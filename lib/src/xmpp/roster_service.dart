@@ -3,7 +3,8 @@
 
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
-mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
+mixin RosterService
+    on XmppBase, BaseStreamService, MessageService, AvatarService {
   Stream<List<RosterItem>> rosterStream({
     int start = 0,
     int end = basePageItemLimit,
@@ -66,8 +67,15 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
 
   @override
   List<mox.XmppManagerBase> get featureManagers =>
-      super.featureManagers
-        ..addAll([mox.RosterManager(XmppRosterStateManager(owner: this))]);
+      super.featureManagers..addAll([
+        mox.RosterManager(
+          XmppRosterStateManager(
+            owner: this,
+            avatarService: this,
+            rosterService: this,
+          ),
+        ),
+      ]);
 
   Future<void> requestRoster() async {
     final result = await _connection.requestRoster();
@@ -82,11 +90,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
       (db) => db.saveRosterItems(items),
       awaitDatabase: true,
     );
-    if (this is AvatarService) {
-      await (this as AvatarService).scheduleAvatarRefresh(
-        items.map((item) => item.jid),
-      );
-    }
+    await scheduleAvatarRefresh(items.map((item) => item.jid));
     await _publishConversationIndexForRoster(items);
 
     final version = rosterResult.ver;
@@ -133,9 +137,7 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
         throw XmppRosterException();
       }
     }
-    if (this is AvatarService) {
-      await (this as AvatarService).scheduleAvatarRefresh([normalized]);
-    }
+    await scheduleAvatarRefresh([normalized]);
     await _ensureConversationIndexEntryForContact(normalized);
   }
 
@@ -239,11 +241,17 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
 }
 
 class XmppRosterStateManager extends mox.BaseRosterStateManager {
-  XmppRosterStateManager({required this.owner}) : super();
+  XmppRosterStateManager({
+    required this.owner,
+    required this.avatarService,
+    required this.rosterService,
+  }) : super();
 
   final _log = Logger('XmppRosterStateManager');
 
   final XmppBase owner;
+  final AvatarService avatarService;
+  final RosterService rosterService;
 
   static const keyPrefix = 'roster_state';
   static final versionStateKey = XmppStateStore.registerKey(
@@ -278,13 +286,12 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
         updatedJids.add(item.jid);
       }
     }, awaitDatabase: true);
-    if (owner is AvatarService && updatedJids.isNotEmpty) {
-      await (owner as AvatarService).scheduleAvatarRefresh(updatedJids);
+    if (updatedJids.isNotEmpty) {
+      await avatarService.scheduleAvatarRefresh(updatedJids);
     }
-    if (owner is RosterService && createdChatJids.isNotEmpty) {
-      final rosterOwner = owner as RosterService;
+    if (createdChatJids.isNotEmpty) {
       for (final jid in createdChatJids) {
-        await rosterOwner._ensureConversationIndexEntryForContact(jid);
+        await rosterService._ensureConversationIndexEntryForContact(jid);
       }
     }
 

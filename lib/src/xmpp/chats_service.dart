@@ -15,12 +15,97 @@ class ChatTransportPreference {
   final bool isExplicit;
 }
 
+final class InboundChatStateEvent extends mox.XmppEvent {
+  InboundChatStateEvent({
+    required this.chatJid,
+    required this.senderJid,
+    required this.state,
+  });
+
+  final String chatJid;
+  final String senderJid;
+  final mox.ChatState state;
+}
+
+final class _TypingParticipantsSession {
+  _TypingParticipantsSession({
+    required Duration linger,
+    required int maxCount,
+    required void Function() onIdle,
+  }) : _linger = linger,
+       _maxCount = maxCount,
+       _onIdle = onIdle;
+
+  final Duration _linger;
+  final int _maxCount;
+  final void Function() _onIdle;
+  final Set<String> _participants = <String>{};
+  final Map<String, Timer> _expiry = <String, Timer>{};
+  StreamController<List<String>>? _controller;
+
+  Stream<List<String>> get stream =>
+      (_controller ??= StreamController<List<String>>.broadcast(
+        onListen: emit,
+        onCancel: _onIdle,
+      )).stream;
+
+  bool get hasListener => _controller?.hasListener ?? false;
+
+  void track({required String participantId, required mox.ChatState state}) {
+    switch (state) {
+      case mox.ChatState.composing:
+        _participants.add(participantId);
+        _expiry.remove(participantId)?.cancel();
+        _expiry[participantId] = Timer(
+          _linger,
+          () => _expireParticipant(participantId),
+        );
+      default:
+        final removed = _participants.remove(participantId);
+        _expiry.remove(participantId)?.cancel();
+        if (!removed) return;
+    }
+    emit();
+  }
+
+  void clear() {
+    _participants.clear();
+    for (final timer in _expiry.values.toList(growable: false)) {
+      timer.cancel();
+    }
+    _expiry.clear();
+    emit();
+  }
+
+  void emit() {
+    final controller = _controller;
+    if (controller == null || controller.isClosed) return;
+    final ordered = _participants.take(_maxCount + 1).toList(growable: false);
+    controller.add(List<String>.unmodifiable(ordered));
+  }
+
+  void dispose() {
+    for (final timer in _expiry.values.toList(growable: false)) {
+      timer.cancel();
+    }
+    _expiry.clear();
+    _participants.clear();
+    _controller?.close();
+    _controller = null;
+  }
+
+  void _expireParticipant(String participantId) {
+    final removed = _participants.remove(participantId);
+    _expiry.remove(participantId)?.cancel();
+    if (!removed) return;
+    emit();
+  }
+}
+
 mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   final Logger _chatLog = Logger('ChatsService');
-  static const String _chatMessageType = 'chat';
-  static const String _groupChatMessageType = 'groupchat';
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
   static const int _conversationIndexSnapshotStart = 0;
@@ -42,10 +127,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   ];
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
   static const List<Chat> _emptyChatList = <Chat>[];
-  final Map<String, Set<String>> _typingParticipants = {};
-  final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
-  final Map<String, StreamController<List<String>>> _typingParticipantStreams =
-      {};
+  final Map<String, _TypingParticipantsSession> _typingParticipantSessions = {};
   final Map<String, int> _openChatUnreadBoundarySeedByJid = {};
   Future<List<ConvItem>>? _conversationIndexLoginSync;
   List<Chat>? _cachedChatList;
@@ -85,6 +167,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         fireAndForget(
           syncConversationIndexSnapshot,
           operationName: _conversationIndexBootstrapOperationName,
+        );
+      })
+      ..registerHandler<InboundChatStateEvent>((event) async {
+        _trackTypingParticipant(
+          chatJid: event.chatJid,
+          senderJid: event.senderJid,
+          state: event.state,
         );
       })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
@@ -138,24 +227,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       return snapshot.items;
     } on XmppAbortedException {
       return _emptyConversationIndexSnapshot;
-    }
-  }
-
-  bool _isMucChatJid(String jid) {
-    try {
-      return mox.JID.fromString(jid).domain == mucServiceHost;
-    } on Exception {
-      return false;
-    }
-  }
-
-  String _chatStateMessageType(String jid) {
-    if (!_isMucChatJid(jid)) return _chatMessageType;
-    try {
-      final parsed = mox.JID.fromString(jid);
-      return parsed.resource.isEmpty ? _groupChatMessageType : _chatMessageType;
-    } on Exception {
-      return _chatMessageType;
     }
   }
 
@@ -346,46 +417,22 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       );
 
   Stream<List<String>> typingParticipantsStream(String jid) {
-    final controller = _typingParticipantStreams.putIfAbsent(
-      jid,
-      () => StreamController<List<String>>.broadcast(
-        onListen: () => _emitTypingParticipants(jid),
-        onCancel: () => _disposeTypingParticipantsIfIdle(jid),
-      ),
-    );
-    _typingParticipants.putIfAbsent(jid, () => <String>{});
-    _typingParticipantExpiry.putIfAbsent(jid, () => <String, Timer>{});
-    return controller.stream;
+    return _typingSessionFor(jid, create: true)!.stream;
   }
 
   @override
   Future<void> _reset() async {
-    for (final controller in _typingParticipantStreams.values.toList(
+    for (final session in _typingParticipantSessions.values.toList(
       growable: false,
     )) {
-      await controller.close();
+      session.dispose();
     }
-    _typingParticipantStreams.clear();
-    _typingParticipants.clear();
-    for (final timers in _typingParticipantExpiry.values.toList(
-      growable: false,
-    )) {
-      for (final timer in timers.values.toList(growable: false)) {
-        timer.cancel();
-      }
-    }
-    _typingParticipantExpiry.clear();
+    _typingParticipantSessions.clear();
     await super._reset();
   }
 
   void clearTypingParticipants(String jid) {
-    final participants = _typingParticipants[jid];
-    if (participants != null) {
-      participants.clear();
-    }
-    final timers = _typingParticipantExpiry.remove(jid);
-    timers?.values.forEach((timer) => timer.cancel());
-    _emitTypingParticipants(jid);
+    _typingSessionFor(jid)?.clear();
   }
 
   void _trackTypingParticipant({
@@ -398,58 +445,36 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     if (senderBare != null && senderBare == myBare) {
       return;
     }
-    final participants = _typingParticipants.putIfAbsent(
-      chatJid,
-      () => <String>{},
-    );
-    final timers = _typingParticipantExpiry.putIfAbsent(
-      chatJid,
-      () => <String, Timer>{},
-    );
     final normalizedSender = _safeParticipantId(senderJid);
     if (normalizedSender == null) return;
-    switch (state) {
-      case mox.ChatState.composing:
-        participants.add(normalizedSender);
-        timers.remove(normalizedSender)?.cancel();
-        timers[normalizedSender] = Timer(
-          _typingParticipantLinger,
-          () => _expireTypingParticipant(chatJid, normalizedSender),
-        );
-      default:
-        final removed = participants.remove(normalizedSender);
-        timers.remove(normalizedSender)?.cancel();
-        if (!removed) return;
-    }
-    _emitTypingParticipants(chatJid);
-  }
-
-  void _expireTypingParticipant(String chatJid, String senderJid) {
-    final participants = _typingParticipants[chatJid];
-    if (participants == null) return;
-    final removed = participants.remove(senderJid);
-    _typingParticipantExpiry[chatJid]?.remove(senderJid)?.cancel();
-    if (!removed) return;
-    _emitTypingParticipants(chatJid);
-  }
-
-  void _emitTypingParticipants(String jid) {
-    final controller = _typingParticipantStreams[jid];
-    if (controller == null || controller.isClosed) return;
-    final participants = _typingParticipants[jid] ?? const <String>{};
-    final ordered = participants.take(_typingParticipantMaxCount + 1).toList();
-    controller.add(List<String>.unmodifiable(ordered));
+    _typingSessionFor(
+      chatJid,
+      create: true,
+    )!.track(participantId: normalizedSender, state: state);
   }
 
   void _disposeTypingParticipantsIfIdle(String jid) {
-    final controller = _typingParticipantStreams[jid];
-    if (controller == null) return;
-    if (controller.hasListener) return;
-    _typingParticipantStreams.remove(jid);
-    controller.close();
-    _typingParticipants.remove(jid);
-    final timers = _typingParticipantExpiry.remove(jid);
-    timers?.values.forEach((timer) => timer.cancel());
+    final session = _typingSessionFor(jid);
+    if (session == null || session.hasListener) return;
+    _typingParticipantSessions.remove(jid);
+    session.dispose();
+  }
+
+  _TypingParticipantsSession? _typingSessionFor(
+    String jid, {
+    bool create = false,
+  }) {
+    if (!create) {
+      return _typingParticipantSessions[jid];
+    }
+    return _typingParticipantSessions.putIfAbsent(
+      jid,
+      () => _TypingParticipantsSession(
+        linger: _typingParticipantLinger,
+        maxCount: _typingParticipantMaxCount,
+        onIdle: () => _disposeTypingParticipantsIfIdle(jid),
+      ),
+    );
   }
 
   String? _safeBareJid(String? jid) {
@@ -536,7 +561,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         return;
       }
     }
-    if (isMuc && messageType == _groupChatMessageType && mucRoomJid != null) {
+    if (isMuc && messageType == _messageTypeGroupchat && mucRoomJid != null) {
       await _sendMucChatStateWithNoStore(
         roomJid: mucRoomJid,
         state: state,

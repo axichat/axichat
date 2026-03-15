@@ -105,6 +105,7 @@ const _mucCreateRollbackFailedLog =
     'Failed to leave room after rejected create attempt.';
 const _roomAffiliationQueryTimeoutLog = 'Room affiliation query timed out.';
 const bool _mucAvatarSupportEnabled = true;
+const bool _mucSendAllowRejoin = true;
 const int _roomAvatarVerificationAttempts = 3;
 const Duration _roomAvatarVerificationDelay = Duration(milliseconds: 350);
 const Set<String> _emptyStatusCodes = <String>{};
@@ -127,6 +128,7 @@ const _affiliationAttr = 'affiliation';
 const _roleAttr = 'role';
 const _reasonTag = 'reason';
 const _subjectTag = 'subject';
+const _messageTypeChat = 'chat';
 const _messageTypeGroupchat = 'groupchat';
 const _messageTypeNormal = 'normal';
 const _mucServiceHostStorageKeyName = 'muc_service_host';
@@ -331,7 +333,7 @@ final class _RoomAvatarPayload {
   final String? hash;
 }
 
-mixin MucService on XmppBase, BaseStreamService {
+mixin MucService on XmppBase, BaseStreamService, AvatarService {
   final _mucLog = Logger('MucService');
   static const Duration _mucJoinTimeout = Duration(seconds: 10);
   static const Duration _mucJoinManagerTimeout = Duration(seconds: 3);
@@ -633,6 +635,400 @@ mixin MucService on XmppBase, BaseStreamService {
 
   String get mucServiceHost =>
       _mucServiceHost ?? 'conference.${_myJid?.domain ?? 'example.com'}';
+
+  bool _isRoomAvatarJid(mox.JID jid) {
+    final bareJid = jid.toBare().toString();
+    if (bareJid.isEmpty) {
+      return false;
+    }
+    if (roomStateFor(bareJid) != null) {
+      return true;
+    }
+    try {
+      return jid.toBare().domain == mucServiceHost;
+    } on Exception {
+      return false;
+    }
+  }
+
+  bool _isMucChatJid(String jid) {
+    try {
+      return mox.JID.fromString(jid).domain == mucServiceHost;
+    } on Exception {
+      return false;
+    }
+  }
+
+  String _chatStateMessageType(String jid) {
+    if (!_isMucChatJid(jid)) return _messageTypeChat;
+    try {
+      final parsed = mox.JID.fromString(jid);
+      return parsed.resource.isEmpty ? _messageTypeGroupchat : _messageTypeChat;
+    } on Exception {
+      return _messageTypeChat;
+    }
+  }
+
+  CalendarChatRole? _calendarSyncSenderRole(
+    mox.MessageEvent event, {
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return CalendarChatRole.participant;
+    }
+    final RoomState? roomState = roomStateFor(chatJid);
+    if (roomState == null) {
+      return null;
+    }
+    final Occupant? occupant = _calendarSyncOccupantForSender(
+      event,
+      roomState: roomState,
+    );
+    if (occupant == null) {
+      return null;
+    }
+    return occupant.role.calendarChatRole;
+  }
+
+  Occupant? _calendarSyncOccupantForSender(
+    mox.MessageEvent event, {
+    required RoomState roomState,
+  }) {
+    return _mucOccupantForSender(event, roomState: roomState);
+  }
+
+  Occupant? _mucOccupantForSender(
+    mox.MessageEvent event, {
+    required RoomState roomState,
+  }) {
+    return roomState.occupantForSenderJid(event.from.toString());
+  }
+
+  bool _isGroupChatMutationAuthorized(mox.MessageEvent event) {
+    if (event.type != _messageTypeGroupchat) {
+      return true;
+    }
+    if (event.isFromMAM) {
+      return true;
+    }
+    final roomJid = event.from.toBare().toString();
+    if (hasLeftRoom(roomJid)) {
+      return false;
+    }
+    final RoomState? roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    final Occupant? occupant = _mucOccupantForSender(
+      event,
+      roomState: roomState,
+    );
+    return occupant?.isPresent ?? false;
+  }
+
+  bool _isGroupChatPinMutationAuthorized(mox.MessageEvent event) {
+    if (!_isGroupChatMutationAuthorized(event)) {
+      return false;
+    }
+    if (event.type != _messageTypeGroupchat || event.isFromMAM) {
+      return true;
+    }
+    final roomJid = event.from.toBare().toString();
+    final roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    final occupant = _mucOccupantForSender(event, roomState: roomState);
+    return occupant?.affiliation.canManagePins ?? false;
+  }
+
+  bool _isSelfPinMutation(mox.MessageEvent event) {
+    final accountJid = myJid;
+    if (accountJid == null) {
+      return false;
+    }
+    if (event.type != _messageTypeGroupchat) {
+      return sameNormalizedAddressValue(
+        event.from.toBare().toString(),
+        accountJid,
+      );
+    }
+    final roomJid = event.from.toBare().toString();
+    final roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    if (roomState.isSelfOccupantId(event.from.toString())) {
+      return true;
+    }
+    final occupant = _mucOccupantForSender(event, roomState: roomState);
+    final realJid = occupant?.realJid?.trim();
+    if (realJid == null || realJid.isEmpty) {
+      return false;
+    }
+    return sameNormalizedAddressValue(realJid, accountJid);
+  }
+
+  bool _isSelfArchivedGroupChatMessageEvent(mox.MessageEvent event) {
+    if (event.type != _messageTypeGroupchat) {
+      return false;
+    }
+    if (_isSelfPinMutation(event)) {
+      return true;
+    }
+    final accountJid = myJid;
+    if (accountJid == null) {
+      return false;
+    }
+    final roomJid = event.from.toBare().toString();
+    final roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    final occupant = _mucOccupantForSender(event, roomState: roomState);
+    final realJid = occupant?.realJid?.trim();
+    if (realJid != null && realJid.isNotEmpty) {
+      return sameNormalizedAddressValue(realJid, accountJid);
+    }
+    return false;
+  }
+
+  ({String senderJid, bool identityVerified}) _resolveReactionSenderIdentity({
+    required String senderJid,
+    required String chatJid,
+    required bool isGroupChat,
+  }) {
+    final accountJid = myJid;
+    if (!isGroupChat) {
+      return (
+        senderJid: bareAddress(senderJid) ?? senderJid,
+        identityVerified: true,
+      );
+    }
+    final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
+    if (accountJid != null &&
+        sameNormalizedAddressValue(senderJid, accountJid)) {
+      return (senderJid: accountJid, identityVerified: true);
+    }
+    final roomState = roomStateFor(normalizedChatJid);
+    if (roomState != null) {
+      final myOccupantJid = roomState.myOccupantJid?.trim();
+      if (accountJid != null &&
+          myOccupantJid != null &&
+          myOccupantJid.isNotEmpty &&
+          senderJid == myOccupantJid) {
+        return (senderJid: accountJid, identityVerified: true);
+      }
+      final occupant = roomState.occupantForSenderJid(
+        senderJid,
+        preferRealJid: true,
+      );
+      final realJid = occupant?.realJid?.trim();
+      if (realJid != null && realJid.isNotEmpty) {
+        if (accountJid != null &&
+            sameNormalizedAddressValue(realJid, accountJid)) {
+          return (senderJid: accountJid, identityVerified: true);
+        }
+        return (
+          senderJid: bareAddress(realJid) ?? realJid,
+          identityVerified: true,
+        );
+      }
+      if (occupant != null) {
+        return (senderJid: occupant.occupantId, identityVerified: false);
+      }
+    }
+    if (senderJid.startsWith('$normalizedChatJid/')) {
+      return (senderJid: senderJid, identityVerified: false);
+    }
+    return (
+      senderJid: bareAddress(senderJid) ?? senderJid,
+      identityVerified: false,
+    );
+  }
+
+  bool _matchesStanzaErrorType(String? errorType, String expected) {
+    if (errorType == null) return true;
+    return errorType == expected;
+  }
+
+  bool _shouldAttemptMucRepair(StanzaErrorConditionData? conditionData) {
+    if (conditionData == null) return false;
+    final String condition = conditionData.condition;
+    final String? errorType = conditionData.type;
+    if (condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
+      return true;
+    }
+    if (condition == _errorConditionResourceConstraint &&
+        _matchesStanzaErrorType(errorType, _errorTypeWait)) {
+      return true;
+    }
+    if (condition == _errorConditionServiceUnavailable &&
+        _matchesStanzaErrorType(errorType, _errorTypeCancel)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _shouldAttemptMucRepairForRoom({
+    required String roomJid,
+    required StanzaErrorConditionData? conditionData,
+  }) {
+    if (!_shouldAttemptMucRepair(conditionData)) return false;
+    late final String key;
+    try {
+      key = _roomKey(roomJid);
+    } on Exception {
+      return false;
+    }
+    final RoomState? room = _roomStates[key];
+    if (room == null) return false;
+    if (room.wasBanned ||
+        room.wasKicked ||
+        room.roomShutdown ||
+        room.blocksAutoRejoin) {
+      return false;
+    }
+
+    final String condition = conditionData?.condition ?? '';
+    final String? errorType = conditionData?.type;
+    if (condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
+      return true;
+    }
+
+    final bool pendingConfig = _instantRoomPending(key);
+    if (pendingConfig) return true;
+    if (room.roomCreated) return true;
+    return room.hasSelfPresence != true;
+  }
+
+  String? _resolveGroupChatRoomJid({
+    required mox.MessageEvent event,
+    required String? summaryChatJid,
+  }) {
+    final String? normalizedSummaryJid = _normalizeMucRoomJidCandidate(
+      summaryChatJid,
+    );
+    if (normalizedSummaryJid != null) return normalizedSummaryJid;
+    final String? fromBare = _normalizeMucRoomJidCandidate(
+      event.from.toBare().toString(),
+    );
+    final String? toBare = _normalizeMucRoomJidCandidate(
+      event.to.toBare().toString(),
+    );
+    final String? ownBare = normalizedBareAddressValue(
+      _myJid?.toBare().toString(),
+    );
+    if (ownBare == null || ownBare.isEmpty) {
+      return fromBare ?? toBare;
+    }
+    if (fromBare != null && fromBare != ownBare) return fromBare;
+    if (toBare != null && toBare != ownBare) return toBare;
+    return null;
+  }
+
+  String? _resolveGroupChatRoomJidFromEvent(mox.MessageEvent event) {
+    final String? fromBare = _normalizeMucRoomJidCandidate(
+      event.from.toBare().toString(),
+    );
+    final String? toBare = _normalizeMucRoomJidCandidate(
+      event.to.toBare().toString(),
+    );
+    final String? ownBare = normalizedBareAddressValue(
+      _myJid?.toBare().toString(),
+    );
+    if (ownBare == null || ownBare.isEmpty) {
+      return fromBare ?? toBare;
+    }
+    if (fromBare != null && fromBare != ownBare) return fromBare;
+    if (toBare != null && toBare != ownBare) return toBare;
+    return null;
+  }
+
+  Future<String?> _resolveGroupChatRoomJidFromDb(String stanzaId) async {
+    final trimmed = stanzaId.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final message = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByStanzaID(trimmed),
+      );
+      if (message == null) return null;
+      return _normalizeMucRoomJidCandidate(message.chatJid);
+    } on XmppAbortedException {
+      return null;
+    }
+  }
+
+  bool _shouldClearMucPresenceForError(
+    StanzaErrorConditionData? conditionData,
+  ) {
+    if (conditionData == null) return false;
+    final condition = conditionData.condition;
+    final errorType = conditionData.type;
+    if (condition == _errorConditionNotAcceptable &&
+        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
+      return true;
+    }
+    return condition == _errorConditionServiceUnavailable &&
+        _matchesStanzaErrorType(errorType, _errorTypeCancel);
+  }
+
+  Future<void> _repairMucJoin(String roomJid) async {
+    try {
+      final String normalizedRoom = _roomKey(roomJid);
+      await ensureJoined(
+        roomJid: normalizedRoom,
+        allowRejoin: true,
+        forceRejoin: true,
+      );
+    } on Exception {
+      // Join failures are already reflected in message errors.
+    }
+  }
+
+  String _pinMutationChatJid(mox.MessageEvent event, String? accountJid) {
+    final isGroupChat = event.type == _messageTypeGroupchat;
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    if (isGroupChat) {
+      return from;
+    }
+    if (accountJid != null && accountJid.isNotEmpty) {
+      if (from.toLowerCase() == accountJid.toLowerCase()) {
+        return to;
+      }
+    }
+    return from;
+  }
+
+  ChatType _pinMutationChatType(String chatJid, Chat? chat) {
+    if (chat?.type == ChatType.groupChat || _isMucChatJid(chatJid)) {
+      return ChatType.groupChat;
+    }
+    return ChatType.chat;
+  }
+
+  String _messageChatJidForEvent(mox.MessageEvent event) {
+    if (event.type == _messageTypeGroupchat) {
+      return event.from.toBare().toString();
+    }
+    final accountJid = myJid;
+    if (accountJid != null &&
+        sameNormalizedAddressValue(event.from.toString(), accountJid)) {
+      return event.to.toBare().toString();
+    }
+    return event.from.toBare().toString();
+  }
+
+  @override
+  List<mox.XmppManagerBase> get featureManagers =>
+      super.featureManagers..addAll([
+        SafeUserAvatarManager(shouldSkipJid: _isRoomAvatarJid),
+        SafeVCardManager(isRoomJid: _isRoomAvatarJid),
+      ]);
 
   Future<void> setMucServiceHost(String? host) async {
     final normalized = host?.trim();
@@ -968,6 +1364,21 @@ mixin MucService on XmppBase, BaseStreamService {
       ..registerHandler<mox.MemberChangedNickEvent>((event) async {
         _handleMemberNickChanged(event.roomJid, event.oldNick, event.newNick);
       })
+      ..registerHandler<RoomVCardAvatarUpdatedEvent>((event) async {
+        final bareJid = _normalizeBareJid(event.jid.toBare().toString());
+        if (bareJid == null || bareJid.isEmpty) return;
+        if (!_isRoomAvatarJid(event.jid)) {
+          return;
+        }
+        if (event.hash.isEmpty) {
+          await _clearAvatarForJid(
+            bareJid,
+            reason: AvatarService._avatarClearReasonVcardEmpty,
+          );
+          return;
+        }
+        await _refreshRoomAvatar(bareJid);
+      })
       ..registerHandler<mox.OwnDataChangedEvent>((event) async {
         await _handleOwnDataChanged(
           roomJid: event.roomJid,
@@ -1113,6 +1524,157 @@ mixin MucService on XmppBase, BaseStreamService {
       return false;
     }
     return true;
+  }
+
+  MucActorIdentity _outboundMucActorIdentity({
+    required String roomJid,
+    required String accountJid,
+  }) {
+    final normalizedRoomJid = _roomKey(roomJid);
+    final roomState = roomStateFor(normalizedRoomJid);
+    final occupantJid = roomState?.myOccupantJid?.trim();
+    final occupant = roomState?.selfOccupant;
+    final occupantNick = occupant?.nick.trim();
+    final rememberedNick = _roomNicknameForKey(normalizedRoomJid)?.trim();
+    final resolvedNick = occupantNick?.isNotEmpty == true
+        ? occupantNick
+        : rememberedNick;
+    if (occupantJid != null &&
+        occupantJid.isNotEmpty &&
+        roomState?.isRoomNickOccupantId(occupantJid) == true) {
+      return MucActorIdentity.room(occupantJid: occupantJid);
+    }
+    if (resolvedNick == null || resolvedNick.isEmpty) {
+      return MucActorIdentity.direct(senderJid: accountJid);
+    }
+    return MucActorIdentity.room(
+      occupantJid: '$normalizedRoomJid/$resolvedNick',
+    );
+  }
+
+  Future<void> _ensureMucJoinForSend({required String roomJid}) async {
+    if (connectionState != ConnectionState.connected) return;
+    late final String normalizedRoom;
+    try {
+      normalizedRoom = _roomKey(roomJid);
+    } on Exception {
+      throw XmppMessageException();
+    }
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) {
+      throw XmppMessageException();
+    }
+    await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'pre-check');
+    if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
+      await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
+      return;
+    }
+
+    try {
+      await ensureJoined(
+        roomJid: normalizedRoom,
+        allowRejoin: _mucSendAllowRejoin,
+      );
+    } on Exception {
+      // Join failures are surfaced by the follow-up presence check.
+    }
+    await _awaitMucJoinCompleterIfActive(normalizedRoom);
+
+    await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'post-join');
+    if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
+      await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
+      return;
+    }
+
+    throw XmppMessageException();
+  }
+
+  Future<void> _awaitMucJoinCompleterIfActive(String roomJid) async {
+    final String normalizedRoom = _roomKey(roomJid);
+    final joinCompleter = _joinCompleterForKey(normalizedRoom);
+    if (joinCompleter == null || joinCompleter.isCompleted) return;
+    try {
+      await joinCompleter.future.timeout(_mucJoinTimeout);
+    } on TimeoutException {
+      // Join timeouts are handled by the join attempt that owns the completer.
+    } on Exception {
+      // Join failures are surfaced by the follow-up presence check.
+    }
+  }
+
+  Future<void> _logMucSendDiagnostics({
+    required String roomJid,
+    required String phase,
+  }) async {
+    if (!kDebugMode) {
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      _mucLog.fine('MUC send diagnostics ($phase): not connected.');
+      return;
+    }
+    late final String normalizedRoom;
+    try {
+      normalizedRoom = _roomKey(roomJid);
+    } on Exception {
+      _mucLog.fine('MUC send diagnostics ($phase): invalid room JID.');
+      return;
+    }
+    final roomState = roomStateFor(normalizedRoom);
+    final managerState = await _mucManagerRoomState(normalizedRoom);
+    final managerJoined = managerState?.joined == true;
+    final managerNick = managerState?.nick?.trim();
+    final managerNickPresent = managerNick?.isNotEmpty == true;
+    final pendingConfig = _instantRoomPending(normalizedRoom);
+    final roomCreated = roomState?.roomCreated == true;
+    final needsJoin = _roomNeedsJoin(normalizedRoom);
+    final hasSelfPresence = roomState?.hasSelfPresence == true;
+    final hasSelfStatus =
+        roomState?.selfPresenceStatusCodes.contains(
+          MucStatusCode.selfPresence.code,
+        ) ==
+        true;
+    final myOccupantJid = roomState?.myOccupantJid;
+    final myOccupantJidPresent = myOccupantJid?.trim().isNotEmpty == true;
+    final expectedOccupantJidMatches =
+        managerNickPresent &&
+        myOccupantJidPresent &&
+        myOccupantJid == '$normalizedRoom/$managerNick';
+    final selfOccupantPresent =
+        myOccupantJidPresent && roomState?.selfOccupant?.isPresent == true;
+    final hasPresenceForSend = await _hasMucPresenceForSend(
+      roomJid: normalizedRoom,
+    );
+    final occupantCount = roomState?.occupants.length ?? 0;
+    final statusCount = roomState?.selfPresenceStatusCodes.length ?? 0;
+    final socketWrapper = _connection.socketWrapper;
+    final socketType = socketWrapper.runtimeType;
+    final resource = _connection.hasConnectionSettings
+        ? _connection.connectionSettings.jid.resource.trim()
+        : null;
+    final resourcePresent = resource?.isNotEmpty == true;
+    final connectionId = identityHashCode(_connection);
+    _mucLog.fine(
+      'MUC send diagnostics ($phase): '
+      'conn=$connectionId '
+      'socket=$socketType '
+      'resource=$resourcePresent '
+      'pendingConfig=$pendingConfig '
+      'roomCreated=$roomCreated '
+      'needsJoin=$needsJoin '
+      'managerState=${managerState != null} '
+      'managerJoined=$managerJoined '
+      'managerNick=$managerNickPresent '
+      'roomState=${roomState != null} '
+      'selfPresence=$hasSelfPresence '
+      'selfStatus=$hasSelfStatus '
+      'occupantJid=$myOccupantJidPresent '
+      'occupantJidMatch=$expectedOccupantJidMatches '
+      'occupantPresent=$selfOccupantPresent '
+      'presenceForSend=$hasPresenceForSend '
+      'occupants=$occupantCount '
+      'statusCodes=$statusCount',
+    );
   }
 
   void _logJoinEvent({
@@ -2665,9 +3227,8 @@ mixin MucService on XmppBase, BaseStreamService {
     required Uint8List bytes,
     required String hash,
   }) async {
-    if (this is! AvatarService) return false;
     if (bytes.isEmpty) return false;
-    await (this as AvatarService).storeAvatarBytesForJid(
+    await storeAvatarBytesForJid(
       jid: _roomKey(roomJid),
       bytes: bytes,
       hash: hash,
@@ -3089,7 +3650,6 @@ mixin MucService on XmppBase, BaseStreamService {
     if (!_mucAvatarSupportEnabled) return;
     if (!_hasUsableXmppStream) return;
     if (bookmarks.isEmpty) return;
-    if (this is! AvatarService) return;
 
     final rooms = <String>{};
     for (final bookmark in bookmarks) {
@@ -3105,7 +3665,6 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> _refreshRoomAvatar(String roomJid) async {
     if (!_mucAvatarSupportEnabled) return;
-    if (this is! AvatarService) return;
     final normalizedRoom = _roomKey(roomJid);
     try {
       final payload = await _fetchRoomAvatarPayload(normalizedRoom);
@@ -3115,7 +3674,7 @@ mixin MucService on XmppBase, BaseStreamService {
           return;
         }
         final vcardHash = sha1.convert(vcardBytes).toString();
-        await (this as AvatarService).storeAvatarBytesForJid(
+        await storeAvatarBytesForJid(
           jid: normalizedRoom,
           bytes: vcardBytes,
           hash: vcardHash,
@@ -3126,7 +3685,7 @@ mixin MucService on XmppBase, BaseStreamService {
       if (decoded == null) {
         return;
       }
-      await (this as AvatarService).storeAvatarBytesForJid(
+      await storeAvatarBytesForJid(
         jid: normalizedRoom,
         bytes: decoded,
         hash: payload.hash,

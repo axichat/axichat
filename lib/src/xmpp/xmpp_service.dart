@@ -321,8 +321,6 @@ abstract interface class XmppBase {
 
   Stream<bool> get selfAvatarHydratingStream;
 
-  void _notifySelfAvatarUpdated(StoredAvatar? avatar);
-
   Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
 
   Stream<anti_abuse.EmailBlocklistSyncUpdate>
@@ -450,14 +448,14 @@ class _AxiEntityCapabilitiesManager extends mox.EntityCapabilitiesManager {
 class XmppService extends XmppBase
     with
         BaseStreamService,
+        AvatarService,
         MucService,
         ChatsService,
-        DraftSyncService,
         BlockingService,
         MessageService,
+        DraftSyncService,
         MessageCollectionSyncService,
         DemoScriptService,
-        AvatarService,
         // OmemoService,
         RosterService,
         PresenceService,
@@ -2735,9 +2733,6 @@ class XmppService extends XmppBase
     if (_databaseReloadController.isClosed) {
       _databaseReloadController = StreamController<void>.broadcast(sync: true);
     }
-    if (_selfAvatarController.isClosed) {
-      _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
-    }
     if (_selfAvatarHydratingController.isClosed) {
       _selfAvatarHydratingController = StreamController<bool>.broadcast(
         sync: true,
@@ -2767,9 +2762,6 @@ class XmppService extends XmppBase
   Future<void> _closeStreamControllers() async {
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();
-    }
-    if (!_selfAvatarController.isClosed) {
-      await _selfAvatarController.close();
     }
     if (!_selfAvatarHydratingController.isClosed) {
       await _selfAvatarHydratingController.close();

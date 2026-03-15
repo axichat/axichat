@@ -6,6 +6,11 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 String _base64EncodeAvatarPublishPayload(Uint8List bytes) =>
     base64Encode(bytes);
 
+const String _selfAvatarStateKeyName = 'self_avatar_state_v2';
+const String _storedAvatarPathField = 'path';
+const String _storedAvatarHashField = 'hash';
+final _selfAvatarStateKey = XmppStateStore.registerKey(_selfAvatarStateKeyName);
+
 const String _avatarRosterRefreshOperationName =
     'AvatarService.refreshRosterAvatarsOnNegotiations';
 const String _avatarConversationRefreshOperationName =
@@ -129,10 +134,8 @@ final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
   const _AvatarMetadataLoadFailed();
 }
 
-mixin AvatarService on XmppBase, MucService {
+mixin AvatarService on XmppBase, BaseStreamService {
   final _avatarLog = Logger('AvatarService');
-  StreamController<StoredAvatar?> _selfAvatarController =
-      StreamController<StoredAvatar?>.broadcast();
   StreamController<bool> _selfAvatarHydratingController =
       StreamController<bool>.broadcast(sync: true);
   StoredAvatar? _cachedSelfAvatar;
@@ -212,7 +215,19 @@ mixin AvatarService on XmppBase, MucService {
   StoredAvatar? get cachedSelfAvatar => _cachedSelfAvatar;
 
   @override
-  Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
+  Stream<StoredAvatar?> get selfAvatarStream =>
+      createSingleStateStoreStream<StoredAvatar?>(
+        watchFunction: (store) async =>
+            (store.watch<Object?>(key: _selfAvatarStateKey) ??
+                    const Stream<Object?>.empty())
+                .startWith(null)
+                .map((_) {
+                  final avatar = _readStoredSelfAvatar(store);
+                  _setCachedSelfAvatar(avatar);
+                  return _cachedSelfAvatar;
+                })
+                .distinct(_storedAvatarsMatch),
+      );
 
   @override
   bool get selfAvatarHydrating {
@@ -243,11 +258,8 @@ mixin AvatarService on XmppBase, MucService {
     _emitSelfAvatarHydrating();
   }
 
-  @override
-  void _notifySelfAvatarUpdated(StoredAvatar? avatar) {
-    _cachedSelfAvatar = avatar;
-    if (_selfAvatarController.isClosed) return;
-    _selfAvatarController.add(avatar);
+  void _setCachedSelfAvatar(StoredAvatar? avatar) {
+    _cachedSelfAvatar = avatar?.isEmpty == true ? null : avatar;
   }
 
   Uint8List? cachedAvatarBytes(String path) {
@@ -304,13 +316,6 @@ mixin AvatarService on XmppBase, MucService {
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers =>
-      super.featureManagers..addAll([
-        SafeUserAvatarManager(shouldSkipJid: _shouldSkipUserAvatarJid),
-        SafeVCardManager(),
-      ]);
-
-  @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
@@ -349,24 +354,10 @@ mixin AvatarService on XmppBase, MucService {
         final bareJid = event.jid.toBare().toString();
         final myBareJid = _myJid?.toBare().toString();
         final isSelf = myBareJid != null && myBareJid == bareJid;
-        final isMuc = _isMucAvatarJid(bareJid);
         _avatarLog.fine(
           'VCard avatar update received. isSelf=$isSelf '
-          'isMuc=$isMuc '
           'hasHash=${event.hash.isNotEmpty}.',
         );
-        if (isMuc) {
-          if (event.hash.isEmpty) {
-            _avatarLog.fine('MUC VCard avatar hash empty; clearing avatar.');
-            await _clearAvatarForJid(
-              bareJid,
-              reason: _avatarClearReasonVcardEmpty,
-            );
-            return;
-          }
-          await _refreshRoomAvatar(bareJid);
-          return;
-        }
         if (event.hash.isEmpty) {
           if (isSelf) {
             _avatarLog.fine('VCard avatar hash empty; ignoring for self.');
@@ -485,9 +476,7 @@ mixin AvatarService on XmppBase, MucService {
         payload: payload,
         public: true,
       );
-      owner._notifySelfAvatarUpdated(
-        StoredAvatar(path: path, hash: payload.hash),
-      );
+      _setCachedSelfAvatar(StoredAvatar(path: path, hash: payload.hash));
       if (waitForPublish) {
         await _bootstrapSelfAvatarIfReady();
       } else {
@@ -509,19 +498,11 @@ mixin AvatarService on XmppBase, MucService {
   Future<StoredAvatar?> getOwnAvatar() async {
     if (!isStateStoreReady) return null;
     try {
-      final path = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) => ss.read(key: selfAvatarPathKey) as String?,
+      final stored = await _dbOpReturning<XmppStateStore, StoredAvatar?>(
+        (ss) => _readStoredSelfAvatar(ss),
       );
-      final hash = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) => ss.read(key: selfAvatarHashKey) as String?,
-      );
-      if (path == null && hash == null) {
-        _cachedSelfAvatar = null;
-        return null;
-      }
-      final stored = StoredAvatar(path: path, hash: hash);
-      _cachedSelfAvatar = stored;
-      return stored;
+      _setCachedSelfAvatar(stored);
+      return _cachedSelfAvatar;
     } on XmppAbortedException {
       return null;
     }
@@ -634,11 +615,7 @@ mixin AvatarService on XmppBase, MucService {
     Iterable<String> jids, {
     bool force = false,
   }) async {
-    final refreshes = <String>[];
-    for (final jid in jids) {
-      if (_isMucAvatarJid(jid)) continue;
-      refreshes.add(jid);
-    }
+    final refreshes = jids.toList(growable: false);
     if (refreshes.isEmpty) return;
     const maxConcurrent = 6;
     for (var index = 0; index < refreshes.length; index += maxConcurrent) {
@@ -737,18 +714,6 @@ mixin AvatarService on XmppBase, MucService {
     return sha1.convert(bytes).toString();
   }
 
-  bool _isMucAvatarJid(String jid) {
-    try {
-      final bareJid = mox.JID.fromString(jid).toBare().toString();
-      if (roomStateFor(bareJid) != null) return true;
-      final host = mucServiceHost.trim();
-      if (host.isEmpty) return false;
-      return mox.JID.fromString(bareJid).domain == host;
-    } on Exception {
-      return false;
-    }
-  }
-
   bool _isSameDomainAvatarJid(String bareJid) {
     final normalized = bareJid.trim();
     if (normalized.isEmpty) return false;
@@ -761,18 +726,10 @@ mixin AvatarService on XmppBase, MucService {
     return targetJid.domain == selfJid.domain;
   }
 
-  bool _shouldSkipUserAvatarJid(mox.JID jid) {
-    final bareJid = jid.toBare().toString().trim();
-    if (bareJid.isEmpty) return _avatarSkipDefault;
-    if (!_isSameDomainAvatarJid(bareJid)) return true;
-    return _isMucAvatarJid(bareJid);
-  }
-
   Future<bool> _shouldSkipAvatarForBareJid(String bareJid) async {
     final normalized = bareJid.trim();
     if (normalized.isEmpty) return _avatarSkipDefault;
     if (!_isSameDomainAvatarJid(normalized)) return true;
-    if (_isMucAvatarJid(normalized)) return true;
     try {
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(
         (db) => db.getChat(normalized),
@@ -825,9 +782,7 @@ mixin AvatarService on XmppBase, MucService {
       if (!await _hasCachedAvatarFile(path)) return;
 
       _markPubSubAvatarPreferred(myBareJid);
-      owner._notifySelfAvatarUpdated(
-        StoredAvatar(path: path, hash: stored.hash),
-      );
+      _setCachedSelfAvatar(StoredAvatar(path: path, hash: stored.hash));
     } on XmppAbortedException {
       return;
     } on Exception catch (error, stackTrace) {
@@ -1339,11 +1294,8 @@ mixin AvatarService on XmppBase, MucService {
     }, awaitDatabase: true);
 
     if (myBareJid != null && myBareJid == bareJid && isStateStoreReady) {
-      await _dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: selfAvatarPathKey, value: null);
-        await ss.write(key: selfAvatarHashKey, value: null);
-      }, awaitDatabase: true);
-      owner._notifySelfAvatarUpdated(null);
+      await _persistStoredSelfAvatar(null);
+      _setCachedSelfAvatar(null);
     }
 
     if (existingPath != null && existingPath.isNotEmpty) {
@@ -1391,7 +1343,7 @@ mixin AvatarService on XmppBase, MucService {
     }, awaitDatabase: true);
     if (myBareJid != null && myBareJid == jid) {
       await _persistOwnAvatar(path, hash);
-      owner._notifySelfAvatarUpdated(StoredAvatar(path: path, hash: hash));
+      _setCachedSelfAvatar(StoredAvatar(path: path, hash: hash));
     }
   }
 
@@ -1402,10 +1354,7 @@ mixin AvatarService on XmppBase, MucService {
       _markPubSubAvatarPreferred(myBareJid);
     }
     try {
-      await _dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: selfAvatarPathKey, value: path);
-        await ss.write(key: selfAvatarHashKey, value: hash);
-      }, awaitDatabase: true);
+      await _persistStoredSelfAvatar(StoredAvatar(path: path, hash: hash));
     } on XmppAbortedException {
       return;
     }
@@ -2064,15 +2013,12 @@ mixin AvatarService on XmppBase, MucService {
     if (storedPath?.trim() != path) return;
 
     try {
-      await _dbOp<XmppStateStore>((ss) async {
-        await ss.write(key: selfAvatarPathKey, value: null);
-        await ss.write(key: selfAvatarHashKey, value: null);
-      }, awaitDatabase: true);
+      await _persistStoredSelfAvatar(null);
     } on XmppAbortedException {
       return;
     }
 
-    owner._notifySelfAvatarUpdated(null);
+    _setCachedSelfAvatar(null);
   }
 
   Future<void> _clearPendingSelfAvatarIfPathMatches(String path) async {
@@ -2118,6 +2064,45 @@ mixin AvatarService on XmppBase, MucService {
       );
     }
   }
+
+  StoredAvatar? _readStoredSelfAvatar(XmppStateStore store) {
+    final rawStored = store.read(key: _selfAvatarStateKey);
+    final encoded = rawStored is Map
+        ? Map<Object?, Object?>.from(rawStored)
+        : null;
+    if (encoded != null) {
+      final path = encoded[_storedAvatarPathField] as String?;
+      final hash = encoded[_storedAvatarHashField] as String?;
+      if (path != null || hash != null) {
+        return StoredAvatar(path: path, hash: hash);
+      }
+      return null;
+    }
+    final path = store.read(key: selfAvatarPathKey) as String?;
+    final hash = store.read(key: selfAvatarHashKey) as String?;
+    if (path == null && hash == null) return null;
+    return StoredAvatar(path: path, hash: hash);
+  }
+
+  Future<void> _persistStoredSelfAvatar(StoredAvatar? avatar) async {
+    await _dbOp<XmppStateStore>((store) async {
+      await store.writeAll(
+        data: <RegisteredStateKey, Object?>{
+          selfAvatarPathKey: avatar?.path,
+          selfAvatarHashKey: avatar?.hash,
+          _selfAvatarStateKey: avatar == null
+              ? null
+              : <String, String?>{
+                  _storedAvatarPathField: avatar.path,
+                  _storedAvatarHashField: avatar.hash,
+                },
+        },
+      );
+    }, awaitDatabase: true);
+  }
+
+  bool _storedAvatarsMatch(StoredAvatar? left, StoredAvatar? right) =>
+      left?.path == right?.path && left?.hash == right?.hash;
 
   Future<_PendingSelfAvatarPublish?> _readPendingSelfAvatarPublish() async {
     if (!isStateStoreReady) return null;

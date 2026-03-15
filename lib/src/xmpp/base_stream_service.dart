@@ -54,4 +54,27 @@ mixin BaseStreamService on XmppBase {
         })
         .handleError((_, _) {}, test: (error) => error is XmppAbortedException);
   }
+
+  Stream<T> createSingleStateStoreStream<T>({
+    required Future<Stream<T>> Function(XmppStateStore store) watchFunction,
+  }) async* {
+    yield* databaseReloadStream
+        .startWith(null)
+        .switchMap((_) async* {
+          if (!isStateStoreReady) {
+            return;
+          }
+          try {
+            final stream = await _dbOpReturning<XmppStateStore, Stream<T>>(
+              (store) async => (await watchFunction(
+                store,
+              )).takeUntil(databaseReloadStream.first),
+            );
+            yield* stream;
+          } on XmppAbortedException {
+            return;
+          }
+        })
+        .handleError((_, _) {}, test: (error) => error is XmppAbortedException);
+  }
 }

@@ -514,6 +514,80 @@ void main() {
     );
 
     test(
+      'selfAvatarStream replays persisted self avatar state from storage.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-avatar-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final stateStoreValues = <String, Object?>{};
+        final stateStoreWatchController = StreamController<Object?>.broadcast();
+        try {
+          when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+            invocation,
+          ) {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            return stateStoreValues[key.value];
+          });
+          when(
+            () => mockStateStore.writeAll(data: any(named: 'data')),
+          ).thenAnswer((invocation) async {
+            final data =
+                invocation.namedArguments[#data]
+                    as Map<RegisteredStateKey, Object?>;
+            for (final entry in data.entries) {
+              stateStoreValues[entry.key.value] = entry.value;
+            }
+            stateStoreWatchController.add(null);
+            return true;
+          });
+          when(
+            () => mockStateStore.watch<Object?>(key: any(named: 'key')),
+          ).thenAnswer((_) => stateStoreWatchController.stream);
+
+          final selfAvatarEvents = <StoredAvatar?>[];
+          final selfAvatarSubscription = xmppService.selfAvatarStream.listen(
+            selfAvatarEvents.add,
+          );
+
+          await xmppService.storeAvatarBytesForJid(
+            jid: mox.JID.fromString(jid).toBare().toString(),
+            bytes: Uint8List.fromList(<int>[
+              0x89,
+              0x50,
+              0x4E,
+              0x47,
+              0x0D,
+              0x0A,
+              0x1A,
+              0x0A,
+              0x00,
+            ]),
+            hash: 'self-avatar-hash',
+          );
+          await pumpEventQueue();
+
+          expect(
+            selfAvatarEvents.whereType<StoredAvatar>().last.hash,
+            'self-avatar-hash',
+          );
+          expect((await xmppService.getOwnAvatar())?.hash, 'self-avatar-hash');
+
+          await selfAvatarSubscription.cancel();
+        } finally {
+          await stateStoreWatchController.close();
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
       'Keeps self avatar hydrating until the latest stream-ready bootstrap completes.',
       () async {
         final pubsubManager = MockPubSubManager();
@@ -1192,7 +1266,7 @@ void main() {
             (_) {},
             onError: errors.add,
           ),
-          (xmppService as MessageService).draftsStream().listen(
+          (xmppService as DraftSyncService).draftsStream().listen(
             (_) {},
             onError: errors.add,
           ),

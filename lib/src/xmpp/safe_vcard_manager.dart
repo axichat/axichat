@@ -3,9 +3,20 @@
 
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
+final class RoomVCardAvatarUpdatedEvent extends mox.XmppEvent {
+  RoomVCardAvatarUpdatedEvent(this.jid, this.hash);
+
+  final mox.JID jid;
+  final String hash;
+}
+
 /// Guarded version of moxxmpp's [VCardManager] that ignores malformed
 /// presence updates instead of throwing.
 class SafeVCardManager extends mox.VCardManager {
+  SafeVCardManager({this.isRoomJid});
+
+  final bool Function(mox.JID jid)? isRoomJid;
+
   @override
   List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
     mox.StanzaHandler(
@@ -28,8 +39,12 @@ class SafeVCardManager extends mox.VCardManager {
 
     final hash = x.firstTag('photo')?.innerText() ?? '';
 
+    final jid = mox.JID.fromString(from);
+    final isRoom = isRoomJid?.call(jid) ?? false;
     getAttributes().sendEvent(
-      mox.VCardAvatarUpdatedEvent(mox.JID.fromString(from), hash),
+      isRoom
+          ? RoomVCardAvatarUpdatedEvent(jid, hash)
+          : mox.VCardAvatarUpdatedEvent(jid, hash),
     );
     return state;
   }

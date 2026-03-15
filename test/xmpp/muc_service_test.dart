@@ -11,6 +11,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/pubsub_manager.dart';
+import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -2104,7 +2105,7 @@ void main() {
         });
 
         eventStreamController.add(
-          mox.VCardAvatarUpdatedEvent(
+          RoomVCardAvatarUpdatedEvent(
             mox.JID.fromString(_roomJid),
             roomAvatarHash,
           ),

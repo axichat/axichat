@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
@@ -235,6 +236,64 @@ void main() {
       verify(
         () => mockConnection.sendChatState(jid: jid, state: state),
       ).called(1);
+    },
+  );
+
+  test(
+    'Inbound chat-state updates keep typing participants in sync.',
+    () async {
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+
+      await connectSuccessfully(xmppService);
+
+      final peerJid = generateRandomJid();
+      expectLater(
+        xmppService.typingParticipantsStream(peerJid),
+        emitsInOrder([
+          <String>[],
+          <String>[peerJid],
+          <String>[],
+        ]),
+      );
+
+      controller.add(
+        mox.MessageEvent(
+          mox.JID.fromString(peerJid),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('typing'),
+            const mox.MessageIdData('chat-state-typing'),
+            mox.ChatState.composing,
+          ]),
+          id: 'chat-state-typing',
+          type: 'chat',
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      controller.add(
+        mox.MessageEvent(
+          mox.JID.fromString(peerJid),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('paused'),
+            const mox.MessageIdData('chat-state-paused'),
+            mox.ChatState.paused,
+          ]),
+          id: 'chat-state-paused',
+          type: 'chat',
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      await controller.close();
     },
   );
 

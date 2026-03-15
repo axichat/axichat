@@ -52,10 +52,6 @@ const String _mamGlobalBootstrapOperationName =
     'MessageService.bootstrapGlobalMamOnNegotiations';
 const String _mamCalendarBootstrapOperationName =
     'MessageService.bootstrapCalendarMamOnNegotiations';
-const String _draftSyncPublishFailedLog = 'Failed to publish draft sync.';
-const String _draftSyncPublishAbortedLog = 'Draft sync publish aborted.';
-const String _draftSyncRetractFailedLog = 'Failed to retract draft sync.';
-const String _draftSyncRetractAbortedLog = 'Draft sync retract aborted.';
 const String _uploadSlotRequestLog = 'Requesting HTTP upload slot.';
 const String _uploadSlotRequestFailedLog = 'Failed to request upload slot.';
 const String _carbonOriginRejectedLog =
@@ -118,7 +114,6 @@ final XmppOperationEvent _mamFetchFailureEvent = XmppOperationEvent(
 );
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
-const bool _mucSendAllowRejoin = true;
 const int _outboundSummaryLimit = 80;
 const String _outboundMessageRejectedLog = 'Outbound message rejected';
 const String _outboundMessageRejectedMissingSummaryLog =
@@ -600,6 +595,117 @@ final class _PinNodeConfigResult {
   final _PinNodePolicy policy;
 }
 
+final class _PinChatSyncSession {
+  Set<String>? authorizedPublishers;
+  final Set<String> pendingPublishes = <String>{};
+  final Set<String> pendingRetractions = <String>{};
+  var syncInFlight = false;
+  var archiveBootstrapInFlight = false;
+  var legacyMirrorReady = false;
+
+  bool get hasPendingMutations =>
+      pendingPublishes.isNotEmpty || pendingRetractions.isNotEmpty;
+
+  void cacheAuthorizedPublishers(Set<String> publishers) {
+    if (publishers.isEmpty) {
+      return;
+    }
+    authorizedPublishers = Set<String>.from(publishers);
+  }
+
+  bool queuePublish(String messageStanzaId) {
+    final normalized = messageStanzaId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final removed = pendingRetractions.remove(normalized);
+    final added = pendingPublishes.add(normalized);
+    return removed || added;
+  }
+
+  bool queueRetraction(String messageStanzaId) {
+    final normalized = messageStanzaId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final removed = pendingPublishes.remove(normalized);
+    final added = pendingRetractions.add(normalized);
+    return removed || added;
+  }
+
+  bool removePendingPublish(String messageStanzaId) {
+    final normalized = messageStanzaId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return pendingPublishes.remove(normalized);
+  }
+
+  bool removePendingRetraction(String messageStanzaId) {
+    final normalized = messageStanzaId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return pendingRetractions.remove(normalized);
+  }
+
+  bool removePendingMutation({
+    required String messageStanzaId,
+    required bool pinned,
+  }) {
+    return pinned
+        ? removePendingPublish(messageStanzaId)
+        : removePendingRetraction(messageStanzaId);
+  }
+
+  bool markSyncInFlight() {
+    if (syncInFlight) {
+      return false;
+    }
+    syncInFlight = true;
+    return true;
+  }
+
+  bool markArchiveBootstrapInFlight() {
+    if (archiveBootstrapInFlight) {
+      return false;
+    }
+    archiveBootstrapInFlight = true;
+    return true;
+  }
+
+  void clearPendingMutations() {
+    pendingPublishes.clear();
+    pendingRetractions.clear();
+  }
+
+  void replacePendingPublishes(Iterable<String> messageIds) {
+    pendingPublishes
+      ..clear()
+      ..addAll(
+        messageIds
+            .map((messageId) => messageId.trim())
+            .where((messageId) => messageId.isNotEmpty),
+      );
+  }
+
+  void replacePendingRetractions(Iterable<String> messageIds) {
+    pendingRetractions
+      ..clear()
+      ..addAll(
+        messageIds
+            .map((messageId) => messageId.trim())
+            .where((messageId) => messageId.isNotEmpty),
+      );
+  }
+
+  List<String> pendingPublishesSnapshot() =>
+      pendingPublishes.toList(growable: false);
+
+  List<String> pendingRetractionsSnapshot() =>
+      pendingRetractions.toList(growable: false);
+}
+
 mox.AccessModel _pinAccessModelForPolicy(_PinNodePolicy policy) =>
     switch (policy) {
       _PinNodePolicy.restricted => _pinAccessModelRestricted,
@@ -957,13 +1063,7 @@ class XmppUploadHeader {
 }
 
 mixin MessageService
-    on
-        XmppBase,
-        BaseStreamService,
-        MucService,
-        ChatsService,
-        DraftSyncService,
-        BlockingService {
+    on XmppBase, BaseStreamService, MucService, BlockingService {
   HttpUploadSupport get httpUploadSupport => _httpUploadSupport;
 
   Stream<HttpUploadSupport> get httpUploadSupportStream =>
@@ -1600,7 +1700,9 @@ mixin MessageService
     if (normalized.isEmpty) {
       return;
     }
-    _pinArchiveBootstrapInFlight.removeAll(normalized);
+    for (final chatJid in normalized) {
+      _pinSyncSession(chatJid).archiveBootstrapInFlight = false;
+    }
     await _dbOp<XmppStateStore>((ss) async {
       for (final chatJid in normalized) {
         await ss.delete(key: _pinArchiveBootstrapKeyFor(chatJid));
@@ -1761,14 +1863,6 @@ mixin MessageService
         (db) => db.subjectsForChat(jid),
       );
 
-  Stream<List<Draft>> draftsStream({
-    int start = 0,
-    int end = basePageItemLimit,
-  }) => createPaginatedStream<Draft, XmppDatabase>(
-    watchFunction: (db) async => db.watchDrafts(start: start, end: end),
-    getFunction: (db) => db.getDrafts(start: start, end: end),
-  );
-
   Stream<List<MessageCollectionMembershipEntry>>
   messageCollectionMembershipsStream(String collectionId, {String? chatJid}) =>
       createPaginatedStream<MessageCollectionMembershipEntry, XmppDatabase>(
@@ -1898,6 +1992,12 @@ mixin MessageService
         watchFunction: (db) async => db.watchPinnedMessages(chatJid),
         getFunction: (db) => db.getPinnedMessages(chatJid),
       );
+
+  _PinChatSyncSession _pinSyncSession(String chatJid) =>
+      _pinChatSyncSessions.putIfAbsent(chatJid, _PinChatSyncSession.new);
+
+  _PinChatSyncSession? _pinSyncSessionOrNull(String chatJid) =>
+      _pinChatSyncSessions[chatJid];
 
   String? _selfBareJid() {
     final selfJid = myJid?.trim();
@@ -2053,7 +2153,7 @@ mixin MessageService
     if (publishers.isEmpty) {
       return;
     }
-    _pinAuthorizedPublishersByChat[normalizedChat] = publishers;
+    _pinSyncSession(normalizedChat).cacheAuthorizedPublishers(publishers);
   }
 
   Future<Set<String>?> _resolvePinAuthorizedPublishers(String chatJid) async {
@@ -2061,13 +2161,13 @@ mixin MessageService
     if (normalizedChat == null) {
       return null;
     }
-    final cached = _pinAuthorizedPublishersByChat[normalizedChat];
+    final cached = _pinSyncSessionOrNull(normalizedChat)?.authorizedPublishers;
     if (cached != null) {
       return cached;
     }
     final context = await _resolvePinNodeContext(normalizedChat);
     _cachePinAuthorizedPublishers(normalizedChat, context);
-    return _pinAuthorizedPublishersByChat[normalizedChat];
+    return _pinSyncSessionOrNull(normalizedChat)?.authorizedPublishers;
   }
 
   bool _isPinPublisherAllowed({
@@ -2100,7 +2200,8 @@ mixin MessageService
   }) async {
     await _ensurePendingPinSyncLoaded();
     final pendingPublishes =
-        _pendingPinPublishesByChat[chatJid] ?? _emptyPinPublisherSet;
+        _pinSyncSessionOrNull(chatJid)?.pendingPublishes ??
+        _emptyPinPublisherSet;
     final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
     return _isPinPublisherAllowed(
       allowedPublishers: allowedPublishers,
@@ -2187,18 +2288,18 @@ mixin MessageService
     if (normalizedChat == null) {
       return;
     }
-    if (_pinSyncInFlight.contains(normalizedChat)) {
-      return;
-    }
     if (!_connection.hasConnectionSettings) {
       return;
     }
     if (!_hasUsableXmppStream) {
       return;
     }
-    final context = await _resolvePinNodeContext(normalizedChat);
-    _pinSyncInFlight.add(normalizedChat);
+    final syncSession = _pinSyncSession(normalizedChat);
+    if (!syncSession.markSyncInFlight()) {
+      return;
+    }
     try {
+      final context = await _resolvePinNodeContext(normalizedChat);
       await database;
       if (!_hasUsableXmppStream) {
         return;
@@ -2258,7 +2359,7 @@ mixin MessageService
     } on XmppAbortedException {
       return;
     } finally {
-      _pinSyncInFlight.remove(normalizedChat);
+      syncSession.syncInFlight = false;
     }
   }
 
@@ -2380,16 +2481,11 @@ mixin MessageService
         cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
       );
   bool _pendingPinSyncLoaded = false;
-  final Map<String, Set<String>> _pinAuthorizedPublishersByChat = {};
-  final Map<String, Set<String>> _pendingPinPublishesByChat = {};
-  final Map<String, Set<String>> _pendingPinRetractionsByChat = {};
+  final Map<String, _PinChatSyncSession> _pinChatSyncSessions = {};
   final Map<String, Map<String, Map<String, _PendingInboundReaction>>>
   _pendingInboundReactionsByChatAndReference = {};
   final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
-  final Set<String> _pinSyncInFlight = {};
-  final Set<String> _pinArchiveBootstrapInFlight = <String>{};
   final Set<String> _pinCreateRetryKeys = <String>{};
-  final Set<String> _legacyPinMirrorReadyChats = <String>{};
   bool _emailPinSnapshotInFlight = false;
   mox.JID? _pinPubSubHost;
 
@@ -3087,32 +3183,6 @@ mixin MessageService
         mox.SFSManager(),
       ]);
 
-  MucActorIdentity _outboundMucActorIdentity({
-    required String roomJid,
-    required String accountJid,
-  }) {
-    final normalizedRoomJid = _roomKey(roomJid);
-    final roomState = roomStateFor(normalizedRoomJid);
-    final occupantJid = roomState?.myOccupantJid?.trim();
-    final occupant = roomState?.selfOccupant;
-    final occupantNick = occupant?.nick.trim();
-    final rememberedNick = _roomNicknameForKey(normalizedRoomJid)?.trim();
-    final resolvedNick = occupantNick?.isNotEmpty == true
-        ? occupantNick
-        : rememberedNick;
-    if (occupantJid != null &&
-        occupantJid.isNotEmpty &&
-        roomState?.isRoomNickOccupantId(occupantJid) == true) {
-      return MucActorIdentity.room(occupantJid: occupantJid);
-    }
-    if (resolvedNick == null || resolvedNick.isEmpty) {
-      return MucActorIdentity.direct(senderJid: accountJid);
-    }
-    return MucActorIdentity.room(
-      occupantJid: '$normalizedRoomJid/$resolvedNick',
-    );
-  }
-
   mox.MessageEvent _buildOutgoingMessageEvent({
     required Message message,
     Message? quotedMessage,
@@ -3258,131 +3328,6 @@ mixin MessageService
         updatedAt: DateTime.timestamp().toUtc(),
         identityVerified: true,
       ),
-    );
-  }
-
-  Future<void> _ensureMucJoinForSend({required String roomJid}) async {
-    if (connectionState != ConnectionState.connected) return;
-    late final String normalizedRoom;
-    try {
-      normalizedRoom = _roomKey(roomJid);
-    } on Exception {
-      throw XmppMessageException();
-    }
-    final manager = _connection.getManager<MUCManager>();
-    if (manager == null) {
-      throw XmppMessageException();
-    }
-    await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'pre-check');
-    if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
-      await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
-      return;
-    }
-
-    try {
-      await ensureJoined(
-        roomJid: normalizedRoom,
-        allowRejoin: _mucSendAllowRejoin,
-      );
-    } on Exception {
-      // Join failures are surfaced by the follow-up presence check.
-    }
-    await _awaitMucJoinCompleterIfActive(normalizedRoom);
-
-    await _logMucSendDiagnostics(roomJid: normalizedRoom, phase: 'post-join');
-    if (await _hasMucPresenceForSend(roomJid: normalizedRoom)) {
-      await _awaitInstantRoomConfigurationIfNeeded(normalizedRoom);
-      return;
-    }
-
-    throw XmppMessageException();
-  }
-
-  Future<void> _awaitMucJoinCompleterIfActive(String roomJid) async {
-    final String normalizedRoom = _roomKey(roomJid);
-    final joinCompleter = _joinCompleterForKey(normalizedRoom);
-    if (joinCompleter == null || joinCompleter.isCompleted) return;
-    try {
-      await joinCompleter.future.timeout(MucService._mucJoinTimeout);
-    } on TimeoutException {
-      // Join timeouts are handled by the join attempt that owns the completer.
-    } on Exception {
-      // Join failures are surfaced by the follow-up presence check.
-    }
-  }
-
-  Future<void> _logMucSendDiagnostics({
-    required String roomJid,
-    required String phase,
-  }) async {
-    if (!kDebugMode) {
-      return;
-    }
-    if (connectionState != ConnectionState.connected) {
-      _log.fine('MUC send diagnostics ($phase): not connected.');
-      return;
-    }
-    late final String normalizedRoom;
-    try {
-      normalizedRoom = _roomKey(roomJid);
-    } on Exception {
-      _log.fine('MUC send diagnostics ($phase): invalid room JID.');
-      return;
-    }
-    final roomState = roomStateFor(normalizedRoom);
-    final managerState = await _mucManagerRoomState(normalizedRoom);
-    final managerJoined = managerState?.joined == true;
-    final managerNick = managerState?.nick?.trim();
-    final managerNickPresent = managerNick?.isNotEmpty == true;
-    final pendingConfig = _instantRoomPending(normalizedRoom);
-    final roomCreated = roomState?.roomCreated == true;
-    final needsJoin = _roomNeedsJoin(normalizedRoom);
-    final hasSelfPresence = roomState?.hasSelfPresence == true;
-    final hasSelfStatus =
-        roomState?.selfPresenceStatusCodes.contains(
-          MucStatusCode.selfPresence.code,
-        ) ==
-        true;
-    final myOccupantJid = roomState?.myOccupantJid;
-    final myOccupantJidPresent = myOccupantJid?.trim().isNotEmpty == true;
-    final expectedOccupantJidMatches =
-        managerNickPresent &&
-        myOccupantJidPresent &&
-        myOccupantJid == '$normalizedRoom/$managerNick';
-    final selfOccupantPresent =
-        myOccupantJidPresent && roomState?.selfOccupant?.isPresent == true;
-    final hasPresenceForSend = await _hasMucPresenceForSend(
-      roomJid: normalizedRoom,
-    );
-    final occupantCount = roomState?.occupants.length ?? 0;
-    final statusCount = roomState?.selfPresenceStatusCodes.length ?? 0;
-    final socketWrapper = _connection.socketWrapper;
-    final socketType = socketWrapper.runtimeType;
-    final resource = _connection.hasConnectionSettings
-        ? _connection.connectionSettings.jid.resource.trim()
-        : null;
-    final resourcePresent = resource?.isNotEmpty == true;
-    final connectionId = identityHashCode(_connection);
-    _log.fine(
-      'MUC send diagnostics ($phase): '
-      'conn=$connectionId '
-      'socket=$socketType '
-      'resource=$resourcePresent '
-      'pendingConfig=$pendingConfig '
-      'roomCreated=$roomCreated '
-      'needsJoin=$needsJoin '
-      'managerState=${managerState != null} '
-      'managerJoined=$managerJoined '
-      'managerNick=$managerNickPresent '
-      'roomState=${roomState != null} '
-      'selfPresence=$hasSelfPresence '
-      'selfStatus=$hasSelfStatus '
-      'occupantJid=$myOccupantJidPresent '
-      'occupantJidMatch=$expectedOccupantJidMatches '
-      'occupantPresent=$selfOccupantPresent '
-      'presenceForSend=$hasPresenceForSend '
-      'occupants=$occupantCount '
-      'statusCodes=$statusCount',
     );
   }
 
@@ -4150,12 +4095,10 @@ mixin MessageService
     return resolvedUpload;
   }
 
-  @override
   Future<XmppAttachmentUpload> _uploadDraftAttachment(
     EmailAttachment attachment,
   ) => _uploadAttachment(attachment);
 
-  @override
   Future<void> _uploadDraftAttachmentFile({
     required XmppAttachmentUpload upload,
     required FileMetadataData metadata,
@@ -5182,171 +5125,6 @@ mixin MessageService
     }
   }
 
-  Future<List<String>> persistDraftAttachmentMetadata(
-    Iterable<EmailAttachment> attachments,
-  ) async {
-    if (attachments.isEmpty) {
-      return const <String>[];
-    }
-    final List<String> metadataIds = <String>[];
-    for (final attachment in attachments) {
-      final metadataId = await _persistDraftAttachmentMetadata(attachment);
-      metadataIds.add(metadataId);
-    }
-    return List.unmodifiable(metadataIds);
-  }
-
-  Future<DraftSaveResult> saveDraft({
-    int? id,
-    required List<String> jids,
-    required String body,
-    String? subject,
-    String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
-    List<EmailAttachment> attachments = const [],
-  }) async {
-    final Draft? existingDraft = id == null
-        ? null
-        : await _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
-    final previousMetadataIds =
-        existingDraft?.attachmentMetadataIds ?? const <String>[];
-    final draftRecipients = await _resolveDraftRecipientRecords(
-      jids: jids,
-      existingRecipients:
-          existingDraft?.draftRecipients ?? const <DraftRecipientData>[],
-    );
-    final draftSyncId = existingDraft?.draftSyncId.trim().isNotEmpty == true
-        ? existingDraft!.draftSyncId
-        : uuid.v4();
-    final draftSourceId = await _ensureDraftSourceId();
-    final draftUpdatedAt = DateTime.timestamp().toUtc();
-    final metadataIds = <String>[];
-    for (final attachment in attachments) {
-      final metadataId = await _persistDraftAttachmentMetadata(attachment);
-      metadataIds.add(metadataId);
-    }
-    final savedId = await _dbOpReturning<XmppDatabase, int>(
-      (db) => db.saveDraft(
-        id: id,
-        jids: jids,
-        body: body,
-        draftSyncId: draftSyncId,
-        draftUpdatedAt: draftUpdatedAt,
-        draftSourceId: draftSourceId,
-        draftRecipients: draftRecipients,
-        subject: subject,
-        quotingStanzaId: quotingStanzaId,
-        quotingReferenceKind: quotingReferenceKind,
-        attachmentMetadataIds: metadataIds,
-      ),
-    );
-    final staleMetadataIds = previousMetadataIds
-        .where((existing) => !metadataIds.contains(existing))
-        .toList();
-    if (staleMetadataIds.isNotEmpty) {
-      await _deleteAttachmentMetadata(staleMetadataIds);
-    }
-    final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
-      (db) =>
-          savedId > 0 ? db.getDraft(savedId) : db.getDraftBySyncId(draftSyncId),
-    );
-    final int resolvedDraftId = savedDraft?.id ?? savedId;
-    if (savedDraft != null) {
-      try {
-        await publishDraftSync(savedDraft);
-      } on XmppAbortedException {
-        _log.fine(_draftSyncPublishAbortedLog);
-      } on Exception catch (error, stackTrace) {
-        _log.fine(_draftSyncPublishFailedLog, error, stackTrace);
-      }
-    }
-    final draftCount = await _dbOpReturning<XmppDatabase, int>(
-      (db) => db.countDrafts(),
-    );
-    return DraftSaveResult(
-      draftId: resolvedDraftId,
-      attachmentMetadataIds: List.unmodifiable(metadataIds),
-      draftCount: draftCount,
-    );
-  }
-
-  Future<List<EmailAttachment>> loadDraftAttachments(
-    Iterable<String> metadataIds,
-  ) async {
-    if (metadataIds.isEmpty) return const [];
-    final attachments = <EmailAttachment>[];
-    for (final metadataId in metadataIds) {
-      final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
-        (db) => db.getFileMetadata(metadataId),
-      );
-      if (metadata == null) {
-        continue;
-      }
-      var path = metadata.path;
-      if (path == null || path.trim().isEmpty) {
-        try {
-          path = await downloadInboundAttachment(metadataId: metadata.id);
-        } on Exception {
-          continue;
-        }
-      }
-      if (path == null || path.trim().isEmpty) {
-        continue;
-      }
-      final file = File(path);
-      if (!await file.exists()) {
-        try {
-          final downloaded = await downloadInboundAttachment(
-            metadataId: metadata.id,
-          );
-          if (downloaded != null && downloaded.trim().isNotEmpty) {
-            path = downloaded;
-          }
-        } on Exception {
-          continue;
-        }
-      }
-      final sourceFile = File(path);
-      if (!await sourceFile.exists()) {
-        continue;
-      }
-      final size = metadata.sizeBytes ?? await sourceFile.length();
-      attachments.add(
-        EmailAttachment(
-          path: path,
-          fileName: metadata.filename,
-          sizeBytes: size,
-          mimeType: metadata.mimeType,
-          width: metadata.width,
-          height: metadata.height,
-          metadataId: metadata.id,
-        ),
-      );
-    }
-    return attachments;
-  }
-
-  Future<void> deleteDraft({required int id}) async {
-    final draft = await _dbOpReturning<XmppDatabase, Draft?>(
-      (db) => db.getDraft(id),
-    );
-    final metadataIds = draft?.attachmentMetadataIds ?? const <String>[];
-    final syncId = draft?.draftSyncId ?? '';
-    await _dbOp<XmppDatabase>((db) => db.removeDraft(id));
-    if (metadataIds.isNotEmpty) {
-      await _deleteAttachmentMetadata(metadataIds);
-    }
-    if (syncId.trim().isNotEmpty) {
-      try {
-        await retractDraftSync(syncId);
-      } on XmppAbortedException {
-        _log.fine(_draftSyncRetractAbortedLog);
-      } on Exception catch (error, stackTrace) {
-        _log.fine(_draftSyncRetractFailedLog, error, stackTrace);
-      }
-    }
-  }
-
   Future<void> deleteFileMetadata(String id) async {
     final String trimmed = id.trim();
     if (trimmed.isEmpty) {
@@ -5399,49 +5177,6 @@ mixin MessageService
     );
     await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     return metadata;
-  }
-
-  Future<String> _persistDraftAttachmentMetadata(
-    EmailAttachment attachment,
-  ) async {
-    final metadataId = attachment.metadataId ?? uuid.v4();
-    final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
-      (db) => db.getFileMetadata(metadataId),
-    );
-    final fileName = attachment.fileName.isNotEmpty
-        ? attachment.fileName
-        : existing?.filename ?? p.basename(attachment.path);
-    final fileSizeBytes = attachment.sizeBytes > 0
-        ? attachment.sizeBytes
-        : existing?.sizeBytes;
-    final metadata = FileMetadataData(
-      id: metadataId,
-      filename: fileName,
-      path: attachment.path,
-      sourceUrls: existing?.sourceUrls,
-      mimeType: attachment.mimeType ?? existing?.mimeType,
-      sizeBytes: fileSizeBytes,
-      width: attachment.width ?? existing?.width,
-      height: attachment.height ?? existing?.height,
-      encryptionKey: existing?.encryptionKey,
-      encryptionIV: existing?.encryptionIV,
-      encryptionScheme: existing?.encryptionScheme,
-      cipherTextHashes: existing?.cipherTextHashes,
-      plainTextHashes: existing?.plainTextHashes,
-      thumbnailType: existing?.thumbnailType,
-      thumbnailData: existing?.thumbnailData,
-    );
-    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
-    return metadata.id;
-  }
-
-  Future<void> _deleteAttachmentMetadata(Iterable<String> metadataIds) async {
-    if (metadataIds.isEmpty) return;
-    await _dbOp<XmppDatabase>((db) async {
-      for (final metadataId in metadataIds) {
-        await db.deleteFileMetadata(metadataId);
-      }
-    });
   }
 
   Future<void> _ensureCapabilityCacheLoaded() async {
@@ -6298,14 +6033,9 @@ mixin MessageService
     _attachmentCacheBytes = null;
     _suppressedMessageNotificationIds.clear();
     _internalEnvelopeChats.clear();
-    _pinAuthorizedPublishersByChat.clear();
-    _pendingPinPublishesByChat.clear();
-    _pendingPinRetractionsByChat.clear();
+    _pinChatSyncSessions.clear();
     _pendingPinSyncLoaded = false;
-    _pinSyncInFlight.clear();
-    _pinArchiveBootstrapInFlight.clear();
     _pinCreateRetryKeys.clear();
-    _legacyPinMirrorReadyChats.clear();
     _emailPinSnapshotInFlight = false;
     _pinPubSubHost = null;
   }
@@ -6407,145 +6137,6 @@ mixin MessageService
     };
   }
 
-  bool _matchesStanzaErrorType(String? errorType, String expected) {
-    if (errorType == null) return true;
-    return errorType == expected;
-  }
-
-  bool _shouldAttemptMucRepair(StanzaErrorConditionData? conditionData) {
-    if (conditionData == null) return false;
-    final String condition = conditionData.condition;
-    final String? errorType = conditionData.type;
-    if (condition == _errorConditionNotAcceptable &&
-        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
-      return true;
-    }
-    if (condition == _errorConditionResourceConstraint &&
-        _matchesStanzaErrorType(errorType, _errorTypeWait)) {
-      return true;
-    }
-    if (condition == _errorConditionServiceUnavailable &&
-        _matchesStanzaErrorType(errorType, _errorTypeCancel)) {
-      return true;
-    }
-    return false;
-  }
-
-  bool _shouldAttemptMucRepairForRoom({
-    required String roomJid,
-    required StanzaErrorConditionData? conditionData,
-  }) {
-    if (!_shouldAttemptMucRepair(conditionData)) return false;
-    late final String key;
-    try {
-      key = _roomKey(roomJid);
-    } on Exception {
-      return false;
-    }
-    final RoomState? room = _roomStates[key];
-    if (room == null) return false;
-    if (room.wasBanned ||
-        room.wasKicked ||
-        room.roomShutdown ||
-        room.blocksAutoRejoin) {
-      return false;
-    }
-
-    final String condition = conditionData?.condition ?? '';
-    final String? errorType = conditionData?.type;
-    if (condition == _errorConditionNotAcceptable &&
-        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
-      return true;
-    }
-
-    final bool pendingConfig = _instantRoomPending(key);
-    if (pendingConfig) return true;
-    if (room.roomCreated) return true;
-    return room.hasSelfPresence != true;
-  }
-
-  String? _resolveGroupChatRoomJid({
-    required mox.MessageEvent event,
-    required _OutboundMessageSummary summary,
-  }) {
-    final String? summaryJid = _normalizeMucRoomJidCandidate(summary.chatJid);
-    if (summaryJid != null) return summaryJid;
-    final String? fromBare = _normalizeMucRoomJidCandidate(
-      event.from.toBare().toString(),
-    );
-    final String? toBare = _normalizeMucRoomJidCandidate(
-      event.to.toBare().toString(),
-    );
-    final String? ownBare = normalizedBareAddressValue(
-      _myJid?.toBare().toString(),
-    );
-    if (ownBare == null || ownBare.isEmpty) {
-      return fromBare ?? toBare;
-    }
-    if (fromBare != null && fromBare != ownBare) return fromBare;
-    if (toBare != null && toBare != ownBare) return toBare;
-    return null;
-  }
-
-  String? _resolveGroupChatRoomJidFromEvent(mox.MessageEvent event) {
-    final String? fromBare = _normalizeMucRoomJidCandidate(
-      event.from.toBare().toString(),
-    );
-    final String? toBare = _normalizeMucRoomJidCandidate(
-      event.to.toBare().toString(),
-    );
-    final String? ownBare = normalizedBareAddressValue(
-      _myJid?.toBare().toString(),
-    );
-    if (ownBare == null || ownBare.isEmpty) {
-      return fromBare ?? toBare;
-    }
-    if (fromBare != null && fromBare != ownBare) return fromBare;
-    if (toBare != null && toBare != ownBare) return toBare;
-    return null;
-  }
-
-  Future<String?> _resolveGroupChatRoomJidFromDb(String stanzaId) async {
-    final trimmed = stanzaId.trim();
-    if (trimmed.isEmpty) return null;
-    try {
-      final message = await _dbOpReturning<XmppDatabase, Message?>(
-        (db) => db.getMessageByStanzaID(trimmed),
-      );
-      if (message == null) return null;
-      return _normalizeMucRoomJidCandidate(message.chatJid);
-    } on XmppAbortedException {
-      return null;
-    }
-  }
-
-  bool _shouldClearMucPresenceForError(
-    StanzaErrorConditionData? conditionData,
-  ) {
-    if (conditionData == null) return false;
-    final condition = conditionData.condition;
-    final errorType = conditionData.type;
-    if (condition == _errorConditionNotAcceptable &&
-        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
-      return true;
-    }
-    return condition == _errorConditionServiceUnavailable &&
-        _matchesStanzaErrorType(errorType, _errorTypeCancel);
-  }
-
-  Future<void> _repairMucJoin(String roomJid) async {
-    try {
-      final String normalizedRoom = _roomKey(roomJid);
-      await ensureJoined(
-        roomJid: normalizedRoom,
-        allowRejoin: true,
-        forceRejoin: true,
-      );
-    } on Exception {
-      // Join failures are already reflected in message errors.
-    }
-  }
-
   Future<bool> _handleError(mox.MessageEvent event) async {
     if (event.type != _messageTypeError) return false;
 
@@ -6605,7 +6196,10 @@ mixin MessageService
     final String? mappedRoomJid = _takeOutboundGroupchatRoomJid(stanzaId);
     final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
     String? roomJid = summaryIsGroupChat
-        ? _resolveGroupChatRoomJid(event: event, summary: summary!)
+        ? _resolveGroupChatRoomJid(
+            event: event,
+            summaryChatJid: summary?.chatJid,
+          )
         : _resolveGroupChatRoomJidFromEvent(event);
     roomJid ??= mappedRoomJid;
     roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
@@ -6651,10 +6245,12 @@ mixin MessageService
 
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
-      _trackTypingParticipant(
-        chatJid: jid,
-        senderJid: event.from.toString(),
-        state: state,
+      await _eventManager.executeHandlers(
+        InboundChatStateEvent(
+          chatJid: jid,
+          senderJid: event.from.toString(),
+          state: state,
+        ),
       );
       await _dbOp<XmppDatabase>(
         (db) => db.updateChatState(chatJid: jid, state: state),
@@ -7204,131 +6800,6 @@ mixin MessageService
     return acl.write;
   }
 
-  CalendarChatRole? _calendarSyncSenderRole(
-    mox.MessageEvent event, {
-    required String chatJid,
-    required ChatType chatType,
-  }) {
-    if (chatType != ChatType.groupChat) {
-      return CalendarChatRole.participant;
-    }
-    final RoomState? roomState = roomStateFor(chatJid);
-    if (roomState == null) {
-      return null;
-    }
-    final Occupant? occupant = _calendarSyncOccupantForSender(
-      event,
-      roomState: roomState,
-    );
-    if (occupant == null) {
-      return null;
-    }
-    return occupant.role.calendarChatRole;
-  }
-
-  Occupant? _calendarSyncOccupantForSender(
-    mox.MessageEvent event, {
-    required RoomState roomState,
-  }) {
-    return _mucOccupantForSender(event, roomState: roomState);
-  }
-
-  Occupant? _mucOccupantForSender(
-    mox.MessageEvent event, {
-    required RoomState roomState,
-  }) {
-    return roomState.occupantForSenderJid(event.from.toString());
-  }
-
-  bool _isGroupChatMutationAuthorized(mox.MessageEvent event) {
-    if (event.type != _messageTypeGroupchat) {
-      return true;
-    }
-    if (event.isFromMAM) {
-      return true;
-    }
-    final roomJid = event.from.toBare().toString();
-    if (hasLeftRoom(roomJid)) {
-      return false;
-    }
-    final RoomState? roomState = roomStateFor(roomJid);
-    if (roomState == null) {
-      return false;
-    }
-    final Occupant? occupant = _mucOccupantForSender(
-      event,
-      roomState: roomState,
-    );
-    return occupant?.isPresent ?? false;
-  }
-
-  bool _isGroupChatPinMutationAuthorized(mox.MessageEvent event) {
-    if (!_isGroupChatMutationAuthorized(event)) {
-      return false;
-    }
-    if (event.type != _messageTypeGroupchat || event.isFromMAM) {
-      return true;
-    }
-    final roomJid = event.from.toBare().toString();
-    final roomState = roomStateFor(roomJid);
-    if (roomState == null) {
-      return false;
-    }
-    final occupant = _mucOccupantForSender(event, roomState: roomState);
-    return occupant?.affiliation.canManagePins ?? false;
-  }
-
-  bool _isSelfPinMutation(mox.MessageEvent event) {
-    final accountJid = myJid;
-    if (accountJid == null) {
-      return false;
-    }
-    if (event.type != _messageTypeGroupchat) {
-      return sameNormalizedAddressValue(
-        event.from.toBare().toString(),
-        accountJid,
-      );
-    }
-    final roomJid = event.from.toBare().toString();
-    final roomState = roomStateFor(roomJid);
-    if (roomState == null) {
-      return false;
-    }
-    if (roomState.isSelfOccupantId(event.from.toString())) {
-      return true;
-    }
-    final occupant = _mucOccupantForSender(event, roomState: roomState);
-    final realJid = occupant?.realJid?.trim();
-    if (realJid == null || realJid.isEmpty) {
-      return false;
-    }
-    return sameNormalizedAddressValue(realJid, accountJid);
-  }
-
-  bool _isSelfArchivedGroupChatMessageEvent(mox.MessageEvent event) {
-    if (event.type != _messageTypeGroupchat) {
-      return false;
-    }
-    if (_isSelfPinMutation(event)) {
-      return true;
-    }
-    final accountJid = myJid;
-    if (accountJid == null) {
-      return false;
-    }
-    final roomJid = event.from.toBare().toString();
-    final roomState = roomStateFor(roomJid);
-    if (roomState == null) {
-      return false;
-    }
-    final occupant = _mucOccupantForSender(event, roomState: roomState);
-    final realJid = occupant?.realJid?.trim();
-    if (realJid != null && realJid.isNotEmpty) {
-      return sameNormalizedAddressValue(realJid, accountJid);
-    }
-    return false;
-  }
-
   bool _isReadOnlyTaskSyncBlocked({
     required CalendarSyncMessage syncMessage,
     required mox.MessageEvent event,
@@ -7788,28 +7259,10 @@ mixin MessageService
     return from;
   }
 
-  String _pinMutationChatJid(mox.MessageEvent event, String? accountJid) {
-    final isGroupChat = event.type == _messageTypeGroupchat;
-    final to = event.to.toBare().toString();
-    final from = event.from.toBare().toString();
-    if (isGroupChat) {
-      return from;
-    }
-    if (accountJid != null && accountJid.isNotEmpty) {
-      if (from.toLowerCase() == accountJid.toLowerCase()) {
-        return to;
-      }
-    }
-    return from;
-  }
-
   Future<void> _ensureSharedPinArchiveBootstrapped({
     required String chatJid,
     required Chat? chat,
   }) async {
-    if (_pinArchiveBootstrapInFlight.contains(chatJid)) {
-      return;
-    }
     if (await _sharedPinArchiveBootstrapComplete(chatJid)) {
       return;
     }
@@ -7822,7 +7275,10 @@ mixin MessageService
     } else if (!await resolveMamSupport()) {
       return;
     }
-    _pinArchiveBootstrapInFlight.add(chatJid);
+    final syncSession = _pinSyncSession(chatJid);
+    if (!syncSession.markArchiveBootstrapInFlight()) {
+      return;
+    }
     try {
       var before = '';
       var completed = false;
@@ -7853,7 +7309,7 @@ mixin MessageService
         await _markSharedPinArchiveBootstrapComplete(chatJid);
       }
     } finally {
-      _pinArchiveBootstrapInFlight.remove(chatJid);
+      syncSession.archiveBootstrapInFlight = false;
     }
   }
 
@@ -8141,60 +7597,6 @@ mixin MessageService
     }).toList();
   }
 
-  ({String senderJid, bool identityVerified}) _resolveReactionSenderIdentity({
-    required String senderJid,
-    required String chatJid,
-    required bool isGroupChat,
-  }) {
-    final accountJid = myJid;
-    if (!isGroupChat) {
-      return (
-        senderJid: bareAddress(senderJid) ?? senderJid,
-        identityVerified: true,
-      );
-    }
-    final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
-    if (accountJid != null &&
-        sameNormalizedAddressValue(senderJid, accountJid)) {
-      return (senderJid: accountJid, identityVerified: true);
-    }
-    final roomState = roomStateFor(normalizedChatJid);
-    if (roomState != null) {
-      final myOccupantJid = roomState.myOccupantJid?.trim();
-      if (accountJid != null &&
-          myOccupantJid != null &&
-          myOccupantJid.isNotEmpty &&
-          senderJid == myOccupantJid) {
-        return (senderJid: accountJid, identityVerified: true);
-      }
-      final occupant = roomState.occupantForSenderJid(
-        senderJid,
-        preferRealJid: true,
-      );
-      final realJid = occupant?.realJid?.trim();
-      if (realJid != null && realJid.isNotEmpty) {
-        if (accountJid != null &&
-            sameNormalizedAddressValue(realJid, accountJid)) {
-          return (senderJid: accountJid, identityVerified: true);
-        }
-        return (
-          senderJid: bareAddress(realJid) ?? realJid,
-          identityVerified: true,
-        );
-      }
-      if (occupant != null) {
-        return (senderJid: occupant.occupantId, identityVerified: false);
-      }
-    }
-    if (senderJid.startsWith('$normalizedChatJid/')) {
-      return (senderJid: senderJid, identityVerified: false);
-    }
-    return (
-      senderJid: bareAddress(senderJid) ?? senderJid,
-      identityVerified: false,
-    );
-  }
-
   String _canonicalReactionSenderJid({
     required String senderJid,
     required String chatJid,
@@ -8234,18 +7636,6 @@ mixin MessageService
       return false;
     }
     return previous.isAfter(delayedAt);
-  }
-
-  String _messageChatJidForEvent(mox.MessageEvent event) {
-    if (event.type == _messageTypeGroupchat) {
-      return event.from.toBare().toString();
-    }
-    final accountJid = myJid;
-    if (accountJid != null &&
-        sameNormalizedAddressValue(event.from.toString(), accountJid)) {
-      return event.to.toBare().toString();
-    }
-    return event.from.toBare().toString();
   }
 
   FileMetadataData? _extractFileMetadata(mox.MessageEvent event) {
@@ -9081,16 +8471,16 @@ mixin MessageService
     final nodeId = event.item.node;
     final chatJid = _chatJidFromPinNode(nodeId);
     if (chatJid == null) return;
+    final syncSession = _pinSyncSession(chatJid);
     final context = await _resolvePinNodeContext(chatJid);
     _cachePinAuthorizedPublishers(chatJid, context);
     if (!_usesPubSubPinSync(context)) {
-      _legacyPinMirrorReadyChats.add(chatJid);
+      syncSession.legacyMirrorReady = true;
     }
     if (!_shouldProcessPinSyncEvent(chatJid)) return;
     await _ensurePendingPinSyncLoaded();
     final itemId = event.item.id.trim();
-    if (itemId.isNotEmpty &&
-        _pendingPinRetractionsByChat[chatJid]?.contains(itemId) == true) {
+    if (itemId.isNotEmpty && syncSession.pendingRetractions.contains(itemId)) {
       return;
     }
     final payload = event.item.payload;
@@ -9116,7 +8506,7 @@ mixin MessageService
     if (messageId == null) {
       return;
     }
-    if (_pendingPinRetractionsByChat[chatJid]?.contains(messageId) == true) {
+    if (syncSession.pendingRetractions.contains(messageId)) {
       return;
     }
     final publisher = event.item.publisher;
@@ -9146,9 +8536,10 @@ mixin MessageService
   Future<void> _handlePinRetraction(mox.PubSubItemsRetractedEvent event) async {
     final chatJid = _chatJidFromPinNode(event.node);
     if (chatJid == null) return;
+    final syncSession = _pinSyncSession(chatJid);
     final context = await _resolvePinNodeContext(chatJid);
     if (!_usesPubSubPinSync(context)) {
-      _legacyPinMirrorReadyChats.add(chatJid);
+      syncSession.legacyMirrorReady = true;
     }
     if (event.itemIds.isEmpty) return;
     if (!_shouldProcessPinSyncEvent(chatJid)) return;
@@ -9169,8 +8560,8 @@ mixin MessageService
         messageStanzaId: messageId,
       );
       pendingChanged =
-          _pendingPinPublishesByChat[chatJid]?.remove(messageId) == true ||
-          _pendingPinRetractionsByChat[chatJid]?.remove(messageId) == true ||
+          syncSession.removePendingPublish(messageId) ||
+          syncSession.removePendingRetraction(messageId) ||
           pendingChanged;
     }
     if (pendingChanged) {
@@ -9187,8 +8578,8 @@ mixin MessageService
         active: true,
       ),
     );
-    final pending = _pendingPinPublishesByChat[payload.chatJid];
-    if (pending?.remove(payload.messageStanzaId) == true) {
+    final syncSession = _pinSyncSessionOrNull(payload.chatJid);
+    if (syncSession?.removePendingPublish(payload.messageStanzaId) == true) {
       await _persistPendingPinSync();
     }
   }
@@ -9448,7 +8839,8 @@ mixin MessageService
     await _ensurePendingPinSyncLoaded();
     final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
     final pendingPublishes =
-        _pendingPinPublishesByChat[chatJid] ?? _emptyPinPublisherSet;
+        _pinSyncSessionOrNull(chatJid)?.pendingPublishes ??
+        _emptyPinPublisherSet;
     final items = result.get<List<mox.PubSubItem>>();
     final parsed = <_PinnedMessageSyncPayload>[];
     for (final item in items) {
@@ -9477,10 +8869,10 @@ mixin MessageService
     required List<_PinnedMessageSyncPayload> items,
   }) async {
     await _ensurePendingPinSyncLoaded();
-    final pendingPublishes =
-        _pendingPinPublishesByChat[chatJid] ?? const <String>{};
+    final syncSession = _pinSyncSessionOrNull(chatJid);
+    final pendingPublishes = syncSession?.pendingPublishes ?? const <String>{};
     final pendingRetractions =
-        _pendingPinRetractionsByChat[chatJid] ?? const <String>{};
+        syncSession?.pendingRetractions ?? const <String>{};
     for (final item in items) {
       if (pendingRetractions.contains(item.messageStanzaId)) {
         continue;
@@ -9511,21 +8903,12 @@ mixin MessageService
 
   Future<void> _queuePinPublish(String chatJid, String messageStanzaId) async {
     await _ensurePendingPinSyncLoaded();
-    final publishes = _pendingPinPublishesByChat.putIfAbsent(
-      chatJid,
-      () => <String>{},
-    );
-    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
-      chatJid,
-      () => <String>{},
-    );
-    retractions.remove(messageStanzaId);
+    _pinSyncSession(chatJid).queuePublish(messageStanzaId);
     _dropOutboundPinMutationByAction(
       chatJid: chatJid,
       messageStanzaId: messageStanzaId,
       pinned: false,
     );
-    publishes.add(messageStanzaId);
     await _persistPendingPinSync();
   }
 
@@ -9534,21 +8917,12 @@ mixin MessageService
     String messageStanzaId,
   ) async {
     await _ensurePendingPinSyncLoaded();
-    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
-      chatJid,
-      () => <String>{},
-    );
-    final publishes = _pendingPinPublishesByChat.putIfAbsent(
-      chatJid,
-      () => <String>{},
-    );
-    publishes.remove(messageStanzaId);
+    _pinSyncSession(chatJid).queueRetraction(messageStanzaId);
     _dropOutboundPinMutationByAction(
       chatJid: chatJid,
       messageStanzaId: messageStanzaId,
       pinned: true,
     );
-    retractions.add(messageStanzaId);
     await _persistPendingPinSync();
   }
 
@@ -9573,17 +8947,6 @@ mixin MessageService
     return decoded;
   }
 
-  Map<String, List<String>> _encodePendingPinMap(
-    Map<String, Set<String>> source,
-  ) {
-    final encoded = <String, List<String>>{};
-    for (final entry in source.entries) {
-      if (entry.value.isEmpty) continue;
-      encoded[entry.key] = entry.value.toList(growable: false);
-    }
-    return encoded;
-  }
-
   Future<void> _ensurePendingPinSyncLoaded() async {
     if (_pendingPinSyncLoaded) {
       return;
@@ -9594,12 +8957,15 @@ mixin MessageService
     final rawRetractions = await _dbOpReturning<XmppStateStore, Object?>(
       (ss) => ss.read(key: _pinPendingRetractionsKey),
     );
-    _pendingPinPublishesByChat
-      ..clear()
-      ..addAll(_decodePendingPinMap(rawPublishes));
-    _pendingPinRetractionsByChat
-      ..clear()
-      ..addAll(_decodePendingPinMap(rawRetractions));
+    for (final session in _pinChatSyncSessions.values) {
+      session.clearPendingMutations();
+    }
+    for (final entry in _decodePendingPinMap(rawPublishes).entries) {
+      _pinSyncSession(entry.key).replacePendingPublishes(entry.value);
+    }
+    for (final entry in _decodePendingPinMap(rawRetractions).entries) {
+      _pinSyncSession(entry.key).replacePendingRetractions(entry.value);
+    }
     _pendingPinSyncLoaded = true;
   }
 
@@ -9607,10 +8973,16 @@ mixin MessageService
     if (!_pendingPinSyncLoaded) {
       return;
     }
-    _pendingPinPublishesByChat.removeWhere((_, ids) => ids.isEmpty);
-    _pendingPinRetractionsByChat.removeWhere((_, ids) => ids.isEmpty);
-    final publishes = _encodePendingPinMap(_pendingPinPublishesByChat);
-    final retractions = _encodePendingPinMap(_pendingPinRetractionsByChat);
+    final publishes = <String, List<String>>{};
+    final retractions = <String, List<String>>{};
+    for (final entry in _pinChatSyncSessions.entries) {
+      if (entry.value.pendingPublishes.isNotEmpty) {
+        publishes[entry.key] = entry.value.pendingPublishesSnapshot();
+      }
+      if (entry.value.pendingRetractions.isNotEmpty) {
+        retractions[entry.key] = entry.value.pendingRetractionsSnapshot();
+      }
+    }
     await _dbOp<XmppStateStore>((ss) async {
       if (publishes.isEmpty) {
         await ss.delete(key: _pinPendingPublishesKey);
@@ -9633,14 +9005,13 @@ mixin MessageService
       return;
     }
     await _ensurePendingPinSyncLoaded();
-    if (_pendingPinPublishesByChat.isEmpty &&
-        _pendingPinRetractionsByChat.isEmpty) {
+    final chatIds = <String>{
+      for (final entry in _pinChatSyncSessions.entries)
+        if (entry.value.hasPendingMutations) entry.key,
+    };
+    if (chatIds.isEmpty) {
       return;
     }
-    final chatIds = <String>{
-      ..._pendingPinPublishesByChat.keys,
-      ..._pendingPinRetractionsByChat.keys,
-    };
     for (final chatJid in chatIds) {
       await _flushPendingPinSyncForChat(chatJid);
     }
@@ -9658,6 +9029,7 @@ mixin MessageService
     if (normalizedChat == null) {
       return;
     }
+    final syncSession = _pinSyncSession(normalizedChat);
     final context = await _resolvePinNodeContext(normalizedChat);
     if (!_usesPubSubPinSync(context)) {
       await _flushPendingSharedPinMutationsForChat(
@@ -9692,12 +9064,8 @@ mixin MessageService
       return;
     }
     await _subscribeToPins(host: host, nodeId: nodeId);
-    final pendingRetractions =
-        _pendingPinRetractionsByChat[normalizedChat]?.toList(growable: false) ??
-        const <String>[];
-    final pendingPublishes =
-        _pendingPinPublishesByChat[normalizedChat]?.toList(growable: false) ??
-        const <String>[];
+    final pendingRetractions = syncSession.pendingRetractionsSnapshot();
+    final pendingPublishes = syncSession.pendingPublishesSnapshot();
     var pendingChanged = false;
     for (final messageId in pendingRetractions) {
       final trimmed = messageId.trim();
@@ -9719,10 +9087,7 @@ mixin MessageService
         continue;
       }
       pendingChanged =
-          _pendingPinRetractionsByChat[normalizedChat]?.remove(
-                canonicalMessageId,
-              ) ==
-              true ||
+          syncSession.removePendingRetraction(canonicalMessageId) ||
           pendingChanged;
     }
     for (final messageId in pendingPublishes) {
@@ -9743,10 +9108,7 @@ mixin MessageService
       );
       if (entry == null) {
         pendingChanged =
-            _pendingPinPublishesByChat[normalizedChat]?.remove(
-                  canonicalMessageId,
-                ) ==
-                true ||
+            syncSession.removePendingPublish(canonicalMessageId) ||
             pendingChanged;
         continue;
       }
@@ -9761,10 +9123,7 @@ mixin MessageService
         continue;
       }
       pendingChanged =
-          _pendingPinPublishesByChat[normalizedChat]?.remove(
-                canonicalMessageId,
-              ) ==
-              true ||
+          syncSession.removePendingPublish(canonicalMessageId) ||
           pendingChanged;
     }
     if (pendingChanged) {
@@ -9775,23 +9134,13 @@ mixin MessageService
   bool _usesPubSubPinSync(_PinNodeContext context) =>
       context.chat?.isEmailBacked == true;
 
-  ChatType _pinMutationChatType(String chatJid, Chat? chat) {
-    if (chat?.type == ChatType.groupChat || _isMucChatJid(chatJid)) {
-      return ChatType.groupChat;
-    }
-    return ChatType.chat;
-  }
-
   Future<void> _flushPendingSharedPinMutationsForChat({
     required String chatJid,
     required Chat? chat,
   }) async {
-    final pendingRetractions =
-        _pendingPinRetractionsByChat[chatJid]?.toList(growable: false) ??
-        const <String>[];
-    final pendingPublishes =
-        _pendingPinPublishesByChat[chatJid]?.toList(growable: false) ??
-        const <String>[];
+    final syncSession = _pinSyncSession(chatJid);
+    final pendingRetractions = syncSession.pendingRetractionsSnapshot();
+    final pendingPublishes = syncSession.pendingPublishesSnapshot();
     var pendingChanged = false;
     for (final messageId in pendingRetractions) {
       final trimmed = messageId.trim();
@@ -9820,8 +9169,7 @@ mixin MessageService
       );
       if (record == null || record.active) {
         pendingChanged =
-            _pendingPinRetractionsByChat[chatJid]?.remove(canonicalMessageId) ==
-                true ||
+            syncSession.removePendingRetraction(canonicalMessageId) ||
             pendingChanged;
         continue;
       }
@@ -9836,8 +9184,7 @@ mixin MessageService
         continue;
       }
       pendingChanged =
-          _pendingPinRetractionsByChat[chatJid]?.remove(canonicalMessageId) ==
-              true ||
+          syncSession.removePendingRetraction(canonicalMessageId) ||
           pendingChanged;
     }
     for (final messageId in pendingPublishes) {
@@ -9867,8 +9214,7 @@ mixin MessageService
       );
       if (record == null || !record.active) {
         pendingChanged =
-            _pendingPinPublishesByChat[chatJid]?.remove(canonicalMessageId) ==
-                true ||
+            syncSession.removePendingPublish(canonicalMessageId) ||
             pendingChanged;
         continue;
       }
@@ -9883,8 +9229,7 @@ mixin MessageService
         continue;
       }
       pendingChanged =
-          _pendingPinPublishesByChat[chatJid]?.remove(canonicalMessageId) ==
-              true ||
+          syncSession.removePendingPublish(canonicalMessageId) ||
           pendingChanged;
     }
     if (pendingChanged) {
@@ -9992,9 +9337,11 @@ mixin MessageService
     if (trimmed.isEmpty) {
       return;
     }
-    final changed = pinned
-        ? _pendingPinPublishesByChat[chatJid]?.remove(trimmed) == true
-        : _pendingPinRetractionsByChat[chatJid]?.remove(trimmed) == true;
+    final changed =
+        _pinSyncSessionOrNull(
+          chatJid,
+        )?.removePendingMutation(messageStanzaId: trimmed, pinned: pinned) ==
+        true;
     if (changed) {
       await _persistPendingPinSync();
     }
@@ -10036,7 +9383,7 @@ mixin MessageService
     if (normalizedChat == null || trimmedMessageId.isEmpty) {
       return;
     }
-    if (!_legacyPinMirrorReadyChats.contains(normalizedChat)) {
+    if (_pinSyncSessionOrNull(normalizedChat)?.legacyMirrorReady != true) {
       return;
     }
     final pubsub = _pinPubSub();
@@ -10204,35 +9551,29 @@ mixin MessageService
       return;
     }
 
-    final publishes = _pendingPinPublishesByChat.putIfAbsent(
-      normalizedChat,
-      () => <String>{},
-    );
-    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
-      normalizedChat,
-      () => <String>{},
-    );
+    final syncSession = _pinSyncSession(normalizedChat);
 
     var changed = false;
     var movedPublish = false;
     var movedRetraction = false;
     for (final aliasId in aliasIds) {
-      if (publishes.remove(aliasId)) {
+      if (syncSession.removePendingPublish(aliasId)) {
         movedPublish = true;
         changed = true;
       }
-      if (retractions.remove(aliasId)) {
+      if (syncSession.removePendingRetraction(aliasId)) {
         movedRetraction = true;
         changed = true;
       }
     }
     if (movedPublish) {
-      publishes.add(canonicalId);
+      syncSession.pendingPublishes.add(canonicalId);
     }
     if (movedRetraction) {
-      retractions.add(canonicalId);
+      syncSession.pendingRetractions.add(canonicalId);
     }
-    if (publishes.contains(canonicalId) && retractions.contains(canonicalId)) {
+    if (syncSession.pendingPublishes.contains(canonicalId) &&
+        syncSession.pendingRetractions.contains(canonicalId)) {
       final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
         (db) => db.getPinnedMessage(
           chatJid: normalizedChat,
@@ -10240,9 +9581,9 @@ mixin MessageService
         ),
       );
       if (record?.active == true) {
-        changed = retractions.remove(canonicalId) || changed;
+        changed = syncSession.removePendingRetraction(canonicalId) || changed;
       } else {
-        changed = publishes.remove(canonicalId) || changed;
+        changed = syncSession.removePendingPublish(canonicalId) || changed;
       }
     }
     if (changed) {
