@@ -652,24 +652,6 @@ List<CalendarDateTime> _normalizeDateTimes(List<CalendarDateTime> values) {
   return normalized;
 }
 
-class RecurrenceEditorSpacing {
-  const RecurrenceEditorSpacing({
-    this.chipSpacing = 6,
-    this.chipRunSpacing = 6,
-    this.weekdaySpacing = 10,
-    this.advancedSectionSpacing = 12,
-    this.endSpacing = 14,
-    this.fieldGap = 12,
-  });
-
-  final double chipSpacing;
-  final double chipRunSpacing;
-  final double weekdaySpacing;
-  final double advancedSectionSpacing;
-  final double endSpacing;
-  final double fieldGap;
-}
-
 class RecurrenceEditor extends StatefulWidget {
   const RecurrenceEditor({
     super.key,
@@ -678,7 +660,12 @@ class RecurrenceEditor extends StatefulWidget {
     this.enabled = true,
     this.fallbackWeekday,
     this.referenceStart,
-    this.spacing = const RecurrenceEditorSpacing(),
+    this.chipSpacing = 6,
+    this.chipRunSpacing = 6,
+    this.weekdaySpacing = 10,
+    this.advancedSectionSpacing = 12,
+    this.endSpacing = 14,
+    this.fieldGap = 12,
     this.showAdvancedToggle = true,
     this.forceAdvanced = false,
     this.chipPadding,
@@ -691,7 +678,12 @@ class RecurrenceEditor extends StatefulWidget {
   final bool enabled;
   final int? fallbackWeekday;
   final DateTime? referenceStart;
-  final RecurrenceEditorSpacing spacing;
+  final double chipSpacing;
+  final double chipRunSpacing;
+  final double weekdaySpacing;
+  final double advancedSectionSpacing;
+  final double endSpacing;
+  final double fieldGap;
   final bool showAdvancedToggle;
   final bool forceAdvanced;
   final EdgeInsets? chipPadding;
@@ -739,7 +731,6 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
   Widget build(BuildContext context) {
     final enabled = widget.enabled;
     final selectedFrequency = value.frequency;
-    final spacing = widget.spacing;
     final DateTime? referenceStart = widget.referenceStart;
     final bool showAdvancedToggle = widget.showAdvancedToggle;
     final bool forceAdvanced = widget.forceAdvanced;
@@ -760,8 +751,8 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
         );
     final children = <Widget>[
       Wrap(
-        spacing: spacing.chipSpacing,
-        runSpacing: spacing.chipRunSpacing,
+        spacing: widget.chipSpacing,
+        runSpacing: widget.chipRunSpacing,
         children: RecurrenceFrequency.values
             .map(
               (freq) => _RecurrenceFrequencyChip(
@@ -780,7 +771,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
 
     if (selectedFrequency.isWeekly) {
       children
-        ..add(SizedBox(height: spacing.weekdaySpacing))
+        ..add(SizedBox(height: widget.weekdaySpacing))
         ..add(
           _RecurrenceWeekdaySelector(
             enabled: enabled,
@@ -793,19 +784,19 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
 
     if (!selectedFrequency.isNone) {
       children
-        ..add(SizedBox(height: spacing.advancedSectionSpacing))
+        ..add(SizedBox(height: widget.advancedSectionSpacing))
         ..add(
           _RecurrenceIntervalRow(
             enabled: enabled,
             currentInterval: value.interval,
             intervalWidth: widget.intervalSelectWidth,
-            fieldGap: spacing.fieldGap,
+            fieldGap: widget.fieldGap,
             unitLabel: _intervalUnitLabel(value.frequency),
             onIntervalChanged: (newValue) =>
                 widget.onChanged(value.copyWith(interval: newValue)),
           ),
         )
-        ..add(SizedBox(height: spacing.endSpacing))
+        ..add(SizedBox(height: widget.endSpacing))
         ..add(
           _RecurrenceEndControls(
             enabled: enabled,
@@ -855,7 +846,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
 
     if (!selectedFrequency.isNone && (showAdvancedToggle || forceAdvanced)) {
       children
-        ..add(SizedBox(height: spacing.advancedSectionSpacing))
+        ..add(SizedBox(height: widget.advancedSectionSpacing))
         ..add(
           _RecurrenceAdvancedToggle(
             isExpanded: isAdvancedVisible,
@@ -865,7 +856,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
         );
       if (isAdvancedVisible) {
         children
-          ..add(SizedBox(height: spacing.advancedSectionSpacing))
+          ..add(SizedBox(height: widget.advancedSectionSpacing))
           ..add(
             _RecurrenceAdvancedFields(
               enabled: enabled,

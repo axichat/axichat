@@ -8,7 +8,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/priority_checkbox_tile.dart';
-import 'recurrence_spacing_tokens.dart';
 import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
 import 'task_text_field.dart';
@@ -667,7 +666,12 @@ class TaskRecurrenceSection extends StatelessWidget {
     this.enabled = true,
     this.fallbackWeekday,
     this.referenceStart,
-    this.spacingConfig,
+    this.chipSpacing,
+    this.chipRunSpacing,
+    this.weekdaySpacing,
+    this.advancedSectionSpacing,
+    this.endSpacing,
+    this.fieldGap,
     this.showAdvancedToggle = true,
     this.forceAdvanced = false,
     this.chipPadding,
@@ -685,7 +689,12 @@ class TaskRecurrenceSection extends StatelessWidget {
   final bool enabled;
   final int? fallbackWeekday;
   final DateTime? referenceStart;
-  final RecurrenceEditorSpacing? spacingConfig;
+  final double? chipSpacing;
+  final double? chipRunSpacing;
+  final double? weekdaySpacing;
+  final double? advancedSectionSpacing;
+  final double? endSpacing;
+  final double? fieldGap;
   final bool showAdvancedToggle;
   final bool forceAdvanced;
   final EdgeInsets? chipPadding;
@@ -695,8 +704,6 @@ class TaskRecurrenceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double resolvedSpacing = spacing ?? context.spacing.s;
-    final RecurrenceEditorSpacing resolvedSpacingConfig =
-        spacingConfig ?? calendarRecurrenceSpacingStandard(context);
     final EdgeInsets resolvedChipPadding =
         chipPadding ??
         EdgeInsets.symmetric(
@@ -727,7 +734,12 @@ class TaskRecurrenceSection extends StatelessWidget {
             enabled: enabled,
             fallbackWeekday: fallbackWeekday,
             referenceStart: referenceStart,
-            spacing: resolvedSpacingConfig,
+            chipSpacing: chipSpacing ?? context.spacing.s,
+            chipRunSpacing: chipRunSpacing ?? context.spacing.s,
+            weekdaySpacing: weekdaySpacing ?? context.spacing.m,
+            advancedSectionSpacing: advancedSectionSpacing ?? context.spacing.m,
+            endSpacing: endSpacing ?? context.spacing.m,
+            fieldGap: fieldGap ?? context.spacing.m,
             showAdvancedToggle: showAdvancedToggle,
             forceAdvanced: forceAdvanced,
             chipPadding: resolvedChipPadding,

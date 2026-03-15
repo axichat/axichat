@@ -1194,7 +1194,6 @@ class _FreeBusyTaskTile extends StatelessWidget {
       contextMenuController: isReadOnly ? null : contextMenuController,
       contextMenuGroupId: isReadOnly ? null : contextMenuGroupId,
       contextMenuBuilder: isReadOnly ? null : contextMenuBuilder,
-      onDragPointerDown: null,
       onResizePointerMove: null,
       contextMenuLongPressEnabled: isReadOnly
           ? false

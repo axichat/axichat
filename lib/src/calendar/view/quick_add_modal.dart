@@ -26,12 +26,11 @@ import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
 import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
-import 'controllers/quick_add_controller.dart';
 import 'controllers/task_checklist_controller.dart';
+import 'controllers/task_draft_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
 import 'widgets/recurrence_editor.dart';
-import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
@@ -91,7 +90,8 @@ class _QuickAddModalState extends State<QuickAddModal>
   final GlobalKey<ShadFormState> _formKey = GlobalKey<ShadFormState>();
   String? _initialTitleValidationMessage;
 
-  late final QuickAddController _formController;
+  late final TaskDraftController _formController;
+  bool _isSubmitting = false;
   late final NlScheduleParserService _parserService;
   Timer? _parserDebounce;
   int _parserRequestId = 0;
@@ -134,7 +134,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     final prefilled = widget.prefilledDateTime;
 
-    _formController = QuickAddController(
+    _formController = TaskDraftController(
       initialStart: prefilled,
       initialEnd: prefilled?.add(const Duration(hours: 1)),
     );
@@ -180,6 +180,7 @@ class _QuickAddModalState extends State<QuickAddModal>
           child: _QuickAddModalContent(
             isSheet: true,
             formController: _formController,
+            isSubmitting: _isSubmitting,
             taskNameController: _taskNameController,
             descriptionController: _descriptionController,
             locationController: _locationController,
@@ -235,6 +236,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             child: _QuickAddModalContent(
               isSheet: false,
               formController: _formController,
+              isSubmitting: _isSubmitting,
               taskNameController: _taskNameController,
               descriptionController: _descriptionController,
               locationController: _locationController,
@@ -655,7 +657,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Future<void> _submitTask() async {
-    if (_formController.isSubmitting) {
+    if (_isSubmitting) {
       return;
     }
 
@@ -667,7 +669,9 @@ class _QuickAddModalState extends State<QuickAddModal>
       return;
     }
 
-    _formController.setSubmitting(true);
+    setState(() {
+      _isSubmitting = true;
+    });
     try {
       final List<String> queuedPathIds = List<String>.from(
         _queuedCriticalPathIds,
@@ -780,7 +784,9 @@ class _QuickAddModalState extends State<QuickAddModal>
       await _dismissModal();
     } finally {
       if (mounted) {
-        _formController.setSubmitting(false);
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
   }
@@ -861,6 +867,7 @@ class _QuickAddModalContent extends StatelessWidget {
   const _QuickAddModalContent({
     required this.isSheet,
     required this.formController,
+    required this.isSubmitting,
     required this.taskNameController,
     required this.descriptionController,
     required this.locationController,
@@ -898,7 +905,8 @@ class _QuickAddModalContent extends StatelessWidget {
   });
 
   final bool isSheet;
-  final QuickAddController formController;
+  final TaskDraftController formController;
+  final bool isSubmitting;
   final TextEditingController taskNameController;
   final TextEditingController descriptionController;
   final TextEditingController locationController;
@@ -964,7 +972,7 @@ class _QuickAddModalContent extends StatelessWidget {
         return AnimatedBuilder(
           animation: formController,
           builder: (context, _) {
-            final bool disabled = formController.isSubmitting || !canSubmit;
+            final bool disabled = isSubmitting || !canSubmit;
             return _QuickAddHeader(
               onClose: onClose,
               onSubmit: disabled ? null : onTaskSubmit,
@@ -978,7 +986,7 @@ class _QuickAddModalContent extends StatelessWidget {
       builder: (context, value, _) {
         final bool canSubmit = titleValidator(value.text) == null;
         return _QuickAddActions(
-          formController: formController,
+          isSubmitting: isSubmitting,
           onCancel: onCancel,
           onSubmit: onTaskSubmit,
           canSubmit: canSubmit,
@@ -1160,8 +1168,7 @@ class _QuickAddModalContent extends StatelessWidget {
                         TaskSecondaryButton(
                           label: context.l10n.calendarAddToCriticalPath,
                           icon: Icons.route,
-                          onPressed:
-                              formController.isSubmitting || !hasCalendarBloc
+                          onPressed: isSubmitting || !hasCalendarBloc
                               ? null
                               : onAddToCriticalPath,
                         ),
@@ -1376,7 +1383,7 @@ class _QuickAddPriorityToggles extends StatelessWidget {
     required this.onUrgentChanged,
   });
 
-  final QuickAddController formController;
+  final TaskDraftController formController;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
 
@@ -1405,7 +1412,7 @@ class _QuickAddScheduleSection extends StatelessWidget {
     required this.onClear,
   });
 
-  final QuickAddController formController;
+  final TaskDraftController formController;
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
   final VoidCallback onClear;
@@ -1437,7 +1444,7 @@ class _QuickAddDeadlineSection extends StatelessWidget {
     required this.onChanged,
   });
 
-  final QuickAddController formController;
+  final TaskDraftController formController;
   final ValueChanged<DateTime?> onChanged;
 
   @override
@@ -1504,7 +1511,7 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
     required this.fallbackDate,
   });
 
-  final QuickAddController formController;
+  final TaskDraftController formController;
   final ValueChanged<RecurrenceFormValue> onChanged;
   final DateTime? fallbackDate;
 
@@ -1525,7 +1532,12 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
           value: formController.recurrence,
           fallbackWeekday: fallbackWeekday,
           referenceStart: formController.startTime,
-          spacingConfig: calendarRecurrenceSpacingCompact(context),
+          chipSpacing: context.spacing.s,
+          chipRunSpacing: context.spacing.s,
+          weekdaySpacing: context.spacing.s,
+          advancedSectionSpacing: context.spacing.m,
+          endSpacing: context.spacing.m,
+          fieldGap: context.spacing.m,
           onChanged: onChanged,
         );
       },
@@ -1535,13 +1547,13 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
 
 class _QuickAddActions extends StatelessWidget {
   const _QuickAddActions({
-    required this.formController,
+    required this.isSubmitting,
     required this.onCancel,
     required this.onSubmit,
     required this.canSubmit,
   });
 
-  final QuickAddController formController;
+  final bool isSubmitting;
   final VoidCallback onCancel;
   final VoidCallback onSubmit;
   final bool canSubmit;
@@ -1549,34 +1561,28 @@ class _QuickAddActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return AnimatedBuilder(
-      animation: formController,
-      builder: (context, _) {
-        final bool isSubmitting = formController.isSubmitting;
-        final bool disabled = isSubmitting || !canSubmit;
-        return TaskFormActionsRow(
-          includeTopBorder: true,
-          padding: EdgeInsets.all(context.spacing.m),
-          gap: context.spacing.m,
-          children: [
-            Expanded(
-              child: TaskSecondaryButton(
-                label: l10n.calendarCancel,
-                onPressed: isSubmitting ? null : onCancel,
-                widthBehavior: AxiButtonWidth.expand,
-              ),
-            ),
-            Expanded(
-              child: TaskPrimaryButton(
-                label: l10n.calendarAddTaskAction,
-                onPressed: disabled ? null : onSubmit,
-                isBusy: isSubmitting,
-                widthBehavior: AxiButtonWidth.expand,
-              ),
-            ),
-          ],
-        );
-      },
+    final bool disabled = isSubmitting || !canSubmit;
+    return TaskFormActionsRow(
+      includeTopBorder: true,
+      padding: EdgeInsets.all(context.spacing.m),
+      gap: context.spacing.m,
+      children: [
+        Expanded(
+          child: TaskSecondaryButton(
+            label: l10n.calendarCancel,
+            onPressed: isSubmitting ? null : onCancel,
+            widthBehavior: AxiButtonWidth.expand,
+          ),
+        ),
+        Expanded(
+          child: TaskPrimaryButton(
+            label: l10n.calendarAddTaskAction,
+            onPressed: disabled ? null : onSubmit,
+            isBusy: isSubmitting,
+            widthBehavior: AxiButtonWidth.expand,
+          ),
+        ),
+      ],
     );
   }
 }

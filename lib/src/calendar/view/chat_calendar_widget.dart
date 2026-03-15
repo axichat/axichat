@@ -150,9 +150,6 @@ class _ChatCalendarWidgetState
       cancelBucket: cancelBucket,
       backgroundColor: colors.background,
       borderColor: colors.border,
-      dividerColor: colors.border,
-      showTopBorder: false,
-      showDivider: true,
     );
   }
 

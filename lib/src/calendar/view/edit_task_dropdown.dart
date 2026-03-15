@@ -31,7 +31,6 @@ import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/schedule_range_utils.dart';
 import 'package:axichat/src/calendar/utils/task_title_validation.dart';
-import 'models/task_context_action.dart';
 import 'controllers/task_checklist_controller.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/critical_path_panel.dart';
@@ -62,6 +61,21 @@ const String _occurrenceScopeTitle = 'Apply changes to';
 const String _occurrenceScopeInstanceLabel = 'This instance';
 const String _occurrenceScopeFutureLabel = 'This and future';
 const String _occurrenceScopeHint = 'Schedule edits affect the selected range.';
+
+@immutable
+class TaskContextAction {
+  const TaskContextAction({
+    required this.icon,
+    required this.label,
+    required this.onSelected,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onSelected;
+  final bool destructive;
+}
 
 enum TaskEditMode {
   full,
@@ -1696,14 +1710,12 @@ class _EditTaskRecurrenceSection extends StatelessWidget {
       value: value,
       fallbackWeekday: fallbackWeekday,
       referenceStart: referenceStart,
-      spacingConfig: const RecurrenceEditorSpacing(
-        chipSpacing: 6,
-        chipRunSpacing: 6,
-        weekdaySpacing: 10,
-        advancedSectionSpacing: 12,
-        endSpacing: 14,
-        fieldGap: 12,
-      ),
+      chipSpacing: 6,
+      chipRunSpacing: 6,
+      weekdaySpacing: 10,
+      advancedSectionSpacing: 12,
+      endSpacing: 14,
+      fieldGap: 12,
       onChanged: onChanged,
       enabled: enabled,
     );
