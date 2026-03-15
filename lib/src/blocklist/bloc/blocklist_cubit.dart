@@ -9,12 +9,30 @@ import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 
 part 'blocklist_state.dart';
+
+extension BlocklistNoticeLocalization on BlocklistNotice {
+  String resolve(AppLocalizations l10n) => switch (type) {
+    BlocklistNoticeType.invalidJid => l10n.blocklistInvalidJid,
+    BlocklistNoticeType.blockFailed => l10n.blocklistBlockFailed(address ?? ''),
+    BlocklistNoticeType.unblockFailed => l10n.blocklistUnblockFailed(
+      address ?? '',
+    ),
+    BlocklistNoticeType.blocked => l10n.blocklistBlocked(address ?? ''),
+    BlocklistNoticeType.unblocked => l10n.blocklistUnblocked(address ?? ''),
+    BlocklistNoticeType.blockUnsupported => l10n.blocklistBlockingUnsupported,
+    BlocklistNoticeType.unblockUnsupported =>
+      l10n.blocklistUnblockingUnsupported,
+    BlocklistNoticeType.unblockAllFailed => l10n.blocklistUnblockAllFailed,
+    BlocklistNoticeType.unblockAllSuccess => l10n.blocklistUnblockAllSuccess,
+  };
+}
 
 class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {

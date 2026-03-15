@@ -4,11 +4,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
-import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,11 +28,11 @@ void main() {
             children: [
               SizedBox(
                 key: Key('address-avatar-1'),
-                child: AxiAvatar(jid: 'eliot@axichat.com'),
+                child: AxiAvatar(jid: 'sample@example.com'),
               ),
               SizedBox(
                 key: Key('address-avatar-2'),
-                child: AxiAvatar(jid: 'eliot@tuta.com'),
+                child: AxiAvatar(jid: 'sample@example.net'),
               ),
             ],
           ),
@@ -55,78 +52,58 @@ void main() {
     },
   );
 
-  testWidgets(
-    'transport aware email avatars keep the label but seed color from address',
-    (tester) async {
-      final selfIdentity = const SelfIdentitySnapshot(
-        selfJid: null,
-        avatarPath: null,
-      );
-      await tester.pumpWidget(
-        _AxiAvatarTestApp(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                key: const Key('email-avatar-1'),
-                child: TransportAwareAvatar(
-                  chat: _emailChat(
-                    address: 'eliot@axichat.com',
-                    displayName: 'Eliot',
-                  ),
-                  selfIdentity: selfIdentity,
-                  showBadge: false,
-                ),
-              ),
-              SizedBox(
-                key: const Key('email-avatar-2'),
-                child: TransportAwareAvatar(
-                  chat: _emailChat(
-                    address: 'eliot@tuta.com',
-                    displayName: 'Eliot',
-                  ),
-                  selfIdentity: selfIdentity,
-                  showBadge: false,
-                ),
-              ),
-            ],
-          ),
+  testWidgets('chat avatars keep the label but seed color from address', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _AxiAvatarTestApp(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              key: Key('email-avatar-1'),
+              child: AxiAvatar(jid: 'Sample', colorSeed: 'sample@example.com'),
+            ),
+            SizedBox(
+              key: Key('email-avatar-2'),
+              child: AxiAvatar(jid: 'Sample', colorSeed: 'sample@example.net'),
+            ),
+          ],
         ),
-      );
+      ),
+    );
 
-      final firstColor = _avatarBackgroundColor(
-        tester,
-        const Key('email-avatar-1'),
-      );
-      final secondColor = _avatarBackgroundColor(
-        tester,
-        const Key('email-avatar-2'),
-      );
+    final firstColor = _avatarBackgroundColor(
+      tester,
+      const Key('email-avatar-1'),
+    );
+    final secondColor = _avatarBackgroundColor(
+      tester,
+      const Key('email-avatar-2'),
+    );
 
-      expect(firstColor, isNot(equals(secondColor)));
-      expect(find.text('E'), findsNWidgets(2));
-    },
-  );
+    expect(firstColor, isNot(equals(secondColor)));
+    expect(find.text('S'), findsNWidgets(2));
+  });
 
   testWidgets(
-    'avatars show a spinner while avatar bytes are loading from a path',
+    'hydrated avatars show a spinner while avatar bytes are loading from a path',
     (tester) async {
       final xmppService = _MockXmppService();
       final avatarLoad = Completer<Uint8List?>();
       when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
-      when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
       when(
-        () => xmppService.loadAvatarBytes(any()),
+        () => xmppService.resolveSafeAvatarBytes(
+          avatarPath: any(named: 'avatarPath'),
+          avatarBytes: any(named: 'avatarBytes'),
+        ),
       ).thenAnswer((_) => avatarLoad.future);
-      when(
-        () => xmppService.cacheSafeAvatarBytes(any(), any()),
-      ).thenReturn(null);
 
       await tester.pumpWidget(
         _AxiAvatarTestApp(
           xmppService: xmppService,
-          child: const AxiAvatar(
-            jid: 'eliot@axichat.com',
+          child: const HydratedAxiAvatar(
+            jid: 'sample@example.com',
             avatarPath: '/avatars/self.enc',
           ),
         ),
@@ -141,24 +118,23 @@ void main() {
   );
 
   testWidgets(
-    'avatar spinner clears after avatar bytes finish loading successfully',
+    'hydrated avatar spinner clears after avatar bytes finish loading successfully',
     (tester) async {
       final xmppService = _MockXmppService();
       final avatarLoad = Completer<Uint8List?>();
       when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
-      when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
       when(
-        () => xmppService.loadAvatarBytes(any()),
+        () => xmppService.resolveSafeAvatarBytes(
+          avatarPath: any(named: 'avatarPath'),
+          avatarBytes: any(named: 'avatarBytes'),
+        ),
       ).thenAnswer((_) => avatarLoad.future);
-      when(
-        () => xmppService.cacheSafeAvatarBytes(any(), any()),
-      ).thenReturn(null);
 
       await tester.pumpWidget(
         _AxiAvatarTestApp(
           xmppService: xmppService,
-          child: const AxiAvatar(
-            jid: 'eliot@axichat.com',
+          child: const HydratedAxiAvatar(
+            jid: 'sample@example.com',
             avatarPath: '/avatars/self.enc',
           ),
         ),
@@ -174,58 +150,59 @@ void main() {
     },
   );
 
-  testWidgets('avatar spinner clears after avatar bytes fail to load', (
-    tester,
-  ) async {
-    final xmppService = _MockXmppService();
-    final avatarLoad = Completer<Uint8List?>();
-    when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
-    when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
-    when(
-      () => xmppService.loadAvatarBytes(any()),
-    ).thenAnswer((_) => avatarLoad.future);
-    when(() => xmppService.cacheSafeAvatarBytes(any(), any())).thenReturn(null);
-
-    await tester.pumpWidget(
-      _AxiAvatarTestApp(
-        xmppService: xmppService,
-        child: const AxiAvatar(
-          jid: 'eliot@axichat.com',
-          avatarPath: '/avatars/self.enc',
+  testWidgets(
+    'hydrated avatar spinner clears after avatar bytes fail to load',
+    (tester) async {
+      final xmppService = _MockXmppService();
+      final avatarLoad = Completer<Uint8List?>();
+      when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
+      when(
+        () => xmppService.resolveSafeAvatarBytes(
+          avatarPath: any(named: 'avatarPath'),
+          avatarBytes: any(named: 'avatarBytes'),
         ),
-      ),
-    );
+      ).thenAnswer((_) => avatarLoad.future);
 
-    await tester.pump();
-    expect(find.byType(AxiProgressIndicator), findsOneWidget);
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: const HydratedAxiAvatar(
+            jid: 'sample@example.com',
+            avatarPath: '/avatars/self.enc',
+          ),
+        ),
+      );
 
-    avatarLoad.completeError(Exception('avatar load failed'));
-    await tester.pumpAndSettle();
+      await tester.pump();
+      expect(find.byType(AxiProgressIndicator), findsOneWidget);
 
-    expect(find.byType(AxiProgressIndicator), findsNothing);
-  });
+      avatarLoad.completeError(Exception('avatar load failed'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AxiProgressIndicator), findsNothing);
+    },
+  );
 
   testWidgets(
-    'external loading overlay retries the avatar when hydration settles',
+    'hydrated avatar retries the path resolution when external loading settles',
     (tester) async {
       final xmppService = _MockXmppService();
       var cacheReady = false;
       when(() => xmppService.cachedSafeAvatarBytes(any())).thenAnswer(
         (_) => cacheReady ? Uint8List.fromList(_transparentPngBytes) : null,
       );
-      when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
       when(
-        () => xmppService.loadAvatarBytes(any()),
+        () => xmppService.resolveSafeAvatarBytes(
+          avatarPath: any(named: 'avatarPath'),
+          avatarBytes: any(named: 'avatarBytes'),
+        ),
       ).thenAnswer((_) async => null);
-      when(
-        () => xmppService.cacheSafeAvatarBytes(any(), any()),
-      ).thenReturn(null);
 
       await tester.pumpWidget(
         _AxiAvatarTestApp(
           xmppService: xmppService,
-          child: const AxiAvatar(
-            jid: 'eliot@axichat.com',
+          child: const HydratedAxiAvatar(
+            jid: 'sample@example.com',
             avatarPath: '/avatars/self.enc',
             loading: true,
           ),
@@ -239,8 +216,8 @@ void main() {
       await tester.pumpWidget(
         _AxiAvatarTestApp(
           xmppService: xmppService,
-          child: const AxiAvatar(
-            jid: 'eliot@axichat.com',
+          child: const HydratedAxiAvatar(
+            jid: 'sample@example.com',
             avatarPath: '/avatars/self.enc',
             loading: false,
           ),
@@ -261,18 +238,6 @@ Color _avatarBackgroundColor(WidgetTester tester, Key avatarKey) {
   );
   final coloredBox = tester.widget<ColoredBox>(coloredBoxFinder.first);
   return coloredBox.color;
-}
-
-Chat _emailChat({required String address, required String displayName}) {
-  return Chat(
-    jid: address,
-    title: displayName,
-    type: ChatType.chat,
-    lastChangeTimestamp: DateTime(2026),
-    transport: MessageTransport.email,
-    contactDisplayName: displayName,
-    emailAddress: address,
-  );
 }
 
 class _AxiAvatarTestApp extends StatelessWidget {

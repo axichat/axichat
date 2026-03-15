@@ -3,7 +3,6 @@
 
 import 'dart:typed_data';
 
-import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';

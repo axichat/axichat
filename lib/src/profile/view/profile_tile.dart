@@ -4,7 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/routes.dart';
@@ -177,7 +177,7 @@ class _ProfileTileLayout extends StatelessWidget {
         children: [
           Hero(
             tag: 'avatar',
-            child: AxiAvatar(
+            child: HydratedAxiAvatar(
               jid: jid,
               subscription: Subscription.both,
               avatarPath: avatarPath,

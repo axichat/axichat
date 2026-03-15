@@ -10,6 +10,7 @@ import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
 import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
 import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:file_picker/file_picker.dart';
@@ -22,6 +23,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 part 'avatar_editor_cubit.freezed.dart';
 part 'avatar_editor_state.dart';
 
+enum AvatarEditorMode { none, colorOnly, cropOnly }
+
 enum AvatarEditorErrorType {
   openFailed,
   readFailed,
@@ -33,6 +36,21 @@ enum AvatarEditorErrorType {
   publishRejected,
   publishTimeout,
   publishGeneric,
+}
+
+extension AvatarEditorErrorLocalization on AvatarEditorErrorType {
+  String resolve(AppLocalizations l10n) => switch (this) {
+    AvatarEditorErrorType.openFailed => l10n.avatarOpenError,
+    AvatarEditorErrorType.readFailed => l10n.avatarReadError,
+    AvatarEditorErrorType.invalidImage => l10n.avatarInvalidImageError,
+    AvatarEditorErrorType.processingFailed => l10n.avatarProcessError,
+    AvatarEditorErrorType.templateLoadFailed => l10n.avatarTemplateLoadError,
+    AvatarEditorErrorType.missingDraft => l10n.avatarMissingDraftError,
+    AvatarEditorErrorType.xmppDisconnected => l10n.avatarXmppDisconnectedError,
+    AvatarEditorErrorType.publishRejected => l10n.avatarPublishRejectedError,
+    AvatarEditorErrorType.publishTimeout => l10n.avatarPublishTimeoutError,
+    AvatarEditorErrorType.publishGeneric => l10n.avatarPublishGenericError,
+  };
 }
 
 class AvatarEditorCubit extends Cubit<AvatarEditorState> {

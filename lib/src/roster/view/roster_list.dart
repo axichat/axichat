@@ -135,7 +135,7 @@ class _RosterListBody extends StatelessWidget {
                     ),
                   ],
                   selected: open,
-                  leading: AxiAvatar(
+                  leading: HydratedAxiAvatar(
                     jid: item.jid,
                     subscription: item.subscription,
                     // Presence is parsed for MUC/identity purposes but not shown

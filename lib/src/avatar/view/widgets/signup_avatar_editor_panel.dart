@@ -5,7 +5,6 @@ import 'dart:typed_data';
 
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';

@@ -7,12 +7,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
-import 'package:axichat/src/avatar/view/avatar_error_l10n.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_sheet_header.dart';
@@ -353,7 +352,11 @@ class _RoomAvatarSection extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          AxiAvatar(jid: roomJid, size: avatarSize, avatarPath: avatarPath),
+          HydratedAxiAvatar(
+            jid: roomJid,
+            size: avatarSize,
+            avatarPath: avatarPath,
+          ),
           if (loading)
             IgnorePointer(
               child: ClipPath(
@@ -695,7 +698,7 @@ class _MemberTileState extends State<_MemberTile> {
         width: context.borderSide.width,
       ),
     );
-    final avatar = AxiAvatar(
+    final avatar = HydratedAxiAvatar(
       jid: avatarKey,
       size: sizing.iconButtonSize,
       avatarPath: widget.avatarPath,

@@ -26,7 +26,10 @@ class BlocklistTile extends StatelessWidget {
         final avatarPath = normalizedJid == null
             ? null
             : avatarPathsByJid?[normalizedJid];
-        final avatar = AxiAvatar(jid: entry.address, avatarPath: avatarPath);
+        final avatar = HydratedAxiAvatar(
+          jid: entry.address,
+          avatarPath: avatarPath,
+        );
         return AxiListTile(
           leading: avatar,
           title: entry.address,

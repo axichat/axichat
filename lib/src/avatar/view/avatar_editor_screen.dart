@@ -6,7 +6,6 @@ import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/avatar/view/avatar_error_l10n.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -331,7 +330,7 @@ class _AvatarCenterStage extends StatelessWidget {
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
                 )
-              : AxiAvatar(
+              : HydratedAxiAvatar(
                   jid: profile.jid,
                   size: avatarSize,
                   subscription: Subscription.both,

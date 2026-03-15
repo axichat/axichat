@@ -15,7 +15,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
-import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -851,10 +851,27 @@ class _ChatListTileState extends State<ChatListTile> {
       paintSurface: false,
       contentPadding: tilePadding,
       tapBounce: false,
-      leading: TransportAwareAvatar(
-        chat: item,
-        selfIdentity: widget.selfIdentity,
-      ),
+      leading: () {
+        final avatarData = item.avatarData(
+          selfJid: widget.selfIdentity.selfJid,
+          selfAvatarPath: widget.selfIdentity.avatarPath,
+          selfAvatarLoading: widget.selfIdentity.avatarLoading,
+        );
+        if (avatarData.isAppIcon) {
+          return AxichatAppIconAvatar(size: sizing.iconButtonTapTarget);
+        }
+        return AvatarTransportBadgeOverlay(
+          size: sizing.iconButtonTapTarget,
+          transport: item.defaultTransport,
+          child: HydratedAxiAvatar(
+            jid: avatarData.identifier!,
+            colorSeed: avatarData.colorSeed,
+            size: sizing.iconButtonTapTarget,
+            loading: avatarData.loading,
+            avatarPath: avatarData.avatarPath,
+          ),
+        );
+      }(),
       title: isCalendarFirstRoom ? null : displayName,
       titleWidget: isCalendarFirstRoom
           ? _CalendarRoomTitle(title: displayName)

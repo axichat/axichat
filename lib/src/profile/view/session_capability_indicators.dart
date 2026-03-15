@@ -3,7 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -145,6 +145,8 @@ class _CapabilityChipData {
   final Color background;
   final Color foreground;
   final _CapabilityLevel level;
+
+  String get semanticsLabel => '$label $status';
 }
 
 class _CapabilityChip extends StatelessWidget {
@@ -175,45 +177,63 @@ class _CapabilityChip extends StatelessWidget {
       fontWeight: FontWeight.w700,
     );
     final maxLines = compact ? 1 : 2;
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: data.background,
-        shape: RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(radii.squircleSm),
-          side: context.borderSide,
+    final Widget statusChild = switch (data.level) {
+      _CapabilityLevel.ready => Icon(
+        LucideIcons.check,
+        size: sizing.menuItemIconSize,
+        color: data.foreground,
+      ),
+      _CapabilityLevel.syncing => Flexible(
+        fit: FlexFit.loose,
+        child: Text(
+          data.status,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: statusStyle,
         ),
       ),
-      child: Padding(
-        padding: chipPadding,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              data.icon,
-              size: sizing.menuItemIconSize,
-              color: colors.foreground,
+      _ => Flexible(
+        fit: FlexFit.loose,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: data.label, style: labelStyle),
+              TextSpan(text: ' • ', style: separatorStyle),
+              TextSpan(text: data.status, style: statusStyle),
+            ],
+          ),
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    };
+    return Semantics(
+      container: true,
+      label: data.semanticsLabel,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            color: data.background,
+            shape: RoundedSuperellipseBorder(
+              borderRadius: BorderRadius.circular(radii.squircleSm),
+              side: context.borderSide,
             ),
-            SizedBox(width: spacing.xs),
-            Flexible(
-              fit: FlexFit.loose,
-              child: Text.rich(
-                TextSpan(
-                  children: switch (data.level) {
-                    _CapabilityLevel.ready || _CapabilityLevel.syncing => [
-                      TextSpan(text: data.status, style: statusStyle),
-                    ],
-                    _ => [
-                      TextSpan(text: data.label, style: labelStyle),
-                      TextSpan(text: ' • ', style: separatorStyle),
-                      TextSpan(text: data.status, style: statusStyle),
-                    ],
-                  },
+          ),
+          child: Padding(
+            padding: chipPadding,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  data.icon,
+                  size: sizing.menuItemIconSize,
+                  color: colors.foreground,
                 ),
-                maxLines: maxLines,
-                overflow: TextOverflow.ellipsis,
-              ),
+                SizedBox(width: spacing.xs),
+                statusChild,
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

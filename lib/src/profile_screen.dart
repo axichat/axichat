@@ -14,7 +14,7 @@ import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
@@ -689,7 +689,7 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                AxiAvatar(
+                HydratedAxiAvatar(
                   jid: widget.jid,
                   subscription: Subscription.both,
                   presence: null,

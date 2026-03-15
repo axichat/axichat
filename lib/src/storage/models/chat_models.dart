@@ -991,7 +991,40 @@ extension ChatTransportExtension on Chat {
   }
 }
 
+enum ChatAvatarKind { avatar, appIcon }
+
+final class ChatAvatarData extends Equatable {
+  const ChatAvatarData.appIcon()
+    : kind = ChatAvatarKind.appIcon,
+      identifier = null,
+      colorSeed = null,
+      avatarPath = null,
+      loading = false;
+
+  const ChatAvatarData.avatar({
+    required this.identifier,
+    required this.colorSeed,
+    required this.avatarPath,
+    required this.loading,
+  }) : kind = ChatAvatarKind.avatar;
+
+  final ChatAvatarKind kind;
+  final String? identifier;
+  final String? colorSeed;
+  final String? avatarPath;
+  final bool loading;
+
+  bool get isAppIcon => kind == ChatAvatarKind.appIcon;
+
+  @override
+  List<Object?> get props => [kind, identifier, colorSeed, avatarPath, loading];
+}
+
 extension ChatAvatarExtension on Chat {
+  bool isSelfAvatarChat(String? selfJid) {
+    return remoteJid.sameBare(selfJid?.trim());
+  }
+
   String? get effectiveAvatarPath {
     final primary = avatarPath?.trim();
     if (primary != null && primary.isNotEmpty) {
@@ -1042,6 +1075,55 @@ extension ChatAvatarExtension on Chat {
       return remote;
     }
     return avatarIdentifier;
+  }
+
+  String? resolvedAvatarPath({
+    String? selfJid,
+    String? selfAvatarPath,
+    String? avatarPathOverride,
+  }) {
+    final overridePath = avatarPathOverride?.trim();
+    if (overridePath != null && overridePath.isNotEmpty) {
+      return overridePath;
+    }
+    final resolvedSelfAvatarPath = selfAvatarPath?.trim();
+    if (isSelfAvatarChat(selfJid) &&
+        resolvedSelfAvatarPath != null &&
+        resolvedSelfAvatarPath.isNotEmpty) {
+      return resolvedSelfAvatarPath;
+    }
+    return effectiveAvatarPath;
+  }
+
+  bool resolvedAvatarLoading({
+    String? selfJid,
+    required bool selfAvatarLoading,
+  }) {
+    return isSelfAvatarChat(selfJid) && selfAvatarLoading;
+  }
+
+  ChatAvatarData avatarData({
+    String? selfJid,
+    String? selfAvatarPath,
+    bool selfAvatarLoading = false,
+    String? avatarPathOverride,
+  }) {
+    if (isAxichatWelcomeThread) {
+      return const ChatAvatarData.appIcon();
+    }
+    return ChatAvatarData.avatar(
+      identifier: avatarIdentifier,
+      colorSeed: avatarColorSeed,
+      avatarPath: resolvedAvatarPath(
+        selfJid: selfJid,
+        selfAvatarPath: selfAvatarPath,
+        avatarPathOverride: avatarPathOverride,
+      ),
+      loading: resolvedAvatarLoading(
+        selfJid: selfJid,
+        selfAvatarLoading: selfAvatarLoading,
+      ),
+    );
   }
 }
 
