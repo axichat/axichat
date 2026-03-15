@@ -9,7 +9,6 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
@@ -19,15 +18,14 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
-import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/common/safe_logging.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -813,16 +811,14 @@ class CalendarBloc extends BaseCalendarBloc {
     }
   }
 
-  Future<EmailAttachment?> _buildCalendarTaskAttachment(
-    CalendarTask task,
-  ) async {
+  Future<Attachment?> _buildCalendarTaskAttachment(CalendarTask task) async {
     try {
       const transferService = CalendarTransferService();
       final File file = await transferService.exportTaskIcs(task: task);
       CalendarTransferService.scheduleCleanup(file);
       final int sizeBytes = await file.length();
       const String calendarIcsMimeType = 'text/calendar';
-      return EmailAttachment(
+      return Attachment(
         path: file.path,
         fileName: file.uri.pathSegments.last,
         sizeBytes: sizeBytes,

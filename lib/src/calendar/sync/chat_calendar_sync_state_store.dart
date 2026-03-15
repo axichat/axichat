@@ -2,7 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
-import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
+import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/storage/state_store.dart';
 
 class ChatCalendarSyncStateStore {

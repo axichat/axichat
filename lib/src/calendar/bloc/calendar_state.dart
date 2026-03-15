@@ -7,7 +7,6 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
-import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
@@ -27,6 +26,15 @@ class TaskFocusRequest {
   final DateTime anchor;
   final int token;
 }
+
+@immutable
+class CalendarSyncWarning {
+  const CalendarSyncWarning({required this.type});
+
+  final CalendarSyncWarningType type;
+}
+
+enum CalendarSyncWarningType { snapshotUnavailable }
 
 @freezed
 abstract class CalendarState with _$CalendarState {
