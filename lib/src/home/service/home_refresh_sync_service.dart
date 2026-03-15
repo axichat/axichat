@@ -4,7 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
