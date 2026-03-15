@@ -359,6 +359,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService {
   int _nextMucJoinAttemptId = _mucJoinAttemptIdStart;
   String? _mucServiceHost;
   Future<List<MucBookmark>>? _mucBookmarksSync;
+  final Set<String> _mucMamUnsupportedRooms = {};
 
   Future<CapabilityDecision> _decideMucSupport({String? jid}) async {
     final candidate = jid?.trim();
@@ -630,6 +631,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService {
     }
     _roomSubjectStreams.clear();
     _mucBookmarksSync = null;
+    _mucMamUnsupportedRooms.clear();
     await super._reset();
   }
 
@@ -667,6 +669,44 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService {
     } on Exception {
       return _messageTypeChat;
     }
+  }
+
+  bool _canQueryMucArchive(String jid) {
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) return false;
+    late final String bareRoom;
+    try {
+      bareRoom = mox.JID.fromString(trimmed).toBare().toString();
+    } on Exception {
+      return false;
+    }
+    if (_mucMamUnsupportedRooms.contains(bareRoom)) return false;
+    if (hasLeftRoom(bareRoom)) return false;
+    final roomState = roomStateFor(bareRoom);
+    if (roomState == null) return false;
+    if (roomState.myOccupantJid == null) return false;
+    if (!roomState.hasSelfPresence) return false;
+    return true;
+  }
+
+  bool _isBareMucRoomJidForCapabilities(String jid) {
+    final normalizedRoom = _normalizeMucRoomJidCandidate(jid);
+    if (normalizedRoom == null) return false;
+    try {
+      final parsed = mox.JID.fromString(jid);
+      if (parsed.resource.isNotEmpty) return false;
+    } on Exception {
+      return false;
+    }
+    return _isMucChatJid(normalizedRoom) ||
+        roomStateFor(normalizedRoom) != null;
+  }
+
+  CalendarFragmentShareDecision calendarFragmentDecisionForChat(Chat chat) {
+    return const CalendarFragmentPolicy().decisionForChat(
+      chat: chat,
+      roomState: roomStateFor(chat.jid),
+    );
   }
 
   CalendarChatRole? _calendarSyncSenderRole(
