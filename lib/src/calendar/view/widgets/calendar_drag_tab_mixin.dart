@@ -44,6 +44,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   bool _showScheduleTabCue = false;
   bool _showTasksTabCue = false;
   bool _cancelBucketHovering = false;
+  bool _dragChromeHovering = false;
   final GlobalKey _cancelBucketKey = GlobalKey(
     debugLabel: 'calendarDragCancelBucket',
   );
@@ -133,6 +134,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     _setTasksTabCue(false);
     _cancelSwitchTimer();
     _cancelDayShiftTimer();
+    _updateDragChromeHovering();
   }
 
   Widget buildDragEdgeTargets() {
@@ -515,7 +517,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     setState(() {
       _cancelBucketHovering = value;
     });
-    onCancelBucketHoverChanged(value);
+    _updateDragChromeHovering();
   }
 
   void _setActiveCancelPayload(CalendarDragPayload? payload) {
@@ -792,21 +794,35 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   void _setScheduleTabCue(bool showCue) {
     if (!mounted || _showScheduleTabCue == showCue) {
       _showScheduleTabCue = showCue;
+      _updateDragChromeHovering();
       return;
     }
     setState(() {
       _showScheduleTabCue = showCue;
     });
+    _updateDragChromeHovering();
   }
 
   void _setTasksTabCue(bool showCue) {
     if (!mounted || _showTasksTabCue == showCue) {
       _showTasksTabCue = showCue;
+      _updateDragChromeHovering();
       return;
     }
     setState(() {
       _showTasksTabCue = showCue;
     });
+    _updateDragChromeHovering();
+  }
+
+  void _updateDragChromeHovering() {
+    final bool isHovering =
+        _cancelBucketHovering || _showScheduleTabCue || _showTasksTabCue;
+    if (_dragChromeHovering == isHovering) {
+      return;
+    }
+    _dragChromeHovering = isHovering;
+    onCancelBucketHoverChanged(isHovering);
   }
 
   void _handleTabControllerChanged() {

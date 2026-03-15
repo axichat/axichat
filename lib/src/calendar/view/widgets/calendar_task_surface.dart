@@ -576,7 +576,7 @@ class _CalendarTaskDragFeedback extends StatelessWidget {
       builder: (context, hovering, child) {
         return AnimatedOpacity(
           duration: calendarTaskSplitPreviewAnimationDuration,
-          opacity: hovering ? 0.45 : 1.0,
+          opacity: hovering ? 0.45 : 0.8,
           child: child,
         );
       },

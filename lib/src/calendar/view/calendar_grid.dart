@@ -234,6 +234,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _gridContextMenuController = ShadPopoverController();
     _taskInteractionController.clipboard.addListener(_handleClipboardChanged);
     _taskInteractionController.preview.addListener(_handleDragPreviewChanged);
+    _cancelBucketHoverNotifier.addListener(_handleBottomDragChromeHoverChanged);
     _taskPopoverController = TaskPopoverController();
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
@@ -844,6 +845,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.preview.removeListener(
       _handleDragPreviewChanged,
     );
+    _cancelBucketHoverNotifier.removeListener(
+      _handleBottomDragChromeHoverChanged,
+    );
     _horizontalHeaderController.removeListener(_handleHorizontalHeaderScroll);
     _horizontalGridController.removeListener(_handleHorizontalGridScroll);
     _horizontalHeaderController.dispose();
@@ -884,6 +888,24 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _surfaceController.updateDragPreview(
       _taskInteractionController.preview.value,
     );
+  }
+
+  void _handleBottomDragChromeHoverChanged() {
+    if (!_cancelBucketHoverNotifier.value) {
+      return;
+    }
+    final CalendarInteractionSession? session =
+        _taskInteractionController.activeInteractionSession;
+    if (session != null &&
+        (session.verticalIntent != CalendarInteractionVerticalIntent.neutral ||
+            session.horizontalIntent !=
+                CalendarInteractionHorizontalIntent.neutral)) {
+      _taskInteractionController.updateInteractionEdgeIntent(
+        verticalIntent: CalendarInteractionVerticalIntent.neutral,
+        horizontalIntent: CalendarInteractionHorizontalIntent.neutral,
+      );
+    }
+    _stopEdgeAutoScroll();
   }
 
   void _copyTaskInstance(CalendarTask task) {
@@ -1277,6 +1299,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didUpdateWidget(covariant CalendarGrid<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.cancelBucketHoverNotifier,
+      widget.cancelBucketHoverNotifier,
+    )) {
+      (oldWidget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier)
+          .removeListener(_handleBottomDragChromeHoverChanged);
+      _cancelBucketHoverNotifier.addListener(
+        _handleBottomDragChromeHoverChanged,
+      );
+    }
     if (oldWidget.state.viewMode != widget.state.viewMode) {
       _dateSlideDirection = 0;
     } else if (!_isSameDay(
@@ -2420,6 +2452,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarInteractionSession? session =
         _taskInteractionController.activeInteractionSession;
     if (session == null) {
+      _stopEdgeAutoScroll();
+      return;
+    }
+    if (_cancelBucketHoverNotifier.value) {
+      if (session.verticalIntent != CalendarInteractionVerticalIntent.neutral ||
+          session.horizontalIntent !=
+              CalendarInteractionHorizontalIntent.neutral) {
+        _taskInteractionController.updateInteractionEdgeIntent(
+          verticalIntent: CalendarInteractionVerticalIntent.neutral,
+          horizontalIntent: CalendarInteractionHorizontalIntent.neutral,
+        );
+      }
       _stopEdgeAutoScroll();
       return;
     }
