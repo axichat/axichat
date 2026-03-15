@@ -42,7 +42,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
     required this.onResizePreview,
     required this.onResizeEnd,
     required this.onResizePointerMove,
-    required this.onDragPointerDown,
     required this.onTap,
     required this.onToggleSelection,
     required this.onContextMenuPosition,
@@ -63,7 +62,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   final ValueChanged<CalendarTask>? onResizePreview;
   final ValueChanged<CalendarTask>? onResizeEnd;
   final ValueChanged<Offset>? onResizePointerMove;
-  final ValueChanged<Offset>? onDragPointerDown;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
   final VoidCallback? onToggleSelection;
   final TaskTileContextMenuCallback? onContextMenuPosition;
@@ -85,7 +83,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       onResizePreview: onResizePreview,
       onResizeEnd: onResizeEnd,
       onResizePointerMove: onResizePointerMove,
-      onDragPointerDown: onDragPointerDown,
       onTap: onTap,
       onToggleSelection: onToggleSelection,
       onContextMenuPosition: onContextMenuPosition,
@@ -112,7 +109,6 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       ..onResizePreview = onResizePreview
       ..onResizeEnd = onResizeEnd
       ..onResizePointerMove = onResizePointerMove
-      ..onDragPointerDown = onDragPointerDown
       ..onTap = onTap
       ..onToggleSelection = onToggleSelection
       ..onContextMenuPosition = onContextMenuPosition
@@ -135,7 +131,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     ValueChanged<CalendarTask>? onResizePreview,
     ValueChanged<CalendarTask>? onResizeEnd,
     ValueChanged<Offset>? onResizePointerMove,
-    ValueChanged<Offset>? onDragPointerDown,
     void Function(CalendarTask task, Rect globalBounds)? onTap,
     VoidCallback? onToggleSelection,
     TaskTileContextMenuCallback? onContextMenuPosition,
@@ -154,7 +149,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
        _onResizePreview = onResizePreview,
        _onResizeEnd = onResizeEnd,
        _onResizePointerMove = onResizePointerMove,
-       _onDragPointerDown = onDragPointerDown,
        _onTap = onTap,
        _onToggleSelection = onToggleSelection,
        _onContextMenuPosition = onContextMenuPosition,
@@ -183,7 +177,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   ValueChanged<CalendarTask>? _onResizePreview;
   ValueChanged<CalendarTask>? _onResizeEnd;
   ValueChanged<Offset>? _onResizePointerMove;
-  ValueChanged<Offset>? _onDragPointerDown;
   void Function(CalendarTask task, Rect globalBounds)? _onTap;
   VoidCallback? _onToggleSelection;
   TaskTileContextMenuCallback? _onContextMenuPosition;
@@ -308,11 +301,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _onResizePointerMove = value;
   }
 
-  ValueChanged<Offset>? get onDragPointerDown => _onDragPointerDown;
-  set onDragPointerDown(ValueChanged<Offset>? value) {
-    _onDragPointerDown = value;
-  }
-
   void Function(CalendarTask task, Rect globalBounds)? get onTap => _onTap;
   set onTap(void Function(CalendarTask task, Rect globalBounds)? value) {
     _onTap = value;
@@ -329,7 +317,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _onContextMenuPosition = value;
   }
 
-  bool get _isDraggingSelf => interactionController.draggingTaskId == task.id;
+  bool get _isDraggingSelf => interactionController.isDraggingTask(task);
 
   bool get _canResize =>
       enableInteractions && task.scheduledTime != null && size.height > 0;
@@ -470,7 +458,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
         }
         return;
       }
-      onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
     } else if (_hitHandle(event.localPosition) != null && _canResize) {
       // Secondary drag shouldn't initiate resize; ensure cursor updates only.
       _updateCursor(event.localPosition);

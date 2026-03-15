@@ -25,9 +25,9 @@ class CalendarTaskTileCallbacks {
     required this.onResizeEnd,
     required this.onResizePointerMove,
     required this.onDragStarted,
+    required this.resolveDragOriginSlot,
     required this.onDragUpdate,
     required this.onDragEnded,
-    required this.onDragPointerDown,
     required this.onEnterSelectionMode,
     required this.onToggleSelection,
     required this.onTap,
@@ -37,10 +37,10 @@ class CalendarTaskTileCallbacks {
   final ValueChanged<CalendarTask> onResizePreview;
   final ValueChanged<CalendarTask> onResizeEnd;
   final ValueChanged<Offset> onResizePointerMove;
-  final void Function(CalendarTask task, Rect bounds) onDragStarted;
+  final VoidCallback onDragStarted;
+  final DateTime? Function(CalendarTask task) resolveDragOriginSlot;
   final ValueChanged<DragUpdateDetails> onDragUpdate;
   final ValueChanged<CalendarTask> onDragEnded;
-  final ValueChanged<Offset> onDragPointerDown;
   final VoidCallback onEnterSelectionMode;
   final VoidCallback onToggleSelection;
   final void Function(CalendarTask task, Rect globalBounds)? onTap;
@@ -58,7 +58,6 @@ class CalendarTaskEntryBindings {
     required this.enableContextMenuLongPress,
     required this.resizeHandleExtent,
     required this.interactionController,
-    required this.dragFeedbackHint,
     required this.cancelBucketHoverNotifier,
     required this.callbacks,
     required this.geometryProvider,
@@ -82,7 +81,6 @@ class CalendarTaskEntryBindings {
   final bool enableContextMenuLongPress;
   final double resizeHandleExtent;
   final TaskInteractionController interactionController;
-  final ValueListenable<DragFeedbackHint> dragFeedbackHint;
   final ValueListenable<bool> cancelBucketHoverNotifier;
   final CalendarTaskTileCallbacks callbacks;
   final CalendarTaskGeometry? Function(String taskId) geometryProvider;
@@ -254,9 +252,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
         return ValueListenableBuilder<String?>(
           valueListenable: _interactionController.dropHoverTaskId,
           builder: (context, dropHoverTaskId, _) {
-            final bool isDraggingTask =
-                _interactionController.draggingTaskId != null &&
-                task.id == _interactionController.draggingTaskId;
+            final bool isDraggingTask = _interactionController.isDraggingTask(
+              task,
+            );
             final bool isHoverTarget = dropHoverTaskId == task.id;
             final CalendarTask? previewTaskCandidate = _previewTaskCandidate(
               preview: preview,
@@ -298,7 +296,6 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 enableInteractions: enableInteractions,
                 isSelectionMode: bindings.isSelectionMode,
                 isSelected: bindings.isSelected,
-                dragFeedbackHint: bindings.dragFeedbackHint,
                 contextMenuController: _menuController,
                 contextMenuGroupId: bindings.contextMenuGroupId,
                 contextMenuBuilder: contextMenuBuilder,
@@ -306,14 +303,11 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                     bindings.enableContextMenuLongPress,
                 resizeHandleExtent: bindings.resizeHandleExtent,
                 touchHoldDelay: bindings.longPressToDragDelay,
-                onDragPointerDown: enableInteractions
-                    ? _callbacks.onDragPointerDown
-                    : null,
                 onToggleSelection: enableInteractions
                     ? () {
                         if (bindings.isSelectionMode &&
                             bindings.isSelected &&
-                            _interactionController.draggingTaskId == task.id) {
+                            _interactionController.isDraggingTask(task)) {
                           _callbacks.onDragEnded(task);
                         }
                         if (bindings.isSelectionMode) {
@@ -332,6 +326,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 globalRectProvider: bindings.globalRectProvider,
                 interactionController: _interactionController,
                 onDragStarted: _callbacks.onDragStarted,
+                resolveDragOriginSlot: _callbacks.resolveDragOriginSlot,
                 onDragUpdate: _callbacks.onDragUpdate,
                 onDragEnded: _callbacks.onDragEnded,
                 snapshotBuilder: () => task.copyWith(),
@@ -345,18 +340,17 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                       isDayView: widget.isDayView,
                     ),
                 enabled: enableInteractions,
-                childWhenDragging: const SizedBox.shrink(),
+                childWhenDragging: const SizedBox.expand(),
                 requiresLongPress: bindings.requiresLongPressToDrag,
                 longPressDelay: bindings.longPressToDragDelay,
                 child: resizable,
               );
             }
 
-            Widget baseTask = buildBaseTask(
-              enableInteractions: !isDraggingTask,
-            );
+            Widget baseTask = buildBaseTask(enableInteractions: true);
+
             if (isDraggingTask) {
-              baseTask = Opacity(opacity: 0.0, child: baseTask);
+              return const SizedBox.expand();
             }
 
             if (previewTaskCandidate != null && !isDraggingTask) {
@@ -468,7 +462,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     if (dragging == null) {
       return null;
     }
-    if (dragging.id == task.id) {
+    if (_interactionController.isDraggingTask(task)) {
       return null;
     }
     if (isHoverTarget) {

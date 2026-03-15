@@ -16,7 +16,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_free_busy_style.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/layout/calendar_layout.dart';
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_surface.dart';
 
@@ -138,12 +138,18 @@ class CalendarSurfaceController {
     return true;
   }
 
-  bool dispatchActiveDragUpdate(Offset globalPosition) {
+  bool dispatchActiveDragUpdate(
+    Offset globalPosition, {
+    bool markDragMoved = true,
+  }) {
     final RenderCalendarSurface? surface = _activeSurface;
     if (surface == null) {
       return false;
     }
-    return surface.dispatchActiveDragUpdate(globalPosition);
+    return surface.dispatchActiveDragUpdate(
+      globalPosition,
+      markDragMoved: markDragMoved,
+    );
   }
 }
 
@@ -656,7 +662,6 @@ class RenderCalendarSurface extends RenderBox
   );
   int? _activePointerId;
   String? _currentHoverTaskId;
-  String? _externalDragTaskId;
 
   bool get _isDragInProgress => isTaskDragInProgress?.call() ?? false;
 
@@ -683,19 +688,6 @@ class RenderCalendarSurface extends RenderBox
       child = childAfter(child);
     }
     return null;
-  }
-
-  _DragLayoutOverride? _dragOverrideForTask(
-    CalendarTask task,
-    CalendarLayoutMetrics metrics,
-  ) {
-    final TaskInteractionController? controller = _interactionController;
-    if (controller == null ||
-        controller.draggingTaskId != task.id ||
-        !controller.dragHasMoved) {
-      return null;
-    }
-    return _resolveActiveDragLayoutOverride(metrics, requireMovement: true);
   }
 
   _DragLayoutOverride? _resolveActiveDragLayoutOverride(
@@ -903,13 +895,6 @@ class RenderCalendarSurface extends RenderBox
       columnTop,
       math.max(columnTop, columnBottom - previewHeight),
     );
-
-    double updatedPointerOffset = pointerLocalDy - clampedTopLocal;
-    if (!updatedPointerOffset.isFinite) {
-      updatedPointerOffset = pointerOffset;
-    }
-    updatedPointerOffset = updatedPointerOffset.clamp(0.0, pointerClampHeight);
-    controller.setDragPointerOffsetFromTop(updatedPointerOffset, notify: false);
 
     final DateTime dayStart = DateTime(
       columnGeometry.date.year,
@@ -1129,13 +1114,17 @@ class RenderCalendarSurface extends RenderBox
     );
   }
 
-  bool dispatchActiveDragUpdate(Offset globalPosition) {
+  bool dispatchActiveDragUpdate(
+    Offset globalPosition, {
+    bool markDragMoved = true,
+  }) {
     final TaskInteractionController? controller = _interactionController;
     final CalendarTask? draggingTask = controller?.draggingTaskSnapshot;
     if (controller == null || draggingTask == null) {
       _updateHoverTask(null);
       return false;
     }
+    onDragAutoScroll?.call(globalPosition);
     controller.updateDragPointerGlobalPosition(globalPosition);
     return _dispatchDragUpdate(
       localPosition: _contentClampedDragLocalOffset(
@@ -1144,6 +1133,7 @@ class RenderCalendarSurface extends RenderBox
       globalPosition: globalPosition,
       controller: controller,
       draggingTask: draggingTask,
+      markDragMoved: markDragMoved,
     );
   }
 
@@ -1152,6 +1142,7 @@ class RenderCalendarSurface extends RenderBox
     required Offset globalPosition,
     required TaskInteractionController controller,
     required CalendarTask draggingTask,
+    bool markDragMoved = true,
   }) {
     final Offset clampedLocal = _contentClampedDragLocalOffset(localPosition);
 
@@ -1192,23 +1183,9 @@ class RenderCalendarSurface extends RenderBox
         hit != null && controller.draggingTaskId != hit.task.id
         ? hit.task.id
         : null;
-    final _TaskHit? hoverHit = hoverTaskId != null ? hit : null;
     _updateHoverTask(hoverTaskId);
 
-    if (hoverHit != null) {
-      final DateTime targetDate =
-          hoverHit.geometry.columnDate ??
-          DateTime(previewStart.year, previewStart.month, previewStart.day);
-      final DateTime? hoverStart = _computePreviewStartForHover(
-        targetDate,
-        globalPosition,
-      );
-      if (hoverStart != null) {
-        previewStart = hoverStart;
-      }
-    }
-
-    if (!controller.dragHasMoved) {
+    if (markDragMoved && !controller.dragHasMoved) {
       controller.markDragMoved();
     }
 
@@ -1237,6 +1214,39 @@ class RenderCalendarSurface extends RenderBox
     return true;
   }
 
+  DateTime? _dropStartForGlobalPosition({
+    required Offset globalPosition,
+    required TaskInteractionController controller,
+    required CalendarTask draggingTask,
+  }) {
+    final CalendarLayoutMetrics? metrics = _metrics;
+    if (metrics == null) {
+      return null;
+    }
+
+    final Offset clampedLocal = _clampLocalOffset(
+      globalToLocal(globalPosition),
+    );
+    _DayColumnGeometry? columnGeometry;
+    if (!_isInTimeColumn(clampedLocal)) {
+      columnGeometry = _geometryForOffset(clampedLocal);
+      columnGeometry ??= _geometryForHorizontal(clampedLocal.dx);
+    }
+    if (columnGeometry == null) {
+      return null;
+    }
+
+    final _PreviewMetrics? previewMetrics = _computePreviewMetricsForPointer(
+      localPosition: clampedLocal,
+      globalPosition: globalPosition,
+      metrics: metrics,
+      controller: controller,
+      draggingTask: draggingTask,
+      columnGeometry: columnGeometry,
+    );
+    return previewMetrics?.start;
+  }
+
   void _handlePointerUp(Offset localPosition, Offset globalPosition) {
     final bool dragActive = _isDragInProgress;
     if (dragActive) {
@@ -1244,27 +1254,11 @@ class RenderCalendarSurface extends RenderBox
       final CalendarTask? draggingTask = controller?.draggingTaskSnapshot;
       DateTime? dropStart;
       if (controller != null && draggingTask != null) {
-        final CalendarLayoutMetrics? metrics = _metrics;
-        final Offset clampedLocal = _clampLocalOffset(localPosition);
-        _DayColumnGeometry? columnGeometry;
-        if (metrics != null && !_isInTimeColumn(clampedLocal)) {
-          columnGeometry = _geometryForOffset(clampedLocal);
-          columnGeometry ??= _geometryForHorizontal(clampedLocal.dx);
-        } else {
-          columnGeometry = null;
-        }
-        if (metrics != null && columnGeometry != null) {
-          final _PreviewMetrics? previewMetrics =
-              _computePreviewMetricsForPointer(
-                localPosition: clampedLocal,
-                globalPosition: globalPosition,
-                metrics: metrics,
-                controller: controller,
-                draggingTask: draggingTask,
-                columnGeometry: columnGeometry,
-              );
-          dropStart = previewMetrics?.start;
-        }
+        dropStart = _dropStartForGlobalPosition(
+          globalPosition: globalPosition,
+          controller: controller,
+          draggingTask: draggingTask,
+        );
       }
       if (dropStart != null) {
         onDragEnd?.call(
@@ -1365,34 +1359,6 @@ class RenderCalendarSurface extends RenderBox
         final DateTime scheduled = task.scheduledTime!;
         final _DayColumnGeometry? columnGeometry = _geometryForDate(scheduled);
         if (columnGeometry != null) {
-          final _DragLayoutOverride? dragOverride = _dragOverrideForTask(
-            task,
-            resolvedMetrics,
-          );
-          if (dragOverride != null) {
-            final Rect rect = dragOverride.rect;
-            final double columnWidth = rect.width;
-            final double narrowedWidth = calendarComputeNarrowedWidth(
-              theme: layoutTheme,
-              slotWidth: columnWidth,
-              baselineWidth: rect.width,
-            );
-            final double splitWidthFactor = rect.width == 0
-                ? 1.0
-                : (narrowedWidth / rect.width).clamp(0.0, 1.0);
-            geometry = CalendarTaskGeometry(
-              rect: rect,
-              narrowedWidth: narrowedWidth,
-              splitWidthFactor: splitWidthFactor,
-              columnDate: dragOverride.columnDate,
-            );
-            child.layout(BoxConstraints.tight(rect.size), parentUsesSize: true);
-            parentData.offset = rect.topLeft;
-            parentData.geometry = geometry;
-            nextGeometries[task.id] = geometry;
-            child = childAfter(child);
-            continue;
-          }
           final OverlapInfo overlap =
               overlapMap[task.id] ??
               const OverlapInfo(columnIndex: 0, totalColumns: 1);
@@ -2308,112 +2274,13 @@ class RenderCalendarSurface extends RenderBox
     }
     final double? height = controller.draggingTaskHeight;
     if (height != null && height.isFinite && height > 0) {
-      final double fallback = height / 2;
-      controller.setDragPointerOffsetFromTop(fallback, notify: false);
-      return fallback;
+      return height / 2;
     }
     final CalendarLayoutMetrics? metrics = _metrics;
     if (metrics != null && metrics.slotHeight > 0) {
-      final double fallback = metrics.slotHeight / 2;
-      controller.setDragPointerOffsetFromTop(fallback, notify: false);
-      return fallback;
+      return metrics.slotHeight / 2;
     }
     return 0.0;
-  }
-
-  DateTime? _computePreviewStartForHover(
-    DateTime targetDate,
-    Offset globalPosition,
-  ) {
-    final TaskInteractionController? controller = _interactionController;
-    final CalendarTask? task = controller?.draggingTaskSnapshot;
-    if (controller == null || task == null) {
-      return null;
-    }
-    final DateTime? computed = _computePreviewStartFromGlobalOffset(
-      globalPosition,
-      targetDate,
-    );
-    if (computed != null) {
-      final Duration duration = _resolvePreviewDuration(controller, task);
-      final DateTime snapped = _snapToStep(computed);
-      return _clampPreviewStart(
-        snapped,
-        targetDate,
-        duration,
-        snapToStep: true,
-      );
-    }
-    return null;
-  }
-
-  DateTime? _computePreviewStartFromGlobalOffset(
-    Offset globalPosition,
-    DateTime targetDate,
-  ) {
-    final TaskInteractionController? controller = _interactionController;
-    if (controller == null || _metrics == null) {
-      return null;
-    }
-    final DateTime? origin = controller.dragOriginSlot;
-    final DateTime? dragStartTime = controller.dragStartScheduledTime;
-    final double? dragTopGlobal = controller.dragStartGlobalTop;
-    if (origin == null || dragTopGlobal == null) {
-      return null;
-    }
-
-    final double pointerOffset =
-        controller.dragPointerOffsetFromTop ??
-        _computePointerTopOffset(globalPosition.dy);
-    final double pointerTopGlobal = globalPosition.dy - pointerOffset;
-    final double deltaPixels = pointerTopGlobal - dragTopGlobal;
-    final double pixelsPerMinute = _metrics!.hourHeight / 60.0;
-    if (pixelsPerMinute == 0) {
-      return dragStartTime ?? origin;
-    }
-
-    final DateTime baseTime = dragStartTime ?? origin;
-    final DateTime baseDateTime = DateTime(
-      targetDate.year,
-      targetDate.month,
-      targetDate.day,
-      baseTime.hour,
-      baseTime.minute,
-      baseTime.second,
-      baseTime.millisecond,
-      baseTime.microsecond,
-    );
-
-    final double minutesDelta = deltaPixels / pixelsPerMinute;
-    final Duration delta = Duration(
-      microseconds: (minutesDelta * 60 * Duration.microsecondsPerSecond)
-          .round(),
-    );
-
-    final DateTime candidate = baseDateTime.add(delta);
-    return candidate;
-  }
-
-  double _computePointerTopOffset(double pointerGlobalDy) {
-    final TaskInteractionController? controller = _interactionController;
-    if (controller == null) {
-      return 0;
-    }
-    final double? stored = controller.dragPointerOffsetFromTop;
-    if (stored != null) {
-      return stored;
-    }
-    final double referenceTop =
-        controller.dragStartGlobalTop ?? pointerGlobalDy;
-    double offset = pointerGlobalDy - referenceTop;
-    final double height = controller.draggingTaskHeight ?? 0;
-    if (height > 0) {
-      offset = offset.clamp(0.0, height);
-    } else {
-      offset = math.max(0.0, offset);
-    }
-    controller.setDragPointerOffsetFromTop(offset);
-    return offset;
   }
 
   DateTime _clampPreviewStart(
@@ -2455,26 +2322,13 @@ class RenderCalendarSurface extends RenderBox
     return candidate;
   }
 
-  DateTime _snapToStep(DateTime timestamp) {
-    final int stepMinutes = minutesPerStep <= 0 ? 15 : minutesPerStep;
-    final int totalMinutes = (timestamp.hour * 60) + timestamp.minute;
-    final int snappedMinutes =
-        (totalMinutes / stepMinutes).round() * stepMinutes;
-    final int snappedHour = snappedMinutes ~/ 60;
-    final int snappedMinute = snappedMinutes % 60;
-    return DateTime(
-      timestamp.year,
-      timestamp.month,
-      timestamp.day,
-      snappedHour,
-      snappedMinute,
-    );
-  }
-
   void handleDragPayloadUpdate(
     CalendarDragPayload payload,
     Offset dragTargetOffset,
   ) {
+    if (payload.source == CalendarDragPayloadSource.taskSurface) {
+      return;
+    }
     final Offset pointerGlobal = _pointerGlobalForPayloadOnly(
       payload,
       dragTargetOffset,
@@ -2493,10 +2347,12 @@ class RenderCalendarSurface extends RenderBox
     );
     _ensureExternalDragInitialized(payload, dragTargetOffset, pointerGlobal);
     _handleExternalDragDrop(payload, dragTargetOffset);
-    _externalDragTaskId = null;
   }
 
   void handleDragPayloadExit(CalendarDragPayload payload) {
+    if (payload.source == CalendarDragPayloadSource.taskSurface) {
+      return;
+    }
     _handleExternalDragExit(payload.task.id);
   }
 
@@ -2512,18 +2368,22 @@ class RenderCalendarSurface extends RenderBox
             dragTargetOffset: dragTargetOffset,
             controller: controller,
           );
-    final Offset local = _clampLocalOffset(globalToLocal(pointerGlobal));
-    _handlePointerDragUpdate(local, pointerGlobal);
-    if (controller != null && !controller.dragHasMoved) {
+    final bool handled = dispatchActiveDragUpdate(pointerGlobal);
+    if (handled && controller != null && !controller.dragHasMoved) {
       controller.markDragMoved();
     }
   }
 
   void _handleExternalDragExit([String? taskId]) {
-    if (_externalDragTaskId != null &&
-        (taskId == null || _externalDragTaskId == taskId)) {
+    final CalendarInteractionSession? session =
+        _interactionController?.activeInteractionSession;
+    final bool isMatchingExternalDrag =
+        session != null &&
+        session.isDrag &&
+        session.source == CalendarInteractionSource.external &&
+        (taskId == null || session.taskId == taskId);
+    if (isMatchingExternalDrag) {
       _interactionController?.clearPreview();
-      _interactionController?.resetFeedbackHint();
     }
     onDragExit?.call();
     onDragAutoScrollStop?.call();
@@ -2543,32 +2403,16 @@ class RenderCalendarSurface extends RenderBox
             dragTargetOffset: dragTargetOffset,
             controller: controller,
           );
-    final Offset local = _clampLocalOffset(globalToLocal(pointerGlobal));
     DateTime? dropStart;
-    final CalendarLayoutMetrics? metrics = _metrics;
-    _DayColumnGeometry? columnGeometry;
-    if (metrics != null && !_isInTimeColumn(local)) {
-      columnGeometry = _geometryForOffset(local);
-      columnGeometry ??= _geometryForHorizontal(local.dx);
-    } else {
-      columnGeometry = null;
-    }
     if (controller != null) {
       controller.updateDragPointerGlobalPosition(pointerGlobal);
     }
-    if (controller != null &&
-        draggingTask != null &&
-        metrics != null &&
-        columnGeometry != null) {
-      final _PreviewMetrics? previewMetrics = _computePreviewMetricsForPointer(
-        localPosition: local,
+    if (controller != null && draggingTask != null) {
+      dropStart = _dropStartForGlobalPosition(
         globalPosition: pointerGlobal,
-        metrics: metrics,
         controller: controller,
         draggingTask: draggingTask,
-        columnGeometry: columnGeometry,
       );
-      dropStart = previewMetrics?.start;
     }
     if (dropStart != null) {
       onDragEnd?.call(
@@ -2640,7 +2484,6 @@ class RenderCalendarSurface extends RenderBox
       feedbackSize: feedbackSize,
       globalPosition: dragTargetOffset,
     );
-    _externalDragTaskId = payload.task.id;
   }
 
   Offset _resolvePointerOffset({

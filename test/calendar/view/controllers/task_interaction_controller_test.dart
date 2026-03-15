@@ -106,6 +106,7 @@ void main() {
       pointerNormalized: 0.5,
       pointerGlobalX: 80,
       originSlot: task.scheduledTime,
+      pointerId: 7,
     );
 
     expect(
@@ -120,6 +121,7 @@ void main() {
       controller.activeInteractionSession?.globalPosition,
       const Offset(80, 80),
     );
+    expect(controller.activeDragPointerId, 7);
 
     controller.updateDragPointerGlobalPosition(const Offset(96, 112));
 
@@ -131,9 +133,40 @@ void main() {
     controller.endDrag();
 
     expect(controller.activeInteractionSession, isNull);
+    expect(controller.activeDragPointerId, isNull);
 
     controller.dispose();
   });
+
+  test(
+    'Dragging task matching also respects base id across instance changes',
+    () {
+      final controller = TaskInteractionController();
+      final task = CalendarTask.create(
+        title: 'Drag task',
+        scheduledTime: DateTime(2024, 1, 1, 10),
+        duration: const Duration(hours: 1),
+      );
+      final CalendarTask rebuiltInstance = task.copyWith(
+        id: '${task.id}::rebuilt',
+      );
+
+      controller.beginDrag(
+        task: task,
+        snapshot: task.copyWith(),
+        bounds: const Rect.fromLTWH(20, 40, 120, 80),
+        pointerNormalized: 0.5,
+        pointerGlobalX: 80,
+        originSlot: task.scheduledTime,
+      );
+
+      expect(controller.isDraggingTask(task), isTrue);
+      expect(controller.isDraggingTask(rebuiltInstance), isTrue);
+
+      controller.endDrag();
+      controller.dispose();
+    },
+  );
 
   test('External drag interaction seeds external source in shared session', () {
     final controller = TaskInteractionController();
@@ -159,6 +192,32 @@ void main() {
       controller.activeInteractionSession?.source,
       CalendarInteractionSource.external,
     );
+
+    controller.dispose();
+  });
+
+  test('Drag start clears stale preview and drop hover', () {
+    final controller = TaskInteractionController();
+    final task = CalendarTask.create(
+      title: 'Drag task',
+      scheduledTime: DateTime(2024, 1, 1, 10),
+      duration: const Duration(hours: 1),
+    );
+
+    controller.updatePreview(task.scheduledTime!, task.duration!);
+    controller.setDropHoverTaskId('other-task');
+
+    controller.beginDrag(
+      task: task,
+      snapshot: task.copyWith(),
+      bounds: const Rect.fromLTWH(20, 40, 120, 80),
+      pointerNormalized: 0.5,
+      pointerGlobalX: 80,
+      originSlot: task.scheduledTime,
+    );
+
+    expect(controller.preview.value, isNull);
+    expect(controller.currentDropHoverTaskId, isNull);
 
     controller.dispose();
   });

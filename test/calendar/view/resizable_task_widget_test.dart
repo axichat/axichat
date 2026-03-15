@@ -53,16 +53,16 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  testWidgets('Secondary pointer down does not trigger drag pointer callback', (
+  testWidgets('Secondary pointer down does not classify a drag target', (
     tester,
   ) async {
+    final controller = TaskInteractionController();
     final task = CalendarTask.create(title: 'Secondary Pointer Task');
-    Offset? capturedOffset;
 
     await tester.pumpWidget(
       _wrapWithShadTheme(
         ResizableTaskWidget(
-          interactionController: TaskInteractionController(),
+          interactionController: controller,
           task: task,
           onResizePreview: (_) {},
           onResizeEnd: (_) {},
@@ -72,32 +72,35 @@ void main() {
           width: 120,
           height: 40,
           isDayView: false,
-          onDragPointerDown: (offset) => capturedOffset = offset,
         ),
       ),
     );
 
     final gesture = await tester.createGesture(
+      pointer: 21,
       kind: PointerDeviceKind.mouse,
       buttons: kSecondaryButton,
     );
     await gesture.down(tester.getCenter(find.byType(ResizableTaskWidget)));
     await tester.pump();
-    await gesture.up();
 
-    expect(capturedOffset, isNull);
+    expect(
+      controller.taskPointerClassification(taskId: task.id, pointerId: 21),
+      isNull,
+    );
+
+    await gesture.up();
+    controller.dispose();
   });
 
-  testWidgets('Primary pointer down forwards to drag pointer callback', (
-    tester,
-  ) async {
+  testWidgets('Primary body pointer classifies as body', (tester) async {
+    final controller = TaskInteractionController();
     final task = CalendarTask.create(title: 'Primary Pointer Task');
-    Offset? capturedOffset;
 
     await tester.pumpWidget(
       _wrapWithShadTheme(
         ResizableTaskWidget(
-          interactionController: TaskInteractionController(),
+          interactionController: controller,
           task: task,
           onResizePreview: (_) {},
           onResizeEnd: (_) {},
@@ -107,79 +110,41 @@ void main() {
           width: 120,
           height: 40,
           isDayView: false,
-          onDragPointerDown: (offset) => capturedOffset = offset,
         ),
       ),
     );
 
     final gesture = await tester.createGesture(
+      pointer: 22,
       kind: PointerDeviceKind.mouse,
       buttons: kPrimaryButton,
     );
     await gesture.down(tester.getCenter(find.byType(ResizableTaskWidget)));
     await tester.pump();
-    await gesture.up();
 
-    expect(capturedOffset, isNotNull);
+    expect(
+      controller.taskPointerClassification(taskId: task.id, pointerId: 22),
+      CalendarTaskPointerTarget.body,
+    );
+
+    await gesture.up();
+    controller.dispose();
   });
 
-  testWidgets(
-    'Top handle pointer down does not forward drag pointer callback',
-    (tester) async {
-      final task = CalendarTask.create(
-        title: 'Handle Pointer Task',
-        scheduledTime: DateTime(2024, 1, 1, 10),
-        duration: const Duration(hours: 1),
-      );
-      Offset? capturedOffset;
-
-      await tester.pumpWidget(
-        _wrapWithShadTheme(
-          Align(
-            alignment: Alignment.topLeft,
-            child: ResizableTaskWidget(
-              interactionController: TaskInteractionController(),
-              task: task,
-              onResizePreview: (_) {},
-              onResizeEnd: (_) {},
-              hourHeight: 40,
-              stepHeight: 10,
-              minutesPerStep: 15,
-              width: 120,
-              height: 80,
-              isDayView: false,
-              onDragPointerDown: (offset) => capturedOffset = offset,
-              resizeHandleExtent: 12,
-            ),
-          ),
-        ),
-      );
-
-      final Rect rect = tester.getRect(find.byType(ResizableTaskWidget));
-      final gesture = await tester.createGesture(
-        kind: PointerDeviceKind.mouse,
-        buttons: kPrimaryButton,
-      );
-      await gesture.down(Offset(rect.center.dx, rect.top + 2));
-      await tester.pump();
-      await gesture.up();
-
-      expect(capturedOffset, isNull);
-    },
-  );
-
-  testWidgets('Unscheduled top edge still forwards drag pointer callback', (
-    tester,
-  ) async {
-    final task = CalendarTask.create(title: 'Unscheduled Handle Edge Task');
-    Offset? capturedOffset;
+  testWidgets('Top handle pointer classifies as resize top', (tester) async {
+    final controller = TaskInteractionController();
+    final task = CalendarTask.create(
+      title: 'Handle Pointer Task',
+      scheduledTime: DateTime(2024, 1, 1, 10),
+      duration: const Duration(hours: 1),
+    );
 
     await tester.pumpWidget(
       _wrapWithShadTheme(
         Align(
           alignment: Alignment.topLeft,
           child: ResizableTaskWidget(
-            interactionController: TaskInteractionController(),
+            interactionController: controller,
             task: task,
             onResizePreview: (_) {},
             onResizeEnd: (_) {},
@@ -189,7 +154,6 @@ void main() {
             width: 120,
             height: 80,
             isDayView: false,
-            onDragPointerDown: (offset) => capturedOffset = offset,
             resizeHandleExtent: 12,
           ),
         ),
@@ -198,14 +162,63 @@ void main() {
 
     final Rect rect = tester.getRect(find.byType(ResizableTaskWidget));
     final gesture = await tester.createGesture(
+      pointer: 23,
       kind: PointerDeviceKind.mouse,
       buttons: kPrimaryButton,
     );
     await gesture.down(Offset(rect.center.dx, rect.top + 2));
     await tester.pump();
-    await gesture.up();
 
-    expect(capturedOffset, isNotNull);
+    expect(
+      controller.taskPointerClassification(taskId: task.id, pointerId: 23),
+      CalendarTaskPointerTarget.resizeTop,
+    );
+
+    await gesture.up();
+    controller.dispose();
+  });
+
+  testWidgets('Unscheduled top edge still classifies as body', (tester) async {
+    final controller = TaskInteractionController();
+    final task = CalendarTask.create(title: 'Unscheduled Handle Edge Task');
+
+    await tester.pumpWidget(
+      _wrapWithShadTheme(
+        Align(
+          alignment: Alignment.topLeft,
+          child: ResizableTaskWidget(
+            interactionController: controller,
+            task: task,
+            onResizePreview: (_) {},
+            onResizeEnd: (_) {},
+            hourHeight: 40,
+            stepHeight: 10,
+            minutesPerStep: 15,
+            width: 120,
+            height: 80,
+            isDayView: false,
+            resizeHandleExtent: 12,
+          ),
+        ),
+      ),
+    );
+
+    final Rect rect = tester.getRect(find.byType(ResizableTaskWidget));
+    final gesture = await tester.createGesture(
+      pointer: 24,
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryButton,
+    );
+    await gesture.down(Offset(rect.center.dx, rect.top + 2));
+    await tester.pump();
+
+    expect(
+      controller.taskPointerClassification(taskId: task.id, pointerId: 24),
+      CalendarTaskPointerTarget.body,
+    );
+
+    await gesture.up();
+    controller.dispose();
   });
 
   testWidgets(

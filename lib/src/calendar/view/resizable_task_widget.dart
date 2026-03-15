@@ -11,40 +11,12 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'controllers/task_interaction_controller.dart';
 import 'widgets/calendar_task_tile_render.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
-
-class DragFeedbackHint {
-  const DragFeedbackHint({
-    required this.width,
-    required this.pointerOffset,
-    required this.anchorDx,
-    required this.anchorDy,
-  });
-
-  final double width;
-  final double pointerOffset;
-  final double anchorDx;
-  final double anchorDy;
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is DragFeedbackHint &&
-        (width - other.width).abs() < 1e-6 &&
-        (pointerOffset - other.pointerOffset).abs() < 1e-3 &&
-        (anchorDx - other.anchorDx).abs() < 1e-3 &&
-        (anchorDy - other.anchorDy).abs() < 1e-3;
-  }
-
-  @override
-  int get hashCode => Object.hash(width, pointerOffset, anchorDx, anchorDy);
-}
 
 typedef TaskContextMenuBuilder =
     List<Widget> Function(BuildContext context, TaskContextMenuRequest request);
@@ -83,8 +55,6 @@ class ResizableTaskWidget extends StatefulWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback? onToggleSelection;
-  final ValueListenable<DragFeedbackHint>? dragFeedbackHint;
-  final ValueChanged<Offset>? onDragPointerDown;
   final ShadPopoverController? contextMenuController;
   final ValueKey<String>? contextMenuGroupId;
   final TaskContextMenuBuilder? contextMenuBuilder;
@@ -114,8 +84,6 @@ class ResizableTaskWidget extends StatefulWidget {
     this.isSelectionMode = false,
     this.isSelected = false,
     this.onToggleSelection,
-    this.dragFeedbackHint,
-    this.onDragPointerDown,
     this.contextMenuController,
     this.contextMenuGroupId,
     this.contextMenuBuilder,
@@ -200,8 +168,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
           animation: interactionChanges,
           builder: (context, _) {
             final CalendarTask task = widget.task;
-            final bool isDragging =
-                controller.draggingTaskIdNotifier.value == task.id;
+            final bool isDragging = controller.isDraggingTask(task);
             final bool isHovering = hoveredTaskId == task.id;
             final bool highlightOnFirstInteraction = controller
                 .shouldHighlightTaskForFirstInteraction(task);
@@ -295,7 +262,6 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   onResizePreview: widget.onResizePreview,
                   onResizeEnd: widget.onResizeEnd,
                   onResizePointerMove: widget.onResizePointerMove,
-                  onDragPointerDown: widget.onDragPointerDown,
                   onTap: widget.onTap,
                   onToggleSelection: widget.onToggleSelection,
                   onContextMenuPosition: _captureContextMenuOffsets,
@@ -306,14 +272,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               );
             }
 
-            if (widget.dragFeedbackHint == null) {
-              return buildContent();
-            }
-
-            return ValueListenableBuilder<DragFeedbackHint>(
-              valueListenable: widget.dragFeedbackHint!,
-              builder: (_, _, _) => buildContent(),
-            );
+            return buildContent();
           },
         );
       },

@@ -6,8 +6,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_task_draggable.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 
 void main() {
   testWidgets('CalendarTaskSurface reuses popover controller across rebuilds', (
@@ -20,10 +22,10 @@ void main() {
       onResizePreview: (_) {},
       onResizeEnd: (_) {},
       onResizePointerMove: (_) {},
-      onDragStarted: (_, _) {},
+      onDragStarted: () {},
+      resolveDragOriginSlot: (task) => task.scheduledTime,
       onDragUpdate: (_) {},
       onDragEnded: (_) {},
-      onDragPointerDown: (_) {},
       onEnterSelectionMode: () {},
       onToggleSelection: () {},
       onTap: (_, _) {},
@@ -51,7 +53,6 @@ void main() {
       enableContextMenuLongPress: false,
       resizeHandleExtent: 12,
       interactionController: interactionController,
-      dragFeedbackHint: interactionController.feedbackHint,
       cancelBucketHoverNotifier: cancelHoverNotifier,
       callbacks: callbacks,
       geometryProvider: (_) => geometry,
@@ -68,6 +69,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: ShadTheme(
           data: ShadThemeData(
             colorScheme: const ShadSlateColorScheme.light(),
@@ -118,6 +122,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: ShadTheme(
           data: ShadThemeData(
             colorScheme: const ShadSlateColorScheme.light(),
@@ -143,16 +150,15 @@ void main() {
                     enableContextMenuLongPress: false,
                     resizeHandleExtent: 12,
                     interactionController: interactionController,
-                    dragFeedbackHint: interactionController.feedbackHint,
                     cancelBucketHoverNotifier: cancelHoverNotifier,
                     callbacks: CalendarTaskTileCallbacks(
                       onResizePreview: (_) {},
                       onResizeEnd: (_) {},
                       onResizePointerMove: (_) {},
-                      onDragStarted: (_, _) {},
+                      onDragStarted: () {},
+                      resolveDragOriginSlot: (task) => task.scheduledTime,
                       onDragUpdate: (_) {},
                       onDragEnded: (_) {},
-                      onDragPointerDown: (_) {},
                       onEnterSelectionMode: () {},
                       onToggleSelection: () {},
                       onTap: (_, _) {},
@@ -211,6 +217,9 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
           home: ShadTheme(
             data: ShadThemeData(
               colorScheme: const ShadSlateColorScheme.light(),
@@ -233,16 +242,15 @@ void main() {
                   enableContextMenuLongPress: false,
                   resizeHandleExtent: 12,
                   interactionController: interactionController,
-                  dragFeedbackHint: interactionController.feedbackHint,
                   cancelBucketHoverNotifier: cancelHoverNotifier,
                   callbacks: CalendarTaskTileCallbacks(
                     onResizePreview: (task) => resizePreview = task,
                     onResizeEnd: (_) {},
                     onResizePointerMove: (_) {},
-                    onDragStarted: (_, _) => dragStarted = true,
+                    onDragStarted: () => dragStarted = true,
+                    resolveDragOriginSlot: (task) => task.scheduledTime,
                     onDragUpdate: (_) {},
                     onDragEnded: (_) {},
-                    onDragPointerDown: (_) {},
                     onEnterSelectionMode: () {},
                     onToggleSelection: () {},
                     onTap: (_, _) {},
@@ -275,6 +283,16 @@ void main() {
       await tester.pump();
       await bodyGesture.moveBy(const Offset(0, 24));
       await tester.pump();
+
+      expect(
+        interactionController.activeInteractionSession?.source,
+        CalendarInteractionSource.taskSurface,
+      );
+      expect(
+        interactionController.activeInteractionSession?.kind,
+        CalendarInteractionKind.drag,
+      );
+
       await bodyGesture.up();
       await tester.pump();
 
@@ -322,6 +340,9 @@ void main() {
 
       Widget buildSurface() {
         return MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
           home: ShadTheme(
             data: ShadThemeData(
               colorScheme: const ShadSlateColorScheme.light(),
@@ -344,16 +365,15 @@ void main() {
                   enableContextMenuLongPress: false,
                   resizeHandleExtent: 12,
                   interactionController: interactionController,
-                  dragFeedbackHint: interactionController.feedbackHint,
                   cancelBucketHoverNotifier: cancelHoverNotifier,
                   callbacks: CalendarTaskTileCallbacks(
                     onResizePreview: (task) => resizePreview = task,
                     onResizeEnd: (_) {},
                     onResizePointerMove: (_) {},
-                    onDragStarted: (_, _) => dragStarted = true,
+                    onDragStarted: () => dragStarted = true,
+                    resolveDragOriginSlot: (task) => task.scheduledTime,
                     onDragUpdate: (_) {},
                     onDragEnded: (_) {},
-                    onDragPointerDown: (_) {},
                     onEnterSelectionMode: () {},
                     onToggleSelection: () {},
                     onTap: (_, _) {},
@@ -387,6 +407,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 325));
       await bodyGesture.moveBy(const Offset(0, 24));
       await tester.pump();
+
+      expect(
+        interactionController.activeInteractionSession?.source,
+        CalendarInteractionSource.taskSurface,
+      );
+      expect(
+        interactionController.activeInteractionSession?.kind,
+        CalendarInteractionKind.drag,
+      );
+
       await bodyGesture.up();
       await tester.pump();
 
@@ -441,6 +471,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: ShadTheme(
           data: ShadThemeData(
             colorScheme: const ShadSlateColorScheme.light(),
@@ -465,16 +498,15 @@ void main() {
                 enableContextMenuLongPress: false,
                 resizeHandleExtent: 12,
                 interactionController: interactionController,
-                dragFeedbackHint: interactionController.feedbackHint,
                 cancelBucketHoverNotifier: cancelHoverNotifier,
                 callbacks: CalendarTaskTileCallbacks(
                   onResizePreview: (_) {},
                   onResizeEnd: (_) {},
                   onResizePointerMove: (_) {},
-                  onDragStarted: (_, _) => dragStarted = true,
+                  onDragStarted: () => dragStarted = true,
+                  resolveDragOriginSlot: (task) => task.scheduledTime,
                   onDragUpdate: (_) {},
                   onDragEnded: (_) {},
-                  onDragPointerDown: (_) {},
                   onEnterSelectionMode: () {},
                   onToggleSelection: () {},
                   onTap: (_, _) => tapped = true,
@@ -510,4 +542,96 @@ void main() {
     expect(dragStarted, isTrue);
     expect(tapped, isFalse);
   });
+
+  testWidgets(
+    'CalendarTaskSurface keeps the source draggable mounted during an active drag',
+    (tester) async {
+      final TaskInteractionController interactionController =
+          TaskInteractionController();
+      final CalendarTask task = CalendarTask.create(
+        title: 'Mounted Drag Source',
+        scheduledTime: DateTime(2024, 1, 1, 10),
+        duration: const Duration(hours: 1),
+      );
+
+      const CalendarTaskGeometry geometry = CalendarTaskGeometry(
+        rect: Rect.fromLTWH(0, 0, 240, 72),
+        narrowedWidth: 200,
+        splitWidthFactor: 200 / 240,
+      );
+
+      final ValueNotifier<bool> cancelHoverNotifier = ValueNotifier(false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: ShadTheme(
+            data: ShadThemeData(
+              colorScheme: const ShadSlateColorScheme.light(),
+              brightness: Brightness.light,
+            ),
+            child: SizedBox(
+              width: 240,
+              height: 72,
+              child: CalendarTaskSurface(
+                task: task,
+                isDayView: true,
+                bindings: CalendarTaskEntryBindings(
+                  isSelectionMode: false,
+                  isSelected: false,
+                  isPopoverOpen: false,
+                  splitPreviewAnimationDuration: Duration.zero,
+                  contextMenuGroupId: const ValueKey<String>('mounted-menu'),
+                  contextMenuBuilderFactory: (_) =>
+                      (_, _) => const <Widget>[],
+                  enableContextMenuLongPress: false,
+                  resizeHandleExtent: 12,
+                  interactionController: interactionController,
+                  cancelBucketHoverNotifier: cancelHoverNotifier,
+                  callbacks: CalendarTaskTileCallbacks(
+                    onResizePreview: (_) {},
+                    onResizeEnd: (_) {},
+                    onResizePointerMove: (_) {},
+                    onDragStarted: () {},
+                    resolveDragOriginSlot: (task) => task.scheduledTime,
+                    onDragUpdate: (_) {},
+                    onDragEnded: (_) {},
+                    onEnterSelectionMode: () {},
+                    onToggleSelection: () {},
+                    onTap: (_, _) {},
+                  ),
+                  geometryProvider: (_) => geometry,
+                  globalRectProvider: (_) => geometry.rect,
+                  stepHeight: 16,
+                  minutesPerStep: 15,
+                  hourHeight: 48,
+                  viewportScrollOffsetProvider: () => 0,
+                  addGeometryListener: (_) {},
+                  removeGeometryListener: (_) {},
+                  requiresLongPressToDrag: false,
+                  longPressToDragDelay: Duration.zero,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(CalendarTaskDraggable), findsOneWidget);
+
+      interactionController.beginDrag(
+        task: task,
+        snapshot: task.copyWith(),
+        bounds: geometry.rect,
+        pointerNormalized: 0.5,
+        pointerGlobalX: geometry.rect.center.dx,
+        originSlot: task.scheduledTime,
+      );
+      await tester.pump();
+
+      expect(find.byType(CalendarTaskDraggable), findsOneWidget);
+    },
+  );
 }

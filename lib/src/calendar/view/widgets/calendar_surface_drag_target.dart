@@ -4,7 +4,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 import 'calendar_render_surface.dart';
 
 /// Bridges Flutter's [DragTarget] events into the [RenderCalendarSurface].
@@ -93,13 +93,7 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
   }
 
   bool _shouldDeferToActiveGridDrag(CalendarDragPayload payload) {
-    final CalendarInteractionSession? session =
-        widget.interactionController.activeInteractionSession;
-    if (session == null || !session.isDrag) {
-      return false;
-    }
-    return session.source == CalendarInteractionSource.taskSurface &&
-        session.taskId == payload.task.id;
+    return payload.source == CalendarDragPayloadSource.taskSurface;
   }
 
   bool _handleWillAccept(DragTargetDetails<CalendarDragPayload> details) {

@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
-import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 
 typedef ResizeAutoScrollHandler = void Function(double delta);
 
@@ -160,14 +159,6 @@ class TaskInteractionController extends ChangeNotifier {
     : _onTaskInteracted = onTaskInteracted,
       preview = ValueNotifier<DragPreview?>(null),
       clipboard = ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
-      feedbackHint = ValueNotifier<DragFeedbackHint>(
-        const DragFeedbackHint(
-          width: 0,
-          pointerOffset: 0,
-          anchorDx: 0,
-          anchorDy: 0,
-        ),
-      ),
       resizePreviewRevision = ValueNotifier<int>(0),
       draggingTaskIdNotifier = ValueNotifier<String?>(null),
       hoveredTaskId = ValueNotifier<String?>(null),
@@ -179,7 +170,6 @@ class TaskInteractionController extends ChangeNotifier {
 
   final ValueNotifier<DragPreview?> preview;
   final ValueNotifier<TaskClipboardState> clipboard;
-  final ValueNotifier<DragFeedbackHint> feedbackHint;
   final ValueNotifier<int> resizePreviewRevision;
   final ValueNotifier<String?> draggingTaskIdNotifier;
   final ValueNotifier<String?> hoveredTaskId;
@@ -208,6 +198,7 @@ class TaskInteractionController extends ChangeNotifier {
   double? dragPointerGlobalX;
   double? dragPointerGlobalY;
   double? dragPointerStartGlobalY;
+  int? _activeDragPointerId;
   bool dragHasMoved = false;
 
   Timer? _dragWidthDebounce;
@@ -235,6 +226,14 @@ class TaskInteractionController extends ChangeNotifier {
   TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
   CalendarInteractionSession? get activeInteractionSession =>
       interactionSession.value;
+  int? get activeDragPointerId => _activeDragPointerId;
+
+  bool isDraggingTask(CalendarTask task) {
+    if (_draggingTaskId == task.id) {
+      return true;
+    }
+    return _draggingTaskBaseId != null && _draggingTaskBaseId == task.baseId;
+  }
 
   bool shouldHighlightTaskForFirstInteraction(CalendarTask task) {
     return !task.isRead;
@@ -391,7 +390,10 @@ class TaskInteractionController extends ChangeNotifier {
     required double pointerNormalized,
     required double pointerGlobalX,
     required DateTime? originSlot,
+    int? pointerId,
   }) {
+    clearPreview();
+    setDropHoverTaskId(null);
     final double normalizedPointer = pointerNormalized.clamp(0.0, 1.0);
     _draggingTaskId = task.id;
     draggingTaskIdNotifier.value = task.id;
@@ -441,6 +443,7 @@ class TaskInteractionController extends ChangeNotifier {
       Offset(pointerGlobalX, pointerGlobalY),
       notify: false,
     );
+    _activeDragPointerId = pointerId;
     interactionSession.value = CalendarInteractionSession(
       kind: CalendarInteractionKind.drag,
       taskId: task.id,
@@ -473,6 +476,7 @@ class TaskInteractionController extends ChangeNotifier {
     dragPointerGlobalX = null;
     dragPointerGlobalY = null;
     dragPointerStartGlobalY = null;
+    _activeDragPointerId = null;
     dragPointerNormalized = 0.5;
     if (interactionSession.value?.isDrag == true) {
       interactionSession.value = null;
@@ -480,7 +484,6 @@ class TaskInteractionController extends ChangeNotifier {
     dragHasMoved = false;
     _pendingAnchorMinutes = null;
     clearPreview();
-    resetFeedbackHint();
     _cancelPendingWidthUpdates();
     notifyListeners();
   }
@@ -655,6 +658,8 @@ class TaskInteractionController extends ChangeNotifier {
     if (_draggingTaskId == task.id) {
       return;
     }
+    clearPreview();
+    setDropHoverTaskId(null);
     _draggingTaskId = task.id;
     draggingTaskIdNotifier.value = task.id;
     _draggingTaskBaseId = task.baseId;
@@ -696,6 +701,7 @@ class TaskInteractionController extends ChangeNotifier {
       globalPosition: pointerPosition,
       source: CalendarInteractionSource.external,
     );
+    _activeDragPointerId = null;
     dragHasMoved = false;
     notifyListeners();
   }
@@ -760,28 +766,11 @@ class TaskInteractionController extends ChangeNotifier {
     _pendingDragForceCenter = false;
   }
 
-  void resetFeedbackHint() {
-    feedbackHint.value = const DragFeedbackHint(
-      width: 0,
-      pointerOffset: 0,
-      anchorDx: 0,
-      anchorDy: 0,
-    );
-  }
-
-  void setFeedbackHint(DragFeedbackHint hint) {
-    if (feedbackHint.value == hint) {
-      return;
-    }
-    feedbackHint.value = hint;
-  }
-
   @override
   void dispose() {
     _cancelPendingWidthUpdates();
     preview.dispose();
     clipboard.dispose();
-    feedbackHint.dispose();
     resizePreviewRevision.dispose();
     draggingTaskIdNotifier.dispose();
     hoveredTaskId.dispose();

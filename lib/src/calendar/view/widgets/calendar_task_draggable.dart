@@ -11,7 +11,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 import 'calendar_task_geometry.dart';
 
 typedef CalendarTaskSnapshotBuilder = CalendarTask Function();
@@ -163,6 +163,7 @@ class CalendarTaskDraggable extends StatefulWidget {
     required this.globalRectProvider,
     required this.interactionController,
     required this.onDragStarted,
+    required this.resolveDragOriginSlot,
     required this.onDragUpdate,
     required this.onDragEnded,
     required this.child,
@@ -179,7 +180,8 @@ class CalendarTaskDraggable extends StatefulWidget {
   final double resizeHandleExtent;
   final CalendarTaskGlobalRectProvider globalRectProvider;
   final TaskInteractionController interactionController;
-  final void Function(CalendarTask task, Rect bounds) onDragStarted;
+  final VoidCallback onDragStarted;
+  final DateTime? Function(CalendarTask task) resolveDragOriginSlot;
   final ValueChanged<DragUpdateDetails>? onDragUpdate;
   final ValueChanged<CalendarTask> onDragEnded;
   final CalendarTaskSnapshotBuilder? snapshotBuilder;
@@ -284,7 +286,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         maxSimultaneousDrags: canDrag ? 1 : 0,
         feedback: widget.feedbackBuilder(context, widget.task, _geometry),
         rootOverlay: true,
-        childWhenDragging: widget.childWhenDragging ?? widget.child,
+        childWhenDragging: widget.childWhenDragging ?? const SizedBox.expand(),
         onDragStarted: _handleDragStarted,
         onDragUpdate: _handleDragUpdate,
         onDragEnd: (details) => _handleDragFinished(cancelled: false),
@@ -302,7 +304,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       maxSimultaneousDrags: canDrag ? 1 : 0,
       feedback: widget.feedbackBuilder(context, widget.task, _geometry),
       rootOverlay: true,
-      childWhenDragging: widget.childWhenDragging ?? widget.child,
+      childWhenDragging: widget.childWhenDragging ?? const SizedBox.expand(),
       onDragStarted: _handleDragStarted,
       onDragUpdate: _handleDragUpdate,
       onDragEnd: (details) => _handleDragFinished(cancelled: false),
@@ -384,6 +386,13 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       normalizedX = 0.5;
     }
     normalizedX = math.min(math.max(normalizedX, 0.0), 1.0);
+    double normalizedY = height > 0 && anchorLocal.dy.isFinite
+        ? anchorLocal.dy / height
+        : 0.5;
+    if (!normalizedY.isFinite) {
+      normalizedY = 0.5;
+    }
+    normalizedY = math.min(math.max(normalizedY, 0.0), 1.0);
     double pointerOffsetY = anchorLocal.dy;
     if (!pointerOffsetY.isFinite || pointerOffsetY < 0) {
       pointerOffsetY = 0.0;
@@ -403,10 +412,16 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     });
     _trackedPointerId = event.pointer;
     _startPointerTracking();
+    _controller.setDragPointerNormalized(normalizedX);
+    _controller.setPendingPointerOffsetFraction(
+      normalizedY,
+      taskId: widget.task.id,
+    );
     widget.interactionController.setDragPointerOffsetFromTop(
       pointerOffsetY,
       notify: false,
     );
+    _controller.dragHasMoved = false;
   }
 
   void _handlePointerUp(PointerUpEvent event) {
@@ -432,11 +447,29 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     }
     final Rect? bounds = _sourceBounds ?? _resolveGlobalBounds();
     if (bounds != null) {
-      widget.onDragStarted(widget.task, bounds);
+      final double pickupNormalizedX = _controller.dragPointerNormalized.clamp(
+        0.0,
+        1.0,
+      );
+      final double pickupGlobalX =
+          bounds.left + (bounds.width * pickupNormalizedX);
+      _controller.beginDrag(
+        task: widget.task,
+        snapshot: widget.snapshotBuilder?.call() ?? widget.task.copyWith(),
+        bounds: bounds,
+        pointerNormalized: pickupNormalizedX,
+        pointerGlobalX: pickupGlobalX,
+        originSlot: widget.resolveDragOriginSlot(widget.task),
+        pointerId: _trackedPointerId,
+      );
+      widget.onDragStarted();
     }
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
+    if (_controller.activeDragPointerId != null) {
+      return;
+    }
     widget.onDragUpdate?.call(details);
   }
 
@@ -479,6 +512,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     return CalendarDragPayload(
       task: widget.task,
       snapshot: snapshot,
+      source: CalendarDragPayloadSource.taskSurface,
       sourceBounds: bounds,
       pointerNormalizedX: pointerNormalized,
       pointerOffsetY: pointerOffsetY,

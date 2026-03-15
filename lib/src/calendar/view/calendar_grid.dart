@@ -42,7 +42,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
 import 'controllers/task_interaction_controller.dart';
 import 'controllers/task_popover_controller.dart';
-import 'controllers/zoom_controls_controller.dart';
 import 'edit_task_dropdown.dart';
 import 'feedback_system.dart';
 import 'layout/calendar_layout.dart'
@@ -52,13 +51,11 @@ import 'layout/calendar_layout.dart'
         CalendarZoomLevel,
         kCalendarZoomLevels,
         resolveCalendarLayoutMetrics;
-import 'models/task_context_action.dart';
 import 'resizable_task_widget.dart';
 import 'task_edit_session_tracker.dart';
 import 'widgets/calendar_hover_title_bubble.dart';
 import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_surface_drag_target.dart';
-import 'widgets/calendar_task_geometry.dart';
 import 'widgets/calendar_task_surface.dart';
 import 'widgets/critical_path_panel.dart';
 import 'widgets/day_event_editor.dart';
@@ -72,6 +69,60 @@ const String _taskPopoverCloseReasonMissingTask = 'missing-task';
 const String _taskPopoverCloseReasonSwitchTarget = 'switch-target';
 const String _taskPopoverCloseReasonTaskDeleted = 'task-deleted';
 const bool _calendarUseRootOverlay = false;
+
+class ZoomControlsController extends ChangeNotifier {
+  ZoomControlsController({
+    Duration autoHideDuration = const Duration(seconds: 5),
+    bool initiallyVisible = false,
+  }) : _autoHideDuration = autoHideDuration,
+       _isVisible = initiallyVisible;
+
+  final Duration _autoHideDuration;
+  bool _isVisible;
+  Timer? _autoHideTimer;
+  bool _disposed = false;
+
+  bool get isVisible => _isVisible;
+
+  void show() {
+    if (_autoHideDuration <= Duration.zero) {
+      _autoHideTimer?.cancel();
+    } else {
+      _startTimer();
+    }
+    _setVisible(true);
+  }
+
+  void hide() {
+    _autoHideTimer?.cancel();
+    _setVisible(false);
+  }
+
+  void _startTimer() {
+    _autoHideTimer?.cancel();
+    _autoHideTimer = Timer(_autoHideDuration, () {
+      if (_disposed) {
+        return;
+      }
+      _setVisible(false);
+    });
+  }
+
+  void _setVisible(bool next) {
+    if (_isVisible == next || _disposed) {
+      return;
+    }
+    _isVisible = next;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _autoHideTimer?.cancel();
+    super.dispose();
+  }
+}
 
 class _CalendarScrollController extends ScrollController {
   _CalendarScrollController({required this.onAttached});
@@ -96,6 +147,8 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
   final VoidCallback? onDragSessionEnded;
   final ValueListenable<bool>? cancelBucketHoverNotifier;
+  final ValueListenable<bool>? nonGridDragRegionHoverNotifier;
+  final ValueListenable<int>? dragCompletionRevision;
 
   const CalendarGrid({
     super.key,
@@ -109,6 +162,8 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
     this.onDragGlobalPositionChanged,
     this.onDragSessionEnded,
     this.cancelBucketHoverNotifier,
+    this.nonGridDragRegionHoverNotifier,
+    this.dragCompletionRevision,
   });
 
   @override
@@ -131,6 +186,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   ValueListenable<bool> get _cancelBucketHoverNotifier =>
       widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
+  ValueListenable<bool> get _nonGridDragRegionHoverNotifier =>
+      widget.nonGridDragRegionHoverNotifier ??
+      _defaultNonGridDragRegionHoverNotifier;
+  ValueListenable<int> get _dragCompletionRevision =>
+      widget.dragCompletionRevision ?? _defaultDragCompletionRevision;
 
   late AnimationController _viewTransitionController;
   late Animation<double> _viewTransitionAnimation;
@@ -169,6 +229,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       calendarScrollAnimationDuration;
   static const ValueListenable<bool> _defaultCancelBucketHoverNotifier =
       AlwaysStoppedAnimation<bool>(false);
+  static const ValueListenable<bool> _defaultNonGridDragRegionHoverNotifier =
+      AlwaysStoppedAnimation<bool>(false);
+  static const ValueListenable<int> _defaultDragCompletionRevision =
+      AlwaysStoppedAnimation<int>(0);
   Ticker? _edgeAutoScrollTicker;
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   final CalendarSurfaceController _surfaceController =
@@ -177,7 +241,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ShadPopoverController _gridContextMenuController;
   DateTime? _contextMenuSlot;
   double _edgeAutoScrollOffsetPerFrame = 0;
-  DateTime? _lastEdgeAutoPageAt;
+  Timer? _edgeAutoPageTimer;
+  CalendarInteractionHorizontalIntent _edgeAutoPageIntent =
+      CalendarInteractionHorizontalIntent.neutral;
+  int _lastDragCompletionRevision = 0;
+  int? _activeTaskDragPointerId;
 
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
@@ -199,9 +267,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Offset? _contextMenuAnchor;
   bool _pendingPopoverGeometryUpdate = false;
   bool _pendingInteractionViewportRefresh = false;
-  bool _dragSessionNotified = false;
+  CalendarInteractionSession? _lastNotifiedTaskSurfaceDragSession;
   bool _hideCompletedScheduled = false;
   int _dateSlideDirection = 0;
+  bool _isSyntheticDragRefresh = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -234,7 +303,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _gridContextMenuController = ShadPopoverController();
     _taskInteractionController.clipboard.addListener(_handleClipboardChanged);
     _taskInteractionController.preview.addListener(_handleDragPreviewChanged);
+    _taskInteractionController.interactionSession.addListener(
+      _handleInteractionSessionChanged,
+    );
     _cancelBucketHoverNotifier.addListener(_handleBottomDragChromeHoverChanged);
+    _nonGridDragRegionHoverNotifier.addListener(
+      _handleNonGridDragRegionHoverChanged,
+    );
+    _lastDragCompletionRevision = _dragCompletionRevision.value;
+    _dragCompletionRevision.addListener(_handleDragCompletionRevisionChanged);
     _taskPopoverController = TaskPopoverController();
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
@@ -593,51 +670,78 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       }
     }
 
-    if (session.horizontalIntent !=
-        CalendarInteractionHorizontalIntent.neutral) {
-      final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
-        context,
-      );
-      final DateTime now = DateTime.now();
-      final DateTime? lastPageAt = _lastEdgeAutoPageAt;
-      if (lastPageAt == null) {
-        _lastEdgeAutoPageAt = now;
-      } else if (now.difference(lastPageAt) >=
-          layoutTheme.edgeAutoPageDebounceDelay) {
-        _lastEdgeAutoPageAt = now;
-        final int steps =
-            session.horizontalIntent ==
-                CalendarInteractionHorizontalIntent.backward
-            ? -1
-            : 1;
-        widget.onDateSelected(shiftedCalendarDate(widget.state, steps));
-        _scheduleInteractionViewportRefresh();
-      }
-    }
-
-    if (_edgeAutoScrollOffsetPerFrame.abs() < 0.01 &&
-        session.horizontalIntent ==
-            CalendarInteractionHorizontalIntent.neutral) {
+    if (_edgeAutoScrollOffsetPerFrame.abs() < 0.01) {
       _stopEdgeAutoScroll();
     }
   }
 
   void _stopEdgeAutoScroll() {
     _edgeAutoScrollOffsetPerFrame = 0;
-    _lastEdgeAutoPageAt = null;
     if (_edgeAutoScrollTicker?.isActive ?? false) {
       _edgeAutoScrollTicker!.stop();
     }
   }
 
-  void _setDragFeedbackHint(DragFeedbackHint hint) {
-    if (_taskInteractionController.feedbackHint.value == hint) {
+  void _cancelEdgeAutoPageTimer() {
+    _edgeAutoPageTimer?.cancel();
+    _edgeAutoPageTimer = null;
+    _edgeAutoPageIntent = CalendarInteractionHorizontalIntent.neutral;
+  }
+
+  void _startEdgeAutoPageTimer({
+    required CalendarInteractionHorizontalIntent intent,
+    required Duration delay,
+  }) {
+    _edgeAutoPageTimer?.cancel();
+    _edgeAutoPageIntent = intent;
+    _edgeAutoPageTimer = Timer(delay, () {
+      _handleEdgeAutoPageTimerFired(intent);
+    });
+  }
+
+  void _updateEdgeAutoPageTimer(
+    CalendarInteractionHorizontalIntent intent, {
+    bool startRepeat = false,
+  }) {
+    final CalendarInteractionSession? session =
+        _taskInteractionController.activeInteractionSession;
+    if (_isAnyNonGridDragRegionHovering ||
+        session == null ||
+        !session.isDrag ||
+        intent == CalendarInteractionHorizontalIntent.neutral) {
+      _cancelEdgeAutoPageTimer();
       return;
     }
+    if (!startRepeat &&
+        _edgeAutoPageTimer != null &&
+        _edgeAutoPageIntent == intent) {
+      return;
+    }
+    final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
+      context,
+    );
+    _startEdgeAutoPageTimer(
+      intent: intent,
+      delay: layoutTheme.edgeAutoPageDebounceDelay,
+    );
+  }
+
+  void _handleEdgeAutoPageTimerFired(
+    CalendarInteractionHorizontalIntent intent,
+  ) {
+    _edgeAutoPageTimer = null;
     if (!mounted) {
       return;
     }
-    _taskInteractionController.setFeedbackHint(hint);
+    if (intent == CalendarInteractionHorizontalIntent.neutral) {
+      return;
+    }
+    final int steps = intent == CalendarInteractionHorizontalIntent.backward
+        ? -1
+        : 1;
+    widget.onDateSelected(shiftedCalendarDate(widget.state, steps));
+    _scheduleInteractionViewportRefresh();
+    _updateEdgeAutoPageTimer(intent, startRepeat: true);
   }
 
   void _updateDragFeedbackWidth(
@@ -734,16 +838,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       normalizedPointer = 0.5;
       _taskInteractionController.setDragPointerNormalized(normalizedPointer);
     }
-    _setDragFeedbackHint(
-      _dragFeedbackHint(
-        width: width,
-        pointerFraction: shouldCenter ? 0.5 : null,
-        anchorDx: shouldCenter
-            ? width / 2
-            : _taskInteractionController.dragAnchorDx,
-        anchorDy: _taskInteractionController.dragPointerOffsetFromTop,
-      ),
-    );
     final double adjustedLeft = width > 0
         ? pointerGlobalX - (width * normalizedPointer)
         : pointerGlobalX;
@@ -753,73 +847,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _taskInteractionController.dragAnchorDx = width * normalizedPointer;
     }
     _taskInteractionController.setActiveDragWidth(width);
-  }
-
-  DragFeedbackHint _dragFeedbackHint({
-    required double width,
-    double? pointerFraction,
-    double? anchorDx,
-    double? anchorDy,
-  }) {
-    double baseWidth = width;
-    if (!baseWidth.isFinite || baseWidth <= 0) {
-      baseWidth =
-          _taskInteractionController.activeDragWidth ??
-          _taskInteractionController.draggingTaskWidth ??
-          0.0;
-    }
-    if (baseWidth <= 0) {
-      final double anchorX = _taskInteractionController.dragAnchorDx ?? 0.0;
-      final double anchorY =
-          _taskInteractionController.dragPointerOffsetFromTop ?? 0.0;
-      return DragFeedbackHint(
-        width: 0,
-        pointerOffset: 0.0,
-        anchorDx: anchorX,
-        anchorDy: anchorY,
-      );
-    }
-
-    final double normalized = pointerFraction != null
-        ? pointerFraction.clamp(0.0, 1.0)
-        : _taskInteractionController.dragPointerNormalized.clamp(0.0, 1.0);
-
-    final double pointerOffset = (baseWidth * normalized).clamp(0.0, baseWidth);
-    final double anchorX =
-        anchorDx ??
-        (pointerFraction != null
-            ? pointerFraction * baseWidth
-            : _taskInteractionController.dragAnchorDx ?? pointerOffset);
-    final double anchorY =
-        anchorDy ?? _taskInteractionController.dragPointerOffsetFromTop ?? 0.0;
-
-    _taskInteractionController.setActiveDragWidth(baseWidth);
-
-    return DragFeedbackHint(
-      width: baseWidth,
-      pointerOffset: pointerOffset,
-      anchorDx: anchorX,
-      anchorDy: anchorY,
-    );
-  }
-
-  void _resetDragFeedbackHint() {
-    final double width =
-        _taskInteractionController.activeDragWidth ??
-        _taskInteractionController.draggingTaskWidth ??
-        0.0;
-    if (width <= 0) {
-      _setDragFeedbackHint(
-        DragFeedbackHint(
-          width: 0,
-          pointerOffset: 0.0,
-          anchorDx: _taskInteractionController.dragAnchorDx ?? 0.0,
-          anchorDy: _taskInteractionController.dragPointerOffsetFromTop ?? 0.0,
-        ),
-      );
-      return;
-    }
-    _updateDragFeedbackWidth(width);
   }
 
   @override
@@ -839,14 +866,25 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
+    _edgeAutoPageTimer?.cancel();
     _taskInteractionController.clipboard.removeListener(
       _handleClipboardChanged,
     );
     _taskInteractionController.preview.removeListener(
       _handleDragPreviewChanged,
     );
+    _taskInteractionController.interactionSession.removeListener(
+      _handleInteractionSessionChanged,
+    );
+    _detachTaskDragPointerRoute();
     _cancelBucketHoverNotifier.removeListener(
       _handleBottomDragChromeHoverChanged,
+    );
+    _nonGridDragRegionHoverNotifier.removeListener(
+      _handleNonGridDragRegionHoverChanged,
+    );
+    _dragCompletionRevision.removeListener(
+      _handleDragCompletionRevisionChanged,
     );
     _horizontalHeaderController.removeListener(_handleHorizontalHeaderScroll);
     _horizontalGridController.removeListener(_handleHorizontalGridScroll);
@@ -857,6 +895,47 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskPopoverController.dispose();
     _inlineErrorTimer?.cancel();
     super.dispose();
+  }
+
+  void _attachTaskDragPointerRoute(int? pointerId) {
+    if (_activeTaskDragPointerId == pointerId) {
+      return;
+    }
+    _detachTaskDragPointerRoute();
+    if (pointerId == null) {
+      return;
+    }
+    RendererBinding.instance.pointerRouter.addRoute(
+      pointerId,
+      _handleTaskDragPointerRoute,
+    );
+    _activeTaskDragPointerId = pointerId;
+  }
+
+  void _detachTaskDragPointerRoute() {
+    final int? pointerId = _activeTaskDragPointerId;
+    if (pointerId == null) {
+      return;
+    }
+    RendererBinding.instance.pointerRouter.removeRoute(
+      pointerId,
+      _handleTaskDragPointerRoute,
+    );
+    _activeTaskDragPointerId = null;
+  }
+
+  void _handleTaskDragPointerRoute(PointerEvent event) {
+    final int? pointerId = _activeTaskDragPointerId;
+    if (pointerId == null || event.pointer != pointerId) {
+      return;
+    }
+    if (event is PointerMoveEvent) {
+      _handleTaskDragGlobalPosition(event.position);
+      return;
+    }
+    if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _detachTaskDragPointerRoute();
+    }
   }
 
   void _updateDragPreview(DateTime start, Duration duration) {
@@ -890,10 +969,67 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  void _handleBottomDragChromeHoverChanged() {
-    if (!_cancelBucketHoverNotifier.value) {
+  void _handleInteractionSessionChanged() {
+    final CalendarInteractionSession? session =
+        _taskInteractionController.activeInteractionSession;
+    final CalendarInteractionSession? previous =
+        _lastNotifiedTaskSurfaceDragSession;
+    final bool wasActive = previous != null;
+    final bool isActive =
+        session != null &&
+        session.isDrag &&
+        session.source == CalendarInteractionSource.taskSurface;
+
+    if (wasActive &&
+        (!isActive ||
+            session.taskId != previous.taskId ||
+            session.source != previous.source)) {
+      widget.onDragSessionEnded?.call();
+    }
+
+    if (!isActive) {
+      _detachTaskDragPointerRoute();
+      _lastNotifiedTaskSurfaceDragSession = null;
       return;
     }
+
+    if (!wasActive || session.taskId != previous.taskId) {
+      _attachTaskDragPointerRoute(
+        _taskInteractionController.activeDragPointerId,
+      );
+      _lastNotifiedTaskSurfaceDragSession = session;
+      _handleTaskDragStarted();
+      _handleTaskDragGlobalPosition(
+        session.globalPosition,
+        markDragMoved: false,
+      );
+      widget.onDragSessionStarted?.call();
+      widget.onDragGlobalPositionChanged?.call(session.globalPosition);
+      return;
+    }
+
+    if (session.globalPosition != previous.globalPosition) {
+      widget.onDragGlobalPositionChanged?.call(session.globalPosition);
+    }
+    _lastNotifiedTaskSurfaceDragSession = session;
+  }
+
+  void _handleBottomDragChromeHoverChanged() {
+    if (_cancelBucketHoverNotifier.value) {
+      _clearActiveInteractionEdgeIntent(clearPreview: true);
+    }
+  }
+
+  void _handleNonGridDragRegionHoverChanged() {
+    if (_nonGridDragRegionHoverNotifier.value) {
+      _clearActiveInteractionEdgeIntent(clearPreview: true);
+    }
+  }
+
+  bool get _isAnyNonGridDragRegionHovering =>
+      _cancelBucketHoverNotifier.value || _nonGridDragRegionHoverNotifier.value;
+
+  void _clearActiveInteractionEdgeIntent({bool clearPreview = false}) {
     final CalendarInteractionSession? session =
         _taskInteractionController.activeInteractionSession;
     if (session != null &&
@@ -905,7 +1041,31 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         horizontalIntent: CalendarInteractionHorizontalIntent.neutral,
       );
     }
+    if (clearPreview) {
+      _clearDragPreview();
+    }
     _stopEdgeAutoScroll();
+    _cancelEdgeAutoPageTimer();
+  }
+
+  void _handleDragCompletionRevisionChanged() {
+    final int revision = _dragCompletionRevision.value;
+    if (revision == _lastDragCompletionRevision) {
+      return;
+    }
+    _lastDragCompletionRevision = revision;
+    _stopEdgeAutoScroll();
+    final bool hasLingeringDrag =
+        _taskInteractionController.draggingTaskId != null ||
+        _taskInteractionController.draggingTaskBaseId != null ||
+        _taskInteractionController.preview.value != null ||
+        _taskInteractionController.activeInteractionSession?.isDrag == true;
+    if (!hasLingeringDrag) {
+      return;
+    }
+    _cancelPendingDragWidth();
+    _taskInteractionController.endDrag();
+    _cancelEdgeAutoPageTimer();
   }
 
   void _copyTaskInstance(CalendarTask task) {
@@ -998,126 +1158,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     context.read<T>().add(const CalendarEvent.selectionCleared());
   }
 
-  void _handleTaskDragStarted(CalendarTask task, Rect bounds) {
+  void _handleTaskDragStarted() {
     _stopEdgeAutoScroll();
     _cancelPendingDragWidth();
-    final double pickupNormalizedX = _taskInteractionController
-        .dragPointerNormalized
-        .clamp(0.0, 1.0);
-    final double pickupGlobalX =
-        bounds.left + (bounds.width * pickupNormalizedX);
-    _taskInteractionController.clearPreview();
-    _taskInteractionController.beginDrag(
-      task: task,
-      snapshot: task.copyWith(),
-      bounds: bounds,
-      pointerNormalized: pickupNormalizedX,
-      pointerGlobalX: pickupGlobalX,
-      originSlot: _computeOriginSlot(task.scheduledTime),
-    );
-    _notifyDragSessionStarted();
-    final double? globalX = _taskInteractionController.dragPointerGlobalX;
-    final double? globalY = _taskInteractionController.dragPointerGlobalY;
-    if (globalX != null && globalY != null) {
-      _notifyDragGlobalPosition(Offset(globalX, globalY));
-    }
-    if (_taskInteractionController.draggingTaskWidth != null) {
-      _taskInteractionController.dragAnchorDx =
-          _taskInteractionController.draggingTaskWidth! *
-          _taskInteractionController.dragPointerNormalized;
-      _taskInteractionController.setActiveDragWidth(
-        _taskInteractionController.draggingTaskWidth!,
-      );
-    }
-    _setDragFeedbackHint(
-      _dragFeedbackHint(
-        width: bounds.width,
-        pointerFraction: 0.5,
-        anchorDx: _taskInteractionController.dragAnchorDx,
-        anchorDy: _taskInteractionController.dragPointerOffsetFromTop,
-      ),
-    );
-  }
-
-  void _handleDragPointerDown(
-    Offset normalizedOffset, {
-    double? pointerOffsetPixels,
-    String? taskId,
-  }) {
-    double normalizedX = normalizedOffset.dx;
-    double normalizedY = normalizedOffset.dy;
-    if (!normalizedX.isFinite) {
-      normalizedX = 0.5;
-    }
-    if (!normalizedY.isFinite) {
-      normalizedY = 0.5;
-    }
-    if (normalizedX < 0) {
-      normalizedX = 0;
-    } else if (normalizedX > 1) {
-      normalizedX = 1;
-    }
-    if (normalizedY < 0) {
-      normalizedY = 0;
-    } else if (normalizedY > 1) {
-      normalizedY = 1;
-    }
-    _taskInteractionController.setDragPointerNormalized(normalizedX);
-    _taskInteractionController.setPendingPointerOffsetFraction(
-      normalizedY,
-      taskId: taskId,
-    );
-    final double? offset =
-        pointerOffsetPixels != null &&
-            pointerOffsetPixels.isFinite &&
-            pointerOffsetPixels >= 0
-        ? pointerOffsetPixels
-        : null;
-    _taskInteractionController.setDragPointerOffsetFromTop(
-      offset,
-      notify: false,
-    );
-    _taskInteractionController.dragHasMoved = false;
-  }
-
-  void _notifyDragSessionStarted() {
-    if (_dragSessionNotified) {
-      return;
-    }
-    _dragSessionNotified = true;
-    widget.onDragSessionStarted?.call();
-  }
-
-  void _notifyDragGlobalPosition(Offset position) {
-    widget.onDragGlobalPositionChanged?.call(position);
-  }
-
-  void _notifyDragSessionEnded() {
-    if (!_dragSessionNotified) {
-      return;
-    }
-    _dragSessionNotified = false;
-    widget.onDragSessionEnded?.call();
-  }
-
-  void _handleTaskPointerDown(CalendarTask task, Offset normalizedOffset) {
-    double? pointerOffset;
-    final CalendarTaskGeometry? geometry = _surfaceController.geometryForTask(
-      task.id,
-    );
-    final double normalizedDy = (normalizedOffset.dy.clamp(0.0, 1.0) as num)
-        .toDouble();
-    if (geometry != null) {
-      final double height = geometry.rect.height;
-      if (height.isFinite && height > 0) {
-        pointerOffset = normalizedDy * height;
-      }
-    }
-    _handleDragPointerDown(
-      normalizedOffset,
-      pointerOffsetPixels: pointerOffset,
-      taskId: task.id,
-    );
   }
 
   DateTime? _computeOriginSlot(DateTime? scheduled) {
@@ -1223,9 +1266,24 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _handleTaskDragUpdate(DragUpdateDetails details) {
+    if (_activeTaskDragPointerId != null) {
+      return;
+    }
+    _handleTaskDragGlobalPosition(details.globalPosition);
+  }
+
+  void _handleTaskDragGlobalPosition(
+    Offset globalPosition, {
+    bool markDragMoved = true,
+  }) {
     final CalendarTask? draggingTask =
         _taskInteractionController.draggingTaskSnapshot;
     if (draggingTask == null) {
+      return;
+    }
+    _taskInteractionController.updateDragPointerGlobalPosition(globalPosition);
+    if (_isAnyNonGridDragRegionHovering) {
+      _clearActiveInteractionEdgeIntent(clearPreview: true);
       return;
     }
     final double? startLeft = _taskInteractionController.dragStartGlobalLeft;
@@ -1236,23 +1294,20 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (startLeft == null || baseWidth <= 0) {
       return;
     }
-    _taskInteractionController.updateDragPointerGlobalPosition(
-      details.globalPosition,
-    );
-    _notifyDragSessionStarted();
-    _notifyDragGlobalPosition(details.globalPosition);
-    _handleAutoScrollForGlobal(details.globalPosition);
     final double widthForNormalization =
         _taskInteractionController.activeDragWidth ??
         _taskInteractionController.draggingTaskWidth ??
         baseWidth;
     final double normalized = widthForNormalization <= 0
         ? 0.5
-        : ((details.globalPosition.dx - startLeft) / widthForNormalization)
-              .clamp(0.0, 1.0);
+        : ((globalPosition.dx - startLeft) / widthForNormalization).clamp(
+            0.0,
+            1.0,
+          );
     const double movementThreshold = 0.001;
-    if ((_taskInteractionController.dragPointerNormalized - normalized).abs() >
-        movementThreshold) {
+    if (markDragMoved &&
+        (_taskInteractionController.dragPointerNormalized - normalized).abs() >
+            movementThreshold) {
       _taskInteractionController.markDragMoved();
     }
     _taskInteractionController.setDragPointerNormalized(normalized);
@@ -1261,9 +1316,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           widthForNormalization *
           _taskInteractionController.dragPointerNormalized;
     }
+    _isSyntheticDragRefresh = !markDragMoved;
     final bool handled = _surfaceController.dispatchActiveDragUpdate(
-      details.globalPosition,
+      globalPosition,
+      markDragMoved: markDragMoved,
     );
+    _isSyntheticDragRefresh = false;
     if (!handled) {
       _clearDragPreview();
     }
@@ -1277,16 +1335,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     _cancelPendingDragWidth();
     _taskInteractionController.endDrag();
+    _cancelEdgeAutoPageTimer();
     _stopEdgeAutoScroll();
-    _setDragFeedbackHint(
-      const DragFeedbackHint(
-        width: 0,
-        pointerOffset: 0.0,
-        anchorDx: 0.0,
-        anchorDy: 0.0,
-      ),
-    );
-    _notifyDragSessionEnded();
   }
 
   @override
@@ -1301,6 +1351,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       _cancelBucketHoverNotifier.addListener(
         _handleBottomDragChromeHoverChanged,
       );
+    }
+    if (!identical(
+      oldWidget.nonGridDragRegionHoverNotifier,
+      widget.nonGridDragRegionHoverNotifier,
+    )) {
+      (oldWidget.nonGridDragRegionHoverNotifier ??
+              _defaultNonGridDragRegionHoverNotifier)
+          .removeListener(_handleNonGridDragRegionHoverChanged);
+      _nonGridDragRegionHoverNotifier.addListener(
+        _handleNonGridDragRegionHoverChanged,
+      );
+    }
+    if (!identical(
+      oldWidget.dragCompletionRevision,
+      widget.dragCompletionRevision,
+    )) {
+      (oldWidget.dragCompletionRevision ?? _defaultDragCompletionRevision)
+          .removeListener(_handleDragCompletionRevisionChanged);
+      _lastDragCompletionRevision = _dragCompletionRevision.value;
+      _dragCompletionRevision.addListener(_handleDragCompletionRevisionChanged);
     }
     if (oldWidget.state.viewMode != widget.state.viewMode) {
       _dateSlideDirection = 0;
@@ -1813,8 +1883,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (dragging == null) {
       return;
     }
-    _notifyDragSessionStarted();
-    _notifyDragGlobalPosition(details.globalPosition);
     _updateDragPreview(details.previewStart, details.previewDuration);
 
     final double? columnWidth =
@@ -1862,18 +1930,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     _handleTaskDrop(dragging, details.slotStart);
-    _clearDragPreview();
-    _cancelPendingDragWidth();
-    _resetDragFeedbackHint();
-    _stopEdgeAutoScroll();
-    _notifyDragSessionEnded();
   }
 
   void _handleSurfaceDragExit() {
     _clearDragPreview();
     _cancelPendingDragWidth();
-    _resetDragFeedbackHint();
-    _stopEdgeAutoScroll();
+    if (_taskInteractionController.activeInteractionSession == null) {
+      _clearActiveInteractionEdgeIntent();
+    }
   }
 
   void _handleSurfaceGeometryChanged() {
@@ -1916,8 +1980,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (session == null) {
       return;
     }
+    if (_isAnyNonGridDragRegionHovering) {
+      _clearActiveInteractionEdgeIntent(clearPreview: true);
+      return;
+    }
     if (session.isDrag) {
-      _surfaceController.dispatchActiveDragUpdate(session.globalPosition);
+      _handleTaskDragGlobalPosition(
+        session.globalPosition,
+        markDragMoved: false,
+      );
       return;
     }
     if (session.isResize) {
@@ -1963,7 +2034,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       enableContextMenuLongPress: hasMouse,
       resizeHandleExtent: hasMouse ? _desktopHandleExtent : _touchHandleExtent,
       interactionController: _taskInteractionController,
-      dragFeedbackHint: _taskInteractionController.feedbackHint,
       cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
       callbacks: _taskCallbacks(task),
       geometryProvider: _surfaceController.geometryForTask,
@@ -1987,9 +2057,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       onResizeEnd: _handleResizeCommit,
       onResizePointerMove: _handleResizeAutoScroll,
       onDragStarted: _handleTaskDragStarted,
+      resolveDragOriginSlot: (dragTask) =>
+          _computeOriginSlot(dragTask.scheduledTime),
       onDragUpdate: _handleTaskDragUpdate,
       onDragEnded: _handleTaskDragEnded,
-      onDragPointerDown: (offset) => _handleTaskPointerDown(task, offset),
       onEnterSelectionMode: () => _enterSelectionMode(task.id),
       onToggleSelection: () => _toggleTaskSelection(task.id),
       onTap: _onScheduledTaskTapped,
@@ -2410,10 +2481,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required double width,
     required double bandWidth,
   }) {
-    if (x < 0 || x <= bandWidth) {
+    if (x < 0 || x > width) {
+      return CalendarInteractionHorizontalIntent.neutral;
+    }
+    if (x <= bandWidth) {
       return CalendarInteractionHorizontalIntent.backward;
     }
-    if (x > width || x >= width - bandWidth) {
+    if (x >= width - bandWidth) {
       return CalendarInteractionHorizontalIntent.forward;
     }
     return CalendarInteractionHorizontalIntent.neutral;
@@ -2445,42 +2519,40 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarInteractionSession? session =
         _taskInteractionController.activeInteractionSession;
     if (session == null) {
+      _cancelEdgeAutoPageTimer();
       _stopEdgeAutoScroll();
       return;
     }
-    if (_cancelBucketHoverNotifier.value) {
-      if (session.verticalIntent != CalendarInteractionVerticalIntent.neutral ||
-          session.horizontalIntent !=
-              CalendarInteractionHorizontalIntent.neutral) {
-        _taskInteractionController.updateInteractionEdgeIntent(
-          verticalIntent: CalendarInteractionVerticalIntent.neutral,
-          horizontalIntent: CalendarInteractionHorizontalIntent.neutral,
-        );
-      }
-      _stopEdgeAutoScroll();
+    if (_isAnyNonGridDragRegionHovering) {
+      _clearActiveInteractionEdgeIntent(clearPreview: true);
       return;
     }
     if (!_verticalController.hasClients) {
+      _cancelEdgeAutoPageTimer();
       return;
     }
     final BuildContext? scrollContext = _scrollableKey.currentContext;
     if (scrollContext == null) {
+      _cancelEdgeAutoPageTimer();
       return;
     }
 
     final RenderObject? renderObject = scrollContext.findRenderObject();
     if (renderObject is! RenderBox) {
+      _cancelEdgeAutoPageTimer();
       return;
     }
 
     final Size viewportSize = renderObject.size;
     final double height = viewportSize.height;
     if (!height.isFinite || height <= 0) {
+      _cancelEdgeAutoPageTimer();
       return;
     }
 
     final double width = viewportSize.width;
     if (!width.isFinite || width <= 0) {
+      _cancelEdgeAutoPageTimer();
       _stopEdgeAutoScroll();
       return;
     }
@@ -2522,16 +2594,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           width: width,
           bandWidth: horizontalBandWidth,
         );
-    if (horizontalIntent != session.horizontalIntent) {
-      _lastEdgeAutoPageAt =
-          horizontalIntent == CalendarInteractionHorizontalIntent.neutral
-          ? null
-          : DateTime.now();
-    }
+    final CalendarInteractionHorizontalIntent effectiveHorizontalIntent =
+        _isSyntheticDragRefresh ? session.horizontalIntent : horizontalIntent;
     _taskInteractionController.updateInteractionEdgeIntent(
       verticalIntent: verticalIntent,
-      horizontalIntent: horizontalIntent,
+      horizontalIntent: effectiveHorizontalIntent,
     );
+    if (!_isSyntheticDragRefresh) {
+      _updateEdgeAutoPageTimer(horizontalIntent, startRepeat: false);
+    }
 
     final double offsetPerFrame = _offsetPerFrameForVerticalIntent(
       intent: verticalIntent,
@@ -2543,8 +2614,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       slowOffsetPerFrame: slowOffsetPerFrame,
     );
 
-    if (offsetPerFrame == 0 &&
-        horizontalIntent == CalendarInteractionHorizontalIntent.neutral) {
+    if (offsetPerFrame == 0) {
       _stopEdgeAutoScroll();
       return;
     }
