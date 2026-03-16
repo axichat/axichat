@@ -12,15 +12,23 @@
 <p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
 <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
 
-<div align="center">
-  <a href="https://f-droid.org/packages/im.axi.axichat">
-    <img
-      src="https://f-droid.org/badge/get-it-on.png"
-      alt="Get it on F-Droid"
-      height="80"
-    />
-  </a>
-</div>
+[//]: # (<div align="center">)
+
+[//]: # (  <a href="https://f-droid.org/packages/im.axi.axichat">)
+
+[//]: # (    <img)
+
+[//]: # (      src="https://f-droid.org/badge/get-it-on.png")
+
+[//]: # (      alt="Get it on F-Droid")
+
+[//]: # (      height="80")
+
+[//]: # (    />)
+
+[//]: # (  </a>)
+
+[//]: # (</div>)
 
 <div align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
@@ -124,18 +132,19 @@
 
 ### Feature highlights:
 
-- 1st-party push notifications and offline sync
-- Unified inbox for chat + email
+- 1st-party push notifications
+- Chat + email unified inbox
 - Sync across all your devices (mobile and desktop)
-- Group chats
+- Group chats with roles and moderation
+- File attachments
 - Avatars
-- Easy forwarding and replying
+- Forwarding and quoting
 - Emoji reactions
 - Delivery and read receipts
 - Typing indicators
-- Attachments
 - Pinned messages
 - Stream management with automatic reconnect to stop messages dropping
+- Import and export contacts and calendars
 - Easy drag-and-drop calendar
 - Natural-language scheduling without AI
 - Availability sharing that shows overlaps before you schedule
@@ -209,10 +218,10 @@
 
 ## Why?
 
-**Email sucks and most XMPP clients neglect UX**
+**Email sucks and XMPP clients neglect UX**
 
-- **Tools matter** - Would you rather write a letter while standing up outside or sitting at your
-  desk? Using the right software makes the same difference. Axichat is a digital desk for your
+- **Tools matter** - Would you rather write a letter while standing outside or sitting at your
+  desk? Using the right software makes the same difference. Axichat is like a digital desk for your
   online communication.
 - **Time matters** - You can always make more money, but not more time. Axichat's calendar is
   designed to help you seize the day, and our chat-like email formatting helps you avoid spending it
