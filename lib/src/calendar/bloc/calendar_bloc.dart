@@ -263,6 +263,7 @@ class CalendarBloc extends BaseCalendarBloc {
     CalendarModel model,
     Emitter<CalendarState> emit, {
     DateTime? selectedDate,
+    String? error,
     bool? isLoading,
     DateTime? lastSyncTime,
     bool? isSelectionMode,
@@ -286,6 +287,7 @@ class CalendarBloc extends BaseCalendarBloc {
       model,
       emit,
       selectedDate: selectedDate,
+      error: error,
       isLoading: isLoading,
       lastSyncTime: lastSyncTime,
       isSelectionMode: isSelectionMode,

@@ -5997,7 +5997,7 @@ class _ChatState extends State<Chat> {
       prefilledText: calendarText,
       locationHelper: locationHelper,
       locateCalendarBloc: () => context.read<CalendarBloc>(),
-      onTaskAdded: (task) {
+      onTaskAdded: (task, queuedCriticalPathIds) {
         context.read<CalendarBloc>().add(
           CalendarEvent.taskAdded(
             title: task.title,
@@ -6009,6 +6009,7 @@ class _ChatState extends State<Chat> {
             endDate: task.endDate,
             priority: task.priority ?? TaskPriority.none,
             recurrence: task.recurrence,
+            queuedCriticalPathIds: queuedCriticalPathIds,
           ),
         );
       },
@@ -6163,7 +6164,7 @@ class _ChatState extends State<Chat> {
       prefilledText: calendarText,
       locationHelper: locationHelper,
       locateCalendarBloc: () => context.read<CalendarBloc>(),
-      onTaskAdded: (task) {
+      onTaskAdded: (task, queuedCriticalPathIds) {
         context.read<CalendarBloc>().add(
           CalendarEvent.taskAdded(
             title: task.title,
@@ -6175,6 +6176,7 @@ class _ChatState extends State<Chat> {
             endDate: task.endDate,
             priority: task.priority ?? TaskPriority.none,
             recurrence: task.recurrence,
+            queuedCriticalPathIds: queuedCriticalPathIds,
           ),
         );
       },

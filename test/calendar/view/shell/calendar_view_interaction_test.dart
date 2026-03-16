@@ -39,7 +39,7 @@ void main() {
           ),
           child: QuickAddModal(
             prefilledDateTime: slotTime,
-            onTaskAdded: (task) => submitted = task,
+            onTaskAdded: (task, _) => submitted = task,
             locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
           ),
         ),

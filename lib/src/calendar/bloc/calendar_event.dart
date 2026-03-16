@@ -58,6 +58,7 @@ abstract class CalendarEvent with _$CalendarEvent {
     @Default(TaskPriority.none) TaskPriority priority,
     RecurrenceRule? recurrence,
     @Default([]) List<TaskChecklistItem> checklist,
+    @Default(<String>[]) List<String> queuedCriticalPathIds,
     ReminderPreferences? reminders,
     CalendarIcsMeta? icsMeta,
   }) = CalendarTaskAdded;
@@ -194,6 +195,7 @@ abstract class CalendarEvent with _$CalendarEvent {
     DateTime? deadline,
     @Default(TaskPriority.none) TaskPriority priority,
     @Default([]) List<TaskChecklistItem> checklist,
+    @Default(<String>[]) List<String> queuedCriticalPathIds,
     ReminderPreferences? reminders,
   }) = CalendarQuickTaskAdded;
 

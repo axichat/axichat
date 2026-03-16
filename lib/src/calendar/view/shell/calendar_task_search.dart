@@ -25,7 +25,6 @@ import 'package:axichat/src/calendar/view/tasks/task_tile_surface.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:uuid/uuid.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_sheet_header.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
@@ -243,10 +242,8 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode();
   final Set<_QuickFilter> _filters = <_QuickFilter>{};
-  String? _pendingCriticalPathAddRequestId;
   String? _pendingCriticalPathAddPathId;
   String? _pendingCriticalPathAddTaskId;
-  int _handledCriticalPathMutationOutcomeToken = 0;
 
   @override
   void initState() {
@@ -275,6 +272,8 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
         : l10n.calendarTaskSearchSubtitle;
     return BlocListener<B, CalendarState>(
       bloc: widget.bloc,
+      listenWhen: (previous, current) =>
+          previous.isCriticalPathMutating != current.isCriticalPathMutating,
       listener: _handleCalendarStateChanged,
       child: BlocBuilder<B, CalendarState>(
         bloc: widget.bloc,
@@ -420,13 +419,10 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
         );
         return;
       }
-      final String requestId = const Uuid().v4();
-      _pendingCriticalPathAddRequestId = requestId;
       _pendingCriticalPathAddPathId = effectivePath.id;
       _pendingCriticalPathAddTaskId = task.baseId;
       widget.bloc.add(
         CalendarEvent.criticalPathTaskAdded(
-          requestId: requestId,
           pathId: effectivePath.id,
           taskId: task.id,
         ),
@@ -437,22 +433,14 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   }
 
   void _handleCalendarStateChanged(BuildContext context, CalendarState state) {
-    if (state.criticalPathMutationOutcomeToken ==
-        _handledCriticalPathMutationOutcomeToken) {
+    if (state.isCriticalPathMutating) {
       return;
     }
-    _handledCriticalPathMutationOutcomeToken =
-        state.criticalPathMutationOutcomeToken;
-    final String? requestId = _pendingCriticalPathAddRequestId;
     final String? pathId = _pendingCriticalPathAddPathId;
     final String? taskId = _pendingCriticalPathAddTaskId;
-    if (requestId == null ||
-        pathId == null ||
-        taskId == null ||
-        state.criticalPathMutationRequestId != requestId) {
+    if (pathId == null || taskId == null) {
       return;
     }
-    _pendingCriticalPathAddRequestId = null;
     _pendingCriticalPathAddPathId = null;
     _pendingCriticalPathAddTaskId = null;
     if (state.criticalPathMutationError != null) {

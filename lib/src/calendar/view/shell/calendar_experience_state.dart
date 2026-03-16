@@ -293,7 +293,7 @@ abstract class CalendarExperienceState<
       prefilledDateTime: prefilledTime,
       locationHelper: helper,
       locateCalendarBloc: () => calendarBloc,
-      onTaskAdded: (task) => calendarBloc.add(
+      onTaskAdded: (task, queuedCriticalPathIds) => calendarBloc.add(
         CalendarEvent.taskAdded(
           title: task.title,
           scheduledTime: task.scheduledTime,
@@ -304,6 +304,7 @@ abstract class CalendarExperienceState<
           priority: task.priority ?? TaskPriority.none,
           recurrence: task.recurrence,
           checklist: task.checklist,
+          queuedCriticalPathIds: queuedCriticalPathIds,
           endDate: task.endDate,
           reminders: task.reminders,
           icsMeta: task.icsMeta,

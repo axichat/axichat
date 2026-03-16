@@ -516,6 +516,10 @@ abstract class BaseCalendarBloc
     CalendarTaskAdded event,
     Emitter<CalendarState> emit,
   ) async {
+    CalendarTask? createdTask;
+    CalendarModel updatedModel = state.model;
+    String? lastAddedPathId;
+    String? lastAddedTaskId;
     try {
       if (event.title.trim().isEmpty) {
         throw const CalendarValidationException(
@@ -543,6 +547,11 @@ abstract class BaseCalendarBloc
           isTaskCreationSubmitting: true,
           taskCreationError: null,
           lastCreatedTaskId: null,
+          isCriticalPathMutating: event.queuedCriticalPathIds.isNotEmpty,
+          criticalPathMutationError: null,
+          lastCreatedCriticalPathId: null,
+          lastCriticalPathTaskAddedPathId: null,
+          lastCriticalPathTaskAddedTaskId: null,
         ),
       );
 
@@ -602,8 +611,19 @@ abstract class BaseCalendarBloc
         icsMeta: event.icsMeta,
       ).copyWith(modifiedAt: now);
 
+      createdTask = task;
       await onTaskAdded(task);
-      final updatedModel = state.model.addTask(task);
+      updatedModel = state.model.addTask(task);
+      if (event.queuedCriticalPathIds.isNotEmpty) {
+        final result = await _applyQueuedCriticalPathAdds(
+          model: updatedModel,
+          task: task,
+          pathIds: event.queuedCriticalPathIds,
+        );
+        updatedModel = result.$1;
+        lastAddedPathId = result.$2;
+        lastAddedTaskId = result.$3;
+      }
       emitModel(
         updatedModel,
         emit,
@@ -611,9 +631,24 @@ abstract class BaseCalendarBloc
         isTaskCreationSubmitting: false,
         taskCreationError: null,
         lastCreatedTaskId: task.id,
+        isCriticalPathMutating: false,
+        criticalPathMutationError: null,
+        lastCriticalPathTaskAddedPathId: lastAddedPathId,
+        lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
       );
     } catch (error) {
-      _emitTaskCreationError(error, 'Failed to add task', emit);
+      if (createdTask == null) {
+        _emitTaskCreationError(error, 'Failed to add task', emit);
+        return;
+      }
+      _emitTaskCreationFollowUpError(
+        error,
+        updatedModel,
+        createdTaskId: createdTask.id,
+        lastAddedPathId: lastAddedPathId,
+        lastAddedTaskId: lastAddedTaskId,
+        emit: emit,
+      );
     }
   }
 
@@ -1477,6 +1512,10 @@ abstract class BaseCalendarBloc
     CalendarQuickTaskAdded event,
     Emitter<CalendarState> emit,
   ) async {
+    CalendarTask? createdTask;
+    CalendarModel updatedModel = state.model;
+    String? lastAddedPathId;
+    String? lastAddedTaskId;
     try {
       if (event.text.trim().isEmpty) {
         throw const CalendarValidationException(
@@ -1492,6 +1531,11 @@ abstract class BaseCalendarBloc
           isTaskCreationSubmitting: true,
           taskCreationError: null,
           lastCreatedTaskId: null,
+          isCriticalPathMutating: event.queuedCriticalPathIds.isNotEmpty,
+          criticalPathMutationError: null,
+          lastCreatedCriticalPathId: null,
+          lastCriticalPathTaskAddedPathId: null,
+          lastCriticalPathTaskAddedTaskId: null,
         ),
       );
 
@@ -1513,8 +1557,19 @@ abstract class BaseCalendarBloc
         reminders: _resolveParsedReminders(event.reminders, parsed.reminders),
       );
 
+      createdTask = task;
       await onTaskAdded(task);
-      final updatedModel = state.model.addTask(task);
+      updatedModel = state.model.addTask(task);
+      if (event.queuedCriticalPathIds.isNotEmpty) {
+        final result = await _applyQueuedCriticalPathAdds(
+          model: updatedModel,
+          task: task,
+          pathIds: event.queuedCriticalPathIds,
+        );
+        updatedModel = result.$1;
+        lastAddedPathId = result.$2;
+        lastAddedTaskId = result.$3;
+      }
       emitModel(
         updatedModel,
         emit,
@@ -1522,9 +1577,24 @@ abstract class BaseCalendarBloc
         isTaskCreationSubmitting: false,
         taskCreationError: null,
         lastCreatedTaskId: task.id,
+        isCriticalPathMutating: false,
+        criticalPathMutationError: null,
+        lastCriticalPathTaskAddedPathId: lastAddedPathId,
+        lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
       );
     } catch (error) {
-      _emitTaskCreationError(error, 'Failed to add quick task', emit);
+      if (createdTask == null) {
+        _emitTaskCreationError(error, 'Failed to add quick task', emit);
+        return;
+      }
+      _emitTaskCreationFollowUpError(
+        error,
+        updatedModel,
+        createdTaskId: createdTask.id,
+        lastAddedPathId: lastAddedPathId,
+        lastAddedTaskId: lastAddedTaskId,
+        emit: emit,
+      );
     }
   }
 
@@ -3244,6 +3314,7 @@ abstract class BaseCalendarBloc
     CalendarModel model,
     Emitter<CalendarState> emit, {
     DateTime? selectedDate,
+    String? error,
     bool? isLoading,
     DateTime? lastSyncTime,
     bool? isSelectionMode,
@@ -3283,6 +3354,7 @@ abstract class BaseCalendarBloc
       dueReminders: _getDueReminders(model),
       nextTask: _getNextTask(model),
       selectedDate: selectedDate ?? state.selectedDate,
+      error: error ?? state.error,
       isLoading: isLoading ?? state.isLoading,
       lastSyncTime: lastSyncTime ?? state.lastSyncTime,
       isSelectionMode: resolvedSelectionMode,
@@ -3347,7 +3419,38 @@ abstract class BaseCalendarBloc
         isTaskCreationSubmitting: false,
         taskCreationError: errorMessage,
         lastCreatedTaskId: null,
+        isCriticalPathMutating: false,
+        criticalPathMutationError: null,
+        lastCriticalPathTaskAddedPathId: null,
+        lastCriticalPathTaskAddedTaskId: null,
       ),
+    );
+  }
+
+  void _emitTaskCreationFollowUpError(
+    Object error,
+    CalendarModel model, {
+    required String createdTaskId,
+    required String? lastAddedPathId,
+    required String? lastAddedTaskId,
+    required Emitter<CalendarState> emit,
+  }) {
+    final String errorMessage = error is CalendarException
+        ? error.message
+        : 'Failed to add task to critical path: $error';
+    logError(errorMessage, error);
+    emitModel(
+      model,
+      emit,
+      error: errorMessage,
+      isLoading: false,
+      isTaskCreationSubmitting: false,
+      taskCreationError: null,
+      lastCreatedTaskId: createdTaskId,
+      isCriticalPathMutating: false,
+      criticalPathMutationError: errorMessage,
+      lastCriticalPathTaskAddedPathId: lastAddedPathId,
+      lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
     );
   }
 
@@ -3401,6 +3504,37 @@ abstract class BaseCalendarBloc
       return null;
     }
     return candidate;
+  }
+
+  Future<(CalendarModel, String?, String?)> _applyQueuedCriticalPathAdds({
+    required CalendarModel model,
+    required CalendarTask task,
+    required List<String> pathIds,
+  }) async {
+    CalendarModel updatedModel = model;
+    String? lastAddedPathId;
+    String? lastAddedTaskId;
+    for (final String pathId in pathIds) {
+      final CalendarCriticalPath? path = updatedModel.criticalPaths[pathId];
+      if (path == null || path.isArchived) {
+        throw const CalendarValidationException(
+          'criticalPath',
+          'Critical path not found',
+        );
+      }
+      if (path.taskIds.contains(task.baseId)) {
+        continue;
+      }
+      final CalendarModel nextModel = updatedModel.addTaskToCriticalPath(
+        pathId: path.id,
+        taskId: task.baseId,
+      );
+      await onCriticalPathUpdated(nextModel.criticalPaths[path.id]!);
+      updatedModel = nextModel;
+      lastAddedPathId = path.id;
+      lastAddedTaskId = task.baseId;
+    }
+    return (updatedModel, lastAddedPathId, lastAddedTaskId);
   }
 
   Set<String> _filterSelectionForFocus({
