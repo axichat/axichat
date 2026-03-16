@@ -2414,6 +2414,51 @@ class XmppService extends XmppBase
         .timeout(timeout);
   }
 
+  Future<bool> syncSessionState() async {
+    if (!hasConnectionSettings || !connected) {
+      return true;
+    }
+
+    const mamHistoryPageSize = 50;
+    final mamOutcome = await syncGlobalMamCatchUpForRefresh(
+      pageSize: mamHistoryPageSize,
+    );
+    if (!_isAcceptableSessionSyncMamOutcome(mamOutcome)) {
+      return false;
+    }
+    final boolResults = await Future.wait<bool>([
+      syncSpamSnapshot(),
+      syncAddressBlockSnapshot(),
+      rehydrateCalendarFromMam(),
+      refreshAvatarsForConversationIndex(),
+      syncDraftsSnapshot(),
+    ]);
+    if (boolResults.any((result) => !result)) {
+      return false;
+    }
+
+    await Future.wait<void>(
+      [
+        () async => syncConversationIndexSnapshot(),
+        () async => syncMucBookmarksSnapshot(),
+      ].map((task) => task()),
+    );
+    return true;
+  }
+
+  bool _isAcceptableSessionSyncMamOutcome(MamGlobalSyncOutcome outcome) {
+    switch (outcome) {
+      case MamGlobalSyncOutcome.completed:
+      case MamGlobalSyncOutcome.skippedUnsupported:
+      case MamGlobalSyncOutcome.skippedDenied:
+      case MamGlobalSyncOutcome.skippedInFlight:
+      case MamGlobalSyncOutcome.skippedResumed:
+        return true;
+      case MamGlobalSyncOutcome.failed:
+        return false;
+    }
+  }
+
   Future<void> ensureForegroundSocketIfActive() async {
     if (!withForeground) {
       _logForegroundMigrationSkip('withForeground disabled');

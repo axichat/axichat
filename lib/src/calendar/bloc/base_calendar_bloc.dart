@@ -543,8 +543,10 @@ abstract class BaseCalendarBloc
         state.copyWith(
           isLoading: true,
           error: null,
+          taskCreationRequestId: event.requestId,
           isTaskCreationSubmitting: true,
           taskCreationError: null,
+          lastCreatedTaskId: null,
         ),
       );
 
@@ -1494,7 +1496,16 @@ abstract class BaseCalendarBloc
         );
       }
 
-      emit(state.copyWith(isLoading: true, error: null));
+      emit(
+        state.copyWith(
+          isLoading: true,
+          error: null,
+          taskCreationRequestId: event.requestId,
+          isTaskCreationSubmitting: true,
+          taskCreationError: null,
+          lastCreatedTaskId: null,
+        ),
+      );
 
       _recordUndoSnapshot();
 
@@ -2460,6 +2471,8 @@ abstract class BaseCalendarBloc
           error: null,
           importRequestId: event.requestId,
           importError: null,
+          lastImportedTaskIds: const <String>[],
+          lastImportedModelChecksum: null,
         ),
       );
       _recordUndoSnapshot();
@@ -2511,6 +2524,8 @@ abstract class BaseCalendarBloc
           error: null,
           importRequestId: event.requestId,
           importError: null,
+          lastImportedTaskIds: const <String>[],
+          lastImportedModelChecksum: null,
         ),
       );
       _recordUndoSnapshot();
@@ -2556,6 +2571,9 @@ abstract class BaseCalendarBloc
           isCriticalPathMutating: true,
           criticalPathMutationError: null,
           error: null,
+          lastCreatedCriticalPathId: null,
+          lastCriticalPathTaskAddedPathId: null,
+          lastCriticalPathTaskAddedTaskId: null,
         ),
       );
       _recordUndoSnapshot();
@@ -2699,6 +2717,9 @@ abstract class BaseCalendarBloc
           isCriticalPathMutating: true,
           criticalPathMutationError: null,
           error: null,
+          lastCreatedCriticalPathId: null,
+          lastCriticalPathTaskAddedPathId: null,
+          lastCriticalPathTaskAddedTaskId: null,
         ),
       );
       _recordUndoSnapshot();

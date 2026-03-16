@@ -1,9 +1,8 @@
 import 'dart:async';
 
-import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -27,30 +26,7 @@ void main() {
     emailSyncStateController = StreamController<EmailSyncState>.broadcast();
     emailReadyTransitionController = StreamController<void>.broadcast();
 
-    when(() => xmppService.hasConnectionSettings).thenReturn(true);
-    when(() => xmppService.connected).thenReturn(true);
-    when(
-      () => xmppService.syncGlobalMamCatchUpForRefresh(
-        pageSize: any(named: 'pageSize'),
-      ),
-    ).thenAnswer((_) async => MamGlobalSyncOutcome.completed);
-    when(() => xmppService.syncSpamSnapshot()).thenAnswer((_) async => true);
-    when(
-      () => xmppService.syncAddressBlockSnapshot(),
-    ).thenAnswer((_) async => true);
-    when(
-      () => xmppService.syncConversationIndexSnapshot(),
-    ).thenAnswer((_) async => const []);
-    when(
-      () => xmppService.syncMucBookmarksSnapshot(),
-    ).thenAnswer((_) async => const []);
-    when(
-      () => xmppService.rehydrateCalendarFromMam(),
-    ).thenAnswer((_) async => true);
-    when(
-      () => xmppService.refreshAvatarsForConversationIndex(),
-    ).thenAnswer((_) async => true);
-    when(() => xmppService.syncDraftsSnapshot()).thenAnswer((_) async => true);
+    when(() => xmppService.syncSessionState()).thenAnswer((_) async => true);
 
     when(
       () => emailService.syncState,
@@ -77,6 +53,7 @@ void main() {
     when(
       () => emailService.syncContactsForHomeRefresh(),
     ).thenAnswer((_) async => true);
+    when(() => emailService.syncSessionState()).thenAnswer((_) async => true);
     when(
       () => emailService.ensureEventChannelActive(),
     ).thenAnswer((_) async {});
@@ -115,11 +92,8 @@ void main() {
         RequestStatus.loading,
         RequestStatus.success,
       ]);
-      verify(
-        () => xmppService.syncGlobalMamCatchUpForRefresh(pageSize: 50),
-      ).called(1);
-      verify(() => emailService.syncContactsForHomeRefresh()).called(1);
-      verify(() => emailService.refreshHistoryForHomeRefresh()).called(1);
+      verify(() => emailService.syncSessionState()).called(1);
+      verify(() => xmppService.syncSessionState()).called(1);
     },
   );
 
@@ -136,48 +110,11 @@ void main() {
     await pumpEventQueue();
 
     verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
-    verifyNever(() => emailService.syncContactsForHomeRefresh());
-    verifyNever(() => xmppService.syncConversationIndexSnapshot());
+    verifyNever(() => emailService.syncSessionState());
+    verifyNever(() => xmppService.syncSessionState());
   });
 
-  test('disconnected refresh skips xmpp post-connect sync work', () async {
-    when(() => xmppService.connected).thenReturn(false);
-
-    final emittedStates = <HomeState>[];
-
-    final bloc = HomeBloc(
-      xmppService: xmppService,
-      emailService: emailService,
-      tabs: const [HomeTab.chats],
-    );
-    final subscription = bloc.stream.listen(emittedStates.add);
-    addTearDown(() async {
-      await subscription.cancel();
-      await bloc.close();
-    });
-
-    bloc.add(const HomeRefreshRequested());
-    await pumpEventQueue();
-
-    expect(emittedStates.map((state) => state.refreshStatus), [
-      RequestStatus.loading,
-      RequestStatus.success,
-    ]);
-    verify(() => emailService.recoverForHomeRefresh()).called(1);
-    verify(() => emailService.syncContactsForHomeRefresh()).called(1);
-    verify(() => emailService.refreshHistoryForHomeRefresh()).called(1);
-    verifyNever(
-      () => xmppService.syncGlobalMamCatchUpForRefresh(
-        pageSize: any(named: 'pageSize'),
-      ),
-    );
-    verifyNever(() => xmppService.syncConversationIndexSnapshot());
-    verifyNever(() => xmppService.syncMucBookmarksSnapshot());
-  });
-
-  test('smtp-only refresh runs email work without xmpp sync failure', () async {
-    when(() => xmppService.hasConnectionSettings).thenReturn(false);
-
+  test('refresh delegates to the two session sync owners only', () async {
     final bloc = HomeBloc(
       xmppService: xmppService,
       emailService: emailService,
@@ -197,14 +134,8 @@ void main() {
       RequestStatus.loading,
       RequestStatus.success,
     ]);
-    verifyNever(
-      () => xmppService.syncGlobalMamCatchUpForRefresh(
-        pageSize: any(named: 'pageSize'),
-      ),
-    );
-    verify(() => emailService.recoverForHomeRefresh()).called(1);
-    verify(() => emailService.syncContactsForHomeRefresh()).called(1);
-    verify(() => emailService.refreshHistoryForHomeRefresh()).called(1);
+    verify(() => emailService.syncSessionState()).called(1);
+    verify(() => xmppService.syncSessionState()).called(1);
   });
 
   test(
@@ -212,7 +143,7 @@ void main() {
     () async {
       final fetchCompleter = Completer<bool>();
       when(
-        () => emailService.refreshHistoryForHomeRefresh(),
+        () => emailService.syncSessionState(),
       ).thenAnswer((_) => fetchCompleter.future);
 
       final bloc = HomeBloc(
@@ -225,14 +156,14 @@ void main() {
       addTearDown(subscription.cancel);
 
       bloc.add(const HomeRefreshRequested());
-      await untilCalled(() => emailService.refreshHistoryForHomeRefresh());
+      await untilCalled(() => emailService.syncSessionState());
 
       final closeFuture = bloc.close();
       fetchCompleter.complete(true);
       await closeFuture;
 
       expect(emittedStates.first.refreshStatus, RequestStatus.loading);
-      verify(() => emailService.refreshHistoryForHomeRefresh()).called(1);
+      verify(() => emailService.syncSessionState()).called(1);
     },
   );
 }

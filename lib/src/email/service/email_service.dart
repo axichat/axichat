@@ -2366,6 +2366,17 @@ class EmailService {
     }
   }
 
+  Future<bool> syncSessionState() async {
+    if (!await recoverForHomeRefresh()) {
+      return false;
+    }
+    final results = await Future.wait<bool>([
+      syncContactsForHomeRefresh(),
+      refreshHistoryForHomeRefresh(),
+    ]);
+    return results.every((result) => result);
+  }
+
   Future<void> _syncEmailBlocklist({
     required XmppDatabase db,
     required List<DeltaContact> blockedContacts,

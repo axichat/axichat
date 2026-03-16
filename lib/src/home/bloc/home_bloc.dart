@@ -232,55 +232,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   Future<_HomeRefreshOutcome> _runRefreshGesture() async {
     final emailService = _emailService;
-    if (!await _runEmailRefreshGesture(emailService)) {
+    if (emailService != null && !await emailService.syncSessionState()) {
       return _HomeRefreshOutcome.failure;
     }
-    if (!_xmppService.hasConnectionSettings || !_xmppService.connected) {
-      return _HomeRefreshOutcome.success;
-    }
-
-    final mamOutcome = await _xmppService.syncGlobalMamCatchUpForRefresh(
-      pageSize: 50,
-    );
-    if (!_isAcceptableMamOutcome(mamOutcome)) {
+    if (!await _xmppService.syncSessionState()) {
       return _HomeRefreshOutcome.failure;
     }
-    if (emailService != null &&
-        !await emailService.syncContactsForHomeRefresh()) {
-      return _HomeRefreshOutcome.failure;
-    }
-    if (!await _xmppService.syncSpamSnapshot()) {
-      return _HomeRefreshOutcome.failure;
-    }
-    if (!await _xmppService.syncAddressBlockSnapshot()) {
-      return _HomeRefreshOutcome.failure;
-    }
-    await _xmppService.syncConversationIndexSnapshot();
-    await _xmppService.syncMucBookmarksSnapshot();
-    if (emailService != null &&
-        !await emailService.refreshHistoryForHomeRefresh()) {
-      return _HomeRefreshOutcome.failure;
-    }
-    await _xmppService.rehydrateCalendarFromMam();
-    await _xmppService.refreshAvatarsForConversationIndex();
-    await _xmppService.syncDraftsSnapshot();
     return _HomeRefreshOutcome.success;
-  }
-
-  Future<bool> _runEmailRefreshGesture(EmailService? emailService) async {
-    if (emailService == null) {
-      return true;
-    }
-    if (!await emailService.recoverForHomeRefresh()) {
-      return false;
-    }
-    if (!await emailService.syncContactsForHomeRefresh()) {
-      return false;
-    }
-    if (!await emailService.refreshHistoryForHomeRefresh()) {
-      return false;
-    }
-    return true;
   }
 
   Future<_HomeRefreshOutcome> _runEmailUnreadRefreshGesture() async {
@@ -292,18 +250,5 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     return didRefresh
         ? _HomeRefreshOutcome.success
         : _HomeRefreshOutcome.failure;
-  }
-
-  bool _isAcceptableMamOutcome(MamGlobalSyncOutcome outcome) {
-    switch (outcome) {
-      case MamGlobalSyncOutcome.completed:
-      case MamGlobalSyncOutcome.skippedUnsupported:
-      case MamGlobalSyncOutcome.skippedDenied:
-      case MamGlobalSyncOutcome.skippedInFlight:
-      case MamGlobalSyncOutcome.skippedResumed:
-        return true;
-      case MamGlobalSyncOutcome.failed:
-        return false;
-    }
   }
 }
