@@ -37,3 +37,26 @@ class ImportantMessagesState extends Equatable {
   @override
   List<Object?> get props => [chatJid, items, visibleItems, query, sortOrder];
 }
+
+class ImportantMessageItem extends Equatable {
+  const ImportantMessageItem({
+    required this.entry,
+    required this.message,
+    required this.chat,
+  });
+
+  final MessageCollectionMembershipEntry entry;
+  final Message? message;
+  final Chat? chat;
+
+  String get messageReferenceId => entry.messageReferenceId;
+
+  String get chatJid => entry.chatJid;
+
+  DateTime get markedAt => entry.addedAt;
+
+  bool get hasMessage => message != null;
+
+  @override
+  List<Object?> get props => [entry, message, chat];
+}

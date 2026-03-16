@@ -1,6 +1,5 @@
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -11,11 +10,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockXmppService xmppService;
-  late MockHomeRefreshSyncService homeRefreshSyncService;
 
   setUp(() {
     xmppService = MockXmppService();
-    homeRefreshSyncService = MockHomeRefreshSyncService();
 
     when(
       () => xmppService.chatsStream(),
@@ -26,9 +23,6 @@ void main() {
     when(
       () => xmppService.demoResetStream,
     ).thenAnswer((_) => const Stream<void>.empty());
-    when(
-      () => homeRefreshSyncService.syncUpdates,
-    ).thenAnswer((_) => const Stream<HomeRefreshSyncUpdate>.empty());
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
     when(
       () => xmppService.setSpamStatus(
@@ -51,10 +45,7 @@ void main() {
         contactJid: 'alice@example.com',
         emailAddress: 'alice@example.com',
       );
-      final cubit = ChatsCubit(
-        xmppService: xmppService,
-        homeRefreshSyncService: homeRefreshSyncService,
-      );
+      final cubit = ChatsCubit(xmppService: xmppService);
       addTearDown(cubit.close);
 
       final success = await cubit.moveSpamToInbox(chat: chat);

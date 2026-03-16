@@ -8,7 +8,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -23,7 +23,6 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -165,34 +164,17 @@ class _AxichatState extends State<Axichat> {
         )..primeAttachmentAutoDownloadSettings(),
         child: Builder(
           builder: (context) {
-            return MultiRepositoryProvider(
-              providers: [
-                RepositoryProvider<EmailService>(
-                  create: (context) => EmailService(
-                    credentialStore: context.read<CredentialStore>(),
-                    databaseBuilder: () => context.read<XmppService>().database,
-                    notificationService: context.read<NotificationService>(),
-                    messageService: context.read<MessageService>(),
-                    emailReadReceiptsEnabled: context
-                        .read<SettingsCubit>()
-                        .state
-                        .emailReadReceipts,
-                  ),
-                ),
-                RepositoryProvider<HomeRefreshSyncService>(
-                  create: (context) => HomeRefreshSyncService(
-                    xmppService: context.read<XmppService>(),
-                    emailService:
-                        context
-                            .read<SettingsCubit>()
-                            .state
-                            .endpointConfig
-                            .smtpEnabled
-                        ? context.read<EmailService>()
-                        : null,
-                  )..start(),
-                ),
-              ],
+            return RepositoryProvider<EmailService>(
+              create: (context) => EmailService(
+                credentialStore: context.read<CredentialStore>(),
+                databaseBuilder: () => context.read<XmppService>().database,
+                notificationService: context.read<NotificationService>(),
+                messageService: context.read<MessageService>(),
+                emailReadReceiptsEnabled: context
+                    .read<SettingsCubit>()
+                    .state
+                    .emailReadReceipts,
+              ),
               child: MultiBlocProvider(
                 providers: [
                   BlocProvider(
@@ -207,8 +189,6 @@ class _AxichatState extends State<Axichat> {
                       credentialStore: context.read<CredentialStore>(),
                       xmppService: context.read<XmppService>(),
                       emailService: context.read<EmailService>(),
-                      homeRefreshSyncService: context
-                          .read<HomeRefreshSyncService>(),
                       initialEndpointConfig: context
                           .read<SettingsCubit>()
                           .state
@@ -249,8 +229,6 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) => ChatsCubit(
                       xmppService: context.read<XmppService>(),
-                      homeRefreshSyncService: context
-                          .read<HomeRefreshSyncService>(),
                       emailService:
                           context
                               .read<SettingsCubit>()
@@ -330,10 +308,6 @@ class _AxichatState extends State<Axichat> {
                           activeEmailService,
                         );
                         emailService.updateEndpointConfig(config);
-                        await context
-                            .read<HomeRefreshSyncService>()
-                            .updateEmailService(activeEmailService);
-                        if (!context.mounted) return;
                         context.read<ConnectivityCubit>().updateEmailContext(
                           emailEnabled: config.smtpEnabled,
                           emailService: activeEmailService,

@@ -61,7 +61,6 @@ void main() {
   late Client mockHttpClient;
   late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
-  late MockHomeRefreshSyncService mockHomeRefreshSyncService;
   late Map<String, String?> credentialStorage;
   late AppLocalizations localizations;
 
@@ -72,7 +71,6 @@ void main() {
     mockStateStore = MockXmppStateStore();
     mockDatabase = MockXmppDatabase();
     mockEmailService = MockEmailService();
-    mockHomeRefreshSyncService = MockHomeRefreshSyncService();
     mockHttpClient = MockHttpClient();
     mockProvisioningClient = MockEmailProvisioningClient();
     localizations = lookupAppLocalizations(const Locale('en'));
@@ -179,13 +177,6 @@ void main() {
     when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
 
-    when(() => mockHomeRefreshSyncService.start()).thenAnswer((_) {});
-    when(() => mockHomeRefreshSyncService.close()).thenAnswer((_) async {});
-    when(
-      () => mockHomeRefreshSyncService.close(
-        abortPendingSync: any(named: 'abortPendingSync'),
-      ),
-    ).thenAnswer((_) async {});
     credentialStorage = <String, String?>{
       'password_prehashed_v1': true.toString(),
     };
@@ -603,7 +594,6 @@ void main() {
         initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
-        homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -655,7 +645,6 @@ void main() {
         initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
-        homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -696,7 +685,6 @@ void main() {
         initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
-        homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -2132,7 +2120,6 @@ void main() {
         credentialStore: mockCredentialStore,
         initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
-        homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),
@@ -2175,7 +2162,6 @@ void main() {
           initialEndpointConfig: const EndpointConfig(),
           xmppService: mockXmppService,
           emailService: mockEmailService,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
           httpClient: mockHttpClient,
           emailProvisioningClient: mockProvisioningClient,
           initialState: const AuthenticationComplete(),
@@ -2186,10 +2172,6 @@ void main() {
         final logoutFuture = bloc.logout(severity: LogoutSeverity.normal);
         await Future<void>.delayed(Duration.zero);
         expect(emittedStates, isEmpty);
-        verify(
-          () => mockHomeRefreshSyncService.close(abortPendingSync: true),
-        ).called(1);
-
         shutdownCompleter.complete();
         await Future<void>.delayed(Duration.zero);
         expect(emittedStates, isEmpty);
@@ -2221,7 +2203,6 @@ void main() {
           initialEndpointConfig: const EndpointConfig(),
           xmppService: mockXmppService,
           emailService: mockEmailService,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
           httpClient: mockHttpClient,
           emailProvisioningClient: mockProvisioningClient,
           initialState: const AuthenticationComplete(),
@@ -2248,7 +2229,6 @@ void main() {
         initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
-        homeRefreshSyncService: mockHomeRefreshSyncService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
         initialState: const AuthenticationComplete(),

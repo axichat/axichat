@@ -19,7 +19,6 @@ import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
@@ -157,7 +156,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required CredentialStore credentialStore,
     required XmppService xmppService,
     EmailService? emailService,
-    HomeRefreshSyncService? homeRefreshSyncService,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -167,12 +165,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
-       _homeRefreshSyncService =
-           homeRefreshSyncService ??
-           HomeRefreshSyncService(
-             xmppService: xmppService,
-             emailService: emailService,
-           ),
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        super(initialState ?? const AuthenticationNone()) {
@@ -187,9 +179,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final initialConfig =
         initialState?.config ?? initialEndpointConfig ?? const EndpointConfig();
     _handleEndpointConfigUpdated(initialConfig);
-    if (state is AuthenticationComplete) {
-      _homeRefreshSyncService.start();
-    }
     _lifecycleListener = AppLifecycleListener(
       onResume: _handleLifecycleResume,
       onShow: _handleLifecycleResume,
@@ -284,7 +273,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   EmailService? _emailService;
-  final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
   late final http.Client _httpClient;
   late final http.Client? _ownedHttpClient;
@@ -660,9 +648,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
     _updateLoginBackoff(state);
-    if (state is AuthenticationComplete) {
-      _homeRefreshSyncService.start();
-    }
     emit(state.copyWithConfig(endpointConfig));
   }
 
@@ -1407,7 +1392,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
     }
-    await _homeRefreshSyncService.close(abortPendingSync: true);
     await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
     await _emailService?.shutdown();
@@ -2826,7 +2810,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Normal logout blocked for device-only password account.');
       return;
     }
-    await _homeRefreshSyncService.close(abortPendingSync: true);
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }

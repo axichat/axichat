@@ -2,8 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';

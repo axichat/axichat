@@ -36,7 +36,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
   void _handleTextChanged() {
     if (_programmaticChange) return;
     final locate = context.read;
-    locate<HomeSearchCubit>().updateQuery(_controller.text);
+    locate<HomeBloc>().add(HomeSearchQueryChanged(_controller.text));
     setState(() {});
   }
 
@@ -60,7 +60,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<HomeSearchCubit, HomeSearchState>(
+    return BlocConsumer<HomeBloc, HomeState>(
       listener: (context, state) {
         final query = state.currentTabState?.query ?? '';
         _syncController(query);
@@ -125,14 +125,16 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         focusNode: _focusNode,
                         placeholder: Text(placeholder),
                         clearTooltip: l10n.commonClear,
-                        onClear: () =>
-                            locate<HomeSearchCubit>().clearQuery(tab: tab),
+                        onClear: () => locate<HomeBloc>().add(
+                          HomeSearchQueryChanged('', tab: tab),
+                        ),
                       ),
                     ),
                     SizedBox(width: spacing.s),
                     AxiButton.ghost(
-                      onPressed: () =>
-                          locate<HomeSearchCubit>().setSearchActive(false),
+                      onPressed: () => locate<HomeBloc>().add(
+                        const HomeSearchVisibilityChanged(false),
+                      ),
                       child: Text(l10n.commonCancel),
                     ),
                   ],
@@ -145,7 +147,9 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         initialValue: sortValue,
                         onChanged: (value) {
                           if (value == null) return;
-                          locate<HomeSearchCubit>().updateSort(value, tab: tab);
+                          locate<HomeBloc>().add(
+                            HomeSearchSortChanged(value, tab: tab),
+                          );
                         },
                         options: SearchSortOrder.values
                             .map(
@@ -165,9 +169,8 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         child: AxiSelect<SearchFilterId>(
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
-                            locate<HomeSearchCubit>().updateFilter(
-                              value,
-                              tab: tab,
+                            locate<HomeBloc>().add(
+                              HomeSearchFilterChanged(value, tab: tab),
                             );
                           },
                           options: filters

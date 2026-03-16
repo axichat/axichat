@@ -18,8 +18,8 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
-import 'package:axichat/src/calendar/view/calendar_widget.dart';
-import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
@@ -51,9 +51,8 @@ import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
-import 'package:axichat/src/important/models/important_message_item.dart';
 import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -92,6 +91,22 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
   ),
 ];
 
+class HomeTabEntry {
+  const HomeTabEntry({
+    required this.id,
+    required this.label,
+    required this.body,
+    this.fab,
+    this.searchFilters = const <HomeSearchFilter>[],
+  });
+
+  final HomeTab id;
+  final String label;
+  final Widget body;
+  final Widget? fab;
+  final List<HomeSearchFilter> searchFilters;
+}
+
 class _GlobalImportantMessagesTab extends StatefulWidget {
   const _GlobalImportantMessagesTab();
 
@@ -105,10 +120,10 @@ class _GlobalImportantMessagesTabState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncSearchState(context, context.read<HomeSearchCubit>().state);
+    _syncSearchState(context, context.read<HomeBloc>().state);
   }
 
-  void _syncSearchState(BuildContext context, HomeSearchState searchState) {
+  void _syncSearchState(BuildContext context, HomeState searchState) {
     final tabState = searchState.stateFor(HomeTab.important);
     final query = searchState.active ? tabState.query : '';
     context.read<ImportantMessagesCubit>().updateFilter(
@@ -126,7 +141,7 @@ class _GlobalImportantMessagesTabState
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<HomeSearchCubit, HomeSearchState>(
+    return BlocListener<HomeBloc, HomeState>(
       listener: _syncSearchState,
       child: ImportantMessagesList(
         showChatLabel: true,
@@ -1235,29 +1250,70 @@ class _HomeContent extends StatelessWidget {
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,
         child: _HomeTabIndexSync(
-          child: MultiBlocProvider(
-            providers: [
-              BlocProvider(
-                create: (context) => HomeSearchCubit(
-                  tabs: tabs.map((tab) => tab.id).toList(),
-                  initialFilters: initialTabFilters,
-                ),
-              ),
-            ],
-            child: _HomeCoordinatorBridge(
-              storage: calendarStorage,
-              child: EmailForwardingWelcomeGate(child: calendarAwareContent),
-            ),
+          child: _HomeCoordinatorBridge(
+            storage: calendarStorage,
+            child: EmailForwardingWelcomeGate(child: calendarAwareContent),
           ),
         ),
       ),
     );
-    final Widget baseLayer = _HomeActionLayer(
-      hasCalendarBloc: hasCalendarBloc,
-      shortcutFocusNode: shortcutFocusNode,
-      onHomeKeyEvent: onHomeKeyEvent,
-      child: scaffold,
-    );
+    Widget buildHomeLayer({T Function<T>()? chatLocate}) {
+      return BlocProvider(
+        create: (context) => HomeBloc(
+          xmppService: context.read<XmppService>(),
+          emailService: endpointConfig.smtpEnabled
+              ? context.read<EmailService>()
+              : null,
+          tabs: tabs.map((tab) => tab.id).toList(),
+          initialFilters: initialTabFilters,
+        ),
+        child: MultiBlocListener(
+          listeners: [
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.endpointConfig != current.endpointConfig,
+              listener: (context, settings) {
+                final locate = context.read;
+                locate<HomeBloc>().add(
+                  HomeEmailServiceChanged(
+                    settings.endpointConfig.smtpEnabled
+                        ? locate<EmailService>()
+                        : null,
+                  ),
+                );
+              },
+            ),
+            BlocListener<HomeBloc, HomeState>(
+              listenWhen: (previous, current) =>
+                  previous.refreshStatus != current.refreshStatus,
+              listener: (context, state) {
+                final locate = context.read;
+                if (state.refreshStatus.isSuccess) {
+                  locate<HomeBloc>().add(const HomeRefreshStatusCleared());
+                  return;
+                }
+                if (!state.refreshStatus.isFailure) {
+                  return;
+                }
+                ShadToaster.maybeOf(context)?.show(
+                  FeedbackToast.error(message: context.l10n.chatsRefreshFailed),
+                );
+                locate<HomeBloc>().add(const HomeRefreshStatusCleared());
+              },
+            ),
+          ],
+          child: _HomeActionLayer(
+            hasCalendarBloc: hasCalendarBloc,
+            shortcutFocusNode: shortcutFocusNode,
+            onHomeKeyEvent: onHomeKeyEvent,
+            chatLocate: chatLocate,
+            child: scaffold,
+          ),
+        ),
+      );
+    }
+
+    final Widget baseLayer = buildHomeLayer();
     if (effectiveOpenJid == null) {
       return baseLayer;
     }
@@ -1307,13 +1363,7 @@ class _HomeContent extends StatelessWidget {
         ),
       ],
       child: Builder(
-        builder: (context) => _HomeActionLayer(
-          hasCalendarBloc: hasCalendarBloc,
-          shortcutFocusNode: shortcutFocusNode,
-          onHomeKeyEvent: onHomeKeyEvent,
-          chatLocate: context.read,
-          child: scaffold,
-        ),
+        builder: (context) => buildHomeLayer(chatLocate: context.read),
       ),
     );
   }
@@ -1385,7 +1435,7 @@ class _HomeActionLayer extends StatelessWidget {
               ),
               ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
                 onInvoke: (_) {
-                  locate<HomeSearchCubit>().toggleSearch();
+                  locate<HomeBloc>().add(const HomeSearchToggled());
                   return null;
                 },
               ),

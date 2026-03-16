@@ -8,7 +8,6 @@ import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
-import 'package:axichat/src/important/models/important_message_item.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';

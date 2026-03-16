@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +21,7 @@ Chat _chat({
   bool favorited = false,
   DateTime? spamUpdatedAt,
   ChatPrimaryView primaryView = ChatPrimaryView.chat,
+  MessageTransport transport = MessageTransport.xmpp,
 }) {
   return Chat(
     jid: jid,
@@ -28,6 +29,7 @@ Chat _chat({
     type: ChatType.chat,
     primaryView: primaryView,
     lastChangeTimestamp: timestamp,
+    transport: transport,
     spam: spam,
     favorited: favorited,
     spamUpdatedAt: spamUpdatedAt,
@@ -38,12 +40,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockXmppService xmppService;
-  late MockHomeRefreshSyncService homeRefreshSyncService;
   late StreamController<List<Chat>> chatsStreamController;
 
   setUp(() {
     xmppService = MockXmppService();
-    homeRefreshSyncService = MockHomeRefreshSyncService();
     chatsStreamController = StreamController<List<Chat>>.broadcast();
 
     when(
@@ -55,9 +55,6 @@ void main() {
     when(
       () => xmppService.demoResetStream,
     ).thenAnswer((_) => const Stream<void>.empty());
-    when(
-      () => homeRefreshSyncService.syncUpdates,
-    ).thenAnswer((_) => const Stream<HomeRefreshSyncUpdate>.empty());
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
   });
 
@@ -73,6 +70,7 @@ void main() {
         title: 'Spam Email',
         timestamp: now,
         spam: true,
+        transport: MessageTransport.email,
       ),
       _chat(jid: 'xmpp@axi.im', title: 'Spam Xmpp', timestamp: now, spam: true),
       _chat(
@@ -84,10 +82,7 @@ void main() {
     ];
     when(() => xmppService.cachedChatList).thenReturn(items);
 
-    final cubit = ChatsCubit(
-      xmppService: xmppService,
-      homeRefreshSyncService: homeRefreshSyncService,
-    );
+    final cubit = ChatsCubit(xmppService: xmppService);
     addTearDown(cubit.close);
 
     cubit.updateSpamSearchSnapshot(
@@ -122,10 +117,7 @@ void main() {
     ];
     when(() => xmppService.cachedChatList).thenReturn(items);
 
-    final cubit = ChatsCubit(
-      xmppService: xmppService,
-      homeRefreshSyncService: homeRefreshSyncService,
-    );
+    final cubit = ChatsCubit(xmppService: xmppService);
     addTearDown(cubit.close);
 
     cubit.updateSpamSearchSnapshot(
@@ -155,10 +147,7 @@ void main() {
     ];
     when(() => xmppService.cachedChatList).thenReturn(items);
 
-    final cubit = ChatsCubit(
-      xmppService: xmppService,
-      homeRefreshSyncService: homeRefreshSyncService,
-    );
+    final cubit = ChatsCubit(xmppService: xmppService);
     addTearDown(cubit.close);
 
     expect(cubit.state.visibleItems.first.jid, 'favorite@axi.im');
@@ -191,10 +180,7 @@ void main() {
     () async {
       when(() => xmppService.openChat(any())).thenAnswer((_) async {});
 
-      final cubit = ChatsCubit(
-        xmppService: xmppService,
-        homeRefreshSyncService: homeRefreshSyncService,
-      );
+      final cubit = ChatsCubit(xmppService: xmppService);
       addTearDown(cubit.close);
 
       await cubit.openImportantMessage(
@@ -221,10 +207,7 @@ void main() {
       when(() => xmppService.cachedChatList).thenReturn([room]);
       when(() => xmppService.openChat(any())).thenAnswer((_) async {});
 
-      final cubit = ChatsCubit(
-        xmppService: xmppService,
-        homeRefreshSyncService: homeRefreshSyncService,
-      );
+      final cubit = ChatsCubit(xmppService: xmppService);
       addTearDown(cubit.close);
 
       await cubit.openChat(jid: room.jid);
@@ -246,10 +229,7 @@ void main() {
       ).copyWith(type: ChatType.groupChat);
       when(() => xmppService.openChat(any())).thenAnswer((_) async {});
 
-      final cubit = ChatsCubit(
-        xmppService: xmppService,
-        homeRefreshSyncService: homeRefreshSyncService,
-      );
+      final cubit = ChatsCubit(xmppService: xmppService);
       addTearDown(cubit.close);
 
       await cubit.openChat(jid: room.jid);
@@ -275,10 +255,7 @@ void main() {
       ).copyWith(type: ChatType.groupChat);
       when(() => xmppService.openChat(any())).thenAnswer((_) async {});
 
-      final cubit = ChatsCubit(
-        xmppService: xmppService,
-        homeRefreshSyncService: homeRefreshSyncService,
-      );
+      final cubit = ChatsCubit(xmppService: xmppService);
       addTearDown(cubit.close);
 
       await cubit.openChat(jid: room.jid, route: ChatRouteIndex.main);
@@ -313,10 +290,7 @@ void main() {
       ),
     ).thenThrow(XmppMucCreateConflictException());
 
-    final cubit = ChatsCubit(
-      xmppService: xmppMucService,
-      homeRefreshSyncService: homeRefreshSyncService,
-    );
+    final cubit = ChatsCubit(xmppService: xmppMucService);
     addTearDown(cubit.close);
 
     await cubit.createChatRoom(title: 'Roomy');
@@ -347,10 +321,7 @@ void main() {
     ).thenAnswer((_) async => 'roadmap@conference.axi.im');
     when(() => xmppMucService.openChat(any())).thenAnswer((_) async {});
 
-    final cubit = ChatsCubit(
-      xmppService: xmppMucService,
-      homeRefreshSyncService: homeRefreshSyncService,
-    );
+    final cubit = ChatsCubit(xmppService: xmppMucService);
     addTearDown(cubit.close);
 
     await cubit.createChatRoom(

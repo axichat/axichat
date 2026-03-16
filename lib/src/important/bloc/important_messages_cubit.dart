@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/search/search_models.dart';
-import 'package:axichat/src/important/models/important_message_item.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
