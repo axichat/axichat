@@ -14,8 +14,8 @@ import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
-import 'package:axichat/src/chat/view/chat.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
+import 'package:axichat/src/avatar/app_icon_provider.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -551,26 +551,28 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                   ),
-                                  SizedBox(height: spacing.m),
-                                  AxiButton.outline(
-                                    onPressed: () =>
-                                        context.go('/guest-calendar'),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.calendar_today),
-                                        SizedBox(width: spacing.s),
-                                        Text(l10n.authGuestCalendarCta),
-                                      ],
+                                  if (!allowSplitView) ...[
+                                    SizedBox(height: spacing.m),
+                                    AxiButton.outline(
+                                      onPressed: () =>
+                                          context.go('/guest-calendar'),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.calendar_today),
+                                          SizedBox(width: spacing.s),
+                                          Text(l10n.authGuestCalendarCta),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  SizedBox(height: spacing.m),
+                                    SizedBox(height: spacing.m),
+                                  ],
                                 ],
                               ),
                             ),
                           ),
                         ),
-                        secondaryChild: const GuestChat(),
+                        secondaryChild: const GuestCalendarWidget(),
                       ),
                     ),
                   ),

@@ -9,6 +9,7 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_data.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -60,7 +61,7 @@ import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/profile/view/session_capability_indicators.dart';
+import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
@@ -78,7 +79,7 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-part 'home/view/home_screen_widgets.dart';
+part 'home_screen_widgets.dart';
 
 List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
   HomeSearchFilter(id: SearchFilterId.all, label: l10n.draftsFilterAll),
@@ -382,7 +383,7 @@ class _HomeShellState extends State<HomeShell> {
           final locate = context.read;
           return AccessibilityActionBloc(
             chatsService: locate<XmppService>(),
-            draftSyncService: locate<XmppService>(),
+            messageService: locate<XmppService>(),
             rosterService: locate<XmppService>() as RosterService,
           );
         },
@@ -478,6 +479,15 @@ class _HomeShellState extends State<HomeShell> {
       ),
     );
   }
+}
+
+String? _resolveWelcomeChatJid(List<m.Chat> items) {
+  for (final chat in items) {
+    if (chat.isAxichatWelcomeThread) {
+      return chat.jid;
+    }
+  }
+  return null;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -652,9 +662,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
     final bool hasBody = resolvedBody.isNotEmpty;
-    final draftSyncService = context.read<XmppService>();
+    final messageService = context.read<XmppService>();
     final List<String> attachmentMetadataIds = await _persistSharedAttachments(
-      draftSyncService: draftSyncService,
+      messageService: messageService,
       attachments: payload.attachments,
     );
     if (!mounted) {
@@ -682,7 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<List<String>> _persistSharedAttachments({
-    required DraftSyncService draftSyncService,
+    required MessageService messageService,
     required List<ShareAttachmentPayload> attachments,
   }) async {
     final List<Attachment> prepared = await _prepareSharedAttachments(
@@ -692,7 +702,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (prepared.isEmpty) {
       return const <String>[];
     }
-    return draftSyncService.persistDraftAttachmentMetadata(prepared);
+    return messageService.persistDraftAttachmentMetadata(prepared);
   }
 
   Future<List<Attachment>> _prepareSharedAttachments({
@@ -1032,6 +1042,15 @@ class _HomeContent extends StatelessWidget {
     final String? openJid = context.select<ChatsCubit, String?>(
       (cubit) => cubit.state.openJid,
     );
+    final chatItems = context.select<ChatsCubit, List<m.Chat>>(
+      (cubit) => cubit.state.items ?? const <m.Chat>[],
+    );
+    final String? effectiveOpenJid =
+        openJid ??
+        switch (navPlacement) {
+          NavPlacement.bottom => null,
+          _ => _resolveWelcomeChatJid(chatItems),
+        };
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
@@ -1059,8 +1078,8 @@ class _HomeContent extends StatelessWidget {
                       builder: (context, state) {
                         final chatsState = context.watch<ChatsCubit>().state;
                         final chatRoute = chatsState.openChatRoute;
-                        final Widget chatPaneContent = openJid == null
-                            ? const GuestChat()
+                        final Widget chatPaneContent = effectiveOpenJid == null
+                            ? const SizedBox.shrink()
                             : const Chat();
                         final Widget chatPane = Align(
                           alignment: Alignment.topLeft,
@@ -1073,7 +1092,7 @@ class _HomeContent extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: AxiAdaptiveLayout(
-                                  invertPriority: openJid != null,
+                                  invertPriority: effectiveOpenJid != null,
                                   showPrimary: !showChatCalendar,
                                   centerSecondary: false,
                                   centerPrimary: false,
@@ -1129,8 +1148,8 @@ class _HomeContent extends StatelessWidget {
 
                         Widget contentForBottomIndex(int selectedBottomIndex) {
                           final bool openCalendar =
-                              (selectedBottomIndex == 1 ||
-                              selectedBottomIndex == 2);
+                              selectedBottomIndex == 1 ||
+                              selectedBottomIndex == 2;
                           final int? calendarTabIndex = openCalendar
                               ? (selectedBottomIndex == 2 ? 1 : 0)
                               : null;
@@ -1205,7 +1224,7 @@ class _HomeContent extends StatelessWidget {
           )
         : mainContent;
     final shouldResizeForKeyboard =
-        navPlacement != NavPlacement.bottom || openJid != null;
+        navPlacement != NavPlacement.bottom || effectiveOpenJid != null;
 
     final scaffold = Scaffold(
       resizeToAvoidBottomInset: shouldResizeForKeyboard,
@@ -1236,10 +1255,10 @@ class _HomeContent extends StatelessWidget {
       onHomeKeyEvent: onHomeKeyEvent,
       child: scaffold,
     );
-    if (openJid == null) {
+    if (effectiveOpenJid == null) {
       return baseLayer;
     }
-    final String resolvedJid = openJid;
+    final String resolvedJid = effectiveOpenJid;
     return MultiBlocProvider(
       key: ValueKey(resolvedJid),
       providers: [
@@ -1259,7 +1278,6 @@ class _HomeContent extends StatelessWidget {
             return ChatBloc(
               jid: resolvedJid,
               messageService: locate<XmppService>(),
-              draftSyncService: locate<XmppService>(),
               chatsService: locate<XmppService>(),
               mucService: locate<XmppService>(),
               notificationService: locate<NotificationService>(),

@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_data.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
@@ -18,7 +19,7 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
-import 'package:axichat/src/profile/view/session_capability_indicators.dart';
+import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
@@ -34,7 +35,7 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'authentication/view/logout_button.dart';
+import 'package:axichat/src/authentication/view/logout_button.dart';
 
 enum _ProfileRoute { main, changePassword, delete }
 
@@ -579,7 +580,7 @@ class _ProfileCardSection extends StatelessWidget {
                 SizedBox(height: spacing.s),
                 Align(
                   alignment: Alignment.center,
-                  child: SessionCapabilityIndicators(
+                  child: ConnectionStatusIndicators(
                     xmppState: connectionState,
                     emailState: _emailStateFor(
                       connectivityState,
@@ -690,14 +691,17 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
               alignment: Alignment.center,
               children: [
                 HydratedAxiAvatar(
-                  jid: widget.jid,
+                  avatarData: AvatarData.avatar(
+                    identifier: widget.jid,
+                    colorSeed: widget.jid,
+                    avatarPath: widget.avatarPath,
+                    loading: widget.loading,
+                  ),
                   subscription: Subscription.both,
                   presence: null,
                   status: null,
                   active: false,
                   size: avatarSize,
-                  avatarPath: widget.avatarPath,
-                  loading: widget.loading,
                 ),
                 AnimatedSwitcher(
                   duration: animationDuration,
