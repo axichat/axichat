@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
-import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
+import 'package:axichat/src/avatar/editing/avatar_pipeline.dart';
+import 'package:axichat/src/avatar/editing/editable_avatar.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';

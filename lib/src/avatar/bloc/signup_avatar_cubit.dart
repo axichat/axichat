@@ -6,12 +6,11 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart'
-    show AvatarEditorMode;
-import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
-import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
+import 'package:axichat/src/avatar/editing/editable_avatar.dart';
+import 'package:axichat/src/avatar/editing/avatar_carousel_engine.dart';
+import 'package:axichat/src/avatar/editing/avatar_pipeline.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';

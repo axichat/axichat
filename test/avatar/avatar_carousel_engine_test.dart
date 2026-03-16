@@ -5,8 +5,8 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
-import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
+import 'package:axichat/src/avatar/editing/avatar_carousel_engine.dart';
+import 'package:axichat/src/avatar/editing/avatar_pipeline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;

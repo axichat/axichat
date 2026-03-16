@@ -5,7 +5,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/avatar/models/avatar_models.dart';
+import 'package:axichat/src/avatar/editing/editable_avatar.dart';
 import 'package:axichat/src/common/avatar_background.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';

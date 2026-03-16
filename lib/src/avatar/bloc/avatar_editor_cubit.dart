@@ -6,10 +6,11 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/avatar/models/avatar_models.dart';
-import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
-import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
+import 'package:axichat/src/avatar/editing/editable_avatar.dart';
+import 'package:axichat/src/avatar/editing/avatar_carousel_engine.dart';
+import 'package:axichat/src/avatar/editing/avatar_pipeline.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -22,8 +23,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'avatar_editor_cubit.freezed.dart';
 part 'avatar_editor_state.dart';
-
-enum AvatarEditorMode { none, colorOnly, cropOnly }
 
 enum AvatarEditorErrorType {
   openFailed,

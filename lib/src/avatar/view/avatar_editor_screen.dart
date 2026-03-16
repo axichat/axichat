@@ -4,9 +4,8 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
-import 'package:axichat/src/avatar/models/avatar_models.dart';
+import 'package:axichat/src/avatar/editing/editable_avatar.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
