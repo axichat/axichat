@@ -5,11 +5,12 @@ import 'dart:ui';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/fade_scale_effect.dart';
+import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class AxiPopover extends StatelessWidget {
+class AxiPopover extends StatefulWidget {
   const AxiPopover({
     super.key,
     required this.child,
@@ -44,12 +45,81 @@ class AxiPopover extends StatelessWidget {
   final bool useSameGroupIdForChild;
 
   @override
+  State<AxiPopover> createState() => _AxiPopoverState();
+}
+
+final class _AxiPopoverState extends State<AxiPopover> {
+  final Object _surfaceOwner = Object();
+  AxiSurfaceController? _registeredSurfaceController;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller?.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSurfaceRegistration();
+  }
+
+  @override
+  void didUpdateWidget(covariant AxiPopover oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_handleControllerChanged);
+      widget.controller?.addListener(_handleControllerChanged);
+    }
+    _syncSurfaceRegistration();
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.removeListener(_handleControllerChanged);
+    _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
+    super.dispose();
+  }
+
+  void _handleControllerChanged() {
+    if (!mounted) {
+      return;
+    }
+    _syncSurfaceRegistration();
+    setState(() {});
+  }
+
+  void _syncSurfaceRegistration() {
+    final controller = widget.controller;
+    final surfaceController = AxiSurfaceScope.maybeControllerOf(context);
+    if (_registeredSurfaceController != null &&
+        _registeredSurfaceController != surfaceController) {
+      _registeredSurfaceController!.unregisterSurface(_surfaceOwner);
+      _registeredSurfaceController = null;
+    }
+    final shouldRegister =
+        controller != null && controller.isOpen && surfaceController != null;
+    if (!shouldRegister) {
+      _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
+      _registeredSurfaceController = null;
+      return;
+    }
+    surfaceController.registerSurface(
+      owner: _surfaceOwner,
+      onDismiss: controller.hide,
+    );
+    _registeredSurfaceController = surfaceController;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final effects = fadeScaleEffectsFor(context);
     final bool shouldWrapSurface =
-        padding == null && decoration == null && shadows == null;
+        widget.padding == null &&
+        widget.decoration == null &&
+        widget.shadows == null;
     Widget resolvedPopoverBuilder(BuildContext popoverContext) {
-      final Widget built = popover(popoverContext);
+      final Widget built = widget.popover(popoverContext);
       if (!shouldWrapSurface) {
         return built;
       }
@@ -63,23 +133,28 @@ class AxiPopover extends StatelessWidget {
 
     final popoverWidget = ShadPopover(
       popover: resolvedPopoverBuilder,
-      controller: controller,
-      visible: visible,
-      closeOnTapOutside: closeOnTapOutside,
-      focusNode: focusNode,
-      anchor: anchor,
+      controller: widget.controller,
+      visible: widget.visible,
+      closeOnTapOutside: widget.closeOnTapOutside,
+      focusNode: widget.focusNode,
+      anchor: widget.anchor,
       effects: effects,
-      shadows: shouldWrapSurface ? const <BoxShadow>[] : shadows,
-      padding: shouldWrapSurface ? EdgeInsets.zero : padding,
-      decoration: shouldWrapSurface ? const ShadDecoration() : decoration,
-      filter: filter,
-      groupId: groupId,
-      areaGroupId: areaGroupId,
-      useSameGroupIdForChild: useSameGroupIdForChild,
-      child: child,
+      shadows: shouldWrapSurface ? const <BoxShadow>[] : widget.shadows,
+      padding: shouldWrapSurface ? EdgeInsets.zero : widget.padding,
+      decoration: shouldWrapSurface
+          ? const ShadDecoration()
+          : widget.decoration,
+      filter: widget.filter,
+      groupId: widget.groupId,
+      areaGroupId: widget.areaGroupId,
+      useSameGroupIdForChild: widget.useSameGroupIdForChild,
+      child: widget.child,
     );
-    final popoverController = controller;
+    final popoverController = widget.controller;
     if (popoverController == null) {
+      return popoverWidget;
+    }
+    if (AxiSurfaceScope.maybeControllerOf(context) != null) {
       return popoverWidget;
     }
     return ListenableBuilder(

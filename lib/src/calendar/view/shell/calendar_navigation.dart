@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1051,13 +1052,14 @@ class _DateLabel extends StatefulWidget {
 }
 
 class _DateLabelState extends State<_DateLabel> {
-  final LayerLink _link = LayerLink();
-  OverlayEntry? _overlayEntry;
+  final OverlayPortalController _portalController = OverlayPortalController();
+  final Object _surfaceOwner = Object();
   bool _isBottomSheetOpen = false;
   late DateTime _visibleMonth;
   late DateFormat _dayFormat;
   late DateFormat _monthFormat;
-  bool get _isPickerOpen => _overlayEntry != null || _isBottomSheetOpen;
+  AxiSurfaceController? _registeredSurfaceController;
+  bool get _isPickerOpen => _portalController.isShowing || _isBottomSheetOpen;
 
   @override
   void initState() {
@@ -1074,6 +1076,7 @@ class _DateLabelState extends State<_DateLabel> {
     final locale = Localizations.localeOf(context).toString();
     _dayFormat = DateFormat.yMMMd(locale);
     _monthFormat = DateFormat.yMMMM(locale);
+    _syncSurfaceRegistration();
   }
 
   @override
@@ -1086,15 +1089,35 @@ class _DateLabelState extends State<_DateLabel> {
         widget.state.selectedDate.month,
       );
     }
-    if (_overlayEntry != null) {
-      _overlayEntry!.markNeedsBuild();
-    }
   }
 
   @override
   void dispose() {
-    _removeOverlay(requestRebuild: false);
+    _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
+    if (_portalController.isShowing) {
+      _portalController.hide();
+    }
     super.dispose();
+  }
+
+  void _syncSurfaceRegistration() {
+    final AxiSurfaceController? surfaceController =
+        AxiSurfaceScope.maybeControllerOf(context);
+    if (_registeredSurfaceController != null &&
+        _registeredSurfaceController != surfaceController) {
+      _registeredSurfaceController!.unregisterSurface(_surfaceOwner);
+      _registeredSurfaceController = null;
+    }
+    if (surfaceController == null || !_portalController.isShowing) {
+      _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
+      _registeredSurfaceController = null;
+      return;
+    }
+    surfaceController.registerSurface(
+      owner: _surfaceOwner,
+      onDismiss: _removeOverlay,
+    );
+    _registeredSurfaceController = surfaceController;
   }
 
   @override
@@ -1114,49 +1137,126 @@ class _DateLabelState extends State<_DateLabel> {
         ? calendarPrimaryColor
         : calendarSubtitleColor;
 
-    return CompositedTransformTarget(
-      link: _link,
-      child: SizedBox(
-        height: context.sizing.buttonHeightRegular,
-        child: AxiButton.outline(
-          onPressed: _toggleOverlay,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: context.sizing.menuItemIconSize,
-                color: iconColor,
-              ),
-              if (!hideText) ...[
-                SizedBox(width: context.spacing.s),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: context.sizing.menuMaxWidth,
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+    final Widget trigger = SizedBox(
+      height: context.sizing.buttonHeightRegular,
+      child: AxiButton.outline(
+        onPressed: _toggleOverlay,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: context.sizing.menuItemIconSize,
+              color: iconColor,
+            ),
+            if (!hideText) ...[
               SizedBox(width: context.spacing.s),
-              Icon(
-                isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                size: context.sizing.iconButtonIconSize,
-                color: iconColor,
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: context.sizing.menuMaxWidth,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
-          ),
+            SizedBox(width: context.spacing.s),
+            Icon(
+              isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              size: context.sizing.iconButtonIconSize,
+              color: iconColor,
+            ),
+          ],
         ),
       ),
+    );
+    return OverlayPortal.overlayChildLayoutBuilder(
+      controller: _portalController,
+      overlayChildBuilder: (overlayContext, info) {
+        if (!_portalController.isShowing) {
+          return const SizedBox.shrink();
+        }
+        final Rect anchorRect = MatrixUtils.transformRect(
+          info.childPaintTransform,
+          Offset.zero & info.childSize,
+        );
+        final spec = ResponsiveHelper.spec(overlayContext);
+        final double dropdownWidth = spec.quickAddMaxWidth ?? 340.0;
+        final double gap = spec.contentPadding.vertical / 2;
+        final double overlayPadding = overlayContext.spacing.m;
+        final double maxLeft = math.max(
+          overlayPadding,
+          info.overlaySize.width - dropdownWidth - overlayPadding,
+        );
+        final double left = (anchorRect.right - dropdownWidth).clamp(
+          overlayPadding,
+          maxLeft,
+        );
+        final double belowSpace =
+            info.overlaySize.height - anchorRect.bottom - gap - overlayPadding;
+        final double aboveSpace = anchorRect.top - gap - overlayPadding;
+        final bool placeBelow = belowSpace >= aboveSpace;
+        final double maxHeight = math.max(
+          0,
+          placeBelow ? belowSpace : aboveSpace,
+        );
+        if (maxHeight <= 0) {
+          return const SizedBox.shrink();
+        }
+        final double top = placeBelow
+            ? anchorRect.bottom + gap
+            : math.max(overlayPadding, anchorRect.top - gap - maxHeight);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _removeOverlay,
+              ),
+            ),
+            Positioned(
+              left: left,
+              top: top,
+              width: dropdownWidth,
+              child: GestureDetector(
+                onTap: () {},
+                behavior: HitTestBehavior.opaque,
+                child: Material(
+                  color: Colors.transparent,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxHeight),
+                    child: InBoundsFadeScale(
+                      child: _CalendarDropdown(
+                        monthFormat: _monthFormat,
+                        month: _visibleMonth,
+                        selectedWeekStart: widget.state.weekStart,
+                        selectedDate: widget.state.selectedDate,
+                        onClose: _removeOverlay,
+                        onMonthChanged: (month) {
+                          setState(() => _visibleMonth = month);
+                        },
+                        onDateSelected: (date) {
+                          widget.onDateSelected(date);
+                          _removeOverlay();
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      child: trigger,
     );
   }
 
   void _toggleOverlay() {
-    if (_overlayEntry != null) {
+    if (_portalController.isShowing) {
       _removeOverlay();
       return;
     }
@@ -1171,61 +1271,11 @@ class _DateLabelState extends State<_DateLabel> {
       _showBottomSheet();
       return;
     }
-    final overlay = Overlay.of(context);
-
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final buttonWidth = renderBox?.size.width ?? 0;
-    final spec = ResponsiveHelper.spec(context);
-    final dropdownWidth = spec.quickAddMaxWidth ?? 340.0;
-    final horizontalOffset = buttonWidth - dropdownWidth;
-    final buttonHeight = renderBox?.size.height ?? 0;
-    final verticalOffset = buttonHeight + spec.contentPadding.vertical / 2;
-
-    final entry = OverlayEntry(
-      builder: (context) {
-        return GestureDetector(
-          onTap: () => _removeOverlay(),
-          behavior: HitTestBehavior.translucent,
-          child: Stack(
-            children: [
-              Positioned.fill(child: Container()),
-              CompositedTransformFollower(
-                link: _link,
-                offset: Offset(horizontalOffset, verticalOffset),
-                showWhenUnlinked: false,
-                child: GestureDetector(
-                  onTap: () {},
-                  behavior: HitTestBehavior.opaque,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InBoundsFadeScale(
-                      child: _CalendarDropdown(
-                        monthFormat: _monthFormat,
-                        month: _visibleMonth,
-                        selectedWeekStart: widget.state.weekStart,
-                        selectedDate: widget.state.selectedDate,
-                        onClose: () => _removeOverlay(),
-                        onMonthChanged: (month) {
-                          setState(() => _visibleMonth = month);
-                          _overlayEntry?.markNeedsBuild();
-                        },
-                        onDateSelected: (date) {
-                          widget.onDateSelected(date);
-                          _removeOverlay();
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    setState(() => _overlayEntry = entry);
-    overlay.insert(entry);
+    _portalController.show();
+    _syncSurfaceRegistration();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _showBottomSheet() async {
@@ -1286,16 +1336,14 @@ class _DateLabelState extends State<_DateLabel> {
     }
   }
 
-  void _removeOverlay({bool requestRebuild = true}) {
-    final entry = _overlayEntry;
-    if (entry == null) {
+  void _removeOverlay() {
+    if (!_portalController.isShowing) {
       return;
     }
-    entry.remove();
-    if (requestRebuild && mounted) {
-      setState(() => _overlayEntry = null);
-    } else {
-      _overlayEntry = null;
+    _portalController.hide();
+    _syncSurfaceRegistration();
+    if (mounted) {
+      setState(() {});
     }
   }
 

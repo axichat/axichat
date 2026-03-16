@@ -24,6 +24,7 @@ import 'package:axichat/src/calendar/task/task_share_formatter.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_task_share_sheet.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
+import 'package:axichat/src/common/ui/axi_surface_scope.dart' as axi_surface;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -70,7 +71,6 @@ const double _headerNavButtonExtent = 44.0;
 const String _taskPopoverCloseReasonMissingTask = 'missing-task';
 const String _taskPopoverCloseReasonSwitchTarget = 'switch-target';
 const String _taskPopoverCloseReasonTaskDeleted = 'task-deleted';
-const bool _calendarUseRootOverlay = false;
 
 class ZoomControlsController extends ChangeNotifier {
   ZoomControlsController({
@@ -205,7 +205,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   final FocusNode _focusNode = FocusNode(debugLabel: 'CalendarGridFocus');
   Timer? _clockTimer;
   bool _hasAutoScrolled = false;
-  OverlayEntry? _activePopoverEntry;
+  final OverlayPortalController _taskPopoverPortalController =
+      OverlayPortalController();
+  final Object _taskPopoverSurfaceOwner = Object();
   CalendarLayoutMetrics _currentLayoutMetrics = const CalendarLayoutMetrics(
     hourHeight: 78,
     slotHeight: 78,
@@ -273,6 +275,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _hideCompletedScheduled = false;
   int _dateSlideDirection = 0;
   bool _isSyntheticDragRefresh = false;
+  axi_surface.AxiSurfaceController? _registeredAxiSurfaceController;
 
   @override
   bool get wantKeepAlive => true;
@@ -315,6 +318,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _lastDragCompletionRevision = _dragCompletionRevision.value;
     _dragCompletionRevision.addListener(_handleDragCompletionRevisionChanged);
     _taskPopoverController = TaskPopoverController();
+    _taskPopoverController.addListener(_syncTaskPopoverSurfaceRegistration);
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
       initiallyVisible: true,
@@ -855,6 +859,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _processFocusRequest(widget.focusRequest);
+    _syncTaskPopoverSurfaceRegistration();
   }
 
   @override
@@ -863,8 +868,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _viewTransitionController.dispose();
     _clockTimer?.cancel();
     _verticalController.dispose();
-    _activePopoverEntry?.remove();
-    _activePopoverEntry = null;
+    if (_taskPopoverPortalController.isShowing) {
+      _taskPopoverPortalController.hide();
+    }
+    _registeredAxiSurfaceController?.unregisterSurface(
+      _taskPopoverSurfaceOwner,
+    );
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
@@ -894,9 +903,40 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _horizontalGridController.dispose();
     _gridContextMenuController.dispose();
     _taskInteractionController.dispose();
+    _taskPopoverController.removeListener(_syncTaskPopoverSurfaceRegistration);
     _taskPopoverController.dispose();
     _inlineErrorTimer?.cancel();
     super.dispose();
+  }
+
+  void _syncTaskPopoverSurfaceRegistration() {
+    final axi_surface.AxiSurfaceController? surfaceController =
+        axi_surface.AxiSurfaceScope.maybeControllerOf(context);
+    if (_registeredAxiSurfaceController != null &&
+        _registeredAxiSurfaceController != surfaceController) {
+      _registeredAxiSurfaceController!.unregisterSurface(
+        _taskPopoverSurfaceOwner,
+      );
+      _registeredAxiSurfaceController = null;
+    }
+    final bool isOpen = _taskPopoverController.activeTaskId != null;
+    if (surfaceController == null || !isOpen) {
+      _registeredAxiSurfaceController?.unregisterSurface(
+        _taskPopoverSurfaceOwner,
+      );
+      _registeredAxiSurfaceController = null;
+      return;
+    }
+    surfaceController.registerSurface(
+      owner: _taskPopoverSurfaceOwner,
+      onDismiss: () {
+        final String? activeId = _taskPopoverController.activeTaskId;
+        if (activeId != null) {
+          _closeTaskPopover(activeId, reason: 'surface-back');
+        }
+      },
+    );
+    _registeredAxiSurfaceController = surfaceController;
   }
 
   void _attachTaskDragPointerRoute(int? pointerId) {
@@ -1637,15 +1677,19 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         .state
         .hideCompletedScheduled;
     _updateCompactState(context);
-    return ResponsiveHelper.layoutBuilder(
-      context,
-      mobile: _CalendarWeekView(gridState: this, compact: true),
-      tablet: _CalendarWeekView(
-        gridState: this,
-        compact: true,
-        allowWeekViewInCompact: true,
+    return OverlayPortal(
+      controller: _taskPopoverPortalController,
+      overlayChildBuilder: _buildTaskPopoverOverlay,
+      child: ResponsiveHelper.layoutBuilder(
+        context,
+        mobile: _CalendarWeekView(gridState: this, compact: true),
+        tablet: _CalendarWeekView(
+          gridState: this,
+          compact: true,
+          allowWeekViewInCompact: true,
+        ),
+        desktop: _CalendarWeekView(gridState: this, compact: false),
       ),
-      desktop: _CalendarWeekView(gridState: this, compact: false),
     );
   }
 
@@ -2190,12 +2234,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskPopoverController.removeLayout(taskId);
     if (_taskPopoverController.activeTaskId != taskId) {
       TaskEditSessionTracker.instance.end(taskId, this);
+      _syncTaskPopoverSurfaceRegistration();
       return;
     }
 
     _taskPopoverController.deactivate();
-    _activePopoverEntry?.remove();
-    _activePopoverEntry = null;
+    if (_taskPopoverPortalController.isShowing) {
+      _taskPopoverPortalController.hide();
+    }
+    _syncTaskPopoverSurfaceRegistration();
     TaskEditSessionTracker.instance.end(taskId, this);
   }
 
@@ -2210,6 +2257,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     _taskPopoverController.activate(task.id, layout);
     _ensurePopoverEntry();
+    _syncTaskPopoverSurfaceRegistration();
     _armPopoverDismissQueue();
   }
 
@@ -2221,208 +2269,188 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _ensurePopoverEntry() {
-    if (_activePopoverEntry != null) {
+    if (_taskPopoverPortalController.isShowing) {
       return;
     }
+    _taskPopoverPortalController.show();
+    _armPopoverDismissQueue();
+  }
 
-    final overlayState = Overlay.of(
-      context,
-      rootOverlay: _calendarUseRootOverlay,
-    );
-    final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+  Widget _buildTaskPopoverOverlay(BuildContext overlayContext) {
+    return ListenableBuilder(
+      listenable: _taskPopoverController,
+      builder: (context, _) {
+        final String? taskId = _taskPopoverController.activeTaskId;
+        if (taskId == null) {
+          return const SizedBox.shrink();
+        }
+        final TaskPopoverLayout layout = _taskPopoverController.layoutFor(
+          taskId,
+        );
+        final scaffoldMessenger = ScaffoldMessenger.maybeOf(overlayContext);
+        final RenderBox? overlayBox =
+            Overlay.of(overlayContext).context.findRenderObject() as RenderBox?;
+        final Offset offset = overlayBox == null
+            ? layout.topLeft
+            : overlayBox.globalToLocal(layout.topLeft);
 
-    _activePopoverEntry = OverlayEntry(
-      builder: (overlayContext) {
-        return ListenableBuilder(
-          listenable: _taskPopoverController,
-          builder: (context, _) {
-            final taskId = _taskPopoverController.activeTaskId;
-            if (taskId == null) {
-              return const SizedBox.shrink();
-            }
-
-            final layout = _taskPopoverController.layoutFor(taskId);
-
-            final renderBox =
-                overlayState.context.findRenderObject() as RenderBox?;
-            final offset = renderBox == null
-                ? layout.topLeft
-                : renderBox.globalToLocal(layout.topLeft);
-
-            const double popoverWidth = calendarTaskPopoverWidth;
-
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: Listener(
-                    behavior: HitTestBehavior.translucent,
-                    onPointerDown: (event) {
-                      final currentId = _taskPopoverController.activeTaskId;
-                      if (currentId == null ||
-                          !_taskPopoverController.dismissArmed) {
-                        return;
-                      }
-
-                      final overlayBox =
-                          overlayState.context.findRenderObject() as RenderBox?;
-                      if (overlayBox == null) {
-                        _closeTaskPopover(currentId, reason: 'outside-tap');
-                        return;
-                      }
-
-                      final popoverLayout = _taskPopoverController.layoutFor(
-                        currentId,
-                      );
-                      final Offset topLeft = popoverLayout.topLeft;
-                      final Rect popoverRect = Rect.fromLTWH(
-                        topLeft.dx,
-                        topLeft.dy,
-                        calendarTaskPopoverWidth,
-                        popoverLayout.maxHeight,
-                      );
-
-                      final Offset localPosition = overlayBox.globalToLocal(
-                        event.position,
-                      );
-
-                      if (!popoverRect.contains(localPosition)) {
-                        _closeTaskPopover(currentId, reason: 'outside-tap');
-                      }
-                    },
-                  ),
-                ),
-                Positioned(
-                  left: offset.dx,
-                  top: offset.dy,
-                  width: popoverWidth,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: layout.maxHeight),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: BlocProvider<T>.value(
-                        value: context.read<T>(),
-                        child: BlocBuilder<T, CalendarState>(
-                          builder: (context, state) {
-                            final baseId = baseTaskIdFrom(taskId);
-                            final latestTask = state.model.tasks[baseId];
-                            if (latestTask == null) {
-                              if (mounted) {
-                                _closeTaskPopover(
-                                  taskId,
-                                  reason: _taskPopoverCloseReasonMissingTask,
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            }
-
-                            final CalendarTask? storedTask =
-                                state.model.tasks[taskId];
-                            final String? occurrenceKey = occurrenceKeyFrom(
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: (event) {
+                  final String? currentId = _taskPopoverController.activeTaskId;
+                  if (currentId == null ||
+                      !_taskPopoverController.dismissArmed) {
+                    return;
+                  }
+                  final RenderBox? currentOverlayBox =
+                      Overlay.of(overlayContext).context.findRenderObject()
+                          as RenderBox?;
+                  if (currentOverlayBox == null) {
+                    _closeTaskPopover(currentId, reason: 'outside-tap');
+                    return;
+                  }
+                  final TaskPopoverLayout popoverLayout = _taskPopoverController
+                      .layoutFor(currentId);
+                  final Rect popoverRect = Rect.fromLTWH(
+                    popoverLayout.topLeft.dx,
+                    popoverLayout.topLeft.dy,
+                    calendarTaskPopoverWidth,
+                    popoverLayout.maxHeight,
+                  );
+                  final Offset localPosition = currentOverlayBox.globalToLocal(
+                    event.position,
+                  );
+                  if (!popoverRect.contains(localPosition)) {
+                    _closeTaskPopover(currentId, reason: 'outside-tap');
+                  }
+                },
+              ),
+            ),
+            Positioned(
+              left: offset.dx,
+              top: offset.dy,
+              width: calendarTaskPopoverWidth,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: layout.maxHeight),
+                child: Material(
+                  color: Colors.transparent,
+                  child: BlocProvider<T>.value(
+                    value: context.read<T>(),
+                    child: BlocBuilder<T, CalendarState>(
+                      builder: (context, state) {
+                        final String baseId = baseTaskIdFrom(taskId);
+                        final CalendarTask? latestTask =
+                            state.model.tasks[baseId];
+                        if (latestTask == null) {
+                          if (mounted) {
+                            _closeTaskPopover(
                               taskId,
+                              reason: _taskPopoverCloseReasonMissingTask,
                             );
-                            final CalendarTask? occurrenceTask =
-                                storedTask == null && occurrenceKey != null
-                                ? latestTask.occurrenceForId(taskId)
-                                : null;
-                            final CalendarTask displayTask =
-                                storedTask ?? occurrenceTask ?? latestTask;
-                            final bool shouldUpdateOccurrence =
-                                storedTask == null && occurrenceTask != null;
-                            final List<TaskContextAction> inlineActions =
-                                _taskContextActions(
-                                  task: displayTask,
-                                  state: state,
-                                  onTaskDeleted: () => _closeTaskPopover(
-                                    taskId,
-                                    reason: _taskPopoverCloseReasonTaskDeleted,
-                                  ),
-                                  includeDeleteAction: false,
-                                  includeCompletionAction: false,
-                                  includePriorityActions: false,
-                                  includeSplitAction: true,
-                                  stripTaskKeyword: true,
-                                );
+                          }
+                          return const SizedBox.shrink();
+                        }
 
-                            return InBoundsFadeScale(
-                              child: EditTaskDropdown<T>(
-                                task: displayTask,
-                                maxHeight: layout.maxHeight,
-                                inlineActions: inlineActions,
-                                collectionMethod:
-                                    state.model.collection?.method,
-                                onClose: () => _closeTaskPopover(
-                                  taskId,
-                                  reason: 'dropdown-close',
-                                ),
-                                scaffoldMessenger: scaffoldMessenger,
-                                locationHelper:
-                                    LocationAutocompleteHelper.fromState(state),
-                                onTaskUpdated: (updatedTask) {
-                                  context.read<T>().add(
-                                    CalendarEvent.taskUpdated(
-                                      task: updatedTask,
-                                    ),
-                                  );
-                                },
-                                onOccurrenceUpdated: shouldUpdateOccurrence
-                                    ? (
-                                        updatedTask,
-                                        scope, {
-                                        required bool scheduleTouched,
-                                        required bool checklistTouched,
-                                      }) {
-                                        if (scheduleTouched ||
-                                            checklistTouched) {
-                                          context.read<T>().add(
-                                            CalendarEvent.taskOccurrenceUpdated(
-                                              taskId: baseId,
-                                              occurrenceId: taskId,
-                                              scheduledTime: scheduleTouched
-                                                  ? updatedTask.scheduledTime
-                                                  : null,
-                                              duration: scheduleTouched
-                                                  ? updatedTask.duration
-                                                  : null,
-                                              endDate: scheduleTouched
-                                                  ? updatedTask.endDate
-                                                  : null,
-                                              checklist: checklistTouched
-                                                  ? updatedTask.checklist
-                                                  : null,
-                                              range: scope.range,
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    : null,
-                                onTaskDeleted: (deletedTaskId) {
-                                  context.read<T>().add(
-                                    CalendarEvent.taskDeleted(
-                                      taskId: deletedTaskId,
-                                    ),
-                                  );
-                                  _closeTaskPopover(
-                                    taskId,
-                                    reason: _taskPopoverCloseReasonTaskDeleted,
-                                  );
-                                },
+                        final CalendarTask? storedTask =
+                            state.model.tasks[taskId];
+                        final String? occurrenceKey = occurrenceKeyFrom(taskId);
+                        final CalendarTask? occurrenceTask =
+                            storedTask == null && occurrenceKey != null
+                            ? latestTask.occurrenceForId(taskId)
+                            : null;
+                        final CalendarTask displayTask =
+                            storedTask ?? occurrenceTask ?? latestTask;
+                        final bool shouldUpdateOccurrence =
+                            storedTask == null && occurrenceTask != null;
+                        final List<TaskContextAction> inlineActions =
+                            _taskContextActions(
+                              task: displayTask,
+                              state: state,
+                              onTaskDeleted: () => _closeTaskPopover(
+                                taskId,
+                                reason: _taskPopoverCloseReasonTaskDeleted,
                               ),
+                              includeDeleteAction: false,
+                              includeCompletionAction: false,
+                              includePriorityActions: false,
+                              includeSplitAction: true,
+                              stripTaskKeyword: true,
                             );
-                          },
-                        ),
-                      ),
+
+                        return InBoundsFadeScale(
+                          child: EditTaskDropdown<T>(
+                            task: displayTask,
+                            maxHeight: layout.maxHeight,
+                            inlineActions: inlineActions,
+                            collectionMethod: state.model.collection?.method,
+                            onClose: () => _closeTaskPopover(
+                              taskId,
+                              reason: 'dropdown-close',
+                            ),
+                            scaffoldMessenger: scaffoldMessenger,
+                            locationHelper:
+                                LocationAutocompleteHelper.fromState(state),
+                            onTaskUpdated: (updatedTask) {
+                              context.read<T>().add(
+                                CalendarEvent.taskUpdated(task: updatedTask),
+                              );
+                            },
+                            onOccurrenceUpdated: shouldUpdateOccurrence
+                                ? (
+                                    updatedTask,
+                                    scope, {
+                                    required bool scheduleTouched,
+                                    required bool checklistTouched,
+                                  }) {
+                                    if (scheduleTouched || checklistTouched) {
+                                      context.read<T>().add(
+                                        CalendarEvent.taskOccurrenceUpdated(
+                                          taskId: baseId,
+                                          occurrenceId: taskId,
+                                          scheduledTime: scheduleTouched
+                                              ? updatedTask.scheduledTime
+                                              : null,
+                                          duration: scheduleTouched
+                                              ? updatedTask.duration
+                                              : null,
+                                          endDate: scheduleTouched
+                                              ? updatedTask.endDate
+                                              : null,
+                                          checklist: checklistTouched
+                                              ? updatedTask.checklist
+                                              : null,
+                                          range: scope.range,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                : null,
+                            onTaskDeleted: (deletedTaskId) {
+                              context.read<T>().add(
+                                CalendarEvent.taskDeleted(
+                                  taskId: deletedTaskId,
+                                ),
+                              );
+                              _closeTaskPopover(
+                                taskId,
+                                reason: _taskPopoverCloseReasonTaskDeleted,
+                              );
+                            },
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         );
       },
     );
-
-    overlayState.insert(_activePopoverEntry!);
-    _armPopoverDismissQueue();
   }
 
   void _handleResizePreview(CalendarTask task) {

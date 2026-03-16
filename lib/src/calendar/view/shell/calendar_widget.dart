@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -401,7 +402,7 @@ class _CalendarWidgetState
   }
 }
 
-class CalendarSurfaceNavigator extends StatelessWidget {
+class CalendarSurfaceNavigator extends StatefulWidget {
   const CalendarSurfaceNavigator({
     super.key,
     required this.navigatorKey,
@@ -416,30 +417,134 @@ class CalendarSurfaceNavigator extends StatelessWidget {
   final bool enablePop;
 
   @override
+  State<CalendarSurfaceNavigator> createState() =>
+      _CalendarSurfaceNavigatorState();
+}
+
+final class _CalendarSurfaceNavigatorState
+    extends State<CalendarSurfaceNavigator> {
+  late final AxiSurfaceController _surfaceController = AxiSurfaceController();
+  late final FocusScopeNode _focusScopeNode = FocusScopeNode(
+    debugLabel: 'CalendarSurfaceScope',
+  );
+  late final ValueNotifier<bool> _navigatorCanPop = ValueNotifier<bool>(false);
+  late final NavigatorObserver _navigatorObserver = _CalendarSurfaceObserver(
+    onStackChanged: _syncNavigatorCanPop,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _surfaceController.attachFocusScope(_focusScopeNode);
+  }
+
+  @override
+  void dispose() {
+    _surfaceController.detachFocusScope(_focusScopeNode);
+    _focusScopeNode.dispose();
+    _navigatorCanPop.dispose();
+    _surfaceController.dispose();
+    super.dispose();
+  }
+
+  void _syncNavigatorCanPop() {
+    final bool canPop = widget.navigatorKey.currentState?.canPop() ?? false;
+    if (_navigatorCanPop.value != canPop) {
+      _navigatorCanPop.value = canPop;
+    }
+  }
+
+  bool _shouldInterceptBack() {
+    return _surfaceController.hasFocusedTextInput() ||
+        _surfaceController.hasOpenSurface ||
+        _navigatorCanPop.value;
+  }
+
+  void _handleBack() {
+    if (_surfaceController.dismissActiveTextInput()) {
+      return;
+    }
+    if (_surfaceController.dismissTopSurface()) {
+      return;
+    }
+    final NavigatorState? navigator = widget.navigatorKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.maybePop();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return CalendarModalScope(
-      navigatorKey: navigatorKey,
-      modalAnchorKey: modalAnchorKey,
-      child: NavigatorPopHandler<void>(
-        enabled: enablePop,
-        onPopWithResult: (_) {
-          final NavigatorState? navigator = navigatorKey.currentState;
-          if (navigator == null || !navigator.canPop()) {
-            return;
-          }
-          navigator.maybePop();
-        },
-        child: Navigator(
-          key: navigatorKey,
-          onDidRemovePage: (page) {},
-          pages: [
-            MaterialPage<void>(
-              key: _calendarSurfacePageKey,
-              child: KeyedSubtree(key: modalAnchorKey, child: child),
-            ),
-          ],
+    return AxiSurfaceScope(
+      controller: _surfaceController,
+      child: CalendarModalScope(
+        navigatorKey: widget.navigatorKey,
+        modalAnchorKey: widget.modalAnchorKey,
+        surfaceController: _surfaceController,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([
+            _surfaceController,
+            _navigatorCanPop,
+            FocusManager.instance,
+          ]),
+          builder: (context, _) {
+            final bool shouldInterceptBack = _shouldInterceptBack();
+            return PopScope(
+              canPop: widget.enablePop && !shouldInterceptBack,
+              onPopInvokedWithResult: (didPop, _) {
+                if (didPop) {
+                  return;
+                }
+                _handleBack();
+              },
+              child: FocusScope(
+                node: _focusScopeNode,
+                child: Navigator(
+                  key: widget.navigatorKey,
+                  observers: <NavigatorObserver>[_navigatorObserver],
+                  onDidRemovePage: (page) => _syncNavigatorCanPop(),
+                  pages: [
+                    MaterialPage<void>(
+                      key: _calendarSurfacePageKey,
+                      child: KeyedSubtree(
+                        key: widget.modalAnchorKey,
+                        child: widget.child,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
+  }
+}
+
+final class _CalendarSurfaceObserver extends NavigatorObserver {
+  _CalendarSurfaceObserver({required VoidCallback onStackChanged})
+    : _onStackChanged = onStackChanged;
+
+  final VoidCallback _onStackChanged;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _onStackChanged();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _onStackChanged();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _onStackChanged();
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    _onStackChanged();
   }
 }

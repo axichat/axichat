@@ -43,9 +43,19 @@ class _GuestCalendarWidgetState
     extends CalendarExperienceState<GuestCalendarWidget, GuestCalendarBloc> {
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
+  late final GlobalKey _calendarModalAnchorKey = GlobalKey(
+    debugLabel: 'guest-calendar-modal-anchor',
+  );
+  late final GlobalKey<NavigatorState> _calendarNavigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
-  BuildContext get calendarModalContext => context;
+  BuildContext get calendarModalContext {
+    return _calendarModalAnchorKey.currentContext ??
+        _calendarNavigatorKey.currentState?.overlay?.context ??
+        _calendarNavigatorKey.currentContext ??
+        context;
+  }
 
   @override
   void dispose() {
@@ -130,19 +140,23 @@ class _GuestCalendarWidgetState
     bool usesDesktopLayout,
     Widget layout,
   ) {
-    return CalendarHoverTitleScope(
-      controller: _hoverTitleController,
-      child: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
-          children: [
-            _GuestBanner(
-              onNavigateBack: _handleBannerBackNavigation,
-              transferMenu: _GuestTransferMenu(state: state),
-            ),
-            Expanded(child: layout),
-          ],
+    return CalendarSurfaceNavigator(
+      navigatorKey: _calendarNavigatorKey,
+      modalAnchorKey: _calendarModalAnchorKey,
+      child: CalendarHoverTitleScope(
+        controller: _hoverTitleController,
+        child: SafeArea(
+          top: true,
+          bottom: false,
+          child: Column(
+            children: [
+              _GuestBanner(
+                onNavigateBack: _handleBannerBackNavigation,
+                transferMenu: _GuestTransferMenu(state: state),
+              ),
+              Expanded(child: layout),
+            ],
+          ),
         ),
       ),
     );

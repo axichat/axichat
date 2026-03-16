@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:flutter/material.dart';
 
 class CalendarModalScope extends InheritedWidget {
@@ -8,11 +9,13 @@ class CalendarModalScope extends InheritedWidget {
     super.key,
     required this.navigatorKey,
     required this.modalAnchorKey,
+    required this.surfaceController,
     required super.child,
   });
 
   final GlobalKey<NavigatorState> navigatorKey;
   final GlobalKey modalAnchorKey;
+  final AxiSurfaceController surfaceController;
 
   static CalendarModalScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<CalendarModalScope>();
@@ -26,7 +29,8 @@ class CalendarModalScope extends InheritedWidget {
   @override
   bool updateShouldNotify(CalendarModalScope oldWidget) {
     return navigatorKey != oldWidget.navigatorKey ||
-        modalAnchorKey != oldWidget.modalAnchorKey;
+        modalAnchorKey != oldWidget.modalAnchorKey ||
+        surfaceController != oldWidget.surfaceController;
   }
 }
 

@@ -10,6 +10,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
+import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
@@ -83,9 +84,11 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   final GlobalKey _triggerKey = GlobalKey();
 
   final OverlayPortalController _portalController = OverlayPortalController();
+  final Object _surfaceOwner = Object();
   bool _isOpen = false;
   bool _isBottomSheetOpen = false;
   Object? _tapRegionGroupId;
+  AxiSurfaceController? _registeredSurfaceController;
 
   DateTime? _currentValue;
   DateTime? _initialValue;
@@ -174,6 +177,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cacheTapRegionGroup();
+    _syncSurfaceRegistration();
   }
 
   void _cacheTapRegionGroup() {
@@ -190,6 +194,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     if (_portalController.isShowing) {
       _portalController.hide();
     }
+    _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
     _isOpen = false;
     super.dispose();
   }
@@ -227,6 +232,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _isOpen = true;
     });
     _portalController.show();
+    _syncSurfaceRegistration();
   }
 
   bool get _hasMouseInput =>
@@ -434,6 +440,27 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       _isOpen = false;
       _initialValue = null;
     });
+    _syncSurfaceRegistration();
+  }
+
+  void _syncSurfaceRegistration() {
+    final AxiSurfaceController? surfaceController =
+        AxiSurfaceScope.maybeControllerOf(context);
+    if (_registeredSurfaceController != null &&
+        _registeredSurfaceController != surfaceController) {
+      _registeredSurfaceController!.unregisterSurface(_surfaceOwner);
+      _registeredSurfaceController = null;
+    }
+    if (surfaceController == null || !_isOpen) {
+      _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
+      _registeredSurfaceController = null;
+      return;
+    }
+    surfaceController.registerSurface(
+      owner: _surfaceOwner,
+      onDismiss: _hideOverlay,
+    );
+    _registeredSurfaceController = surfaceController;
   }
 
   _OverlayGeometry _computeGeometry(BuildContext context) {
@@ -707,6 +734,89 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       ),
     );
 
+    final Widget child = OverlayPortal(
+      controller: _portalController,
+      overlayChildBuilder: (overlayContext) {
+        if (!_isOpen) return const SizedBox.shrink();
+        final geometry = _computeGeometry(overlayContext);
+        final previousMonth = DateTime(
+          _visibleMonth.year,
+          _visibleMonth.month - 1,
+          1,
+        );
+        final nextMonth = DateTime(
+          _visibleMonth.year,
+          _visibleMonth.month + 1,
+          1,
+        );
+        final VoidCallback? handlePrevious = _canNavigateToMonth(previousMonth)
+            ? () => _updateVisibleMonth(previousMonth)
+            : null;
+        final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
+            ? () => _updateVisibleMonth(nextMonth)
+            : null;
+        final header = _DeadlineMonthHeader(
+          label: _monthLabel(_visibleMonth),
+          onPrevious: handlePrevious,
+          onNext: handleNext,
+        );
+        final calendarGrid = _DeadlineCalendarGrid(
+          visibleMonth: _visibleMonth,
+          selectedDate: _currentValue,
+          isDateWithinBounds: _isDateWithinBounds,
+          onDaySelected: _onDaySelected,
+        );
+        final DateTime selectedTime = _currentValue ?? DateTime.now();
+        final timeSelectors = _DeadlineTimeSelectors(
+          showTimeSelectors: widget.showTimeSelectors,
+          selectedHour: selectedTime.hour,
+          selectedMinute: _roundToFive(selectedTime.minute),
+          hourValues: _hourValues,
+          minuteValues: _minuteValues,
+          onHourSelected: _onHourSelected,
+          onMinuteSelected: _onMinuteSelected,
+        );
+        final actions = _DeadlinePickerActions(
+          showTimeSelectors: widget.showTimeSelectors,
+          hasValue: _currentValue != null,
+          onCancel: _handleCancel,
+          onClear: _currentValue != null ? _clearDeadline : null,
+          onDone: _hideOverlay,
+        );
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _hideOverlay,
+              ),
+            ),
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: geometry.offset,
+              child: InBoundsFadeScale(
+                child: _DeadlineAnchoredDropdown(
+                  overlayWidth: widget.overlayWidth,
+                  maxHeight: geometry.maxHeight,
+                  tapRegionGroupId: _tapRegionGroupId,
+                  dropdownKey: _dropdownKey,
+                  showTimeSelectors: widget.showTimeSelectors,
+                  monthHeader: header,
+                  calendarGrid: calendarGrid,
+                  timeSelectors: timeSelectors,
+                  actions: actions,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      child: CompositedTransformTarget(link: _layerLink, child: trigger),
+    );
+    if (AxiSurfaceScope.maybeControllerOf(context) != null) {
+      return child;
+    }
     final canPop = !_isOpen;
     return PopScope(
       canPop: canPop,
@@ -716,88 +826,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         }
         _hideOverlay();
       },
-      child: OverlayPortal(
-        controller: _portalController,
-        overlayLocation: OverlayChildLocation.rootOverlay,
-        overlayChildBuilder: (overlayContext) {
-          if (!_isOpen) return const SizedBox.shrink();
-          final geometry = _computeGeometry(overlayContext);
-          final previousMonth = DateTime(
-            _visibleMonth.year,
-            _visibleMonth.month - 1,
-            1,
-          );
-          final nextMonth = DateTime(
-            _visibleMonth.year,
-            _visibleMonth.month + 1,
-            1,
-          );
-          final VoidCallback? handlePrevious =
-              _canNavigateToMonth(previousMonth)
-              ? () => _updateVisibleMonth(previousMonth)
-              : null;
-          final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
-              ? () => _updateVisibleMonth(nextMonth)
-              : null;
-          final header = _DeadlineMonthHeader(
-            label: _monthLabel(_visibleMonth),
-            onPrevious: handlePrevious,
-            onNext: handleNext,
-          );
-          final calendarGrid = _DeadlineCalendarGrid(
-            visibleMonth: _visibleMonth,
-            selectedDate: _currentValue,
-            isDateWithinBounds: _isDateWithinBounds,
-            onDaySelected: _onDaySelected,
-          );
-          final DateTime selectedTime = _currentValue ?? DateTime.now();
-          final timeSelectors = _DeadlineTimeSelectors(
-            showTimeSelectors: widget.showTimeSelectors,
-            selectedHour: selectedTime.hour,
-            selectedMinute: _roundToFive(selectedTime.minute),
-            hourValues: _hourValues,
-            minuteValues: _minuteValues,
-            onHourSelected: _onHourSelected,
-            onMinuteSelected: _onMinuteSelected,
-          );
-          final actions = _DeadlinePickerActions(
-            showTimeSelectors: widget.showTimeSelectors,
-            hasValue: _currentValue != null,
-            onCancel: _handleCancel,
-            onClear: _currentValue != null ? _clearDeadline : null,
-            onDone: _hideOverlay,
-          );
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _hideOverlay,
-                ),
-              ),
-              CompositedTransformFollower(
-                link: _layerLink,
-                showWhenUnlinked: false,
-                offset: geometry.offset,
-                child: InBoundsFadeScale(
-                  child: _DeadlineAnchoredDropdown(
-                    overlayWidth: widget.overlayWidth,
-                    maxHeight: geometry.maxHeight,
-                    tapRegionGroupId: _tapRegionGroupId,
-                    dropdownKey: _dropdownKey,
-                    showTimeSelectors: widget.showTimeSelectors,
-                    monthHeader: header,
-                    calendarGrid: calendarGrid,
-                    timeSelectors: timeSelectors,
-                    actions: actions,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-        child: CompositedTransformTarget(link: _layerLink, child: trigger),
-      ),
+      child: child,
     );
   }
 
