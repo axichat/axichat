@@ -10,7 +10,6 @@ import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
@@ -24,6 +23,7 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
 
 const double _taskFooterPaddingTop = 4.0;
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
@@ -60,48 +60,80 @@ class ChatCalendarTaskCard extends StatefulWidget {
 }
 
 class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
+  String? _pendingImportRequestId;
+  Completer<String?>? _pendingImportCompleter;
+  int _handledImportOutcomeToken = 0;
+
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ChatCalendarBloc, CalendarState>(
-      builder: (context, state) {
-        final CalendarTask resolvedTask =
-            state.model.tasks[widget.task.id] ?? widget.task;
-        final bool taskInCalendar = state.model.tasks.containsKey(
-          widget.task.id,
-        );
-        final bool tileReadOnly = widget.readOnly || !taskInCalendar;
-        final TaskEditMode editMode = widget.readOnly
-            ? TaskEditMode.readOnly
-            : TaskEditMode.full;
-        final VoidCallback tapAction = widget.readOnly
-            ? () =>
-                  _showTaskEditSheet(context, resolvedTask, editMode: editMode)
-            : () => _handleEditableTap(
-                resolvedTask,
-                taskInCalendar: taskInCalendar,
-                editMode: editMode,
-              );
-        final bool shareFragment = widget.isShareFragment;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ChatCalendarTaskTile(
-              task: resolvedTask,
-              readOnly: tileReadOnly,
-              shareFragment: shareFragment,
-              onTap: tapAction,
-              marginOverride: shareFragment ? _shareMargin() : null,
-              hideActionMenu: shareFragment,
-            ),
-            if (widget.footerDetails.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: _taskFooterPaddingTop),
-                child: ChatInlineDetails(details: widget.footerDetails),
+    return BlocListener<ChatCalendarBloc, CalendarState>(
+      listener: _handleCalendarStateChanged,
+      child: BlocBuilder<ChatCalendarBloc, CalendarState>(
+        builder: (context, state) {
+          final CalendarTask resolvedTask =
+              state.model.tasks[widget.task.id] ?? widget.task;
+          final bool taskInCalendar = state.model.tasks.containsKey(
+            widget.task.id,
+          );
+          final bool tileReadOnly = widget.readOnly || !taskInCalendar;
+          final TaskEditMode editMode = widget.readOnly
+              ? TaskEditMode.readOnly
+              : TaskEditMode.full;
+          final VoidCallback tapAction = widget.readOnly
+              ? () => _showTaskEditSheet(
+                  context,
+                  resolvedTask,
+                  editMode: editMode,
+                )
+              : () => _handleEditableTap(
+                  resolvedTask,
+                  taskInCalendar: taskInCalendar,
+                  editMode: editMode,
+                );
+          final bool shareFragment = widget.isShareFragment;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ChatCalendarTaskTile(
+                task: resolvedTask,
+                readOnly: tileReadOnly,
+                shareFragment: shareFragment,
+                onTap: tapAction,
+                marginOverride: shareFragment ? _shareMargin() : null,
+                hideActionMenu: shareFragment,
               ),
-          ],
-        );
-      },
+              if (widget.footerDetails.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: _taskFooterPaddingTop),
+                  child: ChatInlineDetails(details: widget.footerDetails),
+                ),
+            ],
+          );
+        },
+      ),
     );
+  }
+
+  void _handleCalendarStateChanged(BuildContext _, CalendarState state) {
+    if (state.importOutcomeToken == _handledImportOutcomeToken) {
+      return;
+    }
+    _handledImportOutcomeToken = state.importOutcomeToken;
+    final String? requestId = _pendingImportRequestId;
+    final Completer<String?>? completer = _pendingImportCompleter;
+    if (requestId == null ||
+        completer == null ||
+        completer.isCompleted ||
+        state.importRequestId != requestId) {
+      return;
+    }
+    _pendingImportRequestId = null;
+    _pendingImportCompleter = null;
+    if (state.importError != null) {
+      completer.complete(null);
+      return;
+    }
+    completer.complete(context.read<ChatCalendarBloc>().id);
   }
 
   Future<void> _showTaskEditSheet(
@@ -391,16 +423,18 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return null;
     }
     final List<CalendarTask> tasks = <CalendarTask>[task];
-    bloc.add(CalendarEvent.tasksImported(tasks: tasks));
-    final Set<String> taskIds = <String>{}..add(task.id);
-    final bool copied = await waitForTasksInCalendar(
-      bloc: bloc,
-      taskIds: taskIds,
-    );
-    if (!copied) {
+    final String requestId = const Uuid().v4();
+    final Completer<String?> completer = Completer<String?>();
+    _pendingImportRequestId = requestId;
+    _pendingImportCompleter = completer;
+    bloc.add(CalendarEvent.tasksImported(requestId: requestId, tasks: tasks));
+    try {
+      return await completer.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      _pendingImportRequestId = null;
+      _pendingImportCompleter = null;
       return null;
     }
-    return bloc.id;
   }
 
   void _ensureTaskImported(CalendarTask task) {
@@ -410,7 +444,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
     context.read<ChatCalendarBloc>().add(
-      CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
+      CalendarEvent.tasksImported(
+        requestId: const Uuid().v4(),
+        tasks: <CalendarTask>[task],
+      ),
     );
   }
 

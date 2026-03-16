@@ -18,6 +18,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:axichat/src/calendar/view/shell/calendar_sheet_header.dart';
 
@@ -27,45 +28,53 @@ const double _criticalPathZeroProgress = 0.0;
 const double _criticalPathMaxProgress = 1.0;
 const int _criticalPathSingleTaskCount = 1;
 
-class _PendingCriticalPathSelection {
-  const _PendingCriticalPathSelection({
+class PendingCriticalPathSelection {
+  const PendingCriticalPathSelection({
     required this.pathId,
     required this.pathName,
     required this.taskIds,
     required this.taskCount,
+    required this.pendingRequestIds,
   });
 
   final String pathId;
   final String pathName;
   final Set<String> taskIds;
   final int taskCount;
+  final Set<String> pendingRequestIds;
 }
 
-class _PendingCriticalPathCreation {
-  const _PendingCriticalPathCreation({
-    required this.previousPathIds,
+class PendingCriticalPathCreation {
+  const PendingCriticalPathCreation({
+    required this.requestId,
     required this.name,
     required this.targetTaskIds,
     required this.remainingTaskIds,
     required this.taskCount,
     this.createdPathId,
+    this.pendingAddRequestIds = const <String>{},
   });
 
-  final Set<String> previousPathIds;
+  final String requestId;
   final String name;
   final Set<String> targetTaskIds;
   final List<String> remainingTaskIds;
   final int taskCount;
   final String? createdPathId;
+  final Set<String> pendingAddRequestIds;
 
-  _PendingCriticalPathCreation copyWith({String? createdPathId}) {
-    return _PendingCriticalPathCreation(
-      previousPathIds: previousPathIds,
+  PendingCriticalPathCreation copyWith({
+    String? createdPathId,
+    Set<String>? pendingAddRequestIds,
+  }) {
+    return PendingCriticalPathCreation(
+      requestId: requestId,
       name: name,
       targetTaskIds: targetTaskIds,
       remainingTaskIds: remainingTaskIds,
       taskCount: taskCount,
       createdPathId: createdPathId ?? this.createdPathId,
+      pendingAddRequestIds: pendingAddRequestIds ?? this.pendingAddRequestIds,
     );
   }
 }
@@ -1094,8 +1103,8 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
   required BuildContext context,
   required List<CalendarCriticalPath> paths,
   BaseCalendarBloc? bloc,
-  ValueNotifier<_PendingCriticalPathSelection?>? pendingSelectionNotifier,
-  ValueNotifier<_PendingCriticalPathCreation?>? pendingCreationNotifier,
+  ValueNotifier<PendingCriticalPathSelection?>? pendingSelectionNotifier,
+  ValueNotifier<PendingCriticalPathCreation?>? pendingCreationNotifier,
   bool stayOpen = false,
   Future<String?> Function(CalendarCriticalPath path)? onPathSelected,
   Future<String?> Function()? onCreateNewPath,
@@ -1119,13 +1128,12 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
           final ValueNotifier<String?> statusNotifier = ValueNotifier<String?>(
             null,
           );
-          final ValueNotifier<_PendingCriticalPathSelection?>
-          selectionNotifier =
+          final ValueNotifier<PendingCriticalPathSelection?> selectionNotifier =
               pendingSelectionNotifier ??
-              ValueNotifier<_PendingCriticalPathSelection?>(null);
-          final ValueNotifier<_PendingCriticalPathCreation?> creationNotifier =
+              ValueNotifier<PendingCriticalPathSelection?>(null);
+          final ValueNotifier<PendingCriticalPathCreation?> creationNotifier =
               pendingCreationNotifier ??
-              ValueNotifier<_PendingCriticalPathCreation?>(null);
+              ValueNotifier<PendingCriticalPathCreation?>(null);
 
           bool isBusy(CalendarState? state) {
             if (state == null) {
@@ -1160,12 +1168,12 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                 ] else
                   ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: listViewportHeight),
-                    child: ValueListenableBuilder<Object?>(
-                      valueListenable: Listenable.merge([
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([
                         selectionNotifier,
                         creationNotifier,
                       ]),
-                      builder: (context, _, _) {
+                      builder: (context, _) {
                         final CalendarState? currentState = bloc?.state;
                         return _CriticalPathPickerList(
                           paths: paths,
@@ -1232,12 +1240,12 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                   },
                 ),
                 SizedBox(height: context.spacing.m),
-                ValueListenableBuilder<Object?>(
-                  valueListenable: Listenable.merge([
+                AnimatedBuilder(
+                  animation: Listenable.merge([
                     selectionNotifier,
                     creationNotifier,
                   ]),
-                  builder: (context, _, _) {
+                  builder: (context, _) {
                     final CalendarState? currentState = bloc?.state;
                     final bool busy = isBusy(currentState);
                     return AxiButton.ghost(
@@ -1273,13 +1281,16 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
           if (bloc == null) {
             return content;
           }
-          content = BlocListener<BaseCalendarBloc, CalendarState>.value(
-            value: bloc,
+          content = BlocListener<BaseCalendarBloc, CalendarState>(
+            bloc: bloc,
             listener: (context, state) {
-              final _PendingCriticalPathSelection? pendingSelection =
+              final PendingCriticalPathSelection? pendingSelection =
                   selectionNotifier.value;
               if (pendingSelection != null) {
-                if (state.criticalPathMutationError != null) {
+                final String? requestId = state.criticalPathMutationRequestId;
+                if (requestId != null &&
+                    pendingSelection.pendingRequestIds.contains(requestId) &&
+                    state.criticalPathMutationError != null) {
                   statusNotifier.value = null;
                   selectionNotifier.value = null;
                   FeedbackSystem.showError(
@@ -1288,7 +1299,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                       pendingSelection.taskCount,
                     ),
                   );
-                } else {
+                } else if (requestId != null &&
+                    pendingSelection.pendingRequestIds.contains(requestId)) {
+                  pendingSelection.pendingRequestIds.remove(requestId);
                   final CalendarCriticalPath? path =
                       state.model.criticalPaths[pendingSelection.pathId];
                   final bool added =
@@ -1301,16 +1314,28 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                           pendingSelection.taskCount,
                           pendingSelection.pathName,
                         );
+                  } else if (pendingSelection.pendingRequestIds.isEmpty) {
+                    statusNotifier.value = null;
+                    selectionNotifier.value = null;
+                    FeedbackSystem.showError(
+                      context,
+                      context.l10n.calendarCriticalPathAddFailed(
+                        pendingSelection.taskCount,
+                      ),
+                    );
                   }
                 }
               }
 
-              final _PendingCriticalPathCreation? pendingCreation =
+              final PendingCriticalPathCreation? pendingCreation =
                   creationNotifier.value;
               if (pendingCreation == null) {
                 return;
               }
-              if (state.criticalPathMutationError != null) {
+              if (pendingCreation.createdPathId == null &&
+                  state.criticalPathMutationRequestId ==
+                      pendingCreation.requestId &&
+                  state.criticalPathMutationError != null) {
                 creationNotifier.value = null;
                 FeedbackSystem.showError(
                   context,
@@ -1322,19 +1347,28 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                 );
                 return;
               }
-              final String? createdPathId =
-                  pendingCreation.createdPathId ??
-                  _resolveCreatedPathId(
-                    state: state,
-                    previousIds: pendingCreation.previousPathIds,
-                  );
-              if (createdPathId == null) {
-                return;
-              }
               if (pendingCreation.createdPathId == null) {
+                final String? createdPathId =
+                    state.criticalPathMutationRequestId ==
+                        pendingCreation.requestId
+                    ? state.lastCreatedCriticalPathId
+                    : null;
+                if (createdPathId == null) {
+                  return;
+                }
+                if (pendingCreation.targetTaskIds.isEmpty) {
+                  creationNotifier.value = null;
+                  statusNotifier.value = context.l10n
+                      .calendarCriticalPathQueuedCreate(pendingCreation.name);
+                  return;
+                }
+                final Set<String> addRequestIds = <String>{};
                 for (final String taskId in pendingCreation.remainingTaskIds) {
+                  final String addRequestId = const Uuid().v4();
+                  addRequestIds.add(addRequestId);
                   bloc.add(
                     CalendarEvent.criticalPathTaskAdded(
+                      requestId: addRequestId,
                       pathId: createdPathId,
                       taskId: taskId,
                     ),
@@ -1342,11 +1376,31 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                 }
                 creationNotifier.value = pendingCreation.copyWith(
                   createdPathId: createdPathId,
+                  pendingAddRequestIds: addRequestIds,
                 );
                 return;
               }
+              final String? requestId = state.criticalPathMutationRequestId;
+              if (requestId == null ||
+                  !pendingCreation.pendingAddRequestIds.contains(requestId)) {
+                return;
+              }
+              if (state.criticalPathMutationError != null) {
+                creationNotifier.value = null;
+                FeedbackSystem.showError(
+                  context,
+                  context.l10n.calendarCriticalPathAddFailed(
+                    pendingCreation.taskCount,
+                  ),
+                );
+                return;
+              }
+              pendingCreation.pendingAddRequestIds.remove(requestId);
+              if (pendingCreation.pendingAddRequestIds.isNotEmpty) {
+                return;
+              }
               final CalendarCriticalPath? path =
-                  state.model.criticalPaths[createdPathId];
+                  state.model.criticalPaths[pendingCreation.createdPathId];
               final bool createdAndAdded =
                   path != null &&
                   pendingCreation.targetTaskIds.every(path.taskIds.contains);
@@ -1488,23 +1542,6 @@ String? _resolveCriticalPathName({
   return bloc.state.model.criticalPaths[pathId]?.name ?? fallbackNames[pathId];
 }
 
-String? _resolveCreatedPathId({
-  required CalendarState state,
-  required Set<String> previousIds,
-}) {
-  final String? createdPathId = state.lastCreatedCriticalPathId;
-  if (createdPathId != null) {
-    return createdPathId;
-  }
-  final Set<String> difference = state.model.criticalPaths.keys
-      .toSet()
-      .difference(previousIds);
-  if (difference.isEmpty) {
-    return null;
-  }
-  return difference.first;
-}
-
 Future<void> addTaskToCriticalPath({
   required BuildContext context,
   required BaseCalendarBloc bloc,
@@ -1526,10 +1563,10 @@ Future<void> addTasksToCriticalPath({
   final int taskCount = tasks.length;
   final Set<String> targetTaskIds = <String>{}
     ..addAll(tasks.map((task) => baseTaskIdFrom(task.id)));
-  final ValueNotifier<_PendingCriticalPathSelection?> pendingSelectionNotifier =
-      ValueNotifier<_PendingCriticalPathSelection?>(null);
-  final ValueNotifier<_PendingCriticalPathCreation?> pendingCreationNotifier =
-      ValueNotifier<_PendingCriticalPathCreation?>(null);
+  final ValueNotifier<PendingCriticalPathSelection?> pendingSelectionNotifier =
+      ValueNotifier<PendingCriticalPathSelection?>(null);
+  final ValueNotifier<PendingCriticalPathCreation?> pendingCreationNotifier =
+      ValueNotifier<PendingCriticalPathCreation?>(null);
   await showCriticalPathPicker(
     context: context,
     paths: paths,
@@ -1558,9 +1595,16 @@ Future<void> addTasksToCriticalPath({
       }
       final Set<String> addedTaskIds = <String>{}
         ..addAll(tasksToAdd.map((task) => baseTaskIdFrom(task.id)));
+      final Set<String> requestIds = <String>{};
       for (final CalendarTask task in tasksToAdd) {
+        final String requestId = const Uuid().v4();
+        requestIds.add(requestId);
         bloc.add(
-          CalendarEvent.criticalPathTaskAdded(pathId: path.id, taskId: task.id),
+          CalendarEvent.criticalPathTaskAdded(
+            requestId: requestId,
+            pathId: path.id,
+            taskId: task.id,
+          ),
         );
       }
       final String? resolvedName = _resolveCriticalPathName(
@@ -1569,11 +1613,12 @@ Future<void> addTasksToCriticalPath({
         fallbackNames: pathNamesById,
       );
       if (resolvedName != null) {
-        pendingSelectionNotifier.value = _PendingCriticalPathSelection(
+        pendingSelectionNotifier.value = PendingCriticalPathSelection(
           pathId: path.id,
           pathName: resolvedName,
           taskIds: addedTaskIds,
           taskCount: tasksToAdd.length,
+          pendingRequestIds: requestIds,
         );
       }
       return null;
@@ -1586,13 +1631,16 @@ Future<void> addTasksToCriticalPath({
       if (!context.mounted || name == null) {
         return null;
       }
-      final Set<String> previousIds = <String>{}
-        ..addAll(bloc.state.criticalPaths.map((path) => path.id));
+      final String requestId = const Uuid().v4();
       bloc.add(
-        CalendarEvent.criticalPathCreated(name: name, taskId: tasks.first.id),
+        CalendarEvent.criticalPathCreated(
+          requestId: requestId,
+          name: name,
+          taskId: tasks.first.id,
+        ),
       );
-      pendingCreationNotifier.value = _PendingCriticalPathCreation(
-        previousPathIds: previousIds,
+      pendingCreationNotifier.value = PendingCriticalPathCreation(
+        requestId: requestId,
         name: name,
         targetTaskIds: targetTaskIds,
         remainingTaskIds: tasks

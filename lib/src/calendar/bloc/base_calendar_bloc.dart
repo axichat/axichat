@@ -134,6 +134,7 @@ abstract class BaseCalendarBloc
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
   int _focusSequence = 0;
   int _taskCreationOutcomeSequence = 0;
+  int _importOutcomeSequence = 0;
   int _criticalPathMutationOutcomeSequence = 0;
   static final CalendarLinkedTaskRegistry _linkedTaskRegistry =
       CalendarLinkedTaskRegistry.instance;
@@ -608,6 +609,7 @@ abstract class BaseCalendarBloc
         updatedModel,
         emit,
         isLoading: false,
+        taskCreationRequestId: event.requestId,
         isTaskCreationSubmitting: false,
         taskCreationError: null,
         lastCreatedTaskId: task.id,
@@ -616,7 +618,12 @@ abstract class BaseCalendarBloc
 
       await onTaskAdded(task);
     } catch (error) {
-      _emitTaskCreationError(error, 'Failed to add task', emit);
+      _emitTaskCreationError(
+        error,
+        'Failed to add task',
+        emit,
+        requestId: event.requestId,
+      );
     }
   }
 
@@ -779,7 +786,14 @@ abstract class BaseCalendarBloc
         return;
       }
 
-      emit(state.copyWith(isLoading: true, error: null));
+      emit(
+        state.copyWith(
+          isLoading: true,
+          error: null,
+          isTaskCreationSubmitting: true,
+          taskCreationError: null,
+        ),
+      );
 
       _recordUndoSnapshot();
 
@@ -1501,11 +1515,25 @@ abstract class BaseCalendarBloc
       );
 
       final updatedModel = state.model.addTask(task);
-      emitModel(updatedModel, emit, isLoading: false);
+      emitModel(
+        updatedModel,
+        emit,
+        isLoading: false,
+        taskCreationRequestId: event.requestId,
+        isTaskCreationSubmitting: false,
+        taskCreationError: null,
+        lastCreatedTaskId: task.id,
+        taskCreationOutcomeToken: _nextTaskCreationOutcomeToken(),
+      );
 
       await onTaskAdded(task);
     } catch (error) {
-      _emitTaskCreationError(error, 'Failed to add quick task', emit);
+      _emitTaskCreationError(
+        error,
+        'Failed to add quick task',
+        emit,
+        requestId: event.requestId,
+      );
     }
   }
 
@@ -2426,7 +2454,14 @@ abstract class BaseCalendarBloc
       return;
     }
     try {
-      emit(state.copyWith(isLoading: true, error: null));
+      emit(
+        state.copyWith(
+          isLoading: true,
+          error: null,
+          importRequestId: event.requestId,
+          importError: null,
+        ),
+      );
       _recordUndoSnapshot();
       final now = _now();
       final existingIds = state.model.tasks.keys.toSet();
@@ -2446,12 +2481,22 @@ abstract class BaseCalendarBloc
         isLoading: false,
         isSelectionMode: false,
         selectedTaskIds: const <String>{},
+        importRequestId: event.requestId,
+        importError: null,
+        lastImportedTaskIds: additions.keys.toList(growable: false),
+        lastImportedModelChecksum: null,
+        importOutcomeToken: _nextImportOutcomeToken(),
       );
       for (final task in additions.values) {
         await onTaskAdded(task);
       }
     } catch (error) {
-      await _handleError(error, 'Failed to import tasks', emit);
+      _emitImportError(
+        error,
+        'Failed to import tasks',
+        emit,
+        requestId: event.requestId,
+      );
     }
   }
 
@@ -2460,7 +2505,14 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     try {
-      emit(state.copyWith(isLoading: true, error: null));
+      emit(
+        state.copyWith(
+          isLoading: true,
+          error: null,
+          importRequestId: event.requestId,
+          importError: null,
+        ),
+      );
       _recordUndoSnapshot();
       final merged = state.model.mergeWith(event.model);
       emitModel(
@@ -2469,10 +2521,20 @@ abstract class BaseCalendarBloc
         isLoading: false,
         isSelectionMode: false,
         selectedTaskIds: const <String>{},
+        importRequestId: event.requestId,
+        importError: null,
+        lastImportedTaskIds: const <String>[],
+        lastImportedModelChecksum: merged.checksum,
+        importOutcomeToken: _nextImportOutcomeToken(),
       );
       await onModelImported(merged);
     } catch (error) {
-      await _handleError(error, 'Failed to import calendar', emit);
+      _emitImportError(
+        error,
+        'Failed to import calendar',
+        emit,
+        requestId: event.requestId,
+      );
     }
   }
 
@@ -2490,6 +2552,7 @@ abstract class BaseCalendarBloc
       }
       emit(
         state.copyWith(
+          criticalPathMutationRequestId: event.requestId,
           isCriticalPathMutating: true,
           criticalPathMutationError: null,
           error: null,
@@ -2522,6 +2585,7 @@ abstract class BaseCalendarBloc
             ? path.id
             : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: shouldFocus,
+        criticalPathMutationRequestId: event.requestId,
         isCriticalPathMutating: false,
         criticalPathMutationError: null,
         lastCreatedCriticalPathId: path.id,
@@ -2535,6 +2599,7 @@ abstract class BaseCalendarBloc
         error,
         'Failed to create critical path',
         emit,
+        requestId: event.requestId,
       );
     }
   }
@@ -2630,6 +2695,7 @@ abstract class BaseCalendarBloc
 
       emit(
         state.copyWith(
+          criticalPathMutationRequestId: event.requestId,
           isCriticalPathMutating: true,
           criticalPathMutationError: null,
           error: null,
@@ -2646,6 +2712,7 @@ abstract class BaseCalendarBloc
         emit,
         focusedCriticalPathId: state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
+        criticalPathMutationRequestId: event.requestId,
         isCriticalPathMutating: false,
         criticalPathMutationError: null,
         lastCriticalPathTaskAddedPathId: path.id,
@@ -2660,6 +2727,7 @@ abstract class BaseCalendarBloc
         error,
         'Failed to add task to critical path',
         emit,
+        requestId: event.requestId,
       );
     }
   }
@@ -3207,10 +3275,17 @@ abstract class BaseCalendarBloc
     Set<String>? selectedTaskIds,
     String? focusedCriticalPathId,
     bool focusedCriticalPathSpecified = false,
+    String? taskCreationRequestId,
     bool? isTaskCreationSubmitting,
     String? taskCreationError,
     String? lastCreatedTaskId,
     int? taskCreationOutcomeToken,
+    String? importRequestId,
+    String? importError,
+    List<String>? lastImportedTaskIds,
+    String? lastImportedModelChecksum,
+    int? importOutcomeToken,
+    String? criticalPathMutationRequestId,
     bool? isCriticalPathMutating,
     String? criticalPathMutationError,
     String? lastCreatedCriticalPathId,
@@ -3248,12 +3323,22 @@ abstract class BaseCalendarBloc
       canUndo: _undoStack.isNotEmpty,
       canRedo: _redoStack.isNotEmpty,
       focusedCriticalPathId: normalizedFocus,
+      taskCreationRequestId:
+          taskCreationRequestId ?? state.taskCreationRequestId,
       isTaskCreationSubmitting:
           isTaskCreationSubmitting ?? state.isTaskCreationSubmitting,
       taskCreationError: taskCreationError ?? state.taskCreationError,
       lastCreatedTaskId: lastCreatedTaskId ?? state.lastCreatedTaskId,
       taskCreationOutcomeToken:
           taskCreationOutcomeToken ?? state.taskCreationOutcomeToken,
+      importRequestId: importRequestId ?? state.importRequestId,
+      importError: importError ?? state.importError,
+      lastImportedTaskIds: lastImportedTaskIds ?? state.lastImportedTaskIds,
+      lastImportedModelChecksum:
+          lastImportedModelChecksum ?? state.lastImportedModelChecksum,
+      importOutcomeToken: importOutcomeToken ?? state.importOutcomeToken,
+      criticalPathMutationRequestId:
+          criticalPathMutationRequestId ?? state.criticalPathMutationRequestId,
       isCriticalPathMutating:
           isCriticalPathMutating ?? state.isCriticalPathMutating,
       criticalPathMutationError:
@@ -3293,6 +3378,11 @@ abstract class BaseCalendarBloc
     return _taskCreationOutcomeSequence;
   }
 
+  int _nextImportOutcomeToken() {
+    _importOutcomeSequence += 1;
+    return _importOutcomeSequence;
+  }
+
   int _nextCriticalPathMutationOutcomeToken() {
     _criticalPathMutationOutcomeSequence += 1;
     return _criticalPathMutationOutcomeSequence;
@@ -3301,8 +3391,9 @@ abstract class BaseCalendarBloc
   void _emitTaskCreationError(
     Object error,
     String defaultMessage,
-    Emitter<CalendarState> emit,
-  ) {
+    Emitter<CalendarState> emit, {
+    required String requestId,
+  }) {
     final String errorMessage = error is CalendarException
         ? error.message
         : '$defaultMessage: $error';
@@ -3311,6 +3402,7 @@ abstract class BaseCalendarBloc
       state.copyWith(
         isLoading: false,
         error: errorMessage,
+        taskCreationRequestId: requestId,
         isTaskCreationSubmitting: false,
         taskCreationError: errorMessage,
         lastCreatedTaskId: null,
@@ -3319,11 +3411,35 @@ abstract class BaseCalendarBloc
     );
   }
 
+  void _emitImportError(
+    Object error,
+    String defaultMessage,
+    Emitter<CalendarState> emit, {
+    required String requestId,
+  }) {
+    final String errorMessage = error is CalendarException
+        ? error.message
+        : '$defaultMessage: $error';
+    logError(errorMessage, error);
+    emit(
+      state.copyWith(
+        isLoading: false,
+        error: errorMessage,
+        importRequestId: requestId,
+        importError: errorMessage,
+        lastImportedTaskIds: const <String>[],
+        lastImportedModelChecksum: null,
+        importOutcomeToken: _nextImportOutcomeToken(),
+      ),
+    );
+  }
+
   void _emitCriticalPathMutationError(
     Object error,
     String defaultMessage,
-    Emitter<CalendarState> emit,
-  ) {
+    Emitter<CalendarState> emit, {
+    required String requestId,
+  }) {
     final String errorMessage = error is CalendarException
         ? error.message
         : '$defaultMessage: $error';
@@ -3331,6 +3447,7 @@ abstract class BaseCalendarBloc
     emit(
       state.copyWith(
         error: errorMessage,
+        criticalPathMutationRequestId: requestId,
         isCriticalPathMutating: false,
         criticalPathMutationError: errorMessage,
         lastCreatedCriticalPathId: null,

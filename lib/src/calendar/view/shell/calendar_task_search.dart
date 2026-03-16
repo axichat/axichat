@@ -12,7 +12,6 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
@@ -26,6 +25,7 @@ import 'package:axichat/src/calendar/view/tasks/task_tile_surface.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:uuid/uuid.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_sheet_header.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
@@ -86,63 +86,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
 
   FutureOr<void> Function(CalendarTask task) defaultHandler;
   if (resolvedTargetPath != null) {
-    defaultHandler = (CalendarTask task) async {
-      final B resolvedBloc = resolveBloc();
-      final CalendarCriticalPath? latestPath =
-          resolvedBloc.state.model.criticalPaths[resolvedTargetPath.id];
-      final CalendarCriticalPath effectivePath =
-          latestPath ?? resolvedTargetPath;
-      if (effectivePath.taskIds.contains(task.baseId)) {
-        FeedbackSystem.showError(
-          context,
-          context.l10n.calendarCriticalPathAlreadyContainsTasks(
-            _taskSearchSingleCount,
-          ),
-        );
-        return;
-      }
-      resolvedBloc.add(
-        CalendarEvent.criticalPathTaskAdded(
-          pathId: resolvedTargetPath.id,
-          taskId: task.id,
-        ),
-      );
-      final Set<String> taskIds = <String>{}..add(task.baseId);
-      final bool added = await waitForCriticalPathTasks(
-        bloc: resolvedBloc,
-        pathId: resolvedTargetPath.id,
-        taskIds: taskIds,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      if (!added) {
-        FeedbackSystem.showError(
-          context,
-          context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
-        );
-        return;
-      }
-      final String? resolvedName = _resolveCriticalPathName(
-        bloc: resolvedBloc,
-        pathId: resolvedTargetPath.id,
-        fallbackName: resolvedTargetPath.name,
-      );
-      if (resolvedName == null) {
-        FeedbackSystem.showError(
-          context,
-          context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
-        );
-        return;
-      }
-      FeedbackSystem.showSuccess(
-        context,
-        context.l10n.calendarCriticalPathAddSuccess(
-          _taskSearchSingleCount,
-          resolvedName,
-        ),
-      );
-    };
+    defaultHandler = (CalendarTask _) {};
   } else {
     defaultHandler = (CalendarTask task) async {
       final B resolvedBloc = resolveBloc();
@@ -299,6 +243,10 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   final TextEditingController _queryController = TextEditingController();
   final FocusNode _queryFocusNode = FocusNode();
   final Set<_QuickFilter> _filters = <_QuickFilter>{};
+  String? _pendingCriticalPathAddRequestId;
+  String? _pendingCriticalPathAddPathId;
+  String? _pendingCriticalPathAddTaskId;
+  int _handledCriticalPathMutationOutcomeToken = 0;
 
   @override
   void initState() {
@@ -325,117 +273,124 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
     final String subtitle = targetPath != null
         ? l10n.calendarTaskSearchAddToSubtitle
         : l10n.calendarTaskSearchSubtitle;
-    return BlocBuilder<B, CalendarState>(
+    return BlocListener<B, CalendarState>(
       bloc: widget.bloc,
-      builder: (context, state) {
-        final String query = _queryController.text.trim();
-        final List<CalendarTask> results = _search(state, query);
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final mediaQuery = MediaQuery.of(context);
-            final bool isSheetRoute =
-                ModalRoute.of(context) is ModalBottomSheetRoute;
-            final double keyboardInset = isSheetRoute
-                ? mediaQuery.viewInsets.bottom
-                : 0;
-            final double maxHeight = constraints.hasBoundedHeight
-                ? constraints.maxHeight
-                : mediaQuery.size.height;
-            return ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxHeight),
-              child: CustomScrollView(
-                shrinkWrap: true,
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        CalendarSheetHeader(
-                          title: title,
-                          subtitle: subtitle,
-                          onClose: () => Navigator.of(context).maybePop(),
-                        ),
-                        SizedBox(height: spacing.s),
-                        TaskTextField(
-                          controller: _queryController,
-                          focusNode: _queryFocusNode,
-                          hintText: l10n.calendarTaskSearchHint,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: _handleSubmitted,
-                          onChanged: (_) => setState(() {}),
-                          prefix: Icon(
-                            Icons.search,
-                            color: calendarSubtitleColor,
+      listener: _handleCalendarStateChanged,
+      child: BlocBuilder<B, CalendarState>(
+        bloc: widget.bloc,
+        builder: (context, state) {
+          final String query = _queryController.text.trim();
+          final List<CalendarTask> results = _search(state, query);
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final mediaQuery = MediaQuery.of(context);
+              final bool isSheetRoute =
+                  ModalRoute.of(context) is ModalBottomSheetRoute;
+              final double keyboardInset = isSheetRoute
+                  ? mediaQuery.viewInsets.bottom
+                  : 0;
+              final double maxHeight = constraints.hasBoundedHeight
+                  ? constraints.maxHeight
+                  : mediaQuery.size.height;
+              return ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: maxHeight),
+                child: CustomScrollView(
+                  shrinkWrap: true,
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          CalendarSheetHeader(
+                            title: title,
+                            subtitle: subtitle,
+                            onClose: () => Navigator.of(context).maybePop(),
                           ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: spacing.m,
-                            vertical: spacing.s,
+                          SizedBox(height: spacing.s),
+                          TaskTextField(
+                            controller: _queryController,
+                            focusNode: _queryFocusNode,
+                            hintText: l10n.calendarTaskSearchHint,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: _handleSubmitted,
+                            onChanged: (_) => setState(() {}),
+                            prefix: Icon(
+                              Icons.search,
+                              color: calendarSubtitleColor,
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: spacing.m,
+                              vertical: spacing.s,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: spacing.xxs),
-                        _FilterRow(
-                          filters: _filters,
-                          onFilterToggled: _toggleFilter,
-                        ),
-                        SizedBox(height: spacing.xxs),
-                      ],
-                    ),
-                  ),
-                  if (results.isEmpty)
-                    SliverPadding(
-                      padding: EdgeInsets.only(
-                        top: spacing.xxs,
-                        bottom: spacing.xs + keyboardInset,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: _EmptySearchState(
-                          key: const ValueKey('empty-search'),
-                          showHint: query.isEmpty,
-                          isCompact: isCompact,
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.only(
-                        top: spacing.xxs,
-                        bottom: spacing.xs + keyboardInset,
-                      ),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate((context, index) {
-                          if (index.isOdd) {
-                            return SizedBox(height: spacing.xxs);
-                          }
-                          final CalendarTask task = results[index ~/ 2];
-                          final Widget trailing = _ResultMetadata(task);
-                          final bool useCustomTile =
-                              widget.taskTileBuilder != null;
-                          final Widget tile = useCustomTile
-                              ? widget.taskTileBuilder!.call(
-                                  task,
-                                  trailing: trailing,
-                                  requiresLongPress:
-                                      widget.requiresLongPressForDrag,
-                                  onTap: () => _handleTaskSelected(task),
-                                  onDragStart: () =>
-                                      Navigator.of(context).maybePop(),
-                                  allowContextMenu: false,
-                                )
-                              : _SearchResultTile(
-                                  task: task,
-                                  trailing: trailing,
-                                  onTap: () => _handleTaskSelected(task),
-                                );
-                          return tile;
-                        }, childCount: (results.length * 2) - 1),
+                          SizedBox(height: spacing.xxs),
+                          _FilterRow(
+                            filters: _filters,
+                            onFilterToggled: _toggleFilter,
+                          ),
+                          SizedBox(height: spacing.xxs),
+                        ],
                       ),
                     ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+                    if (results.isEmpty)
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          top: spacing.xxs,
+                          bottom: spacing.xs + keyboardInset,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _EmptySearchState(
+                            key: const ValueKey('empty-search'),
+                            showHint: query.isEmpty,
+                            isCompact: isCompact,
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.only(
+                          top: spacing.xxs,
+                          bottom: spacing.xs + keyboardInset,
+                        ),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            if (index.isOdd) {
+                              return SizedBox(height: spacing.xxs);
+                            }
+                            final CalendarTask task = results[index ~/ 2];
+                            final Widget trailing = _ResultMetadata(task);
+                            final bool useCustomTile =
+                                widget.taskTileBuilder != null;
+                            final Widget tile = useCustomTile
+                                ? widget.taskTileBuilder!.call(
+                                    task,
+                                    trailing: trailing,
+                                    requiresLongPress:
+                                        widget.requiresLongPressForDrag,
+                                    onTap: () => _handleTaskSelected(task),
+                                    onDragStart: () =>
+                                        Navigator.of(context).maybePop(),
+                                    allowContextMenu: false,
+                                  )
+                                : _SearchResultTile(
+                                    task: task,
+                                    trailing: trailing,
+                                    onTap: () => _handleTaskSelected(task),
+                                  );
+                            return tile;
+                          }, childCount: (results.length * 2) - 1),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -451,7 +406,94 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   }
 
   Future<void> _handleTaskSelected(CalendarTask task) async {
+    final CalendarCriticalPath? targetPath = widget.targetPath;
+    if (targetPath != null) {
+      final CalendarCriticalPath? latestPath =
+          widget.bloc.state.model.criticalPaths[targetPath.id];
+      final CalendarCriticalPath effectivePath = latestPath ?? targetPath;
+      if (effectivePath.taskIds.contains(task.baseId)) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAlreadyContainsTasks(
+            _taskSearchSingleCount,
+          ),
+        );
+        return;
+      }
+      final String requestId = const Uuid().v4();
+      _pendingCriticalPathAddRequestId = requestId;
+      _pendingCriticalPathAddPathId = effectivePath.id;
+      _pendingCriticalPathAddTaskId = task.baseId;
+      widget.bloc.add(
+        CalendarEvent.criticalPathTaskAdded(
+          requestId: requestId,
+          pathId: effectivePath.id,
+          taskId: task.id,
+        ),
+      );
+      return;
+    }
     await widget.onTaskSelected(task);
+  }
+
+  void _handleCalendarStateChanged(BuildContext context, CalendarState state) {
+    if (state.criticalPathMutationOutcomeToken ==
+        _handledCriticalPathMutationOutcomeToken) {
+      return;
+    }
+    _handledCriticalPathMutationOutcomeToken =
+        state.criticalPathMutationOutcomeToken;
+    final String? requestId = _pendingCriticalPathAddRequestId;
+    final String? pathId = _pendingCriticalPathAddPathId;
+    final String? taskId = _pendingCriticalPathAddTaskId;
+    if (requestId == null ||
+        pathId == null ||
+        taskId == null ||
+        state.criticalPathMutationRequestId != requestId) {
+      return;
+    }
+    _pendingCriticalPathAddRequestId = null;
+    _pendingCriticalPathAddPathId = null;
+    _pendingCriticalPathAddTaskId = null;
+    if (state.criticalPathMutationError != null) {
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
+      );
+      return;
+    }
+    final bool added =
+        state.lastCriticalPathTaskAddedPathId == pathId &&
+        state.lastCriticalPathTaskAddedTaskId == taskId;
+    if (!added) {
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
+      );
+      return;
+    }
+    final CalendarCriticalPath? targetPath = widget.targetPath;
+    final String? resolvedName = targetPath == null
+        ? null
+        : _resolveCriticalPathName(
+            bloc: widget.bloc,
+            pathId: pathId,
+            fallbackName: targetPath.name,
+          );
+    if (resolvedName == null) {
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarCriticalPathAddFailed(_taskSearchSingleCount),
+      );
+      return;
+    }
+    FeedbackSystem.showSuccess(
+      context,
+      context.l10n.calendarCriticalPathAddSuccess(
+        _taskSearchSingleCount,
+        resolvedName,
+      ),
+    );
   }
 
   void _handleSubmitted(String _) {

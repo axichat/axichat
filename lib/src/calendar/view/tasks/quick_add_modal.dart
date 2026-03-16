@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:uuid/uuid.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
@@ -18,7 +19,9 @@ import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/reminders/alarm_reminder_bridge.dart';
 import 'package:axichat/src/calendar/interop/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
@@ -54,7 +57,7 @@ class QuickAddModal extends StatefulWidget {
   final DateTime? prefilledDateTime;
   final String? prefilledText;
   final VoidCallback? onDismiss;
-  final void Function(CalendarTask task) onTaskAdded;
+  final void Function(CalendarTask task, String requestId) onTaskAdded;
   final QuickAddModalSurface surface;
   final LocationAutocompleteHelper locationHelper;
   final String? initialValidationMessage;
@@ -106,10 +109,11 @@ class _QuickAddModalState extends State<QuickAddModal>
   bool _remindersLocked = false;
   NlAdapterResult? _lastParserResult;
   String? _formError;
-  Set<String>? _pendingCreatedTaskIds;
+  String? _pendingTaskCreationRequestId;
   List<String>? _pendingCreatedTaskCriticalPathIds;
+  Set<String>? _pendingCriticalPathAddRequestIds;
   String? _pendingCreatedTaskIdForCriticalPaths;
-  Set<String>? _pendingCriticalPathIdsBeforeCreate;
+  String? _pendingCriticalPathCreateRequestId;
   int _handledTaskCreationOutcomeToken = 0;
   int _handledCriticalPathMutationOutcomeToken = 0;
 
@@ -179,8 +183,8 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (bloc == null) {
       return _buildModalShell(context, isSubmitting: false);
     }
-    return BlocConsumer<BaseCalendarBloc, CalendarState>.value(
-      value: bloc,
+    return BlocConsumer<BaseCalendarBloc, CalendarState>(
+      bloc: bloc,
       listener: _handleCalendarStateChanged,
       builder: (context, state) => _buildModalShell(
         context,
@@ -623,58 +627,29 @@ class _QuickAddModalState extends State<QuickAddModal>
     });
   }
 
-  String? _resolveCreatedTaskId(CalendarState state, Set<String> previousIds) {
-    final String? createdTaskId = state.lastCreatedTaskId;
-    if (createdTaskId != null) {
-      return createdTaskId;
-    }
-    final Set<String> difference = state.model.tasks.keys.toSet().difference(
-      previousIds,
-    );
-    if (difference.isEmpty) {
-      return null;
-    }
-    return difference.first;
-  }
-
-  String? _resolveCreatedCriticalPathId(
-    CalendarState state,
-    Set<String> previousIds,
-  ) {
-    final String? createdPathId = state.lastCreatedCriticalPathId;
-    if (createdPathId != null) {
-      return createdPathId;
-    }
-    final Set<String> difference = state.model.criticalPaths.keys
-        .toSet()
-        .difference(previousIds);
-    if (difference.isEmpty) {
-      return null;
-    }
-    return difference.first;
-  }
-
   Future<void> _handleCalendarStateChanged(
     BuildContext context,
     CalendarState state,
   ) async {
     if (state.taskCreationOutcomeToken != _handledTaskCreationOutcomeToken) {
       _handledTaskCreationOutcomeToken = state.taskCreationOutcomeToken;
-      final Set<String>? previousIds = _pendingCreatedTaskIds;
-      if (previousIds != null) {
-        _pendingCreatedTaskIds = null;
+      final String? requestId = _pendingTaskCreationRequestId;
+      if (requestId != null && state.taskCreationRequestId == requestId) {
+        _pendingTaskCreationRequestId = null;
         final String? error = state.taskCreationError;
         if (error != null) {
           _pendingCreatedTaskCriticalPathIds = null;
+          _pendingCriticalPathAddRequestIds = null;
           _pendingCreatedTaskIdForCriticalPaths = null;
           _setFormError(error);
           return;
         }
-        final String? createdTaskId = _resolveCreatedTaskId(state, previousIds);
+        final String? createdTaskId = state.lastCreatedTaskId;
         final List<String> pathIds =
             _pendingCreatedTaskCriticalPathIds ?? const <String>[];
         if (createdTaskId == null) {
           _pendingCreatedTaskCriticalPathIds = null;
+          _pendingCriticalPathAddRequestIds = null;
           _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
           return;
         }
@@ -686,18 +661,24 @@ class _QuickAddModalState extends State<QuickAddModal>
         final BaseCalendarBloc? bloc = _locateCalendarBloc();
         if (bloc == null) {
           _pendingCreatedTaskCriticalPathIds = null;
+          _pendingCriticalPathAddRequestIds = null;
           _pendingCreatedTaskIdForCriticalPaths = null;
           _setFormError(context.l10n.calendarCriticalPathUnavailable);
           return;
         }
+        final Set<String> requestIds = <String>{};
         for (final String pathId in pathIds) {
+          final String mutationRequestId = const Uuid().v4();
+          requestIds.add(mutationRequestId);
           bloc.add(
             CalendarEvent.criticalPathTaskAdded(
+              requestId: mutationRequestId,
               pathId: pathId,
               taskId: createdTaskId,
             ),
           );
         }
+        _pendingCriticalPathAddRequestIds = requestIds;
       }
     }
 
@@ -706,11 +687,12 @@ class _QuickAddModalState extends State<QuickAddModal>
       _handledCriticalPathMutationOutcomeToken =
           state.criticalPathMutationOutcomeToken;
 
-      final Set<String>? previousPathIds = _pendingCriticalPathIdsBeforeCreate;
-      if (previousPathIds != null) {
-        _pendingCriticalPathIdsBeforeCreate = null;
+      final String? createRequestId = _pendingCriticalPathCreateRequestId;
+      if (createRequestId != null &&
+          state.criticalPathMutationRequestId == createRequestId) {
+        _pendingCriticalPathCreateRequestId = null;
         final String? createdPathId = state.criticalPathMutationError == null
-            ? _resolveCreatedCriticalPathId(state, previousPathIds)
+            ? state.lastCreatedCriticalPathId
             : null;
         if (createdPathId != null) {
           _addQueuedCriticalPath(createdPathId);
@@ -718,35 +700,52 @@ class _QuickAddModalState extends State<QuickAddModal>
           _setFormError(context.l10n.calendarCriticalPathCreateFailed);
         }
       }
-    }
 
-    final String? pendingTaskId = _pendingCreatedTaskIdForCriticalPaths;
-    final List<String> pendingPathIds =
-        _pendingCreatedTaskCriticalPathIds ?? const <String>[];
-    if (pendingTaskId == null || pendingPathIds.isEmpty) {
-      return;
-    }
-    if (state.criticalPathMutationError != null) {
+      final String? mutationRequestId = state.criticalPathMutationRequestId;
+      final Set<String>? pendingRequestIds = _pendingCriticalPathAddRequestIds;
+      if (mutationRequestId == null ||
+          pendingRequestIds == null ||
+          !pendingRequestIds.contains(mutationRequestId)) {
+        return;
+      }
+      pendingRequestIds.remove(mutationRequestId);
+      if (state.criticalPathMutationError != null) {
+        _pendingCreatedTaskIdForCriticalPaths = null;
+        _pendingCreatedTaskCriticalPathIds = null;
+        _pendingCriticalPathAddRequestIds = null;
+        _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
+        return;
+      }
+      if (pendingRequestIds.isNotEmpty) {
+        return;
+      }
+      final String? pendingTaskId = _pendingCreatedTaskIdForCriticalPaths;
+      final List<String> pendingPathIds =
+          _pendingCreatedTaskCriticalPathIds ?? const <String>[];
+      if (pendingTaskId == null || pendingPathIds.isEmpty) {
+        return;
+      }
+      final bool addedToEveryPath = pendingPathIds.every((pathId) {
+        final CalendarCriticalPath? path = state.model.criticalPaths[pathId];
+        return path != null && path.taskIds.contains(pendingTaskId);
+      });
+      if (!addedToEveryPath) {
+        _pendingCreatedTaskIdForCriticalPaths = null;
+        _pendingCreatedTaskCriticalPathIds = null;
+        _pendingCriticalPathAddRequestIds = null;
+        _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
+        return;
+      }
       _pendingCreatedTaskIdForCriticalPaths = null;
       _pendingCreatedTaskCriticalPathIds = null;
-      _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
-      return;
+      _pendingCriticalPathAddRequestIds = null;
+      if (_queuedCriticalPathIds.isNotEmpty) {
+        setState(() {
+          _queuedCriticalPathIds.clear();
+        });
+      }
+      await _dismissModal();
     }
-    final bool addedToEveryPath = pendingPathIds.every((pathId) {
-      final CalendarCriticalPath? path = state.model.criticalPaths[pathId];
-      return path != null && path.taskIds.contains(pendingTaskId);
-    });
-    if (!addedToEveryPath) {
-      return;
-    }
-    _pendingCreatedTaskIdForCriticalPaths = null;
-    _pendingCreatedTaskCriticalPathIds = null;
-    if (_queuedCriticalPathIds.isNotEmpty) {
-      setState(() {
-        _queuedCriticalPathIds.clear();
-      });
-    }
-    await _dismissModal();
   }
 
   Future<void> _queueCriticalPathForDraft() async {
@@ -774,18 +773,12 @@ class _QuickAddModalState extends State<QuickAddModal>
         if (!mounted || name == null) {
           return null;
         }
-        final Set<String>? previousIds = _locateCalendarBloc()
-            ?.state
-            .model
-            .criticalPaths
-            .keys
-            .toSet();
-        if (previousIds == null) {
-          return null;
-        }
-        _pendingCriticalPathIdsBeforeCreate = previousIds;
+        _pendingCriticalPathCreateRequestId = const Uuid().v4();
         _locateCalendarBloc()?.add(
-          CalendarEvent.criticalPathCreated(name: name),
+          CalendarEvent.criticalPathCreated(
+            requestId: _pendingCriticalPathCreateRequestId!,
+            name: name,
+          ),
         );
         return null;
       },
@@ -806,7 +799,6 @@ class _QuickAddModalState extends State<QuickAddModal>
       _queuedCriticalPathIds,
     );
     final bool hasQueuedPaths = queuedPathIds.isNotEmpty;
-    final Set<String>? previousIds = bloc?.state.model.tasks.keys.toSet();
     if (hasQueuedPaths && bloc == null) {
       _setFormError(context.l10n.calendarCriticalPathUnavailable);
       return;
@@ -877,9 +869,11 @@ class _QuickAddModalState extends State<QuickAddModal>
       icsMeta: icsMeta,
     );
 
-    widget.onTaskAdded(task);
-    _pendingCreatedTaskIds = previousIds;
+    final String requestId = const Uuid().v4();
+    widget.onTaskAdded(task, requestId);
+    _pendingTaskCreationRequestId = requestId;
     _pendingCreatedTaskCriticalPathIds = hasQueuedPaths ? queuedPathIds : null;
+    _pendingCriticalPathAddRequestIds = null;
     _pendingCreatedTaskIdForCriticalPaths = null;
     if (bloc == null) {
       await _dismissModal();
@@ -1658,7 +1652,7 @@ Future<void> showQuickAddModal({
   required BuildContext context,
   DateTime? prefilledDateTime,
   String? prefilledText,
-  required void Function(CalendarTask task) onTaskAdded,
+  required void Function(CalendarTask task, String requestId) onTaskAdded,
   required LocationAutocompleteHelper locationHelper,
   String? initialValidationMessage,
   BaseCalendarBloc? Function()? locateCalendarBloc,

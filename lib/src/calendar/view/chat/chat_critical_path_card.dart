@@ -1,24 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_copy_sheet.dart';
 import 'package:axichat/src/calendar/view/tasks/fragment_card.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
-class ChatCalendarCriticalPathCard extends StatelessWidget {
+class ChatCalendarCriticalPathCard extends StatefulWidget {
   const ChatCalendarCriticalPathCard({
     super.key,
     required this.path,
@@ -45,16 +48,33 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   onCopyToPersonalCalendar;
 
   @override
+  State<ChatCalendarCriticalPathCard> createState() =>
+      _ChatCalendarCriticalPathCardState();
+}
+
+class _ChatCalendarCriticalPathCardState
+    extends State<ChatCalendarCriticalPathCard> {
+  String? _pendingImportRequestId;
+  Completer<bool>? _pendingImportCompleter;
+  int _handledImportOutcomeToken = 0;
+
+  @override
   Widget build(BuildContext context) {
-    return CalendarFragmentCard(
-      fragment: CalendarFragment.criticalPath(path: path, tasks: tasks),
-      footerDetails: footerDetails,
-      onTap: () => _handleCopy(context),
+    return BlocListener<ChatCalendarBloc, CalendarState>(
+      listener: _handleCalendarStateChanged,
+      child: CalendarFragmentCard(
+        fragment: CalendarFragment.criticalPath(
+          path: widget.path,
+          tasks: widget.tasks,
+        ),
+        footerDetails: widget.footerDetails,
+        onTap: () => _handleCopy(context),
+      ),
     );
   }
 
   Future<void> _handleCopy(BuildContext context) async {
-    if (!canAddToPersonal && !canAddToChat) {
+    if (!widget.canAddToPersonal && !widget.canAddToChat) {
       FeedbackSystem.showInfo(
         context,
         context.l10n.chatCriticalPathCopyUnavailableMessage,
@@ -65,10 +85,10 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final CalendarCriticalPathCopyDecision? decision =
         await showCalendarCriticalPathCopySheet(
           context: context,
-          path: path,
-          tasks: tasks,
-          canAddToPersonal: canAddToPersonal,
-          canAddToChat: canAddToChat,
+          path: widget.path,
+          tasks: widget.tasks,
+          canAddToPersonal: widget.canAddToPersonal,
+          canAddToChat: widget.canAddToChat,
         );
     if (decision == null) {
       return;
@@ -78,18 +98,19 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     }
 
     final CalendarModel importModel = _importModel();
-    final CalendarCriticalPath? importPath = importModel.criticalPaths[path.id];
+    final CalendarCriticalPath? importPath =
+        importModel.criticalPaths[widget.path.id];
     final Set<String> taskIds = <String>{}
       ..addAll(importPath?.taskIds ?? const <String>[]);
-    final onCopyToPersonalCalendar = this.onCopyToPersonalCalendar;
+    final onCopyToPersonalCalendar = widget.onCopyToPersonalCalendar;
     final bool canCopyToPersonal =
-        canAddToPersonal && onCopyToPersonalCalendar != null;
-    final bool canCopyToChat = canAddToChat;
+        widget.canAddToPersonal && onCopyToPersonalCalendar != null;
+    final bool canCopyToChat = widget.canAddToChat;
     bool didCopy = false;
     if (decision.addToPersonal && canCopyToPersonal) {
       final bool copied = await onCopyToPersonalCalendar(
         importModel,
-        path.id,
+        widget.path.id,
         taskIds,
       );
       didCopy = didCopy || copied;
@@ -101,8 +122,6 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
       final bool copied = await _copyCriticalPathToCalendar(
         bloc: context.read<ChatCalendarBloc>(),
         model: importModel,
-        pathId: path.id,
-        taskIds: taskIds,
       );
       didCopy = didCopy || copied;
     }
@@ -119,15 +138,17 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   }
 
   CalendarModel _importModel() {
-    final Set<String> availableIds = tasks.map((task) => task.id).toSet();
-    final List<String> orderedIds = path.taskIds
+    final Set<String> availableIds = widget.tasks
+        .map((task) => task.id)
+        .toSet();
+    final List<String> orderedIds = widget.path.taskIds
         .where(availableIds.contains)
         .toList(growable: false);
-    final CalendarCriticalPath resolvedPath = path.copyWith(
+    final CalendarCriticalPath resolvedPath = widget.path.copyWith(
       taskIds: orderedIds,
     );
     final Map<String, CalendarTask> taskMap = <String, CalendarTask>{
-      for (final task in tasks) task.id: task,
+      for (final task in widget.tasks) task.id: task,
     };
     final CalendarModel base = CalendarModel.empty();
     final CalendarModel withTasks = taskMap.isEmpty
@@ -139,14 +160,36 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   Future<bool> _copyCriticalPathToCalendar({
     required BaseCalendarBloc bloc,
     required CalendarModel model,
-    required String pathId,
-    required Set<String> taskIds,
   }) async {
-    bloc.add(CalendarEvent.modelImported(model: model));
-    return waitForCriticalPathTasks(
-      bloc: bloc,
-      pathId: pathId,
-      taskIds: taskIds,
-    );
+    final String requestId = const Uuid().v4();
+    final Completer<bool> completer = Completer<bool>();
+    _pendingImportRequestId = requestId;
+    _pendingImportCompleter = completer;
+    bloc.add(CalendarEvent.modelImported(requestId: requestId, model: model));
+    try {
+      return await completer.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      _pendingImportRequestId = null;
+      _pendingImportCompleter = null;
+      return false;
+    }
+  }
+
+  void _handleCalendarStateChanged(BuildContext _, CalendarState state) {
+    if (state.importOutcomeToken == _handledImportOutcomeToken) {
+      return;
+    }
+    _handledImportOutcomeToken = state.importOutcomeToken;
+    final String? requestId = _pendingImportRequestId;
+    final Completer<bool>? completer = _pendingImportCompleter;
+    if (requestId == null ||
+        completer == null ||
+        completer.isCompleted ||
+        state.importRequestId != requestId) {
+      return;
+    }
+    _pendingImportRequestId = null;
+    _pendingImportCompleter = null;
+    completer.complete(state.importError == null);
   }
 }

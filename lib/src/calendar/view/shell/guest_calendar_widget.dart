@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
@@ -15,7 +16,6 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/interop/calendar_share.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_experience_state.dart';
@@ -31,6 +31,7 @@ import 'package:axichat/src/calendar/view/grid/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
+import 'package:uuid/uuid.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({super.key});
@@ -349,16 +350,40 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
   bool _busy = false;
+  String? _pendingImportRequestId;
+  Completer<bool>? _pendingImportCompleter;
+  int _handledImportOutcomeToken = 0;
 
   @override
   Widget build(BuildContext context) {
     final bool hasCalendarData = widget.state.model.hasCalendarData;
-    return CalendarTransferMenuButton(
-      hasCalendarData: hasCalendarData,
-      onExport: _handleExportAll,
-      onImport: _handleImportCalendar,
-      busy: _busy,
+    return BlocListener<GuestCalendarBloc, CalendarState>(
+      listener: _handleCalendarStateChanged,
+      child: CalendarTransferMenuButton(
+        hasCalendarData: hasCalendarData,
+        onExport: _handleExportAll,
+        onImport: _handleImportCalendar,
+        busy: _busy,
+      ),
     );
+  }
+
+  void _handleCalendarStateChanged(BuildContext _, CalendarState state) {
+    if (state.importOutcomeToken == _handledImportOutcomeToken) {
+      return;
+    }
+    _handledImportOutcomeToken = state.importOutcomeToken;
+    final String? requestId = _pendingImportRequestId;
+    final Completer<bool>? completer = _pendingImportCompleter;
+    if (requestId == null ||
+        completer == null ||
+        completer.isCompleted ||
+        state.importRequestId != requestId) {
+      return;
+    }
+    _pendingImportRequestId = null;
+    _pendingImportCompleter = null;
+    completer.complete(state.importError == null);
   }
 
   Future<void> _handleExportAll() async {
@@ -453,17 +478,23 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
           return;
         }
         if (!mounted) return;
-        final CalendarModel mergedModel = context
-            .read<GuestCalendarBloc>()
-            .state
-            .model
-            .mergeWith(importedModel);
+        final String requestId = const Uuid().v4();
+        final Completer<bool> completer = Completer<bool>();
+        _pendingImportRequestId = requestId;
+        _pendingImportCompleter = completer;
         context.read<GuestCalendarBloc>().add(
-          CalendarEvent.modelImported(model: importedModel),
+          CalendarEvent.modelImported(
+            requestId: requestId,
+            model: importedModel,
+          ),
         );
-        final bool imported = await waitForCalendarChecksum(
-          bloc: context.read<GuestCalendarBloc>(),
-          checksum: mergedModel.checksum,
+        final bool imported = await completer.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            _pendingImportRequestId = null;
+            _pendingImportCompleter = null;
+            return false;
+          },
         );
         if (!mounted) {
           return;
@@ -491,14 +522,20 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!mounted) return;
-      final Set<String> taskIds = <String>{}
-        ..addAll(tasks.map((task) => task.id));
+      final String requestId = const Uuid().v4();
+      final Completer<bool> completer = Completer<bool>();
+      _pendingImportRequestId = requestId;
+      _pendingImportCompleter = completer;
       context.read<GuestCalendarBloc>().add(
-        CalendarEvent.tasksImported(tasks: tasks),
+        CalendarEvent.tasksImported(requestId: requestId, tasks: tasks),
       );
-      final bool imported = await waitForTasksInCalendar(
-        bloc: context.read<GuestCalendarBloc>(),
-        taskIds: taskIds,
+      final bool imported = await completer.future.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          _pendingImportRequestId = null;
+          _pendingImportCompleter = null;
+          return false;
+        },
       );
       if (!mounted) {
         return;

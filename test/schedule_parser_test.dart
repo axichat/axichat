@@ -1,4 +1,4 @@
-import 'package:axichat/src/calendar/utils/schedule_parser.dart';
+import 'package:axichat/src/calendar/task/schedule_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
