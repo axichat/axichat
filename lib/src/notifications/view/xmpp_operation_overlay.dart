@@ -675,11 +675,11 @@ String _resolveOperationLabel(
       l10n.xmppOperationPubSubSpamSuccess,
     XmppOperationLabelKey.pubSubSpamFailure =>
       l10n.xmppOperationPubSubSpamFailure,
-    XmppOperationLabelKey.pubSubEmailBlocklistStart =>
+    XmppOperationLabelKey.pubSubAddressBlockStart =>
       l10n.xmppOperationPubSubEmailBlocklistStart,
-    XmppOperationLabelKey.pubSubEmailBlocklistSuccess =>
+    XmppOperationLabelKey.pubSubAddressBlockSuccess =>
       l10n.xmppOperationPubSubEmailBlocklistSuccess,
-    XmppOperationLabelKey.pubSubEmailBlocklistFailure =>
+    XmppOperationLabelKey.pubSubAddressBlockFailure =>
       l10n.xmppOperationPubSubEmailBlocklistFailure,
     XmppOperationLabelKey.pubSubAvatarMetadataStart =>
       l10n.xmppOperationPubSubAvatarMetadataStart,

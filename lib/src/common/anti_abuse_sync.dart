@@ -30,8 +30,8 @@ class SpamSyncUpdate {
   final SyncOrigin origin;
 }
 
-class EmailBlocklistSyncUpdate {
-  const EmailBlocklistSyncUpdate({
+class AddressBlockSyncUpdate {
+  const AddressBlockSyncUpdate({
     required this.address,
     required this.blocked,
     required this.updatedAt,
@@ -45,3 +45,5 @@ class EmailBlocklistSyncUpdate {
   final String sourceId;
   final SyncOrigin origin;
 }
+
+typedef EmailBlocklistSyncUpdate = AddressBlockSyncUpdate;

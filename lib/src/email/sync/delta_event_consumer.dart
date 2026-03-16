@@ -4,7 +4,7 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';

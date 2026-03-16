@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
@@ -224,6 +225,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _emailAuthFailureSubscription = emailService.authFailureStream.listen(
         _handleEmailAuthFailure,
       );
+      _attachXmppAntiAbuseSubscriptions(emailService);
     }
     Future<void>(() async {
       await _restorePasswordSkippedMode();
@@ -292,6 +294,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   EmailProvisioningException? _lastEmailProvisioningError;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
+  StreamSubscription<SpamSyncUpdate>? _spamSyncSubscription;
+  StreamSubscription<EmailBlocklistSyncUpdate>? _addressBlockSyncSubscription;
   VoidCallback? _foregroundListener;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
@@ -322,12 +326,51 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (identical(_emailService, emailService)) return;
     await _emailAuthFailureSubscription?.cancel();
     _emailAuthFailureSubscription = null;
+    await _cancelXmppAntiAbuseSubscriptions();
     _emailService = emailService;
     if (emailService != null) {
       _emailAuthFailureSubscription = emailService.authFailureStream.listen(
         _handleEmailAuthFailure,
       );
+      _attachXmppAntiAbuseSubscriptions(emailService);
     }
+  }
+
+  void _attachXmppAntiAbuseSubscriptions(EmailService emailService) {
+    _spamSyncSubscription = _xmppService.spamSyncUpdateStream.listen((update) {
+      Future<void>(() async {
+        try {
+          await emailService.applySpamSyncUpdate(update);
+        } on Exception catch (error, stackTrace) {
+          _log.fine(
+            'Failed to apply spam sync update from XMPP stream.',
+            error,
+            stackTrace,
+          );
+        }
+      });
+    });
+    _addressBlockSyncSubscription = _xmppService.addressBlockSyncUpdateStream
+        .listen((update) {
+          Future<void>(() async {
+            try {
+              await emailService.applyEmailBlocklistSyncUpdate(update);
+            } on Exception catch (error, stackTrace) {
+              _log.fine(
+                'Failed to apply address block sync update from XMPP stream.',
+                error,
+                stackTrace,
+              );
+            }
+          });
+        });
+  }
+
+  Future<void> _cancelXmppAntiAbuseSubscriptions() async {
+    await _spamSyncSubscription?.cancel();
+    _spamSyncSubscription = null;
+    await _addressBlockSyncSubscription?.cancel();
+    _addressBlockSyncSubscription = null;
   }
 
   Future<void> resetEndpointConfig() async {
@@ -1359,6 +1402,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
+    await _cancelXmppAntiAbuseSubscriptions();
     if (_foregroundListener != null) {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;

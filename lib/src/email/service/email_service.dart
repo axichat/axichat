@@ -16,7 +16,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:logging/logging.dart';
@@ -44,7 +44,7 @@ import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 enum _EmailSyncSource {
@@ -383,7 +383,6 @@ class EmailService {
   EmailService({
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
-    XmppService? xmppService,
     EmailDeltaTransport? transport,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
@@ -402,7 +401,6 @@ class EmailService {
        _log = logger ?? Logger('EmailService'),
        _notificationService = notificationService,
        _messageService = messageService,
-       _xmppService = xmppService,
        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _transport =
         transport ??
@@ -432,7 +430,6 @@ class EmailService {
     };
     _transport.addEventListener(_eventListener);
     _listenerAttached = true;
-    _attachXmppSyncSubscriptions();
   }
 
   final CredentialStore _credentialStore;
@@ -444,55 +441,12 @@ class EmailService {
   bool _emailReadReceiptsEnabled;
   final NotificationService? _notificationService;
   final MessageService? _messageService;
-  final XmppService? _xmppService;
   final ForegroundTaskBridge? _foregroundBridge;
   AppLocalizations? _localizations;
-  StreamSubscription<SpamSyncUpdate>? _spamSyncSubscription;
-  StreamSubscription<EmailBlocklistSyncUpdate>? _emailBlocklistSyncSubscription;
   final _EmailCredentialRuntimeSession _credentialSession =
       _EmailCredentialRuntimeSession();
   final _EmailNotificationQueueSession _notificationQueue =
       _EmailNotificationQueueSession();
-
-  void _attachXmppSyncSubscriptions() {
-    final xmppService = _xmppService;
-    if (xmppService == null) {
-      return;
-    }
-    _subscribeXmppSyncStreams(xmppService);
-  }
-
-  void _subscribeXmppSyncStreams(XmppService xmppService) {
-    if (_spamSyncSubscription != null ||
-        _emailBlocklistSyncSubscription != null) {
-      return;
-    }
-    _spamSyncSubscription = xmppService.spamSyncUpdateStream.listen((
-      update,
-    ) async {
-      try {
-        await applySpamSyncUpdate(update);
-      } on Exception catch (error, stackTrace) {
-        _log.fine(
-          'Failed to apply spam sync update from XMPP stream.',
-          error,
-          stackTrace,
-        );
-      }
-    });
-    _emailBlocklistSyncSubscription = xmppService.emailBlocklistSyncUpdateStream
-        .listen((update) async {
-          try {
-            await applyEmailBlocklistSyncUpdate(update);
-          } on Exception catch (error, stackTrace) {
-            _log.fine(
-              'Failed to apply email blocklist sync update from XMPP stream.',
-              error,
-              stackTrace,
-            );
-          }
-        });
-  }
 
   AppLocalizations get _l10n =>
       _localizations ?? lookupAppLocalizations(const Locale('en'));
