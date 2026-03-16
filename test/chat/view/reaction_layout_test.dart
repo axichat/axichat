@@ -4,7 +4,7 @@
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

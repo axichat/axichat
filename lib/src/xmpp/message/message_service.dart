@@ -1386,9 +1386,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  Future<void> syncDraftsSnapshot() async {
+  Future<bool> syncDraftsSnapshot() async {
     if (_draftSnapshotInFlight) {
-      return;
+      return true;
     }
     _draftSnapshotInFlight = true;
     try {
@@ -1400,17 +1400,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         featureLabel: 'draft sync',
       );
       if (!decision.isAllowed) {
-        return;
+        return true;
       }
       final manager = _draftsManager;
       if (manager == null) {
-        return;
+        return true;
       }
       await manager.ensureNode();
       await manager.subscribe();
       final snapshot = await manager.fetchAllWithStatus();
       if (!snapshot.isSuccess) {
-        return;
+        return false;
       }
       await _ensureDraftSnapshotMetaLoaded();
       final snapshotTimestamp = DateTime.timestamp().toUtc();
@@ -1502,8 +1502,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
 
       await _flushPendingDraftSync();
+      return true;
     } on XmppAbortedException {
-      return;
+      return false;
     } finally {
       _draftSnapshotInFlight = false;
     }

@@ -20,9 +20,8 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
-import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
-import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
-import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
+import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
+import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
@@ -42,13 +41,15 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
-import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/storage/database.dart' hide DraftAttachmentRef;
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -2401,7 +2402,7 @@ class XmppService extends XmppBase
   }
 
   Future<void> ensureConnected({
-    ReconnectTrigger trigger = ReconnectTrigger.userAction,
+    ReconnectTrigger trigger = ReconnectTrigger.immediateRetry,
     Duration timeout = const Duration(seconds: 20),
   }) async {
     if (!hasConnectionSettings) return;

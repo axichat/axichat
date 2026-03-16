@@ -915,7 +915,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     return true;
   }
 
-  Future<void> refreshAvatarsForConversationIndex() async {
+  Future<bool> refreshAvatarsForConversationIndex() async {
     List<Chat> chats;
     try {
       chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
@@ -925,7 +925,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
         ),
       );
     } on XmppAbortedException {
-      return;
+      return false;
     }
     final directJids = <String>{};
     for (final chat in chats) {
@@ -939,6 +939,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       await _refreshConversationAvatars(directJids);
     }
     await refreshSelfAvatarIfNeeded(force: true);
+    return true;
   }
 
   Future<void> storeAvatarBytesForJid({

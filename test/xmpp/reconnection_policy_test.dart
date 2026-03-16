@@ -107,7 +107,9 @@ void main() {
       );
       async.flushMicrotasks();
 
-      fireAndForget(() => policy.requestReconnect(ReconnectTrigger.userAction));
+      fireAndForget(
+        () => policy.requestReconnect(ReconnectTrigger.immediateRetry),
+      );
       async.flushMicrotasks();
 
       expect(reconnectCalls, 1);
@@ -160,8 +162,8 @@ void main() {
       fireAndForget(() => policy.setShouldReconnect(true));
       fireAndForget(() async {
         await Future.wait([
-          policy.requestReconnect(ReconnectTrigger.userAction),
-          policy.requestReconnect(ReconnectTrigger.userAction),
+          policy.requestReconnect(ReconnectTrigger.immediateRetry),
+          policy.requestReconnect(ReconnectTrigger.immediateRetry),
         ]);
       });
 
@@ -181,13 +183,13 @@ void main() {
     });
 
     await policy.setShouldReconnect(true);
-    await policy.requestReconnect(ReconnectTrigger.userAction);
-    await policy.requestReconnect(ReconnectTrigger.userAction);
+    await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+    await policy.requestReconnect(ReconnectTrigger.immediateRetry);
 
     expect(reconnectCalls, 1);
 
     await policy.onSuccess();
-    await policy.requestReconnect(ReconnectTrigger.userAction);
+    await policy.requestReconnect(ReconnectTrigger.immediateRetry);
 
     expect(reconnectCalls, 2);
   });

@@ -346,7 +346,7 @@ class XmppConnectionSettings extends mox.ConnectionSettings {
 
 enum ReconnectTrigger {
   resume,
-  userAction,
+  immediateRetry,
   foregroundMigration,
   networkAvailable,
   autoFailure,
@@ -355,7 +355,7 @@ enum ReconnectTrigger {
 extension ReconnectTriggerBehavior on ReconnectTrigger {
   bool get shouldBypassBackoff => switch (this) {
     ReconnectTrigger.resume => true,
-    ReconnectTrigger.userAction => true,
+    ReconnectTrigger.immediateRetry => true,
     ReconnectTrigger.foregroundMigration => true,
     ReconnectTrigger.networkAvailable => true,
     ReconnectTrigger.autoFailure => false,
@@ -363,7 +363,7 @@ extension ReconnectTriggerBehavior on ReconnectTrigger {
 
   bool get shouldResetAttemptCounter => switch (this) {
     ReconnectTrigger.resume => true,
-    ReconnectTrigger.userAction => true,
+    ReconnectTrigger.immediateRetry => true,
     ReconnectTrigger.foregroundMigration => true,
     ReconnectTrigger.networkAvailable => true,
     ReconnectTrigger.autoFailure => false,

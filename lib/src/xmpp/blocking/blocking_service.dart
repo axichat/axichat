@@ -152,9 +152,9 @@ mixin BlockingService on XmppBase, BaseStreamService {
         getFunction: (db) => db.getAddressBlocks(),
       );
 
-  Future<void> syncSpamSnapshot() async {
+  Future<bool> syncSpamSnapshot() async {
     if (_spamSnapshotInFlight) {
-      return;
+      return true;
     }
     _spamSnapshotInFlight = true;
     try {
@@ -166,18 +166,18 @@ mixin BlockingService on XmppBase, BaseStreamService {
         featureLabel: 'spam sync',
       );
       if (!decision.isAllowed) {
-        return;
+        return true;
       }
       final manager = _spamManager;
       if (manager == null) {
-        return;
+        return true;
       }
       await manager.ensureNode();
       await manager.subscribe();
       await _flushPendingSpamSync();
       final snapshot = await manager.fetchAllWithStatus();
       if (!snapshot.isSuccess) {
-        return;
+        return false;
       }
       await _ensureSpamSnapshotMetaLoaded();
       final snapshotTimestamp = DateTime.timestamp().toUtc();
@@ -280,16 +280,17 @@ mixin BlockingService on XmppBase, BaseStreamService {
           remoteIds: remoteIds,
         );
       }
+      return true;
     } on XmppAbortedException {
-      return;
+      return false;
     } finally {
       _spamSnapshotInFlight = false;
     }
   }
 
-  Future<void> syncAddressBlockSnapshot() async {
+  Future<bool> syncAddressBlockSnapshot() async {
     if (_addressBlockSnapshotInFlight) {
-      return;
+      return true;
     }
     _addressBlockSnapshotInFlight = true;
     try {
@@ -301,18 +302,18 @@ mixin BlockingService on XmppBase, BaseStreamService {
         featureLabel: 'address block sync',
       );
       if (!decision.isAllowed) {
-        return;
+        return true;
       }
       final manager = _addressBlockManager;
       if (manager == null) {
-        return;
+        return true;
       }
       await manager.ensureNode();
       await manager.subscribe();
       await _flushPendingAddressBlockSync();
       final snapshot = await manager.fetchAllWithStatus();
       if (!snapshot.isSuccess) {
-        return;
+        return false;
       }
       await _ensureAddressBlockSnapshotMetaLoaded();
       final snapshotTimestamp = DateTime.timestamp().toUtc();
@@ -416,8 +417,9 @@ mixin BlockingService on XmppBase, BaseStreamService {
           remoteIds: remoteIds,
         );
       }
+      return true;
     } on XmppAbortedException {
-      return;
+      return false;
     } finally {
       _addressBlockSnapshotInFlight = false;
     }
