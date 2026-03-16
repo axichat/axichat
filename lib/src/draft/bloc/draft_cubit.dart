@@ -86,20 +86,17 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   DraftCubit({
     required MessageService messageService,
-    required DraftSyncService draftSyncService,
     EmailService? emailService,
   }) : _messageService = messageService,
-       _draftSyncService = draftSyncService,
        _emailService = emailService,
        super(const DraftsAvailable(items: null, visibleItems: null)) {
-    _draftsSubscription = _draftSyncService.draftsStream().listen((items) {
+    _draftsSubscription = _messageService.draftsStream().listen((items) {
       _items = items;
       emit(_stateForItems(items));
     });
   }
 
   final MessageService _messageService;
-  final DraftSyncService _draftSyncService;
   EmailService? _emailService;
   List<Draft>? _items;
   DraftSearchSnapshot _searchSnapshot = const DraftSearchSnapshot(
@@ -145,7 +142,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     List<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    return _draftSyncService.loadDraftAttachments(metadataIds);
+    return _messageService.loadDraftAttachments(metadataIds);
   }
 
   Future<Attachment> optimizeAttachment(Attachment attachment) async {
@@ -238,7 +235,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return true;
   }
 
-  Future<DraftSaveResult> saveDraft({
+  Future<Draft> saveDraft({
     required int? id,
     required List<String> jids,
     required String body,
@@ -247,7 +244,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     List<Attachment> attachments = const [],
     bool autoSave = false,
   }) async {
-    final result = await _draftSyncService.saveDraft(
+    final draft = await _messageService.saveDraft(
       id: id,
       jids: jids,
       body: body,
@@ -273,12 +270,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         autoSaved: autoSave,
       ),
     );
-    return result;
+    return draft;
   }
 
   Future<void> deleteDraft({required int id}) async {
     final draft = await _loadDraft(id);
-    await _draftSyncService.deleteDraft(id: id);
+    await _messageService.deleteDraft(id: id);
     try {
       await _clearCoreDraftForDraft(draft);
     } on Exception {
@@ -343,6 +340,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   Future<XmppDatabase> _loadDatabase() async {
     return _messageService.database;
+  }
+
+  Future<int> countDrafts() async {
+    return _messageService.countDrafts();
   }
 
   bool get _shouldUseCoreDraftFallback {

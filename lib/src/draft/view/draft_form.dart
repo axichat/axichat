@@ -11,7 +11,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
-import 'package:axichat/src/chat/view/pending_attachment_list.dart';
+import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
@@ -28,7 +28,7 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -225,10 +225,13 @@ class _DraftFormState extends State<DraftForm> {
         final String? selfJid = resolvedProfileJid.isNotEmpty
             ? resolvedProfileJid
             : null;
-        final selfIdentity = SelfIdentitySnapshot(
-          selfJid: selfJid,
-          avatarPath: profileState.avatarPath,
-          avatarLoading: profileState.avatarHydrating,
+        final selfIdentity = SelfAvatar(
+          jid: selfJid,
+          avatar: Avatar.tryParseOrNull(
+            path: profileState.avatarPath,
+            hash: null,
+          ),
+          hydrating: profileState.avatarHydrating,
         );
         return BlocBuilder<RosterCubit, RosterState>(
           bloc: locate<RosterCubit>(),
@@ -942,7 +945,8 @@ class _DraftFormState extends State<DraftForm> {
         .map((pending) => pending.id)
         .toList();
     final List<String> recipients = _recipientStrings();
-    final result = await context.read<DraftCubit>().saveDraft(
+    final draftCubit = context.read<DraftCubit>();
+    final draft = await draftCubit.saveDraft(
       id: id,
       jids: recipients,
       body: _bodyTextController.text,
@@ -951,6 +955,9 @@ class _DraftFormState extends State<DraftForm> {
       attachments: _currentAttachments(),
       autoSave: autoSave,
     );
+    final draftCount = !autoSave && wasNewDraft
+        ? await draftCubit.countDrafts()
+        : null;
     if (!mounted || saveEpoch != _saveEpoch) return;
     final int signature = _draftSignature(
       recipients: recipients,
@@ -960,30 +967,31 @@ class _DraftFormState extends State<DraftForm> {
       pendingAttachments: _pendingAttachments,
     );
     setState(() {
-      id = result.draftId;
+      id = draft.id;
       _lastSavedSignature = signature;
       _lastAutosaveAt = autoSave ? DateTime.now() : null;
     });
-    widget.onDraftSaved?.call(result.draftId);
+    widget.onDraftSaved?.call(draft.id);
     if (!autoSave &&
         wasNewDraft &&
-        result.draftCount >= draftSyncWarningThreshold) {
+        draftCount != null &&
+        draftCount >= draftSyncWarningThreshold) {
       ShadToaster.maybeOf(context)?.show(
         FeedbackToast.warning(
           message: context.l10n.draftLimitWarning(
             draftSyncMaxItems,
-            result.draftCount,
+            draftCount,
           ),
         ),
       );
     }
     await _applyAttachmentMetadataIds(
-      metadataIds: result.attachmentMetadataIds,
+      metadataIds: draft.attachmentMetadata.values,
       expectedAttachmentIds: attachmentIds,
     );
     if (!mounted) return;
     if (wasNewDraft && widget.attachmentMetadataIds.isNotEmpty) {
-      final Set<String> retainedMetadataIds = result.attachmentMetadataIds
+      final Set<String> retainedMetadataIds = draft.attachmentMetadata.values
           .toSet();
       final List<String> staleMetadataIds = widget.attachmentMetadataIds
           .where((metadataId) => !retainedMetadataIds.contains(metadataId))

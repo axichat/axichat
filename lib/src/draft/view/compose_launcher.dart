@@ -3,8 +3,8 @@
 
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/draft/view/compose_screen.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/foundation.dart';

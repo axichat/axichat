@@ -7,7 +7,7 @@ import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
+import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -1533,7 +1533,6 @@ class _AccessibilityChatScope extends StatelessWidget {
         return AccessibilityChatBloc(
           jid: chatJid,
           messageService: context.read<XmppService>(),
-          draftSyncService: context.read<XmppService>(),
           emailService: emailService,
           contacts: state.contacts,
           myJid: state.myJid,

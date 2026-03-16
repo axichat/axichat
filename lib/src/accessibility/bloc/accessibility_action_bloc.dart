@@ -19,10 +19,10 @@ class AccessibilityActionBloc
     extends Bloc<AccessibilityActionEvent, AccessibilityActionState> {
   AccessibilityActionBloc({
     required ChatsService chatsService,
-    required DraftSyncService draftSyncService,
+    required MessageService messageService,
     RosterService? rosterService,
   }) : _chatsService = chatsService,
-       _draftSyncService = draftSyncService,
+       _messageService = messageService,
        _rosterService = rosterService,
        _log = Logger('AccessibilityActionBloc'),
        super(const AccessibilityActionState.initial()) {
@@ -42,7 +42,7 @@ class AccessibilityActionBloc
     _chatSubscription = _chatsService.chatsStream().listen(
       (items) => add(AccessibilityDataUpdated(chats: items)),
     );
-    _draftSubscription = _draftSyncService.draftsStream().listen(
+    _draftSubscription = _messageService.draftsStream().listen(
       (items) => add(AccessibilityDataUpdated(drafts: items)),
     );
     if (_rosterService != null) {
@@ -56,7 +56,7 @@ class AccessibilityActionBloc
   }
 
   final ChatsService _chatsService;
-  final DraftSyncService _draftSyncService;
+  final MessageService _messageService;
   final RosterService? _rosterService;
   final Logger _log;
 
