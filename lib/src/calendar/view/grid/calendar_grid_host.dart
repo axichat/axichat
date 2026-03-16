@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
+import 'package:flutter/material.dart';
+
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_grid.dart';
+
+/// Shared CalendarGrid wrapper that wires the bloc callbacks for both guest
+/// and authenticated surfaces.
+class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
+  const CalendarGridHost({
+    super.key,
+    required this.state,
+    required this.onEvent,
+    required this.onEmptySlotTapped,
+    required this.onTaskDragEnd,
+    required this.onDragSessionStarted,
+    required this.onDragGlobalPositionChanged,
+    required this.onDragSessionEnded,
+    required this.cancelBucketHoverNotifier,
+    required this.nonGridDragRegionHoverNotifier,
+    required this.dragCompletionRevision,
+  });
+
+  final CalendarState state;
+  final ValueChanged<CalendarEvent> onEvent;
+  final void Function(DateTime date, Offset position) onEmptySlotTapped;
+  final void Function(CalendarTask task, DateTime date) onTaskDragEnd;
+  final VoidCallback onDragSessionStarted;
+  final ValueChanged<Offset> onDragGlobalPositionChanged;
+  final VoidCallback onDragSessionEnded;
+  final ValueNotifier<bool> cancelBucketHoverNotifier;
+  final ValueNotifier<bool> nonGridDragRegionHoverNotifier;
+  final ValueNotifier<int> dragCompletionRevision;
+
+  @override
+  Widget build(BuildContext context) {
+    return CalendarGrid<B>(
+      state: state,
+      onEmptySlotTapped: onEmptySlotTapped,
+      onTaskDragEnd: onTaskDragEnd,
+      onDateSelected: (date) => onEvent(CalendarEvent.dateSelected(date: date)),
+      onViewChanged: (view) => onEvent(CalendarEvent.viewChanged(view: view)),
+      focusRequest: state.pendingFocus,
+      onDragSessionStarted: onDragSessionStarted,
+      onDragGlobalPositionChanged: onDragGlobalPositionChanged,
+      onDragSessionEnded: onDragSessionEnded,
+      cancelBucketHoverNotifier: cancelBucketHoverNotifier,
+      nonGridDragRegionHoverNotifier: nonGridDragRegionHoverNotifier,
+      dragCompletionRevision: dragCompletionRevision,
+    );
+  }
+}

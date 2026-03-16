@@ -6,7 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
-import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';

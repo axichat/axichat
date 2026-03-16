@@ -7,7 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive_ce/hive.dart';
 
-import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'calendar_availability.dart';
 import 'calendar_collection.dart';
 import 'calendar_critical_path.dart';

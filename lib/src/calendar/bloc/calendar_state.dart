@@ -9,7 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
-import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'calendar_event.dart';
 
 part 'calendar_state.freezed.dart';
@@ -57,6 +57,16 @@ abstract class CalendarState with _$CalendarState {
     @Default(false) bool canRedo,
     TaskFocusRequest? pendingFocus,
     String? focusedCriticalPathId,
+    @Default(false) bool isTaskCreationSubmitting,
+    String? taskCreationError,
+    String? lastCreatedTaskId,
+    @Default(0) int taskCreationOutcomeToken,
+    @Default(false) bool isCriticalPathMutating,
+    String? criticalPathMutationError,
+    String? lastCreatedCriticalPathId,
+    String? lastCriticalPathTaskAddedPathId,
+    String? lastCriticalPathTaskAddedTaskId,
+    @Default(0) int criticalPathMutationOutcomeToken,
   }) = _CalendarState;
 
   factory CalendarState.initial() =>

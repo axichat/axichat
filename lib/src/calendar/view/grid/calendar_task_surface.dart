@@ -1,0 +1,583 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/tasks/resizable_task_widget.dart';
+import 'calendar_task_geometry.dart';
+import 'calendar_task_draggable.dart';
+// Completion checkbox intentionally omitted on scheduled grid items.
+
+typedef CalendarTaskContextMenuBuilderFactory =
+    TaskContextMenuBuilder? Function(ShadPopoverController controller);
+
+class CalendarTaskTileCallbacks {
+  const CalendarTaskTileCallbacks({
+    required this.onResizePreview,
+    required this.onResizeEnd,
+    required this.onResizePointerMove,
+    required this.onDragStarted,
+    required this.resolveDragOriginSlot,
+    required this.onDragUpdate,
+    required this.onDragEnded,
+    required this.onEnterSelectionMode,
+    required this.onToggleSelection,
+    required this.onTap,
+    this.onToggleCompletion,
+  });
+
+  final ValueChanged<CalendarTask> onResizePreview;
+  final ValueChanged<CalendarTask> onResizeEnd;
+  final ValueChanged<Offset> onResizePointerMove;
+  final VoidCallback onDragStarted;
+  final DateTime? Function(CalendarTask task) resolveDragOriginSlot;
+  final ValueChanged<DragUpdateDetails> onDragUpdate;
+  final ValueChanged<CalendarTask> onDragEnded;
+  final VoidCallback onEnterSelectionMode;
+  final VoidCallback onToggleSelection;
+  final void Function(CalendarTask task, Rect globalBounds)? onTap;
+  final void Function(CalendarTask task, bool completed)? onToggleCompletion;
+}
+
+class CalendarTaskEntryBindings {
+  CalendarTaskEntryBindings({
+    required this.isSelectionMode,
+    required this.isSelected,
+    required this.isPopoverOpen,
+    required this.splitPreviewAnimationDuration,
+    required this.contextMenuGroupId,
+    required this.contextMenuBuilderFactory,
+    required this.enableContextMenuLongPress,
+    required this.resizeHandleExtent,
+    required this.interactionController,
+    required this.cancelBucketHoverNotifier,
+    required this.callbacks,
+    required this.geometryProvider,
+    required this.globalRectProvider,
+    required this.stepHeight,
+    required this.minutesPerStep,
+    required this.hourHeight,
+    required this.viewportScrollOffsetProvider,
+    required this.addGeometryListener,
+    required this.removeGeometryListener,
+    required this.requiresLongPressToDrag,
+    required this.longPressToDragDelay,
+  });
+
+  final bool isSelectionMode;
+  final bool isSelected;
+  final bool isPopoverOpen;
+  final Duration splitPreviewAnimationDuration;
+  final ValueKey<String> contextMenuGroupId;
+  final CalendarTaskContextMenuBuilderFactory contextMenuBuilderFactory;
+  final bool enableContextMenuLongPress;
+  final double resizeHandleExtent;
+  final TaskInteractionController interactionController;
+  final ValueListenable<bool> cancelBucketHoverNotifier;
+  final CalendarTaskTileCallbacks callbacks;
+  final CalendarTaskGeometry? Function(String taskId) geometryProvider;
+  final Rect? Function(String taskId) globalRectProvider;
+  final double stepHeight;
+  final int minutesPerStep;
+  final double hourHeight;
+  final double Function()? viewportScrollOffsetProvider;
+  final void Function(VoidCallback listener) addGeometryListener;
+  final void Function(VoidCallback listener) removeGeometryListener;
+  final bool requiresLongPressToDrag;
+  final Duration longPressToDragDelay;
+}
+
+class CalendarTaskSurface extends StatefulWidget {
+  const CalendarTaskSurface({
+    super.key,
+    required this.task,
+    required this.isDayView,
+    required this.bindings,
+  });
+
+  final CalendarTask task;
+  final bool isDayView;
+  final CalendarTaskEntryBindings bindings;
+
+  @override
+  State<CalendarTaskSurface> createState() => _CalendarTaskSurfaceState();
+}
+
+class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
+  late final ShadPopoverController _menuController;
+  TaskInteractionController? _attachedController;
+  late final VoidCallback _controllerListener;
+  String? _lastDraggingTaskId;
+  late final VoidCallback _geometryListener;
+  CalendarTaskEntryBindings? _geometryBindings;
+  static const double _splitOverlayFallbackThreshold = 0.98;
+  static const double _minSideBySideGhostWidth = 36.0;
+
+  TaskInteractionController get _interactionController =>
+      widget.bindings.interactionController;
+
+  CalendarTaskTileCallbacks get _callbacks => widget.bindings.callbacks;
+
+  @override
+  void initState() {
+    super.initState();
+    _menuController = ShadPopoverController();
+    _controllerListener = () {
+      final String? nextId =
+          _interactionController.draggingTaskIdNotifier.value;
+      if (_lastDraggingTaskId == nextId || !mounted) {
+        return;
+      }
+      _lastDraggingTaskId = nextId;
+      _scheduleRebuild();
+    };
+    _geometryListener = () {
+      if (!mounted) {
+        return;
+      }
+      final CalendarTaskGeometry geometry = _resolveGeometry();
+      final double height = geometry.rect.height;
+      if (height.isFinite && height > 0) {
+        _interactionController.applyPendingPointerOffsetFraction(
+          taskId: widget.task.id,
+          height: height,
+        );
+      }
+      _scheduleRebuild();
+    };
+    _attachController(widget.bindings.interactionController);
+    _attachGeometryListener(widget.bindings);
+  }
+
+  @override
+  void dispose() {
+    _detachGeometryListener();
+    _attachedController?.draggingTaskIdNotifier.removeListener(
+      _controllerListener,
+    );
+    _menuController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarTaskSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bindings.interactionController !=
+        widget.bindings.interactionController) {
+      _attachController(widget.bindings.interactionController);
+    }
+    if (!identical(oldWidget.bindings, widget.bindings)) {
+      _attachGeometryListener(widget.bindings);
+    }
+  }
+
+  @visibleForTesting
+  ShadPopoverController get menuController => _menuController;
+
+  CalendarTaskGeometry _resolveGeometry() =>
+      widget.bindings.geometryProvider(widget.task.id) ??
+      CalendarTaskGeometry.empty;
+
+  void _attachController(TaskInteractionController controller) {
+    if (_attachedController == controller) {
+      return;
+    }
+    _attachedController?.draggingTaskIdNotifier.removeListener(
+      _controllerListener,
+    );
+    _attachedController = controller;
+    _lastDraggingTaskId = controller.draggingTaskIdNotifier.value;
+    controller.draggingTaskIdNotifier.addListener(_controllerListener);
+  }
+
+  void _attachGeometryListener(CalendarTaskEntryBindings bindings) {
+    if (identical(_geometryBindings, bindings)) {
+      return;
+    }
+    _detachGeometryListener();
+    _geometryBindings = bindings;
+    bindings.addGeometryListener(_geometryListener);
+  }
+
+  void _detachGeometryListener() {
+    final CalendarTaskEntryBindings? bindings = _geometryBindings;
+    if (bindings == null) {
+      return;
+    }
+    bindings.removeGeometryListener(_geometryListener);
+    _geometryBindings = null;
+  }
+
+  void _scheduleRebuild() {
+    if (!mounted) {
+      return;
+    }
+    final SchedulerBinding scheduler = SchedulerBinding.instance;
+    if (scheduler.schedulerPhase == SchedulerPhase.idle) {
+      setState(() {});
+      return;
+    }
+    scheduler.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final CalendarTask task = widget.task;
+    final CalendarTaskEntryBindings bindings = widget.bindings;
+
+    final TaskContextMenuBuilder? contextMenuBuilder = bindings
+        .contextMenuBuilderFactory(_menuController);
+
+    final CalendarTaskGeometry geometry = _resolveGeometry();
+    if (geometry.rect.width <= 0 || geometry.rect.height <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return ValueListenableBuilder<DragPreview?>(
+      valueListenable: _interactionController.preview,
+      builder: (context, preview, _) {
+        return ValueListenableBuilder<String?>(
+          valueListenable: _interactionController.dropHoverTaskId,
+          builder: (context, dropHoverTaskId, _) {
+            final bool isDraggingTask = _interactionController.isDraggingTask(
+              task,
+            );
+            final bool isHoverTarget = dropHoverTaskId == task.id;
+            final CalendarTask? previewTaskCandidate = _previewTaskCandidate(
+              preview: preview,
+              task: task,
+              isHoverTarget: isHoverTarget,
+            );
+            final bool showSplitPreview = previewTaskCandidate != null;
+            final bool allowNarrowing =
+                _interactionController.dragHasMoved &&
+                !_interactionController.isWidthDebounceActive;
+
+            final double width = geometry.rect.width;
+            final double height = geometry.rect.height;
+            final double primaryWidth = showSplitPreview && allowNarrowing
+                ? geometry.narrowedWidth
+                : width;
+
+            Widget buildBaseTask({required bool enableInteractions}) {
+              final resizable = ResizableTaskWidget(
+                key: ValueKey(task.id),
+                interactionController: _interactionController,
+                task: task,
+                onResizePreview: enableInteractions
+                    ? _callbacks.onResizePreview
+                    : null,
+                onResizeEnd: enableInteractions ? _callbacks.onResizeEnd : null,
+                onResizePointerMove: enableInteractions
+                    ? _callbacks.onResizePointerMove
+                    : null,
+                hourHeight: bindings.hourHeight,
+                stepHeight: bindings.stepHeight,
+                minutesPerStep: bindings.minutesPerStep,
+                viewportScrollOffsetProvider:
+                    bindings.viewportScrollOffsetProvider,
+                width: primaryWidth,
+                height: height,
+                isDayView: widget.isDayView,
+                isPopoverOpen: bindings.isPopoverOpen,
+                enableInteractions: enableInteractions,
+                isSelectionMode: bindings.isSelectionMode,
+                isSelected: bindings.isSelected,
+                contextMenuController: _menuController,
+                contextMenuGroupId: bindings.contextMenuGroupId,
+                contextMenuBuilder: contextMenuBuilder,
+                contextMenuLongPressEnabled:
+                    bindings.enableContextMenuLongPress,
+                resizeHandleExtent: bindings.resizeHandleExtent,
+                touchHoldDelay: bindings.longPressToDragDelay,
+                onToggleSelection: enableInteractions
+                    ? () {
+                        if (bindings.isSelectionMode &&
+                            bindings.isSelected &&
+                            _interactionController.isDraggingTask(task)) {
+                          _callbacks.onDragEnded(task);
+                        }
+                        if (bindings.isSelectionMode) {
+                          _callbacks.onToggleSelection();
+                        } else {
+                          _callbacks.onEnterSelectionMode();
+                        }
+                      }
+                    : null,
+                onTap: enableInteractions ? _callbacks.onTap : null,
+              );
+              return CalendarTaskDraggable(
+                task: task,
+                geometry: geometry,
+                resizeHandleExtent: bindings.resizeHandleExtent,
+                globalRectProvider: bindings.globalRectProvider,
+                interactionController: _interactionController,
+                onDragStarted: _callbacks.onDragStarted,
+                resolveDragOriginSlot: _callbacks.resolveDragOriginSlot,
+                onDragUpdate: _callbacks.onDragUpdate,
+                onDragEnded: _callbacks.onDragEnded,
+                snapshotBuilder: () => task.copyWith(),
+                feedbackBuilder: (context, dragTask, dragGeometry) =>
+                    _CalendarTaskDragFeedback(
+                      interactionController: _interactionController,
+                      task: dragTask,
+                      geometry: dragGeometry,
+                      bindings: bindings,
+                      baseHeight: height,
+                      isDayView: widget.isDayView,
+                    ),
+                enabled: enableInteractions,
+                childWhenDragging: const SizedBox.expand(),
+                requiresLongPress: bindings.requiresLongPressToDrag,
+                longPressDelay: bindings.longPressToDragDelay,
+                child: resizable,
+              );
+            }
+
+            Widget baseTask = buildBaseTask(enableInteractions: true);
+
+            if (isDraggingTask) {
+              return const SizedBox.expand();
+            }
+
+            if (previewTaskCandidate != null && !isDraggingTask) {
+              final double occupantWidth = math.min(
+                primaryWidth,
+                geometry.rect.width,
+              );
+              final double ghostWidth = math.max(
+                geometry.rect.width - occupantWidth,
+                0.0,
+              );
+              final bool widthAllowsSplit =
+                  ghostWidth >= _minSideBySideGhostWidth &&
+                  occupantWidth >= _minSideBySideGhostWidth;
+              final bool useSideBySide =
+                  widthAllowsSplit &&
+                  geometry.splitWidthFactor < _splitOverlayFallbackThreshold;
+
+              final Widget previewGhost = _CalendarTaskPreviewGhost(
+                interactionController: _interactionController,
+                task: previewTaskCandidate,
+                bindings: bindings,
+                height: height,
+                width: useSideBySide ? ghostWidth : width,
+                isDayView: widget.isDayView,
+                keySuffix: '-preview',
+              );
+
+              if (useSideBySide) {
+                final Widget occupant = SizedBox(
+                  width: occupantWidth,
+                  child: baseTask,
+                );
+                final Widget ghost = SizedBox(
+                  width: ghostWidth,
+                  child: IgnorePointer(
+                    child: Opacity(
+                      opacity: calendarSplitPreviewGhostOpacity,
+                      child: previewGhost,
+                    ),
+                  ),
+                );
+
+                baseTask = SizedBox.expand(
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        width: occupantWidth,
+                        child: occupant,
+                      ),
+                      Positioned(right: 0, width: ghostWidth, child: ghost),
+                    ],
+                  ),
+                );
+              } else {
+                baseTask = Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Opacity(
+                        opacity: calendarSplitPreviewBaseFadeOpacity,
+                        child: baseTask,
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Opacity(
+                          opacity: calendarSplitPreviewGhostOpacity,
+                          child: previewGhost,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+            }
+
+            final bool paintSplitBorder = showSplitPreview && !isDraggingTask;
+
+            final Widget paintedTask = AnimatedContainer(
+              duration: bindings.splitPreviewAnimationDuration,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(calendarEventRadius),
+                border: paintSplitBorder
+                    ? Border.all(
+                        color: calendarPrimaryColor.withValues(
+                          alpha: calendarSplitPreviewBorderOpacity,
+                        ),
+                        width: calendarBorderStroke * 2,
+                      )
+                    : null,
+              ),
+              child: baseTask,
+            );
+
+            return paintedTask;
+          },
+        );
+      },
+    );
+  }
+
+  CalendarTask? _previewTaskCandidate({
+    required DragPreview? preview,
+    required CalendarTask task,
+    required bool isHoverTarget,
+  }) {
+    final CalendarTask? dragging = _interactionController.draggingTaskSnapshot;
+    if (dragging == null) {
+      return null;
+    }
+    if (_interactionController.isDraggingTask(task)) {
+      return null;
+    }
+    if (isHoverTarget) {
+      return dragging;
+    }
+    if (preview == null) {
+      return null;
+    }
+    return _previewIntersectsTask(preview, task) ? dragging : null;
+  }
+
+  bool _previewIntersectsTask(DragPreview preview, CalendarTask task) {
+    final DateTime? taskStart = task.scheduledTime;
+    if (taskStart == null) {
+      return false;
+    }
+    final Duration duration = task.duration ?? const Duration(hours: 1);
+    final DateTime taskEnd = taskStart.add(duration);
+    final DateTime previewEnd = preview.start.add(preview.duration);
+    return preview.start.isBefore(taskEnd) && previewEnd.isAfter(taskStart);
+  }
+}
+
+class _CalendarTaskPreviewGhost extends StatelessWidget {
+  const _CalendarTaskPreviewGhost({
+    required this.interactionController,
+    required this.task,
+    required this.bindings,
+    required this.width,
+    required this.height,
+    required this.isDayView,
+    required this.keySuffix,
+  });
+
+  final TaskInteractionController interactionController;
+  final CalendarTask task;
+  final CalendarTaskEntryBindings bindings;
+  final double width;
+  final double height;
+  final bool isDayView;
+  final String keySuffix;
+
+  @override
+  Widget build(BuildContext context) {
+    return ResizableTaskWidget(
+      key: ValueKey('${task.id}$keySuffix'),
+      interactionController: interactionController,
+      task: task,
+      onResizePreview: null,
+      onResizeEnd: null,
+      hourHeight: bindings.hourHeight,
+      stepHeight: bindings.stepHeight,
+      minutesPerStep: bindings.minutesPerStep,
+      viewportScrollOffsetProvider: bindings.viewportScrollOffsetProvider,
+      width: width,
+      height: height,
+      isDayView: isDayView,
+      touchHoldDelay: bindings.longPressToDragDelay,
+      enableInteractions: false,
+      isSelectionMode: false,
+      isSelected: false,
+    );
+  }
+}
+
+class _CalendarTaskDragFeedback extends StatelessWidget {
+  const _CalendarTaskDragFeedback({
+    required this.interactionController,
+    required this.task,
+    required this.geometry,
+    required this.bindings,
+    required this.baseHeight,
+    required this.isDayView,
+  });
+
+  final TaskInteractionController interactionController;
+  final CalendarTask task;
+  final CalendarTaskGeometry geometry;
+  final CalendarTaskEntryBindings bindings;
+  final double baseHeight;
+  final bool isDayView;
+
+  @override
+  Widget build(BuildContext context) {
+    final double width = geometry.rect.width;
+    final double height = geometry.rect.height;
+    final Widget feedback = Material(
+      color: Colors.transparent,
+      child: ResizableTaskWidget(
+        key: ValueKey('${task.id}-drag-feedback'),
+        interactionController: interactionController,
+        task: task,
+        hourHeight: bindings.hourHeight,
+        stepHeight: bindings.stepHeight,
+        minutesPerStep: bindings.minutesPerStep,
+        viewportScrollOffsetProvider: bindings.viewportScrollOffsetProvider,
+        width: width,
+        height: height > 0 ? height : baseHeight,
+        isDayView: isDayView,
+        touchHoldDelay: bindings.longPressToDragDelay,
+        enableInteractions: false,
+        isSelectionMode: false,
+        isSelected: false,
+      ),
+    );
+    return ValueListenableBuilder<bool>(
+      valueListenable: bindings.cancelBucketHoverNotifier,
+      builder: (context, hovering, child) {
+        return AnimatedOpacity(
+          duration: calendarTaskSplitPreviewAnimationDuration,
+          opacity: hovering ? 0.45 : 0.8,
+          child: child,
+        );
+      },
+      child: feedback,
+    );
+  }
+}

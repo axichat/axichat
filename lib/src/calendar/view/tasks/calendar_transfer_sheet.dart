@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
+import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
+import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
+
+Future<CalendarExportFormat?> showCalendarExportFormatSheet(
+  BuildContext context, {
+  String? title,
+}) {
+  final resolvedTitle = title ?? context.l10n.calendarExportChooseFormat;
+  final BuildContext modalContext = context.calendarModalContext;
+  return showAdaptiveBottomSheet<CalendarExportFormat>(
+    context: modalContext,
+    useSafeArea: true,
+    showDragHandle: true,
+    surfacePadding: EdgeInsets.zero,
+    builder: (sheetContext) {
+      return AxiSheetScaffold.scroll(
+        header: AxiSheetHeader(
+          title: Text(resolvedTitle),
+          onClose: () => Navigator.of(sheetContext).maybePop(),
+        ),
+        children: [
+          _CalendarTransferOption(
+            icon: LucideIcons.calendarCheck2,
+            label: sheetContext.l10n.calendarExportFormatIcsTitle,
+            description: sheetContext.l10n.calendarExportFormatIcsSubtitle,
+            onTap: () =>
+                Navigator.of(sheetContext).pop(CalendarExportFormat.ics),
+          ),
+          SizedBox(height: sheetContext.spacing.s),
+          _CalendarTransferOption(
+            icon: LucideIcons.braces,
+            label: sheetContext.l10n.calendarExportFormatJsonTitle,
+            description: sheetContext.l10n.calendarExportFormatJsonSubtitle,
+            onTap: () =>
+                Navigator.of(sheetContext).pop(CalendarExportFormat.json),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+class _CalendarTransferOption extends StatelessWidget {
+  const _CalendarTransferOption({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final iconBackground = colors.muted.withValues(alpha: 0.12);
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: spacing.xxs),
+      child: AxiListTile(
+        leading: DecoratedBox(
+          decoration: BoxDecoration(
+            color: iconBackground,
+            borderRadius: context.radius,
+            border: Border.all(color: colors.border),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(spacing.s),
+            child: Icon(
+              icon,
+              size: context.sizing.menuItemIconSize,
+              color: context.colorScheme.primary,
+            ),
+          ),
+        ),
+        title: label,
+        subtitle: description,
+        onTap: onTap,
+      ),
+    );
+  }
+}

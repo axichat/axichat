@@ -3,6 +3,8 @@
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 
 part 'calendar_acl.freezed.dart';
 part 'calendar_acl.g.dart';
@@ -27,6 +29,32 @@ const String _calendarChatRoleVisitorLabel = 'Visitor';
 const String _calendarChatRoleParticipantLabel = 'Participant';
 const String _calendarChatRoleModeratorLabel = 'Moderator';
 const String _calendarChatRoleNoneLabel = 'None';
+const int _calendarChatRoleRankNone = 0;
+const int _calendarChatRoleRankVisitor = 1;
+const int _calendarChatRoleRankParticipant = 2;
+const int _calendarChatRoleRankModerator = 3;
+
+const Map<CalendarChatRole, int> _calendarChatRoleRank =
+    <CalendarChatRole, int>{
+      CalendarChatRole.none: _calendarChatRoleRankNone,
+      CalendarChatRole.visitor: _calendarChatRoleRankVisitor,
+      CalendarChatRole.participant: _calendarChatRoleRankParticipant,
+      CalendarChatRole.moderator: _calendarChatRoleRankModerator,
+    };
+
+const CalendarChatAcl _calendarAclForDirectChat = CalendarChatAcl(
+  read: CalendarChatRole.participant,
+  write: CalendarChatRole.participant,
+  manage: CalendarChatRole.participant,
+  delete: CalendarChatRole.participant,
+);
+
+const CalendarChatAcl _calendarAclForGroupChat = CalendarChatAcl(
+  read: CalendarChatRole.visitor,
+  write: CalendarChatRole.participant,
+  manage: CalendarChatRole.moderator,
+  delete: CalendarChatRole.moderator,
+);
 
 @HiveType(typeId: _calendarChatRoleTypeId)
 enum CalendarChatRole {
@@ -57,6 +85,10 @@ enum CalendarChatRole {
     _calendarChatRoleModeratorValue => CalendarChatRole.moderator,
     _ => CalendarChatRole.none,
   };
+
+  int get rank => _calendarChatRoleRank[this]!;
+
+  bool allows(CalendarChatRole required) => rank >= required.rank;
 }
 
 extension CalendarChatRoleLabelX on CalendarChatRole {
@@ -65,6 +97,23 @@ extension CalendarChatRoleLabelX on CalendarChatRole {
     CalendarChatRole.participant => _calendarChatRoleParticipantLabel,
     CalendarChatRole.moderator => _calendarChatRoleModeratorLabel,
     CalendarChatRole.none => _calendarChatRoleNoneLabel,
+  };
+}
+
+extension ChatTypeCalendarAclX on ChatType {
+  CalendarChatAcl get calendarDefaultAcl => switch (this) {
+    ChatType.groupChat => _calendarAclForGroupChat,
+    ChatType.chat => _calendarAclForDirectChat,
+    ChatType.note => _calendarAclForDirectChat,
+  };
+}
+
+extension OccupantRoleCalendarChatRoleX on OccupantRole {
+  CalendarChatRole get calendarChatRole => switch (this) {
+    OccupantRole.moderator => CalendarChatRole.moderator,
+    OccupantRole.participant => CalendarChatRole.participant,
+    OccupantRole.visitor => CalendarChatRole.visitor,
+    OccupantRole.none => CalendarChatRole.none,
   };
 }
 

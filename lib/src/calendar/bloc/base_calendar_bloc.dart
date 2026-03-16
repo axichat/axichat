@@ -20,9 +20,9 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
-import 'package:axichat/src/calendar/utils/nl_parser_service.dart';
-import 'package:axichat/src/calendar/utils/nl_schedule_adapter.dart';
-import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/calendar/task/nl_parser_service.dart';
+import 'package:axichat/src/calendar/task/nl_schedule_adapter.dart';
+import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
@@ -133,6 +133,8 @@ abstract class BaseCalendarBloc
       ListQueue<_CalendarUndoSnapshot>();
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
   int _focusSequence = 0;
+  int _taskCreationOutcomeSequence = 0;
+  int _criticalPathMutationOutcomeSequence = 0;
   static final CalendarLinkedTaskRegistry _linkedTaskRegistry =
       CalendarLinkedTaskRegistry.instance;
   static final Map<String, Set<String>> _linkedTaskSuppression =
@@ -536,7 +538,14 @@ abstract class BaseCalendarBloc
         );
       }
 
-      emit(state.copyWith(isLoading: true, error: null));
+      emit(
+        state.copyWith(
+          isLoading: true,
+          error: null,
+          isTaskCreationSubmitting: true,
+          taskCreationError: null,
+        ),
+      );
 
       _recordUndoSnapshot();
 
@@ -595,11 +604,19 @@ abstract class BaseCalendarBloc
       ).copyWith(modifiedAt: now);
 
       final updatedModel = state.model.addTask(task);
-      emitModel(updatedModel, emit, isLoading: false);
+      emitModel(
+        updatedModel,
+        emit,
+        isLoading: false,
+        isTaskCreationSubmitting: false,
+        taskCreationError: null,
+        lastCreatedTaskId: task.id,
+        taskCreationOutcomeToken: _nextTaskCreationOutcomeToken(),
+      );
 
       await onTaskAdded(task);
     } catch (error) {
-      await _handleError(error, 'Failed to add task', emit);
+      _emitTaskCreationError(error, 'Failed to add task', emit);
     }
   }
 
@@ -619,7 +636,14 @@ abstract class BaseCalendarBloc
         );
       }
 
-      emit(state.copyWith(isLoading: true, error: null));
+      emit(
+        state.copyWith(
+          isLoading: true,
+          error: null,
+          isTaskCreationSubmitting: true,
+          taskCreationError: null,
+        ),
+      );
 
       _recordUndoSnapshot();
 
@@ -1481,7 +1505,7 @@ abstract class BaseCalendarBloc
 
       await onTaskAdded(task);
     } catch (error) {
-      await _handleError(error, 'Failed to add quick task', emit);
+      _emitTaskCreationError(error, 'Failed to add quick task', emit);
     }
   }
 
@@ -2464,6 +2488,13 @@ abstract class BaseCalendarBloc
           'Path name cannot be empty',
         );
       }
+      emit(
+        state.copyWith(
+          isCriticalPathMutating: true,
+          criticalPathMutationError: null,
+          error: null,
+        ),
+      );
       _recordUndoSnapshot();
       final DateTime now = _now();
       final CalendarCriticalPath path = CalendarCriticalPath.create(
@@ -2491,11 +2522,20 @@ abstract class BaseCalendarBloc
             ? path.id
             : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: shouldFocus,
+        isCriticalPathMutating: false,
+        criticalPathMutationError: null,
+        lastCreatedCriticalPathId: path.id,
+        criticalPathMutationOutcomeToken:
+            _nextCriticalPathMutationOutcomeToken(),
       );
       final createdPath = updatedModel.criticalPaths[path.id]!;
       await onCriticalPathAdded(createdPath);
     } catch (error) {
-      await _handleError(error, 'Failed to create critical path', emit);
+      _emitCriticalPathMutationError(
+        error,
+        'Failed to create critical path',
+        emit,
+      );
     }
   }
 
@@ -2588,6 +2628,13 @@ abstract class BaseCalendarBloc
         return;
       }
 
+      emit(
+        state.copyWith(
+          isCriticalPathMutating: true,
+          criticalPathMutationError: null,
+          error: null,
+        ),
+      );
       _recordUndoSnapshot();
       final CalendarModel updatedModel = state.model.addTaskToCriticalPath(
         pathId: path.id,
@@ -2599,11 +2646,21 @@ abstract class BaseCalendarBloc
         emit,
         focusedCriticalPathId: state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
+        isCriticalPathMutating: false,
+        criticalPathMutationError: null,
+        lastCriticalPathTaskAddedPathId: path.id,
+        lastCriticalPathTaskAddedTaskId: task.baseId,
+        criticalPathMutationOutcomeToken:
+            _nextCriticalPathMutationOutcomeToken(),
       );
       final updatedPath = updatedModel.criticalPaths[path.id]!;
       await onCriticalPathUpdated(updatedPath);
     } catch (error) {
-      await _handleError(error, 'Failed to add task to critical path', emit);
+      _emitCriticalPathMutationError(
+        error,
+        'Failed to add task to critical path',
+        emit,
+      );
     }
   }
 
@@ -3150,6 +3207,16 @@ abstract class BaseCalendarBloc
     Set<String>? selectedTaskIds,
     String? focusedCriticalPathId,
     bool focusedCriticalPathSpecified = false,
+    bool? isTaskCreationSubmitting,
+    String? taskCreationError,
+    String? lastCreatedTaskId,
+    int? taskCreationOutcomeToken,
+    bool? isCriticalPathMutating,
+    String? criticalPathMutationError,
+    String? lastCreatedCriticalPathId,
+    String? lastCriticalPathTaskAddedPathId,
+    String? lastCriticalPathTaskAddedTaskId,
+    int? criticalPathMutationOutcomeToken,
   }) {
     final String? targetFocus = focusedCriticalPathSpecified
         ? focusedCriticalPathId
@@ -3181,6 +3248,27 @@ abstract class BaseCalendarBloc
       canUndo: _undoStack.isNotEmpty,
       canRedo: _redoStack.isNotEmpty,
       focusedCriticalPathId: normalizedFocus,
+      isTaskCreationSubmitting:
+          isTaskCreationSubmitting ?? state.isTaskCreationSubmitting,
+      taskCreationError: taskCreationError ?? state.taskCreationError,
+      lastCreatedTaskId: lastCreatedTaskId ?? state.lastCreatedTaskId,
+      taskCreationOutcomeToken:
+          taskCreationOutcomeToken ?? state.taskCreationOutcomeToken,
+      isCriticalPathMutating:
+          isCriticalPathMutating ?? state.isCriticalPathMutating,
+      criticalPathMutationError:
+          criticalPathMutationError ?? state.criticalPathMutationError,
+      lastCreatedCriticalPathId:
+          lastCreatedCriticalPathId ?? state.lastCreatedCriticalPathId,
+      lastCriticalPathTaskAddedPathId:
+          lastCriticalPathTaskAddedPathId ??
+          state.lastCriticalPathTaskAddedPathId,
+      lastCriticalPathTaskAddedTaskId:
+          lastCriticalPathTaskAddedTaskId ??
+          state.lastCriticalPathTaskAddedTaskId,
+      criticalPathMutationOutcomeToken:
+          criticalPathMutationOutcomeToken ??
+          state.criticalPathMutationOutcomeToken,
     );
     emit(nextState);
     _pendingReminderSync = _runReminderSync(
@@ -3197,6 +3285,60 @@ abstract class BaseCalendarBloc
     await _reminderController?.syncWithTasks(
       model.tasks.values,
       dayEvents: model.dayEvents.values,
+    );
+  }
+
+  int _nextTaskCreationOutcomeToken() {
+    _taskCreationOutcomeSequence += 1;
+    return _taskCreationOutcomeSequence;
+  }
+
+  int _nextCriticalPathMutationOutcomeToken() {
+    _criticalPathMutationOutcomeSequence += 1;
+    return _criticalPathMutationOutcomeSequence;
+  }
+
+  void _emitTaskCreationError(
+    Object error,
+    String defaultMessage,
+    Emitter<CalendarState> emit,
+  ) {
+    final String errorMessage = error is CalendarException
+        ? error.message
+        : '$defaultMessage: $error';
+    logError(errorMessage, error);
+    emit(
+      state.copyWith(
+        isLoading: false,
+        error: errorMessage,
+        isTaskCreationSubmitting: false,
+        taskCreationError: errorMessage,
+        lastCreatedTaskId: null,
+        taskCreationOutcomeToken: _nextTaskCreationOutcomeToken(),
+      ),
+    );
+  }
+
+  void _emitCriticalPathMutationError(
+    Object error,
+    String defaultMessage,
+    Emitter<CalendarState> emit,
+  ) {
+    final String errorMessage = error is CalendarException
+        ? error.message
+        : '$defaultMessage: $error';
+    logError(errorMessage, error);
+    emit(
+      state.copyWith(
+        error: errorMessage,
+        isCriticalPathMutating: false,
+        criticalPathMutationError: errorMessage,
+        lastCreatedCriticalPathId: null,
+        lastCriticalPathTaskAddedPathId: null,
+        lastCriticalPathTaskAddedTaskId: null,
+        criticalPathMutationOutcomeToken:
+            _nextCriticalPathMutationOutcomeToken(),
+      ),
     );
   }
 
