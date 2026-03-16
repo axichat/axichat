@@ -349,21 +349,23 @@ const String _guestCalendarExportFilePrefix = 'axichat_guest_calendar';
 class _GuestTransferMenuState extends State<_GuestTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
-  bool _busy = false;
+  bool _exporting = false;
   String? _pendingImportRequestId;
-  Completer<bool>? _pendingImportCompleter;
+  int? _pendingImportTaskCount;
+  bool _pendingImportIsFullModel = false;
   int _handledImportOutcomeToken = 0;
 
   @override
   Widget build(BuildContext context) {
     final bool hasCalendarData = widget.state.model.hasCalendarData;
+    final bool busy = _exporting || widget.state.isLoading;
     return BlocListener<GuestCalendarBloc, CalendarState>(
       listener: _handleCalendarStateChanged,
       child: CalendarTransferMenuButton(
         hasCalendarData: hasCalendarData,
         onExport: _handleExportAll,
         onImport: _handleImportCalendar,
-        busy: _busy,
+        busy: busy,
       ),
     );
   }
@@ -374,22 +376,37 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     }
     _handledImportOutcomeToken = state.importOutcomeToken;
     final String? requestId = _pendingImportRequestId;
-    final Completer<bool>? completer = _pendingImportCompleter;
-    if (requestId == null ||
-        completer == null ||
-        completer.isCompleted ||
-        state.importRequestId != requestId) {
+    if (requestId == null || state.importRequestId != requestId) {
       return;
     }
     _pendingImportRequestId = null;
-    _pendingImportCompleter = null;
-    completer.complete(state.importError == null);
+    final int? taskCount = _pendingImportTaskCount;
+    final bool importedFullModel = _pendingImportIsFullModel;
+    _pendingImportTaskCount = null;
+    _pendingImportIsFullModel = false;
+    if (state.importError != null) {
+      FeedbackSystem.showError(context, context.l10n.calendarGuestImportFailed);
+      return;
+    }
+    if (importedFullModel) {
+      FeedbackSystem.showSuccess(
+        context,
+        context.l10n.calendarGuestImportSuccess,
+      );
+      return;
+    }
+    if (taskCount != null) {
+      FeedbackSystem.showSuccess(
+        context,
+        context.l10n.calendarGuestImportTasksSuccess(taskCount),
+      );
+    }
   }
 
   Future<void> _handleExportAll() async {
-    if (_busy) return;
+    if (_exporting || widget.state.isLoading) return;
     final l10n = context.l10n;
-    setState(() => _busy = true);
+    setState(() => _exporting = true);
     try {
       final model = widget.state.model;
       if (!model.hasCalendarData) {
@@ -431,13 +448,12 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         l10n.calendarGuestExportFailed(error.toString()),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
   Future<void> _handleImportCalendar() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+    if (_exporting || widget.state.isLoading) return;
     try {
       final shouldImport = await confirm(
         context,
@@ -479,36 +495,14 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         }
         if (!mounted) return;
         final String requestId = const Uuid().v4();
-        final Completer<bool> completer = Completer<bool>();
         _pendingImportRequestId = requestId;
-        _pendingImportCompleter = completer;
+        _pendingImportTaskCount = null;
+        _pendingImportIsFullModel = true;
         context.read<GuestCalendarBloc>().add(
           CalendarEvent.modelImported(
             requestId: requestId,
             model: importedModel,
           ),
-        );
-        final bool imported = await completer.future.timeout(
-          const Duration(seconds: 2),
-          onTimeout: () {
-            _pendingImportRequestId = null;
-            _pendingImportCompleter = null;
-            return false;
-          },
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!imported) {
-          FeedbackSystem.showError(
-            context,
-            context.l10n.calendarGuestImportFailed,
-          );
-          return;
-        }
-        FeedbackSystem.showSuccess(
-          context,
-          context.l10n.calendarGuestImportSuccess,
         );
         return;
       }
@@ -523,33 +517,11 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
       }
       if (!mounted) return;
       final String requestId = const Uuid().v4();
-      final Completer<bool> completer = Completer<bool>();
       _pendingImportRequestId = requestId;
-      _pendingImportCompleter = completer;
+      _pendingImportTaskCount = tasks.length;
+      _pendingImportIsFullModel = false;
       context.read<GuestCalendarBloc>().add(
         CalendarEvent.tasksImported(requestId: requestId, tasks: tasks),
-      );
-      final bool imported = await completer.future.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () {
-          _pendingImportRequestId = null;
-          _pendingImportCompleter = null;
-          return false;
-        },
-      );
-      if (!mounted) {
-        return;
-      }
-      if (!imported) {
-        FeedbackSystem.showError(
-          context,
-          context.l10n.calendarGuestImportFailed,
-        );
-        return;
-      }
-      FeedbackSystem.showSuccess(
-        context,
-        context.l10n.calendarGuestImportTasksSuccess(tasks.length),
       );
     } catch (error) {
       if (!mounted) return;
@@ -557,8 +529,6 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         context,
         context.l10n.calendarGuestImportError(error.toString()),
       );
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 }

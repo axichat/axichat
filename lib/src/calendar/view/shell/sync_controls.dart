@@ -80,15 +80,17 @@ class CalendarTransferMenu extends StatefulWidget {
 class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
+  bool _exporting = false;
   String? _pendingImportRequestId;
-  Completer<bool>? _pendingImportCompleter;
+  int? _pendingImportTaskCount;
+  bool _pendingImportIsFullModel = false;
   int _handledImportOutcomeToken = 0;
 
   CalendarState get state => widget.state;
 
   @override
   Widget build(BuildContext context) {
-    final bool disabled = state.isSyncing;
+    final bool disabled = state.isSyncing || state.isLoading || _exporting;
     final bool hasCalendarData = state.model.hasCalendarData;
     return BlocListener<CalendarBloc, CalendarState>(
       listener: _handleCalendarStateChanged,
@@ -110,16 +112,34 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
     }
     _handledImportOutcomeToken = state.importOutcomeToken;
     final String? requestId = _pendingImportRequestId;
-    final Completer<bool>? completer = _pendingImportCompleter;
-    if (requestId == null ||
-        completer == null ||
-        completer.isCompleted ||
-        state.importRequestId != requestId) {
+    if (requestId == null || state.importRequestId != requestId) {
       return;
     }
     _pendingImportRequestId = null;
-    _pendingImportCompleter = null;
-    completer.complete(state.importError == null);
+    final int? taskCount = _pendingImportTaskCount;
+    final bool importedFullModel = _pendingImportIsFullModel;
+    _pendingImportTaskCount = null;
+    _pendingImportIsFullModel = false;
+    if (state.importError != null) {
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarTransferImportFailed,
+      );
+      return;
+    }
+    if (importedFullModel) {
+      FeedbackSystem.showSuccess(
+        context,
+        context.l10n.calendarTransferImportSuccess,
+      );
+      return;
+    }
+    if (taskCount != null) {
+      FeedbackSystem.showSuccess(
+        context,
+        context.l10n.calendarTransferImportTasksSuccess(taskCount),
+      );
+    }
   }
 
   Future<void> _handleExportAll() async {
@@ -137,8 +157,14 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       FeedbackSystem.showInfo(context, l10n.calendarTransferNoDataExport);
       return;
     }
+    setState(() => _exporting = true);
     final format = await showCalendarExportFormatSheet(context);
-    if (!mounted || format == null) return;
+    if (!mounted || format == null) {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
+      return;
+    }
     try {
       final file = format == CalendarExportFormat.json
           ? await _transferService.exportModel(model: model)
@@ -163,6 +189,10 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         context,
         l10n.calendarTransferExportFailed(error.toString()),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
     }
   }
 
@@ -203,31 +233,15 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         }
         if (!mounted) return;
         final String requestId = const Uuid().v4();
-        final Completer<bool> completer = Completer<bool>();
         _pendingImportRequestId = requestId;
-        _pendingImportCompleter = completer;
+        _pendingImportTaskCount = null;
+        _pendingImportIsFullModel = true;
         context.read<CalendarBloc>().add(
           CalendarEvent.modelImported(
             requestId: requestId,
             model: importedModel,
           ),
         );
-        final bool imported = await completer.future.timeout(
-          const Duration(seconds: 2),
-          onTimeout: () {
-            _pendingImportRequestId = null;
-            _pendingImportCompleter = null;
-            return false;
-          },
-        );
-        if (!mounted) {
-          return;
-        }
-        if (!imported) {
-          FeedbackSystem.showError(context, l10n.calendarTransferImportFailed);
-          return;
-        }
-        FeedbackSystem.showSuccess(context, l10n.calendarTransferImportSuccess);
         return;
       }
       final tasks = result.tasks;
@@ -238,30 +252,11 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       }
       if (!mounted) return;
       final String requestId = const Uuid().v4();
-      final Completer<bool> completer = Completer<bool>();
       _pendingImportRequestId = requestId;
-      _pendingImportCompleter = completer;
+      _pendingImportTaskCount = tasks.length;
+      _pendingImportIsFullModel = false;
       context.read<CalendarBloc>().add(
         CalendarEvent.tasksImported(requestId: requestId, tasks: tasks),
-      );
-      final bool imported = await completer.future.timeout(
-        const Duration(seconds: 2),
-        onTimeout: () {
-          _pendingImportRequestId = null;
-          _pendingImportCompleter = null;
-          return false;
-        },
-      );
-      if (!mounted) {
-        return;
-      }
-      if (!imported) {
-        FeedbackSystem.showError(context, l10n.calendarTransferImportFailed);
-        return;
-      }
-      FeedbackSystem.showSuccess(
-        context,
-        l10n.calendarTransferImportTasksSuccess(tasks.length),
       );
     } catch (error) {
       if (!mounted) return;
