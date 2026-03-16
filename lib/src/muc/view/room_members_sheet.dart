@@ -11,7 +11,7 @@ import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart'
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_sheet_header.dart';
@@ -353,9 +353,13 @@ class _RoomAvatarSection extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           HydratedAxiAvatar(
-            jid: roomJid,
+            avatar: AvatarPresentation.avatar(
+              identifier: roomJid,
+              colorSeed: roomJid,
+              avatarPath: avatarPath,
+              loading: false,
+            ),
             size: avatarSize,
-            avatarPath: avatarPath,
           ),
           if (loading)
             IgnorePointer(
@@ -699,9 +703,13 @@ class _MemberTileState extends State<_MemberTile> {
       ),
     );
     final avatar = HydratedAxiAvatar(
-      jid: avatarKey,
+      avatar: AvatarPresentation.avatar(
+        identifier: avatarKey,
+        colorSeed: avatarKey,
+        avatarPath: widget.avatarPath,
+        loading: false,
+      ),
       size: sizing.iconButtonSize,
-      avatarPath: widget.avatarPath,
     );
     final actionSpecs = <_MemberActionSpec>[
       if (widget.directChatJid != null)
@@ -1276,7 +1284,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final String? selfIdentityJid = resolvedProfileJid.isNotEmpty
         ? resolvedProfileJid
         : null;
-    final selfIdentity = SelfIdentitySnapshot(
+    final selfIdentity = SelfAvatar(
       selfJid: selfIdentityJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
       avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,

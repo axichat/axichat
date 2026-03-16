@@ -12,7 +12,7 @@ import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -103,7 +103,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final String? selfJid = resolvedProfileJid.isNotEmpty
         ? resolvedProfileJid
         : null;
-    final selfIdentity = SelfIdentitySnapshot(
+    final selfIdentity = SelfAvatar(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
       avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,

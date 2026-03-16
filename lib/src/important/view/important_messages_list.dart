@@ -2,9 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
-import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
-import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
+import 'package:axichat/src/chat/view/timeline/message/bubble_surface.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';

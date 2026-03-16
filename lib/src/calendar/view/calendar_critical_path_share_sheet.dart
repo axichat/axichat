@@ -14,7 +14,7 @@ import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -143,7 +143,7 @@ class _CalendarCriticalPathShareSheetState
     final String? selfJid = resolvedProfileJid.isNotEmpty
         ? resolvedProfileJid
         : null;
-    final selfIdentity = SelfIdentitySnapshot(
+    final selfIdentity = SelfAvatar(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
       avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,

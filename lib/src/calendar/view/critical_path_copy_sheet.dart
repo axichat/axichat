@@ -6,7 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
-import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
+import 'package:axichat/src/calendar/view/fragment_card.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
