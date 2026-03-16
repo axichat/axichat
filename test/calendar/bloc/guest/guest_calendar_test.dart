@@ -54,8 +54,12 @@ void main() {
     blocTest<GuestCalendarBloc, CalendarState>(
       'taskAdded inserts a new task',
       build: () => bloc,
-      act: (bloc) =>
-          bloc.add(const CalendarEvent.taskAdded(title: 'Guest task')),
+      act: (bloc) => bloc.add(
+        const CalendarEvent.taskAdded(
+          requestId: 'guest-task-added',
+          title: 'Guest task',
+        ),
+      ),
       expect: () => [
         isA<CalendarState>().having(
           (state) => state.isLoading,
