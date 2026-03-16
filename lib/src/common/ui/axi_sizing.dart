@@ -42,6 +42,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.progressIndicatorSize,
     required this.progressIndicatorStrokeWidth,
     required this.progressIndicatorBarHeight,
+    required this.statusDotSize,
     required this.profileCompactMaxWidth,
     required this.profileWideSidebarMinWidth,
     required this.profileWideSidebarMaxWidth,
@@ -86,6 +87,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double progressIndicatorSize;
   final double progressIndicatorStrokeWidth;
   final double progressIndicatorBarHeight;
+  final double statusDotSize;
   final double profileCompactMaxWidth;
   final double profileWideSidebarMinWidth;
   final double profileWideSidebarMaxWidth;
@@ -131,6 +133,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? progressIndicatorSize,
     double? progressIndicatorStrokeWidth,
     double? progressIndicatorBarHeight,
+    double? statusDotSize,
     double? profileCompactMaxWidth,
     double? profileWideSidebarMinWidth,
     double? profileWideSidebarMaxWidth,
@@ -188,6 +191,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
           progressIndicatorStrokeWidth ?? this.progressIndicatorStrokeWidth,
       progressIndicatorBarHeight:
           progressIndicatorBarHeight ?? this.progressIndicatorBarHeight,
+      statusDotSize: statusDotSize ?? this.statusDotSize,
       profileCompactMaxWidth:
           profileCompactMaxWidth ?? this.profileCompactMaxWidth,
       profileWideSidebarMinWidth:
@@ -247,6 +251,7 @@ const AxiSizing axiSizing = AxiSizing(
   progressIndicatorSize: 16,
   progressIndicatorStrokeWidth: 2,
   progressIndicatorBarHeight: 8,
+  statusDotSize: 8,
   profileCompactMaxWidth: 500,
   profileWideSidebarMinWidth: 340,
   profileWideSidebarMaxWidth: 460,

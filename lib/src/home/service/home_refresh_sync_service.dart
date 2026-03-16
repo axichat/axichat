@@ -5,8 +5,8 @@ import 'dart:async';
 
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
-import 'package:axichat/src/xmpp/bookmarks_manager.dart';
-import 'package:axichat/src/xmpp/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:logging/logging.dart';
 
@@ -326,7 +326,7 @@ class HomeRefreshSyncService {
     _throwIfSyncAborted(epoch);
     await _xmppService.syncSpamSnapshot();
     _throwIfSyncAborted(epoch);
-    await _xmppService.syncEmailBlocklistSnapshot();
+    await _xmppService.syncAddressBlockSnapshot();
     _throwIfSyncAborted(epoch);
   }
 

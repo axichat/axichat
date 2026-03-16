@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-part of 'package:axichat/src/home_screen.dart';
+part of 'package:axichat/src/home/view/home_screen.dart';
 
 enum _HomeDemoPhase { idle, triggered }
 
@@ -317,7 +317,7 @@ class _TransportStatusChips extends StatelessWidget {
             : connectivityState.emailEnabled;
         final indicator = Align(
           alignment: Alignment.centerLeft,
-          child: SessionCapabilityIndicators(
+          child: ConnectionStatusIndicators(
             xmppState: connectionState,
             emailState: sessionEmailState,
             emailEnabled: emailEnabled,
@@ -1133,10 +1133,16 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
               final bool shakeSchedule = dragHintActive;
               final bool shakeTasks = dragHintActive;
               final avatar = HydratedAxiAvatar(
-                jid: profile.jid,
+                avatar: AvatarPresentation.avatar(
+                  label: profile.jid,
+                  colorSeed: profile.jid,
+                  avatar: m.Avatar.tryParseOrNull(
+                    path: profile.avatarPath,
+                    hash: null,
+                  ),
+                  loading: profile.avatarHydrating,
+                ),
                 subscription: m.Subscription.both,
-                avatarPath: profile.avatarPath,
-                loading: profile.avatarHydrating,
                 presence: null,
                 status: null,
                 active: false,
@@ -1504,10 +1510,13 @@ class _ProfileRailItem extends StatelessWidget {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         final avatar = HydratedAxiAvatar(
-          jid: state.jid,
+          avatar: AvatarPresentation.avatar(
+            label: state.jid,
+            colorSeed: state.jid,
+            avatar: m.Avatar.tryParseOrNull(path: state.avatarPath, hash: null),
+            loading: state.avatarHydrating,
+          ),
           subscription: m.Subscription.both,
-          avatarPath: state.avatarPath,
-          loading: state.avatarHydrating,
           presence: null,
           status: null,
           active: false,

@@ -62,6 +62,7 @@ export 'display_time_since.dart';
 export 'dynamic_inline_text.dart';
 export 'fade_scale_dialog.dart';
 export 'in_bounds_fade_scale.dart';
+export 'inline_details.dart';
 export 'jid_input.dart';
 export 'package:axichat/src/common/address_tools.dart';
 export 'link_action_dialog.dart';
