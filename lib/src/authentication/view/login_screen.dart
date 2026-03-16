@@ -213,9 +213,8 @@ class _LoginScreenState extends State<LoginScreen>
     }
     final storedAvatar =
         xmppService.cachedSelfAvatar ?? await xmppService.getOwnAvatar();
-    if (storedAvatar == null || storedAvatar.isEmpty) return;
-    final path = storedAvatar.path?.trim();
-    if (path == null || path.isEmpty) return;
+    if (storedAvatar == null) return;
+    final path = storedAvatar.path;
     final bytes = await xmppService.loadAvatarBytes(path);
     if (bytes == null || bytes.isEmpty || !mounted) return;
     final safeBytes = await sanitizeAvatarBytes(bytes);

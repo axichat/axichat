@@ -261,7 +261,7 @@ class _ChatScaffoldBody extends StatelessWidget {
   final bool personalCalendarAvailable;
   final String? currentUserId;
   final String? selfXmppJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final String? selfAvatarPath;
   final String? myOccupantJid;
   final String? selfNick;

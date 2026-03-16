@@ -705,7 +705,21 @@ class Contact extends Equatable implements Insertable<Contact> {
     return bareAddressOrNull(resolvedAddress);
   }
 
-  String? get effectiveAvatarPath => chat?.effectiveAvatarPath;
+  String? get effectiveAvatarPath {
+    final currentChat = chat;
+    if (currentChat == null) {
+      return null;
+    }
+    final primary = currentChat.avatarPath?.trim();
+    if (primary != null && primary.isNotEmpty) {
+      return primary;
+    }
+    final contact = currentChat.contactAvatarPath?.trim();
+    if (contact != null && contact.isNotEmpty) {
+      return contact;
+    }
+    return null;
+  }
 
   String get jid {
     final value = resolvedAddress;
@@ -991,142 +1005,6 @@ extension ChatTransportExtension on Chat {
   }
 }
 
-enum ChatAvatarKind { avatar, appIcon }
-
-final class ChatAvatarData extends Equatable {
-  const ChatAvatarData.appIcon()
-    : kind = ChatAvatarKind.appIcon,
-      identifier = null,
-      colorSeed = null,
-      avatarPath = null,
-      loading = false;
-
-  const ChatAvatarData.avatar({
-    required this.identifier,
-    required this.colorSeed,
-    required this.avatarPath,
-    required this.loading,
-  }) : kind = ChatAvatarKind.avatar;
-
-  final ChatAvatarKind kind;
-  final String? identifier;
-  final String? colorSeed;
-  final String? avatarPath;
-  final bool loading;
-
-  bool get isAppIcon => kind == ChatAvatarKind.appIcon;
-
-  @override
-  List<Object?> get props => [kind, identifier, colorSeed, avatarPath, loading];
-}
-
-extension ChatAvatarExtension on Chat {
-  bool isSelfAvatarChat(String? selfJid) {
-    return remoteJid.sameBare(selfJid?.trim());
-  }
-
-  String? get effectiveAvatarPath {
-    final primary = avatarPath?.trim();
-    if (primary != null && primary.isNotEmpty) {
-      return primary;
-    }
-    final contact = contactAvatarPath?.trim();
-    if (contact != null && contact.isNotEmpty) {
-      return contact;
-    }
-    return null;
-  }
-
-  String get avatarIdentifier {
-    final displayName = contactDisplayName?.trim();
-    if (displayName?.isNotEmpty == true) {
-      return displayName!;
-    }
-    final titleText = title.trim();
-    if (titleText.isNotEmpty) {
-      return titleText;
-    }
-    final address = emailAddress?.trim();
-    if (address?.isNotEmpty == true) {
-      return address!;
-    }
-    final contact = contactJid?.trim();
-    if (contact?.isNotEmpty == true) {
-      return contact!;
-    }
-    return remoteJid;
-  }
-
-  String get avatarColorSeed {
-    final address = emailAddress?.trim();
-    if (address?.isNotEmpty == true) {
-      return address!;
-    }
-    final fromAddress = emailFromAddress?.trim();
-    if (fromAddress?.isNotEmpty == true) {
-      return fromAddress!;
-    }
-    final contact = contactJid?.trim();
-    if (contact?.isNotEmpty == true) {
-      return contact!;
-    }
-    final remote = remoteJid.trim();
-    if (remote.isNotEmpty) {
-      return remote;
-    }
-    return avatarIdentifier;
-  }
-
-  String? resolvedAvatarPath({
-    String? selfJid,
-    String? selfAvatarPath,
-    String? avatarPathOverride,
-  }) {
-    final overridePath = avatarPathOverride?.trim();
-    if (overridePath != null && overridePath.isNotEmpty) {
-      return overridePath;
-    }
-    final resolvedSelfAvatarPath = selfAvatarPath?.trim();
-    if (isSelfAvatarChat(selfJid) &&
-        resolvedSelfAvatarPath != null &&
-        resolvedSelfAvatarPath.isNotEmpty) {
-      return resolvedSelfAvatarPath;
-    }
-    return effectiveAvatarPath;
-  }
-
-  bool resolvedAvatarLoading({
-    String? selfJid,
-    required bool selfAvatarLoading,
-  }) {
-    return isSelfAvatarChat(selfJid) && selfAvatarLoading;
-  }
-
-  ChatAvatarData avatarData({
-    String? selfJid,
-    String? selfAvatarPath,
-    bool selfAvatarLoading = false,
-    String? avatarPathOverride,
-  }) {
-    if (isAxichatWelcomeThread) {
-      return const ChatAvatarData.appIcon();
-    }
-    return ChatAvatarData.avatar(
-      identifier: avatarIdentifier,
-      colorSeed: avatarColorSeed,
-      avatarPath: resolvedAvatarPath(
-        selfJid: selfJid,
-        selfAvatarPath: selfAvatarPath,
-        avatarPathOverride: avatarPathOverride,
-      ),
-      loading: resolvedAvatarLoading(
-        selfJid: selfJid,
-        selfAvatarLoading: selfAvatarLoading,
-      ),
-    );
-  }
-}
-
 extension ChatLabelExtension on Chat {
   String get displayName {
     final display = contactDisplayName?.trim();
@@ -1241,6 +1119,8 @@ sealed class EmailBlocklistEntry
   }
 }
 
+typedef AddressBlockEntry = EmailBlocklistEntry;
+
 @UseRowClass(EmailBlocklistEntry)
 class EmailBlocklist extends Table {
   TextColumn get address => text()();
@@ -1278,6 +1158,8 @@ sealed class EmailSpamEntry
     if (sourceId != null) 'source_id': Variable<String>(sourceId!),
   };
 }
+
+typedef SpamEntry = EmailSpamEntry;
 
 @UseRowClass(EmailSpamEntry)
 class EmailSpamlist extends Table {

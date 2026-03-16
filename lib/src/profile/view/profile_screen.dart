@@ -4,7 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_data.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
@@ -691,10 +691,13 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
               alignment: Alignment.center,
               children: [
                 HydratedAxiAvatar(
-                  avatarData: AvatarData.avatar(
-                    identifier: widget.jid,
+                  avatar: AvatarPresentation.avatar(
+                    label: widget.jid,
                     colorSeed: widget.jid,
-                    avatarPath: widget.avatarPath,
+                    avatar: Avatar.tryParseOrNull(
+                      path: widget.avatarPath,
+                      hash: null,
+                    ),
                     loading: widget.loading,
                   ),
                   subscription: Subscription.both,

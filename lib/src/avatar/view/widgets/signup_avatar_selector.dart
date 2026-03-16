@@ -129,9 +129,8 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                         ? AxiAvatar(
                             key: ValueKey(_previewVersion),
                             avatar: AvatarPresentation.avatar(
-                              identifier: displayJid,
+                              label: displayJid,
                               colorSeed: displayJid,
-                              avatarPath: null,
                               loading: false,
                             ),
                             size: avatarSize,

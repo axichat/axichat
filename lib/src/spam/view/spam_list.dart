@@ -112,9 +112,12 @@ class _SpamListBody extends StatelessWidget {
         ? resolvedProfileJid
         : null;
     final selfIdentity = SelfAvatar(
-      selfJid: selfJid,
-      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
+      jid: selfJid,
+      avatar: Avatar.tryParseOrNull(
+        path: context.watch<ProfileCubit>().state.avatarPath,
+        hash: null,
+      ),
+      hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     if (items.isEmpty) {
       return Center(

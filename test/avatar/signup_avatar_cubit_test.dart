@@ -111,7 +111,7 @@ class _ImmediateSignupAvatarPipeline extends AvatarPipeline {
       );
 
   @override
-  Future<Avatar> buildFromTemplate({
+  Future<EditableAvatar> buildFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,
@@ -119,7 +119,7 @@ class _ImmediateSignupAvatarPipeline extends AvatarPipeline {
     double cropSide = 100000.0,
   }) async {
     final payloadBytes = Uint8List.fromList(template.id.codeUnits);
-    return Avatar(
+    return EditableAvatar(
       source: AvatarSource.template,
       payload: AvatarUploadPayload(
         bytes: payloadBytes,

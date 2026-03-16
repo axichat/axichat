@@ -162,7 +162,7 @@ class _ChatComposerSection extends StatelessWidget {
   final int composerMinLines;
   final int composerMaxLines;
   final String? selfJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final TextEditingController subjectController;
   final FocusNode subjectFocusNode;
   final TextEditingController textController;

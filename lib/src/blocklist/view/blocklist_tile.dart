@@ -7,6 +7,7 @@ import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -29,9 +30,9 @@ class BlocklistTile extends StatelessWidget {
             : avatarPathsByJid?[normalizedJid];
         final avatar = HydratedAxiAvatar(
           avatar: AvatarPresentation.avatar(
-            identifier: entry.address,
+            label: entry.address,
             colorSeed: entry.address,
-            avatarPath: avatarPath,
+            avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
             loading: false,
           ),
         );

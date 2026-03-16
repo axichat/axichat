@@ -8,7 +8,7 @@ import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
@@ -766,6 +766,39 @@ abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
       (update(table)..whereSamePrimaryKey(data)).write(data);
 
   Future<void> deleteOne(covariant Object value);
+}
+
+extension AddressBlockXmppDatabase on XmppDatabase {
+  Stream<List<AddressBlockEntry>> watchAddressBlocks() => watchEmailBlocklist();
+
+  Future<List<AddressBlockEntry>> getAddressBlocks() => getEmailBlocklist();
+
+  Future<AddressBlockEntry?> getAddressBlockEntry(String address) =>
+      getEmailBlocklistEntry(address);
+
+  Future<void> addAddressBlock(
+    String address, {
+    DateTime? blockedAt,
+    String? sourceId,
+  }) => addEmailBlock(address, blockedAt: blockedAt, sourceId: sourceId);
+
+  Future<void> removeAddressBlock(String address) => removeEmailBlock(address);
+}
+
+extension SpamXmppDatabase on XmppDatabase {
+  Stream<List<SpamEntry>> watchSpamlist() => watchEmailSpamlist();
+
+  Future<List<SpamEntry>> getSpamlist() => getEmailSpamlist();
+
+  Future<SpamEntry?> getSpamEntry(String address) => getEmailSpamEntry(address);
+
+  Future<void> addSpam(
+    String address, {
+    DateTime? flaggedAt,
+    String? sourceId,
+  }) => addEmailSpam(address, flaggedAt: flaggedAt, sourceId: sourceId);
+
+  Future<void> removeSpam(String address) => removeEmailSpam(address);
 }
 
 @DriftAccessor(tables: [Messages])

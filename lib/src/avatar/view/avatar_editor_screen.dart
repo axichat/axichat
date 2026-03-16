@@ -333,10 +333,13 @@ class _AvatarCenterStage extends StatelessWidget {
                 )
               : HydratedAxiAvatar(
                   avatar: AvatarPresentation.avatar(
-                    identifier: profile.jid,
+                    label: profile.jid,
                     colorSeed: profile.jid,
-                    avatarPath: previewBytes == null
-                        ? profile.avatarPath
+                    avatar: previewBytes == null
+                        ? Avatar.tryParseOrNull(
+                            path: profile.avatarPath,
+                            hash: null,
+                          )
                         : null,
                     loading: false,
                   ),

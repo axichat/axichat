@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -129,11 +130,24 @@ class _DraftsListBody extends StatelessWidget {
             final normalizedJid = item.jids[0].normalizedJidKey;
             final resolvedKey = normalizedJid ?? item.jids[0].toLowerCase();
             leadingAvatar = HydratedAxiAvatar(
-              jid: item.jids[0],
-              avatarPath: avatarByJid[resolvedKey],
+              avatar: AvatarPresentation.avatar(
+                label: item.jids[0],
+                colorSeed: item.jids[0],
+                avatar: Avatar.tryParseOrNull(
+                  path: avatarByJid[resolvedKey],
+                  hash: null,
+                ),
+                loading: false,
+              ),
             );
           } else {
-            leadingAvatar = AxiAvatar(jid: recipients.toString());
+            leadingAvatar = AxiAvatar(
+              avatar: AvatarPresentation.avatar(
+                label: recipients.toString(),
+                colorSeed: recipients.toString(),
+                loading: false,
+              ),
+            );
           }
           return ListItemPadding(
             padding: listItemPadding,

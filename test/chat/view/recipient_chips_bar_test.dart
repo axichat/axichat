@@ -1,4 +1,4 @@
-import 'package:axichat/src/avatar/self_avatar_state.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/ui/recipient_chips_bar.dart';
 import 'package:axichat/src/email/models/fan_out_models.dart';
@@ -20,7 +20,7 @@ void main() {
           recipients: const [],
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (target) => added = target,
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -50,7 +50,7 @@ void main() {
           recipients: [recipient],
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (key) => toggledKey = key,
@@ -96,7 +96,7 @@ void main() {
           recipients: recipients,
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (key) => removedKey = key,
           onRecipientToggled: (_) {},
@@ -130,7 +130,7 @@ void main() {
           recipients: [recipient],
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (key) => removedKey = key,
           onRecipientToggled: (key) => toggledKey = key,
@@ -161,7 +161,7 @@ void main() {
           latestStatuses: const {
             'casesensitive@example.com': FanOutRecipientState.failed,
           },
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -194,7 +194,7 @@ void main() {
             ),
           ],
           latestStatuses: const {},
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -225,7 +225,7 @@ void main() {
             ),
           ],
           latestStatuses: const {},
-          selfIdentity: const SelfAvatarState(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfAvatar(),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},

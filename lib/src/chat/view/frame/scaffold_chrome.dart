@@ -297,7 +297,7 @@ class _ChatScaffoldLayout extends StatelessWidget {
   final List<AppBarActionItem> navigationActions;
   final int navigationActionCount;
   final int chatActionCount;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final ChatUser user;
   final String? selfAvatarPath;
   final String? selfXmppJid;
@@ -600,7 +600,7 @@ class _ChatScaffoldAppBar extends StatelessWidget
   final ChatState state;
   final chat_models.Chat? chatEntity;
   final String? jid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final bool isGroupChat;
   final bool isEmailBacked;
   final bool chatCalendarAvailable;
@@ -687,10 +687,8 @@ class _ChatScaffoldAppBar extends StatelessWidget
                 if (showTitleAvatar)
                   Builder(
                     builder: (context) {
-                      final avatarData = chatEntity!.avatarData(
-                        selfJid: selfIdentity.selfJid,
-                        selfAvatarPath: selfIdentity.avatarPath,
-                        selfAvatarLoading: selfIdentity.avatarLoading,
+                      final avatarData = chatEntity!.avatarPresentation(
+                        selfAvatar: selfIdentity,
                       );
                       Widget avatar = avatarData.isAppIcon
                           ? AxichatAppIconAvatar(
@@ -700,7 +698,7 @@ class _ChatScaffoldAppBar extends StatelessWidget
                               size: context.sizing.iconButtonSize,
                               transport: chatEntity!.defaultTransport,
                               child: HydratedAxiAvatar(
-                                avatarData: avatarData,
+                                avatar: avatarData,
                                 size: context.sizing.iconButtonSize,
                               ),
                             );

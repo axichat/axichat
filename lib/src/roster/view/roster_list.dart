@@ -138,9 +138,12 @@ class _RosterListBody extends StatelessWidget {
                   selected: open,
                   leading: HydratedAxiAvatar(
                     avatar: AvatarPresentation.avatar(
-                      identifier: item.jid,
+                      label: item.jid,
                       colorSeed: item.jid,
-                      avatarPath: item.avatarPath,
+                      avatar: Avatar.tryParseOrNull(
+                        path: item.avatarPath,
+                        hash: null,
+                      ),
                       loading: false,
                     ),
                     subscription: item.subscription,

@@ -3,8 +3,7 @@
 
 import 'dart:math' as math;
 
-import 'package:axichat/src/avatar/avatar_data.dart';
-import 'package:axichat/src/avatar/self_avatar_state.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
@@ -54,7 +53,7 @@ class RecipientChipsBar extends StatefulWidget {
   final ValueChanged<String> onRecipientToggled;
   final ValueChanged<String> onRecipientRemoved;
   final Map<String, FanOutRecipientState> latestStatuses;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final bool collapsedByDefault;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
@@ -1023,7 +1022,7 @@ class _RecipientChip extends StatelessWidget {
 
   final ComposerRecipient recipient;
   final Map<String, String> avatarPathsByJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final VoidCallback onToggle;
   final VoidCallback? onRemove;
   final bool pendingRemoval;
@@ -1127,7 +1126,7 @@ class _RecipientChipAvatar extends StatelessWidget {
 
   final Contact target;
   final Map<String, String> avatarPathsByJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final FanOutRecipientState? status;
 
   @override
@@ -1137,26 +1136,30 @@ class _RecipientChipAvatar extends StatelessWidget {
     const double avatarSize = 20.0;
     final avatar = chat != null
         ? (() {
-            final avatarData = chat.avatarData(
-              selfJid: selfIdentity.selfJid,
-              selfAvatarPath: selfIdentity.avatarPath,
-              selfAvatarLoading: selfIdentity.avatarLoading,
-              avatarPathOverride: _avatarPathForChat(chat),
+            final avatarData = chat.avatarPresentation(
+              selfAvatar: selfIdentity,
+              avatarOverride: Avatar.tryParseOrNull(
+                path: _avatarPathForChat(chat),
+                hash: null,
+              ),
             );
             if (avatarData.isAppIcon) {
               return const AxichatAppIconAvatar(size: avatarSize);
             }
             return HydratedAxiAvatar(
-              avatarData: avatarData,
+              avatar: avatarData,
               size: avatarSize,
               shape: AxiAvatarShape.squircle,
             );
           })()
         : HydratedAxiAvatar(
-            avatarData: AvatarData.avatar(
-              identifier: target.recipientId ?? '',
+            avatar: AvatarPresentation.avatar(
+              label: target.recipientId ?? '',
               colorSeed: target.recipientId ?? '',
-              avatarPath: _avatarPathForContact(target),
+              avatar: Avatar.tryParseOrNull(
+                path: _avatarPathForContact(target),
+                hash: null,
+              ),
               loading: false,
             ),
             size: avatarSize,
@@ -1563,7 +1566,7 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final double fieldInnerPadding;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final bool showSuggestionsWhenEmpty;
   final Iterable<Contact> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
@@ -1625,7 +1628,7 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
   final double fieldInnerPadding;
   final Color backgroundColor;
   final Map<String, String> avatarPathsByJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final bool showSuggestionsWhenEmpty;
   final Iterable<Contact> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
@@ -2159,7 +2162,7 @@ class _AutocompleteOptionsList extends StatefulWidget {
 
   final List<Contact> options;
   final Map<String, String> avatarPathsByJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
   final ValueChanged<Contact> onSelected;
   final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
@@ -2541,10 +2544,10 @@ class _RecipientHeaderAvatar extends StatelessWidget {
       padding: EdgeInsets.all(borderWidth),
       decoration: ShapeDecoration(color: backgroundColor, shape: shape),
       child: HydratedAxiAvatar(
-        avatarData: AvatarData.avatar(
-          identifier: jid,
+        avatar: AvatarPresentation.avatar(
+          label: jid,
           colorSeed: jid,
-          avatarPath: avatarPath,
+          avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
           loading: false,
         ),
         size: recipientAvatarSize - (borderWidth * 2),
@@ -2562,22 +2565,18 @@ class _SuggestionAvatar extends StatelessWidget {
 
   final Contact option;
   final Map<String, String> avatarPathsByJid;
-  final SelfAvatarState selfIdentity;
+  final SelfAvatar selfIdentity;
 
   @override
   Widget build(BuildContext context) {
     if (option.chat != null) {
       final chat = option.chat!;
-      final avatarData = chat.avatarData(
-        selfJid: selfIdentity.selfJid,
-        selfAvatarPath: selfIdentity.avatarPath,
-        selfAvatarLoading: selfIdentity.avatarLoading,
-      );
+      final avatarData = chat.avatarPresentation(selfAvatar: selfIdentity);
       if (avatarData.isAppIcon) {
         return const AxichatAppIconAvatar(size: 32);
       }
       return HydratedAxiAvatar(
-        avatarData: avatarData,
+        avatar: avatarData,
         size: 32,
         shape: AxiAvatarShape.squircle,
       );
@@ -2596,10 +2595,10 @@ class _SuggestionAvatar extends StatelessWidget {
       }
     }
     return HydratedAxiAvatar(
-      avatarData: AvatarData.avatar(
-        identifier: jid,
+      avatar: AvatarPresentation.avatar(
+        label: jid,
         colorSeed: jid,
-        avatarPath: avatarPath,
+        avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
         loading: false,
       ),
       size: 32,

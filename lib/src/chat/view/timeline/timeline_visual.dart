@@ -762,10 +762,10 @@ class _MessageAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HydratedAxiAvatar(
-      avatarData: AvatarData.avatar(
-        identifier: jid,
+      avatar: AvatarPresentation.avatar(
+        label: jid,
         colorSeed: jid,
-        avatarPath: avatarPath,
+        avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
         loading: false,
       ),
       size: size,
@@ -997,10 +997,10 @@ class _RecipientAvatarBadge extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(borderWidth),
           child: HydratedAxiAvatar(
-            avatarData: AvatarData.avatar(
-              identifier: chat.avatarIdentifier,
+            avatar: AvatarPresentation.avatar(
+              label: chat.avatarLabel,
               colorSeed: chat.avatarColorSeed,
-              avatarPath: avatarImagePath,
+              avatar: Avatar.tryParseOrNull(path: avatarImagePath, hash: null),
               loading: false,
             ),
             size: recipientAvatarSize - (borderWidth * 2),
@@ -1168,10 +1168,10 @@ class _TypingAvatar extends StatelessWidget {
       padding: EdgeInsets.all(borderWidth),
       decoration: ShapeDecoration(color: borderColor, shape: shape),
       child: HydratedAxiAvatar(
-        avatarData: AvatarData.avatar(
-          identifier: jid,
+        avatar: AvatarPresentation.avatar(
+          label: jid,
           colorSeed: jid,
-          avatarPath: avatarPath,
+          avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
           loading: false,
         ),
         size: recipientAvatarSize - (borderWidth * 2),

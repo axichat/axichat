@@ -112,7 +112,7 @@ final class _RoomChatsUpdated extends ChatEvent {
 final class _RoomSelfAvatarUpdated extends ChatEvent {
   const _RoomSelfAvatarUpdated(this.avatar);
 
-  final StoredAvatar? avatar;
+  final Avatar? avatar;
 
   @override
   List<Object?> get props => [avatar];

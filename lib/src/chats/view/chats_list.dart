@@ -164,9 +164,12 @@ class _ChatsListBody extends StatelessWidget {
         ? resolvedProfileJid
         : null;
     final selfIdentity = SelfAvatar(
-      selfJid: selfJid,
-      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
+      jid: selfJid,
+      avatar: Avatar.tryParseOrNull(
+        path: context.watch<ProfileCubit>().state.avatarPath,
+        hash: null,
+      ),
+      hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
@@ -855,9 +858,7 @@ class _ChatListTileState extends State<ChatListTile> {
       tapBounce: false,
       leading: () {
         final avatarData = item.avatarPresentation(
-          selfJid: widget.selfIdentity.selfJid,
-          selfAvatarPath: widget.selfIdentity.avatarPath,
-          selfAvatarLoading: widget.selfIdentity.avatarLoading,
+          selfAvatar: widget.selfIdentity,
         );
         if (avatarData.isAppIcon) {
           return AxichatAppIconAvatar(size: sizing.iconButtonTapTarget);

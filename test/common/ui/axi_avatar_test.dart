@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -31,9 +32,8 @@ void main() {
                 key: Key('address-avatar-1'),
                 child: AxiAvatar(
                   avatar: AvatarPresentation.avatar(
-                    identifier: 'sample@example.com',
+                    label: 'sample@example.com',
                     colorSeed: 'sample@example.com',
-                    avatarPath: null,
                     loading: false,
                   ),
                 ),
@@ -42,9 +42,8 @@ void main() {
                 key: Key('address-avatar-2'),
                 child: AxiAvatar(
                   avatar: AvatarPresentation.avatar(
-                    identifier: 'sample@example.net',
+                    label: 'sample@example.net',
                     colorSeed: 'sample@example.net',
-                    avatarPath: null,
                     loading: false,
                   ),
                 ),
@@ -79,9 +78,8 @@ void main() {
               key: Key('email-avatar-1'),
               child: AxiAvatar(
                 avatar: AvatarPresentation.avatar(
-                  identifier: 'Sample',
+                  label: 'Sample',
                   colorSeed: 'sample@example.com',
-                  avatarPath: null,
                   loading: false,
                 ),
               ),
@@ -90,9 +88,8 @@ void main() {
               key: Key('email-avatar-2'),
               child: AxiAvatar(
                 avatar: AvatarPresentation.avatar(
-                  identifier: 'Sample',
+                  label: 'Sample',
                   colorSeed: 'sample@example.net',
-                  avatarPath: null,
                   loading: false,
                 ),
               ),
@@ -133,9 +130,9 @@ void main() {
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
-              identifier: 'sample@example.com',
+              label: 'sample@example.com',
               colorSeed: 'sample@example.com',
-              avatarPath: '/avatars/self.enc',
+              avatar: Avatar(path: '/avatars/self.enc'),
               loading: false,
             ),
           ),
@@ -168,9 +165,9 @@ void main() {
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
-              identifier: 'sample@example.com',
+              label: 'sample@example.com',
               colorSeed: 'sample@example.com',
-              avatarPath: '/avatars/self.enc',
+              avatar: Avatar(path: '/avatars/self.enc'),
               loading: false,
             ),
           ),
@@ -205,9 +202,9 @@ void main() {
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
-              identifier: 'sample@example.com',
+              label: 'sample@example.com',
               colorSeed: 'sample@example.com',
-              avatarPath: '/avatars/self.enc',
+              avatar: Avatar(path: '/avatars/self.enc'),
               loading: false,
             ),
           ),
@@ -244,9 +241,9 @@ void main() {
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
-              identifier: 'sample@example.com',
+              label: 'sample@example.com',
               colorSeed: 'sample@example.com',
-              avatarPath: '/avatars/self.enc',
+              avatar: Avatar(path: '/avatars/self.enc'),
               loading: true,
             ),
           ),
@@ -262,9 +259,9 @@ void main() {
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
-              identifier: 'sample@example.com',
+              label: 'sample@example.com',
               colorSeed: 'sample@example.com',
-              avatarPath: '/avatars/self.enc',
+              avatar: Avatar(path: '/avatars/self.enc'),
               loading: false,
             ),
           ),

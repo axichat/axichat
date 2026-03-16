@@ -180,9 +180,9 @@ class _ProfileTileLayout extends StatelessWidget {
             tag: 'avatar',
             child: HydratedAxiAvatar(
               avatar: AvatarPresentation.avatar(
-                identifier: jid,
+                label: jid,
                 colorSeed: jid,
-                avatarPath: avatarPath,
+                avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
                 loading: avatarLoading,
               ),
               subscription: Subscription.both,

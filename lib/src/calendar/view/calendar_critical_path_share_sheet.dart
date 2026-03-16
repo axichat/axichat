@@ -22,7 +22,6 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -144,9 +143,12 @@ class _CalendarCriticalPathShareSheetState
         ? resolvedProfileJid
         : null;
     final selfIdentity = SelfAvatar(
-      selfJid: selfJid,
-      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
+      jid: selfJid,
+      avatar: Avatar.tryParseOrNull(
+        path: context.watch<ProfileCubit>().state.avatarPath,
+        hash: null,
+      ),
+      hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final header = AxiSheetHeader(
       title: Text(l10n.calendarCriticalPathShareTitle),

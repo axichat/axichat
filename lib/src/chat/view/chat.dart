@@ -4,7 +4,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:axichat/src/avatar/avatar_data.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
 import 'package:axichat/src/avatar/view/avatar_badge_overlay.dart';
 import 'package:axichat/src/app.dart';
@@ -62,7 +62,6 @@ import 'package:axichat/src/chat/view/timeline/message/email_image_extension.dar
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/selection_panel_shell.dart';
-import 'package:axichat/src/avatar/self_avatar_state.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
@@ -4933,10 +4932,13 @@ class _ChatState extends State<Chat> {
         final String? selfJid = trimmedProfileJid.isNotEmpty
             ? trimmedProfileJid
             : null;
-        final selfIdentity = SelfAvatarState(
-          selfJid: selfJid,
-          avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-          avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
+        final selfIdentity = SelfAvatar(
+          jid: selfJid,
+          avatar: Avatar.tryParseOrNull(
+            path: context.watch<ProfileCubit>().state.avatarPath,
+            hash: null,
+          ),
+          hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
         );
         final showToast = ShadToaster.maybeOf(context)?.show;
         return MultiBlocListener(
@@ -5524,7 +5526,7 @@ class _ChatState extends State<Chat> {
                   chatEntity?.isCalendarFirstRoom ?? false;
               final bool showingChatCalendar =
                   openChatCalendar || _chatRoute.isCalendar;
-              final bool showCloseButton = !readOnly;
+              final bool showCloseButton = !readOnly && !isWelcomeChat;
               final List<AppBarActionItem> navigationActions =
                   <AppBarActionItem>[
                     if (!readOnly && openStack.length > 1)

@@ -354,9 +354,9 @@ class _RoomAvatarSection extends StatelessWidget {
         children: [
           HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
-              identifier: roomJid,
+              label: roomJid,
               colorSeed: roomJid,
-              avatarPath: avatarPath,
+              avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
               loading: false,
             ),
             size: avatarSize,
@@ -704,9 +704,9 @@ class _MemberTileState extends State<_MemberTile> {
     );
     final avatar = HydratedAxiAvatar(
       avatar: AvatarPresentation.avatar(
-        identifier: avatarKey,
+        label: avatarKey,
         colorSeed: avatarKey,
-        avatarPath: widget.avatarPath,
+        avatar: Avatar.tryParseOrNull(path: widget.avatarPath, hash: null),
         loading: false,
       ),
       size: sizing.iconButtonSize,
@@ -1285,9 +1285,12 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         ? resolvedProfileJid
         : null;
     final selfIdentity = SelfAvatar(
-      selfJid: selfIdentityJid,
-      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
+      jid: selfIdentityJid,
+      avatar: Avatar.tryParseOrNull(
+        path: context.watch<ProfileCubit>().state.avatarPath,
+        hash: null,
+      ),
+      hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final includedRecipients = _recipients.includedRecipients;
     final actionsPadding = EdgeInsets.fromLTRB(

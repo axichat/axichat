@@ -49,22 +49,6 @@ OutlinedBorder _attachmentSurfaceShape({
   );
 }
 
-bool _chatMessagesShouldChain(ChatMessage current, ChatMessage? neighbor) {
-  if (neighbor == null) return false;
-  if (neighbor.user.id != current.user.id) return false;
-  final neighborDate = DateTime(
-    neighbor.createdAt.year,
-    neighbor.createdAt.month,
-    neighbor.createdAt.day,
-  );
-  final currentDate = DateTime(
-    current.createdAt.year,
-    current.createdAt.month,
-    current.createdAt.day,
-  );
-  return neighborDate == currentDate;
-}
-
 bool _chatTimelineItemsShouldChain(
   ChatTimelineItem current,
   ChatTimelineItem? neighbor,

@@ -118,9 +118,8 @@ class _RosterInvitesBody extends StatelessWidget {
                   ],
                   leading: AxiAvatar(
                     avatar: AvatarPresentation.avatar(
-                      identifier: invite.jid,
+                      label: invite.jid,
                       colorSeed: invite.jid,
-                      avatarPath: null,
                       loading: false,
                     ),
                   ),

@@ -28,17 +28,17 @@ class ProfileCubit extends Cubit<ProfileState> {
     _selfAvatarSubscription = _xmppService.selfAvatarStream.listen((
       avatar,
     ) async {
-      if (avatar == null || avatar.isEmpty) {
+      if (avatar == null) {
         emit(state.copyWith(avatarPath: null, avatarHash: null));
         return;
       }
-      final path = avatar.path?.trim();
-      if (path != null && path.isNotEmpty) {
+      final path = avatar.path.trim();
+      if (path.isNotEmpty) {
         await _xmppService.loadAvatarBytes(path);
       }
       emit(
         state.copyWith(
-          avatarPath: path ?? state.avatarPath,
+          avatarPath: path,
           avatarHash: avatar.hash ?? state.avatarHash,
         ),
       );
@@ -62,7 +62,7 @@ class ProfileCubit extends Cubit<ProfileState> {
   final XmppService _xmppService;
   final OmemoService? _omemoService;
 
-  late final StreamSubscription<StoredAvatar?> _selfAvatarSubscription;
+  late final StreamSubscription<Avatar?> _selfAvatarSubscription;
   late final StreamSubscription<bool> _selfAvatarHydratingSubscription;
   late final StreamSubscription<int>
   _storedConversationMessageCountSubscription;
@@ -121,14 +121,12 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   Future<void> _loadAvatar() async {
     final stored = await _xmppService.getOwnAvatar();
-    if (stored == null || stored.isEmpty) return;
-    final path = stored.path?.trim();
-    if (path != null && path.isNotEmpty) {
-      await _xmppService.loadAvatarBytes(path);
-    }
+    if (stored == null) return;
+    final path = stored.path;
+    await _xmppService.loadAvatarBytes(path);
     emit(
       state.copyWith(
-        avatarPath: path ?? state.avatarPath,
+        avatarPath: path,
         avatarHash: stored.hash ?? state.avatarHash,
       ),
     );

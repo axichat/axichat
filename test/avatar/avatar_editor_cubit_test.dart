@@ -29,7 +29,7 @@ void main() {
   test('close invalidates a delayed carousel tick before it can emit', () {
     fakeAsync((async) {
       final templates = <AvatarTemplate>[];
-      final buildCompleter = Completer<Avatar>();
+      final buildCompleter = Completer<EditableAvatar>();
       final cubit = AvatarEditorCubit(
         xmppService: xmppService,
         templates: templates,
@@ -155,10 +155,10 @@ class _TestAvatarPipeline extends AvatarPipeline {
         ),
       );
 
-  final Completer<Avatar> buildCompleter;
+  final Completer<EditableAvatar> buildCompleter;
 
   @override
-  Future<Avatar> buildFromTemplate({
+  Future<EditableAvatar> buildFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,
@@ -184,7 +184,7 @@ class _ImmediateAvatarPipeline extends AvatarPipeline {
       );
 
   @override
-  Future<Avatar> buildFromTemplate({
+  Future<EditableAvatar> buildFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,
@@ -210,12 +210,12 @@ AvatarTemplate _fakeTemplate({required String id}) {
   );
 }
 
-Avatar _avatarFromTemplate({
+EditableAvatar _avatarFromTemplate({
   required AvatarTemplate template,
   required Color background,
 }) {
   final payloadBytes = Uint8List.fromList(template.id.codeUnits);
-  return Avatar(
+  return EditableAvatar(
     source: AvatarSource.template,
     payload: AvatarUploadPayload(
       bytes: payloadBytes,

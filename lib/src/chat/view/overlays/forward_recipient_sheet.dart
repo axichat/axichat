@@ -108,10 +108,13 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     final String? selfJid = trimmedProfileJid.isNotEmpty
         ? trimmedProfileJid
         : null;
-    final selfIdentity = SelfAvatarState(
-      selfJid: selfJid,
-      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
+    final selfIdentity = SelfAvatar(
+      jid: selfJid,
+      avatar: Avatar.tryParseOrNull(
+        path: context.watch<ProfileCubit>().state.avatarPath,
+        hash: null,
+      ),
+      hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),

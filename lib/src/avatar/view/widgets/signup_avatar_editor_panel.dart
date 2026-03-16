@@ -260,9 +260,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               ? AxiAvatar(
                   key: previewKey,
                   avatar: const AvatarPresentation.avatar(
-                    identifier: 'avatar@axichat',
+                    label: 'avatar@axichat',
                     colorSeed: 'avatar@axichat',
-                    avatarPath: null,
                     loading: false,
                   ),
                   size: 96,

@@ -10,6 +10,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/routes.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -48,9 +49,12 @@ class _ArchivesView extends StatelessWidget {
                 ? resolvedProfileJid
                 : null;
             final selfIdentity = SelfAvatar(
-              selfJid: selfJid,
-              avatarPath: profileState.avatarPath,
-              avatarLoading: profileState.avatarHydrating,
+              jid: selfJid,
+              avatar: Avatar.tryParseOrNull(
+                path: profileState.avatarPath,
+                hash: null,
+              ),
+              hydrating: profileState.avatarHydrating,
             );
             final selectedChats = chatsState.selectedChats;
             final selectionActive = selectedChats.isNotEmpty;

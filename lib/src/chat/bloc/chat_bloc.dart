@@ -423,7 +423,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<List<RosterItem>>? _roomRosterSubscription;
   StreamSubscription<List<Chat>>? _roomChatsSubscription;
-  StreamSubscription<StoredAvatar?>? _roomSelfAvatarSubscription;
+  StreamSubscription<Avatar?>? _roomSelfAvatarSubscription;
   StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;

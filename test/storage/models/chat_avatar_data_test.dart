@@ -1,4 +1,5 @@
 import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/storage/models/avatar_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,13 +13,15 @@ void main() {
 
   test('avatar data uses self avatar path and loading for self chats', () {
     final avatarData = baseChat.avatarPresentation(
-      selfJid: 'peer@axi.im',
-      selfAvatarPath: '/avatars/self.enc',
-      selfAvatarLoading: true,
+      selfAvatar: const SelfAvatar(
+        jid: 'peer@axi.im',
+        avatar: Avatar(path: '/avatars/self.enc'),
+        hydrating: true,
+      ),
     );
 
     expect(avatarData.kind, AvatarKind.avatar);
-    expect(avatarData.identifier, 'Peer');
+    expect(avatarData.label, 'Peer');
     expect(avatarData.colorSeed, 'peer@axi.im');
     expect(avatarData.avatarPath, '/avatars/self.enc');
     expect(avatarData.loading, isTrue);
@@ -31,7 +34,7 @@ void main() {
     );
 
     final avatarData = chat.avatarPresentation(
-      avatarPathOverride: ' /avatars/override.enc ',
+      avatarOverride: const Avatar(path: '/avatars/override.enc'),
     );
 
     expect(avatarData.kind, AvatarKind.avatar);
