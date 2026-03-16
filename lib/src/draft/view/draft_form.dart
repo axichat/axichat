@@ -6,9 +6,9 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
-import 'package:axichat/src/calendar/utils/time_formatter.dart';
-import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/task/task_share_formatter.dart';
+import 'package:axichat/src/calendar/task/time_formatter.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';

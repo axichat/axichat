@@ -28,7 +28,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/interop/calendar_fragment_formatter.dart';
 import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state_waiter.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/task/task_share_formatter.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
@@ -82,8 +82,10 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
+import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
+import 'package:axichat/src/email/models/fan_out_send_report.dart';
+import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
 import 'package:axichat/src/important/view/important_messages_list.dart';
@@ -323,6 +325,9 @@ class _ChatState extends State<Chat> {
       CalendarChatSupport();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
+  final Map<String, Completer<Object?>> _pendingCalendarImportCompleters =
+      <String, Completer<Object?>>{};
+  int _handledCalendarImportOutcomeToken = 0;
   Message? _quotedDraft;
   List<PendingAttachment> _pendingAttachments = const [];
   var _pendingAttachmentSeed = 0;
@@ -1007,6 +1012,7 @@ class _ChatState extends State<Chat> {
     }
     context.read<CalendarBloc>().add(
       CalendarEvent.taskAdded(
+        requestId: const Uuid().v4(),
         title: title,
         scheduledTime: start,
         duration: duration,
@@ -1072,17 +1078,26 @@ class _ChatState extends State<Chat> {
       );
       return null;
     }
+    final String requestId = const Uuid().v4();
+    final Completer<Object?> completer = Completer<Object?>();
+    _pendingCalendarImportCompleters[requestId] = completer;
     context.read<CalendarBloc>().add(
-      CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
+      CalendarEvent.tasksImported(
+        requestId: requestId,
+        tasks: <CalendarTask>[task],
+      ),
     );
-    final bool copied = await waitForTasksInCalendar(
-      bloc: context.read<CalendarBloc>(),
-      taskIds: <String>{task.id},
+    final Object? result = await completer.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {
+        _pendingCalendarImportCompleters.remove(requestId);
+        return null;
+      },
     );
-    if (!mounted || !copied) {
+    if (!mounted || result is! String) {
       return null;
     }
-    return context.read<CalendarBloc>().id;
+    return result;
   }
 
   Future<bool> _copyCriticalPathToPersonalCalendar(
@@ -1100,12 +1115,52 @@ class _ChatState extends State<Chat> {
       );
       return false;
     }
-    context.read<CalendarBloc>().add(CalendarEvent.modelImported(model: model));
-    return waitForCriticalPathTasks(
-      bloc: context.read<CalendarBloc>(),
-      pathId: pathId,
-      taskIds: taskIds,
+    final String requestId = const Uuid().v4();
+    final Completer<Object?> completer = Completer<Object?>();
+    _pendingCalendarImportCompleters[requestId] = completer;
+    context.read<CalendarBloc>().add(
+      CalendarEvent.modelImported(requestId: requestId, model: model),
     );
+    final Object? result = await completer.future.timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {
+        _pendingCalendarImportCompleters.remove(requestId);
+        return null;
+      },
+    );
+    return result is bool ? result : false;
+  }
+
+  void _handleCalendarImportStateChanged(BuildContext _, CalendarState state) {
+    if (state.importOutcomeToken == _handledCalendarImportOutcomeToken) {
+      return;
+    }
+    _handledCalendarImportOutcomeToken = state.importOutcomeToken;
+    final String? requestId = state.importRequestId;
+    if (requestId == null) {
+      return;
+    }
+    final Completer<Object?>? completer = _pendingCalendarImportCompleters
+        .remove(requestId);
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
+    if (state.importError != null) {
+      completer.complete(null);
+      return;
+    }
+    final String? importedChecksum = state.lastImportedModelChecksum;
+    if (importedChecksum != null) {
+      completer.complete(
+        importedChecksum == context.read<CalendarBloc>().state.model.checksum,
+      );
+      return;
+    }
+    if (state.lastImportedTaskIds.isNotEmpty) {
+      completer.complete(context.read<CalendarBloc>().id);
+      return;
+    }
+    completer.complete(null);
   }
 
   ({String title, String? description, DateTime start, Duration duration})?
@@ -5005,6 +5060,9 @@ class _ChatState extends State<Chat> {
                 }
               },
             ),
+            BlocListener<CalendarBloc, CalendarState>(
+              listener: _handleCalendarImportStateChanged,
+            ),
             BlocListener<ChatsCubit, ChatsState>(
               listenWhen: (previous, current) =>
                   previous.openChatRoute != current.openChatRoute,
@@ -5896,6 +5954,7 @@ class _ChatState extends State<Chat> {
       const String title = 'hang out';
       context.read<CalendarBloc>().add(
         CalendarEvent.taskAdded(
+          requestId: const Uuid().v4(),
           title: title,
           scheduledTime: scheduledTime,
           duration: duration,
@@ -5934,9 +5993,10 @@ class _ChatState extends State<Chat> {
       prefilledText: calendarText,
       locationHelper: locationHelper,
       locateCalendarBloc: () => context.read<CalendarBloc>(),
-      onTaskAdded: (task) {
+      onTaskAdded: (task, requestId) {
         context.read<CalendarBloc>().add(
           CalendarEvent.taskAdded(
+            requestId: requestId,
             title: task.title,
             scheduledTime: task.scheduledTime,
             description: task.description,
@@ -6100,9 +6160,10 @@ class _ChatState extends State<Chat> {
       prefilledText: calendarText,
       locationHelper: locationHelper,
       locateCalendarBloc: () => context.read<CalendarBloc>(),
-      onTaskAdded: (task) {
+      onTaskAdded: (task, requestId) {
         context.read<CalendarBloc>().add(
           CalendarEvent.taskAdded(
+            requestId: requestId,
             title: task.title,
             scheduledTime: task.scheduledTime,
             description: task.description,

@@ -5,13 +5,11 @@ import 'dart:async';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
-import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -254,9 +252,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       attachments: attachments,
     );
     try {
-      await _mirrorDraftToCore(
+      await _emailService?.mirrorDraftForFallback(
         jids: jids,
-        body: body,
+        text: body,
         subject: subject,
         attachments: attachments,
       );
@@ -277,7 +275,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final draft = await _loadDraft(id);
     await _messageService.deleteDraft(id: id);
     try {
-      await _clearCoreDraftForDraft(draft);
+      await _emailService?.clearMirroredDraftForFallback(
+        draft?.jids ?? const [],
+      );
     } on Exception {
       // Best-effort: core draft syncing should not block local deletes.
     }
@@ -288,90 +288,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return db.getDraft(id);
   }
 
-  Future<void> _mirrorDraftToCore({
-    required List<String> jids,
-    required String body,
-    String? subject,
-    required List<Attachment> attachments,
-  }) async {
-    if (!_shouldUseCoreDraftFallback) return;
-    final emailService = _emailService;
-    if (emailService == null) return;
-    final recipient = await _singleEmailRecipient(jids);
-    if (recipient == null) return;
-    final chat = await _resolveEmailChatForDraft(
-      emailService: emailService,
-      address: recipient,
-    );
-    if (chat == null) return;
-    await emailService.saveDraftToCore(
-      chat: chat,
-      text: body,
-      subject: subject,
-      attachments: attachments,
-    );
-  }
-
-  Future<void> _clearCoreDraftForDraft(Draft? draft) async {
-    if (!_shouldUseCoreDraftFallback) return;
-    final emailService = _emailService;
-    if (emailService == null || draft == null) return;
-    final recipient = await _singleEmailRecipient(draft.jids);
-    if (recipient == null) return;
-    final db = await _loadDatabase();
-    final existing = await db.getChat(recipient);
-    if (existing == null) return;
-    final chat = await emailService.ensureChatForEmailChat(existing);
-    await emailService.clearDraftFromCore(chat);
-  }
-
-  Future<Chat?> _resolveEmailChatForDraft({
-    required EmailService emailService,
-    required String address,
-  }) async {
-    final normalized = normalizeEmailAddress(address);
-    final db = await _loadDatabase();
-    final existing = await db.getChat(normalized);
-    if (existing != null) {
-      return emailService.ensureChatForEmailChat(existing);
-    }
-    return emailService.ensureChatForAddress(address: normalized);
-  }
-
   Future<XmppDatabase> _loadDatabase() async {
     return _messageService.database;
   }
 
   Future<int> countDrafts() async {
     return _messageService.countDrafts();
-  }
-
-  bool get _shouldUseCoreDraftFallback {
-    final emailService = _emailService;
-    if (emailService == null) return false;
-    return emailService.isSmtpOnly;
-  }
-
-  Future<String?> _singleEmailRecipient(List<String> jids) async {
-    const int coreDraftRecipientLimit = 1;
-    final normalizedRecipients = <String>{};
-    for (final jid in jids) {
-      final normalized = normalizeEmailAddress(jid);
-      if (normalized.isEmpty) {
-        continue;
-      }
-      normalizedRecipients.add(normalized);
-    }
-    if (normalizedRecipients.length != coreDraftRecipientLimit) {
-      return null;
-    }
-    final recipient = normalizedRecipients.first;
-    final db = await _loadDatabase();
-    final existing = await db.getChat(recipient);
-    if (existing == null || !existing.defaultTransport.isEmail) {
-      return null;
-    }
-    return recipient;
   }
 
   Future<void> _sendEmailDraft({

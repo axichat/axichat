@@ -7,7 +7,7 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -23,7 +23,7 @@ class DraftsList extends StatefulWidget {
 }
 
 class _DraftsListState extends State<DraftsList> {
-  void _syncSearchSnapshot(HomeSearchState searchState) {
+  void _syncSearchSnapshot(HomeState searchState) {
     final tabState = searchState.stateFor(HomeTab.drafts);
     final query = searchState.active ? tabState.query.trim().toLowerCase() : '';
     final filterAttachmentsOnly =
@@ -43,7 +43,7 @@ class _DraftsListState extends State<DraftsList> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<HomeSearchCubit, HomeSearchState>(
+    return BlocListener<HomeBloc, HomeState>(
       listener: (context, searchState) => _syncSearchSnapshot(searchState),
       child: BlocBuilder<DraftCubit, DraftState>(
         buildWhen: (_, current) => current is DraftsAvailable,

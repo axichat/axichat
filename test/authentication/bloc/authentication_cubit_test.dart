@@ -5,6 +5,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'

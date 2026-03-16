@@ -7,6 +7,7 @@ import 'package:logging/logging.dart';
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';

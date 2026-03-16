@@ -14,6 +14,7 @@ import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
     as provisioning;

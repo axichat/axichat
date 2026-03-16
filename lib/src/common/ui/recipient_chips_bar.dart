@@ -11,7 +11,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/models/fan_out_models.dart';
+import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';

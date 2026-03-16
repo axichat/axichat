@@ -34,9 +34,10 @@ import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
+import 'package:axichat/src/email/models/fan_out_send_report.dart';
+import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
-import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
@@ -5420,22 +5421,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (captionText.isEmpty && htmlCaption?.trim().isNotEmpty == true) {
       captionText = HtmlContentCodec.toPlainText(htmlCaption!);
     }
-    final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
-      body: captionText,
-      subject: subject,
-      quotedDraft: quotedDraft,
-    );
-    final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
-    final effectiveHtmlCaption =
-        syntheticAttachmentReply?.htmlBody ?? htmlCaption;
-    final effectiveAttachment = syntheticAttachmentReply == null
-        ? current.attachment
-        : current.attachment.copyWith(
-            caption: syntheticAttachmentReply.body.isEmpty
-                ? null
-                : syntheticAttachmentReply.body,
-          );
     if (_shouldFanOut(recipients, chat)) {
+      final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
+        body: captionText,
+        subject: subject,
+        quotedDraft: quotedDraft,
+      );
+      final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
+      final effectiveHtmlCaption =
+          syntheticAttachmentReply?.htmlBody ?? htmlCaption;
+      final effectiveAttachment = syntheticAttachmentReply == null
+          ? current.attachment
+          : current.attachment.copyWith(
+              caption: syntheticAttachmentReply.body.isEmpty
+                  ? null
+                  : syntheticAttachmentReply.body,
+            );
       final succeeded = await _sendFanOut(
         recipients: recipients,
         attachment: effectiveAttachment,
@@ -5466,10 +5467,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       await service.sendAttachment(
         chat: chat,
-        attachment: effectiveAttachment,
-        subject: effectiveSubject,
-        htmlCaption: effectiveHtmlCaption,
-        quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
+        attachment: current.attachment,
+        subject: subject,
+        htmlCaption: htmlCaption,
+        quotedDraft: quotedDraft,
       );
       _handlePendingAttachmentSuccessInList(
         pendingAttachments,
@@ -5563,22 +5564,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return false;
     }
-    final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
-      body: caption ?? '',
-      subject: subject,
-      quotedDraft: quotedDraft,
-    );
-    final Attachment resolvedAttachment = syntheticAttachmentReply == null
-        ? (caption == null ? attachment : attachment.copyWith(caption: caption))
-        : attachment.copyWith(
-            caption: syntheticAttachmentReply.body.isEmpty
-                ? null
-                : syntheticAttachmentReply.body,
-          );
-    final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
-    final effectiveHtmlCaption =
-        syntheticAttachmentReply?.htmlBody ?? htmlCaption;
     if (_shouldFanOut(recipients, chat)) {
+      final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
+        body: caption ?? '',
+        subject: subject,
+        quotedDraft: quotedDraft,
+      );
+      final Attachment resolvedAttachment = syntheticAttachmentReply == null
+          ? (caption == null
+                ? attachment
+                : attachment.copyWith(caption: caption))
+          : attachment.copyWith(
+              caption: syntheticAttachmentReply.body.isEmpty
+                  ? null
+                  : syntheticAttachmentReply.body,
+            );
+      final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
+      final effectiveHtmlCaption =
+          syntheticAttachmentReply?.htmlBody ?? htmlCaption;
       final succeeded = await _sendFanOut(
         recipients: recipients,
         attachment: resolvedAttachment,
@@ -5597,10 +5600,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       await service.sendAttachment(
         chat: chat,
-        attachment: resolvedAttachment,
-        subject: effectiveSubject,
-        htmlCaption: effectiveHtmlCaption,
-        quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
+        attachment: caption == null
+            ? attachment
+            : attachment.copyWith(caption: caption),
+        subject: subject,
+        htmlCaption: htmlCaption,
+        quotedDraft: quotedDraft,
       );
       return true;
     } on DeltaChatException catch (error, stackTrace) {
@@ -5752,25 +5757,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     if (attachments.isEmpty) return true;
     _markPendingAttachmentsUploadingInList(pendingAttachments, attachments);
-    final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
-      body: captionForBundle ?? '',
-      subject: subject,
-      quotedDraft: quotedDraft,
-    );
-    final resolvedAttachment = syntheticAttachmentReply == null
-        ? (captionForBundle == null
-              ? bundledAttachment
-              : bundledAttachment.copyWith(caption: captionForBundle))
-        : bundledAttachment.copyWith(
-            caption: syntheticAttachmentReply.body.isEmpty
-                ? null
-                : syntheticAttachmentReply.body,
-          );
-    final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
-    final effectiveHtmlCaption =
-        syntheticAttachmentReply?.htmlBody ?? htmlCaptionForBundle;
     try {
       if (_shouldFanOut(recipients, chat)) {
+        final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
+          body: captionForBundle ?? '',
+          subject: subject,
+          quotedDraft: quotedDraft,
+        );
+        final resolvedAttachment = syntheticAttachmentReply == null
+            ? (captionForBundle == null
+                  ? bundledAttachment
+                  : bundledAttachment.copyWith(caption: captionForBundle))
+            : bundledAttachment.copyWith(
+                caption: syntheticAttachmentReply.body.isEmpty
+                    ? null
+                    : syntheticAttachmentReply.body,
+              );
+        final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
+        final effectiveHtmlCaption =
+            syntheticAttachmentReply?.htmlBody ?? htmlCaptionForBundle;
         final succeeded = await _sendFanOut(
           recipients: recipients,
           attachment: resolvedAttachment,
@@ -5800,10 +5805,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       try {
         await service.sendAttachment(
           chat: chat,
-          attachment: resolvedAttachment,
-          subject: effectiveSubject,
-          htmlCaption: effectiveHtmlCaption,
-          quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
+          attachment: captionForBundle == null
+              ? bundledAttachment
+              : bundledAttachment.copyWith(caption: captionForBundle),
+          subject: subject,
+          htmlCaption: htmlCaptionForBundle,
+          quotedDraft: quotedDraft,
         );
         _handleBundledAttachmentSuccessInList(
           pendingAttachments,
