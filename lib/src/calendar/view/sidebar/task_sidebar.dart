@@ -7,7 +7,6 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
@@ -171,9 +170,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   bool _hasAttemptedQuickTaskSubmit = false;
   bool _preserveDraftFieldsOnTitleClear = false;
   bool _awaitingTaskCreation = false;
-  List<String>? _pendingCreatedTaskCriticalPathIds;
-  String? _pendingCriticalPathAddPathId;
-  String? _pendingCreatedTaskIdForCriticalPaths;
   bool _awaitingCriticalPathCreate = false;
   String? _pendingCriticalPathName;
 
@@ -207,65 +203,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _selectionChecklistDirty;
 
   bool _externalGridDragActive = false;
-  bool _sidebarKeyboardVisible = false;
 
   bool get _hasPrecisePointerInput =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
 
   bool get _isTouchOnlyInput => !_hasPrecisePointerInput;
-
-  bool _isFocusWithinSidebar(FocusNode? focusNode) {
-    final BuildContext? focusContext = focusNode?.context;
-    if (focusContext == null || !focusContext.mounted) {
-      return false;
-    }
-    final Element sidebarElement = context as Element;
-    bool withinSidebar = false;
-    (focusContext as Element).visitAncestorElements((ancestor) {
-      if (ancestor == sidebarElement) {
-        withinSidebar = true;
-        return false;
-      }
-      return true;
-    });
-    return withinSidebar;
-  }
-
-  bool get _hasFocusedSidebarTextInput {
-    final FocusNode? primaryFocus = FocusManager.instance.primaryFocus;
-    if (!_isFocusWithinSidebar(primaryFocus)) {
-      return false;
-    }
-    return FocusManager.instance.isTextInputFocused;
-  }
-
-  bool get _hasFocusedSidebarNode =>
-      _isFocusWithinSidebar(FocusManager.instance.primaryFocus);
-
-  bool get _isSidebarTextInputActive {
-    final FocusNode? primaryFocus = FocusManager.instance.primaryFocus;
-    if (!_isFocusWithinSidebar(primaryFocus)) {
-      return false;
-    }
-    return _hasFocusedSidebarTextInput || _sidebarKeyboardVisible;
-  }
-
-  bool get _currentSidebarKeyboardVisible {
-    final view = View.maybeOf(context);
-    if (view == null) {
-      return MediaQuery.viewInsetsOf(context).bottom > 0;
-    }
-    return view.viewInsets.bottom > 0;
-  }
-
-  Future<bool> _handleSidebarBackButtonPressed() async {
-    if (!_isSidebarTextInputActive) {
-      return false;
-    }
-    FocusScope.of(context).unfocus();
-    FocusManager.instance.primaryFocus?.unfocus();
-    return true;
-  }
 
   bool get _hasSidebarFormValues =>
       _titleController.text.trim().isNotEmpty ||
@@ -712,86 +654,380 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         final EdgeInsetsGeometry scrollPadding = EdgeInsets.only(
           bottom: context.spacing.l,
         ).add(EdgeInsets.only(bottom: keyboardInset));
-        return BackButtonListener(
-          onBackButtonPressed: _handleSidebarBackButtonPressed,
-          child: Container(
-            width: uiState.width,
-            decoration: BoxDecoration(color: sidebarBackgroundColor),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: BlocConsumer<B, CalendarState>(
-                    listener: _handleCalendarStateChanged,
-                    builder: (context, state) {
-                      final locationHelper =
-                          LocationAutocompleteHelper.fromState(state);
-                      final SettingsState settingsState = context
+        return Container(
+          width: uiState.width,
+          decoration: BoxDecoration(color: sidebarBackgroundColor),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: BlocConsumer<B, CalendarState>(
+                  listener: _handleCalendarStateChanged,
+                  builder: (context, state) {
+                    final locationHelper = LocationAutocompleteHelper.fromState(
+                      state,
+                    );
+                    final SettingsState settingsState = context
+                        .watch<SettingsCubit>()
+                        .state;
+                    List<CalendarTask> selectionTasks = const [];
+                    if (state.isSelectionMode) {
+                      selectionTasks = _selectedTasks(state);
+                      _syncSelectionRecurrenceState(selectionTasks);
+                      _syncSelectionRemindersState(selectionTasks);
+                      _syncSelectionFieldControllers(selectionTasks);
+                      selectionTasks = selectionTasks.where((task) {
+                        if (!state.isTaskInFocusedPath(task)) {
+                          return false;
+                        }
+                        if (_hideCompletedCriticalPath &&
+                            _isTaskOnlyInCompletedPaths(task, state)) {
+                          return false;
+                        }
+                        if (task.scheduledTime != null &&
+                            context
+                                .watch<SettingsCubit>()
+                                .state
+                                .hideCompletedScheduled &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        if (task.scheduledTime == null &&
+                            task.deadline != null &&
+                            context
+                                .watch<SettingsCubit>()
+                                .state
+                                .hideCompletedReminders &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        if (task.scheduledTime == null &&
+                            task.deadline == null &&
+                            context
+                                .watch<SettingsCubit>()
+                                .state
+                                .hideCompletedUnscheduled &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
+                    }
+                    final String? activeOrderingPathId =
+                        state.model.criticalPaths[_activeCriticalPathId] != null
+                        ? _activeCriticalPathId
+                        : null;
+                    final bool showAddTaskSection = !_criticalPathsExpanded;
+                    final Widget criticalPathsPanel = CriticalPathPanel(
+                      paths: state.criticalPaths,
+                      tasks: state.model.tasks,
+                      focusedPathId: state.focusedCriticalPathId,
+                      orderingPathId: activeOrderingPathId,
+                      animationDuration: context
                           .watch<SettingsCubit>()
-                          .state;
-                      List<CalendarTask> selectionTasks = const [];
-                      if (state.isSelectionMode) {
-                        selectionTasks = _selectedTasks(state);
-                        _syncSelectionRecurrenceState(selectionTasks);
-                        _syncSelectionRemindersState(selectionTasks);
-                        _syncSelectionFieldControllers(selectionTasks);
-                        selectionTasks = selectionTasks.where((task) {
+                          .animationDuration,
+                      onCreatePath: _handleCreateCriticalPath,
+                      onRenamePath: _handleRenameCriticalPath,
+                      onDeletePath: _handleDeleteCriticalPath,
+                      onSharePath: _handleShareCriticalPath,
+                      onFocusPath: _handleFocusCriticalPath,
+                      onOpenPath: _handleOpenCriticalPath,
+                      onReorderPath: _handleCriticalPathReorder,
+                      taskTileBuilder:
+                          (task, trailing, {bool requiresLongPress = false}) =>
+                              _SidebarDraggableTaskTile<B>(
+                                host: this,
+                                task: task,
+                                uiState: uiState,
+                                trailing: trailing,
+                                requiresLongPress: requiresLongPress,
+                              ),
+                      isExpanded: _criticalPathsExpanded,
+                      onToggleExpanded: _toggleCriticalPathsExpanded,
+                      requiresLongPressForReorder: _isTouchOnlyInput,
+                      hideCompleted: _hideCompletedCriticalPath,
+                      onToggleHideCompleted: (value) =>
+                          setState(() => _hideCompletedCriticalPath = value),
+                      onCloseOrdering: _closeActiveCriticalPath,
+                      onAddTaskToFocusedPath: _openCriticalPathSearch,
+                      onAddTaskToPath: _openCriticalPathSearchForPath,
+                    );
+
+                    List<CalendarTask> unscheduledTasks = const [];
+                    List<CalendarTask> reminderTasks = const [];
+                    List<CalendarTask> orderedUnscheduled = const [];
+                    List<CalendarTask> orderedReminders = const [];
+                    final List<CalendarCriticalPath> queuedCriticalPaths =
+                        _queuedPathsForState(state);
+                    Widget contentBody;
+                    if (state.isSelectionMode) {
+                      contentBody = _SelectionPanel<B>(
+                        tasks: selectionTasks,
+                        uiState: uiState,
+                        locationHelper: locationHelper,
+                        selectionMessage: _selectionMessage,
+                        onExitSelection: () => context.read<B>().add(
+                          const CalendarEvent.selectionCleared(),
+                        ),
+                        onClearSelection: () => context.read<B>().add(
+                          const CalendarEvent.selectionCleared(),
+                        ),
+                        onExportSelected: () =>
+                            _exportSelectedTasks(selectionTasks),
+                        onDeleteSelected: () => context.read<B>().add(
+                          const CalendarEvent.selectionDeleted(),
+                        ),
+                        selectionTitleController: _selectionTitleController,
+                        selectionDescriptionController:
+                            _selectionDescriptionController,
+                        selectionLocationController:
+                            _selectionLocationController,
+                        selectionChecklistController:
+                            _selectionChecklistController,
+                        onSelectionTitleChanged: _handleSelectionTitleChanged,
+                        onSelectionDescriptionChanged:
+                            _handleSelectionDescriptionChanged,
+                        onSelectionLocationChanged:
+                            _handleSelectionLocationChanged,
+                        hasPendingSelectionEdits: _hasPendingSelectionEdits,
+                        onApplySelectionChanges: _applySelectionBatchChanges,
+                        timeAdjustCallbacks: _SelectionTimeAdjustCallbacks(
+                          onStartMinus: () => _shiftSelectionTime(
+                            startDelta: -_selectionTimeStep,
+                          ),
+                          onStartPlus: () => _shiftSelectionTime(
+                            startDelta: _selectionTimeStep,
+                          ),
+                          onEndMinus: () => _shiftSelectionTime(
+                            endDelta: -_selectionTimeStep,
+                          ),
+                          onEndPlus: () =>
+                              _shiftSelectionTime(endDelta: _selectionTimeStep),
+                        ),
+                        onPriorityChanged: (priority) => context.read<B>().add(
+                          CalendarEvent.selectionPriorityChanged(
+                            priority: priority,
+                          ),
+                        ),
+                        onCompletionChanged: (completed) =>
+                            context.read<B>().add(
+                              CalendarEvent.selectionCompletedToggled(
+                                completed: completed,
+                              ),
+                            ),
+                        remindersNotifier: _selectionRemindersNotifier,
+                        remindersMixedNotifier:
+                            _selectionRemindersMixedNotifier,
+                        onRemindersChanged: _handleSelectionRemindersChanged,
+                        reminderAnchorNotifier:
+                            _selectionReminderAnchorNotifier,
+                        recurrenceNotifier: _selectionRecurrenceNotifier,
+                        recurrenceMixedNotifier:
+                            _selectionRecurrenceMixedNotifier,
+                        fallbackWeekday: _defaultSelectionWeekday(
+                          selectionTasks,
+                        ),
+                        onRecurrenceChanged: _handleSelectionRecurrenceChanged,
+                        scheduleLabelBuilder: _selectionScheduleLabel,
+                        onFocusTask: _focusTask,
+                        onRemoveTask: (task) => context.read<B>().add(
+                          CalendarEvent.selectionIdsRemoved(taskIds: {task.id}),
+                        ),
+                        onToggleCompletion: _toggleSidebarTaskCompletion,
+                      );
+                    } else {
+                      unscheduledTasks = _sortTasksByDeadline(
+                        state.unscheduledTasks.where((task) {
                           if (!state.isTaskInFocusedPath(task)) {
                             return false;
                           }
-                          if (_hideCompletedCriticalPath &&
-                              _isTaskOnlyInCompletedPaths(task, state)) {
-                            return false;
-                          }
-                          if (task.scheduledTime != null &&
-                              context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .hideCompletedScheduled &&
-                              task.isCompleted) {
-                            return false;
-                          }
-                          if (task.scheduledTime == null &&
-                              task.deadline != null &&
-                              context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .hideCompletedReminders &&
-                              task.isCompleted) {
-                            return false;
-                          }
-                          if (task.scheduledTime == null &&
-                              task.deadline == null &&
-                              context
-                                  .watch<SettingsCubit>()
-                                  .state
-                                  .hideCompletedUnscheduled &&
+                          if (settingsState.hideCompletedUnscheduled &&
                               task.isCompleted) {
                             return false;
                           }
                           return true;
-                        }).toList();
+                        }).toList(),
+                      );
+                      final List<String> settingsUnscheduledOrder =
+                          settingsState.unscheduledSidebarOrder;
+                      if (!listEquals(
+                        settingsUnscheduledOrder,
+                        _unscheduledOrder,
+                      )) {
+                        _unscheduledOrder = List<String>.from(
+                          settingsUnscheduledOrder,
+                        );
                       }
-                      final String? activeOrderingPathId =
-                          state.model.criticalPaths[_activeCriticalPathId] !=
-                              null
-                          ? _activeCriticalPathId
-                          : null;
-                      final bool showAddTaskSection = !_criticalPathsExpanded;
-                      final Widget criticalPathsPanel = CriticalPathPanel(
-                        paths: state.criticalPaths,
-                        tasks: state.model.tasks,
-                        focusedPathId: state.focusedCriticalPathId,
-                        orderingPathId: activeOrderingPathId,
-                        animationDuration: context
-                            .watch<SettingsCubit>()
-                            .animationDuration,
-                        onCreatePath: _handleCreateCriticalPath,
-                        onRenamePath: _handleRenameCriticalPath,
-                        onDeletePath: _handleDeleteCriticalPath,
-                        onSharePath: _handleShareCriticalPath,
-                        onFocusPath: _handleFocusCriticalPath,
-                        onOpenPath: _handleOpenCriticalPath,
-                        onReorderPath: _handleCriticalPathReorder,
+                      final List<String> unscheduledOrder = _deriveOrder(
+                        unscheduledTasks,
+                        _unscheduledOrder,
+                      );
+                      if (!listEquals(_unscheduledOrder, unscheduledOrder)) {
+                        _unscheduledOrder = List<String>.from(unscheduledOrder);
+                      }
+                      if (!listEquals(
+                        settingsUnscheduledOrder,
+                        unscheduledOrder,
+                      )) {
+                        context
+                            .read<SettingsCubit>()
+                            .saveUnscheduledSidebarOrder(unscheduledOrder);
+                      }
+                      orderedUnscheduled = _orderedTasksFromOrder(
+                        unscheduledTasks,
+                        unscheduledOrder,
+                      );
+                      reminderTasks = _sortTasksByDeadline(
+                        state.reminderTasks.where((task) {
+                          if (!state.isTaskInFocusedPath(task)) {
+                            return false;
+                          }
+                          if (settingsState.hideCompletedReminders &&
+                              task.isCompleted) {
+                            return false;
+                          }
+                          return true;
+                        }).toList(),
+                      );
+                      final List<String> settingsReminderOrder =
+                          settingsState.reminderSidebarOrder;
+                      if (!listEquals(settingsReminderOrder, _reminderOrder)) {
+                        _reminderOrder = List<String>.from(
+                          settingsReminderOrder,
+                        );
+                      }
+                      final List<String> reminderOrder = _deriveOrder(
+                        reminderTasks,
+                        _reminderOrder,
+                      );
+                      if (!listEquals(_reminderOrder, reminderOrder)) {
+                        _reminderOrder = List<String>.from(reminderOrder);
+                      }
+                      if (!listEquals(settingsReminderOrder, reminderOrder)) {
+                        context.read<SettingsCubit>().saveReminderSidebarOrder(
+                          reminderOrder,
+                        );
+                      }
+                      orderedReminders = _orderedTasksFromOrder(
+                        reminderTasks,
+                        reminderOrder,
+                      );
+                      unscheduledTasks = orderedUnscheduled;
+                      reminderTasks = orderedReminders;
+                      contentBody = _UnscheduledSidebarContent(
+                        uiState: uiState,
+                        locationHelper: locationHelper,
+                        formActivityListenable: _formActivityListenable,
+                        hasSidebarFormValues: () => _hasSidebarFormValues,
+                        onClearFieldsPressed: _handleClearFieldsPressed,
+                        titleController: _titleController,
+                        titleFocusNode: _titleFocusNode,
+                        addTaskFormKey: _addTaskFormKey,
+                        quickTaskValidator: _validateQuickTaskTitle,
+                        quickTaskAutovalidateMode: _quickTaskAutovalidateMode,
+                        onQuickTaskChanged: _handleQuickTaskInputChanged,
+                        onQuickTaskSubmitted: () {
+                          _addTask();
+                        },
+                        draftController: _draftController,
+                        onImportantChanged: _onUserImportantChanged,
+                        onUrgentChanged: _onUserUrgentChanged,
+                        sidebarController: _sidebarController,
+                        onAdvancedToggle: _handleAdvancedToggle,
+                        descriptionController: _descriptionController,
+                        locationController: _locationController,
+                        checklistController: _checklistController,
+                        onDeadlineChanged: _onUserDeadlineChanged,
+                        onStartChanged: _onUserStartChanged,
+                        onEndChanged: _onUserEndChanged,
+                        onScheduleCleared: _onUserScheduleCleared,
+                        onRecurrenceChanged: _onUserRecurrenceChanged,
+                        onRemindersChanged: _onRemindersChanged,
+                        onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
+                        onCategoriesChanged: _onCategoriesChanged,
+                        onUrlChanged: _onUrlChanged,
+                        onGeoChanged: _onGeoChanged,
+                        onOrganizerChanged: (value) =>
+                            _draftController.setOrganizer(value),
+                        onAttendeesChanged: (value) =>
+                            _draftController.setAttendees(value),
+                        queuedCriticalPaths: queuedCriticalPaths,
+                        onRemoveQueuedCriticalPath: _removeQueuedCriticalPath,
+                        onAddTask: () {
+                          _addTask();
+                        },
+                        isTaskCreationSubmitting:
+                            state.isTaskCreationSubmitting,
+                        onAddToCriticalPath: _queueCriticalPathForDraft,
+                        onShowAddTaskSection: _showAddTaskSection,
+                        onHideAddTaskSection: _hideAddTaskSection,
+                        showAddTaskSection: showAddTaskSection,
+                        unscheduledTasks: orderedUnscheduled,
+                        reminderTasks: orderedReminders,
+                        hideCompletedUnscheduled:
+                            settingsState.hideCompletedUnscheduled,
+                        hideCompletedReminders:
+                            settingsState.hideCompletedReminders,
+                        onToggleHideCompletedUnscheduled: (value) => context
+                            .read<SettingsCubit>()
+                            .toggleHideCompletedUnscheduled(value),
+                        onToggleHideCompletedReminders: (value) => context
+                            .read<SettingsCubit>()
+                            .toggleHideCompletedReminders(value),
+                        sectionKeys: _sectionKeys,
+                        onToggleSection: _sidebarController.toggleSection,
+                        onSectionDragEnter: _handleSidebarSectionDragEnter,
+                        onSectionDragLeave: () {
+                          widget.onNonGridDragRegionHoverChanged?.call(false);
+                        },
+                        onTaskDropped: _handleTaskDroppedIntoSidebar,
+                        onTaskPayloadDropped: (payload) {
+                          widget.onNonGridDragRegionHoverChanged?.call(false);
+                          widget.onDragPayloadConsumed?.call(payload);
+                        },
+                        onTaskListHover: _handleSidebarDragTargetHover,
+                        onTaskListLeave: () {
+                          widget.onNonGridDragRegionHoverChanged?.call(false);
+                          _stopSidebarAutoScroll();
+                        },
+                        onTaskListDrop: (details) {
+                          widget.onNonGridDragRegionHoverChanged?.call(false);
+                          _stopSidebarAutoScroll();
+                          _forwardSidebarGlobalPosition(
+                            details.globalPosition,
+                            notifyParent: false,
+                          );
+                          _handleTaskDroppedIntoSidebar(details.payload.task);
+                          widget.onDragPayloadConsumed?.call(details.payload);
+                        },
+                        onUnscheduledReorder: (oldIndex, newIndex) {
+                          _handleTaskListReorder(
+                            tasks: orderedUnscheduled,
+                            cache: _unscheduledOrder,
+                            updateCache: (next) {
+                              _unscheduledOrder = next;
+                              context
+                                  .read<SettingsCubit>()
+                                  .saveUnscheduledSidebarOrder(next);
+                            },
+                            oldIndex: oldIndex,
+                            newIndex: newIndex,
+                          );
+                        },
+                        onReminderReorder: (oldIndex, newIndex) {
+                          _handleTaskListReorder(
+                            tasks: orderedReminders,
+                            cache: _reminderOrder,
+                            updateCache: (next) {
+                              _reminderOrder = next;
+                              context
+                                  .read<SettingsCubit>()
+                                  .saveReminderSidebarOrder(next);
+                            },
+                            oldIndex: oldIndex,
+                            newIndex: newIndex,
+                          );
+                        },
+                        requiresLongPressForReorder: _isTouchOnlyInput,
                         taskTileBuilder:
                             (
                               task,
@@ -804,364 +1040,54 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                               trailing: trailing,
                               requiresLongPress: requiresLongPress,
                             ),
-                        isExpanded: _criticalPathsExpanded,
-                        onToggleExpanded: _toggleCriticalPathsExpanded,
-                        requiresLongPressForReorder: _isTouchOnlyInput,
-                        hideCompleted: _hideCompletedCriticalPath,
-                        onToggleHideCompleted: (value) =>
-                            setState(() => _hideCompletedCriticalPath = value),
-                        onCloseOrdering: _closeActiveCriticalPath,
-                        onAddTaskToFocusedPath: _openCriticalPathSearch,
-                        onAddTaskToPath: _openCriticalPathSearchForPath,
                       );
+                    }
 
-                      List<CalendarTask> unscheduledTasks = const [];
-                      List<CalendarTask> reminderTasks = const [];
-                      List<CalendarTask> orderedUnscheduled = const [];
-                      List<CalendarTask> orderedReminders = const [];
-                      final List<CalendarCriticalPath> queuedCriticalPaths =
-                          _queuedPathsForState(state);
-                      Widget contentBody;
-                      if (state.isSelectionMode) {
-                        contentBody = _SelectionPanel<B>(
-                          tasks: selectionTasks,
-                          uiState: uiState,
-                          locationHelper: locationHelper,
-                          selectionMessage: _selectionMessage,
-                          onExitSelection: () => context.read<B>().add(
-                            const CalendarEvent.selectionCleared(),
-                          ),
-                          onClearSelection: () => context.read<B>().add(
-                            const CalendarEvent.selectionCleared(),
-                          ),
-                          onExportSelected: () =>
-                              _exportSelectedTasks(selectionTasks),
-                          onDeleteSelected: () => context.read<B>().add(
-                            const CalendarEvent.selectionDeleted(),
-                          ),
-                          selectionTitleController: _selectionTitleController,
-                          selectionDescriptionController:
-                              _selectionDescriptionController,
-                          selectionLocationController:
-                              _selectionLocationController,
-                          selectionChecklistController:
-                              _selectionChecklistController,
-                          onSelectionTitleChanged: _handleSelectionTitleChanged,
-                          onSelectionDescriptionChanged:
-                              _handleSelectionDescriptionChanged,
-                          onSelectionLocationChanged:
-                              _handleSelectionLocationChanged,
-                          hasPendingSelectionEdits: _hasPendingSelectionEdits,
-                          onApplySelectionChanges: _applySelectionBatchChanges,
-                          timeAdjustCallbacks: _SelectionTimeAdjustCallbacks(
-                            onStartMinus: () => _shiftSelectionTime(
-                              startDelta: -_selectionTimeStep,
-                            ),
-                            onStartPlus: () => _shiftSelectionTime(
-                              startDelta: _selectionTimeStep,
-                            ),
-                            onEndMinus: () => _shiftSelectionTime(
-                              endDelta: -_selectionTimeStep,
-                            ),
-                            onEndPlus: () => _shiftSelectionTime(
-                              endDelta: _selectionTimeStep,
-                            ),
-                          ),
-                          onPriorityChanged: (priority) =>
-                              context.read<B>().add(
-                                CalendarEvent.selectionPriorityChanged(
-                                  priority: priority,
-                                ),
-                              ),
-                          onCompletionChanged: (completed) =>
-                              context.read<B>().add(
-                                CalendarEvent.selectionCompletedToggled(
-                                  completed: completed,
-                                ),
-                              ),
-                          remindersNotifier: _selectionRemindersNotifier,
-                          remindersMixedNotifier:
-                              _selectionRemindersMixedNotifier,
-                          onRemindersChanged: _handleSelectionRemindersChanged,
-                          reminderAnchorNotifier:
-                              _selectionReminderAnchorNotifier,
-                          recurrenceNotifier: _selectionRecurrenceNotifier,
-                          recurrenceMixedNotifier:
-                              _selectionRecurrenceMixedNotifier,
-                          fallbackWeekday: _defaultSelectionWeekday(
-                            selectionTasks,
-                          ),
-                          onRecurrenceChanged:
-                              _handleSelectionRecurrenceChanged,
-                          scheduleLabelBuilder: _selectionScheduleLabel,
-                          onFocusTask: _focusTask,
-                          onRemoveTask: (task) => context.read<B>().add(
-                            CalendarEvent.selectionIdsRemoved(
-                              taskIds: {task.id},
-                            ),
-                          ),
-                          onToggleCompletion: _toggleSidebarTaskCompletion,
-                        );
-                      } else {
-                        unscheduledTasks = _sortTasksByDeadline(
-                          state.unscheduledTasks.where((task) {
-                            if (!state.isTaskInFocusedPath(task)) {
-                              return false;
-                            }
-                            if (settingsState.hideCompletedUnscheduled &&
-                                task.isCompleted) {
-                              return false;
-                            }
-                            return true;
-                          }).toList(),
-                        );
-                        final List<String> settingsUnscheduledOrder =
-                            settingsState.unscheduledSidebarOrder;
-                        if (!listEquals(
-                          settingsUnscheduledOrder,
-                          _unscheduledOrder,
-                        )) {
-                          _unscheduledOrder = List<String>.from(
-                            settingsUnscheduledOrder,
-                          );
-                        }
-                        final List<String> unscheduledOrder = _deriveOrder(
-                          unscheduledTasks,
-                          _unscheduledOrder,
-                        );
-                        if (!listEquals(_unscheduledOrder, unscheduledOrder)) {
-                          _unscheduledOrder = List<String>.from(
-                            unscheduledOrder,
-                          );
-                        }
-                        if (!listEquals(
-                          settingsUnscheduledOrder,
-                          unscheduledOrder,
-                        )) {
-                          context
-                              .read<SettingsCubit>()
-                              .saveUnscheduledSidebarOrder(unscheduledOrder);
-                        }
-                        orderedUnscheduled = _orderedTasksFromOrder(
-                          unscheduledTasks,
-                          unscheduledOrder,
-                        );
-                        reminderTasks = _sortTasksByDeadline(
-                          state.reminderTasks.where((task) {
-                            if (!state.isTaskInFocusedPath(task)) {
-                              return false;
-                            }
-                            if (settingsState.hideCompletedReminders &&
-                                task.isCompleted) {
-                              return false;
-                            }
-                            return true;
-                          }).toList(),
-                        );
-                        final List<String> settingsReminderOrder =
-                            settingsState.reminderSidebarOrder;
-                        if (!listEquals(
-                          settingsReminderOrder,
-                          _reminderOrder,
-                        )) {
-                          _reminderOrder = List<String>.from(
-                            settingsReminderOrder,
-                          );
-                        }
-                        final List<String> reminderOrder = _deriveOrder(
-                          reminderTasks,
-                          _reminderOrder,
-                        );
-                        if (!listEquals(_reminderOrder, reminderOrder)) {
-                          _reminderOrder = List<String>.from(reminderOrder);
-                        }
-                        if (!listEquals(settingsReminderOrder, reminderOrder)) {
-                          context
-                              .read<SettingsCubit>()
-                              .saveReminderSidebarOrder(reminderOrder);
-                        }
-                        orderedReminders = _orderedTasksFromOrder(
-                          reminderTasks,
-                          reminderOrder,
-                        );
-                        unscheduledTasks = orderedUnscheduled;
-                        reminderTasks = orderedReminders;
-                        contentBody = _UnscheduledSidebarContent(
-                          uiState: uiState,
-                          locationHelper: locationHelper,
-                          formActivityListenable: _formActivityListenable,
-                          hasSidebarFormValues: () => _hasSidebarFormValues,
-                          onClearFieldsPressed: _handleClearFieldsPressed,
-                          titleController: _titleController,
-                          titleFocusNode: _titleFocusNode,
-                          addTaskFormKey: _addTaskFormKey,
-                          quickTaskValidator: _validateQuickTaskTitle,
-                          quickTaskAutovalidateMode: _quickTaskAutovalidateMode,
-                          onQuickTaskChanged: _handleQuickTaskInputChanged,
-                          onQuickTaskSubmitted: () {
-                            _addTask();
-                          },
-                          draftController: _draftController,
-                          onImportantChanged: _onUserImportantChanged,
-                          onUrgentChanged: _onUserUrgentChanged,
-                          sidebarController: _sidebarController,
-                          onAdvancedToggle: _handleAdvancedToggle,
-                          descriptionController: _descriptionController,
-                          locationController: _locationController,
-                          checklistController: _checklistController,
-                          onDeadlineChanged: _onUserDeadlineChanged,
-                          onStartChanged: _onUserStartChanged,
-                          onEndChanged: _onUserEndChanged,
-                          onScheduleCleared: _onUserScheduleCleared,
-                          onRecurrenceChanged: _onUserRecurrenceChanged,
-                          onRemindersChanged: _onRemindersChanged,
-                          onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
-                          onCategoriesChanged: _onCategoriesChanged,
-                          onUrlChanged: _onUrlChanged,
-                          onGeoChanged: _onGeoChanged,
-                          onOrganizerChanged: (value) =>
-                              _draftController.setOrganizer(value),
-                          onAttendeesChanged: (value) =>
-                              _draftController.setAttendees(value),
-                          queuedCriticalPaths: queuedCriticalPaths,
-                          onRemoveQueuedCriticalPath: _removeQueuedCriticalPath,
-                          onAddTask: () {
-                            _addTask();
-                          },
-                          isTaskCreationSubmitting:
-                              state.isTaskCreationSubmitting,
-                          onAddToCriticalPath: _queueCriticalPathForDraft,
-                          onShowAddTaskSection: _showAddTaskSection,
-                          onHideAddTaskSection: _hideAddTaskSection,
-                          showAddTaskSection: showAddTaskSection,
-                          unscheduledTasks: orderedUnscheduled,
-                          reminderTasks: orderedReminders,
-                          hideCompletedUnscheduled:
-                              settingsState.hideCompletedUnscheduled,
-                          hideCompletedReminders:
-                              settingsState.hideCompletedReminders,
-                          onToggleHideCompletedUnscheduled: (value) => context
-                              .read<SettingsCubit>()
-                              .toggleHideCompletedUnscheduled(value),
-                          onToggleHideCompletedReminders: (value) => context
-                              .read<SettingsCubit>()
-                              .toggleHideCompletedReminders(value),
-                          sectionKeys: _sectionKeys,
-                          onToggleSection: _sidebarController.toggleSection,
-                          onSectionDragEnter: _handleSidebarSectionDragEnter,
-                          onSectionDragLeave: () {
-                            widget.onNonGridDragRegionHoverChanged?.call(false);
-                          },
-                          onTaskDropped: _handleTaskDroppedIntoSidebar,
-                          onTaskPayloadDropped: (payload) {
-                            widget.onNonGridDragRegionHoverChanged?.call(false);
-                            widget.onDragPayloadConsumed?.call(payload);
-                          },
-                          onTaskListHover: _handleSidebarDragTargetHover,
-                          onTaskListLeave: () {
-                            widget.onNonGridDragRegionHoverChanged?.call(false);
-                            _stopSidebarAutoScroll();
-                          },
-                          onTaskListDrop: (details) {
-                            widget.onNonGridDragRegionHoverChanged?.call(false);
-                            _stopSidebarAutoScroll();
-                            _forwardSidebarGlobalPosition(
-                              details.globalPosition,
-                              notifyParent: false,
-                            );
-                            _handleTaskDroppedIntoSidebar(details.payload.task);
-                            widget.onDragPayloadConsumed?.call(details.payload);
-                          },
-                          onUnscheduledReorder: (oldIndex, newIndex) {
-                            _handleTaskListReorder(
-                              tasks: orderedUnscheduled,
-                              cache: _unscheduledOrder,
-                              updateCache: (next) {
-                                _unscheduledOrder = next;
-                                context
-                                    .read<SettingsCubit>()
-                                    .saveUnscheduledSidebarOrder(next);
-                              },
-                              oldIndex: oldIndex,
-                              newIndex: newIndex,
-                            );
-                          },
-                          onReminderReorder: (oldIndex, newIndex) {
-                            _handleTaskListReorder(
-                              tasks: orderedReminders,
-                              cache: _reminderOrder,
-                              updateCache: (next) {
-                                _reminderOrder = next;
-                                context
-                                    .read<SettingsCubit>()
-                                    .saveReminderSidebarOrder(next);
-                              },
-                              oldIndex: oldIndex,
-                              newIndex: newIndex,
-                            );
-                          },
-                          requiresLongPressForReorder: _isTouchOnlyInput,
-                          taskTileBuilder:
-                              (
-                                task,
-                                trailing, {
-                                bool requiresLongPress = false,
-                              }) => _SidebarDraggableTaskTile<B>(
-                                host: this,
-                                task: task,
-                                uiState: uiState,
-                                trailing: trailing,
-                                requiresLongPress: requiresLongPress,
-                              ),
-                        );
-                      }
+                    final Widget content = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [criticalPathsPanel, contentBody],
+                    );
 
-                      final Widget content = Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [criticalPathsPanel, contentBody],
-                      );
+                    final Set<String> activeTaskIds = state.isSelectionMode
+                        ? selectionTasks.map((task) => task.id).toSet()
+                        : {
+                            ...unscheduledTasks.map((task) => task.id),
+                            ...reminderTasks.map((task) => task.id),
+                          };
+                    _pruneTaskPopoverControllers(activeTaskIds);
 
-                      final Set<String> activeTaskIds = state.isSelectionMode
-                          ? selectionTasks.map((task) => task.id).toSet()
-                          : {
-                              ...unscheduledTasks.map((task) => task.id),
-                              ...reminderTasks.map((task) => task.id),
-                            };
-                      _pruneTaskPopoverControllers(activeTaskIds);
-
-                      final bool enableKeyboardDismiss = _supportsDragDismiss(
-                        context,
-                      );
-                      return Scrollbar(
+                    final bool enableKeyboardDismiss = _supportsDragDismiss(
+                      context,
+                    );
+                    return Scrollbar(
+                      controller: _scrollController,
+                      radius: const Radius.circular(
+                        calendarSidebarScrollbarRadius,
+                      ),
+                      thickness: _layoutTheme.sidebarScrollbarThickness,
+                      child: SingleChildScrollView(
+                        key: _scrollViewportKey,
                         controller: _scrollController,
-                        radius: const Radius.circular(
-                          calendarSidebarScrollbarRadius,
-                        ),
-                        thickness: _layoutTheme.sidebarScrollbarThickness,
-                        child: SingleChildScrollView(
-                          key: _scrollViewportKey,
-                          controller: _scrollController,
-                          padding: scrollPadding,
-                          keyboardDismissBehavior: enableKeyboardDismiss
-                              ? ScrollViewKeyboardDismissBehavior.onDrag
-                              : ScrollViewKeyboardDismissBehavior.manual,
-                          physics: const ClampingScrollPhysics(),
-                          child: content,
-                        ),
-                      );
-                    },
-                  ),
+                        padding: scrollPadding,
+                        keyboardDismissBehavior: enableKeyboardDismiss
+                            ? ScrollViewKeyboardDismissBehavior.onDrag
+                            : ScrollViewKeyboardDismissBehavior.manual,
+                        physics: const ClampingScrollPhysics(),
+                        child: content,
+                      ),
+                    );
+                  },
                 ),
-                if (ResponsiveHelper.isExpanded(context))
-                  _SidebarResizeHandle(
-                    uiState: uiState,
-                    onPointerDown: _handleResizePointerDown,
-                    onPointerMove: _handleResizePointerMove,
-                    onPointerUp: _handleResizePointerUp,
-                    onPointerCancel: _handleResizePointerCancel,
-                  ),
-              ],
-            ),
+              ),
+              if (ResponsiveHelper.isExpanded(context))
+                _SidebarResizeHandle(
+                  uiState: uiState,
+                  onPointerDown: _handleResizePointerDown,
+                  onPointerMove: _handleResizePointerMove,
+                  onPointerUp: _handleResizePointerUp,
+                  onPointerCancel: _handleResizePointerCancel,
+                ),
+            ],
           ),
         );
       },
@@ -1176,7 +1102,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _sidebarKeyboardVisible = _currentSidebarKeyboardVisible;
     final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
       context,
     );
@@ -1188,22 +1113,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       );
       _sidebarControllerInitialized = true;
     }
-  }
-
-  @override
-  void didChangeMetrics() {
-    super.didChangeMetrics();
-    if (!mounted) {
-      return;
-    }
-    final bool keyboardVisible = _currentSidebarKeyboardVisible;
-    final bool keyboardJustClosed = _sidebarKeyboardVisible && !keyboardVisible;
-    _sidebarKeyboardVisible = keyboardVisible;
-    if (!keyboardJustClosed || !_hasFocusedSidebarNode) {
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   @override
@@ -2764,9 +2673,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _awaitingTaskCreation = false;
       final String? error = state.taskCreationError;
       if (error != null) {
-        _pendingCreatedTaskCriticalPathIds = null;
-        _pendingCreatedTaskIdForCriticalPaths = null;
-        _pendingCriticalPathAddPathId = null;
         setState(() {
           _quickTaskError = error;
         });
@@ -2774,26 +2680,21 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         return;
       }
       final String? createdTaskId = state.lastCreatedTaskId;
-      final List<String> pathIds =
-          _pendingCreatedTaskCriticalPathIds ?? const <String>[];
       if (createdTaskId == null) {
-        _pendingCreatedTaskCriticalPathIds = null;
-        _pendingCriticalPathAddPathId = null;
         setState(() {
           _quickTaskError = context.l10n.calendarCriticalPathAddAfterSaveFailed;
         });
         _addTaskFormKey.currentState?.validate();
         return;
       }
-      if (pathIds.isNotEmpty) {
-        _pendingCreatedTaskIdForCriticalPaths = baseTaskIdFrom(createdTaskId);
-        if (!_dispatchNextCriticalPathAdd(createdTaskId)) {
-          _handlePostSaveCriticalPathFailure(
-            context,
-            context.l10n.calendarCriticalPathUnavailable,
-          );
-        }
+      _clearQueuedCriticalPaths();
+      if (state.criticalPathMutationError != null) {
+        FeedbackSystem.showError(
+          context,
+          context.l10n.calendarCriticalPathAddAfterSaveFailed,
+        );
       }
+      return;
     }
 
     if (!state.isCriticalPathMutating && _awaitingCriticalPathCreate) {
@@ -2819,47 +2720,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       }
       return;
     }
-
-    final String? pendingTaskId = _pendingCreatedTaskIdForCriticalPaths;
-    final List<String> pendingPathIds =
-        _pendingCreatedTaskCriticalPathIds ?? const <String>[];
-    if (pendingTaskId == null || pendingPathIds.isEmpty) {
-      return;
-    }
-    final String? pendingPathId = _pendingCriticalPathAddPathId;
-    if (state.isCriticalPathMutating || pendingPathId == null) {
-      return;
-    }
-    _pendingCriticalPathAddPathId = null;
-    if (state.criticalPathMutationError != null) {
-      _handlePostSaveCriticalPathFailure(
-        context,
-        context.l10n.calendarCriticalPathAddAfterSaveFailed,
-      );
-      return;
-    }
-    final CalendarCriticalPath? path = state.model.criticalPaths[pendingPathId];
-    final bool added =
-        state.lastCriticalPathTaskAddedPathId == pendingPathId &&
-        state.lastCriticalPathTaskAddedTaskId == pendingTaskId &&
-        path != null &&
-        path.taskIds.contains(pendingTaskId);
-    if (!added) {
-      _handlePostSaveCriticalPathFailure(
-        context,
-        context.l10n.calendarCriticalPathAddAfterSaveFailed,
-      );
-      return;
-    }
-    _pendingCreatedTaskCriticalPathIds = List<String>.from(
-      pendingPathIds.where((pathId) => pathId != pendingPathId),
-    );
-    if (_pendingCreatedTaskCriticalPathIds!.isNotEmpty) {
-      _dispatchNextCriticalPathAdd(pendingTaskId);
-      return;
-    }
-    _pendingCreatedTaskIdForCriticalPaths = null;
-    _pendingCreatedTaskCriticalPathIds = null;
   }
 
   Future<void> _queueCriticalPathForDraft() async {
@@ -2956,14 +2816,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final List<String> queuedPathIds = List<String>.from(
       _queuedCriticalPathIds,
     );
-    final bool hasQueuedCriticalPaths = queuedPathIds.isNotEmpty;
     final locate = context.read;
     _awaitingTaskCreation = true;
-    _pendingCreatedTaskCriticalPathIds = hasQueuedCriticalPaths
-        ? queuedPathIds
-        : null;
-    _pendingCriticalPathAddPathId = null;
-    _pendingCreatedTaskIdForCriticalPaths = null;
 
     if (!hasLocation && !hasSchedule && !hasRecurrence && !hasIcsMeta) {
       locate<B>().add(
@@ -2975,6 +2829,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           deadline: _draftController.deadline,
           priority: priority,
           checklist: _checklistController.items.toList(),
+          queuedCriticalPathIds: queuedPathIds,
           reminders: _draftController.reminders,
         ),
       );
@@ -3003,37 +2858,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           priority: priority,
           recurrence: recurrence,
           checklist: _checklistController.items.toList(),
+          queuedCriticalPathIds: queuedPathIds,
           reminders: _draftController.reminders,
           icsMeta: icsMeta,
         ),
       );
     }
     _clearQuickTaskTitle();
-  }
-
-  bool _dispatchNextCriticalPathAdd(String taskId) {
-    final List<String> pendingPathIds =
-        _pendingCreatedTaskCriticalPathIds ?? const <String>[];
-    if (pendingPathIds.isEmpty) {
-      return false;
-    }
-    final String pathId = pendingPathIds.first;
-    _pendingCriticalPathAddPathId = pathId;
-    context.read<B>().add(
-      CalendarEvent.criticalPathTaskAdded(pathId: pathId, taskId: taskId),
-    );
-    return true;
-  }
-
-  void _handlePostSaveCriticalPathFailure(
-    BuildContext context,
-    String message,
-  ) {
-    _pendingCreatedTaskIdForCriticalPaths = null;
-    _pendingCreatedTaskCriticalPathIds = null;
-    _pendingCriticalPathAddPathId = null;
-    _clearQueuedCriticalPaths();
-    FeedbackSystem.showError(context, message);
   }
 
   void _clearQuickTaskTitle() {
