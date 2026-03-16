@@ -1076,6 +1076,7 @@ class XmppService extends XmppBase
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
   StreamController<ConnectionState> _connectivityStream =
       StreamController<ConnectionState>.broadcast();
+  Completer<void> _streamNegotiationsDone = Completer<void>();
 
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
@@ -1097,6 +1098,9 @@ class XmppService extends XmppBase
     if (state != ConnectionState.connected) {
       _clearMamNegotiationState();
       _clearSelfAvatarNegotiationState();
+      if (_streamNegotiationsDone.isCompleted) {
+        _streamNegotiationsDone = Completer<void>();
+      }
     }
 
     if (withForeground) {
@@ -1143,6 +1147,9 @@ class XmppService extends XmppBase
       }
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
+    }
+    if (!_streamNegotiationsDone.isCompleted) {
+      _streamNegotiationsDone.complete();
     }
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
@@ -2358,28 +2365,28 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> requestReconnect(ReconnectTrigger trigger) async {
+  Future<bool> requestReconnect(ReconnectTrigger trigger) async {
     if (!_synchronousConnection.isCompleted) {
-      return;
+      return false;
     }
     if (!_connection.hasConnectionSettings) {
-      return;
+      return false;
     }
     if (!_sessionReconnectEnabled) {
-      return;
+      return false;
     }
     if (_reconnectBlocked) {
-      return;
+      return false;
     }
     if (_connectInFlight) {
-      return;
+      return true;
     }
     if (connected) {
-      return;
+      return true;
     }
     final bool reconnecting = await _connection.isReconnecting();
     if (reconnecting && !trigger.shouldBypassBackoff) {
-      return;
+      return true;
     }
 
     final bool shouldReconnect = await _connection.reconnectionPolicy
@@ -2389,7 +2396,7 @@ class XmppService extends XmppBase
         await _connection.setShouldReconnect(true);
       } catch (error, stackTrace) {
         _xmppLogger.finer(_reconnectEnableFailedLog, error, stackTrace);
-        return;
+        return false;
       }
     }
 
@@ -2399,6 +2406,7 @@ class XmppService extends XmppBase
     }
 
     await _connection.requestReconnect(trigger);
+    return true;
   }
 
   Future<void> ensureConnected({
@@ -2415,8 +2423,18 @@ class XmppService extends XmppBase
   }
 
   Future<bool> syncSessionState() async {
-    if (!hasConnectionSettings || !connected) {
+    if (!hasConnectionSettings) {
       return true;
+    }
+    if (!connected) {
+      const negotiationTimeout = Duration(seconds: 20);
+      final negotiationsDone = _waitForStreamNegotiationsDone(
+        timeout: negotiationTimeout,
+      );
+      if (!await requestReconnect(ReconnectTrigger.immediateRetry)) {
+        return false;
+      }
+      await negotiationsDone;
     }
 
     const mamHistoryPageSize = 50;
@@ -2426,24 +2444,33 @@ class XmppService extends XmppBase
     if (!_isAcceptableSessionSyncMamOutcome(mamOutcome)) {
       return false;
     }
-    final boolResults = await Future.wait<bool>([
+    final statusWork = Future.wait<bool>([
       syncSpamSnapshot(),
       syncAddressBlockSnapshot(),
       rehydrateCalendarFromMam(),
-      refreshAvatarsForConversationIndex(),
       syncDraftsSnapshot(),
     ]);
-    if (boolResults.any((result) => !result)) {
+    final snapshotWork = Future.wait<void>([
+      requestBlocklist(),
+      syncConversationIndexSnapshot().then((_) {}),
+      syncMucBookmarksSnapshot().then((_) {}),
+      syncMessageCollectionsSnapshot(),
+    ]);
+    final statusResults = await statusWork;
+    await snapshotWork;
+    if (statusResults.any((result) => !result)) {
       return false;
     }
+    return refreshAvatarsForConversationIndex();
+  }
 
-    await Future.wait<void>(
-      [
-        () async => syncConversationIndexSnapshot(),
-        () async => syncMucBookmarksSnapshot(),
-      ].map((task) => task()),
-    );
-    return true;
+  Future<void> _waitForStreamNegotiationsDone({
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    if (_hasMamNegotiatedStream) {
+      return;
+    }
+    await _streamNegotiationsDone.future.timeout(timeout);
   }
 
   bool _isAcceptableSessionSyncMamOutcome(MamGlobalSyncOutcome outcome) {
@@ -2931,6 +2958,9 @@ class XmppService extends XmppBase
     }
     if (_connectivityStream.isClosed) {
       _connectivityStream = StreamController<ConnectionState>.broadcast();
+    }
+    if (_streamNegotiationsDone.isCompleted) {
+      _streamNegotiationsDone = Completer<void>();
     }
   }
 
