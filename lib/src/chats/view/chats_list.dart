@@ -16,15 +16,15 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
-import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
-import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
+import 'package:axichat/src/chats/view/chat_export_action_button.dart';
+import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -53,7 +53,7 @@ class ChatsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isDesktopPlatform =
         EnvScope.maybeOf(context)?.isDesktopPlatform ?? false;
-    return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+    return BlocBuilder<HomeBloc, HomeState>(
       builder: (context, searchState) {
         return BlocBuilder<RosterCubit, RosterState>(
           builder: (context, rosterState) {
@@ -85,7 +85,7 @@ class _ChatsListSync extends StatefulWidget {
     required this.isDesktopPlatform,
   });
 
-  final HomeSearchState searchState;
+  final HomeState searchState;
   final List<RosterItem> rosterItems;
   final bool showCalendarShortcut;
   final bool calendarAvailable;
@@ -173,8 +173,7 @@ class _ChatsListBody extends StatelessWidget {
     );
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
-          previous.creationStatus != current.creationStatus ||
-          previous.refreshStatus != current.refreshStatus,
+          previous.creationStatus != current.creationStatus,
       listener: (context, state) {
         if (state.creationStatus.isSuccess) {
           showToast?.call(
@@ -190,14 +189,6 @@ class _ChatsListBody extends StatelessWidget {
             ),
           );
           context.read<ChatsCubit>().clearCreationStatus();
-        }
-        if (state.refreshStatus.isSuccess) {
-          context.read<ChatsCubit>().clearRefreshStatus();
-        } else if (state.refreshStatus.isFailure) {
-          showToast?.call(
-            FeedbackToast.error(message: l10n.chatsRefreshFailed),
-          );
-          context.read<ChatsCubit>().clearRefreshStatus();
         }
       },
       child: BlocBuilder<ChatsCubit, ChatsState>(

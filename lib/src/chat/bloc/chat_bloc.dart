@@ -11,9 +11,9 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
-import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
-import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
-import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
+import 'package:axichat/src/calendar/interop/calendar_snapshot_metadata.dart';
+import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
@@ -27,7 +27,6 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
-import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -40,7 +39,8 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
-import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -390,8 +390,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   static const messageBatchSize = 50;
   static const int _emptyMessageCount = 0;
-  static const CalendarFragmentPolicy _calendarFragmentPolicy =
-      CalendarFragmentPolicy();
+  static const CalendarChatSupport _calendarFragmentPolicy =
+      CalendarChatSupport();
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
 
@@ -3792,7 +3792,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
       _ => null,
     };
-    final syntheticEmailReply = _syntheticEmailReplyEnvelope(
+    final syntheticEmailReply = _emailService?.syntheticEmailReplyEnvelope(
       body: trimmedText,
       subject: subject,
       quotedDraft: quotedDraft,
@@ -4809,10 +4809,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emitForwardFailure();
           return;
         }
-        resolvedEmailTarget = await _resolveEmailForwardTarget(
-          emailService: emailService,
-          target: target,
-        );
+        resolvedEmailTarget = await emailService.resolveForwardTarget(target);
         if (resolvedEmailTarget == null) {
           emitForwardFailure();
           return;
@@ -4919,24 +4916,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.warning(_messageForwardFailedLogMessage, error, stackTrace);
       emitForwardFailure();
     }
-  }
-
-  Future<Chat?> _resolveEmailForwardTarget({
-    required EmailService emailService,
-    required Contact target,
-  }) async {
-    final targetChat = target.chat;
-    if (targetChat != null) {
-      return emailService.ensureChatForEmailChat(targetChat);
-    }
-    final address = target.address?.trim();
-    if (address == null || address.isEmpty) {
-      return null;
-    }
-    return emailService.ensureChatForAddress(
-      address: address,
-      displayName: target.displayName,
-    );
   }
 
   ({
@@ -5299,7 +5278,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final updated = pendingAttachments.single;
     if (requiresEmail) {
       final EmailService emailService = service!;
-      final emailSent = await _sendPendingAttachment(
+      final emailSent = await _sendEmailAttachment(
         pending: updated,
         pendingAttachments: pendingAttachments,
         chat: chat,
@@ -5416,7 +5395,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<bool> _sendPendingAttachment({
+  Future<bool> _sendEmailAttachment({
     required PendingAttachment pending,
     required List<PendingAttachment> pendingAttachments,
     required Chat chat,
@@ -5441,7 +5420,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (captionText.isEmpty && htmlCaption?.trim().isNotEmpty == true) {
       captionText = HtmlContentCodec.toPlainText(htmlCaption!);
     }
-    final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
+    final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
       body: captionText,
       subject: subject,
       quotedDraft: quotedDraft,
@@ -5584,7 +5563,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return false;
     }
-    final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
+    final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
       body: caption ?? '',
       subject: subject,
       quotedDraft: quotedDraft,
@@ -5733,7 +5712,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ),
             )
           : attachment;
-      final sent = await _sendPendingAttachment(
+      final sent = await _sendEmailAttachment(
         pending: pendingWithCaption,
         pendingAttachments: pendingAttachments,
         chat: chat,
@@ -5773,7 +5752,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     if (attachments.isEmpty) return true;
     _markPendingAttachmentsUploadingInList(pendingAttachments, attachments);
-    final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
+    final syntheticAttachmentReply = service.syntheticEmailReplyEnvelope(
       body: captionForBundle ?? '',
       subject: subject,
       quotedDraft: quotedDraft,
@@ -6674,38 +6653,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailSubjectAutofillEligible: true,
         emailSubjectAutofilled: false,
       ),
-    );
-  }
-
-  ({String subject, String body, String? htmlBody, String quotedStanzaId})?
-  _syntheticEmailReplyEnvelope({
-    required String body,
-    required String? subject,
-    required Message? quotedDraft,
-  }) {
-    if (quotedDraft == null) {
-      return null;
-    }
-    final quotedContent = ChatSubjectCodec.splitDisplayBody(
-      body: quotedDraft.body,
-      subject: quotedDraft.subject,
-    );
-    final envelope = syntheticReplyEnvelope(
-      body: body,
-      subject: subject,
-      quotedSubject: quotedContent.subject,
-      quotedBody: quotedContent.body,
-      quotedSenderLabel:
-          displaySafeAddress(quotedDraft.senderJid) ?? quotedDraft.senderJid,
-    );
-    final normalizedBody = envelope.body.trim();
-    return (
-      subject: envelope.subject,
-      body: normalizedBody,
-      htmlBody: normalizedBody.isEmpty
-          ? null
-          : HtmlContentCodec.fromPlainText(normalizedBody),
-      quotedStanzaId: quotedDraft.stanzaID,
     );
   }
 

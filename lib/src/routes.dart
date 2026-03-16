@@ -5,7 +5,7 @@ import 'dart:collection';
 
 import 'package:axichat/src/attachments/view/attachment_gallery_screen.dart';
 import 'package:axichat/src/blocklist/view/blocklist_screen.dart';
-import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
+import 'package:axichat/src/calendar/view/shell/guest_calendar_widget.dart';
 import 'package:axichat/src/chats/view/archived_chat_screen.dart';
 import 'package:axichat/src/chats/view/archives_screen.dart';
 import 'package:axichat/src/email/demo/email_demo_screen.dart';

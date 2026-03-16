@@ -907,7 +907,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   CalendarFragmentShareDecision calendarFragmentDecisionForChat(Chat chat) {
-    return const CalendarFragmentPolicy().decisionForChat(
+    return const CalendarChatSupport().decisionForChat(
       chat: chat,
       roomState: roomStateFor(chat.jid),
     );

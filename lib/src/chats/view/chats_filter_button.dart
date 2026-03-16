@@ -3,7 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -40,8 +40,8 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-      bloc: widget.locate<HomeSearchCubit>(),
+    return BlocBuilder<HomeBloc, HomeState>(
+      bloc: widget.locate<HomeBloc>(),
       builder: (context, searchState) {
         final l10n = context.l10n;
         final sizing = context.sizing;
@@ -86,9 +86,8 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                         : null,
                     label: option.label,
                     onPressed: () {
-                      widget.locate<HomeSearchCubit>().updateFilter(
-                        option.id,
-                        tab: HomeTab.chats,
+                      widget.locate<HomeBloc>().add(
+                        HomeSearchFilterChanged(option.id, tab: HomeTab.chats),
                       );
                       popoverController.hide();
                     },

@@ -4,11 +4,10 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
-import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
-import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
+import 'package:axichat/src/avatar/view/signup_avatar_editor_panel.dart';
+import 'package:axichat/src/avatar/view/signup_avatar_selector.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';

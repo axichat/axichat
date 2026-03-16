@@ -5,7 +5,9 @@ import 'dart:typed_data';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';

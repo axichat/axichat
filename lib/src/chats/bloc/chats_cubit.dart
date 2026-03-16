@@ -10,7 +10,6 @@ import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -103,24 +102,17 @@ enum ChatsCreateRoomFailure {
 }
 
 class ChatsCubit extends Cubit<ChatsState> {
-  ChatsCubit({
-    required XmppService xmppService,
-    required HomeRefreshSyncService homeRefreshSyncService,
-    EmailService? emailService,
-  }) : _chatsService = xmppService,
-       _xmppService = xmppService,
-       _homeRefreshSyncService = homeRefreshSyncService,
-       _emailService = emailService,
-       super(_seedInitialState(xmppService.cachedChatList)) {
+  ChatsCubit({required XmppService xmppService, EmailService? emailService})
+    : _chatsService = xmppService,
+      _xmppService = xmppService,
+      _emailService = emailService,
+      super(_seedInitialState(xmppService.cachedChatList)) {
     _chatsSubscription = _chatsService.chatsStream().listen(
       (items) => _updateChats(items),
     );
     _recipientAddressSuggestionsSubscription = _chatsService
         .recipientAddressSuggestionsStream()
         .listen(_updateRecipientAddressSuggestions);
-    _homeRefreshSyncSubscription = _homeRefreshSyncService.syncUpdates.listen(
-      _handleHomeRefreshUpdate,
-    );
     _demoResetSubscription = _xmppService.demoResetStream.listen(
       (_) => _handleDemoReset(),
     );
@@ -149,14 +141,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       openCalendar: false,
       items: items,
       creationStatus: RequestStatus.none,
-      searchQuery: '',
-      searchActive: false,
       searchFilter: SearchFilterId.all,
-      searchSortOrder: SearchSortOrder.newestFirst,
-      spamSearchQuery: '',
-      spamSearchActive: false,
-      spamSearchFilter: SearchFilterId.all,
-      spamSearchSortOrder: SearchSortOrder.newestFirst,
       rosterContacts: const <String>{},
       visibleItems: derived.visibleItems,
       archivedItems: derived.archivedItems,
@@ -167,12 +152,9 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   final ChatsService _chatsService;
   final XmppService _xmppService;
-  final HomeRefreshSyncService _homeRefreshSyncService;
   EmailService? _emailService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
-  late final StreamSubscription<HomeRefreshSyncUpdate>
-  _homeRefreshSyncSubscription;
   late final StreamSubscription<List<String>>
   _recipientAddressSuggestionsSubscription;
   late final StreamSubscription<void> _demoResetSubscription;
@@ -188,7 +170,6 @@ class ChatsCubit extends Cubit<ChatsState> {
       timer.cancel();
     }
     _exportCleanupTimers.clear();
-    await _homeRefreshSyncSubscription.cancel();
     await _chatsSubscription.cancel();
     await _recipientAddressSuggestionsSubscription.cancel();
     await _demoResetSubscription.cancel();
@@ -201,25 +182,6 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   void _handleDemoReset() {
     emit(state.copyWith(demoResetRevision: state.demoResetRevision + 1));
-  }
-
-  void _handleHomeRefreshUpdate(HomeRefreshSyncUpdate update) {
-    final nextStatus = switch (update.phase) {
-      HomeRefreshSyncPhase.running => RequestStatus.loading,
-      HomeRefreshSyncPhase.success => RequestStatus.success,
-      HomeRefreshSyncPhase.failure => RequestStatus.failure,
-      HomeRefreshSyncPhase.idle => RequestStatus.none,
-    };
-    if (state.refreshStatus == nextStatus &&
-        (update.syncedAt == null || state.lastSyncedAt == update.syncedAt)) {
-      return;
-    }
-    emit(
-      state.copyWith(
-        refreshStatus: nextStatus,
-        lastSyncedAt: update.syncedAt ?? state.lastSyncedAt,
-      ),
-    );
   }
 
   void _updateRecipientAddressSuggestions(List<String> suggestions) {
@@ -820,18 +782,6 @@ class ChatsCubit extends Cubit<ChatsState> {
     emit(
       state.copyWith(creationStatus: RequestStatus.none, creationFailure: null),
     );
-  }
-
-  Future<void> refreshHomeSync() {
-    if (!state.refreshStatus.isLoading) {
-      emit(state.copyWith(refreshStatus: RequestStatus.loading));
-    }
-    return _homeRefreshSyncService.refresh().then((_) {});
-  }
-
-  void clearRefreshStatus() {
-    if (state.refreshStatus.isNone) return;
-    emit(state.copyWith(refreshStatus: RequestStatus.none));
   }
 
   Future<void> deleteChat({required String jid}) async {

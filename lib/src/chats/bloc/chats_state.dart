@@ -11,8 +11,6 @@ abstract class ChatsState with _$ChatsState {
     required List<Chat>? items,
     required RequestStatus creationStatus,
     ChatsCreateRoomFailure? creationFailure,
-    @Default(RequestStatus.none) RequestStatus refreshStatus,
-    DateTime? lastSyncedAt,
     @Default(<String>{}) Set<String> selectedJids,
     @Default('') String searchQuery,
     @Default(false) bool searchActive,

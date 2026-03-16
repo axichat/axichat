@@ -1,4 +1,6 @@
-import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 

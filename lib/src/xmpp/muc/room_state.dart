@@ -2,365 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/address_tools.dart';
-import 'package:axichat/src/storage/models/chat_models.dart';
-
-enum MucStatusCode {
-  selfPresence('110'),
-  nickChange('303'),
-  roomCreated('201'),
-  nickAssigned('210'),
-  configurationChanged('104'),
-  banned('301'),
-  kicked('307'),
-  removedByAffiliationChange('321'),
-  removedByMembersOnlyChange('322'),
-  roomShutdown('332');
-
-  const MucStatusCode(this.code);
-
-  final String code;
-}
-
-enum MucJoinErrorCondition {
-  registrationRequired('registration-required'),
-  forbidden('forbidden'),
-  notAuthorized('not-authorized'),
-  itemNotFound('item-not-found'),
-  serviceUnavailable('service-unavailable'),
-  other('');
-
-  const MucJoinErrorCondition(this.xmlValue);
-
-  final String xmlValue;
-
-  bool get blocksAutoRejoin => switch (this) {
-    MucJoinErrorCondition.registrationRequired ||
-    MucJoinErrorCondition.forbidden ||
-    MucJoinErrorCondition.notAuthorized ||
-    MucJoinErrorCondition.itemNotFound => true,
-    _ => false,
-  };
-
-  static MucJoinErrorCondition? fromString(String? value) => switch (value) {
-    'registration-required' => registrationRequired,
-    'forbidden' => forbidden,
-    'not-authorized' => notAuthorized,
-    'item-not-found' => itemNotFound,
-    'service-unavailable' => serviceUnavailable,
-    null || '' => null,
-    _ => other,
-  };
-}
-
-enum OccupantAffiliation {
-  owner,
-  admin,
-  member,
-  outcast,
-  none;
-
-  bool get isOwner => this == owner;
-
-  bool get isAdmin => this == admin;
-
-  bool get isMember => this == member;
-
-  bool get isOutcast => this == outcast;
-
-  bool get isNone => this == none;
-
-  bool get canManagePins => isOwner || isAdmin || isMember;
-
-  int get authorityRank => switch (this) {
-    OccupantAffiliation.owner => 3,
-    OccupantAffiliation.admin => 2,
-    OccupantAffiliation.member => 1,
-    OccupantAffiliation.none => 0,
-    OccupantAffiliation.outcast => -1,
-  };
-
-  String get xmlValue => switch (this) {
-    OccupantAffiliation.owner => 'owner',
-    OccupantAffiliation.admin => 'admin',
-    OccupantAffiliation.member => 'member',
-    OccupantAffiliation.outcast => 'outcast',
-    OccupantAffiliation.none => 'none',
-  };
-
-  static OccupantAffiliation fromString(String? value) => switch (value) {
-    'owner' => owner,
-    'admin' => admin,
-    'member' => member,
-    'outcast' => outcast,
-    _ => none,
-  };
-}
-
-enum OccupantRole {
-  moderator,
-  participant,
-  visitor,
-  none;
-
-  bool get isModerator => this == moderator;
-
-  bool get isParticipant => this == participant;
-
-  bool get isVisitor => this == visitor;
-
-  bool get isNone => this == none;
-
-  String get xmlValue => switch (this) {
-    OccupantRole.moderator => 'moderator',
-    OccupantRole.participant => 'participant',
-    OccupantRole.visitor => 'visitor',
-    OccupantRole.none => 'none',
-  };
-
-  static OccupantRole fromString(String? value) => switch (value) {
-    'moderator' => moderator,
-    'participant' => participant,
-    'visitor' => visitor,
-    _ => none,
-  };
-}
-
-final class MucAffiliationEntry {
-  const MucAffiliationEntry({
-    required this.affiliation,
-    this.jid,
-    this.nick,
-    this.role,
-    this.reason,
-  });
-
-  final OccupantAffiliation affiliation;
-  final String? jid;
-  final String? nick;
-  final OccupantRole? role;
-  final String? reason;
-}
-
-class Occupant {
-  Occupant({
-    required this.occupantId,
-    required this.nick,
-    this.realJid,
-    this.affiliation = OccupantAffiliation.none,
-    this.role = OccupantRole.none,
-    this.chatType = ChatType.groupChat,
-    this.isPresent = true,
-  });
-
-  final String occupantId;
-  final String nick;
-  final String? realJid;
-  final OccupantAffiliation affiliation;
-  final OccupantRole role;
-  final ChatType chatType;
-  final bool isPresent;
-
-  bool get isModerator => role.isModerator;
-  bool get isOffline => !isPresent;
-  bool get hasRealJid => realJid?.trim().isNotEmpty == true;
-  bool get hasResolvedMembershipState => !affiliation.isNone || !role.isNone;
-  String get normalizedNick => nick.trim().toLowerCase();
-  String? get bareRealJid {
-    final resolvedRealJid = realJid?.trim();
-    if (resolvedRealJid == null || resolvedRealJid.isEmpty) {
-      return null;
-    }
-    return bareAddress(resolvedRealJid) ?? resolvedRealJid;
-  }
-
-  String? get normalizedBareRealJid {
-    final resolvedRealJid = realJid?.trim();
-    if (resolvedRealJid == null || resolvedRealJid.isEmpty) {
-      return null;
-    }
-    final normalized = normalizedAddressKey(resolvedRealJid);
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-    return normalized;
-  }
-
-  String get avatarKey {
-    final resolvedRealJid = bareRealJid;
-    if (resolvedRealJid == null) {
-      return nick;
-    }
-    return resolvedRealJid;
-  }
-
-  RoomMemberSectionKind get memberSectionKind {
-    if (affiliation.isOwner) {
-      return RoomMemberSectionKind.owners;
-    }
-    if (affiliation.isAdmin) {
-      return RoomMemberSectionKind.admins;
-    }
-    if (role.isModerator) {
-      return RoomMemberSectionKind.moderators;
-    }
-    if (affiliation.isMember) {
-      return RoomMemberSectionKind.members;
-    }
-    if (role.isParticipant) {
-      return RoomMemberSectionKind.participants;
-    }
-    return RoomMemberSectionKind.visitors;
-  }
-
-  bool matchesOccupantId(String? value) {
-    final trimmedValue = value?.trim();
-    if (trimmedValue == null || trimmedValue.isEmpty) {
-      return false;
-    }
-    return occupantId == trimmedValue ||
-        sameFullAddress(occupantId, trimmedValue);
-  }
-
-  bool matchesNick(String? value) {
-    final trimmedValue = value?.trim();
-    if (trimmedValue == null || trimmedValue.isEmpty) {
-      return false;
-    }
-    return normalizedNick == trimmedValue.toLowerCase();
-  }
-
-  bool matchesRealJid(String? value) {
-    final trimmedValue = value?.trim();
-    if (trimmedValue == null || trimmedValue.isEmpty || !hasRealJid) {
-      return false;
-    }
-    return sameBareAddress(realJid, trimmedValue);
-  }
-
-  bool canBeKickedBy({
-    required OccupantAffiliation actorAffiliation,
-    required OccupantRole actorRole,
-  }) {
-    if (!isPresent) {
-      return false;
-    }
-    if (!actorRole.isModerator &&
-        !actorAffiliation.isAdmin &&
-        !actorAffiliation.isOwner) {
-      return false;
-    }
-    if (actorAffiliation.authorityRank < affiliation.authorityRank) {
-      return false;
-    }
-    if (role.isModerator) {
-      return actorAffiliation.isAdmin || actorAffiliation.isOwner;
-    }
-    return role.isParticipant || role.isVisitor;
-  }
-
-  bool canBeBannedBy({required OccupantAffiliation actorAffiliation}) {
-    if (normalizedBareRealJid == null) return false;
-    if (actorAffiliation.isOwner) return true;
-    if (actorAffiliation.isAdmin) {
-      return affiliation.isMember || affiliation.isNone;
-    }
-    return false;
-  }
-
-  bool canChangeAffiliationTo({
-    required OccupantAffiliation actorAffiliation,
-    required OccupantAffiliation nextAffiliation,
-  }) {
-    if (normalizedBareRealJid == null) return false;
-    if (affiliation == nextAffiliation) return false;
-    if (actorAffiliation.isOwner) {
-      return true;
-    }
-    if (!actorAffiliation.isAdmin) {
-      return false;
-    }
-    return nextAffiliation.isMember && affiliation.isNone;
-  }
-
-  bool canBeGrantedModeratorBy({
-    required OccupantAffiliation actorAffiliation,
-  }) {
-    if (!isPresent) {
-      return false;
-    }
-    if (!actorAffiliation.isOwner && !actorAffiliation.isAdmin) {
-      return false;
-    }
-    if (role.isModerator) {
-      return false;
-    }
-    return affiliation.isMember || affiliation.isNone;
-  }
-
-  bool canBeRevokedModeratorBy({
-    required OccupantAffiliation actorAffiliation,
-  }) {
-    if (!isPresent) {
-      return false;
-    }
-    if (!actorAffiliation.isOwner && !actorAffiliation.isAdmin) {
-      return false;
-    }
-    if (!role.isModerator) {
-      return false;
-    }
-    return affiliation.isMember || affiliation.isNone;
-  }
-
-  String? nextRealJid(String? realJid, {Occupant? fallback}) =>
-      realJid ?? (isPresent ? this.realJid : null) ?? fallback?.realJid;
-
-  OccupantAffiliation nextAffiliation(
-    OccupantAffiliation? affiliation, {
-    Occupant? fallback,
-  }) {
-    final nextAffiliation = affiliation ?? this.affiliation;
-    if (!nextAffiliation.isNone) {
-      return nextAffiliation;
-    }
-    return fallback?.affiliation ?? OccupantAffiliation.none;
-  }
-
-  OccupantRole nextRole(OccupantRole? role, {Occupant? fallback}) {
-    final nextRole = role ?? this.role;
-    if (!nextRole.isNone) {
-      return nextRole;
-    }
-    return fallback?.role ?? OccupantRole.none;
-  }
-
-  bool nextPresence(bool? isPresent) => isPresent ?? this.isPresent;
-
-  Occupant withUnavailable() {
-    if (!isPresent) {
-      return this;
-    }
-    return copyWith(isPresent: false);
-  }
-
-  Occupant copyWith({
-    String? occupantId,
-    String? nick,
-    String? realJid,
-    OccupantAffiliation? affiliation,
-    OccupantRole? role,
-    ChatType? chatType,
-    bool? isPresent,
-  }) => Occupant(
-    occupantId: occupantId ?? this.occupantId,
-    nick: nick ?? this.nick,
-    realJid: realJid ?? this.realJid,
-    affiliation: affiliation ?? this.affiliation,
-    role: role ?? this.role,
-    chatType: chatType ?? this.chatType,
-    isPresent: isPresent ?? this.isPresent,
-  );
-}
+import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
+import 'package:axichat/src/xmpp/muc/occupant.dart';
 
 class RoomState {
   RoomState({
@@ -406,15 +49,10 @@ class RoomState {
   }
 
   List<Occupant> get owners => _occupantGroups.owners;
-
   List<Occupant> get admins => _occupantGroups.admins;
-
   List<Occupant> get moderators => _occupantGroups.moderators;
-
   List<Occupant> get members => _occupantGroups.members;
-
   List<Occupant> get participants => _occupantGroups.participants;
-
   List<Occupant> get visitors => _occupantGroups.visitors;
 
   bool isSelfOccupantId(String? occupantId) {
@@ -1208,15 +846,6 @@ enum MucModerationAction {
   bool get isRoleChange => this == moderator || this == participant;
 }
 
-enum RoomMemberSectionKind {
-  owners,
-  admins,
-  moderators,
-  members,
-  participants,
-  visitors,
-}
-
 class RoomMemberEntry {
   const RoomMemberEntry({
     required this.occupant,
@@ -1320,13 +949,17 @@ class _RoomOccupantDirectory {
       if (!occupant.matchesNick(trimmedNick)) {
         continue;
       }
-      fallback ??= occupant;
+      if (preferPresent && occupant.isPresent) {
+        if (!preferRealJid || occupant.hasRealJid) {
+          return occupant;
+        }
+        fallback ??= occupant;
+        continue;
+      }
       if (preferRealJid && occupant.hasRealJid) {
         return occupant;
       }
-      if (preferPresent && occupant.isPresent) {
-        return occupant;
-      }
+      fallback ??= occupant;
     }
     return fallback;
   }
@@ -1335,37 +968,26 @@ class _RoomOccupantDirectory {
     String senderJid, {
     bool preferRealJid = false,
   }) {
-    final trimmedSenderJid = senderJid.trim();
-    if (trimmedSenderJid.isEmpty) {
-      return null;
-    }
-    final direct = occupants[trimmedSenderJid];
-    Occupant? fallback = direct;
+    final occupantId = canonicalOccupantId(senderJid);
+    final direct = occupantId == null ? null : occupants[occupantId];
     if (direct != null && (!preferRealJid || direct.hasRealJid)) {
       return direct;
     }
+    final nick = addressResourcePart(senderJid)?.trim();
+    if (nick == null || nick.isEmpty) {
+      return direct;
+    }
+    Occupant? fallback = direct;
     for (final occupant in occupants.values) {
-      if (occupant.occupantId == direct?.occupantId) {
+      if (!occupant.matchesNick(nick)) {
         continue;
       }
-      if (!occupant.matchesOccupantId(trimmedSenderJid)) {
-        continue;
-      }
-      fallback ??= occupant;
-      if (!preferRealJid || occupant.hasRealJid) {
+      if (preferRealJid && occupant.hasRealJid) {
         return occupant;
       }
+      fallback ??= occupant;
     }
-    final senderNick = addressResourcePart(trimmedSenderJid)?.trim();
-    if (senderNick == null || senderNick.isEmpty) {
-      return fallback;
-    }
-    return occupantForNick(
-          senderNick,
-          preferRealJid: preferRealJid,
-          preferPresent: !preferRealJid,
-        ) ??
-        fallback;
+    return fallback;
   }
 
   String? canonicalOccupantId(String occupantId) {
@@ -1376,62 +998,33 @@ class _RoomOccupantDirectory {
     if (occupants.containsKey(trimmedOccupantId)) {
       return trimmedOccupantId;
     }
-    if (isRoomNickOccupantId(trimmedOccupantId)) {
-      for (final occupant in occupants.values) {
-        if (!isRoomNickOccupantId(occupant.occupantId)) {
-          continue;
-        }
-        if (occupant.matchesOccupantId(trimmedOccupantId)) {
-          return occupant.occupantId;
-        }
+    for (final key in occupants.keys) {
+      if (sameFullAddress(key, trimmedOccupantId)) {
+        return key;
       }
-      final nick = addressResourcePart(trimmedOccupantId)?.trim();
-      if (nick == null || nick.isEmpty) {
-        return null;
-      }
-      return occupantForNick(
-        nick,
-        preferPresent: true,
-        roomNickOccupantOnly: true,
-      )?.occupantId;
     }
-    return occupantForSenderJid(trimmedOccupantId)?.occupantId;
+    return null;
   }
 
   String? occupantIdForAffiliation({String? realJid, String? nick}) {
     final trimmedRealJid = realJid?.trim();
-    if (trimmedRealJid?.isNotEmpty == true) {
-      final direct = occupantForRealJid(
-        trimmedRealJid!,
-        excludeRoomNickOccupantIds: false,
-      );
-      if (direct != null) {
-        return direct.occupantId;
+    if (trimmedRealJid != null && trimmedRealJid.isNotEmpty) {
+      final byRealJid = occupantForRealJid(trimmedRealJid);
+      if (byRealJid != null) {
+        return byRealJid.occupantId;
       }
-      final trimmedNick = nick?.trim();
-      if (trimmedNick?.isNotEmpty == true) {
-        final roomNickOccupant = occupantForNick(
-          trimmedNick!,
-          preferPresent: true,
-          roomNickOccupantOnly: true,
-        );
-        if (roomNickOccupant == null) {
-          return null;
-        }
-        final occupantRealJid = roomNickOccupant.realJid?.trim();
-        if (occupantRealJid != null &&
-            occupantRealJid.isNotEmpty &&
-            !sameBareAddress(occupantRealJid, trimmedRealJid)) {
-          return null;
-        }
-        return roomNickOccupant.occupantId;
-      }
-      return null;
     }
     final trimmedNick = nick?.trim();
-    if (trimmedNick?.isNotEmpty != true) {
-      return null;
+    if (trimmedNick != null && trimmedNick.isNotEmpty) {
+      final byNick = occupantForNick(
+        trimmedNick,
+        preferPresent: true,
+        preferRealJid: true,
+      );
+      if (byNick != null) {
+        return byNick.occupantId;
+      }
     }
-    return canonicalOccupantId('$roomJid/$trimmedNick');
+    return null;
   }
 }
