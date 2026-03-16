@@ -8,7 +8,7 @@ import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -23,7 +23,7 @@ class SpamList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<HomeSearchCubit, HomeSearchState, _SpamSearchInputs>(
+    return BlocSelector<HomeBloc, HomeState, _SpamSearchInputs>(
       selector: (state) =>
           (active: state.active, tabState: state.stateFor(HomeTab.spam)),
       builder: (context, searchInputs) => _SpamSearchSync(

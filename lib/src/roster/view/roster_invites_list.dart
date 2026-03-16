@@ -6,7 +6,7 @@ import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -19,7 +19,7 @@ class RosterInvitesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<HomeSearchCubit, HomeSearchState>(
+    return BlocListener<HomeBloc, HomeState>(
       listener: (context, searchState) {
         final tabState = searchState.stateFor(HomeTab.invites);
         final query = searchState.active ? tabState.query : '';

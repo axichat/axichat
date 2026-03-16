@@ -8,7 +8,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -21,7 +21,7 @@ class RosterList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<HomeSearchCubit, HomeSearchState>(
+    return BlocListener<HomeBloc, HomeState>(
       listener: (context, searchState) {
         final tabState = searchState.stateFor(HomeTab.contacts);
         final query = searchState.active ? tabState.query : '';

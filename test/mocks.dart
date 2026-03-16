@@ -10,7 +10,6 @@ import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -47,9 +46,6 @@ class MockChatsService extends Mock implements ChatsService {}
 class MockMucService extends Mock implements MucService {}
 
 class MockEmailService extends Mock implements EmailService {}
-
-class MockHomeRefreshSyncService extends Mock
-    implements HomeRefreshSyncService {}
 
 class MockCalendarReminderController extends Mock
     implements CalendarReminderController {}

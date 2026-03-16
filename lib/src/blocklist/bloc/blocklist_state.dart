@@ -3,6 +3,22 @@
 
 part of 'blocklist_cubit.dart';
 
+class BlocklistEntry {
+  const BlocklistEntry({
+    required this.address,
+    required this.blockedAt,
+    required this.transport,
+  });
+
+  final String address;
+  final DateTime blockedAt;
+  final MessageTransport transport;
+
+  bool get isEmail => transport.isEmail;
+
+  bool get isXmpp => transport.isXmpp;
+}
+
 sealed class BlocklistState extends Equatable {
   const BlocklistState({this.items, this.visibleItems});
 

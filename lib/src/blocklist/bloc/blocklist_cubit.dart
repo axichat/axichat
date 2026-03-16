@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/address_tools.dart';

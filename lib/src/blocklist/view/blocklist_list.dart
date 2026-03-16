@@ -3,11 +3,10 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_tile.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/home/home_search_cubit.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -30,10 +29,10 @@ class _BlocklistListState extends State<BlocklistList> {
     if (!widget.bindHomeSearch) {
       return;
     }
-    _syncSearchState(context, context.read<HomeSearchCubit>().state);
+    _syncSearchState(context, context.read<HomeBloc>().state);
   }
 
-  void _syncSearchState(BuildContext context, HomeSearchState searchState) {
+  void _syncSearchState(BuildContext context, HomeState searchState) {
     final tabState = searchState.stateFor(HomeTab.blocked);
     final query = searchState.active ? tabState.query : '';
     context.read<BlocklistCubit>().updateFilter(
@@ -87,7 +86,7 @@ class _BlocklistListState extends State<BlocklistList> {
     if (!widget.bindHomeSearch) {
       return body;
     }
-    return BlocListener<HomeSearchCubit, HomeSearchState>(
+    return BlocListener<HomeBloc, HomeState>(
       listener: _syncSearchState,
       child: body,
     );

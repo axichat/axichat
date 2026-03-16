@@ -7,16 +7,22 @@ import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
-import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:logging/logging.dart';
 
 part 'home_event.dart';
-part 'home_refresh.dart';
 part 'home_state.dart';
+
+enum _HomeRefreshOutcome {
+  success,
+  failure;
+
+  bool get isSuccess => this == success;
+
+  bool get isFailure => this == failure;
+}
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   HomeBloc({
@@ -44,7 +50,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final Logger _log = Logger('HomeBloc');
   EmailService? _emailService;
   StreamSubscription<void>? _emailSyncSubscription;
-  Future<DateTime>? _syncTask;
+  Future<_HomeRefreshOutcome>? _syncTask;
 
   void _onActiveTabChanged(
     HomeActiveTabChanged event,
@@ -113,19 +119,19 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     HomeRefreshRequested event,
     Emitter<HomeState> emit,
   ) async {
-    await _runSync(emit, _runRefreshSequence);
+    await _runSync(emit, _runRefreshGesture);
   }
 
   Future<void> _onEmailUnreadRefreshRequested(
     _HomeEmailUnreadRefreshRequested event,
     Emitter<HomeState> emit,
   ) async {
-    await _runSync(emit, _runEmailUnreadRefreshSequence);
+    await _runSync(emit, _runEmailUnreadRefreshGesture);
   }
 
   Future<void> _runSync(
     Emitter<HomeState> emit,
-    Future<DateTime> Function() action,
+    Future<_HomeRefreshOutcome> Function() action,
   ) async {
     final pending = _syncTask;
     if (pending != null) {
@@ -139,11 +145,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     _syncTask = task;
 
     try {
-      final syncedAt = await task;
+      final outcome = await task;
+      if (outcome.isFailure) {
+        emit(state.copyWith(refreshStatus: RequestStatus.failure));
+        return;
+      }
       emit(
         state.copyWith(
           refreshStatus: RequestStatus.success,
-          lastSyncedAt: syncedAt,
+          lastSyncedAt: DateTime.timestamp(),
         ),
       );
     } on Exception catch (error, stackTrace) {
@@ -193,10 +203,107 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   @override
   Future<void> close() async {
-    _syncTask = null;
     final emailSubscription = _emailSyncSubscription;
     _emailSyncSubscription = null;
     await emailSubscription?.cancel();
     return super.close();
+  }
+
+  Future<void> _attachEmailSyncSubscription(EmailService? emailService) async {
+    final existingSubscription = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await existingSubscription?.cancel();
+
+    if (emailService == null) {
+      return;
+    }
+
+    _emailSyncSubscription = emailService.readyTransitionStream.listen(
+      (_) => _runEmailReconnectSync(),
+    );
+  }
+
+  Future<void> _runEmailReconnectSync() async {
+    if (_syncTask != null) {
+      return;
+    }
+    add(const _HomeEmailUnreadRefreshRequested());
+  }
+
+  Future<_HomeRefreshOutcome> _runRefreshGesture() async {
+    final emailService = _emailService;
+    if (!await _runEmailRefreshGesture(emailService)) {
+      return _HomeRefreshOutcome.failure;
+    }
+    if (!_xmppService.hasConnectionSettings || !_xmppService.connected) {
+      return _HomeRefreshOutcome.success;
+    }
+
+    final mamOutcome = await _xmppService.syncGlobalMamCatchUpForRefresh(
+      pageSize: 50,
+    );
+    if (!_isAcceptableMamOutcome(mamOutcome)) {
+      return _HomeRefreshOutcome.failure;
+    }
+    if (emailService != null &&
+        !await emailService.syncContactsForHomeRefresh()) {
+      return _HomeRefreshOutcome.failure;
+    }
+    if (!await _xmppService.syncSpamSnapshot()) {
+      return _HomeRefreshOutcome.failure;
+    }
+    if (!await _xmppService.syncAddressBlockSnapshot()) {
+      return _HomeRefreshOutcome.failure;
+    }
+    await _xmppService.syncConversationIndexSnapshot();
+    await _xmppService.syncMucBookmarksSnapshot();
+    if (emailService != null &&
+        !await emailService.refreshHistoryForHomeRefresh()) {
+      return _HomeRefreshOutcome.failure;
+    }
+    await _xmppService.rehydrateCalendarFromMam();
+    await _xmppService.refreshAvatarsForConversationIndex();
+    await _xmppService.syncDraftsSnapshot();
+    return _HomeRefreshOutcome.success;
+  }
+
+  Future<bool> _runEmailRefreshGesture(EmailService? emailService) async {
+    if (emailService == null) {
+      return true;
+    }
+    if (!await emailService.recoverForHomeRefresh()) {
+      return false;
+    }
+    if (!await emailService.syncContactsForHomeRefresh()) {
+      return false;
+    }
+    if (!await emailService.refreshHistoryForHomeRefresh()) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<_HomeRefreshOutcome> _runEmailUnreadRefreshGesture() async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      return _HomeRefreshOutcome.success;
+    }
+    final didRefresh = await emailService.refreshUnreadForHomeRefresh();
+    return didRefresh
+        ? _HomeRefreshOutcome.success
+        : _HomeRefreshOutcome.failure;
+  }
+
+  bool _isAcceptableMamOutcome(MamGlobalSyncOutcome outcome) {
+    switch (outcome) {
+      case MamGlobalSyncOutcome.completed:
+      case MamGlobalSyncOutcome.skippedUnsupported:
+      case MamGlobalSyncOutcome.skippedDenied:
+      case MamGlobalSyncOutcome.skippedInFlight:
+      case MamGlobalSyncOutcome.skippedResumed:
+        return true;
+      case MamGlobalSyncOutcome.failed:
+        return false;
+    }
   }
 }
