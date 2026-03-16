@@ -1,4 +1,4 @@
-import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
+import 'package:axichat/src/chat/view/timeline/message/email_image_extension.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;

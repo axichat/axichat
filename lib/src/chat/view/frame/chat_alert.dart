@@ -1,14 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025-present Eliot Lew, Axichat Developers
-
-import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:flutter/widgets.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+part of '../chat.dart';
 
 class ChatAlert extends StatelessWidget {
   const ChatAlert({super.key});

@@ -1,27 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025-present Eliot Lew, Axichat Developers
-
-import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/url_safety.dart';
-import 'package:axichat/src/chat/view/widgets/email_html_web_view.dart';
-import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
-import 'package:axichat/src/email/util/delta_jids.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/storage/models.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:logging/logging.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:intl/intl.dart' as intl;
-import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:url_launcher/url_launcher.dart';
+part of '../chat.dart';
 
 class ChatMessageDetails extends StatefulWidget {
   const ChatMessageDetails({
@@ -31,7 +8,7 @@ class ChatMessageDetails extends StatefulWidget {
     required this.onEmailImagesApproved,
   });
 
-  final ValueChanged<Chat>? onAddRecipient;
+  final ValueChanged<storage_models.Chat>? onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
 
@@ -110,7 +87,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                       bareSender == bareAddress(resolvedEmailSelfJid));
               final shareContext = state.shareContexts[message.stanzaID];
               final shareParticipants = _shareParticipants(
-                shareContext?.participants ?? const <Chat>[],
+                shareContext?.participants ?? const <storage_models.Chat>[],
                 state.chat?.jid,
                 profileJid,
               );
@@ -537,13 +514,13 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     );
   }
 
-  List<Chat> _shareParticipants(
-    List<Chat> participants,
+  List<storage_models.Chat> _shareParticipants(
+    List<storage_models.Chat> participants,
     String? chatJid,
     String? selfJid,
   ) {
     if (participants.isEmpty) {
-      return const <Chat>[];
+      return const <storage_models.Chat>[];
     }
     return participants.where((participant) {
       final jid = participant.jid;
@@ -559,7 +536,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
 
   Future<void> _showRecipientActions(
     BuildContext context, {
-    required Chat recipient,
+    required storage_models.Chat recipient,
     required bool canCreateEmailChat,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -957,7 +934,7 @@ class _MessageDetailsInfo extends StatelessWidget {
 class _RecipientChip extends StatelessWidget {
   const _RecipientChip({required this.chat, required this.onPressed});
 
-  final Chat chat;
+  final storage_models.Chat chat;
   final VoidCallback onPressed;
 
   @override
@@ -983,8 +960,8 @@ class _RecipientChip extends StatelessWidget {
   }
 }
 
-class _ReactionChip extends StatelessWidget {
-  const _ReactionChip({required this.reaction});
+class _MessageDetailsReactionChip extends StatelessWidget {
+  const _MessageDetailsReactionChip({required this.reaction});
 
   final ReactionPreview reaction;
 
@@ -1052,7 +1029,7 @@ class _RecipientsRow extends StatelessWidget {
   const _RecipientsRow({required this.sender, required this.recipients});
 
   final String? sender;
-  final List<Chat> recipients;
+  final List<storage_models.Chat> recipients;
 
   @override
   Widget build(BuildContext context) {
@@ -1111,7 +1088,8 @@ class _ReactionsRow extends StatelessWidget {
           runSpacing: spacing.s,
           alignment: WrapAlignment.center,
           children: [
-            for (final reaction in reactions) _ReactionChip(reaction: reaction),
+            for (final reaction in reactions)
+              _MessageDetailsReactionChip(reaction: reaction),
           ],
         ),
       ],

@@ -2,7 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/chat/models/chat_timeline.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/email/models/fan_out_models.dart';

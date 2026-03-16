@@ -3,7 +3,7 @@ import 'dart:collection';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
@@ -20,7 +20,6 @@ import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart' show DraftSaveResult;
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter/material.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
@@ -157,7 +156,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockMessageService messageService;
-  late MockDraftSyncService draftSyncService;
   late MockChatsService chatsService;
   late MockNotificationService notificationService;
   late MockMucService mucService;
@@ -190,7 +188,6 @@ void main() {
 
   setUp(() {
     messageService = MockMessageService();
-    draftSyncService = MockDraftSyncService();
     chatsService = MockChatsService();
     notificationService = MockNotificationService();
     mucService = MockMucService();
@@ -339,7 +336,7 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => draftSyncService.saveDraft(
+      () => messageService.saveDraft(
         id: any(named: 'id'),
         jids: any(named: 'jids'),
         body: any(named: 'body'),
@@ -347,10 +344,12 @@ void main() {
         attachments: any(named: 'attachments'),
       ),
     ).thenAnswer(
-      (_) async => const DraftSaveResult(
-        draftId: 1,
-        attachmentMetadataIds: [],
-        draftCount: 1,
+      (_) async => Draft(
+        id: 1,
+        jids: const <String>[],
+        draftSyncId: 'draft-1',
+        draftUpdatedAt: DateTime(2024, 1, 1),
+        draftSourceId: 'source-1',
       ),
     );
   });
@@ -398,7 +397,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -473,7 +471,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -571,7 +568,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -635,7 +631,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -705,7 +700,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -807,7 +801,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -884,7 +877,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -978,7 +970,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1065,7 +1056,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1118,7 +1108,6 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1199,7 +1188,6 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1283,7 +1271,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1381,7 +1368,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1412,7 +1398,7 @@ void main() {
       await _pumpBloc();
 
       verify(
-        () => draftSyncService.saveDraft(
+        () => messageService.saveDraft(
           id: null,
           jids: [initialChat.jid],
           body: 'Reply body',
@@ -1457,7 +1443,6 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1531,7 +1516,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1567,7 +1551,7 @@ void main() {
       ),
     ).called(1);
     verifyNever(
-      () => draftSyncService.saveDraft(
+      () => messageService.saveDraft(
         id: null,
         jids: any(named: 'jids'),
         body: any(named: 'body'),
@@ -1599,7 +1583,6 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1669,7 +1652,6 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1712,7 +1694,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1749,7 +1730,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1798,7 +1778,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1862,7 +1841,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1975,7 +1953,6 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2103,7 +2080,6 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2171,7 +2147,6 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -2253,7 +2228,6 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2349,7 +2323,6 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2381,7 +2354,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2438,7 +2410,6 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2557,7 +2528,6 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: xmppService,
-      draftSyncService: xmppService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -2603,7 +2573,6 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2709,7 +2678,6 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2752,7 +2720,6 @@ void main() {
     final bloc = ChatBloc(
       jid: roomJid,
       messageService: messageService,
-      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -2795,7 +2762,6 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2837,7 +2803,6 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2947,7 +2912,6 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
-        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,

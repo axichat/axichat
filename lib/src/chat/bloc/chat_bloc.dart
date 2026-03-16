@@ -17,7 +17,7 @@ import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/event_transform.dart';
@@ -239,7 +239,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required this.jid,
     required MessageService messageService,
-    required DraftSyncService draftSyncService,
     required ChatsService chatsService,
     required NotificationService notificationService,
     required MucService mucService,
@@ -247,7 +246,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     EmailService? emailService,
     OmemoService? omemoService,
   }) : _messageService = messageService,
-       _draftSyncService = draftSyncService,
        _chatsService = chatsService,
        _notificationService = notificationService,
        _emailService = emailService,
@@ -404,7 +402,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String? jid;
   late final String? _chatLookupJid = normalizeAddress(jid);
   final MessageService _messageService;
-  final DraftSyncService _draftSyncService;
   XmppService? _xmppService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
@@ -4770,7 +4767,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final target = event.target;
     final message = event.message;
-    final isEmailTarget = _isEmailForwardTarget(target);
+    final forwardAsEmail =
+        message.isEmailBacked || target.usesEmailTransport(allowHint: true);
     final targetJid = target.recipientId?.trim();
     final emailService = _emailService;
     final syntheticForward = _syntheticForwardEnvelope(message);
@@ -4806,7 +4804,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     try {
       Chat? resolvedEmailTarget;
-      if (isEmailTarget) {
+      if (forwardAsEmail) {
         if (emailService == null) {
           emitForwardFailure();
           return;
@@ -4820,11 +4818,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
       }
-      if (!isEmailTarget && (targetJid == null || targetJid.isEmpty)) {
+      if (!forwardAsEmail && (targetJid == null || targetJid.isEmpty)) {
         emitForwardFailure();
         return;
       }
-      if (isEmailTarget &&
+      if (forwardAsEmail &&
           emailService != null &&
           resolvedEmailTarget != null &&
           message.deltaMsgId != null) {
@@ -4839,7 +4837,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       final attachments = await _attachmentsForMessage(message);
       if (attachments.isNotEmpty) {
-        if (isEmailTarget) {
+        if (forwardAsEmail) {
           if (emailService == null || resolvedEmailTarget == null) {
             emitForwardFailure();
             return;
@@ -4892,7 +4890,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emitForwardSuccess();
         return;
       }
-      if (isEmailTarget) {
+      if (forwardAsEmail) {
         if (emailService == null || resolvedEmailTarget == null) {
           emitForwardFailure();
           return;
@@ -4921,10 +4919,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.warning(_messageForwardFailedLogMessage, error, stackTrace);
       emitForwardFailure();
     }
-  }
-
-  bool _isEmailForwardTarget(Contact target) {
-    return target.usesEmailTransport(allowHint: true);
   }
 
   Future<Chat?> _resolveEmailForwardTarget({
@@ -7184,7 +7178,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? null
         : _quotedMessageReference(quotedMessage: quotedDraft, chat: chat);
     try {
-      await _draftSyncService.saveDraft(
+      await _messageService.saveDraft(
         id: null,
         jids: resolvedRecipients,
         body: trimmedBody,
