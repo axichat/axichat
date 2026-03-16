@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+
+part of 'package:axichat/src/home/view/home_screen.dart';
+
+class _HomeSearchPanel extends StatefulWidget {
+  const _HomeSearchPanel({required this.tabs});
+
+  final List<HomeTabEntry> tabs;
+
+  @override
+  State<_HomeSearchPanel> createState() => _HomeSearchPanelState();
+}
+
+class _HomeSearchPanelState extends State<_HomeSearchPanel> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  var _programmaticChange = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _focusNode = FocusNode();
+    _controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleTextChanged);
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleTextChanged() {
+    if (_programmaticChange) return;
+    final locate = context.read;
+    locate<HomeSearchCubit>().updateQuery(_controller.text);
+    setState(() {});
+  }
+
+  void _syncController(String text) {
+    if (_controller.text == text) return;
+    _programmaticChange = true;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _programmaticChange = false;
+    setState(() {});
+  }
+
+  String _filterLabel(List<HomeSearchFilter> filters, SearchFilterId? id) {
+    for (final filter in filters) {
+      if (filter.id == id) return filter.label;
+    }
+    return filters.isNotEmpty ? filters.first.label : '';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<HomeSearchCubit, HomeSearchState>(
+      listener: (context, state) {
+        final query = state.currentTabState?.query ?? '';
+        _syncController(query);
+        if (state.active) {
+          if (!mounted || _focusNode.hasFocus) return;
+          _focusNode.requestFocus();
+        } else if (_focusNode.hasFocus) {
+          _focusNode.unfocus();
+        }
+      },
+      builder: (context, state) {
+        final locate = context.read;
+        final l10n = context.l10n;
+        final spacing = context.spacing;
+        final active = state.active;
+        final tab = state.activeTab;
+        final entry = tab == null
+            ? (widget.tabs.isEmpty ? null : widget.tabs.first)
+            : widget.tabs.firstWhere(
+                (candidate) => candidate.id == tab,
+                orElse: () => widget.tabs.first,
+              );
+        final filters = entry?.searchFilters ?? const <HomeSearchFilter>[];
+        final currentTabState = tab == null ? null : state.stateFor(tab);
+        final sortValue = currentTabState?.sort ?? SearchSortOrder.newestFirst;
+        final selectedFilterId = currentTabState?.filterId;
+        final effectiveFilterId = filters.isEmpty
+            ? null
+            : (selectedFilterId ?? filters.first.id);
+        final placeholder = entry == null
+            ? l10n.homeSearchPlaceholderTabs
+            : l10n.homeSearchPlaceholderForTab(entry.label);
+        final filterLabel = filters.isEmpty
+            ? null
+            : _filterLabel(filters, effectiveFilterId);
+        return AnimatedCrossFade(
+          crossFadeState: active
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          duration: context.watch<SettingsCubit>().animationDuration,
+          reverseDuration: context.watch<SettingsCubit>().animationDuration,
+          sizeCurve: Curves.easeInOutCubic,
+          firstChild: const SizedBox.shrink(),
+          secondChild: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.m,
+              vertical: spacing.s,
+            ),
+            decoration: BoxDecoration(
+              color: context.colorScheme.card,
+              border: Border(bottom: context.borderSide),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: SearchInputField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        placeholder: Text(placeholder),
+                        clearTooltip: l10n.commonClear,
+                        onClear: () =>
+                            locate<HomeSearchCubit>().clearQuery(tab: tab),
+                      ),
+                    ),
+                    SizedBox(width: spacing.s),
+                    AxiButton.ghost(
+                      onPressed: () =>
+                          locate<HomeSearchCubit>().setSearchActive(false),
+                      child: Text(l10n.commonCancel),
+                    ),
+                  ],
+                ),
+                SizedBox(height: spacing.s),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AxiSelect<SearchSortOrder>(
+                        initialValue: sortValue,
+                        onChanged: (value) {
+                          if (value == null) return;
+                          locate<HomeSearchCubit>().updateSort(value, tab: tab);
+                        },
+                        options: SearchSortOrder.values
+                            .map(
+                              (order) => ShadOption<SearchSortOrder>(
+                                value: order,
+                                child: Text(order.label(l10n)),
+                              ),
+                            )
+                            .toList(),
+                        selectedOptionBuilder: (_, value) =>
+                            Text(value.label(l10n)),
+                      ),
+                    ),
+                    if (filters.length > 1 && effectiveFilterId != null) ...[
+                      SizedBox(width: spacing.s),
+                      Expanded(
+                        child: AxiSelect<SearchFilterId>(
+                          initialValue: effectiveFilterId,
+                          onChanged: (value) {
+                            locate<HomeSearchCubit>().updateFilter(
+                              value,
+                              tab: tab,
+                            );
+                          },
+                          options: filters
+                              .map(
+                                (filter) => ShadOption<SearchFilterId>(
+                                  value: filter.id,
+                                  child: Text(filter.label),
+                                ),
+                              )
+                              .toList(),
+                          selectedOptionBuilder: (_, value) =>
+                              Text(_filterLabel(filters, value)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (filterLabel != null && filters.length > 1)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: spacing.s),
+                      child: Text(
+                        l10n.homeSearchFilterLabel(filterLabel),
+                        style: context.textTheme.muted,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

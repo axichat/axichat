@@ -284,9 +284,9 @@ class _GuestBanner extends StatelessWidget {
     final spacing = context.spacing;
     final EdgeInsets bannerPadding = EdgeInsets.fromLTRB(
       basePadding.left,
-      spacing.m,
+      spacing.s,
       basePadding.right,
-      spacing.m,
+      spacing.s,
     );
     final accent = calendarPrimaryColor;
     return Container(
@@ -309,13 +309,13 @@ class _GuestBanner extends StatelessWidget {
               onNavigateBack();
             },
           ),
-          SizedBox(width: spacing.m),
+          SizedBox(width: spacing.s),
           Icon(
             Icons.info_outline_rounded,
             size: context.sizing.menuItemIconSize,
             color: accent,
           ),
-          SizedBox(width: spacing.m),
+          SizedBox(width: spacing.s),
           Expanded(
             child: Text(
               context.l10n.calendarGuestModeNotice,
@@ -323,10 +323,10 @@ class _GuestBanner extends StatelessWidget {
                 color: calendarSubtitleColor,
                 overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
+              maxLines: 1,
             ),
           ),
-          SizedBox(width: spacing.m),
+          SizedBox(width: spacing.s),
           transferMenu,
         ],
       ),

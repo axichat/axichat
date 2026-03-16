@@ -79,7 +79,10 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-part 'home_screen_widgets.dart';
+part 'nexus.dart';
+part 'bottom_bar.dart';
+part 'navigation_rail.dart';
+part 'search_panel.dart';
 
 List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
   HomeSearchFilter(id: SearchFilterId.all, label: l10n.draftsFilterAll),

@@ -571,7 +571,12 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ),
                         ),
-                        secondaryChild: const GuestCalendarWidget(),
+                        secondaryChild: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border(left: borderSide),
+                          ),
+                          child: const GuestCalendarWidget(),
+                        ),
                       ),
                     ),
                   ),

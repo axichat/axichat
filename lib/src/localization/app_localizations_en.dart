@@ -4485,8 +4485,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get calendarGuestModeNotice =>
-      'Guest Mode - Tasks saved locally on this device only';
+  String get calendarGuestModeNotice => 'Guest mode saves on this device only';
 
   @override
   String get calendarGuestSignUpToSync => 'Sign Up to Sync';

@@ -7934,7 +7934,7 @@ abstract class AppLocalizations {
   /// No description provided for @calendarGuestModeNotice.
   ///
   /// In en, this message translates to:
-  /// **'Guest Mode - Tasks saved locally on this device only'**
+  /// **'Guest mode saves on this device only'**
   String get calendarGuestModeNotice;
 
   /// No description provided for @calendarGuestSignUpToSync.

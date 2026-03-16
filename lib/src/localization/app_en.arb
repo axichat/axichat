@@ -1993,7 +1993,7 @@
       "minutes": {}
     }
   },
-  "calendarGuestModeNotice": "Guest Mode - Tasks saved locally on this device only",
+  "calendarGuestModeNotice": "Guest mode saves on this device only",
   "calendarGuestSignUpToSync": "Sign Up to Sync",
   "calendarGuestExportNoData": "No calendar data available to export.",
   "calendarGuestExportTitle": "Export guest calendar",
