@@ -4,7 +4,7 @@
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
-import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/accessibility/accessibility_flow.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';

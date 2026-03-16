@@ -3,7 +3,7 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
+import 'package:axichat/src/accessibility/accessibility_flow.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
