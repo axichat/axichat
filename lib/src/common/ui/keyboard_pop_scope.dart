@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -11,6 +12,11 @@ class KeyboardPopScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    final bool isPopupRoute = route is PopupRoute<dynamic>;
+    if (AxiSurfaceScope.maybeControllerOf(context) != null && !isPopupRoute) {
+      return child;
+    }
     return ListenableBuilder(
       listenable: FocusManager.instance,
       builder: (context, _) {

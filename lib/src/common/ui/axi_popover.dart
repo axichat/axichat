@@ -17,6 +17,7 @@ class AxiPopover extends StatefulWidget {
     required this.popover,
     this.controller,
     this.visible,
+    this.onDismiss,
     this.closeOnTapOutside = true,
     this.focusNode,
     this.anchor,
@@ -33,6 +34,7 @@ class AxiPopover extends StatefulWidget {
   final Widget child;
   final ShadPopoverController? controller;
   final bool? visible;
+  final VoidCallback? onDismiss;
   final bool closeOnTapOutside;
   final FocusNode? focusNode;
   final ShadAnchorBase? anchor;
@@ -91,23 +93,21 @@ final class _AxiPopoverState extends State<AxiPopover> {
 
   void _syncSurfaceRegistration() {
     final controller = widget.controller;
+    final onDismiss = widget.onDismiss;
     final surfaceController = AxiSurfaceScope.maybeControllerOf(context);
     if (_registeredSurfaceController != null &&
         _registeredSurfaceController != surfaceController) {
       _registeredSurfaceController!.unregisterSurface(_surfaceOwner);
       _registeredSurfaceController = null;
     }
-    final shouldRegister =
-        controller != null && controller.isOpen && surfaceController != null;
-    if (!shouldRegister) {
+    final bool isOpen = controller?.isOpen ?? (widget.visible ?? false);
+    final VoidCallback? dismiss = controller?.hide ?? onDismiss;
+    if (!isOpen || dismiss == null || surfaceController == null) {
       _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
       _registeredSurfaceController = null;
       return;
     }
-    surfaceController.registerSurface(
-      owner: _surfaceOwner,
-      onDismiss: controller.hide,
-    );
+    surfaceController.registerSurface(owner: _surfaceOwner, onDismiss: dismiss);
     _registeredSurfaceController = surfaceController;
   }
 
@@ -151,23 +151,38 @@ final class _AxiPopoverState extends State<AxiPopover> {
       child: widget.child,
     );
     final popoverController = widget.controller;
-    if (popoverController == null) {
+    final fallbackDismiss = popoverController?.hide ?? widget.onDismiss;
+    final bool isOpen = popoverController?.isOpen ?? (widget.visible ?? false);
+    if (fallbackDismiss == null ||
+        AxiSurfaceScope.maybeControllerOf(context) != null) {
       return popoverWidget;
     }
-    if (AxiSurfaceScope.maybeControllerOf(context) != null) {
-      return popoverWidget;
+    final Listenable? visibilityListenable = popoverController;
+    if (visibilityListenable == null) {
+      final canPop = !isOpen;
+      return PopScope(
+        canPop: canPop,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop || canPop) {
+            return;
+          }
+          fallbackDismiss();
+        },
+        child: popoverWidget,
+      );
     }
+    final controller = popoverController;
     return ListenableBuilder(
-      listenable: popoverController,
+      listenable: visibilityListenable,
       builder: (context, _) {
-        final canPop = !popoverController.isOpen;
+        final canPop = !controller!.isOpen;
         return PopScope(
           canPop: canPop,
           onPopInvokedWithResult: (didPop, _) {
             if (didPop || canPop) {
               return;
             }
-            popoverController.hide();
+            fallbackDismiss();
           },
           child: popoverWidget,
         );

@@ -1206,9 +1206,13 @@ class _DateLabelState extends State<_DateLabel> {
         if (maxHeight <= 0) {
           return const SizedBox.shrink();
         }
-        final double top = placeBelow
-            ? anchorRect.bottom + gap
-            : math.max(overlayPadding, anchorRect.top - gap - maxHeight);
+        final double? top = placeBelow ? anchorRect.bottom + gap : null;
+        final double? bottom = placeBelow
+            ? null
+            : math.max(
+                overlayPadding,
+                info.overlaySize.height - anchorRect.top + gap,
+              );
         return Stack(
           children: [
             Positioned.fill(
@@ -1220,6 +1224,7 @@ class _DateLabelState extends State<_DateLabel> {
             Positioned(
               left: left,
               top: top,
+              bottom: bottom,
               width: dropdownWidth,
               child: GestureDetector(
                 onTap: () {},

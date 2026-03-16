@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:flutter/material.dart';
 
 final class AxiSurfaceController extends ChangeNotifier {
