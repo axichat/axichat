@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
@@ -331,11 +332,17 @@ class _AvatarCenterStage extends StatelessWidget {
                   ),
                 )
               : HydratedAxiAvatar(
-                  jid: profile.jid,
+                  avatar: AvatarPresentation.avatar(
+                    identifier: profile.jid,
+                    colorSeed: profile.jid,
+                    avatarPath: previewBytes == null
+                        ? profile.avatarPath
+                        : null,
+                    loading: false,
+                  ),
                   size: avatarSize,
                   subscription: Subscription.both,
                   avatarBytes: previewBytes,
-                  avatarPath: previewBytes == null ? profile.avatarPath : null,
                 ),
         ),
         if (hasCropPreview)

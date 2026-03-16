@@ -95,13 +95,13 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   final AvatarPipeline _pipeline;
   Rect? _pendingCropRect;
   late final AvatarCarouselEngine _carouselEngine;
-  final List<Avatar> _carouselBuffer = <Avatar>[];
+  final List<EditableAvatar> _carouselBuffer = <EditableAvatar>[];
   Timer? _avatarCarouselTimer;
   int _carouselGeneration = 0;
   Future<bool>? _prefillCarouselFuture;
   _CarouselVisibility _carouselVisibility = _CarouselVisibility.visible;
   ShadColorScheme? _colors;
-  Avatar? _currentCarouselAvatar;
+  EditableAvatar? _currentCarouselAvatar;
 
   @override
   Future<void> close() async {
@@ -477,7 +477,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return data.isEmpty ? null : data;
   }
 
-  Future<Avatar?> _refreshAvatarPayload(Avatar avatar) async {
+  Future<EditableAvatar?> _refreshAvatarPayload(EditableAvatar avatar) async {
     if (avatar.source != AvatarSource.upload) {
       return avatar;
     }
@@ -526,7 +526,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     await _refreshAvatarPayload(nextAvatar);
   }
 
-  Future<Avatar> _buildAvatarFromTemplate({
+  Future<EditableAvatar> _buildAvatarFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,
@@ -624,7 +624,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         background: fallbackBackground,
         accent: colors.primary,
       );
-      final entry = Avatar(
+      final entry = EditableAvatar(
         source: AvatarSource.template,
         payload: fallback,
         backgroundColor: fallbackBackground,
@@ -706,7 +706,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         accent: colors.primary,
       );
       _carouselBuffer.add(
-        Avatar(
+        EditableAvatar(
           source: AvatarSource.template,
           payload: fallback,
           backgroundColor: fallbackBackground,

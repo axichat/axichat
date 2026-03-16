@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -136,13 +137,17 @@ class _RosterListBody extends StatelessWidget {
                   ],
                   selected: open,
                   leading: HydratedAxiAvatar(
-                    jid: item.jid,
+                    avatar: AvatarPresentation.avatar(
+                      identifier: item.jid,
+                      colorSeed: item.jid,
+                      avatarPath: item.avatarPath,
+                      loading: false,
+                    ),
                     subscription: item.subscription,
                     // Presence is parsed for MUC/identity purposes but not shown
                     // in the contacts UI because it is unreliable across servers.
                     presence: null,
                     status: item.status,
-                    avatarPath: item.avatarPath,
                   ),
                   title: item.title,
                   subtitle: item.jid,

@@ -45,7 +45,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     _xmppBlocklistSubscription = _xmppService.blocklistStream().listen(
       _handleXmppBlocklist,
     );
-    _emailBlocklistSubscription = _xmppService.emailBlocklistStream().listen(
+    _emailBlocklistSubscription = _xmppService.addressBlocklistStream().listen(
       _handleEmailBlocklist,
     );
   }
@@ -94,7 +94,10 @@ class BlocklistCubit extends Cubit<BlocklistState>
         return;
       }
       try {
-        await _xmppService.setBlockStatus(address: normalized, blocked: true);
+        await _xmppService.setAddressBlockStatus(
+          address: normalized,
+          blocked: true,
+        );
       } on XmppException {
         _emitFailure(
           BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
@@ -151,7 +154,10 @@ class BlocklistCubit extends Cubit<BlocklistState>
     _emitLoading(jid: normalized);
     if (entry.transport.isEmail) {
       try {
-        await _xmppService.setBlockStatus(address: normalized, blocked: false);
+        await _xmppService.setAddressBlockStatus(
+          address: normalized,
+          blocked: false,
+        );
       } on XmppException {
         _emitFailure(
           BlocklistNotice(
@@ -195,7 +201,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
       failed = true;
     }
     try {
-      await _xmppService.clearEmailBlocklist();
+      await _xmppService.clearAddressBlocks();
     } on Exception {
       failed = true;
     }

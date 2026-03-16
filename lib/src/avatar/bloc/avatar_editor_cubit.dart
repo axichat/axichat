@@ -95,7 +95,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Rect? _pendingCropRect;
 
   Timer? _avatarCarouselTimer;
-  Avatar? _nextCarouselAvatar;
+  EditableAvatar? _nextCarouselAvatar;
   ShadColorScheme? _carouselColors;
   bool _carouselEnabled = false;
   int _carouselGeneration = 0;
@@ -223,7 +223,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> _loadInitialAvatar() async {
     final cached = _xmppService.cachedSelfAvatar;
     final stored = cached ?? await _xmppService.getOwnAvatar();
-    final avatarPath = stored?.path?.trim();
+    final avatarPath = stored?.path.trim();
     if (avatarPath == null || avatarPath.isEmpty) {
       return;
     }
@@ -592,7 +592,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   }
 
   Future<void> publish({
-    required Avatar? draftAvatar,
+    required EditableAvatar? draftAvatar,
     required Color backgroundColor,
   }) async {
     if (draftAvatar == null) {
@@ -632,8 +632,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  Future<Avatar?> _refreshDraftPayload(
-    Avatar draftAvatar, {
+  Future<EditableAvatar?> _refreshDraftPayload(
+    EditableAvatar draftAvatar, {
     required Color backgroundColor,
   }) async {
     if (draftAvatar.source != AvatarSource.upload) {
@@ -699,7 +699,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     );
   }
 
-  Future<Avatar> _buildAvatarFromTemplate({
+  Future<EditableAvatar> _buildAvatarFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,

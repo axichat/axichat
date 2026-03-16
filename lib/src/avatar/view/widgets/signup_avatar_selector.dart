@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -127,7 +128,12 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                     child: hasBytes
                         ? AxiAvatar(
                             key: ValueKey(_previewVersion),
-                            jid: displayJid,
+                            avatar: AvatarPresentation.avatar(
+                              identifier: displayJid,
+                              colorSeed: displayJid,
+                              avatarPath: null,
+                              loading: false,
+                            ),
                             size: avatarSize,
                             shape: AxiAvatarShape.squircle,
                             subscription: Subscription.none,

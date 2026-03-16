@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -27,8 +28,12 @@ class BlocklistTile extends StatelessWidget {
             ? null
             : avatarPathsByJid?[normalizedJid];
         final avatar = HydratedAxiAvatar(
-          jid: entry.address,
-          avatarPath: avatarPath,
+          avatar: AvatarPresentation.avatar(
+            identifier: entry.address,
+            colorSeed: entry.address,
+            avatarPath: avatarPath,
+            loading: false,
+          ),
         );
         return AxiListTile(
           leading: avatar,

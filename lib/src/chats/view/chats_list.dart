@@ -4,18 +4,20 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
+import 'package:axichat/src/avatar/view/avatar_badge_overlay.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -161,7 +163,7 @@ class _ChatsListBody extends StatelessWidget {
     final String? selfJid = resolvedProfileJid.isNotEmpty
         ? resolvedProfileJid
         : null;
-    final selfIdentity = SelfIdentitySnapshot(
+    final selfIdentity = SelfAvatar(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
       avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
@@ -306,7 +308,7 @@ class _AnimatedChatTile extends StatelessWidget {
   final bool isOpen;
   final ValueListenable<DateTime> timestampNowListenable;
   final Storage? calendarStorage;
-  final SelfIdentitySnapshot selfIdentity;
+  final SelfAvatar selfIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +362,7 @@ class _ChatTileSlot extends StatelessWidget {
   final bool isOpen;
   final ValueListenable<DateTime> timestampNowListenable;
   final Storage? calendarStorage;
-  final SelfIdentitySnapshot selfIdentity;
+  final SelfAvatar selfIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +493,7 @@ class ChatListTile extends StatefulWidget {
   final bool isOpen;
   final DateTime timestampNow;
   final Storage? calendarStorage;
-  final SelfIdentitySnapshot selfIdentity;
+  final SelfAvatar selfIdentity;
   final bool archivedContext;
   final bool spamContext;
   final bool spamUpdating;
@@ -522,7 +524,7 @@ class AnimatedChatsListView extends StatefulWidget {
   final String? openJid;
   final ValueListenable<DateTime> timestampNowListenable;
   final Storage? calendarStorage;
-  final SelfIdentitySnapshot selfIdentity;
+  final SelfAvatar selfIdentity;
 
   @override
   State<AnimatedChatsListView> createState() => _AnimatedChatsListViewState();
@@ -852,7 +854,7 @@ class _ChatListTileState extends State<ChatListTile> {
       contentPadding: tilePadding,
       tapBounce: false,
       leading: () {
-        final avatarData = item.avatarData(
+        final avatarData = item.avatarPresentation(
           selfJid: widget.selfIdentity.selfJid,
           selfAvatarPath: widget.selfIdentity.avatarPath,
           selfAvatarLoading: widget.selfIdentity.avatarLoading,
@@ -864,11 +866,8 @@ class _ChatListTileState extends State<ChatListTile> {
           size: sizing.iconButtonTapTarget,
           transport: item.defaultTransport,
           child: HydratedAxiAvatar(
-            jid: avatarData.identifier!,
-            colorSeed: avatarData.colorSeed,
+            avatar: avatarData,
             size: sizing.iconButtonTapTarget,
-            loading: avatarData.loading,
-            avatarPath: avatarData.avatarPath,
           ),
         );
       }(),

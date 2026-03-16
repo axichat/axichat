@@ -46,21 +46,21 @@ class AvatarPipeline {
     return segments.isNotEmpty ? segments.last : template.id;
   }
 
-  Rect? resolveCropRect(Avatar avatar) =>
+  Rect? resolveCropRect(EditableAvatar avatar) =>
       avatar.resolveCropRect(minCropSide: _config.minCropSide);
 
-  Rect? initialCropRect(Avatar avatar) =>
+  Rect? initialCropRect(EditableAvatar avatar) =>
       avatar.initialCropRect(minCropSide: _config.minCropSide);
 
-  Rect constrainCropRect({required Avatar avatar, required Rect rect}) {
+  Rect constrainCropRect({required EditableAvatar avatar, required Rect rect}) {
     return avatar.constrainCropRect(
       rect: rect,
       minCropSide: _config.minCropSide,
     );
   }
 
-  Future<Avatar> buildFromUpload(Uint8List bytes) {
-    return Avatar.fromUploadBytes(
+  Future<EditableAvatar> buildFromUpload(Uint8List bytes) {
+    return EditableAvatar.fromUploadBytes(
       bytes: bytes,
       maxDimension: _config.uploadMaxDimension,
       jpegQuality: _config.uploadJpegQuality,
@@ -71,7 +71,7 @@ class AvatarPipeline {
     );
   }
 
-  Future<Avatar> buildFromTemplate({
+  Future<EditableAvatar> buildFromTemplate({
     required AvatarTemplate template,
     required Color background,
     required ShadColorScheme colors,
@@ -82,7 +82,7 @@ class AvatarPipeline {
     final bytes = rawBytes != null && rawBytes.isNotEmpty
         ? rawBytes
         : (await template.generator(background, colors)).bytes;
-    return Avatar.fromTemplateBytes(
+    return EditableAvatar.fromTemplateBytes(
       bytes: bytes,
       template: template,
       background: background,
@@ -95,8 +95,8 @@ class AvatarPipeline {
     );
   }
 
-  Future<Avatar> rebuildUploadPayload({
-    required Avatar avatar,
+  Future<EditableAvatar> rebuildUploadPayload({
+    required EditableAvatar avatar,
     required Rect cropRect,
     required double insetFraction,
     required Color backgroundColor,

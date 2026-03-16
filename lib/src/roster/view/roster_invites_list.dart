@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/blocklist/view/block_menu_item.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -115,7 +116,14 @@ class _RosterInvitesBody extends StatelessWidget {
                       transport: MessageTransport.xmpp,
                     ),
                   ],
-                  leading: AxiAvatar(jid: invite.jid),
+                  leading: AxiAvatar(
+                    avatar: AvatarPresentation.avatar(
+                      identifier: invite.jid,
+                      colorSeed: invite.jid,
+                      avatarPath: null,
+                      loading: false,
+                    ),
+                  ),
                   title: invite.title,
                   subtitle: invite.jid,
                   actions: [

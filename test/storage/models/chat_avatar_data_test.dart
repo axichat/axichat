@@ -1,3 +1,4 @@
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,13 +11,13 @@ void main() {
   );
 
   test('avatar data uses self avatar path and loading for self chats', () {
-    final avatarData = baseChat.avatarData(
+    final avatarData = baseChat.avatarPresentation(
       selfJid: 'peer@axi.im',
       selfAvatarPath: '/avatars/self.enc',
       selfAvatarLoading: true,
     );
 
-    expect(avatarData.kind, ChatAvatarKind.avatar);
+    expect(avatarData.kind, AvatarKind.avatar);
     expect(avatarData.identifier, 'Peer');
     expect(avatarData.colorSeed, 'peer@axi.im');
     expect(avatarData.avatarPath, '/avatars/self.enc');
@@ -29,11 +30,11 @@ void main() {
       contactAvatarPath: '/avatars/fallback.enc',
     );
 
-    final avatarData = chat.avatarData(
+    final avatarData = chat.avatarPresentation(
       avatarPathOverride: ' /avatars/override.enc ',
     );
 
-    expect(avatarData.kind, ChatAvatarKind.avatar);
+    expect(avatarData.kind, AvatarKind.avatar);
     expect(avatarData.avatarPath, '/avatars/override.enc');
   });
 
@@ -45,6 +46,6 @@ void main() {
       lastChangeTimestamp: DateTime(2024, 1, 1),
     );
 
-    expect(welcomeChat.avatarData().kind, ChatAvatarKind.appIcon);
+    expect(welcomeChat.avatarPresentation().kind, AvatarKind.appIcon);
   });
 }

@@ -6,8 +6,8 @@ part of 'avatar_editor_cubit.dart';
 @freezed
 abstract class AvatarEditorState with _$AvatarEditorState {
   const factory AvatarEditorState({
-    Avatar? draftAvatar,
-    Avatar? carouselAvatar,
+    EditableAvatar? draftAvatar,
+    EditableAvatar? carouselAvatar,
     @Default(false) bool shuffling,
     @Default(false) bool processing,
     @Default(false) bool publishing,

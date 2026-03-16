@@ -3,6 +3,7 @@
 
 import 'dart:typed_data';
 
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -17,7 +18,7 @@ enum AxiAvatarShape { circle, squircle }
 class AxiAvatar extends StatelessWidget {
   const AxiAvatar({
     super.key,
-    required this.jid,
+    required this.avatar,
     this.subscription = Subscription.none,
     this.presence,
     this.status,
@@ -25,11 +26,9 @@ class AxiAvatar extends StatelessWidget {
     this.shape = AxiAvatarShape.squircle,
     this.size = 50.0,
     this.avatarBytes,
-    this.loading = false,
-    this.colorSeed,
   });
 
-  final String jid;
+  final AvatarPresentation avatar;
   final Subscription subscription;
   final Presence? presence;
   final String? status;
@@ -37,8 +36,6 @@ class AxiAvatar extends StatelessWidget {
   final AxiAvatarShape shape;
   final double size;
   final Uint8List? avatarBytes;
-  final bool loading;
-  final String? colorSeed;
 
   static const double paddingFraction = 0.0;
 
@@ -61,7 +58,7 @@ class AxiAvatar extends StatelessWidget {
         ? const CircleBorder()
         : SquircleBorder(cornerRadius: squircleCornerRadius);
     final resolvedAvatarBytes = avatarBytes;
-    final showLoadingOverlay = loading;
+    final showLoadingOverlay = avatar.loading;
     final overlayAlpha = motion.tapFocusAlpha + motion.tapHoverAlpha;
 
     Widget child = SizedBox.square(
@@ -72,13 +69,13 @@ class AxiAvatar extends StatelessWidget {
           BlocSelector<SettingsCubit, SettingsState, bool>(
             selector: (state) => state.colorfulAvatars,
             builder: (context, colorfulAvatars) {
-              final displayLabel = _displayLabelForJid(jid);
+              final displayLabel = _displayLabelForAvatar(avatar.label);
               final initial = displayLabel.isNotEmpty
                   ? displayLabel.substring(0, 1).toUpperCase()
                   : '?';
               final avatarColorSeed = _colorSeedForAvatar(
-                jid: jid,
-                colorSeed: colorSeed,
+                label: avatar.label,
+                colorSeed: avatar.colorSeed,
                 displayLabel: displayLabel,
               );
               final backgroundColor = colorfulAvatars
@@ -188,30 +185,24 @@ class AxiAvatar extends StatelessWidget {
 class HydratedAxiAvatar extends StatefulWidget {
   const HydratedAxiAvatar({
     super.key,
-    required this.jid,
+    required this.avatar,
     this.subscription = Subscription.none,
     this.presence,
     this.status,
     this.active = false,
     this.shape = AxiAvatarShape.squircle,
     this.size = 50.0,
-    this.avatarPath,
     this.avatarBytes,
-    this.loading = false,
-    this.colorSeed,
   });
 
-  final String jid;
+  final AvatarPresentation avatar;
   final Subscription subscription;
   final Presence? presence;
   final String? status;
   final bool active;
   final AxiAvatarShape shape;
   final double size;
-  final String? avatarPath;
   final Uint8List? avatarBytes;
-  final bool loading;
-  final String? colorSeed;
 
   @override
   State<HydratedAxiAvatar> createState() => _HydratedAxiAvatarState();
@@ -223,7 +214,7 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
   Object? _loadToken;
 
   String? get _normalizedAvatarPath {
-    final trimmed = widget.avatarPath?.trim();
+    final trimmed = widget.avatar.avatarPath?.trim();
     if (trimmed == null || trimmed.isEmpty) {
       return null;
     }
@@ -247,10 +238,10 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
   @override
   void didUpdateWidget(covariant HydratedAxiAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final jidChanged = oldWidget.jid != widget.jid;
-    final pathChanged = oldWidget.avatarPath != widget.avatarPath;
+    final jidChanged = oldWidget.avatar.label != widget.avatar.label;
+    final pathChanged = oldWidget.avatar.avatarPath != widget.avatar.avatarPath;
     final bytesChanged = oldWidget.avatarBytes != widget.avatarBytes;
-    final loadingSettled = oldWidget.loading && !widget.loading;
+    final loadingSettled = oldWidget.avatar.loading && !widget.avatar.loading;
     if (jidChanged || pathChanged || bytesChanged || loadingSettled) {
       _resolveAvatarBytes(clearStaleBytes: jidChanged || pathChanged);
     }
@@ -317,8 +308,19 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     final path = _normalizedAvatarPath;
     final isLoadingAvatarBytes =
         _providedAvatarBytes == null && path != null && _loadingPath == path;
+    final resolvedAvatarPresentation = widget.avatar.isAppIcon
+        ? AvatarPresentation.appIcon(
+            label: widget.avatar.label,
+            colorSeed: widget.avatar.colorSeed,
+          )
+        : AvatarPresentation.avatar(
+            label: widget.avatar.label,
+            colorSeed: widget.avatar.colorSeed,
+            avatar: widget.avatar.avatar,
+            loading: widget.avatar.loading || isLoadingAvatarBytes,
+          );
     return AxiAvatar(
-      jid: widget.jid,
+      avatar: resolvedAvatarPresentation,
       subscription: widget.subscription,
       presence: widget.presence,
       status: widget.status,
@@ -326,31 +328,28 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
       shape: widget.shape,
       size: widget.size,
       avatarBytes: _providedAvatarBytes ?? _resolvedAvatarBytes,
-      loading: widget.loading || isLoadingAvatarBytes,
-      colorSeed: widget.colorSeed,
     );
   }
 }
 
-String _displayLabelForJid(String jid) {
-  if (jid.isEmpty) return '?';
-  final parsed = parseJid(jid);
+String _displayLabelForAvatar(String label) {
+  if (label.isEmpty) return '?';
+  final parsed = parseJid(label);
   if (parsed != null) {
     final resource = parsed.resource.trim();
     if (resource.isNotEmpty) return resource;
     final localPart = parsed.local.trim();
     if (localPart.isNotEmpty) return localPart;
   }
-  return jid;
+  return label;
 }
 
 String _colorSeedForAvatar({
-  required String jid,
+  required String label,
   required String? colorSeed,
   required String displayLabel,
 }) {
-  final providedSeed = colorSeed?.trim();
-  final preferredSeed = providedSeed?.isNotEmpty == true ? providedSeed : jid;
+  final preferredSeed = colorSeed?.trim() ?? '';
   final normalizedSeed =
       normalizedAddressKey(preferredSeed) ??
       normalizedAddressValue(preferredSeed) ??
@@ -361,6 +360,6 @@ String _colorSeedForAvatar({
   if (displayLabel.isNotEmpty) {
     return displayLabel;
   }
-  final fallback = jid.trim();
+  final fallback = label.trim();
   return fallback.isNotEmpty ? fallback : '?';
 }

@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -28,11 +29,25 @@ void main() {
             children: [
               SizedBox(
                 key: Key('address-avatar-1'),
-                child: AxiAvatar(jid: 'sample@example.com'),
+                child: AxiAvatar(
+                  avatar: AvatarPresentation.avatar(
+                    identifier: 'sample@example.com',
+                    colorSeed: 'sample@example.com',
+                    avatarPath: null,
+                    loading: false,
+                  ),
+                ),
               ),
               SizedBox(
                 key: Key('address-avatar-2'),
-                child: AxiAvatar(jid: 'sample@example.net'),
+                child: AxiAvatar(
+                  avatar: AvatarPresentation.avatar(
+                    identifier: 'sample@example.net',
+                    colorSeed: 'sample@example.net',
+                    avatarPath: null,
+                    loading: false,
+                  ),
+                ),
               ),
             ],
           ),
@@ -62,11 +77,25 @@ void main() {
           children: [
             SizedBox(
               key: Key('email-avatar-1'),
-              child: AxiAvatar(jid: 'Sample', colorSeed: 'sample@example.com'),
+              child: AxiAvatar(
+                avatar: AvatarPresentation.avatar(
+                  identifier: 'Sample',
+                  colorSeed: 'sample@example.com',
+                  avatarPath: null,
+                  loading: false,
+                ),
+              ),
             ),
             SizedBox(
               key: Key('email-avatar-2'),
-              child: AxiAvatar(jid: 'Sample', colorSeed: 'sample@example.net'),
+              child: AxiAvatar(
+                avatar: AvatarPresentation.avatar(
+                  identifier: 'Sample',
+                  colorSeed: 'sample@example.net',
+                  avatarPath: null,
+                  loading: false,
+                ),
+              ),
             ),
           ],
         ),
@@ -103,8 +132,12 @@ void main() {
         _AxiAvatarTestApp(
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
-            jid: 'sample@example.com',
-            avatarPath: '/avatars/self.enc',
+            avatar: AvatarPresentation.avatar(
+              identifier: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatarPath: '/avatars/self.enc',
+              loading: false,
+            ),
           ),
         ),
       );
@@ -134,8 +167,12 @@ void main() {
         _AxiAvatarTestApp(
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
-            jid: 'sample@example.com',
-            avatarPath: '/avatars/self.enc',
+            avatar: AvatarPresentation.avatar(
+              identifier: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatarPath: '/avatars/self.enc',
+              loading: false,
+            ),
           ),
         ),
       );
@@ -167,8 +204,12 @@ void main() {
         _AxiAvatarTestApp(
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
-            jid: 'sample@example.com',
-            avatarPath: '/avatars/self.enc',
+            avatar: AvatarPresentation.avatar(
+              identifier: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatarPath: '/avatars/self.enc',
+              loading: false,
+            ),
           ),
         ),
       );
@@ -202,9 +243,12 @@ void main() {
         _AxiAvatarTestApp(
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
-            jid: 'sample@example.com',
-            avatarPath: '/avatars/self.enc',
-            loading: true,
+            avatar: AvatarPresentation.avatar(
+              identifier: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatarPath: '/avatars/self.enc',
+              loading: true,
+            ),
           ),
         ),
       );
@@ -217,9 +261,12 @@ void main() {
         _AxiAvatarTestApp(
           xmppService: xmppService,
           child: const HydratedAxiAvatar(
-            jid: 'sample@example.com',
-            avatarPath: '/avatars/self.enc',
-            loading: false,
+            avatar: AvatarPresentation.avatar(
+              identifier: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatarPath: '/avatars/self.enc',
+              loading: false,
+            ),
           ),
         ),
       );

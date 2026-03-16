@@ -10,8 +10,8 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class SessionCapabilityIndicators extends StatelessWidget {
-  const SessionCapabilityIndicators({
+class ConnectionStatusIndicators extends StatelessWidget {
+  const ConnectionStatusIndicators({
     super.key,
     required this.xmppState,
     required this.emailState,
@@ -202,8 +202,8 @@ class _CapabilityChip extends StatelessWidget {
     final maxLines = compact ? 1 : 2;
     final Widget statusChild = switch (data.level) {
       _CapabilityLevel.ready when collapseReadyStatus => Container(
-        width: sizing.menuItemIconSize,
-        height: sizing.menuItemIconSize,
+        width: sizing.statusDotSize,
+        height: sizing.statusDotSize,
         decoration: BoxDecoration(
           color: data.foreground,
           shape: BoxShape.circle,

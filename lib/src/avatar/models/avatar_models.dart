@@ -11,8 +11,8 @@ import 'package:flutter/material.dart';
 
 enum AvatarSource { upload, template }
 
-class Avatar {
-  const Avatar({
+class EditableAvatar {
+  const EditableAvatar({
     required this.source,
     required this.payload,
     this.template,
@@ -34,7 +34,7 @@ class Avatar {
 
   Uint8List get bytes => payload.bytes;
 
-  static Future<Avatar> fromUploadBytes({
+  static Future<EditableAvatar> fromUploadBytes({
     required Uint8List bytes,
     required int maxDimension,
     required int jpegQuality,
@@ -80,7 +80,7 @@ class Avatar {
       height: processed.height,
       hash: hash,
     );
-    return Avatar(
+    return EditableAvatar(
       source: AvatarSource.upload,
       payload: payload,
       sourceBytes: prepared.bytes,
@@ -90,7 +90,7 @@ class Avatar {
     );
   }
 
-  static Future<Avatar> fromTemplateBytes({
+  static Future<EditableAvatar> fromTemplateBytes({
     required Uint8List bytes,
     required AvatarTemplate template,
     required Color background,
@@ -128,7 +128,7 @@ class Avatar {
       height: processed.height,
       hash: hash,
     );
-    return Avatar(
+    return EditableAvatar(
       source: AvatarSource.template,
       payload: payload,
       template: template,
@@ -202,7 +202,7 @@ class Avatar {
     );
   }
 
-  Future<Avatar> rebuildUploadPayload({
+  Future<EditableAvatar> rebuildUploadPayload({
     required Rect cropRect,
     required int targetSize,
     required int maxBytes,
@@ -245,7 +245,7 @@ class Avatar {
     return copyWith(payload: nextPayload, cropRect: cropRect);
   }
 
-  Avatar copyWith({
+  EditableAvatar copyWith({
     AvatarSource? source,
     AvatarUploadPayload? payload,
     AvatarTemplate? template,
@@ -255,7 +255,7 @@ class Avatar {
     int? sourceWidth,
     int? sourceHeight,
   }) {
-    return Avatar(
+    return EditableAvatar(
       source: source ?? this.source,
       payload: payload ?? this.payload,
       template: template ?? this.template,

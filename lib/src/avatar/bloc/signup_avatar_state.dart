@@ -17,8 +17,8 @@ class SignupAvatarState extends Equatable {
 
   static const Object _unset = Object();
 
-  final Avatar? avatar;
-  final Avatar? carouselAvatar;
+  final EditableAvatar? avatar;
+  final EditableAvatar? carouselAvatar;
   final bool processing;
   final SignupAvatarErrorType? errorType;
   final int? errorMaxKilobytes;
@@ -69,10 +69,12 @@ class SignupAvatarState extends Equatable {
   }) {
     return SignupAvatarState(
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      avatar: identical(avatar, _unset) ? this.avatar : avatar as Avatar?,
+      avatar: identical(avatar, _unset)
+          ? this.avatar
+          : avatar as EditableAvatar?,
       carouselAvatar: identical(carouselAvatar, _unset)
           ? this.carouselAvatar
-          : carouselAvatar as Avatar?,
+          : carouselAvatar as EditableAvatar?,
       processing: processing ?? this.processing,
       errorType: clearError ? null : errorType ?? this.errorType,
       errorMaxKilobytes: clearError

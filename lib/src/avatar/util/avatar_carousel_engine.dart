@@ -132,7 +132,7 @@ class AvatarCarouselEngine {
     _nonAbstractWarmupState = _NonAbstractWarmupState.ready;
   }
 
-  Future<Avatar?> buildNext({
+  Future<EditableAvatar?> buildNext({
     required AvatarCarouselBuildContext context,
     required AvatarRenderSpecResolver renderSpec,
     bool preferAbstract = false,
@@ -150,13 +150,13 @@ class AvatarCarouselEngine {
     return avatar;
   }
 
-  Future<List<Avatar>> prefill({
+  Future<List<EditableAvatar>> prefill({
     required int targetSize,
     required AvatarCarouselBuildContext context,
     required AvatarRenderSpecResolver renderSpec,
     required bool preferAbstract,
   }) async {
-    final results = <Avatar>[];
+    final results = <EditableAvatar>[];
     if (targetSize <= 0) return results;
     final warmupActive = abstractWarmupActive;
 
@@ -242,7 +242,7 @@ class AvatarCarouselEngine {
     return selection;
   }
 
-  Future<Avatar?> _buildAvatarForTemplate({
+  Future<EditableAvatar?> _buildAvatarForTemplate({
     required AvatarTemplate template,
     required AvatarCarouselBuildContext context,
     required AvatarRenderSpecResolver renderSpec,

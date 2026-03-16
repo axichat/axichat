@@ -2,11 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/profile/view/session_capability_indicators.dart';
+import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -178,10 +179,13 @@ class _ProfileTileLayout extends StatelessWidget {
           Hero(
             tag: 'avatar',
             child: HydratedAxiAvatar(
-              jid: jid,
+              avatar: AvatarPresentation.avatar(
+                identifier: jid,
+                colorSeed: jid,
+                avatarPath: avatarPath,
+                loading: avatarLoading,
+              ),
               subscription: Subscription.both,
-              avatarPath: avatarPath,
-              loading: avatarLoading,
               // Presence is parsed for backend features but hidden in UI.
               presence: null,
               status: null,
@@ -225,7 +229,7 @@ class _ProfileTileLayout extends StatelessWidget {
             constraints: BoxConstraints(maxWidth: indicatorMaxWidth),
             child: Align(
               alignment: Alignment.centerRight,
-              child: SessionCapabilityIndicators(
+              child: ConnectionStatusIndicators(
                 xmppState: connectionState,
                 emailState: sessionEmailState,
                 emailEnabled: emailEnabled,

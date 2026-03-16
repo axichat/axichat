@@ -7,48 +7,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
 
-const String _axichatAppIconAssetPath = 'assets/icons/app_icon_source.png';
-
-ImageProvider<Object> axichatAppIconProvider(
-  BuildContext context, {
-  required double size,
-}) {
-  final baseSize = size < context.sizing.iconButtonTapTarget
-      ? context.sizing.iconButtonTapTarget
-      : size;
-  final devicePixelRatio = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1;
-  final scaledSize = (baseSize * devicePixelRatio).ceil();
-  final cacheExtent = scaledSize > 0 ? scaledSize : 1;
-  return ResizeImage.resizeIfNeeded(
-    cacheExtent,
-    cacheExtent,
-    const AssetImage(_axichatAppIconAssetPath),
-  );
-}
-
-Future<void> precacheAxichatAppIcon(
-  BuildContext context, {
-  double? size,
-}) async {
-  final resolvedSize = size ?? context.sizing.iconButtonTapTarget;
-  await precacheImage(
-    axichatAppIconProvider(context, size: resolvedSize),
-    context,
-  );
-}
-
-class SelfIdentitySnapshot {
-  const SelfIdentitySnapshot({
-    required this.selfJid,
-    required this.avatarPath,
-    this.avatarLoading = false,
-  });
-
-  final String? selfJid;
-  final String? avatarPath;
-  final bool avatarLoading;
-}
-
 class AvatarTransportBadgeOverlay extends StatelessWidget {
   const AvatarTransportBadgeOverlay({
     super.key,
@@ -70,13 +28,18 @@ class AvatarTransportBadgeOverlay extends StatelessWidget {
         : CutoutShape.circle;
     final badgeExtent = sizing.menuItemIconSize + spacing.xxs;
     final cutoutGap = spacing.xxs + (spacing.xxs / 2);
-    final cutoutDepth = (badgeExtent / 2) + cutoutGap;
+    final horizontalOffset = transport.isEmail ? -1.0 : -1.0;
+    final verticalOffset = transport.isEmail ? -4.0 : 0.0;
+    final cutoutDepth = (badgeExtent / 2) + cutoutGap - verticalOffset;
     final cutoutThickness = badgeExtent + (cutoutGap * 2);
     final cutoutCornerRadius = transport.isEmail
         ? context.radii.squircleSm
         : badgeExtent / 2;
     final cutoutInset = spacing.xxs;
-    final cutoutAlignment = Alignment(1 - ((cutoutInset / size) * 2), 1);
+    final cutoutAlignment = Alignment(
+      (1 - ((cutoutInset / size) * 2)) + ((horizontalOffset / size) * 2),
+      1,
+    );
     return SizedBox.square(
       dimension: size,
       child: CutoutSurface(
@@ -122,34 +85,6 @@ class _AvatarTransportBadge extends StatelessWidget {
           iconData,
           size: context.sizing.menuItemIconSize,
           color: colors.foreground,
-        ),
-      ),
-    );
-  }
-}
-
-class AxichatAppIconAvatar extends StatelessWidget {
-  const AxichatAppIconAvatar({super.key, required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
-    final imageProvider = axichatAppIconProvider(context, size: size);
-    return SizedBox.square(
-      dimension: size,
-      child: ClipPath(
-        clipBehavior: Clip.antiAliasWithSaveLayer,
-        clipper: ShapeBorderClipper(shape: shape),
-        child: Image(
-          image: imageProvider,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          isAntiAlias: true,
-          gaplessPlayback: true,
         ),
       ),
     );

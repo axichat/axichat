@@ -4,7 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
-import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -111,7 +111,7 @@ class _SpamListBody extends StatelessWidget {
     final String? selfJid = resolvedProfileJid.isNotEmpty
         ? resolvedProfileJid
         : null;
-    final selfIdentity = SelfIdentitySnapshot(
+    final selfIdentity = SelfAvatar(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
       avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -258,7 +259,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           child: hasPreviewBytes
               ? AxiAvatar(
                   key: previewKey,
-                  jid: 'avatar@axichat',
+                  avatar: const AvatarPresentation.avatar(
+                    identifier: 'avatar@axichat',
+                    colorSeed: 'avatar@axichat',
+                    avatarPath: null,
+                    loading: false,
+                  ),
                   size: 96,
                   subscription: Subscription.none,
                   presence: null,
