@@ -81,9 +81,8 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
   bool _exporting = false;
-  String? _pendingImportRequestId;
-  int? _pendingImportTaskCount;
-  bool _pendingImportIsFullModel = false;
+  final Map<String, ({int? taskCount, bool isFullModel})> _pendingImports =
+      <String, ({int? taskCount, bool isFullModel})>{};
   int _handledImportOutcomeToken = 0;
 
   CalendarState get state => widget.state;
@@ -111,15 +110,16 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       return;
     }
     _handledImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = _pendingImportRequestId;
-    if (requestId == null || state.importRequestId != requestId) {
+    final String? requestId = state.importRequestId;
+    if (requestId == null) {
       return;
     }
-    _pendingImportRequestId = null;
-    final int? taskCount = _pendingImportTaskCount;
-    final bool importedFullModel = _pendingImportIsFullModel;
-    _pendingImportTaskCount = null;
-    _pendingImportIsFullModel = false;
+    final pendingImport = _pendingImports.remove(requestId);
+    if (pendingImport == null) {
+      return;
+    }
+    final int? taskCount = pendingImport.taskCount;
+    final bool importedFullModel = pendingImport.isFullModel;
     if (state.importError != null) {
       FeedbackSystem.showError(
         context,
@@ -233,9 +233,7 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
         }
         if (!mounted) return;
         final String requestId = const Uuid().v4();
-        _pendingImportRequestId = requestId;
-        _pendingImportTaskCount = null;
-        _pendingImportIsFullModel = true;
+        _pendingImports[requestId] = (taskCount: null, isFullModel: true);
         context.read<CalendarBloc>().add(
           CalendarEvent.modelImported(
             requestId: requestId,
@@ -252,9 +250,10 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       }
       if (!mounted) return;
       final String requestId = const Uuid().v4();
-      _pendingImportRequestId = requestId;
-      _pendingImportTaskCount = tasks.length;
-      _pendingImportIsFullModel = false;
+      _pendingImports[requestId] = (
+        taskCount: tasks.length,
+        isFullModel: false,
+      );
       context.read<CalendarBloc>().add(
         CalendarEvent.tasksImported(requestId: requestId, tasks: tasks),
       );

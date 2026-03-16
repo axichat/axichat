@@ -54,8 +54,8 @@ class ChatCalendarCriticalPathCard extends StatefulWidget {
 
 class _ChatCalendarCriticalPathCardState
     extends State<ChatCalendarCriticalPathCard> {
-  String? _pendingImportRequestId;
-  Completer<bool>? _pendingImportCompleter;
+  final Map<String, Completer<bool>> _pendingImportCompleters =
+      <String, Completer<bool>>{};
   int _handledImportOutcomeToken = 0;
 
   @override
@@ -163,14 +163,12 @@ class _ChatCalendarCriticalPathCardState
   }) async {
     final String requestId = const Uuid().v4();
     final Completer<bool> completer = Completer<bool>();
-    _pendingImportRequestId = requestId;
-    _pendingImportCompleter = completer;
+    _pendingImportCompleters[requestId] = completer;
     bloc.add(CalendarEvent.modelImported(requestId: requestId, model: model));
     try {
       return await completer.future.timeout(const Duration(seconds: 2));
     } on TimeoutException {
-      _pendingImportRequestId = null;
-      _pendingImportCompleter = null;
+      _pendingImportCompleters.remove(requestId);
       return false;
     }
   }
@@ -180,16 +178,16 @@ class _ChatCalendarCriticalPathCardState
       return;
     }
     _handledImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = _pendingImportRequestId;
-    final Completer<bool>? completer = _pendingImportCompleter;
-    if (requestId == null ||
-        completer == null ||
-        completer.isCompleted ||
-        state.importRequestId != requestId) {
+    final String? requestId = state.importRequestId;
+    if (requestId == null) {
       return;
     }
-    _pendingImportRequestId = null;
-    _pendingImportCompleter = null;
+    final Completer<bool>? completer = _pendingImportCompleters.remove(
+      requestId,
+    );
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
     completer.complete(state.importError == null);
   }
 }

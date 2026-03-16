@@ -60,8 +60,8 @@ class ChatCalendarTaskCard extends StatefulWidget {
 }
 
 class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
-  String? _pendingImportRequestId;
-  Completer<String?>? _pendingImportCompleter;
+  final Map<String, Completer<String?>> _pendingImportCompleters =
+      <String, Completer<String?>>{};
   int _handledImportOutcomeToken = 0;
 
   @override
@@ -119,16 +119,16 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
     _handledImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = _pendingImportRequestId;
-    final Completer<String?>? completer = _pendingImportCompleter;
-    if (requestId == null ||
-        completer == null ||
-        completer.isCompleted ||
-        state.importRequestId != requestId) {
+    final String? requestId = state.importRequestId;
+    if (requestId == null) {
       return;
     }
-    _pendingImportRequestId = null;
-    _pendingImportCompleter = null;
+    final Completer<String?>? completer = _pendingImportCompleters.remove(
+      requestId,
+    );
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
     if (state.importError != null) {
       completer.complete(null);
       return;
@@ -425,14 +425,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     final List<CalendarTask> tasks = <CalendarTask>[task];
     final String requestId = const Uuid().v4();
     final Completer<String?> completer = Completer<String?>();
-    _pendingImportRequestId = requestId;
-    _pendingImportCompleter = completer;
+    _pendingImportCompleters[requestId] = completer;
     bloc.add(CalendarEvent.tasksImported(requestId: requestId, tasks: tasks));
     try {
       return await completer.future.timeout(const Duration(seconds: 2));
     } on TimeoutException {
-      _pendingImportRequestId = null;
-      _pendingImportCompleter = null;
+      _pendingImportCompleters.remove(requestId);
       return null;
     }
   }
