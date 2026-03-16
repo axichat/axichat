@@ -9,9 +9,9 @@ import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
-import 'package:axichat/src/xmpp/bookmarks_manager.dart';
-import 'package:axichat/src/xmpp/pubsub_manager.dart';
-import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_support.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -114,6 +114,55 @@ class FakeJid extends Fake implements mox.JID {}
 class FakeMamQueryOptions extends Fake implements mox.MAMQueryOptions {}
 
 class FakeResultSetManagement extends Fake implements mox.ResultSetManagement {}
+
+class _BookmarksCompatPubSubManager extends PubSubManager {
+  _BookmarksCompatPubSubManager(this.discoManager);
+
+  final mox.DiscoManager discoManager;
+
+  @override
+  Future<PubSubSupport> refreshSupport({
+    required mox.JID? selfJid,
+    bool force = false,
+    bool demoOffline = false,
+  }) async {
+    final selfFeatures = await _featuresFor(selfJid?.toBare());
+    final host = selfJid?.domain;
+    final hostFeatures = await _featuresFor(
+      host == null ? null : mox.JID.fromString(host),
+    );
+    final selfFeatureSet = selfFeatures ?? const <String>{};
+    final hostFeatureSet = hostFeatures ?? const <String>{};
+
+    return PubSubSupport(
+      pubSubSupported:
+          selfFeatureSet.contains(mox.pubsubXmlns) ||
+          selfFeatureSet.contains(mox.pubsubOwnerXmlns) ||
+          hostFeatureSet.contains(mox.pubsubXmlns) ||
+          hostFeatureSet.contains(mox.pubsubOwnerXmlns),
+      pepSupported:
+          selfFeatureSet.contains(mox.pubsubEventXmlns) ||
+          selfFeatureSet.contains(mox.pubsubXmlns),
+      bookmarks2Supported:
+          selfFeatureSet.contains(bookmarksNotifyFeature) ||
+          selfFeatureSet.contains(bookmarksNodeXmlns) ||
+          selfFeatureSet.contains(_bookmarksCompatFeature) ||
+          selfFeatureSet.contains(_bookmarksCompatPepFeature) ||
+          selfFeatureSet.contains(_bookmarksConversionFeature),
+    );
+  }
+
+  Future<Set<String>?> _featuresFor(mox.JID? jid) async {
+    if (jid == null) {
+      return null;
+    }
+    final response = await discoManager.discoInfoQuery(jid);
+    if (response.isType<mox.StanzaError>()) {
+      return null;
+    }
+    return response.get<mox.DiscoInfo>().features.toSet();
+  }
+}
 
 class _FakePathProviderPlatform extends PathProviderPlatform {
   _FakePathProviderPlatform(this.supportPath);
@@ -475,6 +524,7 @@ void main() {
     test(
       'DISC-014 [HP] refreshPubSubSupport treats bookmarks compatibility features as bookmarks support',
       () async {
+        final pubSubManager = _BookmarksCompatPubSubManager(discoManager);
         final selfInfo = MockDiscoInfo();
         when(() => selfInfo.features).thenReturn([
           mox.pubsubXmlns,
@@ -493,6 +543,9 @@ void main() {
           final info = bare == _accountBareJid ? selfInfo : hostInfo;
           return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info);
         });
+        when(
+          () => mockConnection.getManager<PubSubManager>(),
+        ).thenReturn(pubSubManager);
 
         final support = await xmppService.refreshPubSubSupport(force: true);
 

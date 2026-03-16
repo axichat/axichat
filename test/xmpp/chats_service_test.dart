@@ -5,8 +5,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
-import 'package:axichat/src/xmpp/conversation_index_manager.dart';
-import 'package:axichat/src/xmpp/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -309,9 +308,11 @@ void main() {
         ).copyWith(archived: false, type: ChatType.chat),
       );
 
-      await xmppService.applyConversationIndexSnapshot(
-        const PubSubFetchResult<ConvItem>(items: [], isSuccess: true),
-      );
+      await xmppService.applyConversationIndexSnapshot(const (
+        items: <ConvItem>[],
+        isSuccess: true,
+        isComplete: true,
+      ));
 
       final chat = await database.getChat(welcomeChatJid);
       expect(chat, isNotNull);
@@ -377,17 +378,16 @@ void main() {
         chat!.copyWith(lastMessage: 'FWD: stale@example.com'),
       );
 
-      await xmppService.applyConversationIndexSnapshot(
-        PubSubFetchResult<ConvItem>(
-          items: [
-            ConvItem(
-              peerBare: mox.JID.fromString(peerJid),
-              lastTimestamp: snapshotTimestamp,
-            ),
-          ],
-          isSuccess: true,
-        ),
-      );
+      await xmppService.applyConversationIndexSnapshot((
+        items: <ConvItem>[
+          ConvItem(
+            peerBare: mox.JID.fromString(peerJid),
+            lastTimestamp: snapshotTimestamp,
+          ),
+        ],
+        isSuccess: true,
+        isComplete: true,
+      ));
 
       final repaired = await database.getChat(peerJid);
       expect(repaired?.lastMessage, 'Newest stored body');

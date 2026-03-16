@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;

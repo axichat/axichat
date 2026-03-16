@@ -12,8 +12,10 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
   final Map<String, Map<String, String>> _presenceStatuses = {};
 
   @override
-  List<mox.XmppManagerBase> get featureManagers =>
-      super.featureManagers..addAll([XmppPresenceManager(owner: this)]);
+  List<mox.XmppManagerBase> get featureManagers => <mox.XmppManagerBase>[
+    ...super.featureManagers,
+    XmppPresenceManager(owner: this),
+  ];
 
   Future<void> sendPresence({
     required Presence? presence,

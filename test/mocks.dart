@@ -25,6 +25,7 @@ import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:moxxmpp/src/managers/attributes.dart';
 import 'package:uuid/uuid.dart';
 
 class MockXmppService extends Mock implements XmppService {}
@@ -40,8 +41,6 @@ class MockXmppDatabase extends Mock implements XmppDatabase {}
 class MockNotificationService extends Mock implements NotificationService {}
 
 class MockMessageService extends Mock implements MessageService {}
-
-class MockDraftSyncService extends Mock implements DraftSyncService {}
 
 class MockChatsService extends Mock implements ChatsService {}
 
@@ -174,14 +173,44 @@ RosterItem generateRandomRosterItem({
 }
 
 void prepareMockConnection() {
+  final managersById = <String, mox.XmppManagerBase>{};
+
+  T? lookupManagerById<T extends mox.XmppManagerBase>(String id) =>
+      managersById[id] as T?;
+  T? lookupNegotiatorById<T extends mox.XmppFeatureNegotiatorBase>(String id) =>
+      null;
+
   when(() => mockConnection.hasConnectionSettings).thenReturn(false);
   when(() => mockConnection.socketWrapper).thenReturn(XmppSocketWrapper());
 
   when(
     () => mockConnection.registerFeatureNegotiators(any()),
   ).thenAnswer((_) async {});
+  when(() => mockConnection.registerManagers(any())).thenAnswer((
+    invocation,
+  ) async {
+    final managers =
+        invocation.positionalArguments.first as List<mox.XmppManagerBase>;
+    final attributes = XmppManagerAttributes(
+      sendStanza: (details) async => await mockConnection.sendStanza(details),
+      sendNonza: (_) {},
+      getManagerById: lookupManagerById,
+      sendEvent: (_) {},
+      getConnectionSettings: () => mockConnection.connectionSettings,
+      getFullJID: () => mockConnection.connectionSettings.jid,
+      getSocket: () => mockConnection.socketWrapper,
+      getConnection: () => mockConnection,
+      getNegotiatorById: lookupNegotiatorById,
+    );
 
-  when(() => mockConnection.registerManagers(any())).thenAnswer((_) async {});
+    for (final manager in managers) {
+      managersById[manager.id] = manager;
+      manager.register(attributes);
+    }
+    for (final manager in managers) {
+      await manager.postRegisterCallback();
+    }
+  });
 
   when(() => mockConnection.loadStreamState()).thenAnswer((_) async {});
   when(() => mockConnection.setShouldReconnect(any())).thenAnswer((_) async {});
@@ -192,6 +221,7 @@ void prepareMockConnection() {
     () => mockConnection.asBroadcastStream(),
   ).thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
   when(() => mockConnection.enableCarbons()).thenAnswer((_) async => true);
+  when(() => mockConnection.sendStanza(any())).thenAnswer((_) async => null);
   when(() => mockConnection.requestRoster()).thenAnswer(
     (_) =>
         Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>.value(
@@ -215,6 +245,41 @@ void prepareMockConnection() {
 
   when(() => mockConnection.saltedPassword).thenReturn('');
   when(
+    () => mockConnection.getManager<mox.PubSubManager>(),
+  ).thenAnswer((_) => lookupManagerById<mox.PubSubManager>(mox.pubsubManager));
+  when(
+    () => mockConnection.getManager<mox.DiscoManager>(),
+  ).thenAnswer((_) => lookupManagerById<mox.DiscoManager>(mox.discoManager));
+  when(() => mockConnection.getManager<mox.MessageManager>()).thenAnswer(
+    (_) => lookupManagerById<mox.MessageManager>(mox.messageManager),
+  );
+  when(
+    () => mockConnection.getManager<mox.MAMManager>(),
+  ).thenAnswer((_) => lookupManagerById<mox.MAMManager>(mox.mamManager));
+  when(() => mockConnection.getManager<mox.CarbonsManager>()).thenAnswer(
+    (_) => lookupManagerById<mox.CarbonsManager>(mox.carbonsManager),
+  );
+  when(() => mockConnection.getManager<mox.UserAvatarManager>()).thenAnswer(
+    (_) => lookupManagerById<mox.UserAvatarManager>(mox.userAvatarManager),
+  );
+  when(
+    () => mockConnection.getManager<mox.VCardManager>(),
+  ).thenAnswer((_) => lookupManagerById<mox.VCardManager>(mox.vcardManager));
+  when(() => mockConnection.getManager<mox.BlockingManager>()).thenAnswer(
+    (_) => lookupManagerById<mox.BlockingManager>(mox.blockingManager),
+  );
+  when(
+    () => mockConnection.getManager<MUCManager>(),
+  ).thenAnswer((_) => lookupManagerById<MUCManager>(mox.mucManager));
+  when(() => mockConnection.getManager<XmppPresenceManager>()).thenAnswer(
+    (_) => lookupManagerById<XmppPresenceManager>(mox.presenceManager),
+  );
+  when(
+    () => mockConnection.getManager<XmppStreamManagementManager>(),
+  ).thenAnswer(
+    (_) => lookupManagerById<XmppStreamManagementManager>(mox.smManager),
+  );
+  when(
     () => mockConnection.omemoActivityStream,
   ).thenAnswer((_) => const Stream<mox.OmemoActivityEvent>.empty());
 }
@@ -223,6 +288,14 @@ Future<void> connectSuccessfully(
   XmppService xmppService, {
   String accountJid = jid,
 }) async {
+  final parsedJid = mox.JID.fromString(accountJid);
+  final settings = XmppConnectionSettings(
+    jid: parsedJid.resource.isEmpty
+        ? parsedJid.withResource('test-resource')
+        : parsedJid,
+    password: password,
+  );
+
   when(
     () => mockNotificationService.notificationPreviewsEnabled,
   ).thenReturn(false);
@@ -249,6 +322,9 @@ Future<void> connectSuccessfully(
       key: any(named: 'key'),
       value: any(named: 'value'),
     ),
+  ).thenAnswer((_) async => true);
+  when(
+    () => mockStateStore.writeAll(data: any(named: 'data')),
   ).thenAnswer((_) async => true);
   when(
     () => mockStateStore.delete(key: any(named: 'key')),
@@ -297,6 +373,12 @@ Future<void> connectSuccessfully(
       placeholderJids: any(named: 'placeholderJids'),
     ),
   ).thenAnswer((_) async {});
+  when(
+    () => mockDatabase.getChats(
+      start: any(named: 'start'),
+      end: any(named: 'end'),
+    ),
+  ).thenAnswer((_) async => <Chat>[]);
 
   when(
     () => mockConnection.connect(
@@ -305,6 +387,8 @@ Future<void> connectSuccessfully(
       waitUntilLogin: true,
     ),
   ).thenAnswer((_) async => const Result<bool, mox.XmppError>(true));
+  when(() => mockConnection.connectionSettings).thenReturn(settings);
+  when(() => mockConnection.hasConnectionSettings).thenReturn(true);
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
   when(() => mockDatabase.close()).thenAnswer((_) async {});

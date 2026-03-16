@@ -53,22 +53,19 @@ import 'package:axichat/src/storage/database.dart' hide DraftAttachmentRef;
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
-import 'package:axichat/src/xmpp/bookmarks_features.dart';
-import 'package:axichat/src/xmpp/capability_decision.dart';
-import 'package:axichat/src/xmpp/bookmarks_manager.dart';
-import 'package:axichat/src/xmpp/conversation_index_manager.dart';
-import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
-import 'package:axichat/src/xmpp/email_blocklist_pubsub_manager.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:axichat/src/xmpp/message_collections_pubsub_manager.dart';
-import 'package:axichat/src/xmpp/pubsub_events.dart';
-import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
-import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/pubsub_support.dart';
-import 'package:axichat/src/xmpp/pubsub_manager.dart';
-import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
-import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
-import 'package:axichat/src/xmpp/spam_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
+import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_error_extensions.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_support.dart';
+import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
@@ -92,45 +89,35 @@ import 'package:xml/xml_events.dart';
 
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 
-part 'base_stream_service.dart';
+part 'stream/base_stream_service.dart';
 
-part 'blocking_service.dart';
+part 'blocking/blocking_service.dart';
 
-part 'spam_sync_service.dart';
+part 'pubsub/pubsub_service.dart';
 
-part 'email_blocklist_sync_service.dart';
+part 'chats/chats_service.dart';
 
-part 'chats_service.dart';
+part 'avatar/avatar_service.dart';
 
-part 'avatar_service.dart';
+part 'muc/muc_service.dart';
 
-part 'muc_service.dart';
+part 'muc/muc_join_bootstrap_manager.dart';
 
-part 'muc_join_bootstrap_manager.dart';
-
-part 'message_service.dart';
+part 'message/message_service.dart';
 
 part 'demo/demo_script_service.dart';
 
-part 'draft_sync_service.dart';
+part 'message/message_stanza_manager.dart';
 
-part 'message_collection_sync_service.dart';
+part 'message/xhtml_im_manager.dart';
 
-part 'message_sanitizer.dart';
+part 'omemo/omemo_service.dart';
 
-part 'xhtml_im_manager.dart';
+part 'presence/presence_service.dart';
 
-part 'mam_sm_guard.dart';
+part 'roster/roster_service.dart';
 
-part 'ping_controller.dart';
-
-part 'omemo_service.dart';
-
-part 'presence_service.dart';
-
-part 'roster_service.dart';
-
-part 'xmpp_connection.dart';
+part 'connection/xmpp_connection.dart';
 
 sealed class XmppException implements Exception {
   XmppException([this.wrapped]) : super();
@@ -206,6 +193,208 @@ final class XmppUploadMisconfiguredException extends XmppMessageException {
   final String? diagnostics;
 }
 
+enum XmppPingExpectation {
+  none,
+  responseExpected;
+
+  bool get expectsResponse => this == XmppPingExpectation.responseExpected;
+}
+
+final class XmppKeepAliveManager extends mox.XmppManagerBase {
+  XmppKeepAliveManager() : super(managerId);
+
+  static const String managerId = 'axi.keepalive';
+
+  @override
+  Future<bool> isSupported() async => true;
+
+  XmppPingExpectation sendPing() {
+    final attrs = getAttributes();
+    final socket = attrs.getSocket();
+
+    if (socket.managesKeepalives()) {
+      logger.finest('Not sending ping as the socket manages it.');
+      return XmppPingExpectation.none;
+    }
+
+    final stream = attrs.getManagerById<mox.StreamManagementManager>(
+      mox.smManager,
+    );
+    if (stream != null && stream.isStreamManagementEnabled()) {
+      logger.finest('Sending an ack ping as Stream Management is enabled');
+      stream.sendAckRequestPing();
+      return XmppPingExpectation.responseExpected;
+    }
+
+    if (socket.whitespacePingAllowed()) {
+      logger.finest(
+        'Sending a whitespace ping as Stream Management is not enabled',
+      );
+      attrs.getConnection().sendWhitespacePing();
+      return XmppPingExpectation.none;
+    }
+
+    logger.warning(
+      'Cannot send keepalives as SM is not available, the socket disallows whitespace pings and does not manage its own keepalives. Cannot guarantee that the connection survives.',
+    );
+    return XmppPingExpectation.none;
+  }
+}
+
+final class XmppPingController {
+  XmppPingController({required XmppService owner}) : _owner = owner;
+
+  static const Duration _idlePingInterval = Duration(minutes: 2);
+  static const Duration _minIdleDelay = Duration(seconds: 10);
+  static const Duration _pingTimeout = Duration(seconds: 20);
+
+  final XmppService _owner;
+
+  Timer? _idleTimer;
+  Timer? _pingTimeoutTimer;
+  DateTime? _lastPingSentAt;
+
+  void handleConnectionState(ConnectionState state) {
+    if (state == ConnectionState.connected) {
+      _scheduleIdleCheck();
+      return;
+    }
+    stop();
+  }
+
+  void stop() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
+    _pingTimeoutTimer?.cancel();
+    _pingTimeoutTimer = null;
+    _lastPingSentAt = null;
+  }
+
+  XmppTrafficTracker _trafficTracker() => _owner._connection.socketWrapper;
+
+  void _scheduleIdleCheck() {
+    _idleTimer?.cancel();
+    if (_owner.connectionState != ConnectionState.connected) {
+      return;
+    }
+    final delay = _nextIdleDelay();
+    if (delay == Duration.zero) {
+      _handleIdleCheck();
+      return;
+    }
+    _idleTimer = Timer(delay, _handleIdleCheck);
+  }
+
+  Duration _nextIdleDelay() {
+    final now = DateTime.timestamp();
+    final tracker = _trafficTracker();
+    final lastTraffic = _latestTraffic(
+      tracker.lastIncomingAt,
+      tracker.lastOutgoingAt,
+      _lastPingSentAt,
+    );
+    if (lastTraffic == null) {
+      return _idlePingInterval;
+    }
+    final elapsed = now.difference(lastTraffic);
+    final remaining = _idlePingInterval - elapsed;
+    if (remaining <= Duration.zero) {
+      return Duration.zero;
+    }
+    if (remaining < _minIdleDelay) {
+      return _minIdleDelay;
+    }
+    return remaining;
+  }
+
+  DateTime? _latestTraffic(
+    DateTime? incoming,
+    DateTime? outgoing,
+    DateTime? pingSentAt,
+  ) {
+    if (incoming == null) {
+      if (outgoing == null) {
+        return pingSentAt;
+      }
+      if (pingSentAt == null) {
+        return outgoing;
+      }
+      return outgoing.isAfter(pingSentAt) ? outgoing : pingSentAt;
+    }
+    if (outgoing == null) {
+      if (pingSentAt == null) {
+        return incoming;
+      }
+      return incoming.isAfter(pingSentAt) ? incoming : pingSentAt;
+    }
+    final candidate = incoming.isAfter(outgoing) ? incoming : outgoing;
+    if (pingSentAt == null) {
+      return candidate;
+    }
+    return candidate.isAfter(pingSentAt) ? candidate : pingSentAt;
+  }
+
+  void _handleIdleCheck() {
+    _idleTimer = null;
+    if (_owner.connectionState != ConnectionState.connected) {
+      return;
+    }
+    final now = DateTime.timestamp();
+    final tracker = _trafficTracker();
+    final lastTraffic = _latestTraffic(
+      tracker.lastIncomingAt,
+      tracker.lastOutgoingAt,
+      _lastPingSentAt,
+    );
+    if (lastTraffic != null &&
+        now.difference(lastTraffic) < _idlePingInterval) {
+      _scheduleIdleCheck();
+      return;
+    }
+    _sendPing();
+  }
+
+  void _sendPing() {
+    final manager = _owner._connection.getManager<XmppKeepAliveManager>();
+    if (manager == null) {
+      _scheduleIdleCheck();
+      return;
+    }
+    final expectation = manager.sendPing();
+    _lastPingSentAt = DateTime.timestamp();
+    if (expectation.expectsResponse) {
+      _schedulePingTimeout();
+    } else {
+      _pingTimeoutTimer?.cancel();
+      _pingTimeoutTimer = null;
+    }
+    _scheduleIdleCheck();
+  }
+
+  void _schedulePingTimeout() {
+    _pingTimeoutTimer?.cancel();
+    final sentAt = _lastPingSentAt;
+    if (sentAt == null) {
+      return;
+    }
+    _pingTimeoutTimer = Timer(_pingTimeout, () {
+      _pingTimeoutTimer = null;
+      if (_owner.connectionState != ConnectionState.connected) {
+        return;
+      }
+      final tracker = _trafficTracker();
+      final lastIncoming = tracker.lastIncomingAt;
+      if (lastIncoming != null && lastIncoming.isAfter(sentAt)) {
+        return;
+      }
+      fireAndForget(
+        () => _owner.requestReconnect(ReconnectTrigger.autoFailure),
+        operationName: 'XmppService.pingTimeoutReconnect',
+      );
+    });
+  }
+}
+
 class HttpUploadSupport {
   const HttpUploadSupport({
     required this.supported,
@@ -229,15 +418,6 @@ class HttpUploadSupport {
   int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
 }
 
-class StoredAvatar {
-  const StoredAvatar({required this.path, required this.hash});
-
-  final String? path;
-  final String? hash;
-
-  bool get isEmpty => path == null && hash == null;
-}
-
 // Hardcode the socket endpoints so we never block on DNS when dialing the XMPP
 // server. The `domain` parameter is still passed through for TLS/SASL SNI.
 final serverLookup = <String, IOEndpoint>{
@@ -257,6 +437,12 @@ abstract interface class XmppBase {
   XmppBase();
 
   late XmppConnection _connection;
+  bool _hasInitializedConnection = false;
+
+  void _setConnection(XmppConnection connection) {
+    _connection = connection;
+    _hasInitializedConnection = true;
+  }
 
   XmppBase get owner;
 
@@ -318,32 +504,19 @@ abstract interface class XmppBase {
 
   SecretKey? get avatarEncryptionKey;
 
-  StoredAvatar? get cachedSelfAvatar;
+  Avatar? get cachedSelfAvatar;
 
-  Stream<StoredAvatar?> get selfAvatarStream;
+  Stream<Avatar?> get selfAvatarStream;
 
   bool get selfAvatarHydrating;
 
   Stream<bool> get selfAvatarHydratingStream;
 
-  Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
-
-  Stream<anti_abuse.EmailBlocklistSyncUpdate>
-  get emailBlocklistSyncUpdateStream;
-
-  void emitSpamSyncUpdate(anti_abuse.SpamSyncUpdate update);
-
-  void emitEmailBlocklistSyncUpdate(anti_abuse.EmailBlocklistSyncUpdate update);
-
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
 
-  Future<StoredAvatar?> getOwnAvatar();
-
-  Future<void> publishMessageCollectionSyncEntry(
-    MessageCollectionMembershipEntry entry,
-  );
+  Future<Avatar?> getOwnAvatar();
 
   Stream<void> get databaseReloadStream;
 
@@ -369,7 +542,12 @@ abstract interface class XmppBase {
     _eventManagerInstance = null;
   }
 
+  List<String> get discoFeatures => const <String>[];
+
   List<mox.XmppManagerBase> get featureManagers => [];
+
+  List<mox.XmppManagerBase> get pubSubFeatureManagers =>
+      const <mox.XmppManagerBase>[];
 
   ConnectionState get connectionState;
 
@@ -452,18 +630,15 @@ class XmppService extends XmppBase
     with
         BaseStreamService,
         AvatarService,
+        PubSubService,
         BlockingService,
         MessageService,
         MucService,
         ChatsService,
-        DraftSyncService,
-        MessageCollectionSyncService,
         DemoScriptService,
         // OmemoService,
         RosterService,
-        PresenceService,
-        SpamSyncService,
-        EmailBlocklistSyncService {
+        PresenceService {
   XmppService._(
     this._connectionFactory,
     this._stateStoreFactory,
@@ -534,20 +709,6 @@ class XmppService extends XmppBase
   String? get saltedPassword => _connection.saltedPassword;
 
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
-
-  @override
-  PubSubSupport get pubSubSupport =>
-      _connection.getManager<PubSubManager>()?.support ??
-      const PubSubSupport(
-        pubSubSupported: false,
-        pepSupported: false,
-        bookmarks2Supported: false,
-      );
-
-  @override
-  Stream<PubSubSupport> get pubSubSupportStream =>
-      _connection.getManager<PubSubManager>()?.supportStream ??
-      const Stream<PubSubSupport>.empty();
 
   @override
   bool get autoDownloadImages => _autoDownloadImages;
@@ -827,31 +988,17 @@ class XmppService extends XmppBase
             type: _capability.discoClient,
             name: appDisplayName,
           ),
-        ])..addFeatures(const [
-          bookmarksNotifyFeature,
-          conversationIndexNotifyFeature,
-          draftsNotifyFeature,
-          messageCollectionsNotifyFeature,
-          spamNotifyFeature,
-          emailBlocklistNotifyFeature,
-        ])),
+        ])..addFeatures(discoFeatures)),
         XmppKeepAliveManager(),
         _AxiEntityCapabilitiesManager(
           _capabilityHashBase,
           shouldIgnoreJid: _shouldIgnoreEntityCapabilityJid,
         ),
-        PubSubManager(),
         mox.CSIManager(),
         mox.StableIdManager(),
         mox.CryptographicHashManager(),
         mox.OccupantIdManager(),
         MucJoinBootstrapManager(),
-        BookmarksManager(),
-        ConversationIndexManager(),
-        DraftsPubSubManager(),
-        MessageCollectionsPubSubManager(),
-        SpamPubSubManager(),
-        EmailBlocklistPubSubManager(),
       ]);
 
     return managers;
@@ -1213,7 +1360,7 @@ class XmppService extends XmppBase
     if (!_synchronousConnection.isCompleted) {
       _synchronousConnection.complete();
     }
-    _connection = await _connectionFactory();
+    _setConnection(await _connectionFactory());
     _configureSocketCallbacks();
     _myJid = targetJid;
     if (!_stateStore.isCompleted) {
@@ -1250,7 +1397,7 @@ class XmppService extends XmppBase
     );
 
     _connectionPasswordPreHashed = preHashed;
-    _connection = connectionOverride ?? await _connectionFactory();
+    _setConnection(connectionOverride ?? await _connectionFactory());
     _configureSocketCallbacks();
     _omemoActivitySubscription?.cancel();
     _omemoActivitySubscription = _connection.omemoActivityStream.listen(
@@ -2398,7 +2545,7 @@ class XmppService extends XmppBase
       }
       foregroundAttemptConnection = nextConnection;
 
-      _connection = nextConnection;
+      _setConnection(nextConnection);
       _configureSocketCallbacks();
       _omemoActivitySubscription = _connection.omemoActivityStream.listen(
         _omemoActivityController.add,
@@ -2454,7 +2601,7 @@ class XmppService extends XmppBase
       }
       try {
         final XmppConnection fallbackConnection = XmppConnection();
-        _connection = fallbackConnection;
+        _setConnection(fallbackConnection);
         _configureSocketCallbacks();
         _omemoActivitySubscription = _connection.omemoActivityStream.listen(
           _omemoActivityController.add,
@@ -2652,7 +2799,7 @@ class XmppService extends XmppBase
       await _connection.reset();
     }
     await _connection.socketWrapper.closeStreams();
-    _connection = await _connectionFactory();
+    _setConnection(await _connectionFactory());
     _configureSocketCallbacks();
     if (_activeDbOperations != 0) {
       await _dbOperationsDrained?.future;
@@ -2708,12 +2855,7 @@ class XmppService extends XmppBase
   }
 
   Future<void> _closeManagerStreams() async {
-    await bookmarksManager?.close();
-    await conversationIndexManager?.close();
-    await _connection.getManager<DraftsPubSubManager>()?.close();
-    await _connection.getManager<MessageCollectionsPubSubManager>()?.close();
-    await _connection.getManager<SpamPubSubManager>()?.close();
-    await _connection.getManager<EmailBlocklistPubSubManager>()?.close();
+    await _connection.getManager<PubSubHubManager>()?.close();
   }
 
   Future<void> _resetStreamControllers() async {
@@ -2737,9 +2879,9 @@ class XmppService extends XmppBase
       _spamSyncUpdateController =
           StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
     }
-    if (_emailBlocklistSyncUpdateController.isClosed) {
-      _emailBlocklistSyncUpdateController =
-          StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
+    if (_addressBlockSyncUpdateController.isClosed) {
+      _addressBlockSyncUpdateController =
+          StreamController<anti_abuse.AddressBlockSyncUpdate>.broadcast();
     }
     if (_connectivityStream.isClosed) {
       _connectivityStream = StreamController<ConnectionState>.broadcast();
@@ -2762,8 +2904,8 @@ class XmppService extends XmppBase
     if (!_spamSyncUpdateController.isClosed) {
       await _spamSyncUpdateController.close();
     }
-    if (!_emailBlocklistSyncUpdateController.isClosed) {
-      await _emailBlocklistSyncUpdateController.close();
+    if (!_addressBlockSyncUpdateController.isClosed) {
+      await _addressBlockSyncUpdateController.close();
     }
     if (!_connectivityStream.isClosed) {
       await _connectivityStream.close();
@@ -2771,8 +2913,11 @@ class XmppService extends XmppBase
   }
 
   Future<void> close() async {
-    await _connection.getManager<PubSubManager>()?.disposeSupport();
-    await _reset();
+    if (_hasInitializedConnection) {
+      final connection = _connection;
+      await connection.getManager<PubSubManager>()?.disposeSupport();
+      await _reset();
+    }
     await _closeStreamControllers();
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
@@ -2896,34 +3041,6 @@ class XmppService extends XmppBase
   List<int> secureBytes(int length) {
     final random = Random.secure();
     return List<int>.generate(length, (_) => random.nextInt(256));
-  }
-
-  @override
-  Future<PubSubSupport> refreshPubSubSupport({bool force = false}) async {
-    final manager = _connection.getManager<PubSubManager>();
-    if (manager == null) {
-      return pubSubSupport;
-    }
-    return manager.refreshSupport(
-      force: force,
-      selfJid: _myJid,
-      demoOffline: demoOfflineMode,
-    );
-  }
-
-  @override
-  CapabilityDecision decidePubSubSupport({
-    required bool supported,
-    required String featureLabel,
-  }) {
-    final manager = _connection.getManager<PubSubManager>();
-    if (manager == null) {
-      return const CapabilityDecision(CapabilityDecisionKind.unknown);
-    }
-    return manager.decideSupport(
-      supported: supported,
-      featureLabel: featureLabel,
-    );
   }
 
   static String generateResource() =>
@@ -3746,7 +3863,7 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   }
 }
 
-// PubSubManager wrapper lives in pubsub_manager.dart.
+// PubSubManager wrapper lives in pubsub/pubsub_manager.dart.
 
 /// Custom SASL SCRAM negotiator that adds support for pre-hashed passwords.
 ///

@@ -80,6 +80,9 @@ class XmppConnection extends mox.XmppConnection {
   Future<bool> isReconnecting() => _reconnectionPolicy.getIsReconnecting();
 
   T? getManager<T extends mox.XmppManagerBase>() {
+    final pubSubHubManager = getManagerById<PubSubHubManager>(
+      PubSubHubManager.managerId,
+    );
     switch (T) {
       case == mox.MessageManager:
         return getManagerById(mox.messageManager);
@@ -119,18 +122,21 @@ class XmppConnection extends mox.XmppConnection {
         return getManagerById(mox.userAvatarManager);
       case == mox.VCardManager:
         return getManagerById(mox.vcardManager);
+      case == PubSubHubManager:
+        return pubSubHubManager as T?;
       case == BookmarksManager:
-        return getManagerById(BookmarksManager.managerId);
+        return pubSubHubManager?.getDelegate<BookmarksManager>() as T?;
       case == ConversationIndexManager:
-        return getManagerById(ConversationIndexManager.managerId);
+        return pubSubHubManager?.getDelegate<ConversationIndexManager>() as T?;
       case == DraftsPubSubManager:
-        return getManagerById(DraftsPubSubManager.managerId);
+        return pubSubHubManager?.getDelegate<DraftsPubSubManager>() as T?;
       case == MessageCollectionsPubSubManager:
-        return getManagerById(MessageCollectionsPubSubManager.managerId);
+        return pubSubHubManager?.getDelegate<MessageCollectionsPubSubManager>()
+            as T?;
       case == SpamPubSubManager:
-        return getManagerById(SpamPubSubManager.managerId);
-      case == EmailBlocklistPubSubManager:
-        return getManagerById(EmailBlocklistPubSubManager.managerId);
+        return pubSubHubManager?.getDelegate<SpamPubSubManager>() as T?;
+      case == AddressBlockPubSubManager:
+        return pubSubHubManager?.getDelegate<AddressBlockPubSubManager>() as T?;
       default:
         return null;
     }

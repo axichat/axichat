@@ -29,6 +29,225 @@ final XmppOperationEvent _selfAvatarPublishFailureEvent = XmppOperationEvent(
   isSuccess: false,
 );
 
+final class RoomVCardAvatarUpdatedEvent extends mox.XmppEvent {
+  RoomVCardAvatarUpdatedEvent(this.jid, this.hash);
+
+  final mox.JID jid;
+  final String hash;
+}
+
+/// Avatar manager override that skips room-avatar JIDs and repairs metadata
+/// parsing plus unsubscribe behavior for XEP-0084 notifications.
+class RoomAwareUserAvatarManager extends mox.UserAvatarManager {
+  RoomAwareUserAvatarManager({this.shouldSkipJid});
+
+  static const String _metadataTag = 'metadata';
+  static const String _infoTag = 'info';
+  static const int _maxMetadataItems = 1;
+  static const bool _skipAvatarJidDefault = false;
+
+  final bool Function(mox.JID jid)? shouldSkipJid;
+
+  @override
+  Future<void> onXmppEvent(mox.XmppEvent event) async {
+    if (event is PubSubItemsRefreshedEvent) {
+      fireAndForget(() => _handleRefreshEvent(event));
+      return;
+    }
+
+    if (event is! mox.PubSubNotificationEvent) {
+      return super.onXmppEvent(event);
+    }
+
+    fireAndForget(() async {
+      if (event.item.node != mox.userAvatarMetadataXmlns) return;
+
+      final fromRaw = event.from.trim();
+      if (fromRaw.isEmpty) return;
+
+      late final mox.JID from;
+      try {
+        from = mox.JID.fromString(fromRaw);
+      } on Exception {
+        return;
+      }
+      if (_shouldSkipAvatarJid(from)) {
+        logger.fine('Avatar notification skipped; jid marked skippable.');
+        return;
+      }
+
+      if (event.item.payload case final payload?) {
+        logger.fine('Avatar notification received with inline payload.');
+        await _emitFromPayload(from: from, payload: payload);
+        return;
+      }
+
+      final itemId = event.item.id.trim();
+      logger.fine('Avatar notification received without payload; refreshing.');
+      await _refreshMetadata(
+        from: from,
+        itemId: itemId.isNotEmpty ? itemId : null,
+      );
+    });
+    return;
+  }
+
+  Future<void> _handleRefreshEvent(PubSubItemsRefreshedEvent event) async {
+    if (event.node != mox.userAvatarMetadataXmlns) return;
+    if (_shouldSkipAvatarJid(event.from)) {
+      logger.fine('Avatar refresh event skipped; jid marked skippable.');
+      return;
+    }
+    logger.fine('Avatar refresh event received; refreshing metadata.');
+    await _refreshMetadata(from: event.from);
+  }
+
+  Future<void> _refreshMetadata({required mox.JID from, String? itemId}) async {
+    if (_shouldSkipAvatarJid(from)) return;
+    final pubsub = getAttributes().getManagerById<mox.PubSubManager>(
+      mox.pubsubManager,
+    );
+    if (pubsub == null) {
+      logger.fine('PubSubManager unavailable; cannot refresh avatar metadata.');
+      return;
+    }
+
+    final bareFrom = from.toBare();
+    final normalizedItemId = itemId?.trim();
+    if (normalizedItemId?.isNotEmpty == true) {
+      final itemResult = await pubsub.getItem(
+        bareFrom,
+        mox.userAvatarMetadataXmlns,
+        normalizedItemId!,
+      );
+      if (!itemResult.isType<mox.PubSubError>()) {
+        final fetchedPayload = itemResult.get<mox.PubSubItem>().payload;
+        if (fetchedPayload != null) {
+          logger.fine('Avatar metadata fetched via item lookup.');
+          await _emitFromPayload(from: from, payload: fetchedPayload);
+          return;
+        }
+      }
+      logger.fine('Avatar item lookup failed; falling back to getItems.');
+    }
+
+    var itemsResult = await pubsub.getItems(
+      bareFrom,
+      mox.userAvatarMetadataXmlns,
+      maxItems: _maxMetadataItems,
+    );
+    if (itemsResult.isType<mox.PubSubError>()) {
+      final error = itemsResult.get<mox.PubSubError>();
+      final shouldRetry =
+          error is mox.EjabberdMaxItemsError ||
+          error is mox.MalformedResponseError ||
+          error is mox.UnknownPubSubError;
+      logger.fine(
+        'Avatar getItems failed with ${error.runtimeType}; '
+        'retry=$shouldRetry.',
+      );
+      if (!shouldRetry) return;
+      itemsResult = await pubsub.getItems(
+        bareFrom,
+        mox.userAvatarMetadataXmlns,
+      );
+      if (itemsResult.isType<mox.PubSubError>()) return;
+    }
+
+    final items = itemsResult.get<List<mox.PubSubItem>>();
+    if (items.isEmpty) {
+      logger.fine('Avatar getItems returned empty list; emitting clear event.');
+      getAttributes().sendEvent(
+        mox.UserAvatarUpdatedEvent(from, const <mox.UserAvatarMetadata>[]),
+      );
+      return;
+    }
+
+    final payload = items.first.payload;
+    if (payload == null) return;
+    await _emitFromPayload(from: from, payload: payload);
+  }
+
+  bool _shouldSkipAvatarJid(mox.JID jid) =>
+      shouldSkipJid?.call(jid) ?? _skipAvatarJidDefault;
+
+  Future<void> _emitFromPayload({
+    required mox.JID from,
+    required mox.XMLNode payload,
+  }) async {
+    if (payload.tag != _metadataTag ||
+        payload.attributes['xmlns'] != mox.userAvatarMetadataXmlns) {
+      logger.warning('Received invalid user avatar metadata payload.');
+      return;
+    }
+
+    final metadata = payload
+        .findTags(_infoTag)
+        .map(mox.UserAvatarMetadata.fromXML)
+        .toList();
+    logger.fine('Avatar metadata parsed. count=${metadata.length}.');
+    getAttributes().sendEvent(mox.UserAvatarUpdatedEvent(from, metadata));
+  }
+
+  @override
+  Future<moxlib.Result<mox.AvatarError, bool>> unsubscribe(mox.JID jid) async {
+    final pubsub = getAttributes().getManagerById<mox.PubSubManager>(
+      mox.pubsubManager,
+    );
+    if (pubsub == null) {
+      return moxlib.Result(mox.UnknownAvatarError());
+    }
+
+    final result = await pubsub.unsubscribe(jid, mox.userAvatarMetadataXmlns);
+    if (result.isType<mox.PubSubError>()) {
+      logger.warning('Failed to unsubscribe from user avatar metadata.');
+      return moxlib.Result(mox.UnknownAvatarError());
+    }
+
+    return const moxlib.Result(true);
+  }
+}
+
+/// vCard avatar manager override that routes room avatar updates to a room-
+/// specific event instead of the contact-avatar path.
+class RoomAwareVCardManager extends mox.VCardManager {
+  RoomAwareVCardManager({this.isRoomJid});
+
+  final bool Function(mox.JID jid)? isRoomJid;
+
+  @override
+  List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
+    mox.StanzaHandler(
+      stanzaTag: 'presence',
+      tagName: 'x',
+      tagXmlns: mox.vCardTempUpdate,
+      callback: _onPresenceSafe,
+    ),
+  ];
+
+  Future<mox.StanzaHandlerData> _onPresenceSafe(
+    mox.Stanza presence,
+    mox.StanzaHandlerData state,
+  ) async {
+    final x = presence.firstTag('x', xmlns: mox.vCardTempUpdate);
+    final from = presence.from;
+    if (x == null || from == null) {
+      return state;
+    }
+
+    final hash = x.firstTag('photo')?.innerText() ?? '';
+
+    final jid = mox.JID.fromString(from);
+    final roomAvatarJid = isRoomJid?.call(jid) ?? false;
+    getAttributes().sendEvent(
+      roomAvatarJid
+          ? RoomVCardAvatarUpdatedEvent(jid, hash)
+          : mox.VCardAvatarUpdatedEvent(jid, hash),
+    );
+    return state;
+  }
+}
+
 class AvatarUploadPayload {
   const AvatarUploadPayload({
     required this.bytes,
@@ -138,7 +357,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   final _avatarLog = Logger('AvatarService');
   StreamController<bool> _selfAvatarHydratingController =
       StreamController<bool>.broadcast(sync: true);
-  StoredAvatar? _cachedSelfAvatar;
+  Avatar? _cachedSelfAvatar;
   bool _hasSelfAvatarNegotiatedStream = false;
   bool _selfAvatarInitialSyncCompleted = false;
   SecretKey? _avatarEncryptionKey;
@@ -212,22 +431,21 @@ mixin AvatarService on XmppBase, BaseStreamService {
   SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
 
   @override
-  StoredAvatar? get cachedSelfAvatar => _cachedSelfAvatar;
+  Avatar? get cachedSelfAvatar => _cachedSelfAvatar;
 
   @override
-  Stream<StoredAvatar?> get selfAvatarStream =>
-      createSingleStateStoreStream<StoredAvatar?>(
-        watchFunction: (store) async =>
-            (store.watch<Object?>(key: _selfAvatarStateKey) ??
-                    const Stream<Object?>.empty())
-                .startWith(null)
-                .map((_) {
-                  final avatar = _readStoredSelfAvatar(store);
-                  _setCachedSelfAvatar(avatar);
-                  return _cachedSelfAvatar;
-                })
-                .distinct(_storedAvatarsMatch),
-      );
+  Stream<Avatar?> get selfAvatarStream => createSingleStateStoreStream<Avatar?>(
+    watchFunction: (store) async =>
+        (store.watch<Object?>(key: _selfAvatarStateKey) ??
+                const Stream<Object?>.empty())
+            .startWith(null)
+            .map((_) {
+              final avatar = _readStoredSelfAvatar(store);
+              _setCachedSelfAvatar(avatar);
+              return _cachedSelfAvatar;
+            })
+            .distinct(_storedAvatarsMatch),
+  );
 
   @override
   bool get selfAvatarHydrating {
@@ -258,8 +476,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _emitSelfAvatarHydrating();
   }
 
-  void _setCachedSelfAvatar(StoredAvatar? avatar) {
-    _cachedSelfAvatar = avatar?.isEmpty == true ? null : avatar;
+  void _setCachedSelfAvatar(Avatar? avatar) {
+    _cachedSelfAvatar = avatar;
   }
 
   Uint8List? cachedAvatarBytes(String path) {
@@ -518,7 +736,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
         payload: payload,
         public: true,
       );
-      _setCachedSelfAvatar(StoredAvatar(path: path, hash: payload.hash));
+      _setCachedSelfAvatar(Avatar(path: path, hash: payload.hash));
       if (waitForPublish) {
         await _bootstrapSelfAvatarIfReady();
       } else {
@@ -537,10 +755,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
   }
 
   @override
-  Future<StoredAvatar?> getOwnAvatar() async {
+  Future<Avatar?> getOwnAvatar() async {
     if (!isStateStoreReady) return null;
     try {
-      final stored = await _dbOpReturning<XmppStateStore, StoredAvatar?>(
+      final stored = await _dbOpReturning<XmppStateStore, Avatar?>(
         (ss) => _readStoredSelfAvatar(ss),
       );
       _setCachedSelfAvatar(stored);
@@ -809,21 +1027,19 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (avatarEncryptionKey == null) return;
 
     try {
-      final stored = await _dbOpReturning<XmppStateStore, StoredAvatar?>((
-        ss,
-      ) async {
+      final stored = await _dbOpReturning<XmppStateStore, Avatar?>((ss) async {
         final path = ss.read(key: selfAvatarPathKey) as String?;
         final hash = ss.read(key: selfAvatarHashKey) as String?;
-        if (path == null && hash == null) return null;
-        return StoredAvatar(path: path, hash: hash);
+        final resolvedPath = path?.trim();
+        if (resolvedPath == null || resolvedPath.isEmpty) return null;
+        return Avatar(path: resolvedPath, hash: hash?.trim());
       });
-      if (stored == null || stored.isEmpty) return;
-      final path = stored.path?.trim();
-      if (path == null || path.isEmpty) return;
+      if (stored == null) return;
+      final path = stored.path;
       if (!await _hasCachedAvatarFile(path)) return;
 
       _markPubSubAvatarPreferred(myBareJid);
-      _setCachedSelfAvatar(StoredAvatar(path: path, hash: stored.hash));
+      _setCachedSelfAvatar(Avatar(path: path, hash: stored.hash));
     } on XmppAbortedException {
       return;
     } on Exception catch (error, stackTrace) {
@@ -1384,7 +1600,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }, awaitDatabase: true);
     if (myBareJid != null && myBareJid == jid) {
       await _persistOwnAvatar(path, hash);
-      _setCachedSelfAvatar(StoredAvatar(path: path, hash: hash));
+      _setCachedSelfAvatar(Avatar(path: path, hash: hash));
     }
   }
 
@@ -1395,7 +1611,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       _markPubSubAvatarPreferred(myBareJid);
     }
     try {
-      await _persistStoredSelfAvatar(StoredAvatar(path: path, hash: hash));
+      await _persistStoredSelfAvatar(Avatar(path: path, hash: hash));
     } on XmppAbortedException {
       return;
     }
@@ -2106,7 +2322,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
   }
 
-  StoredAvatar? _readStoredSelfAvatar(XmppStateStore store) {
+  Avatar? _readStoredSelfAvatar(XmppStateStore store) {
     final rawStored = store.read(key: _selfAvatarStateKey);
     final encoded = rawStored is Map
         ? Map<Object?, Object?>.from(rawStored)
@@ -2114,18 +2330,14 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (encoded != null) {
       final path = encoded[_storedAvatarPathField] as String?;
       final hash = encoded[_storedAvatarHashField] as String?;
-      if (path != null || hash != null) {
-        return StoredAvatar(path: path, hash: hash);
-      }
-      return null;
+      return Avatar.tryParseOrNull(path: path, hash: hash);
     }
     final path = store.read(key: selfAvatarPathKey) as String?;
     final hash = store.read(key: selfAvatarHashKey) as String?;
-    if (path == null && hash == null) return null;
-    return StoredAvatar(path: path, hash: hash);
+    return Avatar.tryParseOrNull(path: path, hash: hash);
   }
 
-  Future<void> _persistStoredSelfAvatar(StoredAvatar? avatar) async {
+  Future<void> _persistStoredSelfAvatar(Avatar? avatar) async {
     await _dbOp<XmppStateStore>((store) async {
       await store.writeAll(
         data: <RegisteredStateKey, Object?>{
@@ -2142,7 +2354,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }, awaitDatabase: true);
   }
 
-  bool _storedAvatarsMatch(StoredAvatar? left, StoredAvatar? right) =>
+  bool _storedAvatarsMatch(Avatar? left, Avatar? right) =>
       left?.path == right?.path && left?.hash == right?.hash;
 
   Future<_PendingSelfAvatarPublish?> _readPendingSelfAvatarPublish() async {

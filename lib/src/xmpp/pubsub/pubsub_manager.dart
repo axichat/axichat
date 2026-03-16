@@ -3,15 +3,34 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/xmpp/bookmarks_features.dart';
-import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
-import 'package:axichat/src/xmpp/pubsub_events.dart';
-import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/pubsub_support.dart';
-import 'package:axichat/src/xmpp/capability_decision.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_error_extensions.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_events.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_support.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+
+const String bookmarksNodeXmlns = 'urn:xmpp:bookmarks:1';
+const String bookmarksNotifyFeature = 'urn:xmpp:bookmarks:1+notify';
+const String bookmarks2CompatFeature = 'urn:xmpp:bookmarks:1#compat';
+const String bookmarks2CompatPepFeature = 'urn:xmpp:bookmarks:1#compat-pep';
+const String bookmarks2ConversionFeature = 'urn:xmpp:bookmarks-conversion:0';
+
+enum CapabilityDecisionKind { allowed, unsupported, unknown, error }
+
+class CapabilityDecision {
+  const CapabilityDecision(this.kind, {this.error, this.stackTrace});
+
+  final CapabilityDecisionKind kind;
+  final Object? error;
+  final StackTrace? stackTrace;
+
+  bool get isAllowed => kind == CapabilityDecisionKind.allowed;
+  bool get isUnsupported => kind == CapabilityDecisionKind.unsupported;
+  bool get isUnknown => kind == CapabilityDecisionKind.unknown;
+  bool get isError => kind == CapabilityDecisionKind.error;
+}
 
 /// Axichat wrapper around moxxmpp's [mox.PubSubManager].
 ///
@@ -38,7 +57,7 @@ class PubSubManager extends mox.PubSubManager {
   static const String _conversationIndexNode = 'urn:axi:conversations';
   static const String _draftsNode = 'urn:axi:drafts';
   static const String _spamNode = 'urn:axi:spam';
-  static const String _emailBlocklistNode = 'urn:axi:email-blocklist';
+  static const String _addressBlockNode = 'urn:axi:address-blocklist';
   static const String _jidAttr = 'jid';
   static const String _subIdAttr = 'subid';
   static const String _subscriptionAttr = 'subscription';
@@ -113,7 +132,7 @@ class PubSubManager extends mox.PubSubManager {
       _conversationIndexNode => XmppOperationKind.pubSubConversations,
       _draftsNode => XmppOperationKind.pubSubDrafts,
       _spamNode => XmppOperationKind.pubSubSpam,
-      _emailBlocklistNode => XmppOperationKind.pubSubEmailBlocklist,
+      _addressBlockNode => XmppOperationKind.pubSubAddressBlock,
       mox.userAvatarMetadataXmlns => XmppOperationKind.pubSubAvatarMetadata,
       mox.userAvatarDataXmlns => XmppOperationKind.pubSubAvatarMetadata,
       _ => XmppOperationKind.pubSubFetch,
@@ -332,7 +351,7 @@ class PubSubManager extends mox.PubSubManager {
     final operationKind = _operationKindForNode(node);
     final attrs = getAttributes()
       ..sendEvent(_operationStartEvent(operationKind));
-    final subscriberJid = attrs.getFullJID().toBare().toString();
+    final subscriberJid = _subscriberBareJid(attrs);
     var success = false;
     try {
       final result = await attrs.sendStanza(
@@ -409,7 +428,7 @@ class PubSubManager extends mox.PubSubManager {
     final operationKind = _operationKindForNode(node);
     final attrs = getAttributes()
       ..sendEvent(_operationStartEvent(operationKind));
-    final subscriberJid = attrs.getFullJID().toBare().toString();
+    final subscriberJid = _subscriberBareJid(attrs);
     var success = false;
     try {
       final result = await super.unsubscribe(jid, node, subId: subId);
@@ -437,6 +456,14 @@ class PubSubManager extends mox.PubSubManager {
       return result;
     } finally {
       attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
+    }
+  }
+
+  String _subscriberBareJid(mox.XmppManagerAttributes attrs) {
+    try {
+      return attrs.getConnectionSettings().jid.toBare().toString();
+    } on Exception {
+      return attrs.getFullJID().toBare().toString();
     }
   }
 

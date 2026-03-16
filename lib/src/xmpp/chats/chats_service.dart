@@ -179,6 +179,18 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       });
   }
 
+  @override
+  List<mox.XmppManagerBase> get pubSubFeatureManagers => <mox.XmppManagerBase>[
+    ...super.pubSubFeatureManagers,
+    ConversationIndexManager(),
+  ];
+
+  @override
+  List<String> get discoFeatures => <String>[
+    ...super.discoFeatures,
+    conversationIndexNotifyFeature,
+  ];
+
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
     final pendingSync = _conversationIndexLoginSync;
     if (pendingSync != null) return pendingSync;
@@ -826,7 +838,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<void> applyConversationIndexSnapshot(
-    PubSubFetchResult<ConvItem> snapshot,
+    ({List<ConvItem> items, bool isSuccess, bool isComplete}) snapshot,
   ) async {
     if (!snapshot.isSuccess) return;
     final items = snapshot.items;

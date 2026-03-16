@@ -18,7 +18,7 @@ import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:flutter_bloc/flutter_bloc.dart';

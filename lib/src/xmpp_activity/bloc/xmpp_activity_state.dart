@@ -33,8 +33,8 @@ class XmppOperation {
         XmppOperationLabelKey.pubSubConversationsStart,
       XmppOperationKind.pubSubDrafts => XmppOperationLabelKey.pubSubDraftsStart,
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamStart,
-      XmppOperationKind.pubSubEmailBlocklist =>
-        XmppOperationLabelKey.pubSubEmailBlocklistStart,
+      XmppOperationKind.pubSubAddressBlock =>
+        XmppOperationLabelKey.pubSubAddressBlockStart,
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataStart,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchStart,
@@ -54,8 +54,8 @@ class XmppOperation {
       XmppOperationKind.pubSubDrafts =>
         XmppOperationLabelKey.pubSubDraftsSuccess,
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamSuccess,
-      XmppOperationKind.pubSubEmailBlocklist =>
-        XmppOperationLabelKey.pubSubEmailBlocklistSuccess,
+      XmppOperationKind.pubSubAddressBlock =>
+        XmppOperationLabelKey.pubSubAddressBlockSuccess,
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataSuccess,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchSuccess,
@@ -75,8 +75,8 @@ class XmppOperation {
       XmppOperationKind.pubSubDrafts =>
         XmppOperationLabelKey.pubSubDraftsFailure,
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamFailure,
-      XmppOperationKind.pubSubEmailBlocklist =>
-        XmppOperationLabelKey.pubSubEmailBlocklistFailure,
+      XmppOperationKind.pubSubAddressBlock =>
+        XmppOperationLabelKey.pubSubAddressBlockFailure,
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataFailure,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchFailure,
@@ -114,9 +114,9 @@ enum XmppOperationLabelKey {
   pubSubSpamStart,
   pubSubSpamSuccess,
   pubSubSpamFailure,
-  pubSubEmailBlocklistStart,
-  pubSubEmailBlocklistSuccess,
-  pubSubEmailBlocklistFailure,
+  pubSubAddressBlockStart,
+  pubSubAddressBlockSuccess,
+  pubSubAddressBlockFailure,
   pubSubAvatarMetadataStart,
   pubSubAvatarMetadataSuccess,
   pubSubAvatarMetadataFailure,

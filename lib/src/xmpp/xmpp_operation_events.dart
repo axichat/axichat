@@ -8,7 +8,7 @@ enum XmppOperationKind {
   pubSubConversations,
   pubSubDrafts,
   pubSubSpam,
-  pubSubEmailBlocklist,
+  pubSubAddressBlock,
   pubSubAvatarMetadata,
   pubSubFetch,
   mamGlobalSync,

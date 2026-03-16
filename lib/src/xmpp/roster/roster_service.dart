@@ -66,16 +66,16 @@ mixin RosterService
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers =>
-      super.featureManagers..addAll([
-        mox.RosterManager(
-          XmppRosterStateManager(
-            owner: this,
-            avatarService: this,
-            rosterService: this,
-          ),
-        ),
-      ]);
+  List<mox.XmppManagerBase> get featureManagers => <mox.XmppManagerBase>[
+    ...super.featureManagers,
+    mox.RosterManager(
+      XmppRosterStateManager(
+        owner: this,
+        avatarService: this,
+        rosterService: this,
+      ),
+    ),
+  ];
 
   Future<void> requestRoster() async {
     final result = await _connection.requestRoster();

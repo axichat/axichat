@@ -1,4 +1,4 @@
-import 'package:axichat/src/xmpp/pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 

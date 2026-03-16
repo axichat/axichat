@@ -7,10 +7,10 @@ import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
-import 'package:axichat/src/xmpp/conversation_index_manager.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
-import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -550,7 +550,7 @@ void main() {
             () => mockStateStore.watch<Object?>(key: any(named: 'key')),
           ).thenAnswer((_) => stateStoreWatchController.stream);
 
-          final selfAvatarEvents = <StoredAvatar?>[];
+          final selfAvatarEvents = <Avatar?>[];
           final selfAvatarSubscription = xmppService.selfAvatarStream.listen(
             selfAvatarEvents.add,
           );
@@ -573,7 +573,7 @@ void main() {
           await pumpEventQueue();
 
           expect(
-            selfAvatarEvents.whereType<StoredAvatar>().last.hash,
+            selfAvatarEvents.whereType<Avatar>().last.hash,
             'self-avatar-hash',
           );
           expect((await xmppService.getOwnAvatar())?.hash, 'self-avatar-hash');
@@ -1266,7 +1266,7 @@ void main() {
             (_) {},
             onError: errors.add,
           ),
-          (xmppService as DraftSyncService).draftsStream().listen(
+          (xmppService as MessageService).draftsStream().listen(
             (_) {},
             onError: errors.add,
           ),

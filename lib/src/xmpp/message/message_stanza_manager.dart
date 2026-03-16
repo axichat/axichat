@@ -550,10 +550,10 @@ StanzaErrorConditionData? _parseStanzaErrorCondition(mox.Stanza stanza) {
   return StanzaErrorConditionData(condition: condition, type: normalizedType);
 }
 
-class MessageSanitizerManager extends mox.XmppManagerBase {
-  MessageSanitizerManager() : super('axi.message.sanitizer');
+class MessageStanzaManager extends mox.XmppManagerBase {
+  MessageStanzaManager() : super('axi.message.stanza');
 
-  final _log = Logger('MessageSanitizer');
+  final _log = Logger('MessageStanzaManager');
   static const String _mucUserTag = 'x';
   static const String _mucInviteTag = 'invite';
 

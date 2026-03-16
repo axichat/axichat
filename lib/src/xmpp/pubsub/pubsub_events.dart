@@ -38,20 +38,6 @@ final class PubSubSubscriptionConfigChangedEvent extends mox.XmppEvent {
   final mox.XMLNode? dataForm;
 }
 
-final class PubSubFetchResult<T> {
-  const PubSubFetchResult({
-    required this.items,
-    required this.isSuccess,
-    this.isComplete = _pubSubFetchCompleteDefault,
-  });
-
-  final List<T> items;
-  final bool isSuccess;
-  final bool isComplete;
-}
-
-const bool _pubSubFetchCompleteDefault = true;
-
 extension PubSubPepNotificationAuthorization on mox.PubSubNotificationEvent {
   bool isFromPepOwner(mox.JID owner) {
     final publisher = item.publisher?.trim();

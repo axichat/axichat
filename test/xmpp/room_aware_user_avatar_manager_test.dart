@@ -1,4 +1,4 @@
-import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:mocktail/mocktail.dart';
@@ -10,9 +10,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'SafeUserAvatarManager emits metadata parsed from PEP notifications',
+    'RoomAwareUserAvatarManager emits metadata parsed from PEP notifications',
     () async {
-      final manager = SafeUserAvatarManager();
+      final manager = RoomAwareUserAvatarManager();
       final sentEvents = <mox.XmppEvent>[];
 
       final attributes = mox.XmppManagerAttributes(
@@ -84,9 +84,9 @@ void main() {
   );
 
   test(
-    'SafeUserAvatarManager fetches metadata when notification payload is missing',
+    'RoomAwareUserAvatarManager fetches metadata when notification payload is missing',
     () async {
-      final manager = SafeUserAvatarManager();
+      final manager = RoomAwareUserAvatarManager();
       final sentEvents = <mox.XmppEvent>[];
       final pubsub = _MockPubSubManager();
 
@@ -163,9 +163,9 @@ void main() {
   );
 
   test(
-    'SafeUserAvatarManager unsubscribe calls PubSubManager.unsubscribe',
+    'RoomAwareUserAvatarManager unsubscribe calls PubSubManager.unsubscribe',
     () async {
-      final manager = SafeUserAvatarManager();
+      final manager = RoomAwareUserAvatarManager();
       final pubsub = _MockPubSubManager();
       final jid = mox.JID.fromString('contact@example.com');
 

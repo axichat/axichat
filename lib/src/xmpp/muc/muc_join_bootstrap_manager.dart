@@ -374,12 +374,20 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
       return true;
     }
     final String? toAttr = presence.to;
-    final String ownBareJid = getAttributes().getFullJID().toBare().toString();
+    final String ownBareJid = _ownBareJid();
     if (toAttr != null && toAttr.isNotEmpty) {
       if (_matchesBareJid(toAttr, ownBareJid)) return true;
     }
     final storedNick = _nickForRoom(roomJid);
     if (storedNick == null || storedNick.isEmpty) return false;
     return storedNick.toLowerCase() == nick.toLowerCase();
+  }
+
+  String _ownBareJid() {
+    try {
+      return getAttributes().getConnectionSettings().jid.toBare().toString();
+    } on Exception {
+      return getAttributes().getFullJID().toBare().toString();
+    }
   }
 }

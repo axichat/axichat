@@ -40,7 +40,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/update/bloc/update_cubit.dart';
 import 'package:axichat/src/update/update_service.dart';
 import 'package:axichat/src/update/view/update_prompt.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:flutter/foundation.dart';
@@ -172,7 +172,6 @@ class _AxichatState extends State<Axichat> {
                     credentialStore: context.read<CredentialStore>(),
                     databaseBuilder: () => context.read<XmppService>().database,
                     notificationService: context.read<NotificationService>(),
-                    xmppService: context.read<XmppService>(),
                     messageService: context.read<MessageService>(),
                     emailReadReceiptsEnabled: context
                         .read<SettingsCubit>()
@@ -271,7 +270,6 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) => DraftCubit(
                       messageService: context.read<MessageService>(),
-                      draftSyncService: context.read<XmppService>(),
                       emailService:
                           context
                               .read<SettingsCubit>()

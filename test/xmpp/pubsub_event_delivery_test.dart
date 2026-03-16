@@ -1,7 +1,7 @@
-import 'package:axichat/src/xmpp/bookmarks_manager.dart';
-import 'package:axichat/src/xmpp/conversation_index_manager.dart';
-import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
-import 'package:axichat/src/xmpp/message_collections_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;

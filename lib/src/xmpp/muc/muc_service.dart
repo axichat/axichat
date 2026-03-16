@@ -1439,11 +1439,23 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers =>
-      super.featureManagers..addAll([
-        SafeUserAvatarManager(shouldSkipJid: _isRoomAvatarJid),
-        SafeVCardManager(isRoomJid: _isRoomAvatarJid),
-      ]);
+  List<mox.XmppManagerBase> get featureManagers => <mox.XmppManagerBase>[
+    ...super.featureManagers,
+    RoomAwareUserAvatarManager(shouldSkipJid: _isRoomAvatarJid),
+    RoomAwareVCardManager(isRoomJid: _isRoomAvatarJid),
+  ];
+
+  @override
+  List<mox.XmppManagerBase> get pubSubFeatureManagers => <mox.XmppManagerBase>[
+    ...super.pubSubFeatureManagers,
+    BookmarksManager(),
+  ];
+
+  @override
+  List<String> get discoFeatures => <String>[
+    ...super.discoFeatures,
+    bookmarksNotifyFeature,
+  ];
 
   Future<void> setMucServiceHost(String? host) async {
     final trimmed = host?.trim();
@@ -3988,7 +4000,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   Future<void> applyMucBookmarksSnapshot(
-    PubSubFetchResult<MucBookmark> snapshot,
+    ({List<MucBookmark> items, bool isSuccess, bool isComplete}) snapshot,
   ) async {
     if (!snapshot.isSuccess) return;
     final bookmarks = snapshot.items;
