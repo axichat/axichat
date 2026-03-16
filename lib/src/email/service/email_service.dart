@@ -2370,11 +2370,21 @@ class EmailService {
     if (!await recoverForHomeRefresh()) {
       return false;
     }
-    final results = await Future.wait<bool>([
-      syncContactsForHomeRefresh(),
-      refreshHistoryForHomeRefresh(),
+    await Future.wait<void>([
+      _runBestEffortSessionSync(syncContactsForHomeRefresh),
+      _runBestEffortSessionSync(refreshHistoryForHomeRefresh),
     ]);
-    return results.every((result) => result);
+    return true;
+  }
+
+  Future<void> _runBestEffortSessionSync(
+    Future<bool> Function() operation,
+  ) async {
+    try {
+      await operation();
+    } on Exception {
+      // Home refresh is best-effort once session recovery succeeded.
+    }
   }
 
   Future<void> _syncEmailBlocklist({

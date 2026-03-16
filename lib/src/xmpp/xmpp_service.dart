@@ -2444,24 +2444,22 @@ class XmppService extends XmppBase
     if (!_isAcceptableSessionSyncMamOutcome(mamOutcome)) {
       return false;
     }
-    final statusWork = Future.wait<bool>([
-      syncSpamSnapshot(),
-      syncAddressBlockSnapshot(),
-      rehydrateCalendarFromMam(),
-      syncDraftsSnapshot(),
+    await Future.wait<void>([
+      _runBestEffortSessionSyncBool(syncSpamSnapshot),
+      _runBestEffortSessionSyncBool(syncAddressBlockSnapshot),
+      _runBestEffortSessionSyncBool(rehydrateCalendarFromMam),
+      _runBestEffortSessionSyncBool(syncDraftsSnapshot),
+      _runBestEffortSessionSyncVoid(requestBlocklist),
+      _runBestEffortSessionSyncVoid(() async {
+        await syncConversationIndexSnapshot();
+      }),
+      _runBestEffortSessionSyncVoid(() async {
+        await syncMucBookmarksSnapshot();
+      }),
+      _runBestEffortSessionSyncVoid(syncMessageCollectionsSnapshot),
     ]);
-    final snapshotWork = Future.wait<void>([
-      requestBlocklist(),
-      syncConversationIndexSnapshot().then((_) {}),
-      syncMucBookmarksSnapshot().then((_) {}),
-      syncMessageCollectionsSnapshot(),
-    ]);
-    final statusResults = await statusWork;
-    await snapshotWork;
-    if (statusResults.any((result) => !result)) {
-      return false;
-    }
-    return refreshAvatarsForConversationIndex();
+    await _runBestEffortSessionSyncBool(refreshAvatarsForConversationIndex);
+    return true;
   }
 
   Future<void> _waitForStreamNegotiationsDone({
@@ -2483,6 +2481,26 @@ class XmppService extends XmppBase
         return true;
       case MamGlobalSyncOutcome.failed:
         return false;
+    }
+  }
+
+  Future<void> _runBestEffortSessionSyncBool(
+    Future<bool> Function() operation,
+  ) async {
+    try {
+      await operation();
+    } on Exception {
+      // Home refresh is best-effort once the stream is healthy enough to sync.
+    }
+  }
+
+  Future<void> _runBestEffortSessionSyncVoid(
+    Future<void> Function() operation,
+  ) async {
+    try {
+      await operation();
+    } on Exception {
+      // Home refresh is best-effort once the stream is healthy enough to sync.
     }
   }
 
