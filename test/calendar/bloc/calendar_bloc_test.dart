@@ -427,7 +427,6 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.add(
         const CalendarEvent.taskAdded(
-          requestId: 'task-added',
           title: 'New Task',
           description: 'details',
           duration: Duration(hours: 1),
@@ -490,12 +489,7 @@ void main() {
       'quickTaskAdded creates task from text input',
       build: () => buildBloc(),
       act: (bloc) {
-        bloc.add(
-          const CalendarEvent.quickTaskAdded(
-            requestId: 'quick-task-added',
-            text: 'Draft report',
-          ),
-        );
+        bloc.add(const CalendarEvent.quickTaskAdded(text: 'Draft report'));
       },
       verify: (_) {
         verify(() => syncManager.sendTaskUpdate(any(), 'add')).called(1);

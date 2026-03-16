@@ -31,7 +31,6 @@ import 'package:axichat/src/calendar/view/grid/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
-import 'package:uuid/uuid.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({super.key});
@@ -350,15 +349,15 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
   final CalendarTransferService _transferService =
       const CalendarTransferService();
   bool _exporting = false;
-  final Map<String, ({int? taskCount, bool isFullModel})> _pendingImports =
-      <String, ({int? taskCount, bool isFullModel})>{};
-  int _handledImportOutcomeToken = 0;
+  ({int? taskCount, bool isFullModel})? _pendingImport;
 
   @override
   Widget build(BuildContext context) {
     final bool hasCalendarData = widget.state.model.hasCalendarData;
     final bool busy = _exporting || widget.state.isLoading;
     return BlocListener<GuestCalendarBloc, CalendarState>(
+      listenWhen: (previous, current) =>
+          previous.isLoading != current.isLoading,
       listener: _handleCalendarStateChanged,
       child: CalendarTransferMenuButton(
         hasCalendarData: hasCalendarData,
@@ -370,18 +369,16 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
   }
 
   void _handleCalendarStateChanged(BuildContext _, CalendarState state) {
-    if (state.importOutcomeToken == _handledImportOutcomeToken) {
+    final pendingImport = _pendingImport;
+    if (pendingImport == null || state.isLoading) {
       return;
     }
-    _handledImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = state.importRequestId;
-    if (requestId == null) {
+    if (state.importError == null &&
+        state.lastImportedTaskIds.isEmpty &&
+        state.lastImportedModelChecksum == null) {
       return;
     }
-    final pendingImport = _pendingImports.remove(requestId);
-    if (pendingImport == null) {
-      return;
-    }
+    _pendingImport = null;
     final int? taskCount = pendingImport.taskCount;
     final bool importedFullModel = pendingImport.isFullModel;
     if (state.importError != null) {
@@ -494,13 +491,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
           return;
         }
         if (!mounted) return;
-        final String requestId = const Uuid().v4();
-        _pendingImports[requestId] = (taskCount: null, isFullModel: true);
+        _pendingImport = (taskCount: null, isFullModel: true);
         context.read<GuestCalendarBloc>().add(
-          CalendarEvent.modelImported(
-            requestId: requestId,
-            model: importedModel,
-          ),
+          CalendarEvent.modelImported(model: importedModel),
         );
         return;
       }
@@ -514,13 +507,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!mounted) return;
-      final String requestId = const Uuid().v4();
-      _pendingImports[requestId] = (
-        taskCount: tasks.length,
-        isFullModel: false,
-      );
+      _pendingImport = (taskCount: tasks.length, isFullModel: false);
       context.read<GuestCalendarBloc>().add(
-        CalendarEvent.tasksImported(requestId: requestId, tasks: tasks),
+        CalendarEvent.tasksImported(tasks: tasks),
       );
     } catch (error) {
       if (!mounted) return;

@@ -293,9 +293,8 @@ abstract class CalendarExperienceState<
       prefilledDateTime: prefilledTime,
       locationHelper: helper,
       locateCalendarBloc: () => calendarBloc,
-      onTaskAdded: (task, requestId) => calendarBloc.add(
+      onTaskAdded: (task) => calendarBloc.add(
         CalendarEvent.taskAdded(
-          requestId: requestId,
           title: task.title,
           scheduledTime: task.scheduledTime,
           description: task.description,

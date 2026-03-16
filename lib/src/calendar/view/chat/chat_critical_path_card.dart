@@ -17,7 +17,6 @@ import 'package:axichat/src/calendar/view/tasks/fragment_card.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:uuid/uuid.dart';
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
@@ -54,13 +53,13 @@ class ChatCalendarCriticalPathCard extends StatefulWidget {
 
 class _ChatCalendarCriticalPathCardState
     extends State<ChatCalendarCriticalPathCard> {
-  final Map<String, Completer<bool>> _pendingImportCompleters =
-      <String, Completer<bool>>{};
-  int _handledImportOutcomeToken = 0;
+  Completer<bool>? _pendingImportCompleter;
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<ChatCalendarBloc, CalendarState>(
+      listenWhen: (previous, current) =>
+          previous.isLoading != current.isLoading,
       listener: _handleCalendarStateChanged,
       child: CalendarFragmentCard(
         fragment: CalendarFragment.criticalPath(
@@ -161,33 +160,35 @@ class _ChatCalendarCriticalPathCardState
     required BaseCalendarBloc bloc,
     required CalendarModel model,
   }) async {
-    final String requestId = const Uuid().v4();
+    if (_pendingImportCompleter != null || bloc.state.isLoading) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCriticalPathCopyUnavailableMessage,
+      );
+      return false;
+    }
     final Completer<bool> completer = Completer<bool>();
-    _pendingImportCompleters[requestId] = completer;
-    bloc.add(CalendarEvent.modelImported(requestId: requestId, model: model));
+    _pendingImportCompleter = completer;
+    bloc.add(CalendarEvent.modelImported(model: model));
     try {
       return await completer.future.timeout(const Duration(seconds: 2));
     } on TimeoutException {
-      _pendingImportCompleters.remove(requestId);
+      _pendingImportCompleter = null;
       return false;
     }
   }
 
   void _handleCalendarStateChanged(BuildContext _, CalendarState state) {
-    if (state.importOutcomeToken == _handledImportOutcomeToken) {
+    final Completer<bool>? completer = _pendingImportCompleter;
+    if (completer == null || completer.isCompleted || state.isLoading) {
       return;
     }
-    _handledImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = state.importRequestId;
-    if (requestId == null) {
+    if (state.importError == null &&
+        state.lastImportedTaskIds.isEmpty &&
+        state.lastImportedModelChecksum == null) {
       return;
     }
-    final Completer<bool>? completer = _pendingImportCompleters.remove(
-      requestId,
-    );
-    if (completer == null || completer.isCompleted) {
-      return;
-    }
+    _pendingImportCompleter = null;
     completer.complete(state.importError == null);
   }
 }

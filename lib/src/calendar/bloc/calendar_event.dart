@@ -48,7 +48,6 @@ abstract class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.dataChanged() = CalendarDataChanged;
 
   const factory CalendarEvent.taskAdded({
-    required String requestId,
     required String title,
     DateTime? scheduledTime,
     String? description,
@@ -95,14 +94,11 @@ abstract class CalendarEvent with _$CalendarEvent {
   }) = CalendarRemoteTaskApplied;
 
   const factory CalendarEvent.tasksImported({
-    required String requestId,
     required List<CalendarTask> tasks,
   }) = CalendarTasksImported;
 
-  const factory CalendarEvent.modelImported({
-    required String requestId,
-    required CalendarModel model,
-  }) = CalendarModelImported;
+  const factory CalendarEvent.modelImported({required CalendarModel model}) =
+      CalendarModelImported;
 
   const factory CalendarEvent.syncWarningRaised({
     required CalendarSyncWarning warning,
@@ -193,7 +189,6 @@ abstract class CalendarEvent with _$CalendarEvent {
   }) = CalendarAvailabilityOverlayRemoved;
 
   const factory CalendarEvent.quickTaskAdded({
-    required String requestId,
     required String text,
     String? description,
     DateTime? deadline,
@@ -268,7 +263,6 @@ abstract class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.taskFocusCleared() = CalendarTaskFocusCleared;
 
   const factory CalendarEvent.criticalPathCreated({
-    required String requestId,
     required String name,
     String? taskId,
   }) = CalendarCriticalPathCreated;
@@ -282,7 +276,6 @@ abstract class CalendarEvent with _$CalendarEvent {
       CalendarCriticalPathDeleted;
 
   const factory CalendarEvent.criticalPathTaskAdded({
-    required String requestId,
     required String pathId,
     required String taskId,
     int? index,

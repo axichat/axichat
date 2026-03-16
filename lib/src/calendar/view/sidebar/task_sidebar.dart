@@ -22,7 +22,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:uuid/uuid.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -171,14 +170,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   String? _quickTaskError;
   bool _hasAttemptedQuickTaskSubmit = false;
   bool _preserveDraftFieldsOnTitleClear = false;
-  String? _pendingTaskCreationRequestId;
+  bool _awaitingTaskCreation = false;
   List<String>? _pendingCreatedTaskCriticalPathIds;
-  Set<String>? _pendingCriticalPathAddRequestIds;
+  String? _pendingCriticalPathAddPathId;
   String? _pendingCreatedTaskIdForCriticalPaths;
-  String? _pendingCriticalPathCreateRequestId;
+  bool _awaitingCriticalPathCreate = false;
   String? _pendingCriticalPathName;
-  int _handledTaskCreationOutcomeToken = 0;
-  int _handledCriticalPathMutationOutcomeToken = 0;
 
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
 
@@ -2238,11 +2235,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       title: context.l10n.calendarCriticalPathsNew,
       onSubmit: (name) {
         context.read<B>().add(
-          CalendarEvent.criticalPathCreated(
-            requestId: const Uuid().v4(),
-            name: name,
-            taskId: taskId,
-          ),
+          CalendarEvent.criticalPathCreated(name: name, taskId: taskId),
         );
       },
     );
@@ -2767,63 +2760,44 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleCalendarStateChanged(BuildContext context, CalendarState state) {
-    if (state.taskCreationOutcomeToken != _handledTaskCreationOutcomeToken) {
-      _handledTaskCreationOutcomeToken = state.taskCreationOutcomeToken;
-      final String? requestId = _pendingTaskCreationRequestId;
-      if (requestId != null && state.taskCreationRequestId == requestId) {
-        _pendingTaskCreationRequestId = null;
-        final String? error = state.taskCreationError;
-        if (error != null) {
-          _pendingCriticalPathAddRequestIds = null;
-          setState(() {
-            _quickTaskError = error;
-          });
-          _addTaskFormKey.currentState?.validate();
-        } else {
-          final String? createdTaskId = state.lastCreatedTaskId;
-          final List<String> pathIds =
-              _pendingCreatedTaskCriticalPathIds ?? const <String>[];
-          if (createdTaskId == null) {
-            _pendingCriticalPathAddRequestIds = null;
-            setState(() {
-              _quickTaskError =
-                  context.l10n.calendarCriticalPathAddAfterSaveFailed;
-            });
-            _addTaskFormKey.currentState?.validate();
-          } else if (pathIds.isNotEmpty) {
-            _pendingCreatedTaskIdForCriticalPaths = baseTaskIdFrom(
-              createdTaskId,
-            );
-            final locate = context.read;
-            final Set<String> requestIds = <String>{};
-            for (final String pathId in pathIds) {
-              final String mutationRequestId = const Uuid().v4();
-              requestIds.add(mutationRequestId);
-              locate<B>().add(
-                CalendarEvent.criticalPathTaskAdded(
-                  requestId: mutationRequestId,
-                  pathId: pathId,
-                  taskId: createdTaskId,
-                ),
-              );
-            }
-            _pendingCriticalPathAddRequestIds = requestIds;
-          }
+    if (_awaitingTaskCreation && !state.isTaskCreationSubmitting) {
+      _awaitingTaskCreation = false;
+      final String? error = state.taskCreationError;
+      if (error != null) {
+        _pendingCreatedTaskCriticalPathIds = null;
+        _pendingCreatedTaskIdForCriticalPaths = null;
+        _pendingCriticalPathAddPathId = null;
+        setState(() {
+          _quickTaskError = error;
+        });
+        _addTaskFormKey.currentState?.validate();
+        return;
+      }
+      final String? createdTaskId = state.lastCreatedTaskId;
+      final List<String> pathIds =
+          _pendingCreatedTaskCriticalPathIds ?? const <String>[];
+      if (createdTaskId == null) {
+        _pendingCreatedTaskCriticalPathIds = null;
+        _pendingCriticalPathAddPathId = null;
+        setState(() {
+          _quickTaskError = context.l10n.calendarCriticalPathAddAfterSaveFailed;
+        });
+        _addTaskFormKey.currentState?.validate();
+        return;
+      }
+      if (pathIds.isNotEmpty) {
+        _pendingCreatedTaskIdForCriticalPaths = baseTaskIdFrom(createdTaskId);
+        if (!_dispatchNextCriticalPathAdd(createdTaskId)) {
+          _handlePostSaveCriticalPathFailure(
+            context,
+            context.l10n.calendarCriticalPathUnavailable,
+          );
         }
       }
     }
 
-    if (state.criticalPathMutationOutcomeToken ==
-        _handledCriticalPathMutationOutcomeToken) {
-      return;
-    }
-    _handledCriticalPathMutationOutcomeToken =
-        state.criticalPathMutationOutcomeToken;
-
-    final String? createRequestId = _pendingCriticalPathCreateRequestId;
-    if (createRequestId != null &&
-        state.criticalPathMutationRequestId == createRequestId) {
-      _pendingCriticalPathCreateRequestId = null;
+    if (!state.isCriticalPathMutating && _awaitingCriticalPathCreate) {
+      _awaitingCriticalPathCreate = false;
       final String? pendingName = _pendingCriticalPathName;
       _pendingCriticalPathName = null;
       final String? createdPathId = state.criticalPathMutationError == null
@@ -2843,6 +2817,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
           context.l10n.calendarCriticalPathQueuedCreate(pendingName),
         );
       }
+      return;
     }
 
     final String? pendingTaskId = _pendingCreatedTaskIdForCriticalPaths;
@@ -2851,44 +2826,40 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (pendingTaskId == null || pendingPathIds.isEmpty) {
       return;
     }
-    final String? mutationRequestId = state.criticalPathMutationRequestId;
-    final Set<String>? pendingRequestIds = _pendingCriticalPathAddRequestIds;
-    if (mutationRequestId == null ||
-        pendingRequestIds == null ||
-        !pendingRequestIds.contains(mutationRequestId)) {
+    final String? pendingPathId = _pendingCriticalPathAddPathId;
+    if (state.isCriticalPathMutating || pendingPathId == null) {
       return;
     }
-    pendingRequestIds.remove(mutationRequestId);
+    _pendingCriticalPathAddPathId = null;
     if (state.criticalPathMutationError != null) {
-      _pendingCreatedTaskIdForCriticalPaths = null;
-      _pendingCreatedTaskCriticalPathIds = null;
-      _pendingCriticalPathAddRequestIds = null;
-      setState(() {
-        _quickTaskError = context.l10n.calendarCriticalPathAddAfterSaveFailed;
-      });
-      _addTaskFormKey.currentState?.validate();
+      _handlePostSaveCriticalPathFailure(
+        context,
+        context.l10n.calendarCriticalPathAddAfterSaveFailed,
+      );
       return;
     }
-    if (pendingRequestIds.isNotEmpty) {
+    final CalendarCriticalPath? path = state.model.criticalPaths[pendingPathId];
+    final bool added =
+        state.lastCriticalPathTaskAddedPathId == pendingPathId &&
+        state.lastCriticalPathTaskAddedTaskId == pendingTaskId &&
+        path != null &&
+        path.taskIds.contains(pendingTaskId);
+    if (!added) {
+      _handlePostSaveCriticalPathFailure(
+        context,
+        context.l10n.calendarCriticalPathAddAfterSaveFailed,
+      );
       return;
     }
-    final bool addedToEveryPath = pendingPathIds.every((pathId) {
-      final CalendarCriticalPath? path = state.model.criticalPaths[pathId];
-      return path != null && path.taskIds.contains(pendingTaskId);
-    });
-    if (!addedToEveryPath) {
-      _pendingCreatedTaskIdForCriticalPaths = null;
-      _pendingCreatedTaskCriticalPathIds = null;
-      _pendingCriticalPathAddRequestIds = null;
-      setState(() {
-        _quickTaskError = context.l10n.calendarCriticalPathAddAfterSaveFailed;
-      });
-      _addTaskFormKey.currentState?.validate();
+    _pendingCreatedTaskCriticalPathIds = List<String>.from(
+      pendingPathIds.where((pathId) => pathId != pendingPathId),
+    );
+    if (_pendingCreatedTaskCriticalPathIds!.isNotEmpty) {
+      _dispatchNextCriticalPathAdd(pendingTaskId);
       return;
     }
     _pendingCreatedTaskIdForCriticalPaths = null;
     _pendingCreatedTaskCriticalPathIds = null;
-    _pendingCriticalPathAddRequestIds = null;
   }
 
   Future<void> _queueCriticalPathForDraft() async {
@@ -2909,14 +2880,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         if (!mounted || name == null) {
           return null;
         }
-        _pendingCriticalPathCreateRequestId = const Uuid().v4();
         _pendingCriticalPathName = name;
-        locate<B>().add(
-          CalendarEvent.criticalPathCreated(
-            requestId: _pendingCriticalPathCreateRequestId!,
-            name: name,
-          ),
-        );
+        _awaitingCriticalPathCreate = true;
+        locate<B>().add(CalendarEvent.criticalPathCreated(name: name));
         return null;
       },
     );
@@ -2992,12 +2958,16 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     );
     final bool hasQueuedCriticalPaths = queuedPathIds.isNotEmpty;
     final locate = context.read;
-    final String requestId = const Uuid().v4();
+    _awaitingTaskCreation = true;
+    _pendingCreatedTaskCriticalPathIds = hasQueuedCriticalPaths
+        ? queuedPathIds
+        : null;
+    _pendingCriticalPathAddPathId = null;
+    _pendingCreatedTaskIdForCriticalPaths = null;
 
     if (!hasLocation && !hasSchedule && !hasRecurrence && !hasIcsMeta) {
       locate<B>().add(
         CalendarEvent.quickTaskAdded(
-          requestId: requestId,
           text: title,
           description: _descriptionController.text.trim().isNotEmpty
               ? _descriptionController.text.trim()
@@ -3022,7 +2992,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
       locate<B>().add(
         CalendarEvent.taskAdded(
-          requestId: requestId,
           title: title,
           description: _descriptionController.text.trim().isNotEmpty
               ? _descriptionController.text.trim()
@@ -3039,14 +3008,32 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         ),
       );
     }
-
-    _pendingTaskCreationRequestId = requestId;
-    _pendingCreatedTaskCriticalPathIds = hasQueuedCriticalPaths
-        ? queuedPathIds
-        : null;
-    _pendingCriticalPathAddRequestIds = null;
-    _pendingCreatedTaskIdForCriticalPaths = null;
     _clearQuickTaskTitle();
+  }
+
+  bool _dispatchNextCriticalPathAdd(String taskId) {
+    final List<String> pendingPathIds =
+        _pendingCreatedTaskCriticalPathIds ?? const <String>[];
+    if (pendingPathIds.isEmpty) {
+      return false;
+    }
+    final String pathId = pendingPathIds.first;
+    _pendingCriticalPathAddPathId = pathId;
+    context.read<B>().add(
+      CalendarEvent.criticalPathTaskAdded(pathId: pathId, taskId: taskId),
+    );
+    return true;
+  }
+
+  void _handlePostSaveCriticalPathFailure(
+    BuildContext context,
+    String message,
+  ) {
+    _pendingCreatedTaskIdForCriticalPaths = null;
+    _pendingCreatedTaskCriticalPathIds = null;
+    _pendingCriticalPathAddPathId = null;
+    _clearQueuedCriticalPaths();
+    FeedbackSystem.showError(context, message);
   }
 
   void _clearQuickTaskTitle() {

@@ -325,9 +325,7 @@ class _ChatState extends State<Chat> {
       CalendarChatSupport();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
-  final Map<String, Completer<Object?>> _pendingCalendarImportCompleters =
-      <String, Completer<Object?>>{};
-  int _handledCalendarImportOutcomeToken = 0;
+  Completer<Object?>? _pendingCalendarImportCompleter;
   Message? _quotedDraft;
   List<PendingAttachment> _pendingAttachments = const [];
   var _pendingAttachmentSeed = 0;
@@ -1012,7 +1010,6 @@ class _ChatState extends State<Chat> {
     }
     context.read<CalendarBloc>().add(
       CalendarEvent.taskAdded(
-        requestId: const Uuid().v4(),
         title: title,
         scheduledTime: start,
         duration: duration,
@@ -1078,19 +1075,23 @@ class _ChatState extends State<Chat> {
       );
       return null;
     }
-    final String requestId = const Uuid().v4();
+    if (_pendingCalendarImportCompleter != null ||
+        context.read<CalendarBloc>().state.isLoading) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCalendarTaskCopyUnavailableMessage,
+      );
+      return null;
+    }
     final Completer<Object?> completer = Completer<Object?>();
-    _pendingCalendarImportCompleters[requestId] = completer;
+    _pendingCalendarImportCompleter = completer;
     context.read<CalendarBloc>().add(
-      CalendarEvent.tasksImported(
-        requestId: requestId,
-        tasks: <CalendarTask>[task],
-      ),
+      CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
     );
     final Object? result = await completer.future.timeout(
       const Duration(seconds: 2),
       onTimeout: () {
-        _pendingCalendarImportCompleters.remove(requestId);
+        _pendingCalendarImportCompleter = null;
         return null;
       },
     );
@@ -1115,16 +1116,21 @@ class _ChatState extends State<Chat> {
       );
       return false;
     }
-    final String requestId = const Uuid().v4();
+    if (_pendingCalendarImportCompleter != null ||
+        context.read<CalendarBloc>().state.isLoading) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCriticalPathCopyUnavailableMessage,
+      );
+      return false;
+    }
     final Completer<Object?> completer = Completer<Object?>();
-    _pendingCalendarImportCompleters[requestId] = completer;
-    context.read<CalendarBloc>().add(
-      CalendarEvent.modelImported(requestId: requestId, model: model),
-    );
+    _pendingCalendarImportCompleter = completer;
+    context.read<CalendarBloc>().add(CalendarEvent.modelImported(model: model));
     final Object? result = await completer.future.timeout(
       const Duration(seconds: 2),
       onTimeout: () {
-        _pendingCalendarImportCompleters.remove(requestId);
+        _pendingCalendarImportCompleter = null;
         return null;
       },
     );
@@ -1132,19 +1138,16 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleCalendarImportStateChanged(BuildContext _, CalendarState state) {
-    if (state.importOutcomeToken == _handledCalendarImportOutcomeToken) {
+    final Completer<Object?>? completer = _pendingCalendarImportCompleter;
+    if (completer == null || completer.isCompleted || state.isLoading) {
       return;
     }
-    _handledCalendarImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = state.importRequestId;
-    if (requestId == null) {
+    if (state.importError == null &&
+        state.lastImportedTaskIds.isEmpty &&
+        state.lastImportedModelChecksum == null) {
       return;
     }
-    final Completer<Object?>? completer = _pendingCalendarImportCompleters
-        .remove(requestId);
-    if (completer == null || completer.isCompleted) {
-      return;
-    }
+    _pendingCalendarImportCompleter = null;
     if (state.importError != null) {
       completer.complete(null);
       return;
@@ -5061,6 +5064,8 @@ class _ChatState extends State<Chat> {
               },
             ),
             BlocListener<CalendarBloc, CalendarState>(
+              listenWhen: (previous, current) =>
+                  previous.isLoading != current.isLoading,
               listener: _handleCalendarImportStateChanged,
             ),
             BlocListener<ChatsCubit, ChatsState>(
@@ -5954,7 +5959,6 @@ class _ChatState extends State<Chat> {
       const String title = 'hang out';
       context.read<CalendarBloc>().add(
         CalendarEvent.taskAdded(
-          requestId: const Uuid().v4(),
           title: title,
           scheduledTime: scheduledTime,
           duration: duration,
@@ -5993,10 +5997,9 @@ class _ChatState extends State<Chat> {
       prefilledText: calendarText,
       locationHelper: locationHelper,
       locateCalendarBloc: () => context.read<CalendarBloc>(),
-      onTaskAdded: (task, requestId) {
+      onTaskAdded: (task) {
         context.read<CalendarBloc>().add(
           CalendarEvent.taskAdded(
-            requestId: requestId,
             title: task.title,
             scheduledTime: task.scheduledTime,
             description: task.description,
@@ -6160,10 +6163,9 @@ class _ChatState extends State<Chat> {
       prefilledText: calendarText,
       locationHelper: locationHelper,
       locateCalendarBloc: () => context.read<CalendarBloc>(),
-      onTaskAdded: (task, requestId) {
+      onTaskAdded: (task) {
         context.read<CalendarBloc>().add(
           CalendarEvent.taskAdded(
-            requestId: requestId,
             title: task.title,
             scheduledTime: task.scheduledTime,
             description: task.description,

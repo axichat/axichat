@@ -57,23 +57,17 @@ abstract class CalendarState with _$CalendarState {
     @Default(false) bool canRedo,
     TaskFocusRequest? pendingFocus,
     String? focusedCriticalPathId,
-    String? taskCreationRequestId,
     @Default(false) bool isTaskCreationSubmitting,
     String? taskCreationError,
     String? lastCreatedTaskId,
-    @Default(0) int taskCreationOutcomeToken,
-    String? importRequestId,
     String? importError,
     @Default(<String>[]) List<String> lastImportedTaskIds,
     String? lastImportedModelChecksum,
-    @Default(0) int importOutcomeToken,
-    String? criticalPathMutationRequestId,
     @Default(false) bool isCriticalPathMutating,
     String? criticalPathMutationError,
     String? lastCreatedCriticalPathId,
     String? lastCriticalPathTaskAddedPathId,
     String? lastCriticalPathTaskAddedTaskId,
-    @Default(0) int criticalPathMutationOutcomeToken,
   }) = _CalendarState;
 
   factory CalendarState.initial() =>

@@ -23,7 +23,6 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:uuid/uuid.dart';
 
 const double _taskFooterPaddingTop = 4.0;
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
@@ -60,13 +59,13 @@ class ChatCalendarTaskCard extends StatefulWidget {
 }
 
 class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
-  final Map<String, Completer<String?>> _pendingImportCompleters =
-      <String, Completer<String?>>{};
-  int _handledImportOutcomeToken = 0;
+  Completer<String?>? _pendingImportCompleter;
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<ChatCalendarBloc, CalendarState>(
+      listenWhen: (previous, current) =>
+          previous.isLoading != current.isLoading,
       listener: _handleCalendarStateChanged,
       child: BlocBuilder<ChatCalendarBloc, CalendarState>(
         builder: (context, state) {
@@ -115,20 +114,16 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
   }
 
   void _handleCalendarStateChanged(BuildContext _, CalendarState state) {
-    if (state.importOutcomeToken == _handledImportOutcomeToken) {
+    final Completer<String?>? completer = _pendingImportCompleter;
+    if (completer == null || completer.isCompleted || state.isLoading) {
       return;
     }
-    _handledImportOutcomeToken = state.importOutcomeToken;
-    final String? requestId = state.importRequestId;
-    if (requestId == null) {
+    if (state.importError == null &&
+        state.lastImportedTaskIds.isEmpty &&
+        state.lastImportedModelChecksum == null) {
       return;
     }
-    final Completer<String?>? completer = _pendingImportCompleters.remove(
-      requestId,
-    );
-    if (completer == null || completer.isCompleted) {
-      return;
-    }
+    _pendingImportCompleter = null;
     if (state.importError != null) {
       completer.complete(null);
       return;
@@ -413,6 +408,13 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     required CalendarTaskCopyStyle style,
     required BaseCalendarBloc bloc,
   }) async {
+    if (_pendingImportCompleter != null || bloc.state.isLoading) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCalendarTaskCopyUnavailableMessage,
+      );
+      return null;
+    }
     final bool alreadyAdded = bloc.state.model.tasks.containsKey(task.id);
     if (style.isLinked && alreadyAdded) {
       final l10n = context.l10n;
@@ -423,14 +425,13 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return null;
     }
     final List<CalendarTask> tasks = <CalendarTask>[task];
-    final String requestId = const Uuid().v4();
     final Completer<String?> completer = Completer<String?>();
-    _pendingImportCompleters[requestId] = completer;
-    bloc.add(CalendarEvent.tasksImported(requestId: requestId, tasks: tasks));
+    _pendingImportCompleter = completer;
+    bloc.add(CalendarEvent.tasksImported(tasks: tasks));
     try {
       return await completer.future.timeout(const Duration(seconds: 2));
     } on TimeoutException {
-      _pendingImportCompleters.remove(requestId);
+      _pendingImportCompleter = null;
       return null;
     }
   }
@@ -442,10 +443,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
     context.read<ChatCalendarBloc>().add(
-      CalendarEvent.tasksImported(
-        requestId: const Uuid().v4(),
-        tasks: <CalendarTask>[task],
-      ),
+      CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
     );
   }
 
