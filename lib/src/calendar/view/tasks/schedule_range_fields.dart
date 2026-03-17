@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 
 /// Displays paired date/time inputs for start and end selections, matching the
 /// original calendar styling. Stacks vertically on narrow layouts.
@@ -132,7 +132,7 @@ class _ScheduleField extends StatelessWidget {
           ),
         ),
         SizedBox(height: spacing.s),
-        DeadlinePickerField(
+        CalendarDateTimeField(
           value: value,
           placeholder: placeholder,
           showStatusColors: false,

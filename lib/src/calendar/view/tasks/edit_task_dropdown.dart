@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -32,7 +32,7 @@ import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/tasks/schedule_range_utils.dart';
 import 'package:axichat/src/calendar/view/tasks/task_title_validation.dart';
 import 'package:axichat/src/calendar/view/tasks/task_checklist_controller.dart';
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
 import 'calendar_invitation_status_field.dart';
 import 'calendar_ics_diagnostics_section.dart';
@@ -54,7 +54,6 @@ const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
 const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
 const List<TaskContextAction> _emptyInlineActions = <TaskContextAction>[];
 const double _taskPopoverMinWidth = 320.0;
-const Alignment _taskPopoverTransformAlignment = Alignment.centerLeft;
 const int _initialPopoverRevision = 0;
 const int _popoverRevisionStep = 1;
 const String _occurrenceScopeTitle = 'Apply changes to';
@@ -147,6 +146,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
     this.collectionMethod,
     this.editMode = _defaultTaskEditMode,
     required this.locationHelper,
+    this.parentScrollController,
   });
 
   final CalendarTask task;
@@ -167,6 +167,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarMethod? collectionMethod;
   final TaskEditMode editMode;
   final LocationAutocompleteHelper locationHelper;
+  final ScrollController? parentScrollController;
 
   @override
   State<EditTaskDropdown<B>> createState() => _EditTaskDropdownState<B>();
@@ -180,6 +181,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   late final TextEditingController _locationController;
   late final TaskChecklistController _checklistController;
   final FocusNode _titleFocusNode = FocusNode();
+  final ScrollController _contentScrollController = ScrollController();
   final ValueNotifier<int> _popoverBodyRevision = ValueNotifier<int>(
     _initialPopoverRevision,
   );
@@ -224,6 +226,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _contentScrollController.dispose();
     _checklistController
       ..removeListener(_refresh)
       ..removeListener(_handleChecklistChanged)
@@ -558,195 +561,202 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             popoverHeader,
             Flexible(
               fit: FlexFit.loose,
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  context.spacing.m,
-                  scrollTopPadding,
-                  context.spacing.m,
-                  scrollBottomPadding,
-                ),
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.manual,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _EditTaskTitleField(
-                      controller: _titleController,
-                      validator: (value) => TaskTitleValidation.validate(
-                        value ?? '',
-                        context.l10n,
+              child: _EditTaskScrollBridge(
+                scrollController: _contentScrollController,
+                parentScrollController: widget.parentScrollController,
+                child: SingleChildScrollView(
+                  controller: _contentScrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    context.spacing.m,
+                    scrollTopPadding,
+                    context.spacing.m,
+                    scrollBottomPadding,
+                  ),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.manual,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _EditTaskTitleField(
+                        controller: _titleController,
+                        validator: (value) => TaskTitleValidation.validate(
+                          value ?? '',
+                          context.l10n,
+                        ),
+                        onChanged: _handleTitleChanged,
+                        focusNode: _titleFocusNode,
+                        autovalidateMode: AutovalidateMode.disabled,
+                        enabled: allowsFullEdits,
                       ),
-                      onChanged: _handleTitleChanged,
-                      focusNode: _titleFocusNode,
-                      autovalidateMode: AutovalidateMode.disabled,
-                      enabled: allowsFullEdits,
-                    ),
-                    if (showInlineActions || showOccurrenceScope) ...[
-                      SizedBox(height: context.spacing.m),
-                      if (showInlineActions)
-                        _EditTaskInlineActionsSection(
-                          inlineActions: inlineActions,
-                        ),
-                      if (showOccurrenceScope) ...[
-                        _EditTaskOccurrenceScopeSection(
-                          scope: _occurrenceScope,
-                          enabled: allowsAnyEdits,
-                          onChanged: (scope) =>
-                              setState(() => _occurrenceScope = scope),
-                        ),
+                      if (showInlineActions || showOccurrenceScope) ...[
+                        SizedBox(height: context.spacing.m),
+                        if (showInlineActions)
+                          _EditTaskInlineActionsSection(
+                            inlineActions: inlineActions,
+                          ),
+                        if (showOccurrenceScope) ...[
+                          _EditTaskOccurrenceScopeSection(
+                            scope: _occurrenceScope,
+                            enabled: allowsAnyEdits,
+                            onChanged: (scope) =>
+                                setState(() => _occurrenceScope = scope),
+                          ),
+                          TaskSectionDivider(
+                            verticalPadding: context.spacing.m,
+                          ),
+                        ],
+                      ] else
+                        SizedBox(height: context.spacing.s),
+                      _EditTaskPriorityRow(
+                        isImportant: _isImportant,
+                        isUrgent: _isUrgent,
+                        enabled: allowsFullEdits,
+                        onImportantChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.priority);
+                          _isImportant = value;
+                        }),
+                        onUrgentChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.priority);
+                          _isUrgent = value;
+                        }),
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      _EditTaskCompletionToggle(
+                        value: _isCompleted,
+                        enabled: allowsFullEdits,
+                        onChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.completion);
+                          _isCompleted = value;
+                        }),
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      _EditTaskDescriptionField(
+                        controller: _descriptionController,
+                        onChanged: _handleDescriptionChanged,
+                        enabled: allowsFullEdits,
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      _EditTaskLocationField(
+                        controller: _locationController,
+                        locationHelper: widget.locationHelper,
+                        onChanged: _handleLocationChanged,
+                        enabled: allowsFullEdits,
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      TaskChecklist(
+                        controller: _checklistController,
+                        enabled: allowsChecklistEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      _EditTaskScheduleSection(
+                        start: _startTime,
+                        end: _endTime,
+                        onStartChanged: _handleStartChanged,
+                        onEndChanged: _handleEndChanged,
+                        enabled: allowsFullEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      _EditTaskDeadlineField(
+                        deadline: _deadline,
+                        onChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.deadline);
+                          _deadline = value;
+                        }),
+                        enabled: allowsFullEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      _EditTaskReminderSection(
+                        reminders: _reminders,
+                        deadline: _deadline,
+                        referenceStart: _startTime,
+                        advancedAlarms: _advancedAlarms,
+                        onChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.reminders);
+                          _reminders = value;
+                        }),
+                        onAdvancedAlarmsChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.advancedAlarms);
+                          _advancedAlarms = value;
+                        }),
+                        enabled: allowsFullEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      _EditTaskRecurrenceSection(
+                        value: _recurrence,
+                        fallbackWeekday: _recurrenceFallbackWeekday,
+                        referenceStart: _startTime,
+                        onChanged: _handleRecurrenceChanged,
+                        enabled: allowsFullEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      CalendarCategoriesField(
+                        categories: _categories,
+                        onChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.categories);
+                          _categories = value;
+                        }),
+                        surfaceColor: background,
+                        enabled: allowsFullEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      CalendarLinkGeoFields(
+                        url: _url,
+                        geo: _geo,
+                        onUrlChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.url);
+                          _url = value;
+                        }),
+                        onGeoChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.geo);
+                          _geo = value;
+                        }),
+                        enabled: allowsFullEdits,
+                      ),
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      CalendarParticipantsField(
+                        organizer: _organizer,
+                        attendees: _attendees,
+                        onOrganizerChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.organizer);
+                          _organizer = value;
+                        }),
+                        onAttendeesChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.attendees);
+                          _attendees = value;
+                        }),
+                        enabled: allowsFullEdits,
+                      ),
+                      if (showInvitationStatus) ...[
                         TaskSectionDivider(verticalPadding: context.spacing.m),
-                      ],
-                    ] else
-                      SizedBox(height: context.spacing.s),
-                    _EditTaskPriorityRow(
-                      isImportant: _isImportant,
-                      isUrgent: _isUrgent,
-                      enabled: allowsFullEdits,
-                      onImportantChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.priority);
-                        _isImportant = value;
-                      }),
-                      onUrgentChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.priority);
-                        _isUrgent = value;
-                      }),
-                    ),
-                    SizedBox(height: context.spacing.s),
-                    _EditTaskCompletionToggle(
-                      value: _isCompleted,
-                      enabled: allowsFullEdits,
-                      onChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.completion);
-                        _isCompleted = value;
-                      }),
-                    ),
-                    SizedBox(height: context.spacing.s),
-                    _EditTaskDescriptionField(
-                      controller: _descriptionController,
-                      onChanged: _handleDescriptionChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    SizedBox(height: context.spacing.s),
-                    _EditTaskLocationField(
-                      controller: _locationController,
-                      locationHelper: widget.locationHelper,
-                      onChanged: _handleLocationChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    SizedBox(height: context.spacing.s),
-                    TaskChecklist(
-                      controller: _checklistController,
-                      enabled: allowsChecklistEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    _EditTaskScheduleSection(
-                      start: _startTime,
-                      end: _endTime,
-                      onStartChanged: _handleStartChanged,
-                      onEndChanged: _handleEndChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    _EditTaskDeadlineField(
-                      deadline: _deadline,
-                      onChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.deadline);
-                        _deadline = value;
-                      }),
-                      enabled: allowsFullEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    _EditTaskReminderSection(
-                      reminders: _reminders,
-                      deadline: _deadline,
-                      referenceStart: _startTime,
-                      advancedAlarms: _advancedAlarms,
-                      onChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.reminders);
-                        _reminders = value;
-                      }),
-                      onAdvancedAlarmsChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.advancedAlarms);
-                        _advancedAlarms = value;
-                      }),
-                      enabled: allowsFullEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    _EditTaskRecurrenceSection(
-                      value: _recurrence,
-                      fallbackWeekday: _recurrenceFallbackWeekday,
-                      referenceStart: _startTime,
-                      onChanged: _handleRecurrenceChanged,
-                      enabled: allowsFullEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    CalendarCategoriesField(
-                      categories: _categories,
-                      onChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.categories);
-                        _categories = value;
-                      }),
-                      surfaceColor: background,
-                      enabled: allowsFullEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    CalendarLinkGeoFields(
-                      url: _url,
-                      geo: _geo,
-                      onUrlChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.url);
-                        _url = value;
-                      }),
-                      onGeoChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.geo);
-                        _geo = value;
-                      }),
-                      enabled: allowsFullEdits,
-                    ),
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    CalendarParticipantsField(
-                      organizer: _organizer,
-                      attendees: _attendees,
-                      onOrganizerChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.organizer);
-                        _organizer = value;
-                      }),
-                      onAttendeesChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.attendees);
-                        _attendees = value;
-                      }),
-                      enabled: allowsFullEdits,
-                    ),
-                    if (showInvitationStatus) ...[
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      CalendarInvitationStatusField(
-                        method: method,
-                        sequence: sequence,
-                        rawProperties: rawProperties,
-                      ),
-                    ],
-                    if (_attachments.isNotEmpty) ...[
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      CalendarAttachmentsField(attachments: _attachments),
-                    ],
-                    if (showDiagnostics) ...[
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
-                    ],
-                    TaskSectionDivider(verticalPadding: context.spacing.m),
-                    if (!allowsFullEdits)
-                      IgnorePointer(
-                        child: _TaskCriticalPathMembership<B>(
-                          task: widget.task,
+                        CalendarInvitationStatusField(
+                          method: method,
+                          sequence: sequence,
+                          rawProperties: rawProperties,
                         ),
-                      )
-                    else
-                      _TaskCriticalPathMembership<B>(task: widget.task),
-                    if (keyboardOpen && keyboardActionRow != null) ...[
-                      SizedBox(height: context.spacing.s),
-                      keyboardActionRow,
+                      ],
+                      if (_attachments.isNotEmpty) ...[
+                        TaskSectionDivider(verticalPadding: context.spacing.m),
+                        CalendarAttachmentsField(attachments: _attachments),
+                      ],
+                      if (showDiagnostics) ...[
+                        TaskSectionDivider(verticalPadding: context.spacing.m),
+                        CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
+                      ],
+                      TaskSectionDivider(verticalPadding: context.spacing.m),
+                      if (!allowsFullEdits)
+                        IgnorePointer(
+                          child: _TaskCriticalPathMembership<B>(
+                            task: widget.task,
+                          ),
+                        )
+                      else
+                        _TaskCriticalPathMembership<B>(task: widget.task),
+                      if (keyboardOpen && keyboardActionRow != null) ...[
+                        SizedBox(height: context.spacing.s),
+                        keyboardActionRow,
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -767,7 +777,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double resolvedMaxHeight = constraints.hasBoundedHeight
+        final double resolvedMaxHeight =
+            constraints.hasBoundedHeight &&
+                constraints.maxHeight < widget.maxHeight
             ? constraints.maxHeight
             : widget.maxHeight;
         final mediaQuery = MediaQuery.of(context);
@@ -798,22 +810,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           child: surfaceBody,
         );
 
-        if (!isSheet && isDesktop) {
-          final Widget transformed = _TaskPopoverContainerTransform(
-            header: popoverHeader,
-            body: surfaceBody,
-            width: calendarTaskPopoverWidth,
-            maxHeight: resolvedMaxHeight,
-            radius: radius,
-            background: background,
-            border: popoverBorder,
-            boxShadow: boxShadow ?? const <BoxShadow>[],
+        if (isSheet) {
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: resolvedMaxHeight),
+            child: surfaceBody,
           );
-          return transformed;
-        }
-
-        if (!isSheet) {
-          return surfaced;
         }
         return surfaced;
       },
@@ -1139,6 +1140,91 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 }
 
+class _EditTaskScrollBridge extends StatelessWidget {
+  const _EditTaskScrollBridge({
+    required this.scrollController,
+    required this.parentScrollController,
+    required this.child,
+  });
+
+  final ScrollController scrollController;
+  final ScrollController? parentScrollController;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: NotificationListener<OverscrollNotification>(
+        onNotification: _handleOverscroll,
+        child: child,
+      ),
+    );
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) {
+      return;
+    }
+    final ScrollController? parent = parentScrollController;
+    if (parent == null || !parent.hasClients || !scrollController.hasClients) {
+      return;
+    }
+    final ScrollPosition childPosition = scrollController.position;
+    if (!childPosition.hasPixels || !childPosition.hasContentDimensions) {
+      return;
+    }
+    final double delta = event.scrollDelta.dy;
+    final bool pushingPastTop =
+        delta < 0 && childPosition.pixels <= childPosition.minScrollExtent;
+    final bool pushingPastBottom =
+        delta > 0 && childPosition.pixels >= childPosition.maxScrollExtent;
+    if (!pushingPastTop && !pushingPastBottom) {
+      return;
+    }
+    _scrollParentBy(delta);
+  }
+
+  bool _handleOverscroll(OverscrollNotification notification) {
+    if (notification.depth != 0 ||
+        parentScrollController == null ||
+        !scrollController.hasClients) {
+      return false;
+    }
+    final ScrollPosition childPosition = scrollController.position;
+    if (!childPosition.hasPixels || !childPosition.hasContentDimensions) {
+      return false;
+    }
+    final bool pushingPastTop =
+        notification.overscroll < 0 &&
+        childPosition.pixels <= childPosition.minScrollExtent;
+    final bool pushingPastBottom =
+        notification.overscroll > 0 &&
+        childPosition.pixels >= childPosition.maxScrollExtent;
+    if (!pushingPastTop && !pushingPastBottom) {
+      return false;
+    }
+    _scrollParentBy(notification.overscroll);
+    return false;
+  }
+
+  void _scrollParentBy(double delta) {
+    final ScrollController? parent = parentScrollController;
+    if (parent == null || !parent.hasClients) {
+      return;
+    }
+    final ScrollPosition parentPosition = parent.position;
+    final double targetOffset = (parentPosition.pixels + delta).clamp(
+      parentPosition.minScrollExtent,
+      parentPosition.maxScrollExtent,
+    );
+    if (targetOffset == parentPosition.pixels) {
+      return;
+    }
+    parent.jumpTo(targetOffset);
+  }
+}
+
 class _TaskPopoverSurface extends StatelessWidget {
   const _TaskPopoverSurface({
     required this.child,
@@ -1169,161 +1255,14 @@ class _TaskPopoverSurface extends StatelessWidget {
           border: border,
           boxShadow: boxShadow,
         ),
-        child: ConstrainedBox(
-          constraints: constraints ?? const BoxConstraints(),
-          child: SizedBox(width: width, child: child),
-        ),
-      ),
-    );
-  }
-}
-
-class _TaskPopoverContainerTransform extends StatefulWidget {
-  const _TaskPopoverContainerTransform({
-    required this.header,
-    required this.body,
-    required this.width,
-    required this.maxHeight,
-    required this.radius,
-    required this.background,
-    required this.border,
-    required this.boxShadow,
-  });
-
-  final Widget header;
-  final Widget body;
-  final double width;
-  final double maxHeight;
-  final BorderRadius radius;
-  final Color background;
-  final BoxBorder? border;
-  final List<BoxShadow> boxShadow;
-
-  @override
-  State<_TaskPopoverContainerTransform> createState() =>
-      _TaskPopoverContainerTransformState();
-}
-
-class _TaskPopoverContainerTransformState
-    extends State<_TaskPopoverContainerTransform> {
-  final GlobalKey<OpenContainerState> _containerKey =
-      GlobalKey<OpenContainerState>();
-  bool _opened = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openContainer());
-  }
-
-  void _openContainer() {
-    if (_opened) {
-      return;
-    }
-    _opened = true;
-    _containerKey.currentState?.openContainer();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.width,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: widget.maxHeight),
-        child: Navigator(
-          onGenerateRoute: (_) => PageRouteBuilder<void>(
-            pageBuilder: (context, _, _) => _TaskPopoverTransformBody(
-              containerKey: _containerKey,
-              header: widget.header,
-              body: widget.body,
-              width: widget.width,
-              maxHeight: widget.maxHeight,
-              radius: widget.radius,
-              background: widget.background,
-              border: widget.border,
-              boxShadow: widget.boxShadow,
-            ),
-            transitionDuration: Duration.zero,
-            reverseTransitionDuration: Duration.zero,
+        child: ClipRRect(
+          borderRadius: radius,
+          child: ConstrainedBox(
+            constraints: constraints ?? const BoxConstraints(),
+            child: SizedBox(width: width, child: child),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _TaskPopoverTransformBody extends StatelessWidget {
-  const _TaskPopoverTransformBody({
-    required this.containerKey,
-    required this.header,
-    required this.body,
-    required this.width,
-    required this.maxHeight,
-    required this.radius,
-    required this.background,
-    required this.border,
-    required this.boxShadow,
-  });
-
-  final GlobalKey<OpenContainerState> containerKey;
-  final Widget header;
-  final Widget body;
-  final double width;
-  final double maxHeight;
-  final BorderRadius radius;
-  final Color background;
-  final BoxBorder? border;
-  final List<BoxShadow> boxShadow;
-
-  @override
-  Widget build(BuildContext context) {
-    final BoxConstraints openConstraints = BoxConstraints(
-      maxHeight: maxHeight,
-      minWidth: _taskPopoverMinWidth,
-    );
-    const BoxConstraints closedConstraints = BoxConstraints(
-      minWidth: _taskPopoverMinWidth,
-    );
-    return OpenContainer(
-      key: containerKey,
-      tappable: false,
-      closedColor: background,
-      openColor: background,
-      middleColor: background,
-      closedElevation: 0,
-      openElevation: 0,
-      closedShape: RoundedSuperellipseBorder(borderRadius: radius),
-      openShape: RoundedSuperellipseBorder(borderRadius: radius),
-      transitionDuration: baseAnimationDuration,
-      transitionType: ContainerTransitionType.fadeThrough,
-      closedBuilder: (context, action) {
-        return Align(
-          alignment: _taskPopoverTransformAlignment,
-          child: _TaskPopoverSurface(
-            width: width,
-            constraints: closedConstraints,
-            radius: radius,
-            background: background,
-            border: border,
-            boxShadow: boxShadow,
-            child: header,
-          ),
-        );
-      },
-      openBuilder: (context, action) {
-        return Align(
-          alignment: _taskPopoverTransformAlignment,
-          child: _TaskPopoverSurface(
-            width: width,
-            constraints: openConstraints,
-            radius: radius,
-            background: background,
-            border: border,
-            boxShadow: boxShadow,
-            child: body,
-          ),
-        );
-      },
     );
   }
 }
@@ -1644,7 +1583,7 @@ class _EditTaskDeadlineField extends StatelessWidget {
       children: [
         TaskSectionHeader(title: l10n.calendarDeadlineLabel),
         SizedBox(height: context.spacing.xs),
-        DeadlinePickerField(
+        CalendarDateTimeField(
           value: deadline,
           onChanged: onChanged,
           enabled: enabled,

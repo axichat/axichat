@@ -30,7 +30,7 @@ import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/tasks/task_title_validation.dart';
 import 'package:axichat/src/calendar/view/tasks/task_checklist_controller.dart';
 import 'package:axichat/src/calendar/view/tasks/task_draft_controller.dart';
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/tasks/location_inline_suggestion.dart';
 import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
 import 'package:axichat/src/calendar/view/tasks/task_field_character_hint.dart';
@@ -1438,7 +1438,7 @@ class _QuickAddDeadlineSection extends StatelessWidget {
               size: TaskSectionLabelSize.medium,
             ),
             SizedBox(height: context.spacing.s),
-            DeadlinePickerField(
+            CalendarDateTimeField(
               value: formController.deadline,
               onChanged: onChanged,
             ),

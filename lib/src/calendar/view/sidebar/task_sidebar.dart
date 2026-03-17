@@ -64,7 +64,7 @@ import 'calendar_sidebar_draggable.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_categories_field.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_link_geo_fields.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_participants_field.dart';
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/tasks/location_inline_suggestion.dart';
 import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
 import 'package:axichat/src/calendar/view/tasks/task_field_character_hint.dart';
@@ -561,11 +561,21 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _remindersLocked = false;
   }
 
-  void _pruneTaskPopoverControllers(Set<String> activeTaskIds) {
+  void _pruneTaskPopovers(CalendarState state) {
     final String? activeId = _sidebarController.state.activePopoverTaskId;
-    if (activeId != null && !activeTaskIds.contains(activeId)) {
-      _closeTaskPopover(activeId);
+    if (activeId == null) {
+      return;
     }
+    final CalendarTask? directTask = state.model.tasks[activeId];
+    if (directTask != null) {
+      return;
+    }
+    final String baseId = baseTaskIdFrom(activeId);
+    final CalendarTask? baseTask = state.model.tasks[baseId];
+    if (baseTask?.occurrenceForId(activeId) != null) {
+      return;
+    }
+    _closeTaskPopover(activeId);
   }
 
   @override
@@ -1047,14 +1057,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [criticalPathsPanel, contentBody],
                     );
-
-                    final Set<String> activeTaskIds = state.isSelectionMode
-                        ? selectionTasks.map((task) => task.id).toSet()
-                        : {
-                            ...unscheduledTasks.map((task) => task.id),
-                            ...reminderTasks.map((task) => task.id),
-                          };
-                    _pruneTaskPopoverControllers(activeTaskIds);
 
                     final bool enableKeyboardDismiss = _supportsDragDismiss(
                       context,
@@ -2428,7 +2430,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
+        surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {
           final mediaQuery = MediaQuery.of(sheetContext);
@@ -2669,6 +2671,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleCalendarStateChanged(BuildContext context, CalendarState state) {
+    _pruneTaskPopovers(state);
+
     if (_awaitingTaskCreation && !state.isTaskCreationSubmitting) {
       _awaitingTaskCreation = false;
       final String? error = state.taskCreationError;
@@ -5202,272 +5206,289 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
             _anchorToken,
             task.id,
           );
-          final renderBox = tileContext.findRenderObject() as RenderBox?;
-          final bool hasLayout = _hasRenderableLayout(renderBox);
-          final Size tileSize = hasLayout ? renderBox!.size : Size.zero;
-          Offset tileOrigin = Offset.zero;
-          if (hasLayout) {
-            try {
-              tileOrigin = renderBox!.localToGlobal(Offset.zero);
-            } catch (_) {
-              tileOrigin = Offset.zero;
-            }
-          }
-          final mediaQuery = MediaQuery.of(tileContext);
-          final Size screenSize = mediaQuery.size;
-          final EdgeInsets viewPadding = mediaQuery.viewPadding;
-
-          double margin = context.spacing.m;
-          const double dropdownMaxHeight = calendarSidebarPopoverMaxHeight;
-          const double dropdownWidth = calendarTaskPopoverWidth;
-          final double preferredVerticalGap = context.spacing.s;
-          final double preferredHorizontalGap = context.spacing.m;
-          const double centerDivider = 2.0;
-          const double zeroClamp = 0.0;
-          const double heightDifferenceThreshold = 4.0;
-          const double minimumHeight = calendarTaskPopoverMinHeight;
-          final double popoverChromeInset = context.spacing.l;
-
-          final double usableLeft = viewPadding.left + margin;
-          final double usableRight =
-              screenSize.width - viewPadding.right - margin;
-          final double usableTop = viewPadding.top + margin;
-          final double usableBottom =
-              screenSize.height - viewPadding.bottom - margin;
-          final double usableHeight = math.max(
-            zeroClamp,
-            usableBottom - usableTop,
+          final scaffoldMessenger = ScaffoldMessenger.maybeOf(tileContext);
+          final Widget tileChild = buildListTile(
+            onTap: () => host._toggleTaskPopover(
+              taskId: task.id,
+              anchorToken: _anchorToken,
+              controller: controller,
+            ),
           );
 
-          final double availableBelow =
-              usableBottom - (tileOrigin.dy + tileSize.height);
-          final double availableAbove = tileOrigin.dy - usableTop;
-          final double availableRight =
-              usableRight - (tileOrigin.dx + tileSize.width);
-          final double availableLeft = tileOrigin.dx - usableLeft;
-
-          final double requiredHorizontalSpace =
-              dropdownWidth + preferredHorizontalGap;
-          final bool canOpenRight = availableRight >= requiredHorizontalSpace;
-          final bool canOpenLeft = availableLeft >= requiredHorizontalSpace;
-          final bool openToLeft =
-              canOpenLeft && (!canOpenRight || availableLeft > availableRight);
-          final bool openToSide = canOpenRight || canOpenLeft;
-
-          double effectiveMaxHeight;
-          late final ShadAnchor anchor;
-
-          if (openToSide) {
-            if (usableHeight <= zeroClamp) {
-              effectiveMaxHeight = minimumHeight;
-            } else {
-              effectiveMaxHeight = math.min(dropdownMaxHeight, usableHeight);
-              if (effectiveMaxHeight < minimumHeight) {
-                effectiveMaxHeight = usableHeight;
+          return ListenableBuilder(
+            listenable: Listenable.merge([
+              host._scrollController,
+              host._sidebarController,
+            ]),
+            child: tileChild,
+            builder: (context, child) {
+              final renderBox = tileContext.findRenderObject() as RenderBox?;
+              final bool hasLayout = _hasRenderableLayout(renderBox);
+              final Size tileSize = hasLayout ? renderBox!.size : Size.zero;
+              Offset tileOrigin = Offset.zero;
+              if (hasLayout) {
+                try {
+                  tileOrigin = renderBox!.localToGlobal(Offset.zero);
+                } catch (_) {
+                  tileOrigin = Offset.zero;
+                }
               }
-            }
 
-            effectiveMaxHeight = math.max(
-              minimumHeight,
-              effectiveMaxHeight - popoverChromeInset,
-            );
+              final mediaQuery = MediaQuery.of(tileContext);
+              final Size screenSize = mediaQuery.size;
+              final EdgeInsets viewPadding = mediaQuery.viewPadding;
+              final double margin = context.spacing.m;
+              const double dropdownMaxHeight = 520.0;
+              const double dropdownWidth = calendarTaskPopoverWidth;
+              final double preferredVerticalGap = context.spacing.s;
+              final double preferredHorizontalGap = context.spacing.m;
+              const double centerDivider = 2.0;
+              const double zeroClamp = 0.0;
+              const double heightDifferenceThreshold = 4.0;
+              const double minimumHeight = calendarTaskPopoverMinHeight;
 
-            final double triggerCenterY =
-                tileOrigin.dy + tileSize.height / centerDivider;
-            final double overlayTop =
-                (triggerCenterY - effectiveMaxHeight / centerDivider).clamp(
+              final double usableLeft = viewPadding.left + margin;
+              final double usableRight =
+                  screenSize.width - viewPadding.right - margin;
+              final double usableTop = viewPadding.top + margin;
+              final double usableBottom =
+                  screenSize.height -
+                  viewPadding.bottom -
+                  mediaQuery.viewInsets.bottom -
+                  margin;
+              final double usableHeight = math.max(
+                zeroClamp,
+                usableBottom - usableTop,
+              );
+
+              final double availableBelow =
+                  usableBottom - (tileOrigin.dy + tileSize.height);
+              final double availableAbove = tileOrigin.dy - usableTop;
+              final double availableRight =
+                  usableRight - (tileOrigin.dx + tileSize.width);
+              final double availableLeft = tileOrigin.dx - usableLeft;
+
+              final double requiredHorizontalSpace =
+                  dropdownWidth + preferredHorizontalGap;
+              final bool canOpenRight =
+                  availableRight >= requiredHorizontalSpace;
+              final bool canOpenLeft = availableLeft >= requiredHorizontalSpace;
+              final bool openToLeft =
+                  canOpenLeft &&
+                  (!canOpenRight || availableLeft > availableRight);
+              final bool openToSide = canOpenRight || canOpenLeft;
+
+              double effectiveMaxHeight;
+              late final ShadAnchor anchor;
+
+              if (openToSide) {
+                if (usableHeight <= zeroClamp) {
+                  effectiveMaxHeight = minimumHeight;
+                } else {
+                  effectiveMaxHeight = math.min(
+                    dropdownMaxHeight,
+                    usableHeight,
+                  );
+                  if (effectiveMaxHeight < minimumHeight) {
+                    effectiveMaxHeight = usableHeight;
+                  }
+                }
+
+                final double triggerCenterY =
+                    tileOrigin.dy + tileSize.height / centerDivider;
+                final double overlayTop =
+                    (triggerCenterY - effectiveMaxHeight / centerDivider).clamp(
+                      usableTop,
+                      usableBottom - effectiveMaxHeight,
+                    );
+
+                final double desiredLeft = openToLeft
+                    ? tileOrigin.dx - dropdownWidth - preferredHorizontalGap
+                    : tileOrigin.dx + tileSize.width + preferredHorizontalGap;
+                final double overlayLeft = desiredLeft.clamp(
+                  usableLeft,
+                  usableRight - dropdownWidth,
+                );
+
+                anchor = ShadAnchor(
+                  overlayAlignment: Alignment.topLeft,
+                  childAlignment: Alignment.topLeft,
+                  offset: Offset(
+                    overlayLeft - tileOrigin.dx,
+                    overlayTop - tileOrigin.dy,
+                  ),
+                );
+              } else {
+                final double normalizedAbove = math.max(
+                  zeroClamp,
+                  availableAbove,
+                );
+                final double normalizedBelow = math.max(
+                  zeroClamp,
+                  availableBelow,
+                );
+
+                final double heightIfAbove = math.min(
+                  dropdownMaxHeight,
+                  normalizedAbove,
+                );
+                final double heightIfBelow = math.min(
+                  dropdownMaxHeight,
+                  normalizedBelow,
+                );
+
+                bool showAbove;
+                if (heightIfAbove <= zeroClamp && heightIfBelow <= zeroClamp) {
+                  showAbove = false;
+                } else if (heightIfBelow <= zeroClamp) {
+                  showAbove = true;
+                } else if (heightIfAbove <= zeroClamp) {
+                  showAbove = false;
+                } else if ((heightIfBelow - heightIfAbove).abs() <=
+                    heightDifferenceThreshold) {
+                  showAbove = normalizedAbove > normalizedBelow;
+                } else {
+                  showAbove = heightIfAbove > heightIfBelow;
+                }
+
+                final double availableSpace = showAbove
+                    ? normalizedAbove
+                    : normalizedBelow;
+                final double fallbackMaxHeight = usableHeight <= zeroClamp
+                    ? minimumHeight
+                    : math.min(dropdownMaxHeight, usableHeight);
+
+                effectiveMaxHeight = availableSpace > zeroClamp
+                    ? math.min(dropdownMaxHeight, availableSpace)
+                    : fallbackMaxHeight;
+                if (effectiveMaxHeight < minimumHeight &&
+                    availableSpace > zeroClamp) {
+                  effectiveMaxHeight = availableSpace;
+                }
+
+                final double extraAbove = math.max(
+                  zeroClamp,
+                  normalizedAbove - effectiveMaxHeight,
+                );
+                final double extraBelow = math.max(
+                  zeroClamp,
+                  normalizedBelow - effectiveMaxHeight,
+                );
+                final double extraVerticalSpace = showAbove
+                    ? extraAbove
+                    : extraBelow;
+                final double appliedVerticalGap = math.min(
+                  preferredVerticalGap,
+                  extraVerticalSpace,
+                );
+
+                final double triggerLeft = tileOrigin.dx;
+                final double centeredLeft =
+                    tileOrigin.dx +
+                    (tileSize.width - dropdownWidth) / centerDivider;
+                final double overlayLeft = centeredLeft.clamp(
+                  usableLeft,
+                  usableRight - dropdownWidth,
+                );
+                final double horizontalOffset = overlayLeft - triggerLeft;
+
+                final double desiredTop = showAbove
+                    ? tileOrigin.dy - appliedVerticalGap - effectiveMaxHeight
+                    : tileOrigin.dy + tileSize.height + appliedVerticalGap;
+                final double overlayTop = desiredTop.clamp(
                   usableTop,
                   usableBottom - effectiveMaxHeight,
                 );
 
-            final double desiredLeft = openToLeft
-                ? tileOrigin.dx - dropdownWidth - preferredHorizontalGap
-                : tileOrigin.dx + tileSize.width + preferredHorizontalGap;
-            final double overlayLeft = desiredLeft.clamp(
-              usableLeft,
-              usableRight - dropdownWidth,
-            );
+                anchor = ShadAnchor(
+                  overlayAlignment: Alignment.topLeft,
+                  childAlignment: Alignment.topLeft,
+                  offset: Offset(horizontalOffset, overlayTop - tileOrigin.dy),
+                );
+              }
 
-            anchor = ShadAnchor(
-              overlayAlignment: Alignment.topLeft,
-              childAlignment: Alignment.topLeft,
-              offset: Offset(
-                overlayLeft - tileOrigin.dx,
-                overlayTop - tileOrigin.dy,
-              ),
-            );
-          } else {
-            final double normalizedAbove = math.max(zeroClamp, availableAbove);
-            final double normalizedBelow = math.max(zeroClamp, availableBelow);
+              return AxiPopover(
+                controller: controller,
+                closeOnTapOutside: true,
+                anchor: anchor,
+                padding: EdgeInsets.zero,
+                popover: (context) {
+                  return BlocBuilder<B, CalendarState>(
+                    builder: (context, state) {
+                      final baseId = task.baseId;
+                      final latestTask = state.model.tasks[baseId] ?? task;
+                      final CalendarTask? storedTask =
+                          state.model.tasks[task.id];
+                      final CalendarTask? occurrenceTask =
+                          storedTask == null && task.isOccurrence
+                          ? latestTask.occurrenceForId(task.id)
+                          : null;
+                      final CalendarTask displayTask =
+                          storedTask ?? occurrenceTask ?? latestTask;
+                      final bool shouldUpdateOccurrence =
+                          storedTask == null && occurrenceTask != null;
+                      final List<TaskContextAction> inlineActions = host
+                          ._sidebarInlineActions(displayTask);
 
-            final double heightIfAbove = math.min(
-              dropdownMaxHeight,
-              normalizedAbove,
-            );
-            final double heightIfBelow = math.min(
-              dropdownMaxHeight,
-              normalizedBelow,
-            );
-
-            bool showAbove;
-            if (heightIfAbove <= zeroClamp && heightIfBelow <= zeroClamp) {
-              showAbove = false;
-            } else if (heightIfBelow <= zeroClamp) {
-              showAbove = true;
-            } else if (heightIfAbove <= zeroClamp) {
-              showAbove = false;
-            } else if ((heightIfBelow - heightIfAbove).abs() <=
-                heightDifferenceThreshold) {
-              showAbove = normalizedAbove > normalizedBelow;
-            } else {
-              showAbove = heightIfAbove > heightIfBelow;
-            }
-
-            final double availableSpace = showAbove
-                ? normalizedAbove
-                : normalizedBelow;
-            final double fallbackMaxHeight = usableHeight <= zeroClamp
-                ? minimumHeight
-                : math.min(dropdownMaxHeight, usableHeight);
-
-            effectiveMaxHeight = availableSpace > zeroClamp
-                ? math.min(dropdownMaxHeight, availableSpace)
-                : fallbackMaxHeight;
-            if (effectiveMaxHeight < minimumHeight &&
-                availableSpace > zeroClamp) {
-              effectiveMaxHeight = availableSpace;
-            }
-
-            effectiveMaxHeight = math.max(
-              minimumHeight,
-              effectiveMaxHeight - popoverChromeInset,
-            );
-
-            final double extraAbove = math.max(
-              zeroClamp,
-              normalizedAbove - effectiveMaxHeight,
-            );
-            final double extraBelow = math.max(
-              zeroClamp,
-              normalizedBelow - effectiveMaxHeight,
-            );
-            final double extraVerticalSpace = showAbove
-                ? extraAbove
-                : extraBelow;
-            final double appliedVerticalGap = math.min(
-              preferredVerticalGap,
-              extraVerticalSpace,
-            );
-
-            final double triggerLeft = tileOrigin.dx;
-            final double centeredLeft =
-                tileOrigin.dx +
-                (tileSize.width - dropdownWidth) / centerDivider;
-            final double overlayLeft = centeredLeft.clamp(
-              usableLeft,
-              usableRight - dropdownWidth,
-            );
-            final double horizontalOffset = overlayLeft - triggerLeft;
-
-            final double desiredTop = showAbove
-                ? tileOrigin.dy - appliedVerticalGap - effectiveMaxHeight
-                : tileOrigin.dy + tileSize.height + appliedVerticalGap;
-            final double overlayTop = desiredTop.clamp(
-              usableTop,
-              usableBottom - effectiveMaxHeight,
-            );
-
-            anchor = ShadAnchor(
-              overlayAlignment: Alignment.topLeft,
-              childAlignment: Alignment.topLeft,
-              offset: Offset(horizontalOffset, overlayTop - tileOrigin.dy),
-            );
-          }
-
-          final scaffoldMessenger = ScaffoldMessenger.maybeOf(tileContext);
-
-          return AxiPopover(
-            controller: controller,
-            closeOnTapOutside: true,
-            anchor: anchor,
-            padding: EdgeInsets.zero,
-            popover: (context) {
-              return BlocBuilder<B, CalendarState>(
-                builder: (context, state) {
-                  final baseId = task.baseId;
-                  final latestTask = state.model.tasks[baseId] ?? task;
-                  final CalendarTask? storedTask = state.model.tasks[task.id];
-                  final CalendarTask? occurrenceTask =
-                      storedTask == null && task.isOccurrence
-                      ? latestTask.occurrenceForId(task.id)
-                      : null;
-                  final CalendarTask displayTask =
-                      storedTask ?? occurrenceTask ?? latestTask;
-                  final bool shouldUpdateOccurrence =
-                      storedTask == null && occurrenceTask != null;
-                  final List<TaskContextAction> inlineActions = host
-                      ._sidebarInlineActions(displayTask);
-
-                  return EditTaskDropdown<B>(
-                    task: displayTask,
-                    maxHeight: effectiveMaxHeight,
-                    inlineActions: inlineActions,
-                    collectionMethod: state.model.collection?.method,
-                    onClose: () => host._closeTaskPopover(task.id),
-                    scaffoldMessenger: scaffoldMessenger,
-                    locationHelper: LocationAutocompleteHelper.fromState(state),
-                    onTaskUpdated: (updatedTask) {
-                      context.read<B>().add(
-                        CalendarEvent.taskUpdated(task: updatedTask),
+                      return EditTaskDropdown<B>(
+                        task: displayTask,
+                        maxHeight: effectiveMaxHeight,
+                        parentScrollController: host._scrollController,
+                        inlineActions: inlineActions,
+                        collectionMethod: state.model.collection?.method,
+                        onClose: () => host._closeTaskPopover(task.id),
+                        scaffoldMessenger: scaffoldMessenger,
+                        locationHelper: LocationAutocompleteHelper.fromState(
+                          state,
+                        ),
+                        onTaskUpdated: (updatedTask) {
+                          context.read<B>().add(
+                            CalendarEvent.taskUpdated(task: updatedTask),
+                          );
+                        },
+                        onOccurrenceUpdated: shouldUpdateOccurrence
+                            ? (
+                                updatedTask,
+                                scope, {
+                                required bool scheduleTouched,
+                                required bool checklistTouched,
+                              }) {
+                                if (scheduleTouched || checklistTouched) {
+                                  context.read<B>().add(
+                                    CalendarEvent.taskOccurrenceUpdated(
+                                      taskId: baseId,
+                                      occurrenceId: task.id,
+                                      scheduledTime: scheduleTouched
+                                          ? updatedTask.scheduledTime
+                                          : null,
+                                      duration: scheduleTouched
+                                          ? updatedTask.duration
+                                          : null,
+                                      endDate: scheduleTouched
+                                          ? updatedTask.endDate
+                                          : null,
+                                      checklist: checklistTouched
+                                          ? updatedTask.checklist
+                                          : null,
+                                      range: scope.range,
+                                    ),
+                                  );
+                                }
+                              }
+                            : null,
+                        onTaskDeleted: (taskId) {
+                          context.read<B>().add(
+                            CalendarEvent.taskDeleted(taskId: taskId),
+                          );
+                          host._closeTaskPopover(taskId);
+                        },
                       );
-                    },
-                    onOccurrenceUpdated: shouldUpdateOccurrence
-                        ? (
-                            updatedTask,
-                            scope, {
-                            required bool scheduleTouched,
-                            required bool checklistTouched,
-                          }) {
-                            if (scheduleTouched || checklistTouched) {
-                              context.read<B>().add(
-                                CalendarEvent.taskOccurrenceUpdated(
-                                  taskId: baseId,
-                                  occurrenceId: task.id,
-                                  scheduledTime: scheduleTouched
-                                      ? updatedTask.scheduledTime
-                                      : null,
-                                  duration: scheduleTouched
-                                      ? updatedTask.duration
-                                      : null,
-                                  endDate: scheduleTouched
-                                      ? updatedTask.endDate
-                                      : null,
-                                  checklist: checklistTouched
-                                      ? updatedTask.checklist
-                                      : null,
-                                  range: scope.range,
-                                ),
-                              );
-                            }
-                          }
-                        : null,
-                    onTaskDeleted: (taskId) {
-                      context.read<B>().add(
-                        CalendarEvent.taskDeleted(taskId: taskId),
-                      );
-                      host._closeTaskPopover(taskId);
                     },
                   );
                 },
+                child: child!,
               );
             },
-            child: buildListTile(
-              onTap: () => host._toggleTaskPopover(
-                taskId: task.id,
-                anchorToken: _anchorToken,
-                controller: controller,
-              ),
-            ),
           );
         },
       );
@@ -5764,7 +5785,7 @@ class _AdvancedOptions extends StatelessWidget {
           AnimatedBuilder(
             animation: draftController,
             builder: (context, _) {
-              return DeadlinePickerField(
+              return CalendarDateTimeField(
                 value: draftController.deadline,
                 onChanged: onDeadlineChanged,
               );

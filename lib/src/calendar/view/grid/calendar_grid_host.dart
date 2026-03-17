@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
@@ -23,6 +24,8 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required this.onDragSessionEnded,
     required this.cancelBucketHoverNotifier,
     required this.nonGridDragRegionHoverNotifier,
+    this.composeWindowDragRegionHoverNotifier =
+        const AlwaysStoppedAnimation<bool>(false),
     required this.dragCompletionRevision,
   });
 
@@ -33,9 +36,10 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
   final VoidCallback onDragSessionStarted;
   final ValueChanged<Offset> onDragGlobalPositionChanged;
   final VoidCallback onDragSessionEnded;
-  final ValueNotifier<bool> cancelBucketHoverNotifier;
-  final ValueNotifier<bool> nonGridDragRegionHoverNotifier;
-  final ValueNotifier<int> dragCompletionRevision;
+  final ValueListenable<bool> cancelBucketHoverNotifier;
+  final ValueListenable<bool> nonGridDragRegionHoverNotifier;
+  final ValueListenable<bool> composeWindowDragRegionHoverNotifier;
+  final ValueListenable<int> dragCompletionRevision;
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +55,8 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
       onDragSessionEnded: onDragSessionEnded,
       cancelBucketHoverNotifier: cancelBucketHoverNotifier,
       nonGridDragRegionHoverNotifier: nonGridDragRegionHoverNotifier,
+      composeWindowDragRegionHoverNotifier:
+          composeWindowDragRegionHoverNotifier,
       dragCompletionRevision: dragCompletionRevision,
     );
   }

@@ -59,6 +59,8 @@ class CalendarTaskEntryBindings {
     required this.resizeHandleExtent,
     required this.interactionController,
     required this.cancelBucketHoverNotifier,
+    this.composeWindowDragRegionHoverNotifier =
+        const AlwaysStoppedAnimation<bool>(false),
     required this.callbacks,
     required this.geometryProvider,
     required this.globalRectProvider,
@@ -82,6 +84,7 @@ class CalendarTaskEntryBindings {
   final double resizeHandleExtent;
   final TaskInteractionController interactionController;
   final ValueListenable<bool> cancelBucketHoverNotifier;
+  final ValueListenable<bool> composeWindowDragRegionHoverNotifier;
   final CalendarTaskTileCallbacks callbacks;
   final CalendarTaskGeometry? Function(String taskId) geometryProvider;
   final Rect? Function(String taskId) globalRectProvider;
@@ -570,10 +573,16 @@ class _CalendarTaskDragFeedback extends StatelessWidget {
     );
     return ValueListenableBuilder<bool>(
       valueListenable: bindings.cancelBucketHoverNotifier,
-      builder: (context, hovering, child) {
-        return AnimatedOpacity(
-          duration: calendarTaskSplitPreviewAnimationDuration,
-          opacity: hovering ? 0.45 : 0.8,
+      builder: (context, cancelHovering, child) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: bindings.composeWindowDragRegionHoverNotifier,
+          builder: (context, composeHovering, child) {
+            return AnimatedOpacity(
+              duration: calendarTaskSplitPreviewAnimationDuration,
+              opacity: composeHovering ? 0.0 : (cancelHovering ? 0.45 : 0.8),
+              child: child,
+            );
+          },
           child: child,
         );
       },

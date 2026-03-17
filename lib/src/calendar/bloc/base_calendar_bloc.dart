@@ -668,15 +668,7 @@ abstract class BaseCalendarBloc
         );
       }
 
-      emit(
-        state.copyWith(
-          isLoading: true,
-          error: null,
-          isTaskCreationSubmitting: true,
-          taskCreationError: null,
-          lastCreatedTaskId: null,
-        ),
-      );
+      emit(state.copyWith(isLoading: true, error: null));
 
       _recordUndoSnapshot();
 
@@ -812,14 +804,7 @@ abstract class BaseCalendarBloc
         return;
       }
 
-      emit(
-        state.copyWith(
-          isLoading: true,
-          error: null,
-          isTaskCreationSubmitting: true,
-          taskCreationError: null,
-        ),
-      );
+      emit(state.copyWith(isLoading: true, error: null));
 
       _recordUndoSnapshot();
 

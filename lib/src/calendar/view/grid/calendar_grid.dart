@@ -61,7 +61,7 @@ import 'calendar_surface_drag_target.dart';
 import 'calendar_task_surface.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
 import 'package:axichat/src/calendar/view/month/day_event_editor.dart';
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 
 export 'package:axichat/src/calendar/view/grid/calendar_layout.dart'
@@ -150,6 +150,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final VoidCallback? onDragSessionEnded;
   final ValueListenable<bool>? cancelBucketHoverNotifier;
   final ValueListenable<bool>? nonGridDragRegionHoverNotifier;
+  final ValueListenable<bool>? composeWindowDragRegionHoverNotifier;
   final ValueListenable<int>? dragCompletionRevision;
 
   const CalendarGrid({
@@ -165,6 +166,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
     this.onDragSessionEnded,
     this.cancelBucketHoverNotifier,
     this.nonGridDragRegionHoverNotifier,
+    this.composeWindowDragRegionHoverNotifier,
     this.dragCompletionRevision,
   });
 
@@ -176,7 +178,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     extends State<CalendarGrid<T>>
     with
         TickerProviderStateMixin,
-        AutomaticKeepAliveClientMixin<CalendarGrid<T>> {
+        AutomaticKeepAliveClientMixin<CalendarGrid<T>>,
+        axi_surface.AxiSurfaceRegistration<CalendarGrid<T>> {
   static const int startHour = 0;
   static const int endHour = 24;
   static const int _defaultZoomIndex = 1;
@@ -190,6 +193,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
   ValueListenable<bool> get _nonGridDragRegionHoverNotifier =>
       widget.nonGridDragRegionHoverNotifier ??
+      _defaultNonGridDragRegionHoverNotifier;
+  ValueListenable<bool> get _composeWindowDragRegionHoverNotifier =>
+      widget.composeWindowDragRegionHoverNotifier ??
       _defaultNonGridDragRegionHoverNotifier;
   ValueListenable<int> get _dragCompletionRevision =>
       widget.dragCompletionRevision ?? _defaultDragCompletionRevision;
@@ -207,7 +213,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _hasAutoScrolled = false;
   final OverlayPortalController _taskPopoverPortalController =
       OverlayPortalController();
-  final Object _taskPopoverSurfaceOwner = Object();
   CalendarLayoutMetrics _currentLayoutMetrics = const CalendarLayoutMetrics(
     hourHeight: 78,
     slotHeight: 78,
@@ -275,7 +280,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _hideCompletedScheduled = false;
   int _dateSlideDirection = 0;
   bool _isSyntheticDragRefresh = false;
-  axi_surface.AxiSurfaceController? _registeredAxiSurfaceController;
+
+  @override
+  bool get isAxiSurfaceOpen => _taskPopoverController.activeTaskId != null;
+
+  @override
+  VoidCallback? get onAxiSurfaceDismiss => () {
+    final String? activeId = _taskPopoverController.activeTaskId;
+    if (activeId != null) {
+      _closeTaskPopover(activeId, reason: 'surface-back');
+    }
+  };
 
   @override
   bool get wantKeepAlive => true;
@@ -298,6 +313,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _verticalController = _CalendarScrollController(
       onAttached: _handleScrollAttach,
     );
+    _verticalController.addListener(_handleViewportScrollChanged);
     _horizontalHeaderController = ScrollController();
     _horizontalGridController = ScrollController();
     _horizontalHeaderController.addListener(_handleHorizontalHeaderScroll);
@@ -563,6 +579,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
     _horizontalGridController.jumpTo(targetOffset);
     _syncingHorizontalScroll = false;
+    _handleViewportScrollChanged();
   }
 
   void _handleHorizontalGridScroll() {
@@ -578,6 +595,14 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
     _horizontalHeaderController.jumpTo(targetOffset);
     _syncingHorizontalScroll = false;
+    _handleViewportScrollChanged();
+  }
+
+  void _handleViewportScrollChanged() {
+    if (_taskPopoverController.activeTaskId != null) {
+      _refreshPopoverLayouts();
+    }
+    _refreshActiveInteractionFromSession();
   }
 
   void _scheduleAutoScroll() {
@@ -859,7 +884,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _processFocusRequest(widget.focusRequest);
-    _syncTaskPopoverSurfaceRegistration();
+    syncAxiSurfaceRegistration();
   }
 
   @override
@@ -867,13 +892,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     TaskEditSessionTracker.instance.endForOwner(this);
     _viewTransitionController.dispose();
     _clockTimer?.cancel();
+    _verticalController.removeListener(_handleViewportScrollChanged);
     _verticalController.dispose();
     if (_taskPopoverPortalController.isShowing) {
       _taskPopoverPortalController.hide();
     }
-    _registeredAxiSurfaceController?.unregisterSurface(
-      _taskPopoverSurfaceOwner,
-    );
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
@@ -910,33 +933,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _syncTaskPopoverSurfaceRegistration() {
-    final axi_surface.AxiSurfaceController? surfaceController =
-        axi_surface.AxiSurfaceScope.maybeControllerOf(context);
-    if (_registeredAxiSurfaceController != null &&
-        _registeredAxiSurfaceController != surfaceController) {
-      _registeredAxiSurfaceController!.unregisterSurface(
-        _taskPopoverSurfaceOwner,
-      );
-      _registeredAxiSurfaceController = null;
-    }
-    final bool isOpen = _taskPopoverController.activeTaskId != null;
-    if (surfaceController == null || !isOpen) {
-      _registeredAxiSurfaceController?.unregisterSurface(
-        _taskPopoverSurfaceOwner,
-      );
-      _registeredAxiSurfaceController = null;
-      return;
-    }
-    surfaceController.registerSurface(
-      owner: _taskPopoverSurfaceOwner,
-      onDismiss: () {
-        final String? activeId = _taskPopoverController.activeTaskId;
-        if (activeId != null) {
-          _closeTaskPopover(activeId, reason: 'surface-back');
-        }
-      },
-    );
-    _registeredAxiSurfaceController = surfaceController;
+    syncAxiSurfaceRegistration();
   }
 
   void _attachTaskDragPointerRoute(int? pointerId) {
@@ -1560,7 +1557,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
+        surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {
           final mediaQuery = MediaQuery.of(sheetContext);
@@ -2081,6 +2078,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       resizeHandleExtent: hasMouse ? _desktopHandleExtent : _touchHandleExtent,
       interactionController: _taskInteractionController,
       cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
+      composeWindowDragRegionHoverNotifier:
+          _composeWindowDragRegionHoverNotifier,
       callbacks: _taskCallbacks(task),
       geometryProvider: _surfaceController.geometryForTask,
       globalRectProvider: _surfaceController.globalRectForTask,
@@ -2384,6 +2383,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                           child: EditTaskDropdown<T>(
                             task: displayTask,
                             maxHeight: layout.maxHeight,
+                            parentScrollController: _verticalController,
                             inlineActions: inlineActions,
                             collectionMethod: state.model.collection?.method,
                             onClose: () => _closeTaskPopover(
@@ -4671,7 +4671,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
       ),
       bodyPadding: sheetPadding,
       children: [
-        DeadlinePickerField(
+        CalendarDateTimeField(
           value: _selected,
           onChanged: (value) {
             if (value == null) {

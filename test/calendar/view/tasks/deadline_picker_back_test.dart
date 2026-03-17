@@ -3,7 +3,7 @@
 
 import 'dart:ui';
 
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,7 +99,7 @@ class _DeadlinePageState extends State<_DeadlinePage> {
     return Scaffold(
       key: const Key('deadline-page'),
       body: Center(
-        child: DeadlinePickerField(
+        child: CalendarDateTimeField(
           value: _value,
           onChanged: (value) => setState(() => _value = value),
           showTimeSelectors: true,

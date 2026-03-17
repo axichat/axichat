@@ -172,7 +172,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       await showAdaptiveBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
+        surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {
           final mediaQuery = MediaQuery.of(sheetContext);

@@ -10,7 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -642,7 +642,7 @@ class _AlarmAbsoluteTriggerField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DeadlinePickerField(
+    return CalendarDateTimeField(
       value: value?.value,
       placeholder: context.l10n.calendarAlarmAbsolutePlaceholder,
       showStatusColors: false,

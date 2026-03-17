@@ -120,7 +120,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
         await showAdaptiveBottomSheet<void>(
           context: modalContext,
           isScrollControlled: true,
-          backgroundColor: Colors.transparent,
+          surfacePadding: EdgeInsets.zero,
           showCloseButton: false,
           builder: (sheetContext) {
             final mediaQuery = MediaQuery.of(sheetContext);

@@ -10,7 +10,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
-import 'package:axichat/src/calendar/view/tasks/deadline_picker_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1198,7 +1198,7 @@ class _RecurrenceEndControls extends StatelessWidget {
         ),
         if (mode.isUntil) ...[
           SizedBox(height: context.spacing.s),
-          DeadlinePickerField(
+          CalendarDateTimeField(
             value: value.until,
             placeholder: _recurrenceEndModeUntilLabel,
             showStatusColors: false,
@@ -2084,7 +2084,7 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
         Row(
           children: [
             Expanded(
-              child: DeadlinePickerField(
+              child: CalendarDateTimeField(
                 value: _pendingDate,
                 placeholder: widget.hintText,
                 showStatusColors: false,
