@@ -577,6 +577,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (showInlineActions) ...[
+                        _EditTaskInlineActionsSection(
+                          inlineActions: inlineActions,
+                        ),
+                        SizedBox(height: context.spacing.m),
+                      ],
                       _EditTaskTitleField(
                         controller: _titleController,
                         validator: (value) => TaskTitleValidation.validate(
@@ -588,23 +594,15 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                         autovalidateMode: AutovalidateMode.disabled,
                         enabled: allowsFullEdits,
                       ),
-                      if (showInlineActions || showOccurrenceScope) ...[
+                      if (showOccurrenceScope) ...[
                         SizedBox(height: context.spacing.m),
-                        if (showInlineActions)
-                          _EditTaskInlineActionsSection(
-                            inlineActions: inlineActions,
-                          ),
-                        if (showOccurrenceScope) ...[
-                          _EditTaskOccurrenceScopeSection(
-                            scope: _occurrenceScope,
-                            enabled: allowsAnyEdits,
-                            onChanged: (scope) =>
-                                setState(() => _occurrenceScope = scope),
-                          ),
-                          TaskSectionDivider(
-                            verticalPadding: context.spacing.m,
-                          ),
-                        ],
+                        _EditTaskOccurrenceScopeSection(
+                          scope: _occurrenceScope,
+                          enabled: allowsAnyEdits,
+                          onChanged: (scope) =>
+                              setState(() => _occurrenceScope = scope),
+                        ),
+                        TaskSectionDivider(verticalPadding: context.spacing.m),
                       ] else
                         SizedBox(height: context.spacing.s),
                       _EditTaskPriorityRow(
@@ -762,7 +760,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             ),
             if (footerPinned && footerActionRow != null)
               isSheet
-                  ? SafeArea(top: false, bottom: true, child: footerActionRow)
+                  ? AnimatedPadding(
+                      duration: baseAnimationDuration,
+                      curve: Curves.easeOutCubic,
+                      padding: EdgeInsets.only(
+                        bottom: _sheetFooterActionInset(context),
+                      ),
+                      child: footerActionRow,
+                    )
                   : footerActionRow,
           ],
         ),
@@ -823,6 +828,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   void _handleTitleChanged(String value) {
     _markTouched(_TaskEditField.title);
+  }
+
+  double _sheetFooterActionInset(BuildContext context) {
+    final MediaQueryData mediaQuery = MediaQuery.of(context);
+    final double keyboardInset = mediaQuery.viewInsets.bottom;
+    final double safeBottom = mediaQuery.viewPadding.bottom;
+    if (keyboardInset <= safeBottom) {
+      return 0;
+    }
+    return context.spacing.s + (keyboardInset - safeBottom);
   }
 
   void _handleDescriptionChanged(String value) {
