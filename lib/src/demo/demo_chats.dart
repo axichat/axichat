@@ -129,6 +129,13 @@ class DemoChats {
     mimeType: 'text/plain',
   );
 
+  static const DemoAttachmentAsset groupBannerAttachment = DemoAttachmentAsset(
+    id: 'demo-group-banner',
+    assetPath: 'assets/images/axichat_banner.png',
+    fileName: 'axichat_banner.png',
+    mimeType: 'image/png',
+  );
+
   static const List<DemoAttachmentAsset> composerAttachments = [
     composerAttachment,
     composerAttachmentAltA,
@@ -516,7 +523,7 @@ class DemoChats {
         stanzaId: 'demo-group-6',
         senderJid: '$groupJid/Alex',
         chatJid: groupJid,
-        body: 'If everyone shows up at once, this chat is going to explode.',
+        body: "I kicked off the release drill at 4, and it’s still a little flaky.",
         timestamp: now.subtract(const Duration(minutes: 25)),
         occupantId: '$groupJid/Alex',
       ),
@@ -524,7 +531,8 @@ class DemoChats {
         stanzaId: 'demo-group-5b',
         senderJid: '$groupJid/James',
         chatJid: groupJid,
-        body: 'Can someone pin the details so nobody misses them?',
+        body:
+            'I can grab the store metadata and screenshots once legal gives us a thumbs-up.',
         timestamp: now.subtract(const Duration(minutes: 26)),
         occupantId: '$groupJid/James',
       ),
@@ -532,7 +540,8 @@ class DemoChats {
         stanzaId: 'demo-group-5',
         senderJid: '$groupJid/James',
         chatJid: groupJid,
-        body: "Let's decide who is doing what before we start.",
+        body:
+            'After launch I can keep an eye on logs and take care of the support handoff.',
         timestamp: now.subtract(const Duration(minutes: 27)),
         occupantId: '$groupJid/James',
       ),
@@ -540,7 +549,8 @@ class DemoChats {
         stanzaId: 'demo-group-4',
         senderJid: '$groupJid/George',
         chatJid: groupJid,
-        body: 'Set a start time and people will show up.',
+        body:
+            'Let’s stop UI polish at 2:30, then lock translations and theme tweaks.',
         timestamp: now.subtract(const Duration(minutes: 29)),
         occupantId: '$groupJid/George',
       ),
@@ -549,15 +559,23 @@ class DemoChats {
         senderJid: '$groupJid/Ben',
         chatJid: groupJid,
         body:
-            "Give me five minutes, then I'll post a quick recap so anyone joining late can catch up.",
+            'I’ll post the launch playbook right after CI gives us the final artifact hash.',
         timestamp: now.subtract(const Duration(minutes: 31)),
         occupantId: '$groupJid/Ben',
       ),
       message(
+        stanzaId: 'demo-group-banner-1',
+        senderJid: '$groupJid/Thomas',
+        chatJid: groupJid,
+        body: 'Here\'s the new banner',
+        timestamp: now.subtract(const Duration(minutes: 30)),
+        occupantId: '$groupJid/Thomas',
+      ).copyWith(fileMetadataID: groupBannerAttachment.id),
+      message(
         stanzaId: 'demo-group-2',
         senderJid: '$groupJid/John',
         chatJid: groupJid,
-        body: 'If one step gets missed, everything slows down.',
+        body: 'If CI flakes again, we pause, rerun, then keep moving.',
         timestamp: now.subtract(const Duration(minutes: 33)),
         occupantId: '$groupJid/John',
       ),
@@ -565,7 +583,7 @@ class DemoChats {
         stanzaId: 'demo-group-1',
         senderJid: '$groupJid/Thomas',
         chatJid: groupJid,
-        body: "I'm writing a short note so everyone is on the same page.",
+        body: "I put together a launch primer so everyone can see the full status.",
         timestamp: now.subtract(const Duration(minutes: 35)),
         occupantId: '$groupJid/Thomas',
       ),
@@ -574,7 +592,7 @@ class DemoChats {
         senderJid: '$groupJid/Ben',
         chatJid: groupJid,
         body:
-            'Progress update: hardening backlog is about 60% complete; finishing the remaining checkpoints now.',
+            'Quick check-in: hardening is mostly done, and three deployment checks are still open.',
         timestamp: progressTaskTimestamp,
         occupantId: '$groupJid/Ben',
         task: progressTask,
@@ -583,7 +601,8 @@ class DemoChats {
         stanzaId: 'demo-group-task-share-2',
         senderJid: '$groupJid/Ben',
         chatJid: groupJid,
-        body: 'When and where should we meet next to finalize the rollout?',
+        body:
+            'Let’s lock the final rehearsal slot so comms, support, and QA can run it together.',
         timestamp: planningTaskTimestamp,
         occupantId: '$groupJid/Ben',
         task: planningTask,
@@ -684,6 +703,14 @@ class DemoChats {
             timestamp: now.subtract(const Duration(minutes: 1)),
           ),
           message(
+            stanzaId: 'demo-gmail-4',
+            senderJid: kDemoSelfJid,
+            chatJid: gmailJid,
+            body: "Here's the new banner",
+            timestamp: now.subtract(const Duration(minutes: 2)),
+            occupantId: gmailJid,
+          ).copyWith(fileMetadataID: groupBannerAttachment.id),
+          message(
             stanzaId: 'demo-gmail-2',
             senderJid: gmailJid,
             chatJid: gmailJid,
@@ -700,7 +727,11 @@ class DemoChats {
             occupantId: gmailJid,
           ).copyWith(fileMetadataID: gmailDocAttachment.id),
         ],
-        attachments: const [gmailDocAttachment, gmailDocAttachment2],
+        attachments: const [
+          gmailDocAttachment,
+          gmailDocAttachment2,
+          groupBannerAttachment,
+        ],
       ),
       DemoChatScript(
         chat: Chat(
@@ -720,6 +751,7 @@ class DemoChats {
       DemoChatScript(
         chat: groupChat,
         messages: groupMessages,
+        attachments: const [groupBannerAttachment],
         roomState: RoomState(
           roomJid: groupJid,
           occupants: roomOccupants,

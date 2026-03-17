@@ -1437,10 +1437,9 @@ _resolveTimelineMessageBubbleLayout({
   final recipientBottomInset = (showReplyStrip || showRecipientCutout)
       ? recipientCutoutDepth
       : 0.0;
-  final bubbleBottomCutoutPadding = math.max(
-    reactionBottomInset,
-    recipientBottomInset,
-  );
+  final bubbleBottomCutoutPadding = showCompactReactions && hasBubbleExtras
+      ? spacing.s
+      : math.max(reactionBottomInset, recipientBottomInset);
   final bubbleShadows = _selectedBubbleShadows(context.colorScheme.primary);
   return (
     bubblePadding: bubblePadding,

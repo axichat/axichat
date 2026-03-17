@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
@@ -1880,11 +1880,17 @@ class XmppService extends XmppBase
   static const _demoReactionFire = '🔥';
   static const _demoReactionHeart = '❤️';
   static const _demoReactionLaugh = '😂';
-  static const _demoReactionSparkles = '✨';
   static const _demoReactionMind = '🧠';
-  static const _demoReactionScroll = '📜';
-  static const _demoReactionMoney = '💰';
   static const _demoReactionClap = '👏';
+
+  static const _demoFranklinReactionSets = <List<String>>[
+    <String>[_demoReactionThumbsUp],
+    <String>[_demoReactionHeart],
+    <String>[_demoReactionLaugh],
+    <String>[_demoReactionFire],
+    <String>[_demoReactionThumbsUp, _demoReactionHeart],
+    <String>[_demoReactionLaugh, _demoReactionFire],
+  ];
 
   static const _demoFounderBareJids = <String>[
     kDemoSelfJid,
@@ -1944,71 +1950,30 @@ class XmppService extends XmppBase
           if (franklinMessage != null &&
               !hasReactionsForMessage(franklinMessage.stanzaID)) {
             const reactors = _demoFounderBareJids;
-            await db.replaceReactions(
-              messageId: franklinMessage.stanzaID,
-              senderJid: reactors[0],
-              emojis: const [
-                _demoReactionClap,
-                _demoReactionFire,
-                _demoReactionHeart,
-                _demoReactionLaugh,
-                _demoReactionSparkles,
-              ],
-              updatedAt: updatedAt,
-              identityVerified: true,
+            final reactionCount = math.min(
+              reactors.length,
+              2,
             );
+            for (var i = 0; i < reactionCount; i += 1) {
+              await db.replaceReactions(
+                messageId: franklinMessage.stanzaID,
+                senderJid: reactors[i],
+                emojis: _demoFranklinReactionSets[i],
+                updatedAt: updatedAt,
+                identityVerified: true,
+              );
+            }
+          }
+
+          final groupBannerMessage = messages
+              .where((message) => message.stanzaID == 'demo-group-banner-1')
+              .firstOrNull;
+          if (groupBannerMessage != null &&
+              !hasReactionsForMessage(groupBannerMessage.stanzaID)) {
             await db.replaceReactions(
-              messageId: franklinMessage.stanzaID,
-              senderJid: reactors[1],
-              emojis: const [
-                _demoReactionClap,
-                _demoReactionFire,
-                _demoReactionThumbsUp,
-              ],
-              updatedAt: updatedAt,
-              identityVerified: true,
-            );
-            await db.replaceReactions(
-              messageId: franklinMessage.stanzaID,
-              senderJid: reactors[2],
-              emojis: const [
-                _demoReactionClap,
-                _demoReactionHeart,
-                _demoReactionScroll,
-              ],
-              updatedAt: updatedAt,
-              identityVerified: true,
-            );
-            await db.replaceReactions(
-              messageId: franklinMessage.stanzaID,
-              senderJid: reactors[3],
-              emojis: const [
-                _demoReactionClap,
-                _demoReactionFire,
-                _demoReactionThumbsUp,
-              ],
-              updatedAt: updatedAt,
-              identityVerified: true,
-            );
-            await db.replaceReactions(
-              messageId: franklinMessage.stanzaID,
-              senderJid: reactors[4],
-              emojis: const [
-                _demoReactionClap,
-                _demoReactionMind,
-                _demoReactionThumbsUp,
-              ],
-              updatedAt: updatedAt,
-              identityVerified: true,
-            );
-            await db.replaceReactions(
-              messageId: franklinMessage.stanzaID,
-              senderJid: reactors[5],
-              emojis: const [
-                _demoReactionClap,
-                _demoReactionMoney,
-                _demoReactionFire,
-              ],
+              messageId: groupBannerMessage.stanzaID,
+              senderJid: kDemoSelfJid,
+              emojis: const [_demoReactionThumbsUp, _demoReactionHeart],
               updatedAt: updatedAt,
               identityVerified: true,
             );
@@ -3133,7 +3098,7 @@ class XmppService extends XmppBase
 
   @override
   List<int> secureBytes(int length) {
-    final random = Random.secure();
+    final random = math.Random.secure();
     return List<int>.generate(length, (_) => random.nextInt(256));
   }
 
