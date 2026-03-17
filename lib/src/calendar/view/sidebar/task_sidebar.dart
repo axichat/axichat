@@ -76,6 +76,7 @@ import 'package:axichat/src/calendar/view/tasks/calendar_task_list_tile.dart';
 import 'package:axichat/src/calendar/view/tasks/task_tile_surface.dart';
 import 'package:axichat/src/calendar/view/tasks/reminder_preferences_field.dart';
 import 'package:axichat/src/calendar/view/tasks/task_edit_session_tracker.dart';
+import 'package:axichat/src/calendar/view/tasks/task_popover_controller.dart';
 
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
@@ -5235,177 +5236,21 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
               }
 
               final mediaQuery = MediaQuery.of(tileContext);
-              final Size screenSize = mediaQuery.size;
-              final EdgeInsets viewPadding = mediaQuery.viewPadding;
-              final double margin = context.spacing.m;
-              const double dropdownMaxHeight = 520.0;
-              const double dropdownWidth = calendarTaskPopoverWidth;
-              final double preferredVerticalGap = context.spacing.s;
-              final double preferredHorizontalGap = context.spacing.m;
-              const double centerDivider = 2.0;
-              const double zeroClamp = 0.0;
-              const double heightDifferenceThreshold = 4.0;
-              const double minimumHeight = calendarTaskPopoverMinHeight;
-
-              final double usableLeft = viewPadding.left + margin;
-              final double usableRight =
-                  screenSize.width - viewPadding.right - margin;
-              final double usableTop = viewPadding.top + margin;
-              final double usableBottom =
-                  screenSize.height -
-                  viewPadding.bottom -
-                  mediaQuery.viewInsets.bottom -
-                  margin;
-              final double usableHeight = math.max(
-                zeroClamp,
-                usableBottom - usableTop,
+              final CalendarLayoutTheme layoutTheme =
+                  CalendarLayoutTheme.fromContext(context);
+              final TaskPopoverLayout layout = calculateTaskPopoverLayout(
+                bounds: tileOrigin & tileSize,
+                screenSize: mediaQuery.size,
+                safePadding: mediaQuery.padding,
+                screenMargin: context.spacing.m,
+                popoverGap: layoutTheme.popoverGap,
+                bottomInset: mediaQuery.viewInsets.bottom,
               );
-
-              final double availableBelow =
-                  usableBottom - (tileOrigin.dy + tileSize.height);
-              final double availableAbove = tileOrigin.dy - usableTop;
-              final double availableRight =
-                  usableRight - (tileOrigin.dx + tileSize.width);
-              final double availableLeft = tileOrigin.dx - usableLeft;
-
-              final double requiredHorizontalSpace =
-                  dropdownWidth + preferredHorizontalGap;
-              final bool canOpenRight =
-                  availableRight >= requiredHorizontalSpace;
-              final bool canOpenLeft = availableLeft >= requiredHorizontalSpace;
-              final bool openToLeft =
-                  canOpenLeft &&
-                  (!canOpenRight || availableLeft > availableRight);
-              final bool openToSide = canOpenRight || canOpenLeft;
-
-              double effectiveMaxHeight;
-              late final ShadAnchor anchor;
-
-              if (openToSide) {
-                if (usableHeight <= zeroClamp) {
-                  effectiveMaxHeight = minimumHeight;
-                } else {
-                  effectiveMaxHeight = math.min(
-                    dropdownMaxHeight,
-                    usableHeight,
-                  );
-                  if (effectiveMaxHeight < minimumHeight) {
-                    effectiveMaxHeight = usableHeight;
-                  }
-                }
-
-                final double triggerCenterY =
-                    tileOrigin.dy + tileSize.height / centerDivider;
-                final double overlayTop =
-                    (triggerCenterY - effectiveMaxHeight / centerDivider).clamp(
-                      usableTop,
-                      usableBottom - effectiveMaxHeight,
-                    );
-
-                final double desiredLeft = openToLeft
-                    ? tileOrigin.dx - dropdownWidth - preferredHorizontalGap
-                    : tileOrigin.dx + tileSize.width + preferredHorizontalGap;
-                final double overlayLeft = desiredLeft.clamp(
-                  usableLeft,
-                  usableRight - dropdownWidth,
-                );
-
-                anchor = ShadAnchor(
-                  overlayAlignment: Alignment.topLeft,
-                  childAlignment: Alignment.topLeft,
-                  offset: Offset(
-                    overlayLeft - tileOrigin.dx,
-                    overlayTop - tileOrigin.dy,
-                  ),
-                );
-              } else {
-                final double normalizedAbove = math.max(
-                  zeroClamp,
-                  availableAbove,
-                );
-                final double normalizedBelow = math.max(
-                  zeroClamp,
-                  availableBelow,
-                );
-
-                final double heightIfAbove = math.min(
-                  dropdownMaxHeight,
-                  normalizedAbove,
-                );
-                final double heightIfBelow = math.min(
-                  dropdownMaxHeight,
-                  normalizedBelow,
-                );
-
-                bool showAbove;
-                if (heightIfAbove <= zeroClamp && heightIfBelow <= zeroClamp) {
-                  showAbove = false;
-                } else if (heightIfBelow <= zeroClamp) {
-                  showAbove = true;
-                } else if (heightIfAbove <= zeroClamp) {
-                  showAbove = false;
-                } else if ((heightIfBelow - heightIfAbove).abs() <=
-                    heightDifferenceThreshold) {
-                  showAbove = normalizedAbove > normalizedBelow;
-                } else {
-                  showAbove = heightIfAbove > heightIfBelow;
-                }
-
-                final double availableSpace = showAbove
-                    ? normalizedAbove
-                    : normalizedBelow;
-                final double fallbackMaxHeight = usableHeight <= zeroClamp
-                    ? minimumHeight
-                    : math.min(dropdownMaxHeight, usableHeight);
-
-                effectiveMaxHeight = availableSpace > zeroClamp
-                    ? math.min(dropdownMaxHeight, availableSpace)
-                    : fallbackMaxHeight;
-                if (effectiveMaxHeight < minimumHeight &&
-                    availableSpace > zeroClamp) {
-                  effectiveMaxHeight = availableSpace;
-                }
-
-                final double extraAbove = math.max(
-                  zeroClamp,
-                  normalizedAbove - effectiveMaxHeight,
-                );
-                final double extraBelow = math.max(
-                  zeroClamp,
-                  normalizedBelow - effectiveMaxHeight,
-                );
-                final double extraVerticalSpace = showAbove
-                    ? extraAbove
-                    : extraBelow;
-                final double appliedVerticalGap = math.min(
-                  preferredVerticalGap,
-                  extraVerticalSpace,
-                );
-
-                final double triggerLeft = tileOrigin.dx;
-                final double centeredLeft =
-                    tileOrigin.dx +
-                    (tileSize.width - dropdownWidth) / centerDivider;
-                final double overlayLeft = centeredLeft.clamp(
-                  usableLeft,
-                  usableRight - dropdownWidth,
-                );
-                final double horizontalOffset = overlayLeft - triggerLeft;
-
-                final double desiredTop = showAbove
-                    ? tileOrigin.dy - appliedVerticalGap - effectiveMaxHeight
-                    : tileOrigin.dy + tileSize.height + appliedVerticalGap;
-                final double overlayTop = desiredTop.clamp(
-                  usableTop,
-                  usableBottom - effectiveMaxHeight,
-                );
-
-                anchor = ShadAnchor(
-                  overlayAlignment: Alignment.topLeft,
-                  childAlignment: Alignment.topLeft,
-                  offset: Offset(horizontalOffset, overlayTop - tileOrigin.dy),
-                );
-              }
+              final ShadAnchor anchor = ShadAnchor(
+                overlayAlignment: Alignment.topLeft,
+                childAlignment: Alignment.topLeft,
+                offset: layout.topLeft - tileOrigin,
+              );
 
               return AxiPopover(
                 controller: controller,
@@ -5432,7 +5277,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
 
                       return EditTaskDropdown<B>(
                         task: displayTask,
-                        maxHeight: effectiveMaxHeight,
+                        maxHeight: layout.maxHeight,
                         parentScrollController: host._scrollController,
                         inlineActions: inlineActions,
                         collectionMethod: state.model.collection?.method,

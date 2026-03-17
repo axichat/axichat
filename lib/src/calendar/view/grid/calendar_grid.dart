@@ -2149,69 +2149,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   TaskPopoverLayout _calculateTaskPopoverLayout(Rect bounds) {
     final mediaQuery = MediaQuery.of(context);
-    final Size screenSize = mediaQuery.size;
-    final EdgeInsets safePadding = mediaQuery.padding;
-    const double dropdownWidth = calendarTaskPopoverWidth;
-    const double dropdownMaxHeight = calendarGridPopoverMaxHeight;
-    const double minimumHeight = calendarTaskPopoverMinHeight;
-    final double screenMargin = context.spacing.m;
-    final double usableLeft = screenMargin;
-    final double usableRight = screenSize.width - screenMargin;
-    final double usableTop = safePadding.top + screenMargin;
-    final double usableBottom =
-        screenSize.height - safePadding.bottom - screenMargin;
-    final double usableHeight = math.max(0, usableBottom - usableTop);
-
-    final double leftSpace = bounds.left - usableLeft;
-    final double rightSpace = usableRight - bounds.right;
-
-    final bool placeOnRight;
-    if (rightSpace >= dropdownWidth && leftSpace < dropdownWidth) {
-      placeOnRight = true;
-    } else if (leftSpace >= dropdownWidth && rightSpace < dropdownWidth) {
-      placeOnRight = false;
-    } else {
-      placeOnRight = rightSpace >= leftSpace;
-    }
-
-    double effectiveMaxHeight = dropdownMaxHeight;
-    if (usableHeight <= 0) {
-      effectiveMaxHeight = minimumHeight;
-    } else {
-      effectiveMaxHeight = math.min(dropdownMaxHeight, usableHeight);
-      if (effectiveMaxHeight < minimumHeight) {
-        effectiveMaxHeight = usableHeight;
-      }
-    }
-
-    final double halfHeight = effectiveMaxHeight / 2;
-    final double taskCenterY = bounds.top + (bounds.height / 2);
-    final double clampedCenterY = taskCenterY.clamp(
-      usableTop + halfHeight,
-      usableBottom - halfHeight,
-    );
-
-    double top = clampedCenterY - halfHeight;
-    if (top < usableTop) {
-      top = usableTop;
-    }
-    if (top + effectiveMaxHeight > usableBottom) {
-      top = usableBottom - effectiveMaxHeight;
-    }
-
     final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
       context,
     );
-    final double popoverGap = layoutTheme.popoverGap;
-    double left = placeOnRight
-        ? bounds.right + popoverGap
-        : bounds.left - dropdownWidth - popoverGap;
-
-    left = left.clamp(usableLeft, usableRight - dropdownWidth);
-
-    return TaskPopoverLayout(
-      topLeft: Offset(left, top),
-      maxHeight: effectiveMaxHeight,
+    return calculateTaskPopoverLayout(
+      bounds: bounds,
+      screenSize: mediaQuery.size,
+      safePadding: mediaQuery.padding,
+      screenMargin: context.spacing.m,
+      popoverGap: layoutTheme.popoverGap,
+      bottomInset: mediaQuery.viewInsets.bottom,
     );
   }
 

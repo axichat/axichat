@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:collection';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
@@ -18,6 +19,72 @@ TaskPopoverLayout defaultTaskPopoverLayout() => const TaskPopoverLayout(
   topLeft: Offset.zero,
   maxHeight: calendarTaskPopoverFallbackHeight,
 );
+
+TaskPopoverLayout calculateTaskPopoverLayout({
+  required Rect bounds,
+  required Size screenSize,
+  required EdgeInsets safePadding,
+  required double screenMargin,
+  required double popoverGap,
+  double bottomInset = 0,
+  double dropdownWidth = calendarTaskPopoverWidth,
+  double dropdownMaxHeight = calendarGridPopoverMaxHeight,
+  double minimumHeight = calendarTaskPopoverMinHeight,
+}) {
+  final double usableLeft = screenMargin;
+  final double usableRight = screenSize.width - screenMargin;
+  final double usableTop = safePadding.top + screenMargin;
+  final double usableBottom =
+      screenSize.height - safePadding.bottom - bottomInset - screenMargin;
+  final double usableHeight = math.max(0, usableBottom - usableTop);
+
+  final double leftSpace = bounds.left - usableLeft;
+  final double rightSpace = usableRight - bounds.right;
+
+  final bool placeOnRight;
+  if (rightSpace >= dropdownWidth && leftSpace < dropdownWidth) {
+    placeOnRight = true;
+  } else if (leftSpace >= dropdownWidth && rightSpace < dropdownWidth) {
+    placeOnRight = false;
+  } else {
+    placeOnRight = rightSpace >= leftSpace;
+  }
+
+  double effectiveMaxHeight = dropdownMaxHeight;
+  if (usableHeight <= 0) {
+    effectiveMaxHeight = minimumHeight;
+  } else {
+    effectiveMaxHeight = math.min(dropdownMaxHeight, usableHeight);
+    if (effectiveMaxHeight < minimumHeight) {
+      effectiveMaxHeight = usableHeight;
+    }
+  }
+
+  final double halfHeight = effectiveMaxHeight / 2;
+  final double triggerCenterY = bounds.top + (bounds.height / 2);
+  final double clampedCenterY = triggerCenterY.clamp(
+    usableTop + halfHeight,
+    usableBottom - halfHeight,
+  );
+
+  double top = clampedCenterY - halfHeight;
+  if (top < usableTop) {
+    top = usableTop;
+  }
+  if (top + effectiveMaxHeight > usableBottom) {
+    top = usableBottom - effectiveMaxHeight;
+  }
+
+  double left = placeOnRight
+      ? bounds.right + popoverGap
+      : bounds.left - dropdownWidth - popoverGap;
+  left = left.clamp(usableLeft, usableRight - dropdownWidth);
+
+  return TaskPopoverLayout(
+    topLeft: Offset(left, top),
+    maxHeight: effectiveMaxHeight,
+  );
+}
 
 class TaskPopoverController extends ChangeNotifier {
   final Map<String, TaskPopoverLayout> _layouts = {};
