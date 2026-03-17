@@ -68,3 +68,4 @@ moxxy-master/
 /lib/**/*.md
 /conversations/
 /.cargo-home/
+/*.json

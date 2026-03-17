@@ -1885,7 +1885,7 @@ class XmppService extends XmppBase
 
   static const _demoFranklinReactionSets = <List<String>>[
     <String>[_demoReactionThumbsUp],
-    <String>[_demoReactionHeart],
+    <String>[_demoReactionFire],
     <String>[_demoReactionLaugh],
     <String>[_demoReactionFire],
     <String>[_demoReactionThumbsUp, _demoReactionHeart],
