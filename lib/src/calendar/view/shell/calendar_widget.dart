@@ -506,9 +506,12 @@ final class _CalendarSurfaceNavigatorState
                   pages: [
                     MaterialPage<void>(
                       key: _calendarSurfacePageKey,
-                      child: KeyedSubtree(
-                        key: widget.modalAnchorKey,
-                        child: widget.child,
+                      child: Overlay.wrap(
+                        clipBehavior: Clip.none,
+                        child: KeyedSubtree(
+                          key: widget.modalAnchorKey,
+                          child: widget.child,
+                        ),
                       ),
                     ),
                   ],

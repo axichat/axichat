@@ -1051,15 +1051,20 @@ class _DateLabel extends StatefulWidget {
   State<_DateLabel> createState() => _DateLabelState();
 }
 
-class _DateLabelState extends State<_DateLabel> {
+class _DateLabelState extends State<_DateLabel>
+    with AxiSurfaceRegistration<_DateLabel> {
   final OverlayPortalController _portalController = OverlayPortalController();
-  final Object _surfaceOwner = Object();
   bool _isBottomSheetOpen = false;
   late DateTime _visibleMonth;
   late DateFormat _dayFormat;
   late DateFormat _monthFormat;
-  AxiSurfaceController? _registeredSurfaceController;
   bool get _isPickerOpen => _portalController.isShowing || _isBottomSheetOpen;
+
+  @override
+  bool get isAxiSurfaceOpen => _portalController.isShowing;
+
+  @override
+  VoidCallback? get onAxiSurfaceDismiss => _removeOverlay;
 
   @override
   void initState() {
@@ -1076,7 +1081,7 @@ class _DateLabelState extends State<_DateLabel> {
     final locale = Localizations.localeOf(context).toString();
     _dayFormat = DateFormat.yMMMd(locale);
     _monthFormat = DateFormat.yMMMM(locale);
-    _syncSurfaceRegistration();
+    syncAxiSurfaceRegistration();
   }
 
   @override
@@ -1093,31 +1098,10 @@ class _DateLabelState extends State<_DateLabel> {
 
   @override
   void dispose() {
-    _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
     if (_portalController.isShowing) {
       _portalController.hide();
     }
     super.dispose();
-  }
-
-  void _syncSurfaceRegistration() {
-    final AxiSurfaceController? surfaceController =
-        AxiSurfaceScope.maybeControllerOf(context);
-    if (_registeredSurfaceController != null &&
-        _registeredSurfaceController != surfaceController) {
-      _registeredSurfaceController!.unregisterSurface(_surfaceOwner);
-      _registeredSurfaceController = null;
-    }
-    if (surfaceController == null || !_portalController.isShowing) {
-      _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
-      _registeredSurfaceController = null;
-      return;
-    }
-    surfaceController.registerSurface(
-      owner: _surfaceOwner,
-      onDismiss: _removeOverlay,
-    );
-    _registeredSurfaceController = surfaceController;
   }
 
   @override
@@ -1277,7 +1261,7 @@ class _DateLabelState extends State<_DateLabel> {
       return;
     }
     _portalController.show();
-    _syncSurfaceRegistration();
+    syncAxiSurfaceRegistration();
     if (mounted) {
       setState(() {});
     }
@@ -1346,7 +1330,7 @@ class _DateLabelState extends State<_DateLabel> {
       return;
     }
     _portalController.hide();
-    _syncSurfaceRegistration();
+    syncAxiSurfaceRegistration();
     if (mounted) {
       setState(() {});
     }
