@@ -924,7 +924,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatPinnedMissingMessage => 'Le message épinglé est indisponible.';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet.';
+  String get importantMessagesEmpty => 'No important messages yet';
 
   @override
   String get chatSendMessageTooltip => 'Envoyer le message';

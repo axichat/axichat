@@ -1708,7 +1708,7 @@ abstract class AppLocalizations {
   /// No description provided for @importantMessagesEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No important messages yet.'**
+  /// **'No important messages yet'**
   String get importantMessagesEmpty;
 
   /// No description provided for @chatSendMessageTooltip.

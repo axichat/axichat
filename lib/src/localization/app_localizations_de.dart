@@ -925,7 +925,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Angeheftete Nachricht ist nicht verfügbar.';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet.';
+  String get importantMessagesEmpty => 'No important messages yet';
 
   @override
   String get chatSendMessageTooltip => 'Nachricht senden';

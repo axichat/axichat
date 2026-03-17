@@ -868,7 +868,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatPinnedMissingMessage => '置顶消息不可用。';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet.';
+  String get importantMessagesEmpty => 'No important messages yet';
 
   @override
   String get chatSendMessageTooltip => '发送消息';

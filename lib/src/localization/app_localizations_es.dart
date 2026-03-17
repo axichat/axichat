@@ -920,7 +920,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'El mensaje fijado no está disponible.';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet.';
+  String get importantMessagesEmpty => 'No important messages yet';
 
   @override
   String get chatSendMessageTooltip => 'Enviar mensaje';

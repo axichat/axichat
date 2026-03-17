@@ -903,7 +903,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet.';
+  String get importantMessagesEmpty => 'No important messages yet';
 
   @override
   String get chatSendMessageTooltip => 'Send message';

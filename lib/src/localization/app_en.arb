@@ -386,7 +386,7 @@
   "chatUnpinMessage": "Unpin message",
   "chatPinnedEmptyState": "No pinned messages yet.",
   "chatPinnedMissingMessage": "Pinned message is unavailable.",
-  "importantMessagesEmpty": "No important messages yet.",
+  "importantMessagesEmpty": "No important messages yet",
   "chatSendMessageTooltip": "Send message",
   "chatBlockAction": "Block",
   "chatReactionMore": "More",
