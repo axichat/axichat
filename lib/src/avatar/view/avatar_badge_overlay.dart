@@ -21,21 +21,20 @@ class AvatarTransportBadgeOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sizing = context.sizing;
     final spacing = context.spacing;
     final cutoutShape = transport.isEmail
         ? CutoutShape.squircle
         : CutoutShape.circle;
-    final badgeExtent = sizing.menuItemIconSize + spacing.xxs;
-    final cutoutGap = spacing.xxs + (spacing.xxs / 2);
-    final horizontalOffset = transport.isEmail ? -1.0 : -1.0;
-    final verticalOffset = transport.isEmail ? -4.0 : 0.0;
+    final badgeExtent = context.sizing.menuItemIconSize - spacing.xxs;
+    final cutoutGap = spacing.xxs / 2;
+    final horizontalOffset = -1.0;
+    final verticalOffset = 0.0;
     final cutoutDepth = (badgeExtent / 2) + cutoutGap - verticalOffset;
-    final cutoutThickness = badgeExtent + (cutoutGap * 2);
+    final cutoutThickness = badgeExtent;
     final cutoutCornerRadius = transport.isEmail
-        ? context.radii.squircleSm
-        : badgeExtent / 2;
-    final cutoutInset = spacing.xxs;
+        ? spacing.xs
+        : (badgeExtent / 2) - cutoutGap;
+    final cutoutInset = spacing.xxs + cutoutGap;
     final cutoutAlignment = Alignment(
       (1 - ((cutoutInset / size) * 2)) + ((horizontalOffset / size) * 2),
       1,
@@ -75,17 +74,21 @@ class _AvatarTransportBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final iconData = transport.isEmail
         ? LucideIcons.mail
         : LucideIcons.messageCircle;
+    final icon = Icon(
+      iconData,
+      size: size - spacing.xxs,
+      color: colors.foreground,
+    );
     return SizedBox.square(
       dimension: size,
       child: Center(
-        child: Icon(
-          iconData,
-          size: context.sizing.menuItemIconSize,
-          color: colors.foreground,
-        ),
+        child: transport.isEmail
+            ? Transform.translate(offset: const Offset(0, -1), child: icon)
+            : icon,
       ),
     );
   }
