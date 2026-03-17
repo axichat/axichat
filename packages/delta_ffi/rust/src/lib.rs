@@ -13,16 +13,16 @@ use tokio::runtime::Runtime;
 
 const _mime_headers_query: &str =
     "SELECT mime_headers, mime_compressed FROM msgs WHERE id=?";
-const _mime_headers_column_headers: usize = 0;
-const _mime_headers_column_compressed: usize = 1;
-const _brotli_buffer_size: usize = 4096;
-const _null_byte: u8 = 0;
+const MIME_HEADERS_COLUMN_HEADERS: usize = 0;
+const MIME_HEADERS_COLUMN_COMPRESSED: usize = 1;
+const BROTLI_BUFFER_SIZE: usize = 4096;
+const NULL_BYTE: u8 = 0;
 
-static _runtime: LazyLock<Runtime> =
+static _RUNTIME: LazyLock<Runtime> =
     LazyLock::new(|| Runtime::new().expect("failed to create tokio runtime"));
 
 fn _block_on<T>(future: impl std::future::Future<Output = T>) -> T {
-    _runtime.block_on(future)
+    _RUNTIME.block_on(future)
 }
 
 fn _read_mime_headers(context: &Context, msg_id: MsgId) -> Option<Vec<u8>> {
@@ -31,8 +31,8 @@ fn _read_mime_headers(context: &Context, msg_id: MsgId) -> Option<Vec<u8>> {
         _mime_headers_query,
         (msg_id,),
         |row| {
-            let headers = sql::row_get_vec(row, _mime_headers_column_headers)?;
-            let compressed: Option<bool> = row.get(_mime_headers_column_compressed)?;
+            let headers = sql::row_get_vec(row, MIME_HEADERS_COLUMN_HEADERS)?;
+            let compressed: Option<bool> = row.get(MIME_HEADERS_COLUMN_COMPRESSED)?;
             Ok((headers, compressed.unwrap_or(false)))
         },
     ))
@@ -51,7 +51,7 @@ fn _decompress_headers(compressed: &[u8]) -> Option<Vec<u8>> {
     if compressed.is_empty() {
         return None;
     }
-    let mut decompressor = DecompressorWriter::new(Vec::new(), _brotli_buffer_size);
+    let mut decompressor = DecompressorWriter::new(Vec::new(), BROTLI_BUFFER_SIZE);
     if decompressor.write_all(compressed).is_err() {
         return None;
     }
@@ -69,7 +69,7 @@ fn _headers_to_c_string(headers: &[u8]) -> *mut std::os::raw::c_char {
     let sanitized: Vec<u8> = headers
         .iter()
         .copied()
-        .filter(|byte| *byte != _null_byte)
+        .filter(|byte| *byte != NULL_BYTE)
         .collect();
     let decoded = String::from_utf8_lossy(&sanitized).to_string();
     CString::new(decoded)

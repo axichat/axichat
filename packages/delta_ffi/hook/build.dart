@@ -20,12 +20,14 @@ Future<void> main(List<String> args) async {
     final crateDir = packageRoot.resolve('rust/');
     final targetTriple =
         _rustTargetTriple(codeConfig.targetOS, codeConfig.targetArchitecture);
-    final isRelease = _isReleaseBuild(input);
+    final resolvedMode = _resolveBuildMode(input, args);
+    final isRelease = _isReleaseMode(resolvedMode.name);
     final cargoTargetDir = input.outputDirectory.resolve('cargo-target/');
+    final isVerboseBuild = _isVerboseBuild();
 
     final buildArgs = [
       'build',
-      '-vv',
+      if (isVerboseBuild) '-v' else '--quiet',
       '--manifest-path',
       crateDir.resolve('Cargo.toml').toFilePath(),
       '--target',
@@ -44,6 +46,9 @@ Future<void> main(List<String> args) async {
     final linkerEnvKey = 'CARGO_TARGET_${tripleKeyCargo}_LINKER';
     stdout.writeln(
         '[delta_ffi] Target: $targetTriple (${codeConfig.targetOS.name}/${codeConfig.targetArchitecture.name})');
+    stdout.writeln(
+      '[delta_ffi] Resolved build mode: ${resolvedMode.name} (source: ${resolvedMode.source})',
+    );
     stdout.writeln(
         '[delta_ffi][warning] Using linker: ${environment[linkerEnvKey] ?? 'default'}');
     stdout.writeln(
@@ -68,13 +73,14 @@ Future<void> main(List<String> args) async {
       stderr,
     );
     final stopwatch = Stopwatch()..start();
-    final heartbeat = Timer.periodic(const Duration(seconds: 15), (_) {
-      stdout.writeln(
-        '[delta_ffi] Cargo still running after ${stopwatch.elapsed}.',
-      );
-    });
+    final heartbeat =
+        isVerboseBuild ? Timer.periodic(const Duration(seconds: 15), (_) {
+          stdout.writeln(
+            '[delta_ffi] Cargo still running after ${stopwatch.elapsed}.',
+          );
+        }) : null;
     final exitCode = await process.exitCode;
-    heartbeat.cancel();
+    heartbeat?.cancel();
     stopwatch.stop();
     final capturedStdout = await stdoutOutput;
     final capturedStderr = await stderrOutput;
@@ -394,23 +400,229 @@ String? _androidNdkToolchainBinDirectory() {
   return null;
 }
 
-bool _isReleaseBuild(hooks.BuildInput input) {
+_BuildModeSelection _resolveBuildMode(hooks.BuildInput input, List<String> args) {
+  final argMode = _buildModeFromArgs(args);
+  if (argMode != null) {
+    return _BuildModeSelection(name: argMode, source: 'command line');
+  }
+
+  final userDefinesMode = _buildModeFromUserDefines(input);
+  if (userDefinesMode != null) {
+    return _BuildModeSelection(name: userDefinesMode, source: 'user defines');
+  }
+
+  final environmentMode = _buildModeFromEnvironment();
+  if (environmentMode != null) {
+    return _BuildModeSelection(name: environmentMode, source: 'environment');
+  }
+
+  final configJsonMode = _buildModeFromConfigJson(input.config.json);
+  if (configJsonMode != null) {
+    return _BuildModeSelection(name: configJsonMode, source: 'hook config json');
+  }
+
+  final configMode = _buildModeName(input.config);
+  if (configMode != null) {
+    return _BuildModeSelection(name: configMode, source: 'hooks build input');
+  }
+
+  return const _BuildModeSelection(name: 'debug', source: 'default');
+}
+
+String? _buildModeFromArgs(List<String> args) {
+  for (var i = 0; i < args.length; i++) {
+    final arg = args[i];
+    switch (arg) {
+      case '--release':
+      case '--release=true':
+        return 'release';
+      case '--release=false':
+        return null;
+      case '--debug':
+        return 'debug';
+      case '--profile':
+        if (i + 1 < args.length) {
+          final next = args[i + 1].trim().toLowerCase();
+          if (_isKnownMode(next)) {
+            return next;
+          }
+        }
+        return 'profile';
+      case '--build-mode':
+      case '--mode':
+      case '--flutter-build-mode':
+        if (i + 1 < args.length) {
+          final value = args[i + 1].trim().toLowerCase();
+          if (_isKnownMode(value)) {
+            return value;
+          }
+        }
+    }
+
+    if (arg.startsWith('--build-mode=')) {
+      final value = arg.substring('--build-mode='.length).trim().toLowerCase();
+      if (_isKnownMode(value)) {
+        return value;
+      }
+    }
+    if (arg.startsWith('--mode=')) {
+      final value = arg.substring('--mode='.length).trim().toLowerCase();
+      if (_isKnownMode(value)) {
+        return value;
+      }
+    }
+    if (arg.startsWith('--flutter-build-mode=')) {
+      final value =
+          arg.substring('--flutter-build-mode='.length).trim().toLowerCase();
+      if (_isKnownMode(value)) {
+        return value;
+      }
+    }
+    if (arg.startsWith('--profile=')) {
+      final value = arg.substring('--profile='.length).trim().toLowerCase();
+      if (_isKnownMode(value)) {
+        return value;
+      }
+      return 'profile';
+    }
+    if (arg.startsWith('--release=')) {
+      final value = arg.substring('--release='.length).trim().toLowerCase();
+      if (_isKnownMode(value)) {
+        return value;
+      }
+      return 'release';
+    }
+  }
+
+  return null;
+}
+
+String? _buildModeFromUserDefines(hooks.BuildInput input) {
+  try {
+    final dynamic dynamicInput = input;
+    final dynamic rawUserDefines = dynamicInput.userDefines;
+    if (rawUserDefines is Map) {
+      final userDefines = <String, Object?>{};
+      for (final entry in rawUserDefines.entries) {
+        if (entry.key is String) {
+          userDefines[entry.key as String] = entry.value;
+        }
+      }
+      final modeFromUserDefines = _buildModeFromConfigJson(userDefines);
+      if (modeFromUserDefines != null) {
+        return modeFromUserDefines;
+      }
+    }
+  } catch (_) {
+    // Ignore absence/incompatibility of user-defines.
+  }
+
+  return null;
+}
+
+String? _buildModeFromConfigJson(Map<String, Object?> value) {
+  const modeKeys = {'build_mode', 'buildmode', 'build-mode', 'mode'};
+
+  Object? raw = _lookupConfigValue(
+    value,
+    (key, _) => modeKeys.contains(key),
+  );
+  if (raw is String) {
+    final normalized = raw.toLowerCase();
+    if (_isKnownMode(normalized)) {
+      return normalized;
+    }
+  }
+
+  final nested = _lookupConfigValue(value, (key, _) {
+    return !key.startsWith('_') &&
+        key.endsWith('mode') &&
+        key != 'mode_key';
+  });
+  if (nested is String) {
+    final normalized = nested.toLowerCase();
+    if (_isKnownMode(normalized)) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+Object? _lookupConfigValue(
+  Map<String, Object?> config,
+  bool Function(String key, Object? value) matches,
+) {
+  for (final entry in config.entries) {
+    final key = entry.key.toLowerCase();
+    if (matches(key, entry.value)) {
+      return entry.value;
+    }
+  }
+
+  for (final entry in config.entries) {
+    final value = entry.value;
+    if (value is Map<String, Object?>) {
+      final nested = _lookupConfigValue(value, matches);
+      if (nested != null) {
+        return nested;
+      }
+    } else if (value is List<Object?>) {
+      for (final item in value) {
+        if (item is Map<String, Object?>) {
+          final nested = _lookupConfigValue(item, matches);
+          if (nested != null) {
+            return nested;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+bool _isKnownMode(String value) {
+  return value == 'debug' || value == 'release' || value == 'profile';
+}
+
+bool _isVerboseBuild() {
+  final raw = Platform.environment['DELTA_FFI_VERBOSE_BUILD'];
+  if (raw == null || raw.isEmpty) {
+    return false;
+  }
+  switch (raw.toLowerCase()) {
+    case '1':
+    case 'true':
+    case 'yes':
+    case 'on':
+      return true;
+    default:
+      return false;
+  }
+}
+
+String? _buildModeFromEnvironment() {
+  for (final key in const [
+    'FLUTTER_BUILD_MODE',
+    'BUILD_MODE',
+    'CONFIGURATION',
+  ]) {
+    final value = Platform.environment[key];
+    if (value != null && value.isNotEmpty) {
+      final normalized = value.trim().toLowerCase();
+      if (_isKnownMode(normalized)) {
+        return normalized;
+      }
+    }
+  }
+
+  return null;
+}
+
+bool _isReleaseMode(String modeName) {
   const releaseNames = {'release', 'profile'};
-  final config = input.config;
-  final modeName = _buildModeName(config);
-  if (modeName != null && releaseNames.contains(modeName)) {
-    return true;
-  }
-
-  final environmentMode = Platform.environment['FLUTTER_BUILD_MODE'] ??
-      Platform.environment['BUILD_MODE'] ??
-      Platform.environment['CONFIGURATION'];
-  if (environmentMode != null &&
-      releaseNames.contains(environmentMode.toLowerCase())) {
-    return true;
-  }
-
-  return false;
+  return releaseNames.contains(modeName.toLowerCase());
 }
 
 String? _buildModeName(Object config) {
@@ -441,4 +653,11 @@ String? _buildModeName(Object config) {
   }
 
   return null;
+}
+
+class _BuildModeSelection {
+  const _BuildModeSelection({required this.name, required this.source});
+
+  final String name;
+  final String source;
 }
