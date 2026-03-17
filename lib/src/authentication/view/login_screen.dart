@@ -571,11 +571,20 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ),
                         ),
-                        secondaryChild: DecoratedBox(
-                          decoration: BoxDecoration(
-                            border: Border(left: borderSide),
-                          ),
-                          child: const GuestCalendarWidget(),
+                        secondaryChild: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            const GuestCalendarWidget(),
+                            IgnorePointer(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Container(
+                                  width: borderSide.width,
+                                  color: borderSide.color,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
