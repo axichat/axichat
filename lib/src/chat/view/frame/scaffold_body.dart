@@ -668,11 +668,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                         growable: false,
                       );
                       final canReact =
-                          !isEmailChat &&
-                          (state.xmppCapabilities?.supportsFeature(
-                                mox.messageReactionsXmlns,
-                              ) ??
-                              false);
+                          !isEmailChat && owner._reactionsEnabledForChat(state);
                       composerOverlayBanner = _MessageSelectionToolbar(
                         count: targets.length,
                         onClear: owner._clearMultiSelection,

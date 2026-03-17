@@ -190,6 +190,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   LinkTapCallback? _onLinkLongPress;
 
+  double get _detailRowVerticalOffset => 1.0;
+
   set onLinkLongPress(LinkTapCallback? value) {
     _onLinkLongPress = value;
     if (value == null) {
@@ -540,7 +542,11 @@ class DynamicInlineTextRenderObject extends RenderBox {
       final verticalInset = (detailHeight - textHeight) / 2;
       final opticalOffset =
           textHeight * (_detailOpticalOffsetFactors[i] ?? 0.0);
-      final textTop = detailBaselineY - detailBaseline + opticalOffset;
+      final textTop =
+          detailBaselineY -
+          detailBaseline +
+          opticalOffset +
+          _detailRowVerticalOffset;
       final backgroundTop = textTop - verticalInset;
       if (action != null) {
         final backgroundRect = Rect.fromLTWH(
@@ -603,7 +609,11 @@ class DynamicInlineTextRenderObject extends RenderBox {
         final verticalInset = (detailHeight - textHeight) / 2;
         final opticalOffset =
             textHeight * (_detailOpticalOffsetFactors[i] ?? 0.0);
-        final textTop = detailBaselineY - detailBaseline + opticalOffset;
+        final textTop =
+            detailBaselineY -
+            detailBaseline +
+            opticalOffset +
+            _detailRowVerticalOffset;
         final backgroundTop = textTop - verticalInset;
         final rect = Rect.fromLTWH(
           dx,

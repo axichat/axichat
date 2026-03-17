@@ -483,7 +483,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   })
   _computeSuggestionPools() {
     final allowAddressTargets = widget.allowAddressTargets;
+    final hiddenAddresses = widget.availableChats
+        .where((chat) => chat.hidden)
+        .expand((chat) => chat.identityAddresses)
+        .map(_normalizeAddress)
+        .whereType<String>()
+        .toSet();
     final availableChats = widget.availableChats
+        .where((chat) => !chat.hidden)
         .where((chat) => !chat.isAxichatWelcomeThread)
         .toList(growable: false);
     final recipients = widget.recipients;
@@ -506,6 +513,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         if (_isRoomNick(address)) return;
         if (_isOwnAddress(address)) return;
         if (_isWelcomeThreadAddress(address)) return;
+        final normalized = _normalizeAddress(address);
+        if (normalized != null && hiddenAddresses.contains(normalized)) return;
         final domain = _extractDomain(address);
         if (domain != null) {
           domains.add(domain);
@@ -531,13 +540,20 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
       final addresses = <String>{}
         ..addAll(widget.suggestionAddresses)
-        ..addAll(_databaseSuggestionAddresses);
+        ..addAll(
+          _databaseSuggestionAddresses.where((address) {
+            final normalized = _normalizeAddress(address);
+            return normalized == null || !hiddenAddresses.contains(normalized);
+          }),
+        );
       void addAddress(String? raw) {
         final value = raw?.trim();
         if (value == null || value.isEmpty) return;
         if (_isRoomNick(value)) return;
         if (_isOwnAddress(value)) return;
         if (_isWelcomeThreadAddress(value)) return;
+        final normalized = _normalizeAddress(value);
+        if (normalized != null && hiddenAddresses.contains(normalized)) return;
         addresses.add(value);
       }
 
@@ -1654,6 +1670,8 @@ final class _RecipientAutocompleteOverlayState
   static const double _suggestionMaxHeight = 360;
   static const double _suggestionTileHeight = 64;
 
+  final GlobalKey _triggerKey = GlobalKey();
+  final LayerLink _layerLink = LayerLink();
   final OverlayPortalController _portalController = OverlayPortalController();
 
   List<Contact> _options = const <Contact>[];
@@ -1671,11 +1689,16 @@ final class _RecipientAutocompleteOverlayState
     if (_portalController.isShowing) {
       return;
     }
-    _portalController.show();
-    syncAxiSurfaceRegistration();
-    if (mounted) {
-      setState(() {});
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _portalController.isShowing) {
+        return;
+      }
+      _portalController.show();
+      syncAxiSurfaceRegistration();
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   void _hideOverlayPortal() {
@@ -1747,11 +1770,16 @@ final class _RecipientAutocompleteOverlayState
     super.dispose();
   }
 
-  _AutocompleteOverlayLimits _overlayLimits({
-    required BuildContext overlayContext,
-    required Rect anchorRect,
-    required Size overlaySize,
-  }) {
+  _AutocompleteOverlayLimits _overlayLimits(BuildContext overlayContext) {
+    final triggerBox =
+        _triggerKey.currentContext?.findRenderObject() as RenderBox?;
+    final triggerSize = triggerBox?.size ?? Size.zero;
+    final overlayBox =
+        Overlay.of(overlayContext).context.findRenderObject() as RenderBox?;
+    final triggerOrigin = triggerBox != null && overlayBox != null
+        ? triggerBox.localToGlobal(Offset.zero, ancestor: overlayBox)
+        : (triggerBox?.localToGlobal(Offset.zero) ?? Offset.zero);
+
     final view = View.of(overlayContext);
     final viewPadding = EdgeInsets.fromViewPadding(
       view.padding,
@@ -1763,9 +1791,7 @@ final class _RecipientAutocompleteOverlayState
     );
     final fallbackScreenSize = view.physicalSize / view.devicePixelRatio;
 
-    final screenSize = overlaySize == Size.zero
-        ? fallbackScreenSize
-        : overlaySize;
+    final screenSize = overlayBox?.size ?? fallbackScreenSize;
     final topSafe = viewPadding.top;
     final bottomSafe = viewPadding.bottom;
     final keyboardInset = viewInsets.bottom;
@@ -1776,8 +1802,11 @@ final class _RecipientAutocompleteOverlayState
       _options.length * _suggestionTileHeight,
     );
     final belowSpace =
-        visibleHeight - anchorRect.bottom - bottomSafe - _overlayMargin;
-    final aboveSpace = anchorRect.top - topSafe - _overlayMargin;
+        visibleHeight -
+        (triggerOrigin.dy + triggerSize.height) -
+        bottomSafe -
+        _overlayMargin;
+    final aboveSpace = triggerOrigin.dy - topSafe - _overlayMargin;
 
     final normalizedBelow = math.max(0.0, belowSpace);
     final normalizedAbove = math.max(0.0, aboveSpace);
@@ -1794,10 +1823,14 @@ final class _RecipientAutocompleteOverlayState
     final maxWidth = math.min(_overlayPreferredMaxWidth, maxAllowedWidth);
     final minWidth = math.min(_overlayPreferredMinWidth, maxWidth);
 
+    final verticalOffset = placeBelow
+        ? triggerSize.height + _overlayGap
+        : -(maxHeight + _overlayGap);
+
     return _AutocompleteOverlayLimits(
-      anchorRect: anchorRect,
+      triggerOrigin: triggerOrigin,
       screenWidth: screenSize.width,
-      placeBelow: placeBelow,
+      verticalOffset: verticalOffset,
       maxHeight: maxHeight,
       minWidth: minWidth,
       maxWidth: maxWidth,
@@ -1873,16 +1906,16 @@ final class _RecipientAutocompleteOverlayState
     required double width,
   }) {
     double horizontalOffset = 0;
-    final rightEdge = limits.anchorRect.left + width;
+    final rightEdge = limits.triggerOrigin.dx + width;
     final maxRight = limits.screenWidth - _overlayHorizontalMargin;
     if (rightEdge > maxRight) {
       horizontalOffset = maxRight - rightEdge;
     }
-    final adjustedLeft = limits.anchorRect.left + horizontalOffset;
+    final adjustedLeft = limits.triggerOrigin.dx + horizontalOffset;
     if (adjustedLeft < _overlayHorizontalMargin) {
       horizontalOffset += _overlayHorizontalMargin - adjustedLeft;
     }
-    return Offset(horizontalOffset, 0);
+    return Offset(horizontalOffset, limits.verticalOffset);
   }
 
   void _dismissOverlay() {
@@ -1903,206 +1936,200 @@ final class _RecipientAutocompleteOverlayState
     final colors = context.colorScheme;
     final hintColor = colors.mutedForeground.withValues(alpha: 0.8);
     final textStyle = context.textTheme.p;
-    final Widget child = OverlayPortal.overlayChildLayoutBuilder(
-      controller: _portalController,
-      overlayChildBuilder: (overlayContext, info) {
-        if (_options.isEmpty || !widget.focusNode.hasFocus) {
-          return const SizedBox.shrink();
-        }
+    final Widget child = CompositedTransformTarget(
+      link: _layerLink,
+      child: OverlayPortal(
+        controller: _portalController,
+        overlayChildBuilder: (overlayContext) {
+          if (_options.isEmpty || !widget.focusNode.hasFocus) {
+            return const SizedBox.shrink();
+          }
 
-        final Rect anchorRect = MatrixUtils.transformRect(
-          info.childPaintTransform,
-          Offset.zero & info.childSize,
-        );
-        final limits = _overlayLimits(
-          overlayContext: overlayContext,
-          anchorRect: anchorRect,
-          overlaySize: info.overlaySize,
-        );
-        if (limits.maxHeight <= 0) {
-          return const SizedBox.shrink();
-        }
+          final limits = _overlayLimits(overlayContext);
+          if (limits.maxHeight <= 0) {
+            return const SizedBox.shrink();
+          }
 
-        final overlayColors = overlayContext.colorScheme;
-        final overlayTextTheme = overlayContext.textTheme;
-        final overlayRadius = BorderRadius.circular(20);
-        final titleStyle = overlayTextTheme.p.copyWith(
-          fontWeight: FontWeight.w600,
-          color: overlayColors.foreground,
-        );
-        final subtitleStyle = overlayTextTheme.small.copyWith(
-          color: overlayColors.mutedForeground,
-        );
-        final dividerColor = overlayColors.border.withValues(alpha: 0.55);
-        final hoverColor = overlayColors.muted.withValues(alpha: 0.08);
-        final highlightColor = overlayColors.primary.withValues(alpha: 0.12);
-        final trailingIconColor = overlayColors.muted.withValues(alpha: 0.9);
-        final overlayWidth = _computeOverlayWidth(
-          overlayContext: overlayContext,
-          limits: limits,
-          titleStyle: titleStyle,
-          subtitleStyle: subtitleStyle,
-        );
-        final overlayOffset = _overlayOffsetForWidth(
-          limits: limits,
-          width: overlayWidth,
-        );
-        final double maxLeft = math.max(
-          _overlayHorizontalMargin,
-          info.overlaySize.width - overlayWidth - _overlayHorizontalMargin,
-        );
-        final double left = (anchorRect.left + overlayOffset.dx).clamp(
-          _overlayHorizontalMargin,
-          maxLeft,
-        );
-        final double? top = limits.placeBelow
-            ? anchorRect.bottom + _overlayGap
-            : null;
-        final double? bottom = limits.placeBelow
-            ? null
-            : info.overlaySize.height - anchorRect.top + _overlayGap;
+          final overlayColors = overlayContext.colorScheme;
+          final overlayTextTheme = overlayContext.textTheme;
+          final overlayRadius = BorderRadius.circular(20);
+          final titleStyle = overlayTextTheme.p.copyWith(
+            fontWeight: FontWeight.w600,
+            color: overlayColors.foreground,
+          );
+          final subtitleStyle = overlayTextTheme.small.copyWith(
+            color: overlayColors.mutedForeground,
+          );
+          final dividerColor = overlayColors.border.withValues(alpha: 0.55);
+          final hoverColor = overlayColors.muted.withValues(alpha: 0.08);
+          final highlightColor = overlayColors.primary.withValues(alpha: 0.12);
+          final trailingIconColor = overlayColors.muted.withValues(alpha: 0.9);
+          final overlayWidth = _computeOverlayWidth(
+            overlayContext: overlayContext,
+            limits: limits,
+            titleStyle: titleStyle,
+            subtitleStyle: subtitleStyle,
+          );
+          final overlayOffset = _overlayOffsetForWidth(
+            limits: limits,
+            width: overlayWidth,
+          );
 
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _handleOutsideTap,
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: _handleOutsideTap,
+                ),
               ),
-            ),
-            Positioned(
-              left: left,
-              top: top,
-              bottom: bottom,
-              width: overlayWidth,
-              child: TapRegion(
-                groupId: widget.tapRegionGroup,
-                onTapOutside: (_) => _handleOutsideTap(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: limits.minWidth,
-                    maxWidth: limits.maxWidth,
-                    maxHeight: limits.maxHeight,
-                  ),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: overlayColors.card,
-                      borderRadius: overlayRadius,
-                      border: Border.all(
-                        color: overlayColors.border.withValues(alpha: 0.9),
-                        width: 1,
+              CompositedTransformFollower(
+                link: _layerLink,
+                showWhenUnlinked: false,
+                offset: overlayOffset,
+                child: TapRegion(
+                  groupId: widget.tapRegionGroup,
+                  onTapOutside: (_) => _handleOutsideTap(),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: limits.minWidth,
+                        maxWidth: limits.maxWidth,
+                        maxHeight: limits.maxHeight,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.12),
-                          blurRadius: 28,
-                          offset: const Offset(0, 18),
+                      child: SizedBox(
+                        width: overlayWidth,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: overlayColors.card,
+                            borderRadius: overlayRadius,
+                            border: Border.all(
+                              color: overlayColors.border.withValues(
+                                alpha: 0.9,
+                              ),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 28,
+                                offset: const Offset(0, 18),
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 8,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: overlayRadius,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: ValueListenableBuilder<int?>(
+                                valueListenable:
+                                    widget.highlightedIndexListenable,
+                                builder: (context, highlightedIndex, _) {
+                                  return _AutocompleteOptionsList(
+                                    options: _options,
+                                    avatarPathsByJid: widget.avatarPathsByJid,
+                                    selfIdentity: widget.selfIdentity,
+                                    onSelected: (option) {
+                                      widget.onRecipientAdded(option);
+                                      widget.controller.clear();
+                                      _recomputeOptions();
+                                      widget.focusNode.requestFocus();
+                                    },
+                                    titleStyle: titleStyle,
+                                    subtitleStyle: subtitleStyle,
+                                    dividerColor: dividerColor,
+                                    trailingIconColor: trailingIconColor,
+                                    hoverColor: hoverColor,
+                                    highlightColor: highlightColor,
+                                    highlightedIndex: highlightedIndex,
+                                    maxHeight: limits.maxHeight,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
                         ),
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 6),
-                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+        child: TapRegion(
+          groupId: widget.tapRegionGroup,
+          onTapOutside: (_) => _handleOutsideTap(),
+          child: SizedBox(
+            key: _triggerKey,
+            height: chipsBarHeight,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.fieldOuterPadding,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: DecoratedBox(
+                  decoration: ShapeDecoration(
+                    color: widget.backgroundColor,
+                    shape: RoundedSuperellipseBorder(
+                      borderRadius: BorderRadius.circular(
+                        context.radii.squircle,
+                      ),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.fieldInnerPadding,
+                    ),
+                    child: AxiTextField(
+                      groupId: widget.tapRegionGroup,
+                      controller: widget.controller,
+                      focusNode: widget.focusNode,
+                      maxLines: 1,
+                      keyboardType: TextInputType.emailAddress,
+                      textCapitalization: TextCapitalization.none,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.email],
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(RegExp(r'\\s')),
                       ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: overlayRadius,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: ValueListenableBuilder<int?>(
-                          valueListenable: widget.highlightedIndexListenable,
-                          builder: (context, highlightedIndex, _) {
-                            return _AutocompleteOptionsList(
-                              options: _options,
-                              avatarPathsByJid: widget.avatarPathsByJid,
-                              selfIdentity: widget.selfIdentity,
-                              onSelected: (option) {
-                                widget.onRecipientAdded(option);
-                                widget.controller.clear();
-                                _dismissOverlay();
-                                widget.focusNode.requestFocus();
-                              },
-                              titleStyle: titleStyle,
-                              subtitleStyle: subtitleStyle,
-                              dividerColor: dividerColor,
-                              trailingIconColor: trailingIconColor,
-                              hoverColor: hoverColor,
-                              highlightColor: highlightColor,
-                              highlightedIndex: highlightedIndex,
-                              maxHeight: limits.maxHeight,
-                            );
-                          },
-                        ),
+                      decoration: InputDecoration(
+                        hintText: context.l10n.recipientsAddHint,
+                        hintStyle: textStyle.copyWith(color: hintColor),
+                        isDense: true,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-      child: TapRegion(
-        groupId: widget.tapRegionGroup,
-        onTapOutside: (_) => _handleOutsideTap(),
-        child: SizedBox(
-          height: chipsBarHeight,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: widget.fieldOuterPadding),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: DecoratedBox(
-                decoration: ShapeDecoration(
-                  color: widget.backgroundColor,
-                  shape: RoundedSuperellipseBorder(
-                    borderRadius: BorderRadius.circular(context.radii.squircle),
-                  ),
-                ),
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: widget.fieldInnerPadding,
-                  ),
-                  child: AxiTextField(
-                    groupId: widget.tapRegionGroup,
-                    controller: widget.controller,
-                    focusNode: widget.focusNode,
-                    maxLines: 1,
-                    keyboardType: TextInputType.emailAddress,
-                    textCapitalization: TextCapitalization.none,
-                    autocorrect: false,
-                    autofillHints: const [AutofillHints.email],
-                    inputFormatters: [
-                      FilteringTextInputFormatter.deny(RegExp(r'\\s')),
-                    ],
-                    decoration: InputDecoration(
-                      hintText: context.l10n.recipientsAddHint,
-                      hintStyle: textStyle.copyWith(color: hintColor),
-                      isDense: true,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      focusedErrorBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    style: textStyle,
-                    cursorHeight: textStyle.fontSize,
-                    textInputAction: TextInputAction.go,
-                    onEditingComplete: () => widget.focusNode.requestFocus(),
-                    textAlignVertical: TextAlignVertical.center,
-                    onSubmitted: (_) {
-                      final handled = widget.onSubmitted();
-                      if (!handled) {
-                        final trimmed = widget.controller.text.trim();
-                        if (trimmed.isNotEmpty &&
-                            widget.onManualEntry(trimmed)) {
-                          widget.controller.clear();
-                          _dismissOverlay();
+                      style: textStyle,
+                      cursorHeight: textStyle.fontSize,
+                      textInputAction: TextInputAction.go,
+                      onEditingComplete: () => widget.focusNode.requestFocus(),
+                      textAlignVertical: TextAlignVertical.center,
+                      onSubmitted: (_) {
+                        final handled = widget.onSubmitted();
+                        if (!handled) {
+                          final trimmed = widget.controller.text.trim();
+                          if (trimmed.isNotEmpty &&
+                              widget.onManualEntry(trimmed)) {
+                            widget.controller.clear();
+                            _recomputeOptions();
+                          }
                         }
-                      }
-                      widget.focusNode.requestFocus();
-                    },
+                        widget.focusNode.requestFocus();
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -2131,17 +2158,17 @@ final class _RecipientAutocompleteOverlayState
 
 final class _AutocompleteOverlayLimits {
   const _AutocompleteOverlayLimits({
-    required this.anchorRect,
+    required this.triggerOrigin,
     required this.screenWidth,
-    required this.placeBelow,
+    required this.verticalOffset,
     required this.maxHeight,
     required this.minWidth,
     required this.maxWidth,
   });
 
-  final Rect anchorRect;
+  final Offset triggerOrigin;
   final double screenWidth;
-  final bool placeBelow;
+  final double verticalOffset;
   final double maxHeight;
   final double minWidth;
   final double maxWidth;

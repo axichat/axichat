@@ -91,7 +91,7 @@ class _SenderLabelBlock extends StatelessWidget {
         Text(secondaryLabel, style: secondaryStyle, textAlign: textAlign),
     ];
     return Padding(
-      padding: EdgeInsets.only(bottom: spacing.s, left: leftInset),
+      padding: EdgeInsets.only(top: 0, bottom: spacing.xs, left: leftInset),
       child: Column(
         spacing: spacing.xxs,
         mainAxisSize: MainAxisSize.min,

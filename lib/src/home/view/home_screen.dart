@@ -903,28 +903,56 @@ class _HomeExitPopGuard extends StatelessWidget {
       valueListenable: homeNotifier,
       builder: (context, activeIndex, _) {
         final bottomNotifier = bottomNavIndex;
-        final content = BlocSelector<ChatsCubit, ChatsState, bool>(
-          selector: (state) => state.openStack.isNotEmpty,
-          builder: (context, hasOpenChatStack) {
-            final selectedBottomIndex = bottomNotifier?.value ?? 0;
-            final bool isPrimaryCalendar =
-                selectedBottomIndex == 1 || selectedBottomIndex == 2;
-            final canPop =
-                isPrimaryCalendar || hasOpenChatStack || activeIndex == 0;
-            return PopScope(
-              canPop: canPop,
-              onPopInvokedWithResult: (didPop, _) {
-                if (didPop || canPop) {
-                  return;
-                }
-                if (homeNotifier.value != 0) {
-                  homeNotifier.value = 0;
-                }
+        final content =
+            BlocSelector<
+              ChatsCubit,
+              ChatsState,
+              ({bool hasOpenChatStack, bool openChatOnPrimaryRoute})
+            >(
+              selector: (state) => (
+                hasOpenChatStack: state.openStack.isNotEmpty,
+                openChatOnPrimaryRoute:
+                    state.openStack.isNotEmpty && state.openChatRoute.isMain,
+              ),
+              builder: (context, chatNavigationState) {
+                final hasOpenChatStack = chatNavigationState.hasOpenChatStack;
+                final openChatOnPrimaryRoute =
+                    chatNavigationState.openChatOnPrimaryRoute;
+                final selectedBottomIndex = bottomNotifier?.value ?? 0;
+                final bool isPrimaryCalendar =
+                    selectedBottomIndex == 1 || selectedBottomIndex == 2;
+                final canPop =
+                    !isPrimaryCalendar &&
+                    !openChatOnPrimaryRoute &&
+                    activeIndex == 0;
+                return PopScope(
+                  canPop: canPop,
+                  onPopInvokedWithResult: (didPop, _) {
+                    if (didPop || canPop) {
+                      return;
+                    }
+                    final locate = context.read;
+                    if (openChatOnPrimaryRoute && hasOpenChatStack) {
+                      final chatsState = locate<ChatsCubit>().state;
+                      if (chatsState.openStack.skip(1).isNotEmpty) {
+                        locate<ChatsCubit>().popChat();
+                        return;
+                      }
+                      locate<ChatsCubit>().closeAllChats();
+                      return;
+                    }
+                    if (isPrimaryCalendar) {
+                      bottomNotifier?.value = 0;
+                      return;
+                    }
+                    if (homeNotifier.value != 0) {
+                      homeNotifier.value = 0;
+                    }
+                  },
+                  child: child,
+                );
               },
-              child: child,
             );
-          },
-        );
         if (bottomNotifier == null) {
           return content;
         }

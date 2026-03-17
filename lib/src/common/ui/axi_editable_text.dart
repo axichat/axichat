@@ -5476,13 +5476,16 @@ class EditableTextState extends State<EditableText>
   // Must be called after layout.
   // See https://github.com/flutter/flutter/issues/126312
   void _updateSizeAndTransform() {
+    if (!_canUpdateTextInputGeometry) {
+      return;
+    }
     final Size size = renderEditable.size;
     final Matrix4 transform = renderEditable.getTransformTo(null);
     _textInputConnection!.setEditableSizeAndTransform(size, transform);
   }
 
   void _schedulePeriodicPostFrameCallbacks([Duration? duration]) {
-    if (!_hasInputConnection) {
+    if (!_canUpdateTextInputGeometry) {
       return;
     }
     _updateSelectionRects();
@@ -5496,8 +5499,15 @@ class EditableTextState extends State<EditableText>
 
   _ScribbleCacheKey? _scribbleCacheKey;
 
+  bool get _canUpdateTextInputGeometry =>
+      mounted &&
+      _hasInputConnection &&
+      renderEditable.attached &&
+      renderEditable.hasSize;
+
   void _updateSelectionRects({bool force = false}) {
-    if (!_stylusHandwritingEnabled ||
+    if (!_canUpdateTextInputGeometry ||
+        !_stylusHandwritingEnabled ||
         defaultTargetPlatform != TargetPlatform.iOS) {
       return;
     }
@@ -5591,6 +5601,9 @@ class EditableTextState extends State<EditableText>
   //
   // See: [_updateCaretRectIfNeeded]
   void _updateComposingRectIfNeeded() {
+    if (!_canUpdateTextInputGeometry) {
+      return;
+    }
     final TextRange composingRange = _value.composing;
     assert(mounted);
     Rect? composingRect = renderEditable.getRectForComposingRange(
@@ -5619,6 +5632,9 @@ class EditableTextState extends State<EditableText>
   //
   // See: [_updateComposingRectIfNeeded]
   void _updateCaretRectIfNeeded() {
+    if (!_canUpdateTextInputGeometry) {
+      return;
+    }
     final TextSelection? selection = renderEditable.selection;
     if (selection == null || !selection.isValid) {
       return;
@@ -5639,7 +5655,7 @@ class EditableTextState extends State<EditableText>
   ///
   /// This property is typically used to notify the renderer of input gestures
   /// when [RenderEditable.ignorePointer] is true.
-  late final AxiRenderEditable renderEditable =
+  AxiRenderEditable get renderEditable =>
       _editableKey.currentContext!.findRenderObject()! as AxiRenderEditable;
 
   @override

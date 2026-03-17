@@ -593,10 +593,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 (tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds)),
           );
         });
+      } else {
+        for (final id in stanzaIds) {
+          await db.markMessageDisplayed(id, chatJid: chatJid);
+        }
+      }
+      final chat = await db.getChat(chatJid);
+      if (chat == null) {
         return;
       }
-      for (final id in stanzaIds) {
-        await db.markMessageDisplayed(id, chatJid: chatJid);
+      final selfJid = chat.defaultTransport.isEmail
+          ? state.emailSelfJid
+          : _chatsService.myJid;
+      final unreadCount = await db.countUnreadMessagesForChat(
+        chatJid,
+        selfJid: selfJid,
+      );
+      if (chat.unreadCount != unreadCount) {
+        await db.updateChat(chat.copyWith(unreadCount: unreadCount));
       }
     }
   }
@@ -691,10 +705,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _markMessagesDisplayedLocally([message]);
       return;
     }
+    await _markMessagesDisplayedLocally([message]);
     if (!emailService.hasInMemoryReconnectContext) {
       return;
     }
-    await _markMessagesDisplayedLocally([message]);
     final markedSeen = await emailService.markSeenMessages([
       message,
     ], sendReadReceipts: _settingsSnapshot.emailReadReceipts);
@@ -771,11 +785,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       return;
     }
-    if (!emailService.hasInMemoryReconnectContext) {
-      return;
-    }
     if (seenCandidates.isEmpty) {
       _lastSeenEmailSyncKey = null;
+      return;
+    }
+    await _markMessagesDisplayedLocally(seenCandidates);
+    if (!emailService.hasInMemoryReconnectContext) {
       return;
     }
     final seenSyncKey = [
@@ -792,7 +807,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       sendReadReceipts: _settingsSnapshot.emailReadReceipts,
     );
     if (markedSeen) {
-      await _markMessagesDisplayedLocally(seenCandidates);
       _lastSeenEmailSyncKey = seenSyncKey;
     }
   }

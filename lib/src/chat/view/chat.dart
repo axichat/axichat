@@ -1566,6 +1566,7 @@ class _ChatState extends State<Chat> {
     required BuildContext context,
     required List<String> attachmentIds,
     required bool hasBubbleAnchor,
+    required bool chainsIntoNextMessage,
     required bool isSelfBubble,
     required bool isEmailChat,
     required bool attachmentsBlockedForChat,
@@ -1606,7 +1607,9 @@ class _ChatState extends State<Chat> {
         () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
       );
       final hasAttachmentAbove = index > 0 || hasBubbleAnchor;
-      final hasAttachmentBelow = index < attachmentIds.length - 1;
+      final hasAttachmentBelow =
+          index < attachmentIds.length - 1 ||
+          (chainsIntoNextMessage && index == attachmentIds.length - 1);
       final attachmentShape = _attachmentSurfaceShape(
         context: context,
         isSelf: isSelfBubble,
@@ -2110,6 +2113,7 @@ class _ChatState extends State<Chat> {
           },
         ),
         shape: calendarMessageCardShape,
+        spacing: context.spacing.s,
       );
     } else if (calendarTaskIcs != null) {
       addExtra(
@@ -2132,6 +2136,7 @@ class _ChatState extends State<Chat> {
                 isShareFragment: true,
               ),
         shape: calendarMessageCardShape,
+        spacing: context.spacing.s,
       );
     } else if (displayFragment != null) {
       final fragmentCard = displayFragment.maybeMap(
@@ -2150,7 +2155,11 @@ class _ChatState extends State<Chat> {
           footerDetails: fragmentFooterDetails,
         ),
       );
-      addExtra(fragmentCard, shape: calendarMessageCardShape);
+      addExtra(
+        fragmentCard,
+        shape: calendarMessageCardShape,
+        spacing: context.spacing.s,
+      );
     }
     return (
       hideFragmentText: hideFragmentText,
@@ -2560,8 +2569,8 @@ class _ChatState extends State<Chat> {
       if (self) status,
     ];
     final detailOpticalOffsetFactors = isEmailMessage
-        ? const <int, double>{1: 0.08}
-        : const <int, double>{};
+        ? const <int, double>{0: -0.08, 1: 0.08}
+        : const <int, double>{0: -0.08};
     final surfaceDetails = <InlineSpan>[
       surfaceTime,
       surfaceTransportDetail,
@@ -2623,10 +2632,7 @@ class _ChatState extends State<Chat> {
     final recipientCutoutParticipants = timelineMessageItem.shareParticipants;
     final attachmentIds = timelineMessageItem.attachmentIds;
     final showReplyStrip = isEmailMessage && replyParticipants.isNotEmpty;
-    final canReact =
-        !isEmailChat &&
-        (state.xmppCapabilities?.supportsFeature(mox.messageReactionsXmlns) ??
-            false);
+    final canReact = !isEmailChat && _reactionsEnabledForChat(state);
     final requiresMucReference = messageModel.awaitsMucReference(
       isGroupChat: isGroupChat,
       isEmailBacked: isEmailChat,
@@ -2714,6 +2720,7 @@ class _ChatState extends State<Chat> {
     required List<InlineSpan> surfaceDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<String> attachmentIds,
+    required bool chainsIntoNextMessage,
   }) {
     final bubbleContentKey = detailId;
     final bubbleTextChildren = <Widget>[];
@@ -2829,6 +2836,7 @@ class _ChatState extends State<Chat> {
         context: context,
         attachmentIds: attachmentIds,
         hasBubbleAnchor: hasBubbleAnchor,
+        chainsIntoNextMessage: chainsIntoNextMessage,
         isSelfBubble: self,
         isEmailChat: isEmailChat,
         attachmentsBlockedForChat: attachmentsBlockedForChat,
@@ -3317,6 +3325,14 @@ class _ChatState extends State<Chat> {
       return false;
     }
     return context.read<XmppService>().demoOfflineMode;
+  }
+
+  bool _reactionsEnabledForChat(ChatState state) {
+    if (_isDemoModeActive()) {
+      return true;
+    }
+    return state.xmppCapabilities?.supportsFeature(mox.messageReactionsXmlns) ??
+        false;
   }
 
   bool _isEmailComposerWatermarkOnly({

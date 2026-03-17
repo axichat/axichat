@@ -4910,22 +4910,33 @@ class EmailService {
     if (idsByAccount.isEmpty) {
       return true;
     }
-    await _ensureReady();
-    await _applyEmailReadReceiptPreference(
-      accountIds: idsByAccount.keys,
-      enabled: sendReadReceipts,
-    );
-    var success = true;
-    for (final entry in idsByAccount.entries) {
-      final result = await _transport.markSeenMessages(
-        entry.value,
-        accountId: entry.key,
+    try {
+      await _ensureReady();
+      await _applyEmailReadReceiptPreference(
+        accountIds: idsByAccount.keys,
+        enabled: sendReadReceipts,
       );
-      if (!result) {
-        success = false;
+      var success = true;
+      for (final entry in idsByAccount.entries) {
+        final result = await _transport.markSeenMessages(
+          entry.value,
+          accountId: entry.key,
+        );
+        if (!result) {
+          success = false;
+        }
       }
+      return success;
+    } on DeltaChatException catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
+      return false;
+    } on EmailServiceStoppingException catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
+      return false;
+    } on StateError catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
+      return false;
     }
-    return success;
   }
 
   /// Returns the count of fresh (unread) messages in a chat.

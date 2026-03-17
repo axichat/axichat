@@ -242,6 +242,7 @@ class _ChatMainTimelineList extends StatelessWidget {
     required List<InlineSpan> surfaceDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<String> attachmentIds,
+    required bool chainsIntoNextMessage,
   })
   composeBubbleContent;
   final void Function(Message message) onReplyRequested;

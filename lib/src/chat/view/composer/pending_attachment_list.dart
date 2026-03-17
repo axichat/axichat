@@ -874,10 +874,13 @@ class _StatusIndicator extends StatelessWidget {
       case PendingAttachmentStatus.uploading:
         return AxiProgressIndicator(color: colors.primary);
       case PendingAttachmentStatus.queued:
-        return Icon(
-          LucideIcons.clock,
-          size: sizing.menuItemIconSize,
-          color: colors.mutedForeground,
+        return Transform.translate(
+          offset: const Offset(-1, -1),
+          child: Icon(
+            LucideIcons.clock,
+            size: sizing.menuItemIconSize,
+            color: colors.mutedForeground,
+          ),
         );
       case PendingAttachmentStatus.failed:
         return Icon(

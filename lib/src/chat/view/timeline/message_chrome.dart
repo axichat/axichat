@@ -534,6 +534,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required List<InlineSpan> surfaceDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<String> attachmentIds,
+    required bool chainsIntoNextMessage,
   })
   composeBubbleContent;
   final void Function(Message message) onReplyRequested;
@@ -689,6 +690,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       surfaceDetails: surfaceDetails,
       detailOpticalOffsetFactors: detailOpticalOffsetFactors,
       attachmentIds: attachmentIds,
+      chainsIntoNextMessage: _chatTimelineItemsShouldChain(currentItem, next),
     );
     return _ChatTimelineMessageChromeView(
       currentItem: currentItem,
@@ -1409,18 +1411,25 @@ _resolveTimelineMessageBubbleLayout({
   final bubbleExtraConstraints = BoxConstraints(maxWidth: cappedBubbleWidth);
   final nextIsTailSpacer = next is ChatTimelineTailSpacerItem;
   final isLatestBubble = next == null || nextIsTailSpacer;
-  final baseOuterBottom = isLatestBubble ? spacing.m : spacing.xxs;
+  final rowTopGap = previous == null
+      ? 0.0
+      : chainedPrev
+      ? spacing.s
+      : spacing.m;
   var extraOuterBottom = 0.0;
   if (showCompactReactions) {
-    extraOuterBottom = math.max(extraOuterBottom, reactionCutoutDepth);
+    extraOuterBottom = math.max(extraOuterBottom, spacing.s);
   }
   if (showReplyStrip || showRecipientCutout) {
     extraOuterBottom = math.max(extraOuterBottom, recipientCutoutDepth);
   }
+  if (isLatestBubble) {
+    extraOuterBottom = math.max(extraOuterBottom, spacing.m);
+  }
   final extraOuterLeft = hasAvatarSlot ? avatarOuterInset : 0.0;
   final outerPadding = EdgeInsets.only(
-    top: spacing.xxs,
-    bottom: baseOuterBottom + extraOuterBottom,
+    top: rowTopGap,
+    bottom: extraOuterBottom,
     left: spacing.s + extraOuterLeft,
     right: spacing.s,
   );
@@ -1568,6 +1577,7 @@ _resolveTimelineMessageShellData({
   required void Function(chat_models.Chat chat) onRecipientTap,
 }) {
   final self = viewData.self;
+  final chainedPrevious = _chatTimelineItemsShouldChain(currentItem, previous);
   final cutoutData = _resolveTimelineMessageCutoutData(
     context: context,
     timelineMessageItem: timelineMessageItem,
@@ -1589,9 +1599,7 @@ _resolveTimelineMessageShellData({
     onToggleQuickReactionRequested: onToggleQuickReactionRequested,
     onRecipientTap: onRecipientTap,
   );
-  final hasAvatarSlot =
-      cutoutData.hasAvatarSlot &&
-      !_chatTimelineItemsShouldChain(currentItem, previous);
+  final hasAvatarSlot = cutoutData.hasAvatarSlot;
   final (
     bubblePadding: bubblePadding,
     bubbleBorderRadius: bubbleBorderRadius,
@@ -1670,8 +1678,8 @@ _resolveTimelineMessageShellData({
     recipientOverlay: cutoutData.recipientOverlay,
     recipientStyle: cutoutData.recipientStyle,
     recipientAnchor: cutoutData.recipientAnchor,
-    avatarOverlay: cutoutData.avatarOverlay,
-    avatarStyle: cutoutData.avatarStyle,
+    avatarOverlay: chainedPrevious ? null : cutoutData.avatarOverlay,
+    avatarStyle: chainedPrevious ? null : cutoutData.avatarStyle,
     avatarAnchor: cutoutData.avatarAnchor,
     selectionOverlay: cutoutData.selectionOverlay,
     selectionStyle: cutoutData.selectionStyle,
