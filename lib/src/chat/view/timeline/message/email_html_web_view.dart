@@ -2,11 +2,14 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:convert' as convert;
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -84,7 +87,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static final WebUri _emailWebViewUri = WebUri(_emailWebViewBaseUrl);
 
   InAppWebViewController? _controller;
+  dynamic _desktopWebview;
   bool _isLoading = true;
+  bool _isOpeningDesktopWebview = false;
   String? _preparedHtmlData;
   String? _preparedHtmlInputKey;
   double? _contentHeight;
@@ -108,6 +113,19 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _refreshPreparedHtml(reload: _controller != null);
+  }
+
+  @override
+  void dispose() {
+    final desktopWebview = _desktopWebview;
+    if (desktopWebview != null) {
+      try {
+        desktopWebview.close();
+      } on Exception {
+        // Ignore close errors, especially when the window has already been closed.
+      }
+    }
+    super.dispose();
   }
 
   @override
@@ -182,7 +200,63 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       await _loadHtml();
       return;
     }
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      _isLoading = false;
+    }
     setState(() {});
+  }
+
+  Future<void> _openDesktopWebview() async {
+    final preparedHtmlData = _preparedHtmlData;
+    if (preparedHtmlData == null || _isOpeningDesktopWebview) {
+      return;
+    }
+    _isOpeningDesktopWebview = true;
+    if (mounted) {
+      setState(() {});
+    }
+
+    try {
+      final desktopWebview = await WebviewWindow.create();
+      _desktopWebview = desktopWebview;
+      final normalizedIdentifier =
+          (_preparedHtmlInputKey ?? widget.html.hashCode.toString())
+              .replaceAll(' ', '_')
+              .replaceAll(RegExp('[^a-zA-Z0-9._-]'), '_');
+      final safeIdentifier = normalizedIdentifier.length > 128
+          ? normalizedIdentifier.substring(0, 128)
+          : normalizedIdentifier;
+      final fileName = 'axichat-email-webview-$safeIdentifier.html';
+      final htmlFile = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}$fileName',
+      );
+      await htmlFile.writeAsString(
+        preparedHtmlData,
+        encoding: convert.utf8,
+      );
+      desktopWebview.onClose.whenComplete(() {
+        if (!mounted) {
+          if (identical(_desktopWebview, desktopWebview)) {
+            _desktopWebview = null;
+          }
+          return;
+        }
+        if (identical(_desktopWebview, desktopWebview)) {
+          setState(() {
+            _desktopWebview = null;
+          });
+        }
+      });
+      desktopWebview.launch(htmlFile.uri.toString());
+    } on Exception {
+      _desktopWebview = null;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isOpeningDesktopWebview = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadHtml() async {
@@ -262,6 +336,40 @@ html, body {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      final isLoading = _isLoading || _preparedHtmlData == null;
+      final isLaunching = _isOpeningDesktopWebview;
+      return SizedBox(
+        width: double.infinity,
+        height: _resolvedHeight,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: ColoredBox(
+                color: context.colorScheme.card,
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(spacing.m),
+                    child: isLoading
+                        ? const AxiProgressIndicator()
+                        : AxiButton.outline(
+                            onPressed: isLaunching ? null : _openDesktopWebview,
+                            child: Text(
+                              isLaunching
+                                  ? 'Opening email preview'
+                                  : 'Open email preview',
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
       width: double.infinity,
       height: _resolvedHeight,

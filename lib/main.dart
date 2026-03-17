@@ -21,6 +21,7 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Column, Table;
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter/services.dart';
@@ -34,8 +35,11 @@ import 'src/app.dart';
 bool withForeground = false;
 final ValueNotifier<bool> foregroundServiceActive = ValueNotifier(false);
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
+  if (runWebViewTitleBarWidget(args)) {
+    return;
+  }
   firstFrameGate.defer(binding);
   _installKeyboardGuard();
   await NetworkAvailabilityService.instance.start();
