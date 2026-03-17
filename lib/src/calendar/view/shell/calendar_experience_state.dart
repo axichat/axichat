@@ -43,6 +43,7 @@ abstract class CalendarExperienceState<
 >
     extends State<W>
     with TickerProviderStateMixin, CalendarDragTabMixin {
+  CalendarSizeClass? _previousLayoutSizeClass;
   late final TabController _mobileTabController;
   late final AnimationController _tasksTabPulseController;
   late final Animation<double> _tasksTabPulse;
@@ -56,6 +57,9 @@ abstract class CalendarExperienceState<
   final Object _calendarShellHoverToken = Object();
   CalendarTaskOffGridDragController? _offGridDragController;
   bool _calendarShellOffGridHovering = false;
+
+  @protected
+  CalendarSizeClass? get previousLayoutSizeClass => _previousLayoutSizeClass;
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -146,6 +150,7 @@ abstract class CalendarExperienceState<
           spec,
           mediaQuery,
         );
+        _onLayoutSizeClassResolved(state, sizeClass);
         final bool usesDesktopLayout = shouldUseDesktopLayout(
           sizeClass,
           mediaQuery,
@@ -762,6 +767,24 @@ abstract class CalendarExperienceState<
 
   void _handleKeyboardJumpToToday(CalendarState state) {
     calendarBloc.add(CalendarEvent.dateSelected(date: DateTime.now()));
+  }
+
+  void _onLayoutSizeClassResolved(CalendarState state, CalendarSizeClass sizeClass) {
+    final CalendarSizeClass? previousSizeClass = _previousLayoutSizeClass;
+    final bool shouldPromoteDayToWeek = switch ((previousSizeClass, sizeClass)) {
+      (CalendarSizeClass.compact, CalendarSizeClass.medium) => true,
+      (CalendarSizeClass.medium, CalendarSizeClass.expanded) => true,
+      _ => false,
+    };
+    if (shouldPromoteDayToWeek &&
+        state.viewMode == CalendarView.day &&
+        mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || calendarBloc.state.viewMode != CalendarView.day) return;
+        calendarBloc.add(const CalendarEvent.viewChanged(view: CalendarView.week));
+      });
+    }
+    _previousLayoutSizeClass = sizeClass;
   }
 
   DateTime _shiftedDate(CalendarState state, int steps) {

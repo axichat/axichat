@@ -88,10 +88,11 @@ class _ChatCalendarWidgetState
 
   @override
   void onLayoutModeResolved(CalendarState state, bool usesDesktopLayout) {
+    super.onLayoutModeResolved(state, usesDesktopLayout);
     if (usesDesktopLayout && _mobileInitialScrollSynced) {
       _mobileInitialScrollSynced = false;
     }
-    if (usesDesktopLayout) {
+    if (usesDesktopLayout && previousLayoutSizeClass != CalendarSizeClass.medium) {
       _maybeSyncDesktopInitialView(state);
       return;
     }
