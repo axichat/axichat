@@ -403,8 +403,8 @@ class _LoginScreenState extends State<LoginScreen>
                       width: double.infinity,
                       color: colors.background,
                       child: AxiAdaptiveLayout(
-                        primaryFlex: 4,
-                        secondaryFlex: 6,
+                        primaryFlex: 3,
+                        secondaryFlex: 7,
                         primaryPadding: EdgeInsets.symmetric(
                           horizontal: spacing.m,
                         ),
