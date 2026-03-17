@@ -50,9 +50,15 @@ class AxiPopover extends StatefulWidget {
   State<AxiPopover> createState() => _AxiPopoverState();
 }
 
-final class _AxiPopoverState extends State<AxiPopover> {
-  final Object _surfaceOwner = Object();
-  AxiSurfaceController? _registeredSurfaceController;
+final class _AxiPopoverState extends State<AxiPopover>
+    with AxiSurfaceRegistration<AxiPopover> {
+  @override
+  bool get isAxiSurfaceOpen =>
+      widget.controller?.isOpen ?? (widget.visible ?? false);
+
+  @override
+  VoidCallback? get onAxiSurfaceDismiss =>
+      widget.controller?.hide ?? widget.onDismiss;
 
   @override
   void initState() {
@@ -63,7 +69,7 @@ final class _AxiPopoverState extends State<AxiPopover> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncSurfaceRegistration();
+    syncAxiSurfaceRegistration();
   }
 
   @override
@@ -73,13 +79,12 @@ final class _AxiPopoverState extends State<AxiPopover> {
       oldWidget.controller?.removeListener(_handleControllerChanged);
       widget.controller?.addListener(_handleControllerChanged);
     }
-    _syncSurfaceRegistration();
+    syncAxiSurfaceRegistration();
   }
 
   @override
   void dispose() {
     widget.controller?.removeListener(_handleControllerChanged);
-    _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
     super.dispose();
   }
 
@@ -87,28 +92,8 @@ final class _AxiPopoverState extends State<AxiPopover> {
     if (!mounted) {
       return;
     }
-    _syncSurfaceRegistration();
+    syncAxiSurfaceRegistration();
     setState(() {});
-  }
-
-  void _syncSurfaceRegistration() {
-    final controller = widget.controller;
-    final onDismiss = widget.onDismiss;
-    final surfaceController = AxiSurfaceScope.maybeControllerOf(context);
-    if (_registeredSurfaceController != null &&
-        _registeredSurfaceController != surfaceController) {
-      _registeredSurfaceController!.unregisterSurface(_surfaceOwner);
-      _registeredSurfaceController = null;
-    }
-    final bool isOpen = controller?.isOpen ?? (widget.visible ?? false);
-    final VoidCallback? dismiss = controller?.hide ?? onDismiss;
-    if (!isOpen || dismiss == null || surfaceController == null) {
-      _registeredSurfaceController?.unregisterSurface(_surfaceOwner);
-      _registeredSurfaceController = null;
-      return;
-    }
-    surfaceController.registerSurface(owner: _surfaceOwner, onDismiss: dismiss);
-    _registeredSurfaceController = surfaceController;
   }
 
   @override
