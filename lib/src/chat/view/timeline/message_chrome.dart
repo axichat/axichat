@@ -1357,7 +1357,9 @@ _resolveTimelineMessageBubbleLayout({
       EdgeInsets.symmetric(vertical: selectionBubbleVerticalInset),
     );
   }
-  if (hasAvatarSlot) {
+  final chainedPrevious = _chatTimelineItemsShouldChain(currentItem, previous);
+  final showAvatarContentInset = hasAvatarSlot && !chainedPrevious;
+  if (showAvatarContentInset) {
     bubblePadding = bubblePadding.add(
       EdgeInsets.only(left: avatarContentInset + spacing.xxs),
     );
@@ -1365,7 +1367,7 @@ _resolveTimelineMessageBubbleLayout({
   final hasBubbleExtras = bubbleExtraChildren.any(
     (child) => child is _MessageExtraItem,
   );
-  final chainedPrev = _chatTimelineItemsShouldChain(currentItem, previous);
+  final chainedPrev = chainedPrevious;
   final chainedNext = _chatTimelineItemsShouldChain(currentItem, next);
   final bubbleBorderRadius = _bubbleBorderRadius(
     baseRadius: bubbleBaseRadius,

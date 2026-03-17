@@ -612,6 +612,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (chat.unreadCount != unreadCount) {
         await db.updateChat(chat.copyWith(unreadCount: unreadCount));
       }
+      var changed = false;
+      final updatedItems = state.items
+          .map((message) {
+            final originId = message.originID?.trim();
+            final shouldMarkDisplayed =
+                stanzaIds.contains(message.stanzaID) ||
+                (originId != null &&
+                    originId.isNotEmpty &&
+                    stanzaIds.contains(originId));
+            if (!shouldMarkDisplayed || message.displayed) {
+              return message;
+            }
+            changed = true;
+            return message.copyWith(displayed: true);
+          })
+          .toList(growable: false);
+      if (changed) {
+        add(_ChatMessagesUpdated(updatedItems));
+      }
     }
   }
 

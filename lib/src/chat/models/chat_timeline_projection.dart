@@ -100,7 +100,17 @@ bool looksForwardedMessage({
 Occupant? resolveRoomMessageOccupant({
   required Message message,
   required RoomState roomState,
-}) => roomState.occupantForSenderJid(message.senderJid, preferRealJid: true);
+}) {
+  final senderJid = message.senderJid.trim();
+  final occupant = roomState.occupantForSenderJid(
+    senderJid,
+    preferRealJid: true,
+  );
+  if (occupant != null) {
+    return occupant;
+  }
+  return roomState.occupantForRealJid(senderJid);
+}
 
 RoomMemberEntry? resolveRoomMemberEntryForMessage({
   required Message message,
@@ -109,11 +119,15 @@ RoomMemberEntry? resolveRoomMemberEntryForMessage({
   final senderJid = message.senderJid.trim();
   final senderNick = addressResourcePart(senderJid)?.trim();
   RoomMemberEntry? fallback;
+  final realJidMatches = <RoomMemberEntry>[];
   for (final section in sections) {
     for (final member in section.members) {
       if (member.occupant.occupantId == senderJid ||
           sameFullAddress(member.occupant.occupantId, senderJid)) {
         return member;
+      }
+      if (member.occupant.matchesRealJid(senderJid)) {
+        realJidMatches.add(member);
       }
       if (fallback == null &&
           senderNick != null &&
@@ -122,6 +136,29 @@ RoomMemberEntry? resolveRoomMemberEntryForMessage({
         fallback = member;
       }
     }
+  }
+  if (realJidMatches.isNotEmpty) {
+    if (senderNick != null && senderNick.isNotEmpty) {
+      for (final member in realJidMatches) {
+        if (member.occupant.isPresent &&
+            _sameOccupantNick(member.occupant.nick, senderNick)) {
+          return member;
+        }
+      }
+    }
+    for (final member in realJidMatches) {
+      if (member.occupant.isPresent) {
+        return member;
+      }
+    }
+    if (senderNick != null && senderNick.isNotEmpty) {
+      for (final member in realJidMatches) {
+        if (_sameOccupantNick(member.occupant.nick, senderNick)) {
+          return member;
+        }
+      }
+    }
+    return realJidMatches.first;
   }
   return fallback;
 }
