@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   charset_converter
   emoji_picker_flutter
+  flutter_inappwebview_linux
   flutter_secure_storage_linux
   sqlcipher_flutter_libs
   url_launcher_linux

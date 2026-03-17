@@ -1721,6 +1721,11 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  void _openEmailInFullView({required String messageId}) {
+    if (!mounted) return;
+    unawaited(_selectMessage(messageId));
+  }
+
   void _appendCollapsedEmailPreviewBubbleContent({
     required BuildContext context,
     required bool isSelfBubble,
@@ -1752,7 +1757,7 @@ class _ChatState extends State<Chat> {
         _MessageViewFullAction(
           self: isSelfBubble,
           label: l10n.chatMessageViewFullAction,
-          onPressed: () => unawaited(_selectMessage(messageId)),
+          onPressed: () => _openEmailInFullView(messageId: messageId),
         ),
       );
     }
@@ -1816,6 +1821,8 @@ class _ChatState extends State<Chat> {
     final shouldUseSelectedInlineEmailWebView =
         isSingleSelection && shouldRenderHtmlBody;
     final shouldShowImageGallery = hasRemoteHtmlImages && shouldRenderHtmlBody;
+    final shouldShowViewFullInMessageBubble =
+        shouldShowViewFullEmailAction && !shouldUseSelectedInlineEmailWebView;
     final (
       :details,
       :detailActions,
@@ -1844,13 +1851,12 @@ class _ChatState extends State<Chat> {
       );
     }
     if (shouldRenderHtmlBody) {
-      if (shouldShowViewFullEmailAction &&
-          !shouldUseSelectedInlineEmailWebView) {
+      if (shouldShowViewFullInMessageBubble) {
         bubbleTextChildren.add(
           _MessageViewFullAction(
             self: isSelfBubble,
             label: l10n.chatMessageViewFullAction,
-            onPressed: () => unawaited(_selectMessage(messageId)),
+            onPressed: () => _openEmailInFullView(messageId: messageId),
           ),
         );
       }
@@ -1936,7 +1942,7 @@ class _ChatState extends State<Chat> {
         _MessageViewFullAction(
           self: isSelfBubble,
           label: l10n.chatMessageViewFullAction,
-          onPressed: () => unawaited(_selectMessage(messageId)),
+          onPressed: () => _openEmailInFullView(messageId: messageId),
         ),
       );
     }

@@ -214,9 +214,17 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final messageColumnAlignment = self
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
+    final unreadIndicatorReserve = showUnreadIndicator
+        ? sizing.statusDotSize + spacing.xs
+        : 0.0;
+    final bubbleMaxWidth = (bubblePreviewWidth - unreadIndicatorReserve).clamp(
+      0.0,
+      double.infinity,
+    );
     final selectableBubble = MouseRegion(
       cursor: readOnly ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
@@ -239,7 +247,7 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
           )
         : bubbleStack;
     final bubbleWithSlack = ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: bubblePreviewWidth),
+      constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
       child: measuredBubbleStack,
     );
     final bubbleWithIndicator = isEmailMessage
