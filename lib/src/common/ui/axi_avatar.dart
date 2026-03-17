@@ -221,6 +221,11 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     return trimmed;
   }
 
+  String? get _normalizedAvatarHash {
+    final hash = widget.avatar.avatar?.hash?.trim();
+    return (hash == null || hash.isEmpty) ? null : hash;
+  }
+
   Uint8List? get _providedAvatarBytes {
     final bytes = widget.avatarBytes;
     if (bytes == null || bytes.isEmpty) {
@@ -240,10 +245,18 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     super.didUpdateWidget(oldWidget);
     final jidChanged = oldWidget.avatar.label != widget.avatar.label;
     final pathChanged = oldWidget.avatar.avatarPath != widget.avatar.avatarPath;
+    final oldAvatarHash = oldWidget.avatar.avatar?.hash?.trim();
+    final hashChanged = _normalizedAvatarHash != oldAvatarHash;
     final bytesChanged = oldWidget.avatarBytes != widget.avatarBytes;
     final loadingSettled = oldWidget.avatar.loading && !widget.avatar.loading;
-    if (jidChanged || pathChanged || bytesChanged || loadingSettled) {
-      _resolveAvatarBytes(clearStaleBytes: jidChanged || pathChanged);
+    if (jidChanged ||
+        pathChanged ||
+        hashChanged ||
+        bytesChanged ||
+        loadingSettled) {
+      _resolveAvatarBytes(
+        clearStaleBytes: jidChanged || pathChanged || hashChanged,
+      );
     }
   }
 
@@ -267,7 +280,9 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     }
 
     final xmpp = context.read<XmppService>();
-    final safeCached = xmpp.cachedSafeAvatarBytes(path);
+    final safeCached = clearStaleBytes
+        ? null
+        : xmpp.cachedSafeAvatarBytes(path);
     if (safeCached != null && safeCached.isNotEmpty) {
       setState(() {
         _resolvedAvatarBytes = safeCached;

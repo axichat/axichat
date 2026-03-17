@@ -651,7 +651,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   colorSeed: profile.jid,
                   avatar: m.Avatar.tryParseOrNull(
                     path: profile.avatarPath,
-                    hash: null,
+                    hash: profile.avatarHash,
                   ),
                   loading: profile.avatarHydrating,
                 ),

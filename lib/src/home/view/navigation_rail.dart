@@ -237,7 +237,10 @@ class _ProfileRailItem extends StatelessWidget {
           avatar: AvatarPresentation.avatar(
             label: state.jid,
             colorSeed: state.jid,
-            avatar: m.Avatar.tryParseOrNull(path: state.avatarPath, hash: null),
+            avatar: m.Avatar.tryParseOrNull(
+              path: state.avatarPath,
+              hash: state.avatarHash,
+            ),
             loading: state.avatarHydrating,
           ),
           subscription: m.Subscription.both,
