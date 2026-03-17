@@ -85,8 +85,8 @@
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/01.png">
-        <img src="metadata/en-US/images/mockups/01.png" width="100%" alt="Email conversation flow" />
+      <a href="metadata/en-US/images/mockups/03.png">
+        <img src="metadata/en-US/images/mockups/03.png" width="100%" alt="Recipient address dropdown" />
       </a>
     </td>
   </tr>
@@ -104,8 +104,8 @@
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/04.png">
-        <img src="metadata/en-US/images/mockups/04.png" width="100%" alt="Drag and drop calendar grid" />
+      <a href="metadata/en-US/images/mockups/06.png">
+        <img src="metadata/en-US/images/mockups/06.png" width="100%" alt="Home screen conversation list" />
       </a>
     </td>
   </tr>
@@ -118,13 +118,13 @@
 <table width="100%">
   <tr>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/06.png">
-        <img src="metadata/en-US/images/mockups/06.png" width="100%" alt="Home screen conversation list" />
+      <a href="metadata/en-US/images/mockups/04.png">
+        <img src="metadata/en-US/images/mockups/04.png" width="100%" alt="Drag and drop calendar grid" />
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/03.png">
-        <img src="metadata/en-US/images/mockups/03.png" width="100%" alt="Recipient address dropdown" />
+      <a href="metadata/en-US/images/mockups/01.png">
+        <img src="metadata/en-US/images/mockups/01.png" width="100%" alt="Email conversation flow" />
       </a>
     </td>
   </tr>
