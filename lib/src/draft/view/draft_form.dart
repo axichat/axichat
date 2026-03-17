@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/task/task_share_formatter.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';
@@ -1546,14 +1547,53 @@ class _DraftTaskDropRegion extends StatefulWidget {
 class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
   CalendarDragPayload? _hoverPayload;
   Offset? _localPosition;
+  final Object _composeTaskDragHoverToken = Object();
+  CalendarTaskOffGridDragController? _offGridDragController;
 
   RenderBox? get _box => context.findRenderObject() as RenderBox?;
+
+  void _setComposeTaskDragHover(bool isHovering) {
+    final CalendarTaskOffGridDragController? offGridDragController =
+        _offGridDragController;
+    if (offGridDragController == null) {
+      return;
+    }
+    offGridDragController.setRegionActive(
+      region: CalendarTaskOffGridDragRegion.composeWindow,
+      token: _composeTaskDragHoverToken,
+      isActive: isHovering,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final CalendarTaskOffGridDragController offGridDragController = context
+        .read<CalendarTaskOffGridDragController>();
+    if (_offGridDragController == offGridDragController) {
+      return;
+    }
+    _offGridDragController?.setRegionActive(
+      region: CalendarTaskOffGridDragRegion.composeWindow,
+      token: _composeTaskDragHoverToken,
+      isActive: false,
+    );
+    _offGridDragController = offGridDragController;
+    if (_hoverPayload != null) {
+      _offGridDragController?.setRegionActive(
+        region: CalendarTaskOffGridDragRegion.composeWindow,
+        token: _composeTaskDragHoverToken,
+        isActive: true,
+      );
+    }
+  }
 
   void _updateHover(DragTargetDetails<CalendarDragPayload> details) {
     final RenderBox? box = _box;
     final Offset local = box != null
         ? box.globalToLocal(details.offset)
         : details.offset;
+    _setComposeTaskDragHover(true);
     setState(() {
       _hoverPayload = details.data;
       _localPosition = local;
@@ -1564,6 +1604,7 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
     if (_hoverPayload == null) {
       return;
     }
+    _setComposeTaskDragHover(false);
     setState(() {
       _hoverPayload = null;
       _localPosition = null;
@@ -1573,6 +1614,12 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
   void _handleDrop(DragTargetDetails<CalendarDragPayload> details) {
     widget.onTaskDropped?.call(details.data);
     _handleLeave(details.data);
+  }
+
+  @override
+  void dispose() {
+    _setComposeTaskDragHover(false);
+    super.dispose();
   }
 
   @override

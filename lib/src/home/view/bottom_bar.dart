@@ -256,8 +256,14 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   final GlobalKey _bottomNavBarKey = GlobalKey(
     debugLabel: 'home-bottom-nav-bar',
   );
+  final GlobalKey _cancelBucketKey = GlobalKey(
+    debugLabel: 'home-bottom-nav-cancel-bucket',
+  );
   Timer? _calendarDragSwitchTimer;
   int? _hoveredCalendarTargetTab;
+  bool _cancelBucketHovering = false;
+  final Object _bottomBarDragHoverToken = Object();
+  CalendarTaskOffGridDragController? _offGridDragController;
 
   @override
   void initState() {
@@ -268,6 +274,23 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final CalendarTaskOffGridDragController offGridDragController = context
+        .read<CalendarTaskOffGridDragController>();
+    if (_offGridDragController != offGridDragController) {
+      _offGridDragController?.setRegionActive(
+        region: CalendarTaskOffGridDragRegion.compactBottomBar,
+        token: _bottomBarDragHoverToken,
+        isActive: false,
+      );
+      _offGridDragController = offGridDragController;
+      if (_cancelBucketHovering) {
+        _offGridDragController?.setRegionActive(
+          region: CalendarTaskOffGridDragRegion.compactBottomBar,
+          token: _bottomBarDragHoverToken,
+          isActive: true,
+        );
+      }
+    }
     _handleCalendarDragSignal();
   }
 
@@ -288,7 +311,16 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   void dispose() {
     widget.calendarBottomDragSession.removeListener(_handleCalendarDragSignal);
     _cancelCalendarDragSwitchTimer();
+    _setBottomDragHovering(false);
     super.dispose();
+  }
+
+  void _setBottomDragHovering(bool isHovering) {
+    _offGridDragController?.setRegionActive(
+      region: CalendarTaskOffGridDragRegion.compactBottomBar,
+      token: _bottomBarDragHoverToken,
+      isActive: isHovering,
+    );
   }
 
   int _clampBottomNavIndex(int index) => index.clamp(0, 3).toInt();
@@ -346,6 +378,40 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       tabWidth,
       size.height,
     );
+  }
+
+  Rect? _bottomNavBarRect() {
+    final BuildContext? navContext = _bottomNavBarKey.currentContext;
+    final RenderBox? box = navContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      return null;
+    }
+    final Size size = box.size;
+    if (!size.width.isFinite ||
+        !size.height.isFinite ||
+        size.width <= 0 ||
+        size.height <= 0) {
+      return null;
+    }
+    final Offset origin = box.localToGlobal(Offset.zero);
+    return origin & size;
+  }
+
+  Rect? _cancelBucketRect() {
+    final BuildContext? bucketContext = _cancelBucketKey.currentContext;
+    final RenderBox? box = bucketContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      return null;
+    }
+    final Size size = box.size;
+    if (!size.width.isFinite ||
+        !size.height.isFinite ||
+        size.width <= 0 ||
+        size.height <= 0) {
+      return null;
+    }
+    final Offset origin = box.localToGlobal(Offset.zero);
+    return origin & size;
   }
 
   void _cancelCalendarDragSwitchTimer() {
@@ -422,14 +488,19 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     }
     final CalendarBottomDragSession? dragSession =
         widget.calendarBottomDragSession.value;
+    if (dragSession == null) {
+      _cancelBucketHovering = false;
+      _setBottomDragHovering(false);
+      _setCalendarDragCleared();
+      return;
+    }
     final int selectedIndex = _clampBottomNavIndex(widget.selectedBottomIndex);
-    final int? sourceTab = dragSession == null
-        ? null
-        : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
-              _normalizeCalendarTabIndex(
-                selectedIndex == 2 ? 1 : selectedIndex,
-              );
+    final int? sourceTab =
+        _normalizeCalendarTabIndex(dragSession.sourceTab) ??
+        _normalizeCalendarTabIndex(selectedIndex == 2 ? 1 : selectedIndex);
     if (sourceTab == null) {
+      _cancelBucketHovering = false;
+      _setBottomDragHovering(false);
       _setCalendarDragCleared();
       return;
     }
@@ -439,21 +510,38 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final chatCalendarActive =
         chatsState.openJid != null && chatsState.openChatRoute.isCalendar;
     if (!widget.calendarAvailable || (!openCalendar && !chatCalendarActive)) {
+      _cancelBucketHovering = false;
+      _setBottomDragHovering(false);
       _setHoveredCalendarTargetTab(null);
       return;
     }
-    final Offset? pointer = dragSession?.pointer;
+    final Offset? pointer = dragSession.pointer;
     if (pointer == null) {
+      _cancelBucketHovering = false;
+      _setBottomDragHovering(false);
       _setHoveredCalendarTargetTab(null);
       return;
     }
+    final Rect? cancelBucketRect = _cancelBucketRect();
+    final bool cancelBucketHovering =
+        cancelBucketRect != null && cancelBucketRect.contains(pointer);
+    if (_cancelBucketHovering != cancelBucketHovering) {
+      setState(() {
+        _cancelBucketHovering = cancelBucketHovering;
+      });
+    }
+    final Rect? bottomNavBarRect = _bottomNavBarRect();
+    final bool bottomNavHovering =
+        bottomNavBarRect != null && bottomNavBarRect.contains(pointer);
     final int targetTab = sourceTab == 0 ? 1 : 0;
     final Rect? targetRect = _calendarTabRectForIndex(targetTab);
     if (targetRect == null) {
+      _setBottomDragHovering(cancelBucketHovering || bottomNavHovering);
       _setHoveredCalendarTargetTab(null);
       return;
     }
     final Rect hitRect = targetRect.inflate(context.spacing.s);
+    _setBottomDragHovering(cancelBucketHovering || bottomNavHovering);
     if (!hitRect.contains(pointer)) {
       _setHoveredCalendarTargetTab(null);
       return;
@@ -467,7 +555,6 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final colors = context.colorScheme;
-    final l10n = context.l10n;
     final chatsState = context.watch<ChatsCubit>().state;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final unreadChatsCount = chatItems
@@ -508,15 +595,13 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsetsDirectional.only(
-            start: spacing.xs,
-            end: spacing.xs,
-            top: spacing.s,
-            bottom: spacing.s,
-          ),
+          padding: EdgeInsetsDirectional.only(top: spacing.s),
           child: ValueListenableBuilder<CalendarBottomDragSession?>(
             valueListenable: widget.calendarBottomDragSession,
             builder: (context, dragSession, _) {
+              final Duration animationDuration = context
+                  .watch<SettingsCubit>()
+                  .animationDuration;
               final int safeSelectedIndex = _clampBottomNavIndex(
                 widget.selectedBottomIndex,
               );
@@ -556,6 +641,10 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   widget.calendarAvailable &&
                   (openCalendar || chatCalendarActive) &&
                   dragSourceTab != null;
+              final bool scheduleSwitchHintActive =
+                  dragHintActive && dragSourceTab == 1;
+              final bool tasksSwitchHintActive =
+                  dragHintActive && dragSourceTab == 0;
               final avatar = HydratedAxiAvatar(
                 avatar: AvatarPresentation.avatar(
                   label: profile.jid,
@@ -572,10 +661,10 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                 active: false,
                 size: sizing.iconButtonIconSize + spacing.xxs,
               );
-              return GNav(
+              final Widget navBar = GNav(
                 key: _bottomNavBarKey,
                 selectedIndex: safeSelectedIndex,
-                duration: context.watch<SettingsCubit>().animationDuration,
+                duration: animationDuration,
                 haptic: true,
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
@@ -606,7 +695,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                 tabs: [
                   GButton(
                     icon: LucideIcons.house,
-                    text: l10n.homeBottomNavHome,
+                    text: context.l10n.homeBottomNavHome,
                     leading: _HomeBottomNavBadgeIcon(
                       iconData: LucideIcons.house,
                       badgeCount: chatsBadgeCount,
@@ -618,9 +707,9 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   ),
                   GButton(
                     icon: LucideIcons.calendarClock,
-                    text: l10n.homeRailCalendar,
+                    text: context.l10n.homeRailCalendar,
                     leading: AxiAttentionShake(
-                      enabled: dragHintActive,
+                      enabled: scheduleSwitchHintActive,
                       child: _HomeBottomNavBadgeIcon(
                         iconData: LucideIcons.calendarClock,
                         badgeCount: scheduledAlertsCount,
@@ -637,9 +726,9 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   ),
                   GButton(
                     icon: LucideIcons.squareCheck,
-                    text: l10n.calendarFragmentTaskLabel,
+                    text: context.l10n.calendarFragmentTaskLabel,
                     leading: AxiAttentionShake(
-                      enabled: dragHintActive,
+                      enabled: tasksSwitchHintActive,
                       child: _HomeBottomNavBadgeIcon(
                         iconData: LucideIcons.squareCheck,
                         badgeCount: unscheduledAlertsCount,
@@ -656,11 +745,69 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   ),
                   GButton(
                     icon: LucideIcons.user,
-                    text: l10n.settingsButtonLabel,
+                    text: context.l10n.settingsButtonLabel,
                     leading: avatar,
                     iconColor: colors.mutedForeground,
                     iconActiveColor: colors.foreground,
                   ),
+                ],
+              );
+              final bool showCancelBucket = dragSession != null;
+              final Widget cancelBucket = CalendarDragCancelBucket(
+                key: _cancelBucketKey,
+                visible: showCancelBucket,
+                bottomInset: 0,
+                hovering: _cancelBucketHovering,
+                onWillAcceptWithDetails: (details) {
+                  _setBottomDragHovering(true);
+                  if (!_cancelBucketHovering) {
+                    setState(() {
+                      _cancelBucketHovering = true;
+                    });
+                  }
+                  return true;
+                },
+                onMove: (_) {
+                  _setBottomDragHovering(true);
+                  if (!_cancelBucketHovering) {
+                    setState(() {
+                      _cancelBucketHovering = true;
+                    });
+                  }
+                },
+                onLeave: (_) {
+                  if (_cancelBucketHovering) {
+                    setState(() {
+                      _cancelBucketHovering = false;
+                    });
+                  }
+                  _handleCalendarDragSignal();
+                },
+                onAcceptWithDetails: (details) {
+                  final CalendarTask restored =
+                      restoreCalendarTaskFromDragPayload(details.data);
+                  context.read<CalendarBloc>().add(
+                    CalendarEvent.taskUpdated(task: restored),
+                  );
+                  widget.calendarBottomDragSession.value = null;
+                  _setBottomDragHovering(false);
+                  setState(() {
+                    _cancelBucketHovering = false;
+                  });
+                },
+              );
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: EdgeInsetsDirectional.only(
+                      start: spacing.xs,
+                      end: spacing.xs,
+                      bottom: showCancelBucket ? 0 : spacing.s,
+                    ),
+                    child: navBar,
+                  ),
+                  cancelBucket,
                 ],
               );
             },

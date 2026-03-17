@@ -235,7 +235,7 @@ const AxiSizing axiSizing = AxiSizing(
   dialogMaxHeightFraction: 0.9,
   composeWindowWidth: axiSpaceXxl * 4,
   composeWindowExpandedWidth: 720,
-  composeWindowHeight: 560,
+  composeWindowHeight: 576,
   composeWindowExpandedHeight: 640,
   composeWindowMinWidth: 360,
   composeWindowMinHeight: 260,

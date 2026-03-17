@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
@@ -137,6 +138,9 @@ class _AxichatState extends State<Axichat> {
       providers: [
         ChangeNotifierProvider<CalendarStorageManager>(
           create: (context) => widget._storageManager,
+        ),
+        ChangeNotifierProvider<CalendarTaskOffGridDragController>(
+          create: (context) => CalendarTaskOffGridDragController(),
         ),
         RepositoryProvider<XmppService>.value(value: _xmppService),
         RepositoryProvider<MessageService>(

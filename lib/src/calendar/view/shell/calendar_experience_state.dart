@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,6 +31,7 @@ import 'package:axichat/src/calendar/view/month/calendar_month_host.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_scaffolds.dart';
 import 'package:axichat/src/calendar/view/sidebar/calendar_sidebar_host.dart';
 import 'package:axichat/src/calendar/view/sidebar/task_sidebar.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 
 const bool _calendarLoadingOverlayEnabled = false;
 
@@ -50,9 +52,10 @@ abstract class CalendarExperienceState<
   final ValueNotifier<bool> _cancelBucketHoverNotifier = ValueNotifier<bool>(
     false,
   );
-  final ValueNotifier<bool> _nonGridDragRegionHoverNotifier =
-      ValueNotifier<bool>(false);
   final ValueNotifier<int> _gridDragCompletionRevision = ValueNotifier<int>(0);
+  final Object _calendarShellHoverToken = Object();
+  CalendarTaskOffGridDragController? _offGridDragController;
+  bool _calendarShellOffGridHovering = false;
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -72,8 +75,8 @@ abstract class CalendarExperienceState<
       _gridDragCompletionRevision;
 
   @protected
-  ValueNotifier<bool> get nonGridDragRegionHoverNotifier =>
-      _nonGridDragRegionHoverNotifier;
+  ValueListenable<bool> get nonGridDragRegionHoverNotifier =>
+      _offGridDragController ?? const AlwaysStoppedAnimation<bool>(false);
 
   @protected
   BuildContext get calendarModalContext;
@@ -96,13 +99,40 @@ abstract class CalendarExperienceState<
 
   @override
   void dispose() {
+    _offGridDragController?.setRegionActive(
+      region: CalendarTaskOffGridDragRegion.calendarShell,
+      token: _calendarShellHoverToken,
+      isActive: false,
+    );
     disposeCalendarDragTabMixin();
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     _cancelBucketHoverNotifier.dispose();
-    _nonGridDragRegionHoverNotifier.dispose();
     _gridDragCompletionRevision.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final CalendarTaskOffGridDragController offGridDragController = context
+        .read<CalendarTaskOffGridDragController>();
+    if (_offGridDragController == offGridDragController) {
+      return;
+    }
+    _offGridDragController?.setRegionActive(
+      region: CalendarTaskOffGridDragRegion.calendarShell,
+      token: _calendarShellHoverToken,
+      isActive: false,
+    );
+    _offGridDragController = offGridDragController;
+    if (_calendarShellOffGridHovering) {
+      _offGridDragController?.setRegionActive(
+        region: CalendarTaskOffGridDragRegion.calendarShell,
+        token: _calendarShellHoverToken,
+        isActive: true,
+      );
+    }
   }
 
   @override
@@ -166,7 +196,12 @@ abstract class CalendarExperienceState<
                     _handleCalendarGridDragPositionChanged,
                 onDragSessionEnded: _handleCalendarGridDragSessionEnded,
                 cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
-                nonGridDragRegionHoverNotifier: _nonGridDragRegionHoverNotifier,
+                nonGridDragRegionHoverNotifier: nonGridDragRegionHoverNotifier,
+                composeWindowDragRegionHoverNotifier:
+                    _offGridDragController?.listenableFor(
+                      CalendarTaskOffGridDragRegion.composeWindow,
+                    ) ??
+                    const AlwaysStoppedAnimation<bool>(false),
                 dragCompletionRevision: _gridDragCompletionRevision,
               );
         final Widget dragTargets = isMonthView
@@ -314,7 +349,7 @@ abstract class CalendarExperienceState<
   }
 
   void _handleCalendarGridDragSessionStarted() {
-    _nonGridDragRegionHoverNotifier.value = false;
+    _setCalendarShellOffGridHover(false);
     _handleCalendarDragSessionStarted();
     _sidebarKey.currentState?.handleExternalGridDragStarted(
       isTouchMode: !_hasMouseDevice,
@@ -327,13 +362,13 @@ abstract class CalendarExperienceState<
   }
 
   void _handleCalendarGridDragSessionEnded() {
-    _nonGridDragRegionHoverNotifier.value = false;
+    _setCalendarShellOffGridHover(false);
     _handleCalendarDragSessionEnded();
     _sidebarKey.currentState?.handleExternalGridDragEnded();
   }
 
   void _handleCalendarSidebarDragSessionStarted() {
-    _nonGridDragRegionHoverNotifier.value = false;
+    _setCalendarShellOffGridHover(false);
     _handleCalendarDragSessionStarted();
   }
 
@@ -342,17 +377,26 @@ abstract class CalendarExperienceState<
   }
 
   void _handleCalendarSidebarDragSessionEnded() {
-    _nonGridDragRegionHoverNotifier.value = false;
+    _setCalendarShellOffGridHover(false);
     _handleCalendarDragSessionEnded();
   }
 
   void _handleCalendarNonGridDragRegionHoverChanged(bool isHovering) {
-    _nonGridDragRegionHoverNotifier.value = isHovering;
+    _setCalendarShellOffGridHover(isHovering);
   }
 
   void _handleCalendarDragPayloadConsumed(CalendarDragPayload payload) {
-    _nonGridDragRegionHoverNotifier.value = false;
+    _setCalendarShellOffGridHover(false);
     _gridDragCompletionRevision.value += 1;
+  }
+
+  void _setCalendarShellOffGridHover(bool isHovering) {
+    _calendarShellOffGridHovering = isHovering;
+    _offGridDragController?.setRegionActive(
+      region: CalendarTaskOffGridDragRegion.calendarShell,
+      token: _calendarShellHoverToken,
+      isActive: isHovering,
+    );
   }
 
   void _handleCalendarDragSessionStarted() {
