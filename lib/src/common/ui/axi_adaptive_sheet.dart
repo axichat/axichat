@@ -20,6 +20,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   required WidgetBuilder builder,
   bool isScrollControlled = false,
   bool useSafeArea = true,
+  bool useBottomSafeArea = true,
   bool preferDialogOnMobile = false,
   bool showDragHandle = false,
   bool enableDrag = true,
@@ -74,7 +75,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         final double topInset = useSafeArea
             ? viewMediaQuery.viewPadding.top
             : zeroInset;
-        final double bottomSafeInset = useSafeArea
+        final double bottomSafeInset = useSafeArea && useBottomSafeArea
             ? math.max(
                 viewMediaQuery.viewPadding.bottom -
                     mediaQuery.viewInsets.bottom,

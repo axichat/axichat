@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -505,8 +504,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       rawProperties: rawProperties,
     );
     final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
-    final env = EnvScope.maybeOf(context);
-    final bool isDesktop = env?.isDesktopPlatform ?? false;
     final List<TaskContextAction> inlineActions = widget.inlineActions;
     Widget buildBody({
       required double keyboardInset,
@@ -539,6 +536,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               onSave: _handleSave,
               canSave: canSave,
               includeTopBorder: includeTopBorder,
+              isSheet: isSheet,
               showDelete: allowsFullEdits,
             );
           },
@@ -782,9 +780,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double resolvedMaxHeight =
-            constraints.hasBoundedHeight &&
-                constraints.maxHeight < widget.maxHeight
+        final double resolvedMaxHeight = isSheet && constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : constraints.hasBoundedHeight &&
+                  constraints.maxHeight < widget.maxHeight
             ? constraints.maxHeight
             : widget.maxHeight;
         final mediaQuery = MediaQuery.of(context);
@@ -1772,6 +1771,7 @@ class _EditTaskActionsRow extends StatelessWidget {
     required this.onSave,
     required this.canSave,
     required this.includeTopBorder,
+    required this.isSheet,
     required this.showDelete,
   });
 
@@ -1781,13 +1781,19 @@ class _EditTaskActionsRow extends StatelessWidget {
   final VoidCallback onSave;
   final bool canSave;
   final bool includeTopBorder;
+  final bool isSheet;
   final bool showDelete;
 
   @override
   Widget build(BuildContext context) {
     return TaskFormActionsRow(
       includeTopBorder: includeTopBorder,
-      padding: EdgeInsets.all(context.spacing.m),
+      padding: EdgeInsets.fromLTRB(
+        context.spacing.m,
+        context.spacing.m,
+        context.spacing.m,
+        context.spacing.m,
+      ),
       gap: context.spacing.s,
       children: [
         if (showDelete)

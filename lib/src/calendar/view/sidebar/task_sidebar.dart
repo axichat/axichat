@@ -2431,6 +2431,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
+        useBottomSafeArea: false,
         surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {

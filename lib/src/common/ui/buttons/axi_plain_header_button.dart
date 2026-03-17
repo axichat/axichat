@@ -105,6 +105,7 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
                 ? SystemMouseCursors.click
                 : SystemMouseCursors.basic,
             hoverStrategies: ShadTheme.of(context).hoverStrategies,
+            behavior: HitTestBehavior.opaque,
             onHoverChange: enabled ? _setHovered : null,
             onTap: onTap,
             onLongPress: onLongPress,

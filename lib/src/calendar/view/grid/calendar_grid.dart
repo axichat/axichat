@@ -1557,6 +1557,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
+        useBottomSafeArea: false,
         surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {
