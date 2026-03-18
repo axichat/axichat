@@ -2312,61 +2312,82 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     const welcomeChatJid = 'axichat@welcome.axichat.invalid';
     const welcomeStanzaId = 'signup-welcome.axichat';
+    Message? insertedMessage;
     try {
       final db = await _xmppService.database;
-      final existing = await db.getMessageByStanzaID(welcomeStanzaId);
-      if (existing == null) {
+      final existingMessage = await db.getMessageByStanzaID(welcomeStanzaId);
+      final existingChat = await db.getChat(welcomeChatJid);
+      if (existingMessage == null) {
+        if (existingChat != null) {
+          if (existingChat.title != title ||
+              existingChat.contactDisplayName != title ||
+              existingChat.contactJid != welcomeChatJid) {
+            await db.updateChat(
+              existingChat.copyWith(
+                title: title,
+                contactDisplayName: title,
+                contactJid: welcomeChatJid,
+              ),
+            );
+          }
+          return;
+        }
         if (!allowInsert) {
           return;
         }
-        await db.saveMessage(
-          Message(
-            stanzaID: welcomeStanzaId,
-            senderJid: welcomeChatJid,
-            chatJid: welcomeChatJid,
-            body: body,
-            timestamp: DateTime.timestamp(),
-            acked: true,
-            received: true,
-          ),
+        insertedMessage = Message(
+          stanzaID: welcomeStanzaId,
+          senderJid: welcomeChatJid,
+          chatJid: welcomeChatJid,
+          body: body,
+          timestamp: DateTime.timestamp(),
+          acked: true,
+          received: true,
+          displayed: true,
         );
-      } else if (existing.body != body ||
-          existing.htmlBody != null ||
-          existing.senderJid != welcomeChatJid ||
-          existing.chatJid != welcomeChatJid) {
+        await db.saveMessage(insertedMessage);
+      } else if (existingMessage.body != body ||
+          existingMessage.htmlBody != null ||
+          existingMessage.senderJid != welcomeChatJid ||
+          existingMessage.chatJid != welcomeChatJid ||
+          !existingMessage.displayed) {
         await db.updateMessage(
-          existing.copyWith(
+          existingMessage.copyWith(
             senderJid: welcomeChatJid,
             chatJid: welcomeChatJid,
             body: body,
             htmlBody: null,
             acked: true,
             received: true,
+            displayed: true,
           ),
         );
       }
-      final chat = await db.getChat(welcomeChatJid);
-      if (chat == null) {
+      if (existingChat == null) {
         if (!allowInsert) {
           return;
         }
+        final chatTimestamp =
+            insertedMessage?.timestamp ??
+            existingMessage?.timestamp ??
+            DateTime.timestamp();
         await db.createChat(
           Chat(
             jid: welcomeChatJid,
             title: title,
             type: ChatType.chat,
-            lastChangeTimestamp: existing?.timestamp ?? DateTime.timestamp(),
+            lastChangeTimestamp: chatTimestamp,
             contactDisplayName: title,
             contactJid: welcomeChatJid,
           ),
         );
         return;
       }
-      if (chat.title != title ||
-          chat.contactDisplayName != title ||
-          chat.contactJid != welcomeChatJid) {
+      if (existingChat.title != title ||
+          existingChat.contactDisplayName != title ||
+          existingChat.contactJid != welcomeChatJid) {
         await db.updateChat(
-          chat.copyWith(
+          existingChat.copyWith(
             title: title,
             contactDisplayName: title,
             contactJid: welcomeChatJid,
