@@ -49,6 +49,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
@@ -98,6 +99,7 @@ const _emailResendFailedLogMessage = 'Failed to resend email message.';
 const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
 const _xmppAttachmentSendFailedLogMessage = 'Failed to send XMPP attachment.';
 const _xmppDraftSaveFailedLogMessage = 'Failed to save XMPP draft.';
+const _mucAvatarTraceLogName = 'MucAvatarTrace';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
@@ -265,7 +267,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
            emailSelfJid: emailService?.selfSenderJid,
          ),
        ) {
-    on<_ChatUpdated>(_onChatUpdated);
+    on<_ChatUpdated>(_onChatUpdated, transformer: restartable());
     on<_ChatStarted>(_onChatStarted);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
@@ -612,25 +614,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (chat.unreadCount != unreadCount) {
         await db.updateChat(chat.copyWith(unreadCount: unreadCount));
       }
-      var changed = false;
-      final updatedItems = state.items
-          .map((message) {
-            final originId = message.originID?.trim();
-            final shouldMarkDisplayed =
-                stanzaIds.contains(message.stanzaID) ||
-                (originId != null &&
-                    originId.isNotEmpty &&
-                    stanzaIds.contains(originId));
-            if (!shouldMarkDisplayed || message.displayed) {
-              return message;
-            }
-            changed = true;
-            return message.copyWith(displayed: true);
-          })
-          .toList(growable: false);
-      if (changed) {
-        add(_ChatMessagesUpdated(updatedItems));
-      }
     }
   }
 
@@ -742,9 +725,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<Message> items,
     required bool allowSend,
   }) async {
-    if (!allowSend) {
-      return;
-    }
     final scopedItems = items
         .where((message) => message.chatJid == chat.jid)
         .toList(growable: false);
@@ -762,6 +742,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         : unreadCandidates;
     if (_xmppAllowedForChat(chat) && unreadVisibleCandidates.isNotEmpty) {
       await _markMessagesDisplayedLocally(unreadVisibleCandidates);
+    }
+    final seenCandidates = chat.defaultTransport.isEmail
+        ? unreadVisibleCandidates
+              .where((message) => message.deltaMsgId != null)
+              .toList(growable: false)
+        : const <Message>[];
+    if (seenCandidates.isNotEmpty) {
+      await _markMessagesDisplayedLocally(seenCandidates);
+    }
+    if (!allowSend) {
+      return;
     }
     final shouldSendChatReadReceipts =
         chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
@@ -795,20 +786,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (emailService == null || !chat.defaultTransport.isEmail) {
       return;
     }
-    final seenCandidates = unreadVisibleCandidates
-        .where((message) => message.deltaMsgId != null)
-        .toList(growable: false);
     if (kEnableDemoChats && _messageService.demoOfflineMode) {
-      if (seenCandidates.isNotEmpty) {
-        await _markMessagesDisplayedLocally(seenCandidates);
-      }
       return;
     }
     if (seenCandidates.isEmpty) {
       _lastSeenEmailSyncKey = null;
       return;
     }
-    await _markMessagesDisplayedLocally(seenCandidates);
     if (!emailService.hasInMemoryReconnectContext) {
       return;
     }
@@ -828,6 +812,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (markedSeen) {
       _lastSeenEmailSyncKey = seenSyncKey;
     }
+  }
+
+  Future<void> _syncReadStateLocallyIfAvailable({
+    required Chat? chat,
+    required List<Message> items,
+  }) async {
+    if (chat == null) return;
+    await _syncReadStateForActiveChat(
+      chat: chat,
+      items: items,
+      allowSend: false,
+    );
   }
 
   bool _xmppAllowedForChat(Chat chat) {
@@ -1336,7 +1332,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
     if (targetJid == null) return;
-    await _messageSubscription?.cancel();
+    final previousSubscription = _messageSubscription;
+    _messageSubscription = null;
+    await _detachAndCancelSubscription(previousSubscription);
+    if (isClosed) return;
     _currentMessageLimit = limit;
     final chat = state.chat;
     final emailService = _emailService;
@@ -1374,7 +1373,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _subscribeToPinnedMessages(Chat chat) async {
     final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
-    await _pinnedSubscription?.cancel();
+    final previousSubscription = _pinnedSubscription;
+    _pinnedSubscription = null;
+    await _detachAndCancelSubscription(previousSubscription);
+    if (isClosed) return;
     if (trimmedChatJid == null) {
       _pinnedSubscription = null;
       return;
@@ -1395,11 +1397,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _subscribeToTypingParticipants(Chat chat) async {
     if (!_xmppAllowedForChat(chat)) {
-      await _typingParticipantsSubscription?.cancel();
+      final previousSubscription = _typingParticipantsSubscription;
+      _typingParticipantsSubscription = null;
+      await _detachAndCancelSubscription(previousSubscription);
       _typingParticipantsSubscription = null;
       return;
     }
-    await _typingParticipantsSubscription?.cancel();
+    final previousSubscription = _typingParticipantsSubscription;
+    _typingParticipantsSubscription = null;
+    await _detachAndCancelSubscription(previousSubscription);
+    if (isClosed) return;
     _typingParticipantsSubscription = _chatsService
         .typingParticipantsStream(chat.jid)
         .listen(
@@ -1419,19 +1426,52 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _detachAndCancelSubscription<T>(
+    StreamSubscription<T>? subscription,
+  ) async {
+    if (subscription == null) {
+      return;
+    }
+    subscription
+      ..onData(null)
+      ..onError(null)
+      ..onDone(null);
+    await subscription.cancel();
+  }
+
   @override
   Future<void> close() async {
-    await _chatSubscription.cancel();
-    await _messageSubscription?.cancel();
-    await _pinnedSubscription?.cancel();
-    await _roomSubscription?.cancel();
-    await _roomRosterSubscription?.cancel();
-    await _roomChatsSubscription?.cancel();
-    await _roomSelfAvatarSubscription?.cancel();
-    await _typingParticipantsSubscription?.cancel();
-    await _emailSyncSubscription?.cancel();
-    await _connectivitySubscription?.cancel();
-    await _httpUploadSupportSubscription?.cancel();
+    await _detachAndCancelSubscription(_chatSubscription);
+    final messageSubscription = _messageSubscription;
+    _messageSubscription = null;
+    await _detachAndCancelSubscription(messageSubscription);
+    final pinnedSubscription = _pinnedSubscription;
+    _pinnedSubscription = null;
+    await _detachAndCancelSubscription(pinnedSubscription);
+    final roomSubscription = _roomSubscription;
+    _roomSubscription = null;
+    await _detachAndCancelSubscription(roomSubscription);
+    final roomRosterSubscription = _roomRosterSubscription;
+    _roomRosterSubscription = null;
+    await _detachAndCancelSubscription(roomRosterSubscription);
+    final roomChatsSubscription = _roomChatsSubscription;
+    _roomChatsSubscription = null;
+    await _detachAndCancelSubscription(roomChatsSubscription);
+    final roomSelfAvatarSubscription = _roomSelfAvatarSubscription;
+    _roomSelfAvatarSubscription = null;
+    await _detachAndCancelSubscription(roomSelfAvatarSubscription);
+    final typingParticipantsSubscription = _typingParticipantsSubscription;
+    _typingParticipantsSubscription = null;
+    await _detachAndCancelSubscription(typingParticipantsSubscription);
+    final emailSyncSubscription = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await _detachAndCancelSubscription(emailSyncSubscription);
+    final connectivitySubscription = _connectivitySubscription;
+    _connectivitySubscription = null;
+    await _detachAndCancelSubscription(connectivitySubscription);
+    final httpUploadSupportSubscription = _httpUploadSupportSubscription;
+    _httpUploadSupportSubscription = null;
+    await _detachAndCancelSubscription(httpUploadSupportSubscription);
     final metadataSubscription = _fileMetadataSubscription;
     _fileMetadataSubscription = null;
     _trackedFileMetadataIds = const <String>{};
@@ -1480,10 +1520,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               : state.roomState ??
                     _mucService.roomStateForOrEmpty(event.chat.jid)
         : null;
+    final nextRoomMemberSections = nextRoomState == null
+        ? const <RoomMemberSection>[]
+        : resetContext || state.roomState == null
+        ? _buildRoomMemberSections(nextRoomState)
+        : state.roomMemberSections;
     final unreadCount = event.chat.unreadCount;
     final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
       event.chat.jid,
     );
+    if (event.chat.type == ChatType.groupChat) {
+      final roomSectionSummary = nextRoomMemberSections
+          .map((section) => '${section.kind.name}=${section.members.length}')
+          .join(',');
+      SafeLogging.debugLog(
+        'MUC_AVATAR_TRACE|open_chat|chat=${event.chat.jid}|title=${event.chat.title}|'
+        'reset=$resetContext|typing_context=$typingContextChanged|'
+        'pinned_context=$pinnedContextChanged|unread=$unreadCount|'
+        'seeded_unread=$stagedUnreadCount|room_ready=${nextRoomState != null}|'
+        'room_occupants=${nextRoomState?.occupants.length ?? 0}|'
+        'room_sections=$roomSectionSummary|self_jid=${_chatsService.myJid}|'
+        'chat_type=${event.chat.type.name}',
+        name: _mucAvatarTraceLogName,
+      );
+    }
     emit(
       state.copyWith(
         items: resetContext ? const <Message>[] : state.items,
@@ -1508,13 +1568,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             ? false
             : state.emailSubjectAutofilled,
         roomState: nextRoomState,
-        roomMemberSections: resetContext
+        roomMemberSections: nextRoomState == null
             ? const <RoomMemberSection>[]
-            : nextRoomState == null
-            ? const <RoomMemberSection>[]
-            : state.roomState == null
-            ? _buildRoomMemberSections(nextRoomState)
-            : state.roomMemberSections,
+            : nextRoomMemberSections,
         pinnedMessages: resetContext
             ? _emptyPinnedMessageItems
             : state.pinnedMessages,
@@ -1624,12 +1680,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _shareContextAttemptedStanzaIds.clear();
       _autoDownloadAttemptedMetadataIds.clear();
       _autoDownloadAttemptedEmailMessages.clear();
+    }
+    final roomSubscription = _roomSubscription;
+    _roomSubscription = null;
+    await _detachAndCancelSubscription(roomSubscription);
+    final roomRosterSubscription = _roomRosterSubscription;
+    _roomRosterSubscription = null;
+    await _detachAndCancelSubscription(roomRosterSubscription);
+    final roomChatsSubscription = _roomChatsSubscription;
+    _roomChatsSubscription = null;
+    await _detachAndCancelSubscription(roomChatsSubscription);
+    final roomSelfAvatarSubscription = _roomSelfAvatarSubscription;
+    _roomSelfAvatarSubscription = null;
+    await _detachAndCancelSubscription(roomSelfAvatarSubscription);
+    if (emit.isDone) return;
+    if (event.chat.type == ChatType.groupChat) {
+      _subscribeRoomMemberSources();
+    } else {
+      _roomRosterItems = const <RosterItem>[];
+      _roomChats = const <Chat>[];
+      _roomSelfAvatarPath = null;
+    }
+    if (resetContext) {
       await _syncFileMetadataSubscriptions(const <String>{});
+      if (emit.isDone) return;
       await _subscribeToMessages(
         limit: messageBatchSize,
         filter: nextViewFilter,
       );
+      if (emit.isDone) return;
       await _prefetchPeerAvatar(event.chat);
+      if (emit.isDone) return;
     }
     if (event.chat.defaultTransport.isEmail && !resetContext) {
       if (_emailUnreadBoundaryUnreadCount != unreadCount) {
@@ -1639,6 +1720,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (resetContext && unreadCount > _emptyMessageCount) {
       await _resolveEmailUnreadBoundaryDeltaId(event.chat);
+      if (emit.isDone) return;
     }
     if (!resetContext && state.items.isNotEmpty) {
       final rawBoundary = _resolveStickyUnreadBoundaryStanzaId(
@@ -1662,35 +1744,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (typingContextChanged) {
       await _subscribeToTypingParticipants(event.chat);
+      if (emit.isDone) return;
     }
     if (pinnedContextChanged) {
       await _subscribeToPinnedMessages(event.chat);
+      if (emit.isDone) return;
     }
     if (_xmppAllowedForChat(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
+      if (emit.isDone) return;
     }
     if (showXmppCapabilities) {
       final capabilities = await _resolvePeerCapabilities(event.chat);
+      if (emit.isDone) return;
       if (capabilities != null) {
         emit(state.copyWith(xmppCapabilities: capabilities));
       }
     }
-    await _roomSubscription?.cancel();
-    _roomSubscription = null;
-    await _roomRosterSubscription?.cancel();
-    _roomRosterSubscription = null;
-    await _roomChatsSubscription?.cancel();
-    _roomChatsSubscription = null;
-    await _roomSelfAvatarSubscription?.cancel();
-    _roomSelfAvatarSubscription = null;
-    _roomRosterItems = const <RosterItem>[];
-    _roomChats = const <Chat>[];
-    _roomSelfAvatarPath = null;
+    if (emit.isDone) return;
     if (event.chat.type == ChatType.groupChat) {
-      if (resetContext) {
-        _refreshRoomMemberSections(emit);
-      }
-      _subscribeRoomMemberSources();
       _roomSubscription = _mucService.roomStateStream(event.chat.jid).listen((
         room,
       ) {
@@ -1699,10 +1771,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final shouldPrimeRoomState = resetContext || state.roomState == null;
       if (shouldPrimeRoomState) {
         await _primeRoomState(event.chat, emit);
+        if (emit.isDone) return;
       }
       await _ensureMucMembership(event.chat);
-    } else {
-      emit(state.copyWith(roomState: null, roomMemberSections: const []));
     }
   }
 
@@ -1754,10 +1825,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chatJid = _bareJid(state.chat?.jid);
     if (chatJid == null) return;
     if (chatJid != _bareJid(event.roomState.roomJid)) return;
+    final nextRoomSections = _buildRoomMemberSections(event.roomState);
+    if (state.chat?.type == ChatType.groupChat) {
+      final sectionSummary = nextRoomSections
+          .map((section) => '${section.kind.name}=${section.members.length}')
+          .join(',');
+      SafeLogging.debugLog(
+        'MUC_AVATAR_TRACE|room_state_update|chat=$chatJid|room=${event.roomState.roomJid}|'
+        'occupants=${event.roomState.occupants.length}|sections=$sectionSummary|'
+        'has_self_presence=${event.roomState.hasSelfPresence}|'
+        'has_self_occupant=${event.roomState.hasPresentSelfOccupant}|'
+        'self_jid=${_chatsService.myJid}',
+        name: _mucAvatarTraceLogName,
+      );
+    }
     emit(
       state.copyWith(
         roomState: event.roomState,
-        roomMemberSections: _buildRoomMemberSections(event.roomState),
+        roomMemberSections: nextRoomSections,
       ),
     );
     final chat = state.chat;
@@ -1989,6 +2074,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
+    if (state.chat?.type == ChatType.groupChat) {
+      final chatJid = state.chat?.jid;
+      final firstId = event.items.isNotEmpty ? event.items.first.stanzaID : '';
+      final lastId = event.items.isNotEmpty ? event.items.last.stanzaID : '';
+      SafeLogging.debugLog(
+        'MUC_AVATAR_TRACE|messages_batch|chat=$chatJid|count=${event.items.length}|'
+        'first=$firstId|last=$lastId|previous_count=${state.items.length}',
+        name: _mucAvatarTraceLogName,
+      );
+    }
     final attachmentMaps = await _loadAttachmentMaps(event.items);
     final filtered = await _filterInternalMessages(
       messages: event.items,
@@ -2045,12 +2140,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (unreadBoundary != null) {
       _pendingUnreadBoundaryCount = null;
     }
+    final chat = state.chat;
     final nextMetadataIds = _metadataIdsForState(
       messages: filteredItems,
       attachmentsByMessageId: filtered.attachmentsByMessageId,
       pinnedMessages: state.pinnedMessages,
     );
+    if (emit.isDone)
+      return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
     await _syncFileMetadataSubscriptions(nextMetadataIds);
+    if (emit.isDone)
+      return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
     final nextFileMetadataById = _pruneFileMetadataById(
       metadataIds: nextMetadataIds,
       existing: state.fileMetadataById,
@@ -2107,14 +2207,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _maybeRequestVisibleEmailQuotedText(filteredItems);
     if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(filteredItems, emit);
+      if (emit.isDone)
+        return _syncReadStateLocallyIfAvailable(
+          chat: chat,
+          items: filteredItems,
+        );
       await _hydrateShareReplies(filteredItems, emit);
+      if (emit.isDone)
+        return _syncReadStateLocallyIfAvailable(
+          chat: chat,
+          items: filteredItems,
+        );
     }
     _queueAutoDownloadAttachments(
       messages: filteredItems,
       attachmentsByMessageId: filtered.attachmentsByMessageId,
     );
 
-    final chat = state.chat;
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
     if (chat != null) {
       await _syncReadStateForActiveChat(
@@ -2123,6 +2232,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         allowSend: lifecycleState == AppLifecycleState.resumed,
       );
     }
+    if (emit.isDone) return;
     await _maybeBootstrapUnreadWindow(
       chat: state.chat,
       filteredOutCount: event.items.length - filteredItems.length,
@@ -2413,7 +2523,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
       pinnedMessages: pinnedItems,
     );
+    if (emit.isDone) return;
     await _syncFileMetadataSubscriptions(nextMetadataIds);
+    if (emit.isDone) return;
     emit(
       state.copyWith(
         pinnedMessages: pinnedItems,
@@ -2496,6 +2608,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _syncFileMetadataSubscriptions(Set<String> metadataIds) async {
+    if (isClosed) return;
     final normalizedIds = <String>{
       for (final id in metadataIds)
         if (id.trim().isNotEmpty) id.trim(),
@@ -2503,9 +2616,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final sameIds =
         normalizedIds.length == _trackedFileMetadataIds.length &&
         normalizedIds.containsAll(_trackedFileMetadataIds);
-    if (sameIds && _fileMetadataSubscription != null) {
-      return;
-    }
+    if (sameIds && _fileMetadataSubscription != null) return;
     if (!sameIds) {
       _fileMetadataRetryAttempts = _emptyMessageCount;
     }
@@ -2515,14 +2626,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (previous != null) {
       _fileMetadataSubscriptionCancelling = true;
       try {
-        await previous.cancel();
+        await _detachAndCancelSubscription(previous);
       } finally {
         _fileMetadataSubscriptionCancelling = false;
       }
     }
-    if (normalizedIds.isEmpty) {
-      return;
-    }
+    if (isClosed) return;
+    if (normalizedIds.isEmpty) return;
     _fileMetadataSubscription = _messageService
         .fileMetadataByIdsStream(normalizedIds)
         .listen(
@@ -4343,7 +4453,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final emailSub = _emailSyncSubscription;
     _emailSyncSubscription = null;
-    await emailSub?.cancel();
+    await _detachAndCancelSubscription(emailSub);
+    if (emit.isDone) return;
     _emailService = emailService;
     final shouldResetEmailAvailability = emailService != null;
     emit(
