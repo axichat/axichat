@@ -69,17 +69,22 @@ final class _AxiPopoverState extends State<AxiPopover>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    syncAxiSurfaceRegistration();
+    syncAxiSurfaceRegistration(notify: false);
   }
 
   @override
   void didUpdateWidget(covariant AxiPopover oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final bool wasOpen =
+        oldWidget.controller?.isOpen ?? (oldWidget.visible ?? false);
+    final bool isOpen = widget.controller?.isOpen ?? (widget.visible ?? false);
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_handleControllerChanged);
       widget.controller?.addListener(_handleControllerChanged);
     }
-    syncAxiSurfaceRegistration();
+    syncAxiSurfaceRegistration(
+      notify: oldWidget.visible != widget.visible && wasOpen != isOpen,
+    );
   }
 
   @override

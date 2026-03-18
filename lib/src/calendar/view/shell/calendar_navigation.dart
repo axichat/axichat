@@ -1081,7 +1081,7 @@ class _DateLabelState extends State<_DateLabel>
     final locale = Localizations.localeOf(context).toString();
     _dayFormat = DateFormat.yMMMd(locale);
     _monthFormat = DateFormat.yMMMM(locale);
-    syncAxiSurfaceRegistration();
+    syncAxiSurfaceRegistration(notify: false);
   }
 
   @override

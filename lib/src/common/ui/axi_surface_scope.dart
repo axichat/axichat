@@ -3,14 +3,11 @@
 
 import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 final class AxiSurfaceController extends ChangeNotifier {
   final List<Object> _surfaceOrder = <Object>[];
   final Map<Object, VoidCallback> _dismissCallbacks = <Object, VoidCallback>{};
   FocusScopeNode? _focusScopeNode;
-  bool _notificationScheduled = false;
-  bool _isDisposed = false;
 
   bool get hasOpenSurface => _surfaceOrder.isNotEmpty;
 
@@ -19,7 +16,7 @@ final class AxiSurfaceController extends ChangeNotifier {
       return;
     }
     _focusScopeNode = focusScopeNode;
-    _notifyListenersSafely();
+    notifyListeners();
   }
 
   void detachFocusScope(FocusScopeNode focusScopeNode) {
@@ -27,12 +24,13 @@ final class AxiSurfaceController extends ChangeNotifier {
       return;
     }
     _focusScopeNode = null;
-    _notifyListenersSafely();
+    notifyListeners();
   }
 
   void registerSurface({
     required Object owner,
     required VoidCallback onDismiss,
+    bool notify = true,
   }) {
     final bool alreadyRegistered = _dismissCallbacks.containsKey(owner);
     final bool alreadyTop =
@@ -45,14 +43,16 @@ final class AxiSurfaceController extends ChangeNotifier {
       _surfaceOrder.remove(owner);
     }
     _surfaceOrder.add(owner);
-    _notifyListenersSafely();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void unregisterSurface(Object owner, {bool notify = true}) {
     final bool removedCallback = _dismissCallbacks.remove(owner) != null;
     final bool removedOrder = _surfaceOrder.remove(owner);
     if (notify && (removedCallback || removedOrder)) {
-      _notifyListenersSafely();
+      notifyListeners();
     }
   }
 
@@ -90,48 +90,11 @@ final class AxiSurfaceController extends ChangeNotifier {
     final VoidCallback? dismiss = _dismissCallbacks[owner];
     if (dismiss == null) {
       _surfaceOrder.removeLast();
-      _notifyListenersSafely();
+      notifyListeners();
       return _surfaceOrder.isNotEmpty;
     }
     dismiss();
     return true;
-  }
-
-  void _notifyListenersSafely() {
-    if (_isDisposed) {
-      return;
-    }
-    final scheduler = SchedulerBinding.instance;
-    final phase = scheduler.schedulerPhase;
-    final bool frameworkLocked =
-        phase == SchedulerPhase.transientCallbacks ||
-        phase == SchedulerPhase.midFrameMicrotasks ||
-        phase == SchedulerPhase.persistentCallbacks;
-    if (!frameworkLocked) {
-      notifyListeners();
-      return;
-    }
-    if (_notificationScheduled) {
-      return;
-    }
-    _notificationScheduled = true;
-    scheduler.addPostFrameCallback((_) {
-      _notificationScheduled = false;
-      if (_isDisposed) {
-        return;
-      }
-      notifyListeners();
-    });
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-    _notificationScheduled = false;
-    _surfaceOrder.clear();
-    _dismissCallbacks.clear();
-    _focusScopeNode = null;
-    super.dispose();
   }
 }
 
@@ -171,21 +134,22 @@ mixin AxiSurfaceRegistration<T extends StatefulWidget> on State<T> {
   VoidCallback? get onAxiSurfaceDismiss;
 
   @protected
-  void syncAxiSurfaceRegistration() {
+  void syncAxiSurfaceRegistration({bool notify = true}) {
     final AxiSurfaceController? surfaceController =
         AxiSurfaceScope.maybeControllerOf(context);
     if (_registeredAxiSurfaceController != null &&
         _registeredAxiSurfaceController != surfaceController) {
-      unregisterAxiSurfaceRegistration(notify: true);
+      unregisterAxiSurfaceRegistration(notify: false);
     }
     final VoidCallback? dismiss = onAxiSurfaceDismiss;
     if (!isAxiSurfaceOpen || dismiss == null || surfaceController == null) {
-      unregisterAxiSurfaceRegistration(notify: true);
+      unregisterAxiSurfaceRegistration(notify: notify);
       return;
     }
     surfaceController.registerSurface(
       owner: axiSurfaceOwner,
       onDismiss: dismiss,
+      notify: notify,
     );
     _registeredAxiSurfaceController = surfaceController;
   }
@@ -200,8 +164,14 @@ mixin AxiSurfaceRegistration<T extends StatefulWidget> on State<T> {
   }
 
   @override
+  void activate() {
+    super.activate();
+    syncAxiSurfaceRegistration(notify: false);
+  }
+
+  @override
   void deactivate() {
-    unregisterAxiSurfaceRegistration(notify: true);
+    unregisterAxiSurfaceRegistration(notify: false);
     super.deactivate();
   }
 

@@ -180,7 +180,7 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cacheTapRegionGroup();
-    syncAxiSurfaceRegistration();
+    syncAxiSurfaceRegistration(notify: false);
   }
 
   void _cacheTapRegionGroup() {

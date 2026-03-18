@@ -1757,7 +1757,7 @@ final class _RecipientAutocompleteOverlayState
       widget.focusNode.addListener(_syncPortalVisibility);
     }
     _recomputeOptions();
-    syncAxiSurfaceRegistration();
+    syncAxiSurfaceRegistration(notify: false);
   }
 
   @override

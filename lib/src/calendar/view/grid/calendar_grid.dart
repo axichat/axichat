@@ -334,7 +334,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _lastDragCompletionRevision = _dragCompletionRevision.value;
     _dragCompletionRevision.addListener(_handleDragCompletionRevisionChanged);
     _taskPopoverController = TaskPopoverController();
-    _taskPopoverController.addListener(_syncTaskPopoverSurfaceRegistration);
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
       initiallyVisible: true,
@@ -884,7 +883,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _processFocusRequest(widget.focusRequest);
-    syncAxiSurfaceRegistration();
+    syncAxiSurfaceRegistration(notify: false);
   }
 
   @override
@@ -926,14 +925,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _horizontalGridController.dispose();
     _gridContextMenuController.dispose();
     _taskInteractionController.dispose();
-    _taskPopoverController.removeListener(_syncTaskPopoverSurfaceRegistration);
     _taskPopoverController.dispose();
     _inlineErrorTimer?.cancel();
     super.dispose();
-  }
-
-  void _syncTaskPopoverSurfaceRegistration() {
-    syncAxiSurfaceRegistration();
   }
 
   void _attachTaskDragPointerRoute(int? pointerId) {
@@ -2181,7 +2175,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskPopoverController.removeLayout(taskId);
     if (_taskPopoverController.activeTaskId != taskId) {
       TaskEditSessionTracker.instance.end(taskId, this);
-      _syncTaskPopoverSurfaceRegistration();
+      syncAxiSurfaceRegistration();
       return;
     }
 
@@ -2189,7 +2183,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (_taskPopoverPortalController.isShowing) {
       _taskPopoverPortalController.hide();
     }
-    _syncTaskPopoverSurfaceRegistration();
+    syncAxiSurfaceRegistration();
     TaskEditSessionTracker.instance.end(taskId, this);
   }
 
@@ -2204,7 +2198,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     _taskPopoverController.activate(task.id, layout);
     _ensurePopoverEntry();
-    _syncTaskPopoverSurfaceRegistration();
+    syncAxiSurfaceRegistration();
     _armPopoverDismissQueue();
   }
 
