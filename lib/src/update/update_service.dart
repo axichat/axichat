@@ -531,7 +531,7 @@ final class _AppStoreUpdateBackend
   final Upgrader _upgrader;
   bool _initialized = false;
 
-  static const Duration _requestTimeout = Duration(seconds: 8);
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   @override
   Future<UpdateOffer?> check({
@@ -579,7 +579,7 @@ final class _FdroidUpdateBackend
   final http.Client _httpClient;
   final Logger _log;
 
-  static const Duration _requestTimeout = Duration(seconds: 8);
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   @override
   Future<UpdateOffer?> check({
@@ -651,7 +651,7 @@ final class _GitHubReleaseUpdateBackend implements UpdateStoreBackend {
   final Uri _repositoryUri;
   final Logger _log;
 
-  static const Duration _requestTimeout = Duration(seconds: 8);
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   @override
   Future<UpdateOffer?> check({
@@ -827,8 +827,8 @@ final class _FlatpakUpdateBackend
   FlatpakUpdateInfo? _latestUpdateInfo;
   bool _monitorInitialized = false;
 
-  static const Duration _monitorTimeout = Duration(seconds: 8);
-  static const Duration _initialSignalTimeout = Duration(seconds: 2);
+  static const Duration _monitorTimeout = Duration(seconds: 15);
+  static const Duration _initialSignalTimeout = Duration(seconds: 15);
 
   @override
   Future<UpdateOffer?> check({

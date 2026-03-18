@@ -105,7 +105,7 @@ class EmailProvisioningClient {
   static const String _baseUrlDefineKey = 'EMAIL_PROVISIONING_BASE_URL';
   static const String _publicTokenDefineKey = 'EMAIL_PUBLIC_TOKEN';
   static const String _publicTokenPlaceholder = 'set-email-public-token';
-  static const Duration _requestTimeout = Duration(seconds: 12);
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
   EmailProvisioningClient({
     required Uri baseUrl,

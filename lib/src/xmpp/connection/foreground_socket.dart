@@ -110,8 +110,8 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   Completer<void>? _startCompleter;
   Completer<void>? _taskReadyCompleter;
 
-  static const Duration _taskReadyTimeout = Duration(seconds: 5);
-  static const Duration _defaultStopServiceTimeout = Duration(seconds: 5);
+  static const Duration _taskReadyTimeout = Duration(seconds: 15);
+  static const Duration _defaultStopServiceTimeout = Duration(seconds: 15);
   static final Logger _log = Logger('ForegroundTaskBridge');
 
   int get _totalUsage =>
@@ -446,7 +446,7 @@ Future<void> _waitForResume() async {
   });
   binding.addObserver(observer);
   await completer.future.timeout(
-    const Duration(seconds: 5),
+    const Duration(seconds: 15),
     onTimeout: () {
       binding.removeObserver(observer);
     },

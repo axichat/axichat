@@ -640,7 +640,7 @@ class _MemberTile extends StatefulWidget {
 }
 
 class _MemberTileState extends State<_MemberTile> {
-  static const Duration _actionTimeout = Duration(seconds: 10);
+  static const Duration _actionTimeout = Duration(seconds: 15);
 
   bool _showActions = false;
   String? _loadingActionId;

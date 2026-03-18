@@ -342,12 +342,12 @@ final class _RoomAvatarPayload {
 
 mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   final _mucLog = Logger('MucService');
-  static const Duration _mucJoinTimeout = Duration(seconds: 10);
-  static const Duration _mucJoinManagerTimeout = Duration(seconds: 3);
-  static const Duration _roomConfigSubmitTimeout = Duration(seconds: 5);
-  static const Duration _roomActionTimeout = Duration(seconds: 10);
-  static const Duration _roomQueryTimeout = Duration(seconds: 5);
-  static const Duration _mucCreateRoomBookmarkTimeout = Duration(seconds: 5);
+  static const Duration _mucJoinTimeout = Duration(seconds: 15);
+  static const Duration _mucJoinManagerTimeout = Duration(seconds: 15);
+  static const Duration _roomConfigSubmitTimeout = Duration(seconds: 15);
+  static const Duration _roomActionTimeout = Duration(seconds: 15);
+  static const Duration _roomQueryTimeout = Duration(seconds: 15);
+  static const Duration _mucCreateRoomBookmarkTimeout = Duration(seconds: 15);
   static const int _mucJoinSelfPresencePollIntervalMs = 200;
   static const Duration _mucJoinSelfPresencePollInterval = Duration(
     milliseconds: _mucJoinSelfPresencePollIntervalMs,
