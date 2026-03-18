@@ -4,6 +4,7 @@
 import 'package:axichat/src/chat/models/chat_timeline.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
@@ -12,6 +13,8 @@ import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
+
+const _mucAvatarTraceLogName = 'MucAvatarTrace';
 
 ({String? subject, String body}) displaySubjectAndBody(
   Message message, {
@@ -102,12 +105,19 @@ Occupant? resolveRoomMessageOccupant({
   required RoomState roomState,
 }) {
   final senderJid = message.senderJid.trim();
-  final occupant = roomState.occupantForSenderJid(
+  final occupantId = message.occupantID?.trim();
+  if (occupantId != null && occupantId.isNotEmpty) {
+    final matchedByOccupantId = roomState.matchingOccupant(occupantId);
+    if (matchedByOccupantId != null) {
+      return matchedByOccupantId;
+    }
+  }
+  final occupantFromSenderJid = roomState.occupantForSenderJid(
     senderJid,
     preferRealJid: true,
   );
-  if (occupant != null) {
-    return occupant;
+  if (occupantFromSenderJid != null) {
+    return occupantFromSenderJid;
   }
   return roomState.occupantForRealJid(senderJid);
 }
@@ -118,49 +128,198 @@ RoomMemberEntry? resolveRoomMemberEntryForMessage({
 }) {
   final senderJid = message.senderJid.trim();
   final senderNick = addressResourcePart(senderJid)?.trim();
-  RoomMemberEntry? fallback;
-  final realJidMatches = <RoomMemberEntry>[];
+  final occupantId = message.occupantID?.trim();
+  RoomMemberEntry? directMatch;
+  RoomMemberEntry? realJidMatch;
+  RoomMemberEntry? exactNickMatch;
+  RoomMemberEntry? aliasNickMatch;
   for (final section in sections) {
     for (final member in section.members) {
-      if (member.occupant.occupantId == senderJid ||
-          sameFullAddress(member.occupant.occupantId, senderJid)) {
-        return member;
+      final memberOccupant = member.occupant;
+      final matchesDirectOccupantId =
+          occupantId != null &&
+          occupantId.isNotEmpty &&
+          _sameOccupantId(memberOccupant.occupantId, occupantId);
+      final matchesSenderOccupantId = _sameOccupantId(
+        memberOccupant.occupantId,
+        senderJid,
+      );
+      if (matchesDirectOccupantId || matchesSenderOccupantId) {
+        directMatch = _betterRoomMemberEntry(directMatch, member);
+        continue;
       }
-      if (member.occupant.matchesRealJid(senderJid)) {
-        realJidMatches.add(member);
+      if (memberOccupant.matchesRealJid(senderJid)) {
+        realJidMatch = _betterRoomMemberEntry(realJidMatch, member);
+        continue;
       }
-      if (fallback == null &&
-          senderNick != null &&
-          senderNick.isNotEmpty &&
-          _sameOccupantNick(member.occupant.nick, senderNick)) {
-        fallback = member;
-      }
-    }
-  }
-  if (realJidMatches.isNotEmpty) {
-    if (senderNick != null && senderNick.isNotEmpty) {
-      for (final member in realJidMatches) {
-        if (member.occupant.isPresent &&
-            _sameOccupantNick(member.occupant.nick, senderNick)) {
-          return member;
+      if (senderNick != null && senderNick.isNotEmpty) {
+        if (_matchesExactRoomMemberSenderNick(
+          memberOccupant: memberOccupant,
+          senderNick: senderNick,
+        )) {
+          exactNickMatch = _betterRoomMemberEntry(exactNickMatch, member);
+          continue;
+        }
+        if (_matchesDerivedRoomMemberSenderAlias(
+          memberOccupant: memberOccupant,
+          senderNick: senderNick,
+        )) {
+          aliasNickMatch = _betterRoomMemberEntry(aliasNickMatch, member);
         }
       }
     }
-    for (final member in realJidMatches) {
-      if (member.occupant.isPresent) {
-        return member;
-      }
-    }
-    if (senderNick != null && senderNick.isNotEmpty) {
-      for (final member in realJidMatches) {
-        if (_sameOccupantNick(member.occupant.nick, senderNick)) {
-          return member;
-        }
-      }
-    }
-    return realJidMatches.first;
   }
-  return fallback;
+  var resolved = directMatch;
+  resolved = _betterRoomMemberEntry(resolved, realJidMatch);
+  resolved = _betterRoomMemberEntry(resolved, exactNickMatch);
+  resolved = _betterRoomMemberEntry(resolved, aliasNickMatch);
+  return resolved;
+}
+
+RoomMemberEntry? resolveRoomMemberEntryForOccupant({
+  required Occupant occupant,
+  required List<RoomMemberSection> sections,
+}) {
+  final occupantRealJid = occupant.realJid?.trim();
+  final occupantNick = occupant.nick.trim();
+  final occupantId = occupant.occupantId.trim();
+  RoomMemberEntry? directMatch;
+  RoomMemberEntry? realJidMatch;
+  RoomMemberEntry? exactNickMatch;
+  RoomMemberEntry? aliasNickMatch;
+  for (final section in sections) {
+    for (final member in section.members) {
+      final memberOccupant = member.occupant;
+      if (_sameOccupantId(memberOccupant.occupantId, occupantId)) {
+        directMatch = _betterRoomMemberEntry(directMatch, member);
+        continue;
+      }
+      if (occupantRealJid != null &&
+          occupantRealJid.isNotEmpty &&
+          memberOccupant.matchesRealJid(occupantRealJid)) {
+        realJidMatch = _betterRoomMemberEntry(realJidMatch, member);
+        continue;
+      }
+      if (_matchesExactRoomMemberSenderNick(
+        memberOccupant: memberOccupant,
+        senderNick: occupantNick,
+      )) {
+        exactNickMatch = _betterRoomMemberEntry(exactNickMatch, member);
+        continue;
+      }
+      if (_matchesDerivedRoomMemberSenderAlias(
+        memberOccupant: memberOccupant,
+        senderNick: occupantNick,
+      )) {
+        aliasNickMatch = _betterRoomMemberEntry(aliasNickMatch, member);
+      }
+    }
+  }
+  var resolved = directMatch;
+  resolved = _betterRoomMemberEntry(resolved, realJidMatch);
+  resolved = _betterRoomMemberEntry(resolved, exactNickMatch);
+  resolved = _betterRoomMemberEntry(resolved, aliasNickMatch);
+  return resolved;
+}
+
+RoomMemberEntry? _betterRoomMemberEntry(
+  RoomMemberEntry? current,
+  RoomMemberEntry? candidate,
+) {
+  if (current == null) {
+    return candidate;
+  }
+  if (candidate == null) {
+    return current;
+  }
+  final currentHasAvatar = _roomMemberEntryHasAvatar(current);
+  final candidateHasAvatar = _roomMemberEntryHasAvatar(candidate);
+  if (candidateHasAvatar != currentHasAvatar) {
+    return candidateHasAvatar ? candidate : current;
+  }
+  final currentPresent = current.occupant.isPresent;
+  final candidatePresent = candidate.occupant.isPresent;
+  if (candidatePresent != currentPresent) {
+    return candidatePresent ? candidate : current;
+  }
+  return current;
+}
+
+bool _roomMemberEntryHasAvatar(RoomMemberEntry entry) {
+  return entry.avatarPath?.trim().isNotEmpty == true;
+}
+
+bool _sameOccupantId(String left, String right) {
+  final trimmedLeft = left.trim();
+  final trimmedRight = right.trim();
+  if (trimmedLeft.isEmpty || trimmedRight.isEmpty) {
+    return false;
+  }
+  final normalizedLeft = normalizedOccupantId(left);
+  final normalizedRight = normalizedOccupantId(right);
+  if (normalizedLeft != null &&
+      normalizedRight != null &&
+      normalizedLeft == normalizedRight) {
+    return true;
+  }
+  return trimmedLeft.toLowerCase() == trimmedRight.toLowerCase();
+}
+
+String? _traceValue(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
+}
+
+String _traceOccupant(Occupant? occupant) {
+  if (occupant == null) {
+    return '<none>';
+  }
+  return '${occupant.occupantId}|nick=${occupant.nick}|'
+      'realJid=${occupant.realJid ?? '<null>'}|present=${occupant.isPresent}|'
+      'avatarKey=${occupant.avatarKey}';
+}
+
+String _traceMemberEntry(RoomMemberEntry? entry) {
+  if (entry == null) {
+    return '<none>';
+  }
+  return '${entry.occupant.occupantId}|nick=${entry.occupant.nick}|'
+      'avatar=${_traceValue(entry.avatarPath) ?? '<none>'}|'
+      'direct=${_traceValue(entry.directChatJid) ?? '<none>'}|'
+      'actions=${entry.actions.length}';
+}
+
+String _traceRoomMemberSections(List<RoomMemberSection> sections) {
+  final entries = <String>[];
+  for (final section in sections) {
+    for (final member in section.members) {
+      if (entries.length >= 12) {
+        break;
+      }
+      final occupant = member.occupant;
+      entries.add(
+        '${section.kind.name}|'
+        'id=${occupant.occupantId}|'
+        'nick=${occupant.nick}|'
+        'present=${occupant.isPresent}|'
+        'real=${_traceValue(occupant.realJid) ?? '<none>'}|'
+        'avatar=${_traceValue(member.avatarPath) ?? '<none>'}',
+      );
+    }
+    if (entries.length >= 12) {
+      break;
+    }
+  }
+  if (entries.isEmpty) {
+    return '<none>';
+  }
+  if (entries.length >= 12) {
+    return '${entries.take(12).join('||')}|truncated';
+  }
+  return entries.join('||');
 }
 
 ({
@@ -187,6 +346,7 @@ resolveMainChatTimelineMessageAuthor({
 }) {
   final senderBare = bareAddress(message.senderJid);
   final normalizedSenderBare = normalizedAddressKey(message.senderJid);
+  final senderNick = addressResourcePart(message.senderJid)?.trim();
   final isSelfXmpp =
       senderBare != null && senderBare == bareAddress(profileJid);
   final isSelfEmail =
@@ -228,24 +388,87 @@ resolveMainChatTimelineMessageAuthor({
     message: message,
     sections: roomMemberSections,
   );
-  final avatarOccupant = messageMemberEntry?.occupant ?? occupant;
+  final roomBareJid = chat == null ? null : normalizedAddressKey(chat.jid);
+  String avatarSource = 'none';
+  final avatarMemberEntry =
+      messageMemberEntry ??
+      (occupant == null
+          ? null
+          : resolveRoomMemberEntryForOccupant(
+              occupant: occupant,
+              sections: roomMemberSections,
+            ));
+  final avatarOccupant = avatarMemberEntry?.occupant ?? occupant;
   String? authorAvatarPath;
+  bool skippedRoomBareFallback = false;
+  String? fallbackLookupJid;
+  String nickMatchCandidateSummary = '<none>';
+  if (!isSelf && senderNick != null && senderNick.isNotEmpty) {
+    final matches = <String>[];
+    for (final section in roomMemberSections) {
+      for (final member in section.members) {
+        if (!_matchesExactRoomMemberSenderNick(
+          memberOccupant: member.occupant,
+          senderNick: senderNick,
+        )) {
+          if (!_matchesDerivedRoomMemberSenderAlias(
+            memberOccupant: member.occupant,
+            senderNick: senderNick,
+          )) {
+            continue;
+          }
+        }
+        if (matches.length >= 6) {
+          continue;
+        }
+        final occupant = member.occupant;
+        matches.add(
+          '${section.kind.name}|'
+          'id=${occupant.occupantId}|'
+          'present=${occupant.isPresent}|'
+          'real=${_traceValue(occupant.realJid) ?? '<none>'}|'
+          'avatar=${_traceValue(member.avatarPath) ?? '<none>'}|'
+          'aliases=${_traceMemberIdentityAliases(occupant)}',
+        );
+      }
+    }
+    if (matches.isNotEmpty) {
+      nickMatchCandidateSummary = matches.join('||');
+    }
+  }
   if (isSelf) {
     final trimmedSelfAvatarPath = selfAvatarPath?.trim();
     if (trimmedSelfAvatarPath != null && trimmedSelfAvatarPath.isNotEmpty) {
       authorAvatarPath = trimmedSelfAvatarPath;
+      avatarSource = 'self_avatar';
     }
   } else {
-    final memberAvatarPath = messageMemberEntry?.avatarPath?.trim();
+    final memberAvatarPath = avatarMemberEntry?.avatarPath?.trim();
     if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
       authorAvatarPath = memberAvatarPath;
+      avatarSource = messageMemberEntry != null
+          ? 'message_entry'
+          : 'occupant_entry';
     } else {
       final occupantRealJid = avatarOccupant?.realJid?.trim();
       if (occupantRealJid != null && occupantRealJid.isNotEmpty) {
         final bareRealJid = bareAddress(occupantRealJid) ?? occupantRealJid;
-        final resolvedAvatarPath = avatarPathForBareJid(bareRealJid)?.trim();
-        if (resolvedAvatarPath != null && resolvedAvatarPath.isNotEmpty) {
-          authorAvatarPath = resolvedAvatarPath;
+        final normalizedBareRealJid = normalizedAddressKey(bareRealJid);
+        fallbackLookupJid = bareRealJid;
+        final isRoomBareJidMatch =
+            roomBareJid != null &&
+            normalizedBareRealJid != null &&
+            normalizedBareRealJid == roomBareJid;
+        if (normalizedBareRealJid != null &&
+            normalizedBareRealJid.isNotEmpty &&
+            !isRoomBareJidMatch) {
+          final resolvedAvatarPath = avatarPathForBareJid(bareRealJid)?.trim();
+          if (resolvedAvatarPath != null && resolvedAvatarPath.isNotEmpty) {
+            authorAvatarPath = resolvedAvatarPath;
+            avatarSource = 'bare_jid_fallback:$bareRealJid';
+          }
+        } else {
+          skippedRoomBareFallback = isRoomBareJidMatch;
         }
       }
     }
@@ -257,6 +480,27 @@ resolveMainChatTimelineMessageAuthor({
           occupant: avatarOccupant,
           unknownLabel: unknownLabel,
         );
+  SafeLogging.debugLog(
+    'MUC_AVATAR_TRACE|resolve_message|'
+    'chat=${chat?.jid ?? '<none>'}|stanza=${message.stanzaID}|'
+    'senderJid=${message.senderJid}|occupantId=${_traceValue(message.occupantID) ?? '<none>'}|'
+    'senderNick=${addressResourcePart(message.senderJid) ?? '<none>'}|'
+    'isSelf=$isSelf|selfFlags='
+    'xmpp=$isSelfXmpp,email=$isSelfEmail,'
+    'mucSelf=$isMucSelf,placeholder=$isDeltaPlaceholderSender|'
+    'sections=${roomMemberSections.map((section) => '${section.kind.name}=${section.members.length}').join('|')}|'
+    'occupant=${_traceOccupant(occupant)}|'
+    'messageEntry=${_traceMemberEntry(messageMemberEntry)}|'
+    'avatarEntry=${_traceMemberEntry(avatarMemberEntry)}|'
+    'avatarSource=$avatarSource|'
+    'memberNick=${occupant?.nick}|avatarKey=$authorAvatarKey|'
+    'avatarPath=${_traceValue(authorAvatarPath) ?? '<none>'}|'
+    'lookupJid=${fallbackLookupJid ?? '<none>'}|'
+    'nickMatches=$nickMatchCandidateSummary|'
+    'sectionMembers=${_traceRoomMemberSections(roomMemberSections)}|'
+    'skipRoomBare=$skippedRoomBareFallback',
+    name: _mucAvatarTraceLogName,
+  );
   return (
     authorId: authorId,
     authorDisplayName: authorDisplayName,
@@ -812,10 +1056,104 @@ ChatTimelineMessageDelivery _messageDelivery(
 }
 
 bool _sameOccupantNick(String left, String right) {
-  final normalizedLeft = left.trim().toLowerCase();
-  final normalizedRight = right.trim().toLowerCase();
+  final normalizedLeft = _normalizeMemberNickname(left);
+  final normalizedRight = _normalizeMemberNickname(right);
   if (normalizedLeft.isEmpty || normalizedRight.isEmpty) {
     return false;
   }
   return normalizedLeft == normalizedRight;
+}
+
+bool _matchesExactRoomMemberSenderNick({
+  required Occupant memberOccupant,
+  required String senderNick,
+}) {
+  final candidates = <String>[
+    memberOccupant.nick,
+    _resourcePart(memberOccupant.occupantId),
+  ];
+  for (final candidate in candidates) {
+    if (_sameOccupantNick(candidate, senderNick)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _matchesDerivedRoomMemberSenderAlias({
+  required Occupant memberOccupant,
+  required String senderNick,
+}) {
+  for (final candidate in _memberIdentityAliases(memberOccupant)) {
+    if (_sameOccupantNick(candidate, senderNick)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+Iterable<String> _memberIdentityAliases(Occupant occupant) sync* {
+  final occupantNickLocalPart = addressLocalPart(occupant.nick);
+  if (occupantNickLocalPart != null && occupantNickLocalPart.isNotEmpty) {
+    yield occupantNickLocalPart;
+  }
+  final realJid = occupant.realJid?.trim();
+  if (realJid == null || realJid.isEmpty) {
+    return;
+  }
+  yield realJid;
+  final bareRealJid = bareAddress(realJid);
+  if (bareRealJid != null && bareRealJid.isNotEmpty) {
+    yield bareRealJid;
+  }
+  final realJidLocalPart = addressLocalPart(realJid);
+  if (realJidLocalPart != null && realJidLocalPart.isNotEmpty) {
+    yield realJidLocalPart;
+  }
+}
+
+String _traceMemberIdentityAliases(Occupant occupant) {
+  final aliases = <String>{};
+  for (final candidate in _memberIdentityAliases(occupant)) {
+    final trimmed = candidate.trim();
+    if (trimmed.isEmpty) {
+      continue;
+    }
+    aliases.add(trimmed);
+    if (aliases.length >= 6) {
+      break;
+    }
+  }
+  if (aliases.isEmpty) {
+    return '<none>';
+  }
+  return aliases.join(',');
+}
+
+String _normalizeMemberNickname(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return trimmed
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+String _resourcePart(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return '';
+  }
+  final parsed = parseJid(trimmed);
+  if (parsed != null && parsed.resource.trim().isNotEmpty) {
+    return parsed.resource.trim();
+  }
+  final slashIndex = trimmed.indexOf('/');
+  if (slashIndex == -1 || slashIndex == trimmed.length - 1) {
+    return '';
+  }
+  return trimmed.substring(slashIndex + 1).trim();
 }

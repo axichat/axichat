@@ -1385,32 +1385,8 @@ _resolveTimelineMessageBubbleLayout({
     (self ? outboundClampedBubbleWidth : inboundClampedBubbleWidth) +
         selectionAllowance,
   );
-  final expandedBubbleWidth = math.max(
-    cappedBubbleWidth,
-    math.max(0.0, messageRowMaxWidth - selectionAllowance),
-  );
-  final bubbleMaxWidthForLayout = isSingleSelection
-      ? expandedBubbleWidth
-      : cappedBubbleWidth;
   final combinedReactionCornerClearance =
       bubbleCornerClearance + reactionCornerClearance;
-  final compactReactionMinimumBubbleWidth = showCompactReactions
-      ? math.min(
-          bubbleMaxWidthForLayout,
-          minimumReactionCutoutBubbleWidth(
-            context: context,
-            reactions: reactions,
-            padding: reactionCutoutPadding,
-            minThickness: reactionCutoutMinThickness,
-            cornerClearance: combinedReactionCornerClearance,
-          ),
-        )
-      : 0.0;
-  final bubbleTextConstraints = BoxConstraints(
-    minWidth: compactReactionMinimumBubbleWidth,
-    maxWidth: bubbleMaxWidthForLayout,
-  );
-  final bubbleExtraConstraints = BoxConstraints(maxWidth: cappedBubbleWidth);
   final nextIsTailSpacer = next is ChatTimelineTailSpacerItem;
   final isLatestBubble = next == null || nextIsTailSpacer;
   final rowTopGap = previous == null
@@ -1435,6 +1411,30 @@ _resolveTimelineMessageBubbleLayout({
     left: spacing.s + extraOuterLeft,
     right: spacing.s,
   );
+  final fullWidthBubbleMax = math.max(
+    0.0,
+    messageRowMaxWidth - outerPadding.horizontal - selectionAllowance,
+  );
+  final bubbleMaxWidthForLayout = isSingleSelection
+      ? math.max(cappedBubbleWidth, fullWidthBubbleMax)
+      : cappedBubbleWidth;
+  final compactReactionMinimumBubbleWidth = showCompactReactions
+      ? math.min(
+          bubbleMaxWidthForLayout,
+          minimumReactionCutoutBubbleWidth(
+            context: context,
+            reactions: reactions,
+            padding: reactionCutoutPadding,
+            minThickness: reactionCutoutMinThickness,
+            cornerClearance: combinedReactionCornerClearance,
+          ),
+        )
+      : 0.0;
+  final bubbleTextConstraints = BoxConstraints(
+    minWidth: compactReactionMinimumBubbleWidth,
+    maxWidth: bubbleMaxWidthForLayout,
+  );
+  final bubbleExtraConstraints = BoxConstraints(maxWidth: cappedBubbleWidth);
   final reactionBottomInset = showCompactReactions ? reactionCutoutDepth : 0.0;
   final recipientBottomInset = (showReplyStrip || showRecipientCutout)
       ? recipientCutoutDepth
