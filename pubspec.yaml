@@ -45,12 +45,12 @@ dependencies:
     git:
       url: https://gitlab.com/axichat/moxxmpp.git
       path: packages/moxxmpp
-      ref: v0.6.4
+      ref: v0.6.5
   moxxmpp_socket_tcp:
     git:
       url: https://gitlab.com/axichat/moxxmpp.git
       path: packages/moxxmpp_socket_tcp
-      ref: v0.6.4
+      ref: v0.6.5
   moxlib:
     git:
       url: https://gitlab.com/axichat/moxlib.git
@@ -79,7 +79,6 @@ dependencies:
   connectivity_plus: ^7.0.0
   dbus: ^0.7.11
   flutter_html: ^3.0.0
-  flutter_html_table: ^3.0.0
   flutter_inappwebview: ^6.2.0-beta.3
   flutter_local_notifications: ^20.0.0
   flutter_timezone: ^3.0.1

@@ -602,14 +602,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
-  flutter_html_table:
-    dependency: "direct main"
-    description:
-      name: flutter_html_table
-      sha256: de15300b1f6d8014e1702e7edfdf3411f362c8fb753e89bac4c99215ea94a4d8
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.0"
   flutter_inappwebview:
     dependency: "direct main"
     description:
@@ -690,14 +682,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.14.4"
-  flutter_layout_grid:
-    dependency: transitive
-    description:
-      name: flutter_layout_grid
-      sha256: "739e568db97af031d528dfd8a80d333df0e5a310a126e087690fa42cd61dfb5f"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.8"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -1240,20 +1224,20 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/moxxmpp"
-      ref: "v0.6.4"
-      resolved-ref: e0675e8106fff9ab992d24f40131139f0f7eb7bb
+      ref: "v0.6.5"
+      resolved-ref: "8ebfbc7e012c3ad4f985dcf26a25462df1efd4c2"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
-    version: "0.6.4"
+    version: "0.6.5"
   moxxmpp_socket_tcp:
     dependency: "direct main"
     description:
       path: "packages/moxxmpp_socket_tcp"
-      ref: "v0.6.4"
-      resolved-ref: e0675e8106fff9ab992d24f40131139f0f7eb7bb
+      ref: "v0.6.5"
+      resolved-ref: "8ebfbc7e012c3ad4f985dcf26a25462df1efd4c2"
       url: "https://gitlab.com/axichat/moxxmpp.git"
     source: git
-    version: "0.4.1"
+    version: "0.4.2"
   msix:
     dependency: "direct dev"
     description:
@@ -1631,14 +1615,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
-  quiver:
-    dependency: transitive
-    description:
-      name: quiver
-      sha256: ea0b925899e64ecdfbf9c7becb60d5b50e706ade44a85b2363be2a22d88117d2
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.2"
   random_string:
     dependency: transitive
     description:
