@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:mime/mime.dart';
 
-const Duration _emailImageDownloadTimeout = Duration(seconds: 8);
+const Duration _emailImageDownloadTimeout = Duration(seconds: 15);
 const Duration _emailImageDecodeTimeout = Duration(seconds: 2);
 const int _emailImageMaxBytes = 4 * 1024 * 1024;
 const int _emailImageMaxPixels = 16 * 1024 * 1024;

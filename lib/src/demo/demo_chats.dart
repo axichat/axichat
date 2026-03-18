@@ -523,7 +523,8 @@ class DemoChats {
         stanzaId: 'demo-group-6',
         senderJid: '$groupJid/Alex',
         chatJid: groupJid,
-        body: "I kicked off launch warmups for 4 PM, and I’m still seeing one tiny hiccup.",
+        body:
+            "I kicked off launch warmups for 4 PM, and I’m still seeing one tiny hiccup.",
         timestamp: now.subtract(const Duration(minutes: 25)),
         occupantId: '$groupJid/Alex',
       ),

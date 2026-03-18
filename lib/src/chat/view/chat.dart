@@ -107,6 +107,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_html/flutter_html.dart' as html_widget;
+import 'package:flutter_html_table/flutter_html_table.dart';
 import 'package:flutter/rendering.dart'
     show
         BoxHitTestResult,
@@ -278,7 +279,6 @@ class _ChatState extends State<Chat> {
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
-  final _inlineEmailBodyOverrideMessageIds = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   static final Map<String, double> _scrollOffsetCache = {};
@@ -400,80 +400,6 @@ class _ChatState extends State<Chat> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  bool _usesAlternateInlineEmailBody(String messageId) {
-    final normalizedMessageId = messageId.trim();
-    if (normalizedMessageId.isEmpty) {
-      return false;
-    }
-    return _inlineEmailBodyOverrideMessageIds.contains(normalizedMessageId);
-  }
-
-  void _toggleInlineEmailBody(String messageId) {
-    final normalizedMessageId = messageId.trim();
-    if (normalizedMessageId.isEmpty) {
-      return;
-    }
-    setState(() {
-      if (!_inlineEmailBodyOverrideMessageIds.add(normalizedMessageId)) {
-        _inlineEmailBodyOverrideMessageIds.remove(normalizedMessageId);
-      }
-    });
-  }
-
-  ({
-    List<InlineSpan> details,
-    Map<int, DynamicInlineDetailAction> detailActions,
-    Map<int, double> detailOpticalOffsetFactors,
-  })
-  _emailInlineDetailActionData({
-    required BuildContext context,
-    required List<InlineSpan> details,
-    required Map<int, double> detailOpticalOffsetFactors,
-    required bool enabled,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    if (!enabled) {
-      return (
-        details: details,
-        detailActions: const <int, DynamicInlineDetailAction>{},
-        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-      );
-    }
-    final colors = context.colorScheme;
-    final spacing = context.spacing;
-    final actionTextStyle = context.textTheme.small.copyWith(
-      color: colors.secondaryForeground,
-      fontSize: 11.0,
-      height: 1.0,
-      fontWeight: FontWeight.w600,
-      textBaseline: TextBaseline.alphabetic,
-    );
-    final actionIndex = details.length;
-    return (
-      details: <InlineSpan>[
-        ...details,
-        TextSpan(text: label, style: actionTextStyle),
-      ],
-      detailActions: <int, DynamicInlineDetailAction>{
-        actionIndex: DynamicInlineDetailAction(
-          onTap: onTap,
-          backgroundColor: colors.secondary,
-          borderRadius: context.radii.squircleSm,
-          padding: EdgeInsets.symmetric(
-            horizontal: spacing.xs,
-            vertical: spacing.xxs,
-          ),
-          minimumHeight:
-              (actionTextStyle.fontSize ?? spacing.s) +
-              spacing.xs +
-              (context.borderSide.width * 2),
-        ),
-      },
-      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-    );
   }
 
   void _typingListener() {
@@ -1730,7 +1656,6 @@ class _ChatState extends State<Chat> {
     required BuildContext context,
     required bool isSelfBubble,
     required bool shouldShowViewFullEmailAction,
-    required bool shouldShowEmailHtmlAction,
     required String collapsedEmailPreviewText,
     required String messageId,
     required Object bubbleContentKey,
@@ -1740,18 +1665,6 @@ class _ChatState extends State<Chat> {
     required List<Widget> bubbleTextChildren,
   }) {
     final l10n = context.l10n;
-    final (
-      :details,
-      :detailActions,
-      detailOpticalOffsetFactors: collapsedDetailOpticalOffsetFactors,
-    ) = _emailInlineDetailActionData(
-      context: context,
-      details: messageDetails,
-      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-      enabled: shouldShowEmailHtmlAction,
-      label: l10n.chatMessageViewHtmlAction,
-      onTap: () => _toggleInlineEmailBody(messageId),
-    );
     if (shouldShowViewFullEmailAction) {
       bubbleTextChildren.add(
         _MessageViewFullAction(
@@ -1773,9 +1686,8 @@ class _ChatState extends State<Chat> {
       Padding(
         padding: EdgeInsets.only(top: context.spacing.xs),
         child: ChatInlineDetails(
-          details: details,
-          detailActions: detailActions,
-          detailOpticalOffsetFactors: collapsedDetailOpticalOffsetFactors,
+          details: messageDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         ),
       ),
     );
@@ -1785,7 +1697,6 @@ class _ChatState extends State<Chat> {
     required BuildContext context,
     required bool isSelfBubble,
     required bool isSingleSelection,
-    required bool shouldShowEmailHtmlAction,
     required bool shouldShowViewFullEmailAction,
     required bool autoLoadEmailImages,
     required bool hasRemoteHtmlImages,
@@ -1802,8 +1713,7 @@ class _ChatState extends State<Chat> {
     required Map<int, double> detailOpticalOffsetFactors,
     required List<Widget> bubbleTextChildren,
   }) {
-    final l10n = context.l10n;
-    final shouldLoadImages =
+    final shouldLoadImagesInWebView =
         autoLoadEmailImages ||
         (messageDatabaseId != null &&
             _loadedEmailImageMessageIds.contains(messageDatabaseId));
@@ -1812,7 +1722,7 @@ class _ChatState extends State<Chat> {
         : () => _handleEmailImagesApproved(messageDatabaseId);
     final preparedHtmlBody = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
       normalizedHtmlBody,
-      allowRemoteImages: shouldLoadImages,
+      allowRemoteImages: false,
     );
     final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
         ? normalizedHtmlText
@@ -1822,19 +1732,9 @@ class _ChatState extends State<Chat> {
         isSingleSelection && shouldRenderHtmlBody;
     final shouldShowImageGallery = hasRemoteHtmlImages && shouldRenderHtmlBody;
     final shouldShowViewFullInMessageBubble =
-        shouldShowViewFullEmailAction && !shouldUseSelectedInlineEmailWebView;
-    final (
-      :details,
-      :detailActions,
-      detailOpticalOffsetFactors: htmlDetailOpticalOffsetFactors,
-    ) = _emailInlineDetailActionData(
-      context: context,
-      details: messageDetails,
-      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-      enabled: shouldShowEmailHtmlAction && shouldRenderHtmlBody,
-      label: l10n.chatMessageShowTextAction,
-      onTap: () => _toggleInlineEmailBody(messageId),
-    );
+        shouldUseSelectedInlineEmailWebView
+        ? true
+        : shouldShowViewFullEmailAction;
     if (!shouldRenderHtmlBody &&
         emailFallbackText != null &&
         emailFallbackText.isNotEmpty) {
@@ -1855,8 +1755,12 @@ class _ChatState extends State<Chat> {
         bubbleTextChildren.add(
           _MessageViewFullAction(
             self: isSelfBubble,
-            label: l10n.chatMessageViewFullAction,
-            onPressed: () => _openEmailInFullView(messageId: messageId),
+            label: shouldUseSelectedInlineEmailWebView
+                ? context.l10n.commonHide
+                : context.l10n.chatMessageViewFullAction,
+            onPressed: shouldUseSelectedInlineEmailWebView
+                ? () => unawaited(_clearMessageSelection())
+                : () => _openEmailInFullView(messageId: messageId),
           ),
         );
       }
@@ -1865,6 +1769,17 @@ class _ChatState extends State<Chat> {
           (isSelfBubble
               ? context.colorScheme.primaryForeground
               : context.colorScheme.primary);
+      if (shouldUseSelectedInlineEmailWebView &&
+          shouldShowImageGallery &&
+          !shouldLoadImagesInWebView &&
+          onLoadRequested != null) {
+        bubbleTextChildren.add(
+          Padding(
+            padding: EdgeInsets.only(bottom: context.spacing.xs),
+            child: EmailImagePlaceholder(onTap: onLoadRequested),
+          ),
+        );
+      }
       bubbleTextChildren.add(
         shouldUseSelectedInlineEmailWebView
             ? _MessageHtmlWebViewBody(
@@ -1873,7 +1788,7 @@ class _ChatState extends State<Chat> {
                 backgroundColor: bubbleColor,
                 textColor: textColor,
                 linkColor: linkColor,
-                shouldLoadImages: shouldLoadImages,
+                shouldLoadImages: shouldLoadImagesInWebView,
                 onLinkTap: _handleLinkTap,
               )
             : _MessageHtmlBody(
@@ -1882,38 +1797,28 @@ class _ChatState extends State<Chat> {
                 textStyle: baseTextStyle,
                 textColor: textColor,
                 linkColor: linkColor,
-                shouldLoadImages: shouldLoadImages,
+                shouldLoadImages: false,
                 onLinkTap: _handleLinkTap,
               ),
       );
     }
-    if (shouldShowImageGallery &&
-        !shouldLoadImages &&
-        onLoadRequested != null) {
+    if (messageDetails.isNotEmpty) {
       bubbleTextChildren.add(
         Padding(
           padding: EdgeInsets.only(top: context.spacing.xs),
-          child: EmailImagePlaceholder(onTap: onLoadRequested),
+          child: ChatInlineDetails(
+            details: messageDetails,
+            detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+          ),
         ),
       );
     }
-    bubbleTextChildren.add(
-      Padding(
-        padding: EdgeInsets.only(top: context.spacing.xs),
-        child: ChatInlineDetails(
-          details: details,
-          detailActions: detailActions,
-          detailOpticalOffsetFactors: htmlDetailOpticalOffsetFactors,
-        ),
-      ),
-    );
   }
 
   void _appendTextBodyBubbleContent({
     required BuildContext context,
     required bool isSelfBubble,
     required bool shouldShowViewFullEmailAction,
-    required bool shouldShowEmailHtmlAction,
     required String messageId,
     required Object bubbleContentKey,
     required String displayMessageText,
@@ -1925,18 +1830,6 @@ class _ChatState extends State<Chat> {
     required List<Widget> bubbleTextChildren,
   }) {
     final l10n = context.l10n;
-    final (
-      :details,
-      :detailActions,
-      detailOpticalOffsetFactors: textDetailOpticalOffsetFactors,
-    ) = _emailInlineDetailActionData(
-      context: context,
-      details: messageDetails,
-      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-      enabled: shouldShowEmailHtmlAction,
-      label: l10n.chatMessageViewHtmlAction,
-      onTap: () => _toggleInlineEmailBody(messageId),
-    );
     if (shouldShowViewFullEmailAction) {
       bubbleTextChildren.add(
         _MessageViewFullAction(
@@ -1953,9 +1846,8 @@ class _ChatState extends State<Chat> {
           text: displayMessageText,
           baseStyle: baseTextStyle,
           linkStyle: linkStyle,
-          details: details,
-          detailActions: detailActions,
-          detailOpticalOffsetFactors: textDetailOpticalOffsetFactors,
+          details: messageDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
           onLinkTap: _handleLinkTap,
           onLinkLongPress: _handleLinkTap,
         ),
@@ -1966,9 +1858,8 @@ class _ChatState extends State<Chat> {
       Padding(
         padding: EdgeInsets.only(top: context.spacing.xs),
         child: ChatInlineDetails(
-          details: details,
-          detailActions: detailActions,
-          detailOpticalOffsetFactors: textDetailOpticalOffsetFactors,
+          details: messageDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         ),
       ),
     );
@@ -2277,9 +2168,6 @@ class _ChatState extends State<Chat> {
     final fullEmailPreviewText = displayMessageText.trim().isNotEmpty
         ? displayMessageText.trim()
         : (normalizedHtmlText?.trim() ?? _emptyText);
-    final hasRemoteHtmlImages =
-        normalizedHtmlBody != null &&
-        HtmlContentCodec.containsRemoteImages(normalizedHtmlBody);
     final collapsedEmailPreviewText = _collapsedEmailPreviewText(
       fullEmailPreviewText,
     );
@@ -2301,26 +2189,16 @@ class _ChatState extends State<Chat> {
           renderedText: displayMessageText,
         );
     final hasEmailHtmlBody = isEmailMessage && normalizedHtmlBody != null;
-    final usesAlternateInlineEmailBody = _usesAlternateInlineEmailBody(
-      messageModel.stanzaID,
-    );
     final defaultShowsInlineEmailHtmlBody =
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
         hasEmailHtmlBody &&
         (!hasVisibleEmailText || shouldPreferRichEmailHtml);
-    final shouldShowEmailHtmlAction =
-        shouldRenderTextContent &&
-        !hasAttachmentCaption &&
-        hasEmailHtmlBody &&
-        hasVisibleEmailText;
     final shouldRenderInlineEmailHtmlBody =
         hasEmailHtmlBody &&
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
-        (defaultShowsInlineEmailHtmlBody
-            ? !usesAlternateInlineEmailBody
-            : usesAlternateInlineEmailBody);
+        (defaultShowsInlineEmailHtmlBody || isSingleSelection);
     final shouldShowViewFullEmailAction =
         hasEmailHtmlBody &&
         shouldRenderTextContent &&
@@ -2346,7 +2224,6 @@ class _ChatState extends State<Chat> {
         context: context,
         isSelfBubble: isSelfBubble,
         shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
-        shouldShowEmailHtmlAction: shouldShowEmailHtmlAction,
         collapsedEmailPreviewText: collapsedEmailPreviewText,
         messageId: messageModel.stanzaID,
         bubbleContentKey: bubbleContentKey,
@@ -2356,11 +2233,13 @@ class _ChatState extends State<Chat> {
         bubbleTextChildren: bubbleTextChildren,
       );
     } else if (shouldRenderInlineEmailHtmlBody) {
+      final hasRemoteHtmlImages = HtmlContentCodec.containsRemoteImages(
+        normalizedHtmlBody,
+      );
       _appendInlineEmailHtmlBubbleContent(
         context: context,
         isSelfBubble: isSelfBubble,
         isSingleSelection: isSingleSelection,
-        shouldShowEmailHtmlAction: shouldShowEmailHtmlAction,
         shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
         autoLoadEmailImages: autoLoadEmailImages,
         hasRemoteHtmlImages: hasRemoteHtmlImages,
@@ -2382,7 +2261,6 @@ class _ChatState extends State<Chat> {
         context: context,
         isSelfBubble: isSelfBubble,
         shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
-        shouldShowEmailHtmlAction: shouldShowEmailHtmlAction,
         messageId: messageModel.stanzaID,
         bubbleContentKey: bubbleContentKey,
         displayMessageText: displayMessageText,
@@ -5612,7 +5490,10 @@ class _ChatState extends State<Chat> {
                   chatEntity?.isCalendarFirstRoom ?? false;
               final bool showingChatCalendar =
                   openChatCalendar || _chatRoute.isCalendar;
-              final bool showCloseButton = !readOnly && !isWelcomeChat;
+              final mediaQuery = MediaQuery.sizeOf(context);
+              final bool isCompactChat = mediaQuery.width < smallScreen;
+              final bool showCloseButton =
+                  !readOnly && (!isWelcomeChat || isCompactChat);
               final List<AppBarActionItem> navigationActions =
                   <AppBarActionItem>[
                     if (!readOnly && openStack.length > 1)

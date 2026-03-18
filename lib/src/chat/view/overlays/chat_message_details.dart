@@ -279,15 +279,31 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                               side: context.borderSide,
                             ),
                           ),
-                          child: EmailHtmlWebView.embedded(
-                            html: normalizedHtmlBody,
-                            allowRemoteImages: shouldLoadImages,
-                            backgroundColor: context.colorScheme.card,
-                            textColor: context.colorScheme.foreground,
-                            linkColor: context.colorScheme.primary,
-                            simplifyLayout: true,
-                            minHeight: context.sizing.attachmentPreviewExtent,
-                            onLinkTap: (url) => _handleLinkTap(context, url),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (shouldShowImageGallery &&
+                                  !shouldLoadImages &&
+                                  onLoadRequested != null)
+                                Padding(
+                                  padding: EdgeInsets.all(spacing.s),
+                                  child: EmailImagePlaceholder(
+                                    onTap: onLoadRequested,
+                                  ),
+                                ),
+                              EmailHtmlWebView.embedded(
+                                html: normalizedHtmlBody,
+                                allowRemoteImages: shouldLoadImages,
+                                backgroundColor: context.colorScheme.card,
+                                textColor: context.colorScheme.foreground,
+                                linkColor: context.colorScheme.primary,
+                                simplifyLayout: true,
+                                minHeight:
+                                    context.sizing.attachmentPreviewExtent,
+                                onLinkTap: (url) =>
+                                    _handleLinkTap(context, url),
+                              ),
+                            ],
                           ),
                         )
                       else if (emailFallbackText != null &&
@@ -299,10 +315,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                           message.body ?? '',
                           style: textTheme.lead,
                         ),
-                      if (shouldShowImageGallery &&
-                          !shouldLoadImages &&
-                          onLoadRequested != null)
-                        EmailImagePlaceholder(onTap: onLoadRequested),
                       if (shareContext?.subject?.isNotEmpty == true)
                         Column(
                           spacing: spacing.s,

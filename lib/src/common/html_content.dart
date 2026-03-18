@@ -8,6 +8,49 @@ import 'package:axichat/src/common/url_safety.dart';
 
 class HtmlContentCodec {
   static const String _htmlNamespaceUri = 'http://www.w3.org/1999/xhtml';
+  static const Set<String> _flutterTableWrapperTags = <String>{
+    'table',
+    'tbody',
+    'tfoot',
+    'thead',
+    'col',
+    'colgroup',
+  };
+  static const Set<String> _flutterTableCellTags = <String>{
+    'td',
+    'th',
+  };
+  static const String _tableCellInlineDisplayStyle =
+      'display:inline-block; vertical-align:top; margin-right:8px;';
+  static const String _tableCellHeaderStyle =
+      'display:inline-block; vertical-align:top; margin-right:8px; font-weight:bold;';
+  static const String _tableRowStyle = 'display:block; padding:0; margin:0 0 4px 0;';
+  static const Set<String> _flutterLayoutUnwrapTags = <String>{
+    'aside',
+    'article',
+    'blockquote',
+    'caption',
+    'figcaption',
+    'figure',
+    'header',
+    'main',
+    'nav',
+    'section',
+    'tfoot',
+    'thead',
+    'tbody',
+  };
+  static const Set<String> _flutterLayoutReplaceTags = <String>{
+    'figure',
+    'figcaption',
+    'aside',
+    'article',
+    'header',
+    'main',
+    'nav',
+    'section',
+    'caption',
+  };
   static const String _webViewViewportContent =
       'width=device-width, initial-scale=1.0, viewport-fit=cover';
   static const String _webViewBaseStyle = '''
@@ -614,7 +657,87 @@ pre, code {
       document.nodes,
       allowRemoteImages: allowRemoteImages,
     );
+    _normalizeFlutterHtmlLayout(document.nodes);
+    _flattenFlutterTableLayout(document.nodes);
+    _trimEmptyFlutterHtmlNodes(document.nodes);
     return document;
+  }
+
+  static void _normalizeFlutterHtmlLayout(List<dom.Node> nodes) {
+    var index = 0;
+    while (index < nodes.length) {
+      final node = nodes[index];
+      if (node is dom.Element) {
+        final tag = (node.localName ?? '').toLowerCase();
+        if (_flutterLayoutUnwrapTags.contains(tag)) {
+          final replacementNodes = node.nodes.toList();
+          _normalizeFlutterHtmlLayout(replacementNodes);
+          nodes.removeAt(index);
+          for (
+            var offset = replacementNodes.length - 1;
+            offset >= 0;
+            offset--
+          ) {
+            nodes.insert(index, replacementNodes[offset]);
+          }
+          continue;
+        }
+        if (_flutterLayoutReplaceTags.contains(tag)) {
+          final replacement = dom.Element.tag('div')
+            ..nodes.addAll(node.nodes.toList())
+            ..attributes.addAll(node.attributes);
+          _normalizeFlutterHtmlLayout(replacement.nodes);
+          nodes[index] = replacement;
+          index++;
+          continue;
+        }
+        if (node.nodes.isNotEmpty) {
+          _normalizeFlutterHtmlLayout(node.nodes);
+        }
+      }
+      index++;
+    }
+  }
+
+  static void _flattenFlutterTableLayout(List<dom.Node> nodes) {
+    var index = 0;
+    while (index < nodes.length) {
+      final node = nodes[index];
+      if (node is dom.Element) {
+        final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'tr') {
+          final rowNode = _formatFlutterTableRow(node);
+          nodes[index] = rowNode;
+          _flattenFlutterTableLayout(rowNode.nodes);
+          index++;
+          continue;
+        }
+        if (_flutterTableCellTags.contains(tag)) {
+          final cellNode = _formatFlutterTableCell(node);
+          nodes[index] = cellNode;
+          _flattenFlutterTableLayout(cellNode.nodes);
+          index++;
+          continue;
+        }
+        if (_flutterTableWrapperTags.contains(tag)) {
+          final replacementNodes = node.nodes.toList();
+          _flattenFlutterTableLayout(replacementNodes);
+          nodes.removeAt(index);
+          for (
+            var offset = replacementNodes.length - 1;
+            offset >= 0;
+            offset--
+          ) {
+            nodes.insert(index, replacementNodes[offset]);
+          }
+          continue;
+        }
+        if (node.nodes.isNotEmpty) {
+          _flattenFlutterTableLayout(node.nodes);
+        }
+      }
+      index++;
+    }
   }
 
   static void _normalizeWebViewNodes(
@@ -710,6 +833,38 @@ pre, code {
         );
       }
     }
+  }
+
+  static dom.Element _formatFlutterTableRow(dom.Element row) {
+    final formattedRow = dom.Element.tag('div')
+      ..attributes['style'] = _tableRowStyle;
+    var hadCells = false;
+    final children = row.nodes.toList();
+    for (final child in children) {
+      final isCell = child is dom.Element &&
+          _flutterTableCellTags.contains((child.localName ?? '').toLowerCase());
+      if (!isCell) {
+        formattedRow.nodes.add(child);
+        continue;
+      }
+      if (hadCells) {
+        formattedRow.nodes.add(dom.Text(' \u00A0 '));
+      }
+      formattedRow.nodes.add(_formatFlutterTableCell(child));
+      hadCells = true;
+    }
+    if (!hadCells) {
+      formattedRow.nodes.addAll(children);
+    }
+    return formattedRow;
+  }
+
+  static dom.Element _formatFlutterTableCell(dom.Element cell) {
+    final isHeader = (cell.localName ?? '').toLowerCase() == 'th';
+    return dom.Element.tag('span')
+      ..attributes['style'] =
+          isHeader ? _tableCellHeaderStyle : _tableCellInlineDisplayStyle
+      ..nodes.addAll(cell.nodes.toList());
   }
 
   static void _normalizeFlutterHtmlNodes(
@@ -964,10 +1119,105 @@ pre, code {
     if (property == 'behavior' || property == '-moz-binding') {
       return null;
     }
+    if (!const <String>{
+      'color',
+      'background-color',
+      'font',
+      'font-size',
+      'font-style',
+      'font-weight',
+      'font-family',
+      'text-decoration',
+      'text-align',
+      'line-height',
+      'letter-spacing',
+      'white-space',
+      'word-break',
+      'overflow-wrap',
+      'vertical-align',
+      'margin',
+      'margin-top',
+      'margin-right',
+      'margin-bottom',
+      'margin-left',
+      'padding',
+      'padding-top',
+      'padding-right',
+      'padding-bottom',
+      'padding-left',
+      'border',
+      'border-top',
+      'border-right',
+      'border-bottom',
+      'border-left',
+      'border-color',
+      'border-style',
+      'border-width',
+      'border-radius',
+      'list-style',
+      'list-style-type',
+    }.contains(property)) {
+      return null;
+    }
     if (_containsUnsafeCssValue(value)) {
       return null;
     }
     return '$property: $value';
+  }
+
+  static void _trimEmptyFlutterHtmlNodes(List<dom.Node> nodes) {
+    for (final node in nodes.toList()) {
+      if (node.nodes.isNotEmpty) {
+        _trimEmptyFlutterHtmlNodes(node.nodes);
+      }
+      if (node is! dom.Element) {
+        continue;
+      }
+      if (_isEmptyFlutterHtmlElement(node)) {
+        node.remove();
+      }
+    }
+  }
+
+  static bool _isEmptyFlutterHtmlElement(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (tag == 'img' || tag == 'br' || tag == 'hr') {
+      return false;
+    }
+    if (const <String>{
+      'html',
+      'body',
+      'table',
+      'thead',
+      'tbody',
+      'tfoot',
+      'tr',
+      'td',
+      'th',
+      'ul',
+      'ol',
+      'li',
+      'blockquote',
+    }.contains(tag)) {
+      return false;
+    }
+    if (element.text.replaceAll('\u00A0', ' ').trim().isNotEmpty) {
+      return false;
+    }
+    for (final child in element.nodes) {
+      if (child is dom.Comment) {
+        continue;
+      }
+      if (child is dom.Text &&
+          child.text.replaceAll('\u00A0', ' ').trim().isEmpty) {
+        continue;
+      }
+      if (child is dom.Element && _isEmptyFlutterHtmlElement(child)) {
+        continue;
+      }
+      return false;
+    }
+    return true;
   }
 
   static String? _sanitizeWebViewInlineStyle(String style) {

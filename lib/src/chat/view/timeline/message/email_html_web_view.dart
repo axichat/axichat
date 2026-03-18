@@ -41,9 +41,40 @@ String _buildEmailWebViewThemeStyle({
       ? const Color(0xFFFFFFFF)
       : backgroundColor;
   return '''
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <style id="axichat-email-webview-theme">
 html, body {
   background-color: ${_emailWebViewCssColor(fallbackBackgroundColor)} !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+*, *::before, *::after {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+}
+body > *:first-child {
+  margin-top: 0 !important;
+}
+body > *:last-child {
+  margin-bottom: 0 !important;
+}
+img, table, iframe, pre, blockquote {
+  max-width: 100% !important;
+}
+img, svg, video, canvas {
+  height: auto !important;
+}
+table {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+pre, code, blockquote, td, th, div, p, span, a {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 </style>
 ''';
@@ -111,6 +142,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   String? _preparedHtmlData;
   String? _preparedHtmlInputKey;
   double? _contentHeight;
+  int _heightMeasurementEpoch = 0;
 
   double get _resolvedHeight {
     final measuredHeight = _contentHeight;
@@ -254,6 +286,23 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     });
   }
 
+  void _scheduleContentHeightMeasurements() {
+    final epoch = ++_heightMeasurementEpoch;
+
+    Future<void> measureAfter(Duration delay) async {
+      await Future<void>.delayed(delay);
+      if (!mounted || epoch != _heightMeasurementEpoch) {
+        return;
+      }
+      await _measureContentHeight();
+    }
+
+    unawaited(measureAfter(Duration.zero));
+    unawaited(measureAfter(const Duration(milliseconds: 80)));
+    unawaited(measureAfter(const Duration(milliseconds: 200)));
+    unawaited(measureAfter(const Duration(milliseconds: 400)));
+  }
+
   void _updateContentHeight(double height) {
     if (!mounted || height <= 0) {
       return;
@@ -328,6 +377,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
               onContentSizeChanged:
                   (controller, oldContentSize, newContentSize) {
                     _updateContentHeight(newContentSize.height);
+                    _scheduleContentHeightMeasurements();
                   },
               shouldOverrideUrlLoading: (controller, navigationAction) async {
                 final url =
@@ -342,6 +392,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
               },
               onLoadStop: (controller, url) async {
                 await _measureContentHeight();
+                _scheduleContentHeightMeasurements();
                 if (!mounted) return;
                 setState(() {
                   _isLoading = false;

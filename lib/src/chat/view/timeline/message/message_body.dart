@@ -15,7 +15,6 @@ class _ParsedMessageBody extends StatefulWidget {
     required this.linkStyle,
     required this.details,
     required this.onLinkTap,
-    this.detailActions = const <int, DynamicInlineDetailAction>{},
     this.detailOpticalOffsetFactors = const <int, double>{},
     this.onLinkLongPress,
     this.contentKey,
@@ -25,7 +24,6 @@ class _ParsedMessageBody extends StatefulWidget {
   final TextStyle baseStyle;
   final TextStyle linkStyle;
   final List<InlineSpan> details;
-  final Map<int, DynamicInlineDetailAction> detailActions;
   final Map<int, double> detailOpticalOffsetFactors;
   final ValueChanged<String> onLinkTap;
   final ValueChanged<String>? onLinkLongPress;
@@ -84,7 +82,6 @@ class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
       key: textKey,
       text: _parsed.body,
       details: widget.details,
-      detailActions: widget.detailActions,
       detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
       links: _parsed.links,
       onLinkTap: handleLinkTap,
@@ -130,7 +127,7 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
       shrinkWrap: true,
       extensions: createEmailHtmlExtensions(
         shouldLoadImages: widget.shouldLoadImages,
-      ),
+      )..add(const TableHtmlExtension()),
       style: createEmailHtmlStyles(
         fallbackFontSize: fallbackFontSize,
         textColor: widget.textColor,
@@ -167,15 +164,18 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sizing = context.sizing;
-    return EmailHtmlWebView.embedded(
-      html: html,
-      allowRemoteImages: shouldLoadImages,
-      minHeight: sizing.attachmentPreviewExtent,
-      backgroundColor: backgroundColor,
-      textColor: textColor,
-      linkColor: linkColor,
-      simplifyLayout: true,
-      onLinkTap: onLinkTap,
+    return SizedBox(
+      width: double.infinity,
+      child: EmailHtmlWebView.embedded(
+        html: html,
+        allowRemoteImages: shouldLoadImages,
+        minHeight: sizing.attachmentPreviewExtent,
+        backgroundColor: backgroundColor,
+        textColor: textColor,
+        linkColor: linkColor,
+        simplifyLayout: true,
+        onLinkTap: onLinkTap,
+      ),
     );
   }
 }
@@ -198,6 +198,7 @@ class _MessageViewFullAction extends StatelessWidget {
       padding: EdgeInsets.only(bottom: spacing.xs),
       child: Align(
         alignment: self ? Alignment.centerRight : Alignment.centerLeft,
+        widthFactor: 1.0,
         child: AxiButton.secondary(
           size: AxiButtonSize.sm,
           onPressed: onPressed,
