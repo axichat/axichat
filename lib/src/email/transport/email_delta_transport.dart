@@ -60,6 +60,8 @@ const String _emailSecurityModeUnknownPrefix =
 const String _emailSecurityModeUnknownSuffix = ' connections.';
 const String _emailAccountNotReadyError =
     'Email account not hydrated; wait for email sync.';
+const String _blockedMultiDeviceSyncMessageError =
+    'Blocked Multi Device Synchronization placeholder message.';
 const String _accountHydrationFailedLog =
     'Failed to hydrate email account address.';
 const String _originIdHydrationFailedLog = 'Failed to hydrate Delta origin ID.';
@@ -1300,12 +1302,22 @@ class EmailDeltaTransport implements ChatTransport {
     }
     final context = session.context;
     final resolvedAccountId = session.accountId;
+    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    if (_isMultiDeviceSyncMessage(
+      subject: sanitizedSubject,
+      body: body,
+      htmlBody: htmlBody,
+    )) {
+      _log.warning(
+        'Attempted to send Multi Device Synchronization placeholder body; dropping message.',
+      );
+      throw const DeltaStateException(_blockedMultiDeviceSyncMessageError);
+    }
     final Chat chat = await _requireReadyOutgoingChat(
       chatId: chatId,
       accountId: resolvedAccountId,
       context: context,
     );
-    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
     final coreSubject = subjectForDeltaCore(subject);
     final DateTime sentAt = DateTime.timestamp();
     final String pendingStanzaId = _pendingOutgoingStanzaId();
@@ -1368,12 +1380,23 @@ class EmailDeltaTransport implements ChatTransport {
     }
     final context = session.context;
     final resolvedAccountId = session.accountId;
+    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    if (_isMultiDeviceSyncMessage(
+      subject: sanitizedSubject,
+      body: attachment.caption,
+      htmlBody: htmlCaption,
+    )) {
+      _log.warning(
+        'Attempted to send Multi Device Synchronization placeholder attachment message; '
+        'dropping message.',
+      );
+      throw const DeltaStateException(_blockedMultiDeviceSyncMessageError);
+    }
     final Chat chat = await _requireReadyOutgoingChat(
       chatId: chatId,
       accountId: resolvedAccountId,
       context: context,
     );
-    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
     final coreSubject = subjectForDeltaCore(subject);
     final sanitizedFileName = sanitizeEmailAttachmentFilename(
       attachment.fileName,
@@ -1499,6 +1522,19 @@ class EmailDeltaTransport implements ChatTransport {
     final String uniqueId = uuid.v4();
     return '$_pendingOutgoingStanzaPrefix'
         '$_pendingOutgoingStanzaSeparator$uniqueId';
+  }
+
+  bool _isMultiDeviceSyncMessage({
+    required String? subject,
+    required String? body,
+    String? htmlBody,
+  }) {
+    final String? inferredBody = body?.trim().isNotEmpty == true
+        ? body
+        : (htmlBody?.trim().isNotEmpty == true
+              ? HtmlContentCodec.toPlainText(htmlBody!)
+              : null);
+    return isMultiDeviceSyncMessage(subject: subject, body: inferredBody);
   }
 
   Future<void> _recordOutgoing({
@@ -2376,12 +2412,23 @@ class EmailDeltaTransport implements ChatTransport {
     }
     final context = session.context;
     final resolvedAccountId = session.accountId;
+    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    if (_isMultiDeviceSyncMessage(
+      subject: sanitizedSubject,
+      body: body,
+      htmlBody: htmlBody,
+    )) {
+      _log.warning(
+        'Attempted to send Multi Device Synchronization placeholder quote message; '
+        'dropping message.',
+      );
+      throw const DeltaStateException(_blockedMultiDeviceSyncMessageError);
+    }
     final Chat chat = await _requireReadyOutgoingChat(
       chatId: chatId,
       accountId: resolvedAccountId,
       context: context,
     );
-    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
     final coreSubject = subjectForDeltaCore(subject);
     final DateTime sentAt = DateTime.timestamp();
     final String pendingStanzaId = _pendingOutgoingStanzaId();

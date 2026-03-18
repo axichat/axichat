@@ -370,15 +370,17 @@ class DeltaEventConsumer {
       }
       if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
         final last = await _context.getMessage(entry.msgId);
-        final timestamp = last?.timestamp;
-        final preview = _previewTextForDeltaMessage(last);
-        if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
-          updated = updated.copyWith(lastChangeTimestamp: timestamp);
-        }
-        if (preview != null &&
-            preview.isNotEmpty &&
-            preview != updated.lastMessage) {
-          updated = updated.copyWith(lastMessage: preview);
+        if (last == null || !_isMultiDeviceSyncMessage(last)) {
+          final timestamp = last?.timestamp;
+          final preview = _previewTextForDeltaMessage(last);
+          if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
+            updated = updated.copyWith(lastChangeTimestamp: timestamp);
+          }
+          if (preview != null &&
+              preview.isNotEmpty &&
+              preview != updated.lastMessage) {
+            updated = updated.copyWith(lastMessage: preview);
+          }
         }
       }
       if (updated != chat) {
@@ -410,19 +412,12 @@ class DeltaEventConsumer {
         );
       }
 
-      final last = await _context.getMessage(filteredMsgIds.last);
-      final lastTimestamp = last?.timestamp;
-      if (lastTimestamp != null) {
-        final stored = await db.getChatByDeltaChatId(
-          chatId,
-          accountId: deltaAccountId,
-        );
-        if (stored != null && stored.lastChangeTimestamp != lastTimestamp) {
-          await db.updateChat(
-            stored.copyWith(lastChangeTimestamp: lastTimestamp),
-          );
-          await db.repairChatSummaryPreservingTimestamp(stored.jid);
-        }
+      final stored = await db.getChatByDeltaChatId(
+        chatId,
+        accountId: deltaAccountId,
+      );
+      if (stored != null) {
+        await _refreshStoredChatSummary(chatJid: stored.jid, db: db);
       }
       await _updateUnreadCount(chatId);
     }
@@ -522,16 +517,21 @@ class DeltaEventConsumer {
           deltaAccountId: deltaAccountId,
         );
         if (existing != null) {
-          lastTimestamp = existing.timestamp;
-          lastPreview = await _previewTextForStoredMessage(
-            db: db,
-            message: existing,
-          );
+          if (!isMultiDeviceSyncMessage(
+            subject: existing.subject,
+            body: existing.body,
+          )) {
+            lastTimestamp = existing.timestamp;
+            lastPreview = await _previewTextForStoredMessage(
+              db: db,
+              message: existing,
+            );
+          }
         } else {
           final last = await _context.getMessage(entry.msgId);
-          lastTimestamp = last?.timestamp;
-          lastPreview = _previewTextForDeltaMessage(last);
-          if (last != null) {
+          if (last != null && !_isMultiDeviceSyncMessage(last)) {
+            lastTimestamp = last.timestamp;
+            lastPreview = _previewTextForDeltaMessage(last);
             final stanzaId = _stanzaId(entry.msgId);
             final stored = await db.getMessageByStanzaID(stanzaId);
             if (stored == null) {
@@ -563,6 +563,8 @@ class DeltaEventConsumer {
         if (hasPreview && shouldUpdateTimestamp) {
           updated = updated.copyWith(lastMessage: lastPreview);
         }
+      } else if (!hydratedMessages && lastTimestamp == null) {
+        await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
       }
       var storedUnreadCount = await db.countUnreadMessagesForChat(
         updated.jid,
@@ -734,6 +736,9 @@ class DeltaEventConsumer {
   Future<DeltaMessage?> _hydrateMessage(int chatId, int msgId) async {
     final msg = await _context.getMessage(msgId);
     if (msg == null) return null;
+    if (_isMultiDeviceSyncMessage(msg)) {
+      return null;
+    }
     await _ingestDeltaMessage(chatId: chatId, msg: msg);
     return msg;
   }
@@ -783,7 +788,10 @@ class DeltaEventConsumer {
       return;
     }
     final msg = await _hydrateMessage(chatId, msgId);
-    if (msg != null && !msg.isOutgoing) {
+    if (msg == null) {
+      return;
+    }
+    if (!msg.isOutgoing) {
       await _updateChatSummaryForIncomingMessage(
         chatId: chatId,
         messageId: msgId,
@@ -799,7 +807,10 @@ class DeltaEventConsumer {
     if (_isDeltaMessageMarkerId(msgId)) {
       return;
     }
-    await _hydrateMessage(chatId, msgId);
+    final msg = await _hydrateMessage(chatId, msgId);
+    if (msg == null) {
+      return;
+    }
     await _updateUnreadCount(chatId);
   }
 
@@ -951,6 +962,13 @@ class DeltaEventConsumer {
     if (!skipSystemChatCheck && await _isDeltaSystemChat(chatId)) {
       _log.finer(
         'Dropping Delta system-chat message msgId=${msg.id} chatId=$chatId',
+      );
+      return;
+    }
+    if (_isMultiDeviceSyncMessage(msg)) {
+      _log.finer(
+        'Dropping Multi Device Synchronization placeholder message '
+        'msgId=${msg.id} chatId=$chatId',
       );
       return;
     }
@@ -1202,6 +1220,15 @@ class DeltaEventConsumer {
     return normalizedSender == normalizedSelf;
   }
 
+  bool _isMultiDeviceSyncMessage(DeltaMessage msg) {
+    final String? inferredBody = msg.text?.trim().isNotEmpty == true
+        ? msg.text
+        : (msg.html?.trim().isNotEmpty == true
+              ? HtmlContentCodec.toPlainText(msg.html!)
+              : null);
+    return isMultiDeviceSyncMessage(subject: msg.subject, body: inferredBody);
+  }
+
   Future<void> _updateExistingMessage({
     required Message existing,
     required DeltaMessage msg,
@@ -1435,9 +1462,11 @@ class DeltaEventConsumer {
             db: resolvedDb,
             message: lastMessage,
           );
+    final lastChangeTimestamp =
+        lastMessage?.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
     final updated = chat.copyWith(
       lastMessage: preview,
-      lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
+      lastChangeTimestamp: lastChangeTimestamp,
     );
     if (updated != chat) {
       await resolvedDb.updateChat(updated);
@@ -1448,6 +1477,12 @@ class DeltaEventConsumer {
     required XmppDatabase db,
     required Message message,
   }) async {
+    if (isMultiDeviceSyncMessage(
+      subject: message.subject,
+      body: message.body,
+    )) {
+      return null;
+    }
     final preview = ChatSubjectCodec.previewEmailText(
       body: message.body,
       subject: message.subject,
@@ -1468,6 +1503,9 @@ class DeltaEventConsumer {
 
   String? _previewTextForDeltaMessage(DeltaMessage? message) {
     if (message == null) {
+      return null;
+    }
+    if (_isMultiDeviceSyncMessage(message)) {
       return null;
     }
     final sanitizedSubject = sanitizeEmailSubjectValue(message.subject);

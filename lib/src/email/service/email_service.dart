@@ -254,7 +254,7 @@ class EmailService {
   static const int _deltaMessageIdUnset = DeltaMessageId.none;
   static const int _emptyUnreadCount = 0;
   static const Duration _foregroundKeepaliveInterval = Duration(seconds: 45);
-  static const Duration _foregroundFetchTimeout = Duration(seconds: 8);
+  static const Duration _foregroundFetchTimeout = Duration(seconds: 15);
   static const Duration _notificationFlushDelay = Duration(milliseconds: 500);
   static const Duration _contactsSyncDebounce = Duration(seconds: 2);
   static const int _connectivityConnectedMin = 4000;
@@ -1353,6 +1353,26 @@ class EmailService {
     );
   }
 
+  bool _isBlockedMultiDeviceSyncMessage({
+    required String? subject,
+    required String? body,
+    String? htmlBody,
+  }) {
+    final String? inferredBody = body?.trim().isNotEmpty == true
+        ? body
+        : (htmlBody?.trim().isNotEmpty == true
+              ? HtmlContentCodec.toPlainText(htmlBody!)
+              : null);
+    return isMultiDeviceSyncMessage(subject: subject, body: inferredBody);
+  }
+
+  Never _throwBlockedMultiDeviceSyncMessage({required String operation}) {
+    throw DeltaInternalException(
+      operation: operation,
+      message: 'Blocked Multi Device Synchronization placeholder message.',
+    );
+  }
+
   Future<int> sendMessage({
     required Chat chat,
     required String body,
@@ -1384,6 +1404,13 @@ class EmailService {
         : (normalizedHtml == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
+    if (_isBlockedMultiDeviceSyncMessage(
+      subject: normalizedSubject,
+      body: effectiveBody,
+      htmlBody: normalizedHtml,
+    )) {
+      _throwBlockedMultiDeviceSyncMessage(operation: 'send email message');
+    }
     String? shareId;
     String? subjectToken;
     if (normalizedSubject != null) {
@@ -1504,6 +1531,17 @@ class EmailService {
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(effectiveSubject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(effectiveHtmlCaption);
+    var captionText = effectiveAttachment.caption?.trim() ?? '';
+    if (captionText.isEmpty && normalizedHtml != null) {
+      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
+    }
+    if (_isBlockedMultiDeviceSyncMessage(
+      subject: normalizedSubject,
+      body: captionText,
+      htmlBody: normalizedHtml,
+    )) {
+      _throwBlockedMultiDeviceSyncMessage(operation: 'send email attachment');
+    }
     String? shareId;
     if (normalizedSubject != null) {
       shareId = ShareTokenCodec.generateShareId();
@@ -1526,10 +1564,6 @@ class EmailService {
         share: shareRecord,
         participants: participants,
       );
-    }
-    var captionText = effectiveAttachment.caption?.trim() ?? '';
-    if (captionText.isEmpty && normalizedHtml != null) {
-      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
     }
     final captionEnvelope = _composeSubjectEnvelope(
       subject: normalizedSubject,
@@ -1673,6 +1707,15 @@ class EmailService {
     var captionText = attachment?.caption?.trim() ?? '';
     if (captionText.isEmpty && normalizedHtmlCaption != null) {
       captionText = HtmlContentCodec.toPlainText(normalizedHtmlCaption);
+    }
+    if (_isBlockedMultiDeviceSyncMessage(
+      subject: effectiveSubject,
+      body: hasAttachment ? captionText : bodyText,
+      htmlBody: hasAttachment ? normalizedHtmlCaption : normalizedHtmlBody,
+    )) {
+      _throwBlockedMultiDeviceSyncMessage(
+        operation: hasAttachment ? 'fan-out attachment' : 'fan-out message',
+      );
     }
     final transmitCaption = subjectShareToken != null
         ? ShareTokenCodec.injectToken(
@@ -2318,7 +2361,7 @@ class EmailService {
       return true;
     }
     try {
-      const emailUnreadFetchTimeout = Duration(seconds: 8);
+      const emailUnreadFetchTimeout = Duration(seconds: 15);
       final fetched = await performBackgroundFetch(
         timeout: emailUnreadFetchTimeout,
       );
@@ -5295,6 +5338,13 @@ class EmailService {
         : (normalizedHtml == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
+    if (_isBlockedMultiDeviceSyncMessage(
+      subject: normalizedSubject,
+      body: effectiveBody,
+      htmlBody: normalizedHtml,
+    )) {
+      _throwBlockedMultiDeviceSyncMessage(operation: 'send reply');
+    }
     final msgId = await _guardDeltaOperation(
       operation: 'send reply',
       body: () => _transport.sendTextWithQuote(

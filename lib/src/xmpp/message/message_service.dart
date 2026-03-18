@@ -54,15 +54,6 @@ class MamStreamManagementGuard extends mox.XmppManagerBase {
 
 final RegExp _crlfPattern = RegExp(r'[\r\n]');
 const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
-
-const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
-const int _messageStatusSyncEnvelopeVersion = 1;
-const String _messageStatusSyncEnvelopeIdKey = 'id';
-const String _messageStatusSyncEnvelopeChatJidKey = 'chat_jid';
-const String _messageStatusSyncEnvelopeVersionKey = 'v';
-const String _messageStatusSyncEnvelopeAckedKey = 'acked';
-const String _messageStatusSyncEnvelopeReceivedKey = 'received';
-const String _messageStatusSyncEnvelopeDisplayedKey = 'displayed';
 const String _calendarSyncOperationUpdate = 'update';
 const String _calendarSyncOperationDelete = 'delete';
 const String _calendarSyncEntityTask = 'task';
@@ -89,12 +80,6 @@ const String _pinSyncFlushFailedLog = 'Failed to flush pending pin sync.';
 const String _pinSyncFlushAbortedLog = 'Pending pin sync aborted.';
 const String _pinSyncFlushOperationName =
     'MessageService.flushPendingPinSyncOnNegotiations';
-const String _pinSyncReconnectRefreshFailedLog =
-    'Failed to refresh pinned messages after reconnect.';
-const String _pinSyncReconnectRefreshAbortedLog =
-    'Pinned message refresh after reconnect aborted.';
-const String _pinSyncReconnectRefreshOperationName =
-    'MessageService.refreshPinnedMessagesOnNegotiations';
 const String _httpUploadBootstrapOperationName =
     'MessageService.refreshHttpUploadSupportOnNegotiations';
 const String _mamGlobalBootstrapOperationName =
@@ -226,7 +211,7 @@ const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
 const String _pinArchiveBootstrapKeyPrefix = 'pin_sync_archive_bootstrap_';
 const Duration _mamQueryTimeout = Duration(seconds: 90);
-const Duration _mamQueryFallbackTimeout = Duration(seconds: 5);
+const Duration _mamQueryFallbackTimeout = Duration(seconds: 15);
 const Set<String> _emptyPinPublisherSet = <String>{};
 final _pinPendingPublishesKey = XmppStateStore.registerKey(
   _pinPendingPublishesKeyName,
@@ -273,78 +258,6 @@ const String _draftSyncFlushPendingOperationName =
     'MessageService.flushPendingDraftSyncOnResume';
 const String _draftSyncSnapshotBootstrapOperationName =
     'MessageService.bootstrapDraftSnapshotOnNegotiations';
-
-final class _MessageStatusSyncEnvelope {
-  const _MessageStatusSyncEnvelope({
-    required this.id,
-    required this.chatJid,
-    required this.acked,
-    required this.received,
-    required this.displayed,
-  });
-
-  final String id;
-  final String? chatJid;
-  final bool acked;
-  final bool received;
-  final bool displayed;
-
-  Map<String, dynamic> toJson() {
-    final normalizedChatJid = chatJid?.trim();
-    return {
-      _messageStatusSyncEnvelopeVersionKey: _messageStatusSyncEnvelopeVersion,
-      _messageStatusSyncEnvelopeIdKey: id,
-      if (normalizedChatJid != null && normalizedChatJid.isNotEmpty)
-        _messageStatusSyncEnvelopeChatJidKey: normalizedChatJid,
-      _messageStatusSyncEnvelopeAckedKey: acked,
-      _messageStatusSyncEnvelopeReceivedKey: received,
-      _messageStatusSyncEnvelopeDisplayedKey: displayed,
-    };
-  }
-
-  static _MessageStatusSyncEnvelope? tryParseEnvelope(String raw) {
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return null;
-      }
-      final payload = decoded[_messageStatusSyncEnvelopeKey];
-      if (payload is! Map<String, dynamic>) {
-        return null;
-      }
-      final version = payload[_messageStatusSyncEnvelopeVersionKey] as int?;
-      if (version != _messageStatusSyncEnvelopeVersion) {
-        return null;
-      }
-      final id = payload[_messageStatusSyncEnvelopeIdKey] as String?;
-      if (id == null || id.isEmpty) {
-        return null;
-      }
-      final chatJid = (payload[_messageStatusSyncEnvelopeChatJidKey] as String?)
-          ?.trim();
-      final acked =
-          payload[_messageStatusSyncEnvelopeAckedKey] as bool? ?? false;
-      final received =
-          payload[_messageStatusSyncEnvelopeReceivedKey] as bool? ?? false;
-      final displayed =
-          payload[_messageStatusSyncEnvelopeDisplayedKey] as bool? ?? false;
-      final normalizedDisplayed = displayed;
-      final normalizedReceived = normalizedDisplayed || received;
-      final normalizedAcked = normalizedReceived || acked;
-      return _MessageStatusSyncEnvelope(
-        id: id,
-        chatJid: chatJid == null || chatJid.isEmpty ? null : chatJid,
-        acked: normalizedAcked,
-        received: normalizedReceived,
-        displayed: normalizedDisplayed,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static bool isEnvelope(String raw) => tryParseEnvelope(raw) != null;
-}
 
 final class OutboundMessageErrorEvent extends mox.XmppEvent {
   OutboundMessageErrorEvent({
@@ -931,6 +844,7 @@ final class _ChatMamSession {
   bool loading = false;
   bool catchingUp = false;
   bool catchUpCompleted = false;
+  Object? loadingToken;
   Completer<void>? loadingCompleter;
 }
 
@@ -2429,8 +2343,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final trimmed = body?.trim();
     if (trimmed == null || trimmed.isEmpty) return false;
     return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
-        CalendarSyncMessage.looksLikeEnvelope(trimmed) ||
-        _MessageStatusSyncEnvelope.isEnvelope(trimmed);
+        CalendarSyncMessage.looksLikeEnvelope(trimmed);
   }
 
   Stream<List<Message>> _localMessageStreamForChat({
@@ -3737,42 +3650,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  Future<void> _refreshPinsAfterReconnect() async {
-    if (_pinReconnectRefreshInFlight) {
-      return;
-    }
-    if (!_connection.hasConnectionSettings) {
-      return;
-    }
-    _pinReconnectRefreshInFlight = true;
-    try {
-      await database;
-      final support = await refreshPubSubSupport();
-      final decision = decidePubSubSupport(
-        supported: support.pubSubSupported,
-        featureLabel: 'pinned messages',
-      );
-      if (!decision.isAllowed) {
-        return;
-      }
-      final chats = await _loadAllChatsPaged();
-      for (final chat in chats) {
-        if (!_usesPubSubPins(chat)) {
-          continue;
-        }
-        final chatJid = chat.jid.trim();
-        if (chatJid.isEmpty) {
-          continue;
-        }
-        await syncPinnedMessagesForChat(chatJid);
-      }
-    } on XmppAbortedException {
-      return;
-    } finally {
-      _pinReconnectRefreshInFlight = false;
-    }
-  }
-
   final _log = Logger('MessageService');
   StreamController<HttpUploadSupport> _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
@@ -3846,10 +3723,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   bool _pendingPinSyncLoaded = false;
   final Map<String, _PinChatSyncSession> _pinChatSyncSessions = {};
   final Map<String, Map<String, Map<String, _PendingInboundReaction>>>
-  _pendingInboundReactionsByChatAndReference = {};
+      _pendingInboundReactionsByChatAndReference = {};
   final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
   final Set<String> _pinCreateRetryKeys = <String>{};
-  bool _pinReconnectRefreshInFlight = false;
   mox.JID? _pinPubSubHost;
 
   bool _hasHttpUploadIdentity(mox.DiscoInfo info) {
@@ -4359,7 +4235,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           _rememberStableKey(message.chatJid, stableKey);
         }
 
-        if (await _handleMessageStatusSync(event)) return;
         await _handleChatState(event, message.chatJid);
 
         if (await _handleCorrection(event, message.senderJid)) return;
@@ -4495,14 +4370,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             displayed: isDisplayed,
           );
         });
-
-        await _broadcastMessageStatusSync(
-          id: event.id,
-          chatJid: chatJid,
-          acked: isAcked,
-          received: isReceived,
-          displayed: isDisplayed,
-        );
       })
       ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
         final chatJid = event.from.toBare().toString();
@@ -4510,14 +4377,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           await db.markMessageReceived(event.id, chatJid: chatJid);
           await db.markMessageAcked(event.id, chatJid: chatJid);
         });
-
-        await _broadcastMessageStatusSync(
-          id: event.id,
-          chatJid: chatJid,
-          acked: true,
-          received: true,
-          displayed: false,
-        );
       })
       ..registerHandler<mox.PubSubNotificationEvent>((event) async {
         await _handlePinNotification(event);
@@ -4572,15 +4431,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             _log.fine(_pinSyncFlushFailedLog, error, stackTrace);
           }
         }, operationName: _pinSyncFlushOperationName);
-        fireAndForget(() async {
-          try {
-            await _refreshPinsAfterReconnect();
-          } on XmppAbortedException {
-            _log.fine(_pinSyncReconnectRefreshAbortedLog);
-          } on Exception catch (error, stackTrace) {
-            _log.fine(_pinSyncReconnectRefreshFailedLog, error, stackTrace);
-          }
-        }, operationName: _pinSyncReconnectRefreshOperationName);
       });
   }
 
@@ -6548,7 +6398,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (!visibleWindowEmpty && localCount >= desiredWindow) {
       return;
     }
-    _beginChatMamLoad(session);
+    final loadingToken = _beginChatMamLoad(session);
     try {
       final outcome = await hydrateLatestFromMamForChatIfNeeded(
         chat: chat,
@@ -6579,7 +6429,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         );
       }
     } finally {
-      _finishChatMamLoad(session);
+      _finishChatMamLoad(session, loadingToken);
     }
   }
 
@@ -6615,7 +6465,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (beforeId == null || beforeId.isEmpty) {
       return;
     }
-    _beginChatMamLoad(session);
+    final loadingToken = _beginChatMamLoad(session);
     try {
       final result = await fetchBeforeFromArchiveForChat(
         chat: chat,
@@ -6629,7 +6479,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         filter: filter,
       );
     } finally {
-      _finishChatMamLoad(session);
+      _finishChatMamLoad(session, loadingToken);
     }
   }
 
@@ -6685,7 +6535,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     session.catchUpCompleted = false;
     session.catchingUp = true;
-    _beginChatMamLoad(session);
+    final loadingToken = _beginChatMamLoad(session);
     try {
       final results = await catchUpChatFromMamOnConnect(
         chat: chat,
@@ -6703,7 +6553,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       session.catchUpCompleted = true;
     } finally {
-      _finishChatMamLoad(session);
+      _finishChatMamLoad(session, loadingToken);
       session.catchingUp = false;
     }
   }
@@ -6955,19 +6805,33 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     session.loading = false;
     session.catchingUp = false;
     session.catchUpCompleted = false;
-    session.loadingCompleter?.complete();
+    final loadingCompleter = session.loadingCompleter;
+    if (loadingCompleter != null && !loadingCompleter.isCompleted) {
+      loadingCompleter.complete();
+    }
     session.loadingCompleter = null;
+    session.loadingToken = null;
   }
 
-  void _beginChatMamLoad(_ChatMamSession session) {
+  Object _beginChatMamLoad(_ChatMamSession session) {
+    final token = Object();
     session.loading = true;
+    session.loadingToken = token;
     session.loadingCompleter = Completer<void>();
+    return token;
   }
 
-  void _finishChatMamLoad(_ChatMamSession session) {
+  void _finishChatMamLoad(_ChatMamSession session, Object token) {
+    if (!identical(session.loadingToken, token)) {
+      return;
+    }
     session.loading = false;
-    session.loadingCompleter?.complete();
+    final loadingCompleter = session.loadingCompleter;
+    if (loadingCompleter != null && !loadingCompleter.isCompleted) {
+      loadingCompleter.complete();
+    }
     session.loadingCompleter = null;
+    session.loadingToken = null;
   }
 
   Future<void> _applyMamResultToChatSession(
@@ -7512,7 +7376,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String feature,
     required String featureLabel,
   }) async {
-    final decision = await _featureDecision(jid: jid, feature: feature);
+    const decision = CapabilityDecision(CapabilityDecisionKind.allowed);
     _logCapabilityDecision(
       featureLabel: featureLabel,
       jid: jid,
@@ -7748,12 +7612,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (isArchived && !allowArchivedAcknowledgement) {
       return (acked: false, received: false);
     }
-    final body = event.get<mox.MessageBodyData>()?.body?.trim();
-    if (body != null &&
-        body.isNotEmpty &&
-        _MessageStatusSyncEnvelope.isEnvelope(body)) {
-      return (acked: false, received: false);
-    }
 
     final markable =
         event.extensions.get<mox.MarkableData>()?.isMarkable ?? false;
@@ -7867,45 +7725,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return (acked: true, received: true);
   }
 
-  Future<bool> _handleMessageStatusSync(mox.MessageEvent event) async {
-    final raw = event.get<mox.MessageBodyData>()?.body?.trim();
-    if (raw == null || raw.isEmpty) {
-      return false;
-    }
-    final from = event.from.toBare().toString().toLowerCase();
-    final to = event.to.toBare().toString().toLowerCase();
-    final accountJid = myJid;
-    final self = accountJid?.toLowerCase();
-    if (self == null || self.isEmpty) {
-      return false;
-    }
-    if (from != self || to != self) {
-      return false;
-    }
-
-    final envelope = _MessageStatusSyncEnvelope.tryParseEnvelope(raw);
-    if (envelope == null) {
-      if (raw.contains(_messageStatusSyncEnvelopeKey)) {
-        _log.fine('Dropped malformed message status sync envelope from self');
-        return true;
-      }
-      return false;
-    }
-
-    await _dbOp<XmppDatabase>((db) async {
-      final chatJid = envelope.chatJid?.trim();
-      await _applyOutboundMessageStatus(
-        db,
-        id: envelope.id,
-        chatJid: chatJid,
-        acked: envelope.acked,
-        received: envelope.received,
-        displayed: envelope.displayed,
-      );
-    });
-    return true;
-  }
-
   Future<void> _applyOutboundMessageStatus(
     XmppDatabase db, {
     required String id,
@@ -7946,66 +7765,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  Future<void> _broadcastMessageStatusSync({
-    required String id,
-    required String chatJid,
-    required bool acked,
-    required bool received,
-    required bool displayed,
-  }) async {
-    final accountJid = myJid;
-    if (accountJid == null || accountJid.isEmpty) {
-      return;
-    }
-    final normalizedChatJid = chatJid.trim();
-    if (normalizedChatJid.isEmpty) {
-      return;
-    }
-
-    final normalizedDisplayed = displayed;
-    final normalizedReceived = normalizedDisplayed || received;
-    final normalizedAcked = normalizedReceived || acked;
-
-    final db = await database;
-    final message = await db.getMessageByReferenceId(
-      id,
-      chatJid: normalizedChatJid,
-    );
-    if (message == null) {
-      return;
-    }
-    if (message.senderJid.toLowerCase() != accountJid.toLowerCase()) {
-      return;
-    }
-    final body = message.body;
-    if (body != null &&
-        body.isNotEmpty &&
-        (CalendarSyncMessage.looksLikeEnvelope(body) ||
-            _MessageStatusSyncEnvelope.isEnvelope(body))) {
-      return;
-    }
-
-    final envelopeJson = jsonEncode({
-      _messageStatusSyncEnvelopeKey: _MessageStatusSyncEnvelope(
-        id: id,
-        chatJid: normalizedChatJid,
-        acked: normalizedAcked,
-        received: normalizedReceived,
-        displayed: normalizedDisplayed,
-      ).toJson(),
-    });
-
-    try {
-      await sendMessage(
-        jid: accountJid,
-        text: envelopeJson,
-        storeLocally: false,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.finer('Failed to broadcast message status sync', error, stackTrace);
-    }
-  }
-
   @override
   Future<void> _reset() async {
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
@@ -8039,7 +7798,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     _chatMamSessions.clear();
     _pendingPinSyncLoaded = false;
-    _pinReconnectRefreshInFlight = false;
     _pinCreateRetryKeys.clear();
     _pinPubSubHost = null;
   }

@@ -3,7 +3,6 @@
 
 // ignore_for_file: avoid_renaming_method_parameters
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
@@ -37,7 +36,6 @@ abstract interface class Database {
 const String _databaseFileSuffix = '.axichat.drift';
 const int _messageAttachmentMaxCount = 50;
 const int _emptyTimestampMillis = 0;
-const String _messageStatusSyncEnvelopeKey = 'message_status_sync';
 
 class MessageDeltaSnapshot {
   const MessageDeltaSnapshot({
@@ -1970,7 +1968,7 @@ WHERE transport IS NULL
       filter: filter,
       limit: end,
       offset: start,
-    ).watch();
+    ).watch().map(_filterMessagesForDisplay);
   }
 
   @override
@@ -1985,7 +1983,7 @@ WHERE transport IS NULL
       filter: filter,
       limit: end,
       offset: start,
-    ).get();
+    ).get().then(_filterMessagesForDisplay);
   }
 
   @override
@@ -2003,7 +2001,7 @@ WHERE transport IS NULL
       limit: limit,
       beforeTimestamp: beforeTimestamp,
       beforeStanzaId: beforeStanzaId,
-    ).get();
+    ).get().then(_filterMessagesForDisplay);
   }
 
   @override
@@ -2043,6 +2041,13 @@ WHERE transport IS NULL
     ).getSingle();
 
     return query.read<int>('count');
+  }
+
+  bool _shouldDisplayMessage(Message message) =>
+      !isMultiDeviceSyncMessage(subject: message.subject, body: message.body);
+
+  List<Message> _filterMessagesForDisplay(Iterable<Message> messages) {
+    return messages.where(_shouldDisplayMessage).toList(growable: false);
   }
 
   @override
@@ -2208,7 +2213,8 @@ WHERE transport IS NULL
         (tbl) =>
             OrderingTerm(expression: tbl.timestamp, mode: OrderingMode.asc),
       ]);
-    return query.get();
+    final rows = await query.get();
+    return _filterMessagesForDisplay(rows);
   }
 
   @override
@@ -2373,7 +2379,10 @@ WHERE transport IS NULL
         messageCollectionMemberships,
       },
     );
-    return selectable.map((row) => messages.map(row.data)).get();
+    return selectable
+        .map((row) => messages.map(row.data))
+        .get()
+        .then(_filterMessagesForDisplay);
   }
 
   @override
@@ -2421,6 +2430,7 @@ WHERE transport IS NULL
       }
       for (final message in messages) {
         final bool isInternalSync = await _isInternalSyncMessage(
+          subject: message.subject,
           body: message.body,
           fileMetadataId: message.fileMetadataID,
         );
@@ -2680,14 +2690,17 @@ WHERE transport IS NULL
       return false;
     }
     return CalendarSyncMessage.isCalendarSyncEnvelope(trimmed) ||
-        CalendarSyncMessage.looksLikeEnvelope(trimmed) ||
-        _isMessageStatusSyncEnvelope(trimmed);
+        CalendarSyncMessage.looksLikeEnvelope(trimmed);
   }
 
   Future<bool> _isInternalSyncMessage({
+    required String? subject,
     required String? body,
     required String? fileMetadataId,
   }) async {
+    if (isMultiDeviceSyncMessage(subject: subject, body: body)) {
+      return true;
+    }
     if (_isInternalSyncEnvelope(body)) {
       return true;
     }
@@ -2704,33 +2717,6 @@ WHERE transport IS NULL
     return metadata.isCalendarSnapshot;
   }
 
-  bool _isMessageStatusSyncEnvelope(String raw) {
-    if (!raw.contains(_messageStatusSyncEnvelopeKey)) {
-      return false;
-    }
-    const versionKey = 'v';
-    const idKey = 'id';
-    const messageStatusSyncEnvelopeVersion = 1;
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return false;
-      }
-      final payload = decoded[_messageStatusSyncEnvelopeKey];
-      if (payload is! Map<String, dynamic>) {
-        return false;
-      }
-      final version = payload[versionKey] as int?;
-      if (version != messageStatusSyncEnvelopeVersion) {
-        return false;
-      }
-      final id = payload[idKey] as String?;
-      return id != null && id.trim().isNotEmpty;
-    } catch (_) {
-      return false;
-    }
-  }
-
   @override
   Future<void> saveMessage(
     Message message, {
@@ -2744,6 +2730,7 @@ WHERE transport IS NULL
     final hasAttachment = trimmedMetadataId?.isNotEmpty == true;
     final messageTimestamp = message.timestamp ?? DateTime.timestamp();
     final bool isInternalSync = await _isInternalSyncMessage(
+      subject: message.subject,
       body: message.body,
       fileMetadataId: trimmedMetadataId,
     );
@@ -2763,11 +2750,7 @@ WHERE transport IS NULL
         currentChat?.title.trim() != 'Saved Messages';
     final bool shouldIncrementUnread =
         shouldUpdateChatSummary &&
-        _messageCountsTowardUnread(
-          trimmedBody: trimmedBody,
-          fileMetadataId: message.fileMetadataID,
-          pseudoMessageType: message.pseudoMessageType,
-        ) &&
+        _messageCountsTowardUnread(message: message) &&
         !message.displayed &&
         !isSelfMessage;
     final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
@@ -2939,20 +2922,8 @@ WHERE transport IS NULL
     });
   }
 
-  bool _messageCountsTowardUnread({
-    required String? trimmedBody,
-    required String? fileMetadataId,
-    required PseudoMessageType? pseudoMessageType,
-  }) {
-    final hasBody = trimmedBody?.isNotEmpty == true;
-    final hasAttachment = fileMetadataId?.trim().isNotEmpty == true;
-    if (!(hasBody || hasAttachment)) {
-      return false;
-    }
-    if (pseudoMessageType == null) {
-      return true;
-    }
-    return pseudoMessageType.isInvite;
+  bool _messageCountsTowardUnread({required Message message}) {
+    return message.hasUnreadContent;
   }
 
   Future<String?> _messagePreview({
@@ -3334,14 +3305,8 @@ WHERE chat_jid = ?
         pseudoMessageType: lastMessage?.pseudoMessageType,
         pseudoMessageData: lastMessage?.pseudoMessageData,
       );
-      final String? trimmedBody = existing.body?.trim();
       final bool shouldDecrementUnread =
-          _messageCountsTowardUnread(
-            trimmedBody: trimmedBody,
-            fileMetadataId: existing.fileMetadataID,
-            pseudoMessageType: existing.pseudoMessageType,
-          ) &&
-          !existing.displayed;
+          _messageCountsTowardUnread(message: existing) && !existing.displayed;
       final int nextUnreadCount = lastMessage == null
           ? 0
           : shouldDecrementUnread && chat.unreadCount > 0
@@ -3514,14 +3479,8 @@ WHERE email_from_address IN ($placeholderClause)
     }
     final unreadDecrements = <String, int>{};
     for (final message in messagesToDelete) {
-      final trimmedBody = message.body?.trim();
       final shouldDecrement =
-          _messageCountsTowardUnread(
-            trimmedBody: trimmedBody,
-            fileMetadataId: message.fileMetadataID,
-            pseudoMessageType: message.pseudoMessageType,
-          ) &&
-          !message.displayed;
+          _messageCountsTowardUnread(message: message) && !message.displayed;
       if (!shouldDecrement) {
         continue;
       }

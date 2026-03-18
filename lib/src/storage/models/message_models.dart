@@ -25,6 +25,21 @@ part 'message_models.freezed.dart';
 
 const uuid = Uuid();
 
+bool isMultiDeviceSyncMessage({
+  required String? subject,
+  required String? body,
+}) {
+  final normalizedSubject = subject?.trim().toLowerCase();
+  if (normalizedSubject != 'multi device synchronization') {
+    return false;
+  }
+  final normalizedBody = body?.trim().toLowerCase();
+  return normalizedBody?.startsWith(
+        'this message is used to synchronize data between your devices',
+      ) ==
+      true;
+}
+
 final class DeltaAccountDefaults {
   static const int legacyId = 0;
 }
@@ -774,6 +789,9 @@ extension MessageReferenceIds on Message {
     final hasBody = body?.trim().isNotEmpty == true;
     final hasAttachment = fileMetadataID?.trim().isNotEmpty == true;
     final pseudoMessageType = this.pseudoMessageType;
+    if (isMultiDeviceSyncMessage(subject: subject, body: body)) {
+      return false;
+    }
     if (!(hasBody || hasAttachment)) {
       return false;
     }
