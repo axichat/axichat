@@ -107,7 +107,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_html/flutter_html.dart' as html_widget;
-import 'package:flutter_html_table/flutter_html_table.dart';
 import 'package:flutter/rendering.dart'
     show
         BoxHitTestResult,

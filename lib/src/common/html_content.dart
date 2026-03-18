@@ -16,41 +16,13 @@ class HtmlContentCodec {
     'col',
     'colgroup',
   };
-  static const Set<String> _flutterTableCellTags = <String>{
-    'td',
-    'th',
-  };
+  static const Set<String> _flutterTableCellTags = <String>{'td', 'th'};
   static const String _tableCellInlineDisplayStyle =
       'display:inline-block; vertical-align:top; margin-right:8px;';
   static const String _tableCellHeaderStyle =
       'display:inline-block; vertical-align:top; margin-right:8px; font-weight:bold;';
-  static const String _tableRowStyle = 'display:block; padding:0; margin:0 0 4px 0;';
-  static const Set<String> _flutterLayoutUnwrapTags = <String>{
-    'aside',
-    'article',
-    'blockquote',
-    'caption',
-    'figcaption',
-    'figure',
-    'header',
-    'main',
-    'nav',
-    'section',
-    'tfoot',
-    'thead',
-    'tbody',
-  };
-  static const Set<String> _flutterLayoutReplaceTags = <String>{
-    'figure',
-    'figcaption',
-    'aside',
-    'article',
-    'header',
-    'main',
-    'nav',
-    'section',
-    'caption',
-  };
+  static const String _tableRowStyle =
+      'display:block; padding:0; margin:0 0 4px 0;';
   static const String _webViewViewportContent =
       'width=device-width, initial-scale=1.0, viewport-fit=cover';
   static const String _webViewBaseStyle = '''
@@ -571,10 +543,6 @@ pre, code {
       final sourceHtml = bodyHtml != null && bodyHtml.isNotEmpty
           ? bodyHtml
           : document.outerHtml;
-      final simplifiedHtml = simplifyHtmlForWebView(sourceHtml);
-      if (simplifiedHtml.isNotEmpty) {
-        return simplifiedHtml;
-      }
       if (sourceHtml.isNotEmpty) {
         return sourceHtml;
       }
@@ -657,46 +625,9 @@ pre, code {
       document.nodes,
       allowRemoteImages: allowRemoteImages,
     );
-    _normalizeFlutterHtmlLayout(document.nodes);
     _flattenFlutterTableLayout(document.nodes);
     _trimEmptyFlutterHtmlNodes(document.nodes);
     return document;
-  }
-
-  static void _normalizeFlutterHtmlLayout(List<dom.Node> nodes) {
-    var index = 0;
-    while (index < nodes.length) {
-      final node = nodes[index];
-      if (node is dom.Element) {
-        final tag = (node.localName ?? '').toLowerCase();
-        if (_flutterLayoutUnwrapTags.contains(tag)) {
-          final replacementNodes = node.nodes.toList();
-          _normalizeFlutterHtmlLayout(replacementNodes);
-          nodes.removeAt(index);
-          for (
-            var offset = replacementNodes.length - 1;
-            offset >= 0;
-            offset--
-          ) {
-            nodes.insert(index, replacementNodes[offset]);
-          }
-          continue;
-        }
-        if (_flutterLayoutReplaceTags.contains(tag)) {
-          final replacement = dom.Element.tag('div')
-            ..nodes.addAll(node.nodes.toList())
-            ..attributes.addAll(node.attributes);
-          _normalizeFlutterHtmlLayout(replacement.nodes);
-          nodes[index] = replacement;
-          index++;
-          continue;
-        }
-        if (node.nodes.isNotEmpty) {
-          _normalizeFlutterHtmlLayout(node.nodes);
-        }
-      }
-      index++;
-    }
   }
 
   static void _flattenFlutterTableLayout(List<dom.Node> nodes) {
@@ -841,7 +772,8 @@ pre, code {
     var hadCells = false;
     final children = row.nodes.toList();
     for (final child in children) {
-      final isCell = child is dom.Element &&
+      final isCell =
+          child is dom.Element &&
           _flutterTableCellTags.contains((child.localName ?? '').toLowerCase());
       if (!isCell) {
         formattedRow.nodes.add(child);
@@ -862,8 +794,9 @@ pre, code {
   static dom.Element _formatFlutterTableCell(dom.Element cell) {
     final isHeader = (cell.localName ?? '').toLowerCase() == 'th';
     return dom.Element.tag('span')
-      ..attributes['style'] =
-          isHeader ? _tableCellHeaderStyle : _tableCellInlineDisplayStyle
+      ..attributes['style'] = isHeader
+          ? _tableCellHeaderStyle
+          : _tableCellInlineDisplayStyle
       ..nodes.addAll(cell.nodes.toList());
   }
 

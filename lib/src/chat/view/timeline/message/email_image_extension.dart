@@ -67,6 +67,8 @@ Map<String, Style> createEmailHtmlStyles({
   Color? textColor,
   Color? linkColor,
 }) {
+  final baseFontSize = FontSize(fallbackFontSize);
+
   Style inlineStyle({
     Color? color,
     FontSize? fontSize,
@@ -82,80 +84,52 @@ Map<String, Style> createEmailHtmlStyles({
     verticalAlign: VerticalAlign.bottom,
   );
 
-  Style blockStyle({Color? color, FontSize? fontSize}) => Style(
+  Style rootStyle() => Style(
     margin: Margins.zero,
     padding: HtmlPaddings.zero,
-    color: color,
-    fontSize: fontSize,
+    color: textColor,
+    fontSize: baseFontSize,
   );
 
-  final bodyStyle = blockStyle(
+  final quoteStyle = Style(
     color: textColor,
-    fontSize: FontSize(fallbackFontSize),
-  );
-  final quoteStyle = blockStyle(
-    color: textColor,
-    fontSize: FontSize(fallbackFontSize),
+    fontSize: baseFontSize,
   ).copyWith(border: Border.fromBorderSide(BorderSide.none));
-  final tableCellStyle = Style(
-    color: textColor,
-    fontSize: FontSize(fallbackFontSize),
-    margin: Margins.zero,
-    padding: HtmlPaddings.zero,
-  );
 
   return <String, Style>{
-    'html': bodyStyle,
-    'body': bodyStyle,
-    'p': bodyStyle,
-    'div': bodyStyle,
-    'span': inlineStyle(color: textColor, fontSize: FontSize(fallbackFontSize)),
+    'html': rootStyle(),
+    'body': rootStyle(),
+    'span': inlineStyle(color: textColor, fontSize: baseFontSize),
     'blockquote': quoteStyle,
-    'ul': bodyStyle,
-    'ol': bodyStyle,
-    'li': bodyStyle,
-    'table': bodyStyle,
-    'thead': tableCellStyle,
-    'tbody': tableCellStyle,
-    'tfoot': tableCellStyle,
-    'tr': tableCellStyle,
-    'td': tableCellStyle,
-    'th': tableCellStyle,
-    'h1': bodyStyle,
-    'h2': bodyStyle,
-    'h3': bodyStyle,
-    'h4': bodyStyle,
-    'h5': bodyStyle,
-    'h6': bodyStyle,
     'strong': inlineStyle(
       color: textColor,
-      fontSize: FontSize(fallbackFontSize),
+      fontSize: baseFontSize,
       fontWeight: FontWeight.w700,
     ),
     'em': inlineStyle(
       color: textColor,
-      fontSize: FontSize(fallbackFontSize),
+      fontSize: baseFontSize,
       fontStyle: FontStyle.italic,
     ),
     'b': inlineStyle(
       color: textColor,
-      fontSize: FontSize(fallbackFontSize),
+      fontSize: baseFontSize,
       fontWeight: FontWeight.w700,
     ),
     'i': inlineStyle(
       color: textColor,
-      fontSize: FontSize(fallbackFontSize),
+      fontSize: baseFontSize,
       fontStyle: FontStyle.italic,
     ),
     'u': inlineStyle(
       color: textColor,
-      fontSize: FontSize(fallbackFontSize),
+      fontSize: baseFontSize,
       textDecoration: TextDecoration.underline,
     ),
     'img': inlineStyle(),
     'a': inlineStyle(
       color: linkColor,
-      fontSize: FontSize(fallbackFontSize),
+      fontSize: baseFontSize,
       textDecoration: TextDecoration.underline,
     ),
   };

@@ -127,7 +127,7 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
       shrinkWrap: true,
       extensions: createEmailHtmlExtensions(
         shouldLoadImages: widget.shouldLoadImages,
-      )..add(const TableHtmlExtension()),
+      ),
       style: createEmailHtmlStyles(
         fallbackFontSize: fallbackFontSize,
         textColor: widget.textColor,
