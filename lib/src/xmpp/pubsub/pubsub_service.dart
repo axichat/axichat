@@ -4,14 +4,15 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin PubSubService on XmppBase, BaseStreamService {
+  static const PubSubSupport _assumedPubSubSupport = PubSubSupport(
+    pubSubSupported: true,
+    pepSupported: true,
+    bookmarks2Supported: true,
+  );
+
   @override
   PubSubSupport get pubSubSupport =>
-      _connection.getManager<PubSubManager>()?.support ??
-      const PubSubSupport(
-        pubSubSupported: false,
-        pepSupported: false,
-        bookmarks2Supported: false,
-      );
+      _connection.getManager<PubSubManager>()?.support ?? _assumedPubSubSupport;
 
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
@@ -20,15 +21,7 @@ mixin PubSubService on XmppBase, BaseStreamService {
 
   @override
   Future<PubSubSupport> refreshPubSubSupport({bool force = false}) async {
-    final manager = _connection.getManager<PubSubManager>();
-    if (manager == null) {
-      return pubSubSupport;
-    }
-    return manager.refreshSupport(
-      force: force,
-      selfJid: _myJid,
-      demoOffline: demoOfflineMode,
-    );
+    return _assumedPubSubSupport;
   }
 
   @override
@@ -36,14 +29,7 @@ mixin PubSubService on XmppBase, BaseStreamService {
     required bool supported,
     required String featureLabel,
   }) {
-    final manager = _connection.getManager<PubSubManager>();
-    if (manager == null) {
-      return const CapabilityDecision(CapabilityDecisionKind.unknown);
-    }
-    return manager.decideSupport(
-      supported: supported,
-      featureLabel: featureLabel,
-    );
+    return const CapabilityDecision(CapabilityDecisionKind.allowed);
   }
 
   @override

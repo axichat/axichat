@@ -1583,9 +1583,6 @@ mixin BlockingService on XmppBase, BaseStreamService {
     if (manager == null) {
       throw XmppBlockUnsupportedException();
     }
-    if (!await manager.isSupported()) {
-      throw XmppBlockUnsupportedException();
-    }
     if (!await _ensureSpamReportingSupport()) {
       throw XmppSpamReportUnsupportedException();
     }
@@ -1640,29 +1637,8 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return _spamReportingSupported;
     }
     _spamReportingSupportResolved = true;
-    if (demoOfflineMode) {
-      _spamReportingSupported = true;
-      return true;
-    }
-    final discoManager = _connection.getManager<mox.DiscoManager>();
-    final target = _reportingDiscoTarget();
-    if (discoManager == null || target == null) {
-      _spamReportingSupported = false;
-      return false;
-    }
-    try {
-      final result = await discoManager.discoInfoQuery(target);
-      if (result.isType<mox.StanzaError>()) {
-        _spamReportingSupported = false;
-        return false;
-      }
-      final info = result.get<mox.DiscoInfo>();
-      _spamReportingSupported = info.features.contains(_reportingFeature);
-      return _spamReportingSupported;
-    } on Exception {
-      _spamReportingSupported = false;
-      return false;
-    }
+    _spamReportingSupported = true;
+    return true;
   }
 
   mox.JID? _reportingDiscoTarget() {

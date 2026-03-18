@@ -1950,10 +1950,7 @@ class XmppService extends XmppBase
           if (franklinMessage != null &&
               !hasReactionsForMessage(franklinMessage.stanzaID)) {
             const reactors = _demoFounderBareJids;
-            final reactionCount = math.min(
-              reactors.length,
-              2,
-            );
+            final reactionCount = math.min(reactors.length, 2);
             for (var i = 0; i < reactionCount; i += 1) {
               await db.replaceReactions(
                 messageId: franklinMessage.stanzaID,
@@ -2414,7 +2411,6 @@ class XmppService extends XmppBase
       _runBestEffortSessionSyncBool(syncAddressBlockSnapshot),
       _runBestEffortSessionSyncBool(rehydrateCalendarFromMam),
       _runBestEffortSessionSyncBool(syncDraftsSnapshot),
-      _runBestEffortSessionSyncVoid(requestBlocklist),
       _runBestEffortSessionSyncVoid(() async {
         await syncConversationIndexSnapshot();
       }),
@@ -3027,7 +3023,10 @@ class XmppService extends XmppBase
         if (_activeDbOperations != 0) {
           _activeDbOperations -= 1;
           if (_activeDbOperations == 0) {
-            _dbOperationsDrained?.complete();
+            final dbOperationsDrained = _dbOperationsDrained;
+            if (dbOperationsDrained != null && !dbOperationsDrained.isCompleted) {
+              dbOperationsDrained.complete();
+            }
             _dbOperationsDrained = null;
           }
         }
@@ -3080,7 +3079,11 @@ class XmppService extends XmppBase
         if (_activeDbOperations != 0) {
           _activeDbOperations -= 1;
           if (_activeDbOperations == 0) {
-            _dbOperationsDrained?.complete();
+            final dbOperationsDrained = _dbOperationsDrained;
+            if (dbOperationsDrained != null &&
+                !dbOperationsDrained.isCompleted) {
+              dbOperationsDrained.complete();
+            }
             _dbOperationsDrained = null;
           }
         }
@@ -3430,7 +3433,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       _socket = await Socket.connect(
         host,
         port,
-        timeout: const Duration(seconds: 5),
+        timeout: const Duration(seconds: 15),
       );
       _onConnectSuccess?.call();
       _log.finest('Success!');

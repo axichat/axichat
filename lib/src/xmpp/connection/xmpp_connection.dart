@@ -297,7 +297,6 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<List<String>?> requestBlocklist() async {
     if (getManager<mox.BlockingManager>() case final bm?) {
-      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
       return await bm.getBlocklist();
     }
     return null;
@@ -305,21 +304,18 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<void> block(String jid) async {
     if (getManager<mox.BlockingManager>() case final bm?) {
-      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
       if (!await bm.block([jid])) throw XmppBlocklistException();
     }
   }
 
   Future<void> unblock(String jid) async {
     if (getManager<mox.BlockingManager>() case final bm?) {
-      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
       if (!await bm.unblock([jid])) throw XmppBlocklistException();
     }
   }
 
   Future<void> unblockAll() async {
     if (getManager<mox.BlockingManager>() case final bm?) {
-      if (!await bm.isSupported()) throw XmppBlockUnsupportedException();
       if (!await bm.unblockAll()) throw XmppBlocklistException();
     }
   }
@@ -577,7 +573,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
          shouldContinue: shouldContinue,
        );
 
-  static const timeoutDuration = Duration(seconds: 5);
+  static const timeoutDuration = Duration(seconds: 15);
   static const _offlineErrnos = <int>{
     50, // ENETDOWN (macOS)
     51, // ENETUNREACH (macOS)
