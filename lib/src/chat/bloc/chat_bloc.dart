@@ -99,7 +99,6 @@ const _emailResendFailedLogMessage = 'Failed to resend email message.';
 const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
 const _xmppAttachmentSendFailedLogMessage = 'Failed to send XMPP attachment.';
 const _xmppDraftSaveFailedLogMessage = 'Failed to save XMPP draft.';
-const _mucAvatarTraceLogName = 'MucAvatarTrace';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
@@ -269,13 +268,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
        ) {
     on<_ChatUpdated>(_onChatUpdated, transformer: restartable());
     on<_ChatStarted>(_onChatStarted);
-    on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
-    on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
+    on<_ChatMessagesUpdated>(
+      _onChatMessagesUpdated,
+      transformer: restartable(),
+    );
+    on<_PinnedMessagesUpdated>(
+      _onPinnedMessagesUpdated,
+      transformer: restartable(),
+    );
     on<_FileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
     on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<ChatPinnedMessageSelected>(_onChatPinnedMessageSelected);
     on<ChatImportantMessageSelected>(_onChatImportantMessageSelected);
-    on<_RoomStateUpdated>(_onRoomStateUpdated);
+    on<_RoomStateUpdated>(_onRoomStateUpdated, transformer: restartable());
     on<_RoomRosterUpdated>(_onRoomRosterUpdated);
     on<_RoomChatsUpdated>(_onRoomChatsUpdated);
     on<_RoomSelfAvatarUpdated>(_onRoomSelfAvatarUpdated);
@@ -1529,21 +1534,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
       event.chat.jid,
     );
-    if (event.chat.type == ChatType.groupChat) {
-      final roomSectionSummary = nextRoomMemberSections
-          .map((section) => '${section.kind.name}=${section.members.length}')
-          .join(',');
-      SafeLogging.debugLog(
-        'MUC_AVATAR_TRACE|open_chat|chat=${event.chat.jid}|title=${event.chat.title}|'
-        'reset=$resetContext|typing_context=$typingContextChanged|'
-        'pinned_context=$pinnedContextChanged|unread=$unreadCount|'
-        'seeded_unread=$stagedUnreadCount|room_ready=${nextRoomState != null}|'
-        'room_occupants=${nextRoomState?.occupants.length ?? 0}|'
-        'room_sections=$roomSectionSummary|self_jid=${_chatsService.myJid}|'
-        'chat_type=${event.chat.type.name}',
-        name: _mucAvatarTraceLogName,
-      );
-    }
     emit(
       state.copyWith(
         items: resetContext ? const <Message>[] : state.items,
@@ -1826,19 +1816,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chatJid == null) return;
     if (chatJid != _bareJid(event.roomState.roomJid)) return;
     final nextRoomSections = _buildRoomMemberSections(event.roomState);
-    if (state.chat?.type == ChatType.groupChat) {
-      final sectionSummary = nextRoomSections
-          .map((section) => '${section.kind.name}=${section.members.length}')
-          .join(',');
-      SafeLogging.debugLog(
-        'MUC_AVATAR_TRACE|room_state_update|chat=$chatJid|room=${event.roomState.roomJid}|'
-        'occupants=${event.roomState.occupants.length}|sections=$sectionSummary|'
-        'has_self_presence=${event.roomState.hasSelfPresence}|'
-        'has_self_occupant=${event.roomState.hasPresentSelfOccupant}|'
-        'self_jid=${_chatsService.myJid}',
-        name: _mucAvatarTraceLogName,
-      );
-    }
     emit(
       state.copyWith(
         roomState: event.roomState,
@@ -1847,6 +1824,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
+    if (emit.isDone) return;
     await _refreshRoomAffiliationsIfNeeded(
       chat: chat,
       roomState: event.roomState,
@@ -2074,16 +2052,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
-    if (state.chat?.type == ChatType.groupChat) {
-      final chatJid = state.chat?.jid;
-      final firstId = event.items.isNotEmpty ? event.items.first.stanzaID : '';
-      final lastId = event.items.isNotEmpty ? event.items.last.stanzaID : '';
-      SafeLogging.debugLog(
-        'MUC_AVATAR_TRACE|messages_batch|chat=$chatJid|count=${event.items.length}|'
-        'first=$firstId|last=$lastId|previous_count=${state.items.length}',
-        name: _mucAvatarTraceLogName,
-      );
-    }
     final attachmentMaps = await _loadAttachmentMaps(event.items);
     final filtered = await _filterInternalMessages(
       messages: event.items,
