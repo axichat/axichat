@@ -73,12 +73,13 @@ Future<void> main(List<String> args) async {
       stderr,
     );
     final stopwatch = Stopwatch()..start();
-    final heartbeat =
-        isVerboseBuild ? Timer.periodic(const Duration(seconds: 15), (_) {
-          stdout.writeln(
-            '[delta_ffi] Cargo still running after ${stopwatch.elapsed}.',
-          );
-        }) : null;
+    final heartbeat = isVerboseBuild
+        ? Timer.periodic(const Duration(seconds: 15), (_) {
+            stdout.writeln(
+              '[delta_ffi] Cargo still running after ${stopwatch.elapsed}.',
+            );
+          })
+        : null;
     final exitCode = await process.exitCode;
     heartbeat?.cancel();
     stopwatch.stop();
@@ -400,7 +401,8 @@ String? _androidNdkToolchainBinDirectory() {
   return null;
 }
 
-_BuildModeSelection _resolveBuildMode(hooks.BuildInput input, List<String> args) {
+_BuildModeSelection _resolveBuildMode(
+    hooks.BuildInput input, List<String> args) {
   final argMode = _buildModeFromArgs(args);
   if (argMode != null) {
     return _BuildModeSelection(name: argMode, source: 'command line');
@@ -418,7 +420,8 @@ _BuildModeSelection _resolveBuildMode(hooks.BuildInput input, List<String> args)
 
   final configJsonMode = _buildModeFromConfigJson(input.config.json);
   if (configJsonMode != null) {
-    return _BuildModeSelection(name: configJsonMode, source: 'hook config json');
+    return _BuildModeSelection(
+        name: configJsonMode, source: 'hook config json');
   }
 
   final configMode = _buildModeName(input.config);
@@ -535,9 +538,7 @@ String? _buildModeFromConfigJson(Map<String, Object?> value) {
   }
 
   final nested = _lookupConfigValue(value, (key, _) {
-    return !key.startsWith('_') &&
-        key.endsWith('mode') &&
-        key != 'mode_key';
+    return !key.startsWith('_') && key.endsWith('mode') && key != 'mode_key';
   });
   if (nested is String) {
     final normalized = nested.toLowerCase();

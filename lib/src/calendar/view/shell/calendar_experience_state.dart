@@ -769,9 +769,15 @@ abstract class CalendarExperienceState<
     calendarBloc.add(CalendarEvent.dateSelected(date: DateTime.now()));
   }
 
-  void _onLayoutSizeClassResolved(CalendarState state, CalendarSizeClass sizeClass) {
+  void _onLayoutSizeClassResolved(
+    CalendarState state,
+    CalendarSizeClass sizeClass,
+  ) {
     final CalendarSizeClass? previousSizeClass = _previousLayoutSizeClass;
-    final bool shouldPromoteDayToWeek = switch ((previousSizeClass, sizeClass)) {
+    final bool shouldPromoteDayToWeek = switch ((
+      previousSizeClass,
+      sizeClass,
+    )) {
       (CalendarSizeClass.compact, CalendarSizeClass.medium) => true,
       (CalendarSizeClass.medium, CalendarSizeClass.expanded) => true,
       _ => false,
@@ -781,7 +787,9 @@ abstract class CalendarExperienceState<
         mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || calendarBloc.state.viewMode != CalendarView.day) return;
-        calendarBloc.add(const CalendarEvent.viewChanged(view: CalendarView.week));
+        calendarBloc.add(
+          const CalendarEvent.viewChanged(view: CalendarView.week),
+        );
       });
     }
     _previousLayoutSizeClass = sizeClass;

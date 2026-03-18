@@ -92,7 +92,8 @@ class _ChatCalendarWidgetState
     if (usesDesktopLayout && _mobileInitialScrollSynced) {
       _mobileInitialScrollSynced = false;
     }
-    if (usesDesktopLayout && previousLayoutSizeClass != CalendarSizeClass.medium) {
+    if (usesDesktopLayout &&
+        previousLayoutSizeClass != CalendarSizeClass.medium) {
       _maybeSyncDesktopInitialView(state);
       return;
     }
