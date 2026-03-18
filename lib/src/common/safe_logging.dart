@@ -232,7 +232,14 @@ class SafeLogging {
       error == null ? '' : _sanitize(error.toString());
 
   static String sanitizeStackTrace(StackTrace? stackTrace) =>
-      stackTrace == null ? '' : _sanitize(stackTrace.toString());
+      stackTrace == null ? '' : _sanitizeStackTrace(stackTrace.toString());
+
+  static String _sanitizeStackTrace(String input) {
+    if (input.isEmpty) {
+      return input;
+    }
+    return _sanitizeContent(input);
+  }
 
   static String _sanitize(String input) {
     if (input.startsWith(_xmppTrafficOutPrefix) ||
