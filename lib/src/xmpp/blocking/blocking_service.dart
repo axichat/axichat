@@ -580,8 +580,11 @@ mixin BlockingService on XmppBase, BaseStreamService {
     const String blocklistFetchOnLoginOperationName =
         'BlockingService.requestBlocklistOnLogin';
     manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _spamReportingSupportResolved = false;
+        if (event.resumed) {
+          return;
+        }
         _blockingLogger.info('Fetching blocklist...');
         fireAndForget(
           requestBlocklist,

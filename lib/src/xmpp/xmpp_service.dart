@@ -2407,6 +2407,7 @@ class XmppService extends XmppBase
       return false;
     }
     await Future.wait<void>([
+      _runBestEffortSessionSyncVoid(requestBlocklist),
       _runBestEffortSessionSyncBool(syncSpamSnapshot),
       _runBestEffortSessionSyncBool(syncAddressBlockSnapshot),
       _runBestEffortSessionSyncBool(rehydrateCalendarFromMam),

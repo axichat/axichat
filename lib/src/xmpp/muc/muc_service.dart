@@ -88,7 +88,6 @@ const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
 const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
 const _mucCreateRoomOperationName = 'MucService.createRoom';
 const _mucUpsertBookmarkOperationName = 'MucService.upsertBookmarkForRoom';
-const _mucJoinRoomOperationName = 'MucService.joinRoom';
 const _mucPostJoinRefreshOperationName = 'MucService.refreshJoinedRoom';
 const _mucResumeRecoveryOperationName = 'MucService.recoverAfterResume';
 const _mucSnapshotBootstrapOperationName =
@@ -2295,6 +2294,35 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     completer.complete();
   }
 
+  Future<void> _runJoinRoomRequest({
+    required String roomJid,
+    required MUCManager manager,
+    required String nickname,
+    required int maxHistoryStanzas,
+    required int joinAttemptId,
+  }) async {
+    try {
+      final roomBare = mox.JID.fromString(roomJid).toBare();
+      final result = await manager
+          .joinRoom(roomBare, nickname, maxHistoryStanzas: maxHistoryStanzas)
+          .timeout(
+            _mucJoinManagerTimeout,
+            onTimeout: () {
+              _logJoinEvent(
+                message: _mucJoinManagerJoinTimeoutLog,
+                attemptId: joinAttemptId,
+              );
+              return const moxlib.Result<bool, mox.MUCError>(true);
+            },
+          );
+      if (result.isType<mox.MUCError>()) {
+        _completeJoinAttempt(roomJid, error: XmppMessageException());
+      }
+    } on Exception catch (error, stackTrace) {
+      _completeJoinAttempt(roomJid, error: error, stackTrace: stackTrace);
+    }
+  }
+
   Future<void> _pollForSelfPresenceFromMucManager(String roomJid) async {
     final normalizedRoom = _roomKey(roomJid);
     final activeCompleter = _joinCompleterForKey(normalizedRoom);
@@ -2752,6 +2780,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     final joinCompleterActive = !joinCompleter.isCompleted;
     final joinInFlight = _mucJoinInFlight(normalizedRoom);
     Future<void> pollFuture = Future<void>.value();
+    Future<void> joinRequestFuture = Future<void>.value();
     _logJoinEvent(
       message: _mucJoinRequestedLog,
       attemptId: joinAttemptId,
@@ -2776,38 +2805,16 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
 
       final resolvedHistoryStanzas =
           maxHistoryStanzas ?? _defaultMucJoinHistoryStanzas;
-      final roomBare = mox.JID.fromString(normalizedRoom).toBare();
+      joinRequestFuture = _runJoinRoomRequest(
+        roomJid: normalizedRoom,
+        manager: manager,
+        nickname: nickname,
+        maxHistoryStanzas: resolvedHistoryStanzas,
+        joinAttemptId: joinAttemptId,
+      );
       pollFuture = _pollForSelfPresenceFromMucManager(normalizedRoom);
-      fireAndForget(() async {
-        try {
-          final result = await manager
-              .joinRoom(
-                roomBare,
-                nickname,
-                maxHistoryStanzas: resolvedHistoryStanzas,
-              )
-              .timeout(
-                _mucJoinManagerTimeout,
-                onTimeout: () {
-                  _logJoinEvent(
-                    message: _mucJoinManagerJoinTimeoutLog,
-                    attemptId: joinAttemptId,
-                  );
-                  return const moxlib.Result<bool, mox.MUCError>(true);
-                },
-              );
-          if (result.isType<mox.MUCError>()) {
-            _completeJoinAttempt(normalizedRoom, error: XmppMessageException());
-          }
-        } on Exception catch (error, stackTrace) {
-          _completeJoinAttempt(
-            normalizedRoom,
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }, operationName: _mucJoinRoomOperationName);
       await joinCompleter.future.timeout(_mucJoinTimeout);
+      await joinRequestFuture;
       await pollFuture;
       _scheduleRoomPostJoinRefresh(normalizedRoom);
     } on TimeoutException {
@@ -2830,6 +2837,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       } else {
         _completeJoinAttempt(normalizedRoom);
       }
+      await joinRequestFuture;
       await pollFuture;
     } on Exception catch (error, stackTrace) {
       _completeJoinAttempt(
@@ -2837,6 +2845,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         error: error,
         stackTrace: stackTrace,
       );
+      await joinRequestFuture;
       await pollFuture;
     } finally {
       _decrementMucJoinInFlight(normalizedRoom);
