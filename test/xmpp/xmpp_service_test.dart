@@ -588,7 +588,7 @@ void main() {
     );
 
     test(
-      'Runs only one proactive self avatar refresh per connection lifecycle.',
+      'Shows self avatar hydrating only while the negotiated refresh is running.',
       () async {
         final pubsubManager = MockPubSubManager();
         final userAvatarManager = MockUserAvatarManager();
@@ -662,6 +662,8 @@ void main() {
           ),
         );
 
+        expect(xmppService.selfAvatarHydrating, isFalse);
+
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
         await pumpEventQueue();
 
@@ -681,6 +683,120 @@ void main() {
         expect(xmppService.selfAvatarHydrating, isFalse);
       },
     );
+
+    test('Runs proactive self avatar refresh again after reconnect.', () async {
+      final pubsubManager = MockPubSubManager();
+      final userAvatarManager = MockUserAvatarManager();
+      final metadataGates = <Completer<void>>[
+        Completer<void>(),
+        Completer<void>(),
+      ];
+      final metadataPayload =
+          (mox.XmlBuilder.withNamespace('metadata', mox.userAvatarMetadataXmlns)
+                ..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', 'avatar-hash')
+                        ..attr('bytes', '3')
+                        ..attr('type', 'image/png')
+                        ..attr('width', '1')
+                        ..attr('height', '1'))
+                      .build(),
+                ))
+              .build();
+      final metadataItem = mox.PubSubItem(
+        id: 'avatar-hash',
+        node: mox.userAvatarMetadataXmlns,
+        payload: metadataPayload,
+      );
+      var metadataCalls = 0;
+
+      when(() => mockStateStore.read(key: any(named: 'key'))).thenReturn(null);
+      await xmppService.close();
+      database = XmppDrift(
+        file: File(''),
+        passphrase: '',
+        executor: NativeDatabase.memory(),
+      );
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+      when(
+        () => mockConnection.getManager<mox.PubSubManager>(),
+      ).thenReturn(pubsubManager);
+      when(
+        () => mockConnection.getManager<mox.UserAvatarManager>(),
+      ).thenReturn(userAvatarManager);
+      when(
+        () => mockConnection.getManager<mox.VCardManager>(),
+      ).thenReturn(null);
+
+      when(
+        () => pubsubManager.getItems(
+          any(),
+          mox.userAvatarMetadataXmlns,
+          maxItems: any(named: 'maxItems'),
+        ),
+      ).thenAnswer((_) async {
+        final gateIndex = metadataCalls;
+        metadataCalls += 1;
+        await metadataGates[gateIndex].future;
+        return moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>(
+          <mox.PubSubItem>[metadataItem],
+        );
+      });
+      when(() => userAvatarManager.getUserAvatarData(any(), any())).thenAnswer(
+        (_) async => const moxlib.Result<mox.AvatarError, mox.UserAvatarData>(
+          mox.UserAvatarData('AQID', 'avatar-hash'),
+        ),
+      );
+
+      expect(xmppService.selfAvatarHydrating, isFalse);
+
+      eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+      await pumpEventQueue();
+
+      expect(metadataCalls, equals(1));
+      expect(xmppService.selfAvatarHydrating, isTrue);
+
+      metadataGates.first.complete();
+      await pumpEventQueue();
+
+      expect(xmppService.selfAvatarHydrating, isFalse);
+
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.notConnected,
+          mox.XmppConnectionState.connected,
+        ),
+      );
+      await pumpEventQueue();
+
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.notConnected,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(xmppService.selfAvatarHydrating, isFalse);
+
+      eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+      await pumpEventQueue();
+
+      expect(metadataCalls, equals(2));
+      expect(xmppService.selfAvatarHydrating, isTrue);
+
+      metadataGates.last.complete();
+      await pumpEventQueue();
+
+      expect(xmppService.selfAvatarHydrating, isFalse);
+    });
 
     test('Given a standard text message, writes it to the database.', () async {
       final beforeMessage = await database.getMessageByStanzaID(

@@ -417,7 +417,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
   final Map<String, Future<void>> _avatarFileOperations = {};
   DateTime? _selfAvatarRepairLastAttempt;
   int? _selfAvatarRefreshLifecycleEpoch;
-  int _selfAvatarRefreshInFlightCount = 0;
   @override
   final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
   @override
@@ -452,16 +451,11 @@ mixin AvatarService on XmppBase, BaseStreamService {
 
   @override
   bool get selfAvatarHydrating {
-    final bareJid = _myJid?.toBare().toString();
-    if (bareJid == null || bareJid.isEmpty) {
-      return false;
-    }
     if (connectionState != ConnectionState.connected &&
         connectionState != ConnectionState.connecting) {
       return false;
     }
-    return !_selfAvatarInitialSyncCompleted ||
-        _selfAvatarRefreshInFlightCount > 0;
+    return _isSelfAvatarRefreshRunning();
   }
 
   @override
@@ -474,10 +468,23 @@ mixin AvatarService on XmppBase, BaseStreamService {
   }
 
   void _clearSelfAvatarNegotiationState() {
+    final bareJid = _myJid?.toBare().toString();
+    if (bareJid != null && bareJid.isNotEmpty) {
+      _avatarRefreshInProgress.remove(bareJid);
+    }
     _hasSelfAvatarNegotiatedStream = false;
     _selfAvatarInitialSyncCompleted = false;
+    _selfAvatarRefreshLifecycleEpoch = null;
     _selfAvatarBootstrapFuture = null;
     _emitSelfAvatarHydrating();
+  }
+
+  bool _isSelfAvatarRefreshRunning() {
+    final bareJid = _myJid?.toBare().toString();
+    if (bareJid == null || bareJid.isEmpty) {
+      return false;
+    }
+    return _avatarRefreshInProgress.contains(bareJid);
   }
 
   void _setCachedSelfAvatar(Avatar? avatar) {
@@ -867,7 +874,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarRefreshLifecycleEpoch = null;
-    _selfAvatarRefreshInFlightCount = 0;
     _selfAvatarBootstrapFuture = null;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
@@ -1106,19 +1112,24 @@ mixin AvatarService on XmppBase, BaseStreamService {
       _avatarLog.fine('VCard request skipped; jid marked skippable.');
       return;
     }
-    final added = _avatarRefreshInProgress.add(normalizedJid);
-    if (!force && !added) {
-      _avatarLog.fine('VCard request already in progress; skipping.');
-      return;
-    }
+    final myBareJid = _myJid?.toBare().toString();
+    final isSelf = myBareJid != null && myBareJid == normalizedJid;
+    var refreshStarted = false;
     try {
-      final myBareJid = _myJid?.toBare().toString();
-      final isSelf = myBareJid != null && myBareJid == normalizedJid;
       _avatarLog.fine('Refreshing vCard avatar. isSelf=$isSelf force=$force.');
       final manager = _connection.getManager<mox.VCardManager>();
       if (manager == null) {
         _avatarLog.fine('VCardManager unavailable; skipping refresh.');
         return;
+      }
+      final added = _avatarRefreshInProgress.add(normalizedJid);
+      if (!added) {
+        _avatarLog.fine('VCard request already in progress; skipping.');
+        return;
+      }
+      refreshStarted = true;
+      if (isSelf) {
+        _emitSelfAvatarHydrating();
       }
 
       final vcardResult = await _withAvatarRefreshTimeout(
@@ -1186,7 +1197,12 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
     } finally {
-      _avatarRefreshInProgress.remove(normalizedJid);
+      if (refreshStarted) {
+        _avatarRefreshInProgress.remove(normalizedJid);
+        if (isSelf) {
+          _emitSelfAvatarHydrating();
+        }
+      }
     }
   }
 
@@ -1227,20 +1243,11 @@ mixin AvatarService on XmppBase, BaseStreamService {
       _avatarLog.fine('Avatar refresh skipped; jid marked skippable.');
       return;
     }
-    final added = _avatarRefreshInProgress.add(bareJid);
-    if (!force && !added) {
-      _avatarLog.fine('Avatar refresh already in progress; skipping.');
-      return;
-    }
-    var isSelf = false;
+    final myBareJid = _myJid?.toBare().toString();
+    final isSelf = myBareJid != null && myBareJid == bareJid;
+    var refreshStarted = false;
     try {
       final manager = _connection.getManager<mox.UserAvatarManager>();
-      final myBareJid = _myJid?.toBare().toString();
-      isSelf = myBareJid != null && myBareJid == bareJid;
-      if (isSelf) {
-        _selfAvatarRefreshInFlightCount += 1;
-        _emitSelfAvatarHydrating();
-      }
       _avatarLog.fine(
         'Refreshing avatar. isSelf=$isSelf force=$force '
         'metadataProvided=${metadata != null}.',
@@ -1257,6 +1264,15 @@ mixin AvatarService on XmppBase, BaseStreamService {
           'Self avatar refresh skipped; lifecycle already refreshed.',
         );
         return;
+      }
+      final added = _avatarRefreshInProgress.add(bareJid);
+      if (!added) {
+        _avatarLog.fine('Avatar refresh already in progress; skipping.');
+        return;
+      }
+      refreshStarted = true;
+      if (isSelf) {
+        _emitSelfAvatarHydrating();
       }
       if (isSelf && metadata == null && !force) {
         _selfAvatarRefreshLifecycleEpoch = lifecycleEpoch;
@@ -1354,11 +1370,12 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh avatar.', error, stackTrace);
     } finally {
-      if (isSelf && _selfAvatarRefreshInFlightCount > 0) {
-        _selfAvatarRefreshInFlightCount -= 1;
-        _emitSelfAvatarHydrating();
+      if (refreshStarted) {
+        _avatarRefreshInProgress.remove(bareJid);
+        if (isSelf) {
+          _emitSelfAvatarHydrating();
+        }
       }
-      _avatarRefreshInProgress.remove(bareJid);
     }
   }
 
@@ -1378,19 +1395,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
       await _clearAvatarForJid(bareJid, reason: _avatarClearReasonVcardEmpty);
       return;
     }
-    final added = _avatarRefreshInProgress.add(bareJid);
-    if (!added) {
-      _avatarLog.fine('VCard refresh already in progress; skipping.');
-      return;
-    }
-    var isSelf = false;
+    final myBareJid = _myJid?.toBare().toString();
+    final isSelf = myBareJid != null && myBareJid == bareJid;
+    var refreshStarted = false;
     try {
-      final myBareJid = _myJid?.toBare().toString();
-      isSelf = myBareJid != null && myBareJid == bareJid;
-      if (isSelf) {
-        _selfAvatarRefreshInFlightCount += 1;
-        _emitSelfAvatarHydrating();
-      }
       final existingHash = await _storedAvatarHash(bareJid);
       if (existingHash == hash) {
         final existingPath = await _storedAvatarPath(bareJid);
@@ -1403,6 +1411,15 @@ mixin AvatarService on XmppBase, BaseStreamService {
       if (manager == null) {
         _avatarLog.fine('VCardManager unavailable; skipping refresh.');
         return;
+      }
+      final added = _avatarRefreshInProgress.add(bareJid);
+      if (!added) {
+        _avatarLog.fine('VCard refresh already in progress; skipping.');
+        return;
+      }
+      refreshStarted = true;
+      if (isSelf) {
+        _emitSelfAvatarHydrating();
       }
 
       final vcardResult = await _withAvatarRefreshTimeout(
@@ -1450,11 +1467,12 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
     } finally {
-      if (isSelf && _selfAvatarRefreshInFlightCount > 0) {
-        _selfAvatarRefreshInFlightCount -= 1;
-        _emitSelfAvatarHydrating();
+      if (refreshStarted) {
+        _avatarRefreshInProgress.remove(bareJid);
+        if (isSelf) {
+          _emitSelfAvatarHydrating();
+        }
       }
-      _avatarRefreshInProgress.remove(bareJid);
     }
   }
 
