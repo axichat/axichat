@@ -77,9 +77,14 @@ String? syntheticForwardDisplaySenderLabel({
 }
 
 String? preferredForwardedPreviewSenderLabel({
+  required String? forwardedOriginalSenderLabel,
   required String? forwardedSubjectSenderLabel,
   required String? forwardedFromJid,
 }) {
+  final originalSender = forwardedOriginalSenderLabel?.trim();
+  if (originalSender != null && originalSender.isNotEmpty) {
+    return originalSender;
+  }
   final subjectSender = forwardedSubjectSenderLabel?.trim();
   if (subjectSender != null && subjectSender.isNotEmpty) {
     return subjectSender;
@@ -87,6 +92,49 @@ String? preferredForwardedPreviewSenderLabel({
   final forwarder = forwardedFromJid?.trim();
   if (forwarder != null && forwarder.isNotEmpty) {
     return forwarder;
+  }
+  return null;
+}
+
+String? forwardedBodySenderLabel(String? body) {
+  final normalizedBody = body?.replaceAll('\r\n', '\n').trimLeft();
+  if (normalizedBody == null || normalizedBody.isEmpty) {
+    return null;
+  }
+  const forwardedHeader = '-------- forwarded message --------';
+  if (!normalizedBody.toLowerCase().startsWith(forwardedHeader)) {
+    return null;
+  }
+  final lines = normalizedBody.split('\n');
+  for (final line in lines.skip(1)) {
+    final trimmedLine = line.trim();
+    if (trimmedLine.isEmpty) {
+      break;
+    }
+    final separatorIndex = trimmedLine.indexOf(':');
+    if (separatorIndex == -1) {
+      continue;
+    }
+    final headerName = trimmedLine
+        .substring(0, separatorIndex)
+        .trim()
+        .toLowerCase();
+    if (headerName != 'from') {
+      continue;
+    }
+    final rawValue = trimmedLine.substring(separatorIndex + 1).trim();
+    if (rawValue.isEmpty) {
+      return null;
+    }
+    final match = RegExp(
+      r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}',
+      caseSensitive: false,
+    ).firstMatch(rawValue);
+    if (match == null) {
+      return rawValue;
+    }
+    final email = match.group(0)?.trim();
+    return email == null || email.isEmpty ? rawValue : email;
   }
   return null;
 }

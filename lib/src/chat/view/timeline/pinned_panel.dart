@@ -373,9 +373,11 @@ class _PinnedMessageTile extends StatelessWidget {
     required Message? message,
     required bool isSelf,
     required String? forwardedFromJid,
+    required String? forwardedOriginalSenderLabel,
     required String? forwardedSubjectSenderLabel,
   }) {
     final preferredPreviewSenderLabel = preferredForwardedPreviewSenderLabel(
+      forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
       forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
       forwardedFromJid: forwardedFromJid,
     );
@@ -485,6 +487,8 @@ class _PinnedMessageTile extends StatelessWidget {
     final forwardedSubjectSenderLabel =
         previewTimelineItem?.forwardedSubjectSenderLabel;
     final forwardedFromJid = previewTimelineItem?.forwardedFromJid;
+    final forwardedOriginalSenderLabel =
+        previewTimelineItem?.forwardedOriginalSenderLabel;
     final messageError =
         previewTimelineItem?.error ??
         effectiveMessage?.error ??
@@ -1079,6 +1083,7 @@ class _PinnedMessageTile extends StatelessWidget {
               message: effectiveMessage,
               isSelf: isSelf,
               forwardedFromJid: forwardedFromJid,
+              forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
               forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
             ),
             isSelf: isSelf,

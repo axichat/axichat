@@ -59,6 +59,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
     required this.subjectLabel,
     required this.isForwarded,
     required this.forwardedFromJid,
+    required this.forwardedOriginalSenderLabel,
     required this.forwardedSubjectSenderLabel,
     required this.isInvite,
     required this.isInviteRevocation,
@@ -98,6 +99,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
   final String? subjectLabel;
   final bool isForwarded;
   final String? forwardedFromJid;
+  final String? forwardedOriginalSenderLabel;
   final String? forwardedSubjectSenderLabel;
   final bool isInvite;
   final bool isInviteRevocation;

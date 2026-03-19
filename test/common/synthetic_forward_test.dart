@@ -43,11 +43,36 @@ void main() {
     expect(split.body, 'Original body');
   });
 
+  test('forwarded body sender labels extract the original author', () {
+    expect(
+      forwardedBodySenderLabel(
+        '-------- Forwarded message --------\n'
+        'From: Person <original@example.com>\n'
+        'Subject: Hello\n'
+        '\n'
+        'Body',
+      ),
+      'original@example.com',
+    );
+  });
+
+  test('forwarded preview labels prefer stored original senders', () {
+    expect(
+      preferredForwardedPreviewSenderLabel(
+        forwardedOriginalSenderLabel: 'stored@example.com',
+        forwardedSubjectSenderLabel: 'original@example.com',
+        forwardedFromJid: 'forwarder@example.com',
+      ),
+      'stored@example.com',
+    );
+  });
+
   test(
     'forwarded preview labels prefer the original sender over the forwarder',
     () {
       expect(
         preferredForwardedPreviewSenderLabel(
+          forwardedOriginalSenderLabel: null,
           forwardedSubjectSenderLabel: 'original@example.com',
           forwardedFromJid: 'forwarder@example.com',
         ),
@@ -59,6 +84,7 @@ void main() {
   test('forwarded preview labels fall back to the forwarder', () {
     expect(
       preferredForwardedPreviewSenderLabel(
+        forwardedOriginalSenderLabel: null,
         forwardedSubjectSenderLabel: null,
         forwardedFromJid: 'forwarder@example.com',
       ),

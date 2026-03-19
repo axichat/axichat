@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 import 'dart:collection';
 
@@ -211,6 +212,13 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(<Contact>[]);
+    registerFallbackValue(
+      Contact.address(
+        address: 'fallback@example.com',
+        shareSignatureEnabled: true,
+        transport: MessageTransport.email,
+      ),
+    );
     registerFallbackValue(<Message>[fallbackMessage]);
     registerFallbackValue(MessageTimelineFilter.allWithContact);
     registerFallbackValue(ChatType.chat);
@@ -330,6 +338,9 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         forwarded: any(named: 'forwarded'),
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
         quotedMessage: any(named: 'quotedMessage'),
         quotedReference: any(named: 'quotedReference'),
         calendarFragment: any(named: 'calendarFragment'),
@@ -351,6 +362,9 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         forwarded: any(named: 'forwarded'),
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
         quotedMessage: any(named: 'quotedMessage'),
         quotedReference: any(named: 'quotedReference'),
         calendarFragment: any(named: 'calendarFragment'),
@@ -370,6 +384,9 @@ void main() {
         htmlCaption: any(named: 'htmlCaption'),
         forwarded: any(named: 'forwarded'),
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
         transportGroupId: any(named: 'transportGroupId'),
         attachmentOrder: any(named: 'attachmentOrder'),
         quotedMessage: any(named: 'quotedMessage'),
@@ -387,6 +404,9 @@ void main() {
         htmlCaption: any(named: 'htmlCaption'),
         forwarded: any(named: 'forwarded'),
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
         transportGroupId: any(named: 'transportGroupId'),
         attachmentOrder: any(named: 'attachmentOrder'),
         quotedMessage: any(named: 'quotedMessage'),
@@ -429,6 +449,10 @@ void main() {
     ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
     when(
       () => messageService.syncPinnedMessagesForChat(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () =>
+          messageService.resendMessage(any(), chatType: any(named: 'chatType')),
     ).thenAnswer((_) async {});
 
     when(
@@ -1256,6 +1280,9 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         forwarded: true,
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
         chatType: ChatType.chat,
       ),
     ).thenAnswer((_) async {});
@@ -1297,6 +1324,7 @@ void main() {
             '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\nForward me',
         forwarded: true,
         forwardedFromJid: initialChat.jid,
+        forwardedOriginalSenderLabel: 'peer@axi.im',
         chatType: ChatType.chat,
       ),
     ).called(1);
@@ -1437,6 +1465,161 @@ void main() {
     await bloc.close();
   });
 
+  test('forwarding welcome text uses the local-only message path', () async {
+    final syntheticForwardSubject = markSyntheticForwardSubject(
+      'FWD: peer@axi.im',
+    );
+    final message = Message(
+      stanzaID: 'forward-welcome-text',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: 'Forward locally',
+      timestamp: DateTime.now(),
+    );
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageForwardRequested(
+        message: message,
+        target: Contact.chat(chat: welcomeChat, shareSignatureEnabled: false),
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.sendLocalOnlyMessage(
+        jid: welcomeChat.jid,
+        text: ChatSubjectCodec.composeXmppBody(
+          body: 'Forward locally',
+          subject: syntheticForwardSubject,
+        ),
+        encryptionProtocol: EncryptionProtocol.none,
+        htmlBody:
+            '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\nForward locally',
+        forwarded: true,
+        forwardedFromJid: initialChat.jid,
+        forwardedOriginalSenderLabel: 'peer@axi.im',
+        chatType: ChatType.chat,
+      ),
+    ).called(1);
+    verifyNever(
+      () => messageService.sendMessage(
+        jid: welcomeChat.jid,
+        text: any(named: 'text'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlBody: any(named: 'htmlBody'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
+        chatType: any(named: 'chatType'),
+      ),
+    );
+
+    await bloc.close();
+  });
+
+  test(
+    'forwarding welcome attachments uses the local-only attachment path',
+    () async {
+      final file = File(
+        '${Directory.systemTemp.path}/axichat-forward-welcome-attachment.txt',
+      );
+      await file.writeAsString('forward welcome attachment');
+      addTearDown(() async {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      });
+      when(
+        () => mockDatabase.getFileMetadata('forward-welcome-meta'),
+      ).thenAnswer(
+        (_) async => FileMetadataData(
+          id: 'forward-welcome-meta',
+          filename: 'forward.txt',
+          mimeType: 'text/plain',
+          path: file.path,
+          sizeBytes: await file.length(),
+        ),
+      );
+      final message = Message(
+        stanzaID: 'forward-welcome-attachment',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Attachment caption',
+        fileMetadataID: 'forward-welcome-meta',
+        timestamp: DateTime.now(),
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageForwardRequested(
+          message: message,
+          target: Contact.chat(chat: welcomeChat, shareSignatureEnabled: false),
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendLocalOnlyAttachment(
+          jid: welcomeChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: EncryptionProtocol.none,
+          htmlCaption: any(named: 'htmlCaption'),
+          forwarded: true,
+          forwardedFromJid: initialChat.jid,
+          forwardedOriginalSenderLabel: 'peer@axi.im',
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          chatType: ChatType.chat,
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendAttachment(
+          jid: welcomeChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          htmlCaption: any(named: 'htmlCaption'),
+          forwarded: any(named: 'forwarded'),
+          forwardedFromJid: any(named: 'forwardedFromJid'),
+          forwardedOriginalSenderLabel: any(
+            named: 'forwardedOriginalSenderLabel',
+          ),
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
   test('welcome chat bootstrap skips XMPP hydrate and pin sync', () async {
     final bloc = ChatBloc(
       jid: welcomeChat.jid,
@@ -1571,6 +1754,147 @@ void main() {
     },
   );
 
+  test('resending welcome text uses the local-only message path', () async {
+    final message = Message(
+      stanzaID: 'resend-welcome-text',
+      senderJid: welcomeChat.jid,
+      chatJid: welcomeChat.jid,
+      body: 'Retry welcome',
+      timestamp: DateTime.now(),
+    );
+
+    final bloc = ChatBloc(
+      jid: welcomeChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(welcomeChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.sendLocalOnlyMessage(
+        jid: welcomeChat.jid,
+        text: 'Retry welcome',
+        encryptionProtocol: EncryptionProtocol.none,
+        htmlBody: any(named: 'htmlBody'),
+        quotedMessage: any(named: 'quotedMessage'),
+        calendarFragment: any(named: 'calendarFragment'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        calendarAvailabilityMessage: any(named: 'calendarAvailabilityMessage'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
+        chatType: ChatType.chat,
+      ),
+    ).called(1);
+    verifyNever(
+      () => messageService.resendMessage(
+        'resend-welcome-text',
+        chatType: ChatType.chat,
+      ),
+    );
+
+    await bloc.close();
+  });
+
+  test(
+    'resending welcome attachments uses the local-only attachment path',
+    () async {
+      final file = File(
+        '${Directory.systemTemp.path}/axichat-resend-welcome-attachment.txt',
+      );
+      await file.writeAsString('resend welcome attachment');
+      addTearDown(() async {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      });
+      when(
+        () => mockDatabase.getFileMetadata('resend-welcome-meta'),
+      ).thenAnswer(
+        (_) async => FileMetadataData(
+          id: 'resend-welcome-meta',
+          filename: 'resend.txt',
+          mimeType: 'text/plain',
+          path: file.path,
+          sizeBytes: await file.length(),
+        ),
+      );
+      final message = Message(
+        stanzaID: 'resend-welcome-attachment',
+        senderJid: welcomeChat.jid,
+        chatJid: welcomeChat.jid,
+        body: 'Resend caption',
+        fileMetadataID: 'resend-welcome-meta',
+        timestamp: DateTime.now(),
+      );
+
+      final bloc = ChatBloc(
+        jid: welcomeChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(welcomeChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendLocalOnlyAttachment(
+          jid: welcomeChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: EncryptionProtocol.none,
+          quotedMessage: any(named: 'quotedMessage'),
+          htmlCaption: any(named: 'htmlCaption'),
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          chatType: ChatType.chat,
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendAttachment(
+          jid: welcomeChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          quotedMessage: any(named: 'quotedMessage'),
+          htmlCaption: any(named: 'htmlCaption'),
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+      verifyNever(
+        () => messageService.resendMessage(
+          'resend-welcome-attachment',
+          chatType: ChatType.chat,
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
   test('forwarding supports a raw email address target', () async {
     const syntheticForwardSubject = 'FWD: peer@axi.im';
     final emailService = MockEmailService();
@@ -1591,10 +1915,7 @@ void main() {
       emailAddress: 'fresh@example.com',
     );
     when(
-      () => emailService.ensureChatForAddress(
-        address: any(named: 'address'),
-        displayName: any(named: 'displayName'),
-      ),
+      () => emailService.resolveForwardTarget(any()),
     ).thenAnswer((_) async => resolvedEmailChat);
     when(
       () => emailService.sendMessage(
@@ -1604,6 +1925,9 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         forwarded: any(named: 'forwarded'),
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
       ),
     ).thenAnswer((_) async => 1);
 
@@ -1634,9 +1958,12 @@ void main() {
     await _pumpBloc();
 
     verify(
-      () => emailService.ensureChatForAddress(
-        address: 'fresh@example.com',
-        displayName: 'fresh@example.com',
+      () => emailService.resolveForwardTarget(
+        Contact.address(
+          address: 'fresh@example.com',
+          shareSignatureEnabled: true,
+          transport: MessageTransport.email,
+        ),
       ),
     ).called(1);
     verify(
@@ -1647,6 +1974,7 @@ void main() {
         htmlBody: injectSyntheticForwardHtmlMarker('Forward me by email'),
         forwarded: true,
         forwardedFromJid: initialChat.jid,
+        forwardedOriginalSenderLabel: 'peer@axi.im',
       ),
     ).called(1);
 
@@ -1858,6 +2186,9 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         forwarded: true,
         forwardedFromJid: any(named: 'forwardedFromJid'),
+        forwardedOriginalSenderLabel: any(
+          named: 'forwardedOriginalSenderLabel',
+        ),
         chatType: ChatType.chat,
       ),
     ).thenAnswer((_) async {});
@@ -1901,6 +2232,7 @@ void main() {
             '<p><strong>Bold body</strong></p>',
         forwarded: true,
         forwardedFromJid: initialChat.jid,
+        forwardedOriginalSenderLabel: 'peer@axi.im',
         chatType: ChatType.chat,
       ),
     ).called(1);

@@ -625,12 +625,14 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final resolvedForwardHtml = deltaMessageId == null
       ? message.htmlBody
       : emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
-  final forwardedSubjectSenderLabel = syntheticForwardDisplaySenderLabel(
-    subjectLabel: rawSubjectLabel,
-    emailMarkerPresent:
-        isEmailMessage &&
-        hasSyntheticForwardHtmlMarker(html: resolvedForwardHtml),
-  );
+  final forwardedSubjectSenderLabel =
+      syntheticForwardDisplaySenderLabel(
+        subjectLabel: rawSubjectLabel,
+        emailMarkerPresent:
+            isEmailMessage &&
+            hasSyntheticForwardHtmlMarker(html: resolvedForwardHtml),
+      ) ??
+      forwardedBodySenderLabel(rawBodyText);
   if (forwardedSubjectSenderLabel != null) {
     final forwardedContent = splitSyntheticForwardBody(bodyText);
     subjectLabel = forwardedContent.subject;
@@ -728,6 +730,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     subjectLabel: subjectLabel,
     isForwarded: isForwardedMessage,
     forwardedFromJid: message.forwardedFromJid,
+    forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
     forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
     isInvite: isInvite,
     isInviteRevocation: isInviteRevocation,
@@ -873,6 +876,7 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
     subjectLabel: item.subjectLabel,
     isForwarded: item.isForwarded,
     forwardedFromJid: item.forwardedFromJid,
+    forwardedOriginalSenderLabel: item.forwardedOriginalSenderLabel,
     forwardedSubjectSenderLabel: item.forwardedSubjectSenderLabel,
     isInvite: item.isInvite,
     isInviteRevocation: item.isInviteRevocation,

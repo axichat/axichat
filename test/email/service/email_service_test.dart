@@ -106,6 +106,15 @@ void main() {
         participantCount: 0,
       ),
     );
+    registerFallbackValue(
+      Message(
+        stanzaID: 'fallback-stanza',
+        senderJid: 'fallback@axi.im',
+        chatJid: 'fallback@axi.im',
+        body: 'fallback',
+        timestamp: DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+    );
   });
 
   setUp(() {
@@ -207,6 +216,27 @@ void main() {
       ),
     ).thenAnswer((_) async => 1);
     when(
+      () => transport.forwardMessages(
+        messageIds: any(named: 'messageIds'),
+        toChatId: any(named: 'toChatId'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
+      () => transport.getChatMessageIds(
+        chatId: any(named: 'chatId'),
+        beforeMessageId: any(named: 'beforeMessageId'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => const <int>[]);
+    when(
+      () =>
+          transport.hydrateMessages(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async {});
+    when(
+      () => transport.getMessage(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => null);
+    when(
       () => transport.ensureInitialized(
         databasePrefix: any(named: 'databasePrefix'),
         databasePassphrase: any(named: 'databasePassphrase'),
@@ -266,6 +296,7 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(() => database.updateChat(any())).thenAnswer((_) async {});
+    when(() => database.updateMessage(any())).thenAnswer((_) async {});
     when(
       () => database.getChatByDeltaChatId(
         any(),
@@ -1970,6 +2001,139 @@ void main() {
           ),
         ),
       );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'forwardMessages preserves the original author label for native email forwards',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'target@example.com',
+          displayName: 'target@example.com',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 88);
+
+      var getChatMessageIdsCallCount = 0;
+      when(
+        () => transport.getChatMessageIds(
+          chatId: 88,
+          beforeMessageId: any(named: 'beforeMessageId'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async {
+        getChatMessageIdsCallCount += 1;
+        return getChatMessageIdsCallCount == 1
+            ? const <int>[11, 12]
+            : const <int>[11, 12, 301];
+      });
+      when(
+        () =>
+            transport.getMessage(301, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 301,
+          chatId: 88,
+          text: 'Forwarded body',
+          timestamp: DateTime.now(),
+          isOutgoing: true,
+        ),
+      );
+
+      final forwardedCopy = Message(
+        stanzaID: 'dc-msg-301',
+        senderJid: 'alice@example.org',
+        chatJid: 'target@delta.chat',
+        body: 'Forwarded body',
+        timestamp: DateTime.now(),
+        deltaMsgId: 301,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      );
+      when(
+        () => database.getMessageByDeltaId(
+          301,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => forwardedCopy);
+
+      final targetChat = Chat(
+        jid: 'target@delta.chat',
+        title: 'target@example.com',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'target@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+      final sourceMessage = Message(
+        stanzaID: 'dc-msg-77',
+        senderJid: 'forwarder@example.com',
+        chatJid: 'forwarder@delta.chat',
+        body: 'Forwarded body',
+        timestamp: DateTime.now(),
+        deltaMsgId: 77,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        subject: 'FWD: original@example.com',
+      );
+
+      final forwarded = await service.forwardMessages(
+        messages: [sourceMessage],
+        toChat: targetChat,
+      );
+
+      expect(forwarded, isTrue);
+      verify(
+        () => transport.forwardMessages(
+          messageIds: [77],
+          toChatId: 88,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verify(
+        () => transport.hydrateMessages([
+          301,
+        ], accountId: DeltaAccountDefaults.legacyId),
+      ).called(1);
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>().having(
+              (message) => message.pseudoMessageData,
+              'pseudoMessageData',
+              allOf(
+                containsPair('forwarded', true),
+                containsPair('forwardedFromJid', 'forwarder@example.com'),
+                containsPair(
+                  'forwardedOriginalSenderLabel',
+                  'original@example.com',
+                ),
+              ),
+            ),
+          ),
+        ),
+      ).called(1);
 
       addTearDown(service.shutdown);
     },

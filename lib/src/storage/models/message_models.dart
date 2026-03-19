@@ -12,6 +12,7 @@ import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -970,15 +971,63 @@ extension MessageForwardingX on Message {
     return resolved;
   }
 
+  String? get forwardedOriginalSenderLabel {
+    final payload = pseudoMessageData;
+    if (payload == null || payload.isEmpty) {
+      return null;
+    }
+    final raw = payload['forwardedOriginalSenderLabel'];
+    if (raw is! String) {
+      return null;
+    }
+    final resolved = raw.trim();
+    if (resolved.isEmpty) {
+      return null;
+    }
+    return resolved;
+  }
+
+  String? resolveForwardedOriginalSenderLabel() {
+    final storedOriginalSender = forwardedOriginalSenderLabel;
+    if (storedOriginalSender != null) {
+      return storedOriginalSender;
+    }
+    final markedSubject = syntheticForwardMarkedVisibleSubject(subject);
+    final markedSubjectSender = syntheticForwardSenderLabel(markedSubject);
+    if (markedSubjectSender != null && markedSubjectSender.isNotEmpty) {
+      return markedSubjectSender;
+    }
+    final subjectSender = syntheticForwardSenderLabel(subject);
+    if (subjectSender != null &&
+        subjectSender.isNotEmpty &&
+        bareAddressOrNull(subjectSender) != null) {
+      return subjectSender;
+    }
+    final resource = parseJid(senderJid)?.resource.trim();
+    if (resource != null && resource.isNotEmpty) {
+      return resource;
+    }
+    final safeAddress = displaySafeAddress(senderJid)?.trim();
+    if (safeAddress != null && safeAddress.isNotEmpty) {
+      return safeAddress;
+    }
+    final sender = senderJid.trim();
+    return sender.isEmpty ? null : sender;
+  }
+
   Map<String, dynamic> pseudoMessageDataWithForwarded({
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
   }) {
     final resolvedForwardedFrom = forwardedFromJid?.trim();
+    final resolvedOriginalSender = forwardedOriginalSenderLabel?.trim();
     return <String, dynamic>{
       ...(pseudoMessageData ?? const <String, dynamic>{}),
       'forwarded': true,
       if (resolvedForwardedFrom != null && resolvedForwardedFrom.isNotEmpty)
         'forwardedFromJid': resolvedForwardedFrom,
+      if (resolvedOriginalSender != null && resolvedOriginalSender.isNotEmpty)
+        'forwardedOriginalSenderLabel': resolvedOriginalSender,
     };
   }
 }

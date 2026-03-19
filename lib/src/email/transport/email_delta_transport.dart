@@ -2299,6 +2299,26 @@ class EmailDeltaTransport implements ChatTransport {
     return context.searchMessages(chatId: chatId, query: query);
   }
 
+  Future<List<int>> getChatMessageIds({
+    required int chatId,
+    int? beforeMessageId,
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return const <int>[];
+    }
+    if (beforeMessageId == null) {
+      return context.getChatMessageIds(chatId: chatId);
+    }
+    return context.getChatMessageIds(
+      chatId: chatId,
+      beforeMessageId: beforeMessageId,
+    );
+  }
+
   Future<void> hydrateMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return;
     await _ensureContextReady();

@@ -1363,6 +1363,7 @@ class EmailService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? quotedStanzaId,
   }) async {
     if (kEnableDemoChats) {
@@ -1373,6 +1374,7 @@ class EmailService {
         htmlBody: htmlBody,
         forwarded: forwarded,
         forwardedFromJid: forwardedFromJid,
+        forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
         quotedStanzaId: quotedStanzaId,
       );
     }
@@ -1459,6 +1461,7 @@ class EmailService {
           message.copyWith(
             pseudoMessageData: message.pseudoMessageDataWithForwarded(
               forwardedFromJid: forwardedFromJid,
+              forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
             ),
           ),
         );
@@ -1475,6 +1478,7 @@ class EmailService {
     Message? quotedDraft,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? quotedStanzaId,
   }) async {
     final syntheticReply = syntheticEmailReplyEnvelope(
@@ -1499,6 +1503,7 @@ class EmailService {
         htmlCaption: effectiveHtmlCaption,
         forwarded: forwarded,
         forwardedFromJid: forwardedFromJid,
+        forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
         quotedStanzaId: effectiveQuotedStanzaId,
       );
     }
@@ -1570,6 +1575,7 @@ class EmailService {
           message.copyWith(
             pseudoMessageData: message.pseudoMessageDataWithForwarded(
               forwardedFromJid: forwardedFromJid,
+              forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
             ),
           ),
         );
@@ -3970,6 +3976,7 @@ class EmailService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? quotedStanzaId,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
@@ -3983,6 +3990,7 @@ class EmailService {
     const generator = Uuid();
     final stanzaId = 'demo-email-${generator.v4()}';
     final forwardedFromNormalized = forwardedFromJid?.trim();
+    final originalSenderNormalized = forwardedOriginalSenderLabel?.trim();
     final db = await _databaseBuilder();
     final timestamp = await _resolveDemoTimestampForChat(
       db: db,
@@ -4009,6 +4017,9 @@ class EmailService {
               if (forwardedFromNormalized != null &&
                   forwardedFromNormalized.isNotEmpty)
                 'forwardedFromJid': forwardedFromNormalized,
+              if (originalSenderNormalized != null &&
+                  originalSenderNormalized.isNotEmpty)
+                'forwardedOriginalSenderLabel': originalSenderNormalized,
             }
           : null,
     );
@@ -4029,6 +4040,7 @@ class EmailService {
     String? htmlCaption,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? quotedStanzaId,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
@@ -4061,6 +4073,7 @@ class EmailService {
       sourceUrls: [Uri.file(attachment.path).toString()],
     );
     final forwardedFromNormalized = forwardedFromJid?.trim();
+    final originalSenderNormalized = forwardedOriginalSenderLabel?.trim();
     final message = Message(
       stanzaID: stanzaId,
       originID: stanzaId,
@@ -4082,6 +4095,9 @@ class EmailService {
               if (forwardedFromNormalized != null &&
                   forwardedFromNormalized.isNotEmpty)
                 'forwardedFromJid': forwardedFromNormalized,
+              if (originalSenderNormalized != null &&
+                  originalSenderNormalized.isNotEmpty)
+                'forwardedOriginalSenderLabel': originalSenderNormalized,
             }
           : null,
     );
@@ -5081,21 +5097,124 @@ class EmailService {
       chat: toChat,
       account: account,
     );
-    final deltaIds = messages
+    final forwardedMessages = messages
         .where(
           (message) =>
               message.deltaMsgId != null &&
               message.deltaAccountId == account.deltaAccountId,
         )
+        .toList(growable: false);
+    final deltaIds = forwardedMessages
         .map((message) => message.deltaMsgId!)
         .toList(growable: false);
     if (deltaIds.isEmpty) {
       return false;
     }
-    return _transport.forwardMessages(
+    final existingMessageIds = await _transport.getChatMessageIds(
+      chatId: toChatId,
+      accountId: account.deltaAccountId,
+    );
+    final forwarded = await _transport.forwardMessages(
       messageIds: deltaIds,
       toChatId: toChatId,
       accountId: account.deltaAccountId,
+    );
+    if (!forwarded) {
+      return false;
+    }
+    await _applyNativeForwardMetadata(
+      sourceMessages: forwardedMessages,
+      deltaAccountId: account.deltaAccountId,
+      deltaChatId: toChatId,
+      existingMessageIds: existingMessageIds.toSet(),
+    );
+    return true;
+  }
+
+  Future<void> _applyNativeForwardMetadata({
+    required List<Message> sourceMessages,
+    required int deltaAccountId,
+    required int deltaChatId,
+    required Set<int> existingMessageIds,
+  }) async {
+    if (sourceMessages.isEmpty) {
+      return;
+    }
+    final db = await _databaseBuilder();
+    const maxAttempts = 5;
+    const retryDelay = Duration(milliseconds: 50);
+    for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
+      final candidateIds =
+          (await _transport.getChatMessageIds(
+                chatId: deltaChatId,
+                accountId: deltaAccountId,
+              ))
+              .where(
+                (messageId) =>
+                    messageId > _deltaMessageIdUnset &&
+                    !existingMessageIds.contains(messageId),
+              )
+              .toList()
+            ..sort();
+      if (candidateIds.isEmpty) {
+        if (attempt + 1 < maxAttempts) {
+          await Future<void>.delayed(retryDelay);
+        }
+        continue;
+      }
+      await _transport.hydrateMessages(candidateIds, accountId: deltaAccountId);
+      final resolvedIds = <int>[];
+      for (final candidateId in candidateIds) {
+        final deltaMessage = await _transport.getMessage(
+          candidateId,
+          accountId: deltaAccountId,
+        );
+        if (deltaMessage?.isOutgoing != true) {
+          continue;
+        }
+        final stored = await db.getMessageByDeltaId(
+          candidateId,
+          deltaAccountId: deltaAccountId,
+        );
+        if (stored == null) {
+          continue;
+        }
+        resolvedIds.add(candidateId);
+      }
+      if (resolvedIds.isEmpty) {
+        if (attempt + 1 < maxAttempts) {
+          await Future<void>.delayed(retryDelay);
+        }
+        continue;
+      }
+      final pairCount = resolvedIds.length < sourceMessages.length
+          ? resolvedIds.length
+          : sourceMessages.length;
+      for (var index = 0; index < pairCount; index += 1) {
+        final stored = await db.getMessageByDeltaId(
+          resolvedIds[index],
+          deltaAccountId: deltaAccountId,
+        );
+        if (stored == null) {
+          continue;
+        }
+        final sourceMessage = sourceMessages[index];
+        final updated = stored.copyWith(
+          pseudoMessageData: stored.pseudoMessageDataWithForwarded(
+            forwardedFromJid: sourceMessage.senderJid,
+            forwardedOriginalSenderLabel: sourceMessage
+                .resolveForwardedOriginalSenderLabel(),
+          ),
+        );
+        if (updated != stored) {
+          await db.updateMessage(updated);
+        }
+      }
+      return;
+    }
+    _log.fine(
+      'Native forwarded email metadata was not applied for '
+      'chatId=$deltaChatId accountId=$deltaAccountId.',
     );
   }
 

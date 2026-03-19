@@ -5043,6 +5043,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     Message? quotedMessage,
     MessageReference? quotedReference,
     CalendarFragment? calendarFragment,
@@ -5060,6 +5061,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       htmlBody: htmlBody,
       forwarded: forwarded,
       forwardedFromJid: forwardedFromJid,
+      forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
       quotedMessage: quotedMessage,
       quotedReference: quotedReference,
       calendarFragment: calendarFragment,
@@ -5082,6 +5084,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     Message? quotedMessage,
     MessageReference? quotedReference,
     CalendarFragment? calendarFragment,
@@ -5101,6 +5104,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       htmlBody: htmlBody,
       forwarded: forwarded,
       forwardedFromJid: forwardedFromJid,
+      forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
       quotedMessage: quotedMessage,
       quotedReference: quotedReference,
       calendarFragment: calendarFragment,
@@ -5124,6 +5128,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     Message? quotedMessage,
     MessageReference? quotedReference,
     CalendarFragment? calendarFragment,
@@ -5206,6 +5211,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final Map<String, dynamic>? pseudoMessageData =
         availabilityData ?? taskData ?? fragmentData;
     final String? resolvedForwardedFrom = forwardedFromJid?.trim();
+    final String? resolvedOriginalSender = forwardedOriginalSenderLabel?.trim();
     final Map<String, dynamic>? resolvedPseudoData = forwarded
         ? <String, dynamic>{
             ...(pseudoMessageData ?? const <String, dynamic>{}),
@@ -5213,6 +5219,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             if (resolvedForwardedFrom != null &&
                 resolvedForwardedFrom.isNotEmpty)
               'forwardedFromJid': resolvedForwardedFrom,
+            if (resolvedOriginalSender != null &&
+                resolvedOriginalSender.isNotEmpty)
+              'forwardedOriginalSenderLabel': resolvedOriginalSender,
           }
         : pseudoMessageData;
     final DateTime timestamp = offlineDemo
@@ -5429,6 +5438,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? htmlCaption,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? transportGroupId,
     int? attachmentOrder,
     Message? quotedMessage,
@@ -5444,6 +5454,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       htmlCaption: htmlCaption,
       forwarded: forwarded,
       forwardedFromJid: forwardedFromJid,
+      forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
       transportGroupId: transportGroupId,
       attachmentOrder: attachmentOrder,
       quotedMessage: quotedMessage,
@@ -5462,6 +5473,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? htmlCaption,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? transportGroupId,
     int? attachmentOrder,
     Message? quotedMessage,
@@ -5477,6 +5489,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       htmlCaption: htmlCaption,
       forwarded: forwarded,
       forwardedFromJid: forwardedFromJid,
+      forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
       transportGroupId: transportGroupId,
       attachmentOrder: attachmentOrder,
       quotedMessage: quotedMessage,
@@ -5496,6 +5509,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? htmlCaption,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? forwardedOriginalSenderLabel,
     String? transportGroupId,
     int? attachmentOrder,
     Message? quotedMessage,
@@ -5545,6 +5559,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         ? caption
         : _attachmentLabel(filename, size);
     final String? resolvedForwardedFrom = forwardedFromJid?.trim();
+    final String? resolvedOriginalSender = forwardedOriginalSenderLabel?.trim();
     final DateTime timestamp = demoOfflineMode
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
@@ -5575,13 +5590,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
               if (resolvedForwardedFrom != null &&
                   resolvedForwardedFrom.isNotEmpty)
                 'forwardedFromJid': resolvedForwardedFrom,
+              if (resolvedOriginalSender != null &&
+                  resolvedOriginalSender.isNotEmpty)
+                'forwardedOriginalSenderLabel': resolvedOriginalSender,
             }
           : null,
     );
     const shouldStore = true;
     await _storeMessage(message, chatType: resolvedChatType);
     onLocalMessageStored?.call(message.stanzaID);
-    if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
+    if (!localOnly &&
+        resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
         resolvedChatType == ChatType.chat) {
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {

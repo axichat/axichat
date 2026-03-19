@@ -213,6 +213,7 @@ Widget? _timelineQuotedPreview({
 Widget? _timelineForwardedPreview({
   required bool isForwarded,
   required String? forwardedFromJid,
+  required String? forwardedOriginalSenderLabel,
   required String? forwardedSubjectSenderLabel,
   required String fallbackSenderJid,
   required bool fallbackIsSelf,
@@ -235,6 +236,7 @@ Widget? _timelineForwardedPreview({
     l10n: l10n,
   );
   final preferredPreviewSenderLabel = preferredForwardedPreviewSenderLabel(
+    forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
     forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
     forwardedFromJid: forwardedFromJid,
   );
@@ -1724,6 +1726,8 @@ _resolveTimelineMessagePreviews({
   final forwardedPreview = _timelineForwardedPreview(
     isForwarded: timelineMessageItem.isForwarded,
     forwardedFromJid: timelineMessageItem.forwardedFromJid,
+    forwardedOriginalSenderLabel:
+        timelineMessageItem.forwardedOriginalSenderLabel,
     forwardedSubjectSenderLabel:
         timelineMessageItem.forwardedSubjectSenderLabel,
     fallbackSenderJid: messageModel.senderJid,

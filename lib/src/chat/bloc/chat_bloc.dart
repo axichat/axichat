@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
@@ -835,6 +836,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.isEmailBacked || chat.isAxichatWelcomeThread) return false;
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return candidate.trim().isNotEmpty;
+  }
+
+  bool _isLocalOnlyXmppTarget({required String? jid, Contact? target}) {
+    return isAxichatWelcomeThreadJid(jid) ||
+        target?.chat?.isAxichatWelcomeThread == true;
   }
 
   bool _canPageEmailHistory(Chat chat) {
@@ -4031,9 +4037,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
+    final allXmppRecipientsLocalOnly =
+        xmppRecipients.isNotEmpty &&
+        xmppRecipients.every(
+          (recipient) => _isLocalOnlyXmppTarget(
+            jid: _resolvedXmppRecipientJid(recipient),
+            target: recipient.target,
+          ),
+        );
     if (attachmentsViaXmpp &&
         !event.supportsHttpFileUpload &&
-        !isLocalOnlyChat) {
+        !(isLocalOnlyChat || allXmppRecipientsLocalOnly)) {
       emit(
         state.copyWith(
           composerError: ChatMessageKey.chatComposerFileUploadUnavailable,
@@ -4971,6 +4985,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     try {
       Chat? resolvedEmailTarget;
+      final forwardedOriginalSenderLabel = message
+          .resolveForwardedOriginalSenderLabel();
       if (forwardAsEmail) {
         if (emailService == null) {
           emitForwardFailure();
@@ -5025,6 +5041,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               htmlCaption: index == 0 ? syntheticEmailHtml : null,
               forwarded: true,
               forwardedFromJid: message.senderJid,
+              forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
             );
           }
           if (shouldBundle && bundled.isNotEmpty) {
@@ -5034,22 +5051,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
         final attachmentGroupId = attachments.length > 1 ? uuid.v4() : null;
+        final targetIsLocalOnly = _isLocalOnlyXmppTarget(
+          jid: targetJid,
+          target: target,
+        );
         for (var index = 0; index < attachments.length; index += 1) {
           final attachment = attachments[index];
           final captionedAttachment = index == 0
               ? attachment.copyWith(caption: syntheticXmppText)
               : attachment;
-          await _messageService.sendAttachment(
-            jid: targetJid!,
-            attachment: captionedAttachment,
-            encryptionProtocol: target.encryptionProtocol,
-            chatType: target.chatType,
-            htmlCaption: index == 0 ? syntheticXmppHtml : null,
-            forwarded: true,
-            forwardedFromJid: message.senderJid,
-            transportGroupId: attachmentGroupId,
-            attachmentOrder: index,
-          );
+          if (targetIsLocalOnly) {
+            await _messageService.sendLocalOnlyAttachment(
+              jid: targetJid!,
+              attachment: captionedAttachment,
+              encryptionProtocol: target.encryptionProtocol,
+              chatType: target.chatType,
+              htmlCaption: index == 0 ? syntheticXmppHtml : null,
+              forwarded: true,
+              forwardedFromJid: message.senderJid,
+              forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
+              transportGroupId: attachmentGroupId,
+              attachmentOrder: index,
+            );
+          } else {
+            await _messageService.sendAttachment(
+              jid: targetJid!,
+              attachment: captionedAttachment,
+              encryptionProtocol: target.encryptionProtocol,
+              chatType: target.chatType,
+              htmlCaption: index == 0 ? syntheticXmppHtml : null,
+              forwarded: true,
+              forwardedFromJid: message.senderJid,
+              forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
+              transportGroupId: attachmentGroupId,
+              attachmentOrder: index,
+            );
+          }
         }
         emitForwardSuccess();
         return;
@@ -5066,17 +5103,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           htmlBody: syntheticEmailHtml,
           forwarded: true,
           forwardedFromJid: message.senderJid,
+          forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
         );
       } else {
-        await _messageService.sendMessage(
-          jid: targetJid!,
-          text: syntheticXmppText,
-          htmlBody: syntheticXmppHtml,
-          forwarded: true,
-          forwardedFromJid: message.senderJid,
-          encryptionProtocol: target.encryptionProtocol,
-          chatType: target.chatType,
+        final targetIsLocalOnly = _isLocalOnlyXmppTarget(
+          jid: targetJid,
+          target: target,
         );
+        if (targetIsLocalOnly) {
+          await _messageService.sendLocalOnlyMessage(
+            jid: targetJid!,
+            text: syntheticXmppText,
+            htmlBody: syntheticXmppHtml,
+            forwarded: true,
+            forwardedFromJid: message.senderJid,
+            forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
+            encryptionProtocol: target.encryptionProtocol,
+            chatType: target.chatType,
+          );
+        } else {
+          await _messageService.sendMessage(
+            jid: targetJid!,
+            text: syntheticXmppText,
+            htmlBody: syntheticXmppHtml,
+            forwarded: true,
+            forwardedFromJid: message.senderJid,
+            forwardedOriginalSenderLabel: forwardedOriginalSenderLabel,
+            encryptionProtocol: target.encryptionProtocol,
+            chatType: target.chatType,
+          );
+        }
       }
       emitForwardSuccess();
     } on Exception catch (error, stackTrace) {
@@ -5122,7 +5178,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (originalBody.isNotEmpty) originalBody,
     ];
     final body = sections.join('\n\n');
-    final senderLabel = _forwardedSenderDisplayLabel(message);
+    final senderLabel =
+        message.resolveForwardedOriginalSenderLabel() ?? message.senderJid;
     final subjectText = syntheticForwardVisibleSubject(
       senderLabel: senderLabel,
     );
@@ -5191,19 +5248,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return HtmlContentCodec.fromPlainText('$subjectText\n\n$body');
   }
 
-  String _forwardedSenderDisplayLabel(Message message) {
-    final parsed = parseJid(message.senderJid);
-    final resource = parsed?.resource.trim();
-    if (resource != null && resource.isNotEmpty) {
-      return resource;
-    }
-    final safeAddress = displaySafeAddress(message.senderJid);
-    if (safeAddress != null && safeAddress.trim().isNotEmpty) {
-      return safeAddress.trim();
-    }
-    return message.senderJid.trim();
-  }
-
   Future<void> _onChatMessageResendRequested(
     ChatMessageResendRequested event,
     Emitter<ChatState> emit,
@@ -5211,6 +5255,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final message = event.message;
     final chatType = event.chatType;
     final isEmailMessage = message.deltaChatId != null;
+    final isLocalOnlyChat = isAxichatWelcomeThreadJid(message.chatJid);
     try {
       if (isEmailMessage) {
         await _resendEmailMessage(message, emit);
@@ -5234,23 +5279,73 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           final resolvedAttachment = shouldApplyCaption
               ? attachment.copyWith(caption: caption)
               : attachment;
-          await _messageService.sendAttachment(
-            jid: message.chatJid,
-            attachment: resolvedAttachment,
-            encryptionProtocol: message.encryptionProtocol,
-            quotedMessage: index == 0 ? quoted : null,
-            chatType: chatType,
-            htmlCaption: shouldApplyCaption ? htmlCaption : null,
-            transportGroupId: attachmentGroupId,
-            attachmentOrder: index,
-          );
+          if (isLocalOnlyChat) {
+            await _messageService.sendLocalOnlyAttachment(
+              jid: message.chatJid,
+              attachment: resolvedAttachment,
+              encryptionProtocol: message.encryptionProtocol,
+              quotedMessage: index == 0 ? quoted : null,
+              chatType: chatType,
+              htmlCaption: shouldApplyCaption ? htmlCaption : null,
+              forwarded: message.isForwarded,
+              forwardedFromJid: message.forwardedFromJid,
+              forwardedOriginalSenderLabel:
+                  message.forwardedOriginalSenderLabel,
+              transportGroupId: attachmentGroupId,
+              attachmentOrder: index,
+            );
+          } else {
+            await _messageService.sendAttachment(
+              jid: message.chatJid,
+              attachment: resolvedAttachment,
+              encryptionProtocol: message.encryptionProtocol,
+              quotedMessage: index == 0 ? quoted : null,
+              chatType: chatType,
+              htmlCaption: shouldApplyCaption ? htmlCaption : null,
+              transportGroupId: attachmentGroupId,
+              attachmentOrder: index,
+            );
+          }
         }
         return;
       }
       final hasBody =
           message.plainText.isNotEmpty || message.normalizedHtmlBody != null;
       if (!hasBody) return;
-      await _messageService.resendMessage(message.stanzaID, chatType: chatType);
+      if (isLocalOnlyChat) {
+        final CalendarFragment? fragment = message.calendarFragment;
+        final CalendarTask? taskIcs = message.calendarTaskIcs;
+        final bool taskIcsReadOnly = message.calendarTaskIcsReadOnly;
+        final CalendarAvailabilityMessage? availabilityMessage =
+            message.calendarAvailabilityMessage;
+        Message? quoted;
+        if (message.quoting != null) {
+          quoted = await _messageService.loadMessageByReferenceId(
+            message.quoting!,
+            chatJid: message.chatJid,
+          );
+        }
+        await _messageService.sendLocalOnlyMessage(
+          jid: message.chatJid,
+          text: message.plainText,
+          htmlBody: message.normalizedHtmlBody,
+          encryptionProtocol: message.encryptionProtocol,
+          quotedMessage: quoted,
+          calendarFragment: fragment,
+          calendarTaskIcs: taskIcs,
+          calendarTaskIcsReadOnly: taskIcsReadOnly,
+          calendarAvailabilityMessage: availabilityMessage,
+          forwarded: message.isForwarded,
+          forwardedFromJid: message.forwardedFromJid,
+          forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
+          chatType: chatType,
+        );
+      } else {
+        await _messageService.resendMessage(
+          message.stanzaID,
+          chatType: chatType,
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _log.warning(_messageResendFailedLogMessage, error, stackTrace);
     }
@@ -6099,10 +6194,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       _replacePendingAttachmentInList(pendingAttachments, current);
       try {
-        XmppAttachmentUpload? upload;
+        XmppAttachmentUpload? localUpload;
+        XmppAttachmentUpload? networkUpload;
         for (final entry in targets.entries) {
           final targetJid = entry.key;
           final target = entry.value;
+          final targetIsLocalOnly = _isLocalOnlyXmppTarget(
+            jid: targetJid,
+            target: target,
+          );
           final quote =
               quotedDraft != null &&
                   quotedDraft.chatJid == targetJid &&
@@ -6110,37 +6210,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? quotedDraft
               : null;
           final groupId = attachmentGroupIds[targetJid];
-          upload = chat.isAxichatWelcomeThread
-              ? await _messageService.sendLocalOnlyAttachment(
-                  jid: targetJid,
-                  attachment: current.attachment,
-                  encryptionProtocol: target.encryptionProtocol,
-                  chatType: target.chatType,
-                  quotedMessage: quote,
-                  htmlCaption: shouldApplyCaption ? htmlCaption : null,
-                  transportGroupId: groupId,
-                  attachmentOrder: index,
-                  upload: upload,
-                  onLocalMessageStored: (stanzaId) {
-                    storedStanzaId = stanzaId;
-                    onLocalMessageStored?.call(stanzaId);
-                  },
-                )
-              : await _messageService.sendAttachment(
-                  jid: targetJid,
-                  attachment: current.attachment,
-                  encryptionProtocol: target.encryptionProtocol,
-                  chatType: target.chatType,
-                  quotedMessage: quote,
-                  htmlCaption: shouldApplyCaption ? htmlCaption : null,
-                  transportGroupId: groupId,
-                  attachmentOrder: index,
-                  upload: upload,
-                  onLocalMessageStored: (stanzaId) {
-                    storedStanzaId = stanzaId;
-                    onLocalMessageStored?.call(stanzaId);
-                  },
-                );
+          if (targetIsLocalOnly) {
+            localUpload = await _messageService.sendLocalOnlyAttachment(
+              jid: targetJid,
+              attachment: current.attachment,
+              encryptionProtocol: target.encryptionProtocol,
+              chatType: target.chatType,
+              quotedMessage: quote,
+              htmlCaption: shouldApplyCaption ? htmlCaption : null,
+              transportGroupId: groupId,
+              attachmentOrder: index,
+              upload: localUpload,
+              onLocalMessageStored: (stanzaId) {
+                storedStanzaId = stanzaId;
+                onLocalMessageStored?.call(stanzaId);
+              },
+            );
+          } else {
+            networkUpload = await _messageService.sendAttachment(
+              jid: targetJid,
+              attachment: current.attachment,
+              encryptionProtocol: target.encryptionProtocol,
+              chatType: target.chatType,
+              quotedMessage: quote,
+              htmlCaption: shouldApplyCaption ? htmlCaption : null,
+              transportGroupId: groupId,
+              attachmentOrder: index,
+              upload: networkUpload,
+              onLocalMessageStored: (stanzaId) {
+                storedStanzaId = stanzaId;
+                onLocalMessageStored?.call(stanzaId);
+              },
+            );
+          }
         }
         _removePendingAttachmentFromList(pendingAttachments, current.id);
       } on XmppFileTooBigException catch (_) {
@@ -6985,7 +7087,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final quote = quotedDraft != null && quotedDraft.chatJid == targetJid
           ? quotedDraft
           : null;
-      if (recipient.target.chat?.isAxichatWelcomeThread == true) {
+      if (_isLocalOnlyXmppTarget(jid: targetJid, target: recipient.target)) {
         await _messageService.sendLocalOnlyMessage(
           jid: targetJid,
           text: body,
