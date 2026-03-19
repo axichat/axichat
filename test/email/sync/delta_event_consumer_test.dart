@@ -146,6 +146,67 @@ void main() {
     expect(persistedMessage.timestamp, timestamp);
   });
 
+  test(
+    'persists original sender metadata for incoming forwarded emails',
+    () async {
+      const chatId = 7;
+      const msgId = 25;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text:
+            '---------- Forwarded message ---------\n'
+            'From: Original Person <original@example.com>\n'
+            'Subject: Quarterly plan\n'
+            '\n'
+            'Forwarded body',
+        subject: 'Fwd: Quarterly plan',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Forwarder',
+        contactAddress: 'forwarder@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persistedMessage =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.last
+              as Message;
+      expect(persistedMessage.isForwarded, isTrue);
+      expect(persistedMessage.forwardedFromJid, 'forwarder@example.com');
+      expect(
+        persistedMessage.forwardedOriginalSenderLabel,
+        'original@example.com',
+      );
+    },
+  );
+
   test('chatModified updates stored metadata', () async {
     const chatId = 11;
     final existingChat = Chat(

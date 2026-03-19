@@ -866,12 +866,6 @@ pre, code {
         _compactFlutterTablePreviewNodes(row.innerHtml),
       );
     }
-    if (!hasNonCellContent &&
-        cellCount == 1 &&
-        singleCell != null &&
-        (singleCell.localName ?? '').toLowerCase() == 'div') {
-      return singleCell;
-    }
     return formattedRow;
   }
 
@@ -1316,19 +1310,6 @@ pre, code {
           continue;
         }
         final tag = (node.localName ?? '').toLowerCase();
-        if (tag == 'center') {
-          final replacementNodes = node.nodes.toList();
-          final index = nodes.indexOf(node);
-          node.remove();
-          for (
-            var offset = replacementNodes.length - 1;
-            offset >= 0;
-            offset--
-          ) {
-            nodes.insert(index, replacementNodes[offset]);
-          }
-          continue;
-        }
         if (tag == 'style') {
           final sanitizedStyleText = _sanitizeWebViewStyleElementText(
             node.text,

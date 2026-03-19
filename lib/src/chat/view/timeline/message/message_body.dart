@@ -128,7 +128,7 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         width: double.infinity,
         child: html_widget.Html(
           data: widget.html,
-          shrinkWrap: true,
+          shrinkWrap: false,
           extensions: createEmailHtmlExtensions(
             shouldLoadImages: widget.shouldLoadImages,
           ),

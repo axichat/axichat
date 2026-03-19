@@ -10,6 +10,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
@@ -18,6 +19,7 @@ import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/email/util/email_message_merge.dart';
+import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
@@ -1757,6 +1759,12 @@ class DeltaEventConsumer {
       htmlBody: normalizedHtml,
       subject: sanitizedSubject,
     );
+    next = _applyForwardedMetadata(
+      message: next,
+      rawBody: rawText,
+      normalizedHtml: normalizedHtml,
+      sanitizedSubject: sanitizedSubject,
+    );
     next = await _applyShareMetadata(
       db: db,
       message: next,
@@ -1768,6 +1776,42 @@ class DeltaEventConsumer {
     );
     next = await _attachFileMetadata(db: db, message: next, delta: msg);
     return next;
+  }
+
+  Message _applyForwardedMetadata({
+    required Message message,
+    required String? rawBody,
+    required String? normalizedHtml,
+    required String? sanitizedSubject,
+  }) {
+    final htmlText = normalizedHtml == null
+        ? null
+        : HtmlContentCodec.toPlainText(normalizedHtml);
+    final originalSenderLabel =
+        syntheticForwardDisplaySenderLabel(
+          subjectLabel: sanitizedSubject,
+          emailMarkerPresent: hasSyntheticForwardHtmlMarker(
+            html: normalizedHtml,
+          ),
+        ) ??
+        forwardedBodySenderLabel(rawBody) ??
+        forwardedBodySenderLabel(htmlText);
+    final normalizedSubject = sanitizedSubject?.trim().toLowerCase() ?? '';
+    final isForwarded =
+        originalSenderLabel != null ||
+        normalizedSubject.startsWith('fwd:') ||
+        normalizedSubject.startsWith('fw:') ||
+        hasForwardedBodyHeader(rawBody) ||
+        hasForwardedBodyHeader(htmlText);
+    if (!isForwarded) {
+      return message;
+    }
+    return message.copyWith(
+      pseudoMessageData: message.pseudoMessageDataWithForwarded(
+        forwardedFromJid: message.senderJid,
+        forwardedOriginalSenderLabel: originalSenderLabel,
+      ),
+    );
   }
 
   Future<void> _storeMessage({

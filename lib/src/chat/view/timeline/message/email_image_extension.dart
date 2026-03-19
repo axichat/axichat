@@ -91,10 +91,11 @@ Map<String, Style> createEmailHtmlStyles({
     fontSize: baseFontSize,
   );
 
-  final quoteStyle = Style(
-    color: textColor,
-    fontSize: baseFontSize,
-  ).copyWith(border: Border.fromBorderSide(BorderSide.none));
+  final quoteStyle = Style(color: textColor, fontSize: baseFontSize).copyWith(
+    border: Border.fromBorderSide(BorderSide.none),
+    margin: Margins.zero,
+    padding: HtmlPaddings.zero,
+  );
 
   return <String, Style>{
     'html': rootStyle(),
