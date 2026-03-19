@@ -1583,7 +1583,9 @@ void main() {
           target: Contact.chat(chat: welcomeChat, shareSignatureEnabled: false),
         ),
       );
-      await _pumpBloc();
+      await bloc.stream.firstWhere(
+        (state) => state.toast?.message == ChatMessageKey.chatMessageForwarded,
+      );
 
       verify(
         () => messageService.sendLocalOnlyAttachment(
@@ -1858,7 +1860,7 @@ void main() {
       bloc.add(
         ChatMessageResendRequested(message: message, chatType: ChatType.chat),
       );
-      await _pumpBloc();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
       verify(
         () => messageService.sendLocalOnlyAttachment(
