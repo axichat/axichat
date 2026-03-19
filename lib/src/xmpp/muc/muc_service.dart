@@ -90,8 +90,10 @@ const _mucCreateRoomOperationName = 'MucService.createRoom';
 const _mucUpsertBookmarkOperationName = 'MucService.upsertBookmarkForRoom';
 const _mucPostJoinRefreshOperationName = 'MucService.refreshJoinedRoom';
 const _mucResumeRecoveryOperationName = 'MucService.recoverAfterResume';
-const _mucSnapshotBootstrapOperationName =
-    'MucService.bootstrapSnapshotOnNegotiations';
+const _mucServiceDiscoveryBootstrapOperationName =
+    'MucService.discoverServiceHostOnNegotiations';
+const _mucBookmarksBootstrapOperationName =
+    'MucService.syncBookmarksOnNegotiations';
 const _mucCreateRoomBookmarkTimeoutLog =
     'Bookmark upsert still running for newly created room.';
 const _mucCreateConflictLog =
@@ -204,6 +206,7 @@ final class _MucRoomSession {
   bool tracksJoinOperation = false;
   Completer<void>? instantRoomConfigCompleter;
   Completer<void>? postJoinRefreshCompleter;
+  Completer<void>? repairCompleter;
   bool instantRoomConfigured = false;
   bool instantRoomPending = false;
   bool seededDummyRoom = false;
@@ -587,6 +590,20 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       return;
     }
     _ensureRoomSessionForKey(roomKey).postJoinRefreshCompleter = completer;
+  }
+
+  Completer<void>? _repairCompleterForKey(String roomKey) =>
+      _roomSessionForKey(roomKey)?.repairCompleter;
+
+  void _setRepairCompleterForKey(String roomKey, Completer<void>? completer) {
+    if (completer == null) {
+      final session = _roomSessionForKey(roomKey);
+      if (session != null) {
+        session.repairCompleter = null;
+      }
+      return;
+    }
+    _ensureRoomSessionForKey(roomKey).repairCompleter = completer;
   }
 
   bool _seededDummyRoom(String roomKey) =>
@@ -1418,23 +1435,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         preserveOccupants: _preserveOccupantsOnMucError,
       );
     }
-    fireAndForget(
-      () => _repairMucJoin(resolvedRoomJid),
-      operationName: 'MucService.repairMucJoinAfterMessageError',
-    );
-  }
-
-  Future<void> _repairMucJoin(String roomJid) async {
-    try {
-      final String normalizedRoom = _roomKey(roomJid);
-      await ensureJoined(
-        roomJid: normalizedRoom,
-        allowRejoin: true,
-        forceRejoin: true,
-      );
-    } on Exception {
-      // Join failures are already reflected in message errors.
-    }
+    unawaited(_ensureRoomRepairTask(resolvedRoomJid));
   }
 
   @override
@@ -1774,6 +1775,43 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mucServiceDiscoveryBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+        },
+        operationName: _mucServiceDiscoveryBootstrapOperationName,
+        run: () async {
+          await discoverMucServiceHost();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mucBookmarksBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _mucBookmarksBootstrapOperationName,
+        run: () async {
+          await syncMucBookmarksSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mucResumeRecoveryOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _mucResumeRecoveryOperationName,
+        run: () async {
+          await _recoverRoomsAfterResume();
+        },
+      ),
+    );
     manager
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         if (event.state == ConnectionState.connected) return;
@@ -1848,29 +1886,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         } finally {
           await _removeMucPrejoinRoom(event.roomBare);
         }
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) {
-          fireAndForget(() async {
-            try {
-              await _recoverRoomsAfterResume();
-            } on XmppAbortedException {
-              _mucLog.fine('MUC resume recovery aborted.');
-            } on Exception catch (error, stackTrace) {
-              _mucLog.fine('MUC resume recovery failed.', error, stackTrace);
-            }
-          }, operationName: _mucResumeRecoveryOperationName);
-          return;
-        }
-        fireAndForget(() async {
-          try {
-            await _bootstrapMucSnapshotAfterNegotiations();
-          } on XmppAbortedException {
-            _mucLog.fine('MUC snapshot bootstrap aborted.');
-          } on Exception catch (error, stackTrace) {
-            _mucLog.fine('MUC snapshot bootstrap failed.', error, stackTrace);
-          }
-        }, operationName: _mucSnapshotBootstrapOperationName);
       });
   }
 
@@ -2292,6 +2307,42 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       return;
     }
     completer.complete();
+  }
+
+  Future<void> _ensureRoomRepairTask(String roomJid) async {
+    final normalizedRoom = _roomKey(roomJid);
+    final existingCompleter = _repairCompleterForKey(normalizedRoom);
+    if (existingCompleter != null && !existingCompleter.isCompleted) {
+      return existingCompleter.future;
+    }
+    final completer = Completer<void>();
+    _setRepairCompleterForKey(normalizedRoom, completer);
+    unawaited(
+      _runRoomRepairTask(roomJid: normalizedRoom, completer: completer),
+    );
+    return completer.future;
+  }
+
+  Future<void> _runRoomRepairTask({
+    required String roomJid,
+    required Completer<void> completer,
+  }) async {
+    try {
+      await ensureJoined(
+        roomJid: roomJid,
+        allowRejoin: true,
+        forceRejoin: true,
+      );
+    } on Exception {
+      // Join failures are already reflected in message errors.
+    } finally {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+      if (identical(_repairCompleterForKey(roomJid), completer)) {
+        _setRepairCompleterForKey(roomJid, null);
+      }
+    }
   }
 
   Future<void> _runJoinRoomRequest({
@@ -4050,25 +4101,12 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
   }
 
-  Future<void> _bootstrapMucSnapshotAfterNegotiations() async {
-    await discoverMucServiceHost();
-    await syncMucBookmarksSnapshot();
-  }
-
   Future<List<MucBookmark>> syncMucBookmarksSnapshot() async {
     final pendingSync = _mucBookmarksSync;
     if (pendingSync != null) return pendingSync;
     final task = () async {
       try {
         await database;
-        final support = await refreshPubSubSupport();
-        final decision = decidePubSubSupport(
-          supported: support.canUseBookmarks2,
-          featureLabel: 'bookmarks',
-        );
-        if (!decision.isAllowed) {
-          return _emptyMucSnapshot;
-        }
         final bookmarksManager = _connection.getManager<BookmarksManager>();
         if (bookmarksManager == null) {
           return _emptyMucSnapshot;
