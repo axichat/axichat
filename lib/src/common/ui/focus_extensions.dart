@@ -13,27 +13,17 @@ extension TextInputFocusManager on FocusManager {
 
 extension TextInputFocusNode on FocusNode {
   bool get isTextInputFocused {
+    if (axi.isRegisteredEditableTextFocusNode(this)) {
+      return true;
+    }
     final BuildContext? focusContext = context;
     if (focusContext == null || !focusContext.mounted) {
       return false;
     }
-    final Element focusElement = focusContext as Element;
-    if (_isTextInputElement(focusElement)) {
-      return true;
-    }
-    var isFocusedTextInput = false;
-    focusElement.visitAncestorElements((ancestor) {
-      if (_isTextInputElement(ancestor)) {
-        isFocusedTextInput = true;
-        return false;
-      }
-      return true;
-    });
-    return isFocusedTextInput;
+    return _isTextInputWidget(focusContext.widget);
   }
 }
 
-bool _isTextInputElement(Element element) {
-  final Widget widget = element.widget;
+bool _isTextInputWidget(Widget widget) {
   return widget is EditableText || widget is axi.EditableText;
 }

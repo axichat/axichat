@@ -144,6 +144,22 @@ const List<String> kDefaultContentInsertionMimeTypes = <String>[
   'image/webp',
 ];
 
+final Expando<bool> _editableTextFocusNodeRegistry = Expando<bool>(
+  'AxiEditableTextFocusNodeRegistry',
+);
+
+void registerEditableTextFocusNode(FocusNode focusNode) {
+  _editableTextFocusNodeRegistry[focusNode] = true;
+}
+
+void unregisterEditableTextFocusNode(FocusNode focusNode) {
+  _editableTextFocusNodeRegistry[focusNode] = null;
+}
+
+bool isRegisteredEditableTextFocusNode(FocusNode focusNode) {
+  return _editableTextFocusNodeRegistry[focusNode] ?? false;
+}
+
 class _CompositionCallback extends SingleChildRenderObjectWidget {
   const _CompositionCallback({
     required this.compositeCallback,
@@ -3062,6 +3078,7 @@ class EditableTextState extends State<EditableText>
     _liveTextInputStatus?.addListener(_onChangedLiveTextInputStatus);
     clipboardStatus.addListener(_onChangedClipboardStatus);
     widget.controller.addListener(_didChangeTextEditingValue);
+    registerEditableTextFocusNode(widget.focusNode);
     widget.focusNode.addListener(_handleFocusChanged);
     _cursorVisibilityNotifier.value = widget.showCursor;
     _previousTypingValue = widget.controller.value;
@@ -3235,6 +3252,11 @@ class EditableTextState extends State<EditableText>
     }
 
     if (widget.focusNode != oldWidget.focusNode) {
+      unregisterEditableTextFocusNode(oldWidget.focusNode);
+      registerEditableTextFocusNode(widget.focusNode);
+    }
+
+    if (widget.focusNode != oldWidget.focusNode) {
       oldWidget.focusNode.removeListener(_handleFocusChanged);
       widget.focusNode.addListener(_handleFocusChanged);
       updateKeepAlive();
@@ -3332,6 +3354,7 @@ class EditableTextState extends State<EditableText>
     _backingCursorBlinkOpacityController = null;
     _selectionOverlay?.dispose();
     _selectionOverlay = null;
+    unregisterEditableTextFocusNode(widget.focusNode);
     widget.focusNode.removeListener(_handleFocusChanged);
     WidgetsBinding.instance.removeObserver(this);
     _liveTextInputStatus?.removeListener(_onChangedLiveTextInputStatus);
