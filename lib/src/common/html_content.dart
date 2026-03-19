@@ -828,6 +828,12 @@ pre, code {
   }
 
   static dom.Element? _formatFlutterTableCell(dom.Element cell) {
+    if (!_shouldCompactFlutterTableCell(cell)) {
+      if (!_compactFlutterTablePreviewHasContent(cell.nodes)) {
+        return null;
+      }
+      return dom.Element.tag('div')..nodes.addAll(cell.nodes.toList());
+    }
     final compactNodes = _compactFlutterTablePreviewNodes(cell.innerHtml);
     if (!_compactFlutterTablePreviewHasContent(compactNodes)) {
       return null;
@@ -838,6 +844,24 @@ pre, code {
           ? _tableCellHeaderStyle
           : _tableCellInlineDisplayStyle
       ..nodes.addAll(compactNodes);
+  }
+
+  static bool _shouldCompactFlutterTableCell(dom.Element cell) {
+    final tag = (cell.localName ?? '').toLowerCase();
+    if (tag == 'th') {
+      return true;
+    }
+    if (cell.querySelector('table') != null) {
+      return true;
+    }
+    final style = cell.attributes['style']?.trim().toLowerCase() ?? '';
+    if (style.contains('font-size:0pt') ||
+        style.contains('font-size: 0pt') ||
+        style.contains('line-height:0pt') ||
+        style.contains('line-height: 0pt')) {
+      return true;
+    }
+    return false;
   }
 
   static List<dom.Node> _compactFlutterTablePreviewNodes(String html) {
