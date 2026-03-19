@@ -6,7 +6,6 @@ import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/accessibility_flow.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -760,9 +759,7 @@ String? _attachmentLabelFor(
 String _messageId(Message message) => message.id ?? message.stanzaID;
 
 class AccessibilityActionMenu extends StatefulWidget {
-  const AccessibilityActionMenu({super.key, this.chatLocate});
-
-  final T Function<T>()? chatLocate;
+  const AccessibilityActionMenu({super.key});
 
   @override
   State<AccessibilityActionMenu> createState() =>
@@ -820,10 +817,7 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
             child: state.visible
                 ? BlockSemantics(
                     blocking: true,
-                    child: _AccessibilityMenuScaffold(
-                      state: state,
-                      chatLocate: widget.chatLocate,
-                    ),
+                    child: _AccessibilityMenuScaffold(state: state),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -834,13 +828,9 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
 }
 
 class _AccessibilityMenuScaffold extends StatefulWidget {
-  const _AccessibilityMenuScaffold({
-    required this.state,
-    required this.chatLocate,
-  });
+  const _AccessibilityMenuScaffold({required this.state});
 
   final AccessibilityActionState state;
-  final T Function<T>()? chatLocate;
 
   @override
   State<_AccessibilityMenuScaffold> createState() =>
@@ -1175,8 +1165,6 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                                         nextGroupActivator,
                                                     previousGroupActivator:
                                                         previousGroupActivator,
-                                                    chatLocate:
-                                                        widget.chatLocate,
                                                   ),
                                             ),
                                           ),
@@ -1672,7 +1660,6 @@ class _AccessibilityActionContent extends StatelessWidget {
     required this.activateItemActivator,
     required this.nextGroupActivator,
     required this.previousGroupActivator,
-    required this.chatLocate,
   });
 
   final AccessibilityActionState state;
@@ -1694,7 +1681,6 @@ class _AccessibilityActionContent extends StatelessWidget {
   final ShortcutActivator activateItemActivator;
   final ShortcutActivator nextGroupActivator;
   final ShortcutActivator previousGroupActivator;
-  final T Function<T>()? chatLocate;
 
   @override
   Widget build(BuildContext context) {
@@ -1863,7 +1849,6 @@ class _AccessibilityActionContent extends StatelessWidget {
                     currentRecipients,
                   ),
                 ),
-                chatLocate: chatLocate,
               ),
             ),
           ),
@@ -2893,13 +2878,11 @@ class _MessageCarousel extends StatefulWidget {
     required this.section,
     required this.focusNode,
     required this.initialIndex,
-    required this.chatLocate,
   });
 
   final AccessibilityMenuSection section;
   final FocusNode focusNode;
   final int initialIndex;
-  final T Function<T>()? chatLocate;
 
   @override
   State<_MessageCarousel> createState() => _MessageCarouselState();
@@ -3010,7 +2993,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
   Widget build(BuildContext context) {
     final items = _items;
     final spacing = context.spacing;
-    final chatLocate = widget.chatLocate;
+    final locate = context.read;
     final hasFocus = widget.focusNode.hasFocus;
     final hasItems = items.isNotEmpty;
     final clampedIndex = _currentIndex.clamp(
@@ -3116,22 +3099,18 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                         stanzaId: currentMessage?.stanzaID ?? '',
                         metadata: attachment,
                         allowed: true,
-                        downloadDelegate: chatLocate == null
-                            ? null
-                            : AttachmentDownloadDelegate(
-                                () => chatLocate<ChatBloc>()
-                                    .downloadInboundAttachment(
-                                      metadataId: attachment.id,
-                                      stanzaId: currentMessage?.stanzaID ?? '',
-                                    ),
+                        downloadDelegate: AttachmentDownloadDelegate(
+                          () => locate<AccessibilityChatBloc>()
+                              .downloadInboundAttachment(
+                                metadataId: attachment.id,
+                                stanzaId: currentMessage?.stanzaID ?? '',
                               ),
-                        metadataReloadDelegate: chatLocate == null
-                            ? null
-                            : AttachmentMetadataReloadDelegate(
-                                () => chatLocate<ChatBloc>().reloadFileMetadata(
-                                  attachment.id,
-                                ),
-                              ),
+                        ),
+                        metadataReloadDelegate:
+                            AttachmentMetadataReloadDelegate(
+                              () => locate<AccessibilityChatBloc>()
+                                  .reloadFileMetadata(attachment.id),
+                            ),
                       ),
                     )
                   else if (attachmentLabel != null && rawBody.isEmpty)

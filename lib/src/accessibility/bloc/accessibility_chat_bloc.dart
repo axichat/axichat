@@ -64,6 +64,47 @@ class AccessibilityChatBloc
     _emailService = emailService;
   }
 
+  Future<bool> downloadInboundAttachment({
+    required String metadataId,
+    required String stanzaId,
+  }) async {
+    try {
+      final downloadedPath = await _messageService.downloadInboundAttachment(
+        metadataId: metadataId,
+        stanzaId: stanzaId,
+      );
+      return downloadedPath?.trim().isNotEmpty == true;
+    } on XmppException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to download accessibility attachment $metadataId',
+        error,
+        stackTrace,
+      );
+      return false;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Unexpected error downloading accessibility attachment $metadataId',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
+    try {
+      final db = await _messageService.database;
+      return db.getFileMetadata(metadataId);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to reload accessibility attachment metadata $metadataId',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
   @override
   Future<void> close() async {
     await _messageSubscription?.cancel();
