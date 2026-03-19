@@ -16,7 +16,6 @@ import 'package:axichat/src/calendar/view/shell/sync_controls.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -25,22 +24,19 @@ import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-const bool _chatCalendarSurfacePopEnabledDefault = true;
-
-bool _resolveChatCalendarSurfacePopEnabled(BuildContext context) {
-  return context.watch<ChatsCubit>().state.openChatCalendar ||
-      _chatCalendarSurfacePopEnabledDefault;
-}
-
 class ChatCalendarWidget extends StatefulWidget {
   const ChatCalendarWidget({
     super.key,
     required this.chat,
+    required this.surfacePopEnabled,
     this.showHeader = true,
+    this.onCanHandleBackChanged,
   });
 
   final Chat chat;
+  final bool surfacePopEnabled;
   final bool showHeader;
+  final ValueChanged<bool>? onCanHandleBackChanged;
 
   @override
   State<ChatCalendarWidget> createState() => _ChatCalendarWidgetState();
@@ -206,11 +202,17 @@ class _ChatCalendarWidgetState
       controller: _hoverTitleController,
       child: tintedLayout,
     );
-    return CalendarSurfaceNavigator(
-      navigatorKey: _calendarNavigatorKey,
-      modalAnchorKey: _calendarModalAnchorKey,
-      enablePop: _resolveChatCalendarSurfacePopEnabled(context),
-      child: calendarBody,
+    return NotificationListener<NavigationNotification>(
+      onNotification: (notification) {
+        widget.onCanHandleBackChanged?.call(notification.canHandlePop);
+        return false;
+      },
+      child: CalendarSurfaceNavigator(
+        navigatorKey: _calendarNavigatorKey,
+        modalAnchorKey: _calendarModalAnchorKey,
+        enablePop: widget.surfacePopEnabled,
+        child: calendarBody,
+      ),
     );
   }
 
@@ -257,7 +259,7 @@ class _ChatCalendarWidgetState
     final TaskSidebarState<ChatCalendarBloc>? sidebarState =
         sidebarKey.currentState;
     await showCalendarTaskSearch(
-      context: context,
+      context: calendarModalContext,
       bloc: bloc,
       locate: locate,
       requiresLongPressForDrag: sidebarState?.requiresLongPressForDrag ?? false,

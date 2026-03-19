@@ -295,6 +295,7 @@ class _ChatState extends State<Chat> {
   var _chatRoute = ChatRouteIndex.main;
   var _previousChatRoute = ChatRouteIndex.main;
   LocalHistoryEntry? _chatRouteHistoryEntry;
+  bool _chatCalendarCanHandleBack = false;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
   final _multiSelectedMessageIds = <String>{};
@@ -6161,6 +6162,18 @@ class _ChatState extends State<Chat> {
     _setChatRoute(ChatRouteIndex.main);
   }
 
+  void _handleChatCalendarCanHandleBackChanged(bool canHandleBack) {
+    final nextCanHandleBack = _chatRoute.isCalendar && canHandleBack;
+    if (_chatCalendarCanHandleBack == nextCanHandleBack) {
+      return;
+    }
+    _chatCalendarCanHandleBack = nextCanHandleBack;
+    if (!mounted) {
+      return;
+    }
+    _updateChatRouteHistoryEntry();
+  }
+
   void _clearChatRouteHistoryEntry() {
     final entry = _chatRouteHistoryEntry;
     _chatRouteHistoryEntry = null;
@@ -6181,6 +6194,10 @@ class _ChatState extends State<Chat> {
       _clearChatRouteHistoryEntry();
       return;
     }
+    if (_chatRoute.isCalendar && _chatCalendarCanHandleBack) {
+      _clearChatRouteHistoryEntry();
+      return;
+    }
     if (_chatRouteHistoryEntry != null) {
       return;
     }
@@ -6195,6 +6212,9 @@ class _ChatState extends State<Chat> {
   }) {
     if (!mounted) return;
     final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
+    if (!nextRoute.isCalendar && _chatCalendarCanHandleBack) {
+      _chatCalendarCanHandleBack = false;
+    }
     final bool wasSettings = _chatRoute.isSettings;
     setState(() {
       _previousChatRoute = _chatRoute;

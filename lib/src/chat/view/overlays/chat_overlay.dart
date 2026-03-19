@@ -299,10 +299,14 @@ class _ChatCalendarOverlay extends StatelessWidget {
     super.key,
     required this.chat,
     required this.calendarAvailable,
+    required this.surfacePopEnabled,
+    required this.onCanHandleBackChanged,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
+  final bool surfacePopEnabled;
+  final ValueChanged<bool> onCanHandleBackChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +321,8 @@ class _ChatCalendarOverlay extends StatelessWidget {
         child: _ChatCalendarPanel(
           chat: currentChat,
           calendarAvailable: calendarAvailable,
+          surfacePopEnabled: surfacePopEnabled,
+          onCanHandleBackChanged: onCanHandleBackChanged,
         ),
       ),
     );
@@ -449,6 +455,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
     required this.onSpamToggle,
     required this.onRenameContact,
     required this.onImportantMessageSelected,
+    required this.onChatCalendarCanHandleBackChanged,
   });
 
   final Widget chatMainBody;
@@ -469,6 +476,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;
   final Future<void> Function()? onRenameContact;
   final ValueChanged<String> onImportantMessageSelected;
+  final ValueChanged<bool> onChatCalendarCanHandleBackChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -521,6 +529,8 @@ class _ChatRouteOverlayStack extends StatelessWidget {
             ),
             chat: chatEntity,
             calendarAvailable: calendarAvailable,
+            surfacePopEnabled: currentRoute.isCalendar,
+            onCanHandleBackChanged: onChatCalendarCanHandleBackChanged,
           ),
         ),
       ],

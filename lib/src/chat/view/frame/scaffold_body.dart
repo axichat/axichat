@@ -1002,6 +1002,8 @@ class _ChatScaffoldBody extends StatelessWidget {
               owner._handleSpamToggle(sendToSpam: sendToSpam),
           onRenameContact: canRenameContact ? owner._promptContactRename : null,
           onImportantMessageSelected: owner._handleImportantMessageSelected,
+          onChatCalendarCanHandleBackChanged:
+              owner._handleChatCalendarCanHandleBackChanged,
         );
       },
     );

@@ -141,10 +141,14 @@ class _ChatCalendarPanel extends StatelessWidget {
   const _ChatCalendarPanel({
     required this.chat,
     required this.calendarAvailable,
+    required this.surfacePopEnabled,
+    required this.onCanHandleBackChanged,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
+  final bool surfacePopEnabled;
+  final ValueChanged<bool> onCanHandleBackChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +158,12 @@ class _ChatCalendarPanel extends StatelessWidget {
     }
     return BlocProvider<CalendarBloc>.value(
       value: context.watch<ChatCalendarBloc>(),
-      child: ChatCalendarWidget(chat: currentChat, showHeader: true),
+      child: ChatCalendarWidget(
+        chat: currentChat,
+        surfacePopEnabled: surfacePopEnabled,
+        showHeader: true,
+        onCanHandleBackChanged: onCanHandleBackChanged,
+      ),
     );
   }
 }
