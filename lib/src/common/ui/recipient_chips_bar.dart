@@ -92,6 +92,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   String? _ownNormalizedJid;
   List<RosterItem> _lastRosterItems = const <RosterItem>[];
   List<Chat> _lastAvailableChats = const <Chat>[];
+  List<ComposerRecipient> _lastRecipients = const <ComposerRecipient>[];
   Map<String, String> _avatarPathsByJid = const <String, String>{};
   List<Chat> _availableAutocompleteChats = const <Chat>[];
   Set<String> _knownDomains = const <String>{};
@@ -118,6 +119,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _focusNode.addListener(_handleFocusChanged);
     _lastRosterItems = List<RosterItem>.from(widget.rosterItems);
     _lastAvailableChats = List<Chat>.from(widget.availableChats);
+    _lastRecipients = List<ComposerRecipient>.from(widget.recipients);
     _avatarPathsByJid = _computeAvatarPaths();
     _databaseSuggestionAddresses = widget.databaseSuggestionAddresses;
     final pools = _computeSuggestionPools();
@@ -460,12 +462,15 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void _refreshAvatarPaths() {
     final rosterItems = widget.rosterItems;
     final availableChats = widget.availableChats;
+    final recipients = widget.recipients;
     if (listEquals(rosterItems, _lastRosterItems) &&
-        listEquals(availableChats, _lastAvailableChats)) {
+        listEquals(availableChats, _lastAvailableChats) &&
+        listEquals(recipients, _lastRecipients)) {
       return;
     }
     _lastRosterItems = List<RosterItem>.from(rosterItems);
     _lastAvailableChats = List<Chat>.from(availableChats);
+    _lastRecipients = List<ComposerRecipient>.from(recipients);
     final next = _computeAvatarPaths();
     if (mapEquals(next, _avatarPathsByJid)) {
       return;

@@ -19,6 +19,8 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/xmpp/message/message_service.dart'
+    show XmppAttachmentUpload;
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -115,6 +117,48 @@ void _mockEmailSync(MockEmailService service) {
     ),
   ).thenAnswer((_) async => 1);
   when(
+    () => service.fanOutSend(
+      targets: any(named: 'targets'),
+      body: any(named: 'body'),
+      htmlBody: any(named: 'htmlBody'),
+      attachment: any(named: 'attachment'),
+      htmlCaption: any(named: 'htmlCaption'),
+      shareId: any(named: 'shareId'),
+      quotedStanzaId: any(named: 'quotedStanzaId'),
+      useSubjectToken: any(named: 'useSubjectToken'),
+      tokenAsSignature: any(named: 'tokenAsSignature'),
+      subject: any(named: 'subject'),
+    ),
+  ).thenAnswer((invocation) async {
+    final targets =
+        invocation.namedArguments[#targets]! as List<Contact>;
+    final shareId =
+        invocation.namedArguments[#shareId] as String? ?? 'share-1';
+    return FanOutSendReport(
+      shareId: shareId,
+      statuses: [
+        for (var index = 0; index < targets.length; index++)
+          FanOutRecipientStatus(
+            chat: Chat(
+              jid:
+                  targets[index].chatJid ??
+                  targets[index].address ??
+                  'target-$index@example.com',
+              title:
+                  targets[index].displayName ??
+                  targets[index].address ??
+                  targets[index].chatJid ??
+                  'target-$index',
+              type: ChatType.chat,
+              lastChangeTimestamp: DateTime(2024, 1, 1),
+            ),
+            state: FanOutRecipientState.sent,
+            deltaMsgId: index + 1,
+          ),
+      ],
+    );
+  });
+  when(
     () => service.sendReply(
       chat: any(named: 'chat'),
       body: any(named: 'body'),
@@ -129,6 +173,8 @@ void _mockEmailSync(MockEmailService service) {
   when(() => service.getMessageFullHtml(any())).thenAnswer((_) async => null);
   when(() => service.getQuotedMessage(any())).thenAnswer((_) async => null);
 }
+
+class FakeXmppAttachmentUpload extends Fake implements XmppAttachmentUpload {}
 
 Chat _groupChat(String jid, {String title = 'Room'}) => Chat(
   jid: jid,
@@ -169,6 +215,8 @@ void main() {
     registerFallbackValue(<Contact>[]);
     registerFallbackValue(<Message>[fallbackMessage]);
     registerFallbackValue(MessageTimelineFilter.allWithContact);
+    registerFallbackValue(ChatType.chat);
+    registerFallbackValue(EncryptionProtocol.none);
     registerFallbackValue(OccupantAffiliation.none);
     registerFallbackValue(OccupantRole.none);
     registerFallbackValue(fallbackMessage);
@@ -256,6 +304,63 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) => messageStreamController.stream);
+    when(
+      () => messageService.httpUploadSupportStream,
+    ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+    when(
+      () => messageService.httpUploadSupport,
+    ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(
+      () => messageService.createChatArchiveSession(),
+    ).thenReturn('session-1');
+    when(
+      () => messageService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.sendMessage(
+        jid: any(named: 'jid'),
+        text: any(named: 'text'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlBody: any(named: 'htmlBody'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        quotedMessage: any(named: 'quotedMessage'),
+        quotedReference: any(named: 'quotedReference'),
+        calendarFragment: any(named: 'calendarFragment'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        calendarAvailabilityMessage: any(named: 'calendarAvailabilityMessage'),
+        storeLocally: any(named: 'storeLocally'),
+        noStore: any(named: 'noStore'),
+        extraExtensions: any(named: 'extraExtensions'),
+        chatType: any(named: 'chatType'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.sendAttachment(
+        jid: any(named: 'jid'),
+        attachment: any(named: 'attachment'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlCaption: any(named: 'htmlCaption'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        transportGroupId: any(named: 'transportGroupId'),
+        attachmentOrder: any(named: 'attachmentOrder'),
+        quotedMessage: any(named: 'quotedMessage'),
+        quotedReference: any(named: 'quotedReference'),
+        chatType: any(named: 'chatType'),
+        upload: any(named: 'upload'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((_) async => FakeXmppAttachmentUpload());
 
     when(
       () => messageService.countLocalMessages(
@@ -1148,6 +1253,80 @@ void main() {
         chatType: ChatType.chat,
       ),
     ).called(1);
+
+    await bloc.close();
+  });
+
+  test('sending supports a raw XMPP address target', () async {
+    when(
+      () => messageService.sendMessage(
+        jid: 'fresh@axi.im',
+        text: 'Hello raw XMPP',
+        encryptionProtocol: EncryptionProtocol.none,
+        quotedMessage: any(named: 'quotedMessage'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        chatType: ChatType.chat,
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      _messageSent(
+        chat: initialChat,
+        text: 'Hello raw XMPP',
+        recipients: [
+          ComposerRecipient(
+            target: Contact.address(
+              address: 'fresh@axi.im',
+              shareSignatureEnabled: true,
+              transport: MessageTransport.xmpp,
+            ),
+          ),
+        ],
+        settings: _defaultChatSettings(),
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.sendMessage(
+        jid: 'fresh@axi.im',
+        text: 'Hello raw XMPP',
+        encryptionProtocol: EncryptionProtocol.none,
+        quotedMessage: any(named: 'quotedMessage'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        chatType: ChatType.chat,
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).called(1);
+
+    verifyNever(
+      () => messageService.sendMessage(
+        jid: initialChat.jid,
+        text: any(named: 'text'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        quotedMessage: any(named: 'quotedMessage'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        chatType: any(named: 'chatType'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    );
 
     await bloc.close();
   });
@@ -2480,6 +2659,19 @@ void main() {
     when(
       () => xmppService.httpUploadSupport,
     ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(
+      () => xmppService.createChatArchiveSession(),
+    ).thenReturn('xmpp-session-1');
+    when(
+      () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
     when(
       () => xmppService.messageStreamForChat(
         any(),

@@ -2114,11 +2114,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachmentsByMessageId: filtered.attachmentsByMessageId,
       pinnedMessages: state.pinnedMessages,
     );
-    if (emit.isDone)
+    if (emit.isDone) {
       return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
+    }
     await _syncFileMetadataSubscriptions(nextMetadataIds);
-    if (emit.isDone)
+    if (emit.isDone) {
       return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
+    }
     final nextFileMetadataById = _pruneFileMetadataById(
       metadataIds: nextMetadataIds,
       existing: state.fileMetadataById,
@@ -2175,17 +2177,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _maybeRequestVisibleEmailQuotedText(filteredItems);
     if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(filteredItems, emit);
-      if (emit.isDone)
+      if (emit.isDone) {
         return _syncReadStateLocallyIfAvailable(
           chat: chat,
           items: filteredItems,
         );
+      }
       await _hydrateShareReplies(filteredItems, emit);
-      if (emit.isDone)
+      if (emit.isDone) {
         return _syncReadStateLocallyIfAvailable(
           chat: chat,
           items: filteredItems,
         );
+      }
     }
     _queueAutoDownloadAttachments(
       messages: filteredItems,
@@ -6013,17 +6017,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     } else {
       for (final recipient in recipients) {
-        final targetJid = recipient.target.chatJid;
-        if (targetJid == null || targetJid.isEmpty) {
+        final targetJid = _resolvedXmppRecipientJid(recipient);
+        if (targetJid == null) {
           continue;
         }
         targets[targetJid] = recipient.target;
       }
       if (targets.isEmpty) {
-        targets[chat.jid] = Contact.chat(
-          chat: chat,
-          shareSignatureEnabled: chat.shareSignatureEnabled ?? false,
+        emit(
+          state.copyWith(
+            composerError: ChatMessageKey.chatComposerSelectRecipient,
+          ),
         );
+        return false;
       }
     }
     final attachmentGroupIds = <String, String?>{};
@@ -6795,6 +6801,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  String? _resolvedXmppRecipientJid(ComposerRecipient recipient) {
+    final targetJid = recipient.xmppJid()?.trim();
+    if (targetJid == null || targetJid.isEmpty) {
+      return null;
+    }
+    return targetJid;
+  }
+
   bool _hasEmailTarget({
     required Chat chat,
     required List<ComposerRecipient> recipients,
@@ -6900,8 +6914,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     final processed = <String>{};
     for (final recipient in recipients) {
-      final targetJid = recipient.target.chatJid;
-      if (targetJid == null || targetJid.isEmpty) {
+      final targetJid = _resolvedXmppRecipientJid(recipient);
+      if (targetJid == null) {
         continue;
       }
       if (!processed.add(targetJid)) continue;

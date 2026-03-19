@@ -1,7 +1,9 @@
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/ui/axi_text_field.dart';
 import 'package:axichat/src/common/ui/recipient_chips_bar.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +29,7 @@ void main() {
         ),
       ),
     );
-    await tester.enterText(find.byType(TextField), 'new@example.com');
+    await _enterRecipientText(tester, 'new@example.com');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     expect(added?.address, 'new@example.com');
   });
@@ -104,7 +106,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(TextField));
+    await _focusInput(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     expect(removedKey, recipients.last.key);
   });
@@ -202,8 +204,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'c');
+    await _enterRecipientText(tester, 'c');
     await tester.pumpAndSettle();
 
     expect(find.text('Codex'), findsOneWidget);
@@ -233,12 +234,24 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'ca@');
+    await _enterRecipientText(tester, 'ca@');
     await tester.pumpAndSettle();
 
     expect(find.text('ca@axi.im'), findsOneWidget);
   });
+}
+
+final Finder _inputFieldFinder = find.byType(AxiTextField);
+
+Future<void> _focusInput(WidgetTester tester) async {
+  await tester.tap(_inputFieldFinder);
+  await tester.pump();
+}
+
+Future<void> _enterRecipientText(WidgetTester tester, String text) async {
+  await _focusInput(tester);
+  tester.testTextInput.enterText(text);
+  await tester.pump();
 }
 
 Widget _wrapWithTheme(Widget child) {
@@ -247,7 +260,12 @@ Widget _wrapWithTheme(Widget child) {
   when(
     () => settingsCubit.stream,
   ).thenAnswer((_) => const Stream<SettingsState>.empty());
+  when(
+    () => settingsCubit.animationDuration,
+  ).thenReturn(const Duration(milliseconds: 200));
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: BlocProvider<SettingsCubit>.value(
       value: settingsCubit,
       child: ShadTheme(
@@ -255,7 +273,12 @@ Widget _wrapWithTheme(Widget child) {
           colorScheme: const ShadSlateColorScheme.light(),
           brightness: Brightness.light,
         ),
-        child: Scaffold(body: child),
+        child: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(width: 640, height: 320, child: child),
+          ),
+        ),
       ),
     ),
   );
