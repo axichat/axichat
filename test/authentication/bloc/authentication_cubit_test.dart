@@ -1178,8 +1178,8 @@ void main() {
     );
 
     test(
-      'syncSignupWelcomeMessage does not reseed when the welcome chat already '
-      'exists in the chat table.',
+      'syncSignupWelcomeMessage recreates the welcome message when the welcome '
+      'chat already exists.',
       () async {
         const welcomeBody = 'Welcome to Axichat!';
         const welcomeTitle = 'Axichat';
@@ -1187,15 +1187,22 @@ void main() {
           credentialStore: mockCredentialStore,
           initialEndpointConfig: const EndpointConfig(),
           xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
+            httpClient: mockHttpClient,
+            emailProvisioningClient: mockProvisioningClient,
         );
+        when(
+          () => mockXmppService.database,
+        ).thenAnswer((_) async => mockDatabase);
         when(
           () => mockDatabase.getMessageByStanzaID(_welcomeStanzaId),
         ).thenAnswer((_) async => null);
         when(
           () => mockDatabase.getChat(_welcomeChatJid),
         ).thenAnswer((_) async => Chat.fromJid(_welcomeChatJid));
+        when(
+          () =>
+              mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
+        ).thenAnswer((_) async {});
         when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
 
         await bloc.syncSignupWelcomeMessage(
@@ -1204,7 +1211,12 @@ void main() {
           body: welcomeBody,
         );
 
-        verifyNever(() => mockDatabase.saveMessage(any()));
+        final savedMessage =
+            verify(() => mockDatabase.saveMessage(captureAny())).captured.single
+                as Message;
+        expect(savedMessage.stanzaID, equals(_welcomeStanzaId));
+        expect(savedMessage.chatJid, equals(_welcomeChatJid));
+        expect(savedMessage.body, equals(welcomeBody));
         verifyNever(() => mockDatabase.createChat(any()));
         verifyNever(() => mockDatabase.updateMessage(any()));
         final updatedChat =

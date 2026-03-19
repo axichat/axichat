@@ -2330,22 +2330,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               ),
             );
           }
+        } else if (!allowInsert) {
           return;
         }
-        if (!allowInsert) {
-          return;
+        if (allowInsert) {
+          insertedMessage = Message(
+            stanzaID: welcomeStanzaId,
+            senderJid: welcomeChatJid,
+            chatJid: welcomeChatJid,
+            body: body,
+            timestamp: DateTime.timestamp(),
+            acked: true,
+            received: true,
+            displayed: true,
+          );
+          await db.saveMessage(insertedMessage);
         }
-        insertedMessage = Message(
-          stanzaID: welcomeStanzaId,
-          senderJid: welcomeChatJid,
-          chatJid: welcomeChatJid,
-          body: body,
-          timestamp: DateTime.timestamp(),
-          acked: true,
-          received: true,
-          displayed: true,
-        );
-        await db.saveMessage(insertedMessage);
       } else if (existingMessage.body != body ||
           existingMessage.htmlBody != null ||
           existingMessage.senderJid != welcomeChatJid ||
