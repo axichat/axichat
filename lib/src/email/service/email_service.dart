@@ -5141,6 +5141,10 @@ class EmailService {
       return;
     }
     final db = await _databaseBuilder();
+    final unresolvedSourceIndexes = <int>{
+      for (var index = 0; index < sourceMessages.length; index += 1) index,
+    };
+    final appliedCandidateIds = <int>{};
     const maxAttempts = 5;
     const retryDelay = Duration(milliseconds: 50);
     for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -5152,7 +5156,8 @@ class EmailService {
               .where(
                 (messageId) =>
                     messageId > _deltaMessageIdUnset &&
-                    !existingMessageIds.contains(messageId),
+                    !existingMessageIds.contains(messageId) &&
+                    !appliedCandidateIds.contains(messageId),
               )
               .toList()
             ..sort();
@@ -5163,7 +5168,7 @@ class EmailService {
         continue;
       }
       await _transport.hydrateMessages(candidateIds, accountId: deltaAccountId);
-      final resolvedIds = <int>[];
+      final candidateMessages = <Message>[];
       for (final candidateId in candidateIds) {
         final deltaMessage = await _transport.getMessage(
           candidateId,
@@ -5179,26 +5184,28 @@ class EmailService {
         if (stored == null) {
           continue;
         }
-        resolvedIds.add(candidateId);
+        candidateMessages.add(stored);
       }
-      if (resolvedIds.isEmpty) {
+      if (candidateMessages.isEmpty) {
         if (attempt + 1 < maxAttempts) {
           await Future<void>.delayed(retryDelay);
         }
         continue;
       }
-      final pairCount = resolvedIds.length < sourceMessages.length
-          ? resolvedIds.length
-          : sourceMessages.length;
-      for (var index = 0; index < pairCount; index += 1) {
-        final stored = await db.getMessageByDeltaId(
-          resolvedIds[index],
-          deltaAccountId: deltaAccountId,
-        );
-        if (stored == null) {
-          continue;
+      final matches = _matchNativeForwardSources(
+        sourceMessages: sourceMessages,
+        unresolvedSourceIndexes: unresolvedSourceIndexes,
+        candidateMessages: candidateMessages,
+      );
+      if (matches.isEmpty) {
+        if (attempt + 1 < maxAttempts) {
+          await Future<void>.delayed(retryDelay);
         }
-        final sourceMessage = sourceMessages[index];
+        continue;
+      }
+      for (final entry in matches.entries) {
+        final sourceMessage = sourceMessages[entry.key];
+        final stored = entry.value;
         final updated = stored.copyWith(
           pseudoMessageData: stored.pseudoMessageDataWithForwarded(
             forwardedFromJid: sourceMessage.senderJid,
@@ -5209,12 +5216,86 @@ class EmailService {
         if (updated != stored) {
           await db.updateMessage(updated);
         }
+        final candidateId = stored.deltaMsgId;
+        if (candidateId != null) {
+          appliedCandidateIds.add(candidateId);
+        }
+        unresolvedSourceIndexes.remove(entry.key);
       }
-      return;
+      if (unresolvedSourceIndexes.isEmpty) {
+        return;
+      }
+      if (attempt + 1 < maxAttempts) {
+        await Future<void>.delayed(retryDelay);
+      }
     }
     _log.fine(
-      'Native forwarded email metadata was not applied for '
+      'Native forwarded email metadata was only applied to '
+      '${sourceMessages.length - unresolvedSourceIndexes.length}/'
+      '${sourceMessages.length} messages for '
       'chatId=$deltaChatId accountId=$deltaAccountId.',
+    );
+  }
+
+  Map<int, Message> _matchNativeForwardSources({
+    required List<Message> sourceMessages,
+    required Set<int> unresolvedSourceIndexes,
+    required List<Message> candidateMessages,
+  }) {
+    final candidatesByKey =
+        <({String body, bool hasAttachment}), List<Message>>{};
+    for (final candidate in candidateMessages) {
+      final key = _nativeForwardMatchKey(candidate);
+      candidatesByKey.putIfAbsent(key, () => <Message>[]).add(candidate);
+    }
+    final matches = <int, Message>{};
+    final sortedSourceIndexes = unresolvedSourceIndexes.toList()..sort();
+    for (final sourceIndex in sortedSourceIndexes) {
+      final sourceMessage = sourceMessages[sourceIndex];
+      final key = _nativeForwardMatchKey(sourceMessage);
+      final candidates = candidatesByKey[key];
+      if (candidates == null || candidates.isEmpty) {
+        continue;
+      }
+      matches[sourceIndex] = candidates.removeAt(
+        _preferredNativeForwardCandidateIndex(
+          sourceMessage: sourceMessage,
+          candidateMessages: candidates,
+        ),
+      );
+    }
+    return matches;
+  }
+
+  int _preferredNativeForwardCandidateIndex({
+    required Message sourceMessage,
+    required List<Message> candidateMessages,
+  }) {
+    final sourceSubject = sourceMessage.subject?.trim() ?? '';
+    if (sourceSubject.isEmpty) {
+      final emptySubjectIndex = candidateMessages.indexWhere(
+        (candidate) => (candidate.subject?.trim() ?? '').isEmpty,
+      );
+      return emptySubjectIndex == -1 ? 0 : emptySubjectIndex;
+    }
+    final exactSubjectIndex = candidateMessages.indexWhere(
+      (candidate) => (candidate.subject?.trim() ?? '') == sourceSubject,
+    );
+    if (exactSubjectIndex != -1) {
+      return exactSubjectIndex;
+    }
+    final emptySubjectIndex = candidateMessages.indexWhere(
+      (candidate) => (candidate.subject?.trim() ?? '').isEmpty,
+    );
+    return emptySubjectIndex == -1 ? 0 : emptySubjectIndex;
+  }
+
+  ({String body, bool hasAttachment}) _nativeForwardMatchKey(Message message) {
+    final normalizedBody = message.body?.trim() ?? '';
+    final fileMetadataId = message.fileMetadataID?.trim();
+    return (
+      body: normalizedBody,
+      hasAttachment: fileMetadataId != null && fileMetadataId.isNotEmpty,
     );
   }
 

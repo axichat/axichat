@@ -43,4 +43,26 @@ void main() {
       expect(authorized, isTrue);
     });
   });
+
+  group('Message.resolveForwardedOriginalSenderLabel', () {
+    test('prefers the original author from a forwarded body header', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: 'forwarder@example.com',
+        chatJid: 'forwarder@example.com',
+        subject: 'Quarterly plan',
+        body:
+            '-------- Forwarded message --------\n'
+            'From: Original Person <original@example.com>\n'
+            'Subject: Quarterly plan\n'
+            '\n'
+            'Forwarded body',
+      );
+
+      expect(
+        message.resolveForwardedOriginalSenderLabel(),
+        'original@example.com',
+      );
+    });
+  });
 }

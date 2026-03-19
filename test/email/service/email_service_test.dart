@@ -2140,6 +2140,262 @@ void main() {
   );
 
   test(
+    'forwardMessages waits for all native copies and matches them by content',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'target@example.com',
+          displayName: 'target@example.com',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 88);
+
+      var getChatMessageIdsCallCount = 0;
+      when(
+        () => transport.getChatMessageIds(
+          chatId: 88,
+          beforeMessageId: any(named: 'beforeMessageId'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async {
+        getChatMessageIdsCallCount += 1;
+        return switch (getChatMessageIdsCallCount) {
+          1 => const <int>[11, 12],
+          2 => const <int>[11, 12, 301, 302],
+          _ => const <int>[11, 12, 301, 302, 303],
+        };
+      });
+      when(
+        () =>
+            transport.getMessage(301, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 301,
+          chatId: 88,
+          text: 'Forwarded first',
+          subject: 'FWD: first@example.com',
+          timestamp: DateTime.now(),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () =>
+            transport.getMessage(302, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 302,
+          chatId: 88,
+          text: 'Unrelated note',
+          subject: 'Something else',
+          timestamp: DateTime.now(),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () =>
+            transport.getMessage(303, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 303,
+          chatId: 88,
+          text:
+              '-------- Forwarded message --------\n'
+              'From: Original Two <second@example.com>\n'
+              'Subject: Quarterly plan\n'
+              '\n'
+              'Forwarded second',
+          subject: 'Quarterly plan',
+          timestamp: DateTime.now(),
+          isOutgoing: true,
+        ),
+      );
+
+      final forwardedCopyOne = Message(
+        stanzaID: 'dc-msg-301',
+        senderJid: 'alice@example.org',
+        chatJid: 'target@delta.chat',
+        body: 'Forwarded first',
+        subject: 'FWD: first@example.com',
+        timestamp: DateTime.now(),
+        deltaMsgId: 301,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      );
+      final unrelatedMessage = Message(
+        stanzaID: 'dc-msg-302',
+        senderJid: 'alice@example.org',
+        chatJid: 'target@delta.chat',
+        body: 'Unrelated note',
+        subject: 'Something else',
+        timestamp: DateTime.now(),
+        deltaMsgId: 302,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      );
+      final forwardedCopyTwo = Message(
+        stanzaID: 'dc-msg-303',
+        senderJid: 'alice@example.org',
+        chatJid: 'target@delta.chat',
+        body:
+            '-------- Forwarded message --------\n'
+            'From: Original Two <second@example.com>\n'
+            'Subject: Quarterly plan\n'
+            '\n'
+            'Forwarded second',
+        subject: 'Quarterly plan',
+        timestamp: DateTime.now(),
+        deltaMsgId: 303,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      );
+      when(
+        () => database.getMessageByDeltaId(
+          301,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => forwardedCopyOne);
+      when(
+        () => database.getMessageByDeltaId(
+          302,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => unrelatedMessage);
+      when(
+        () => database.getMessageByDeltaId(
+          303,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => forwardedCopyTwo);
+
+      final targetChat = Chat(
+        jid: 'target@delta.chat',
+        title: 'target@example.com',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'target@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+      final sourceMessages = [
+        Message(
+          stanzaID: 'dc-msg-77',
+          senderJid: 'forwarder-one@example.com',
+          chatJid: 'forwarder-one@delta.chat',
+          body: 'Forwarded first',
+          subject: 'FWD: first@example.com',
+          timestamp: DateTime.now(),
+          deltaMsgId: 77,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+        Message(
+          stanzaID: 'dc-msg-78',
+          senderJid: 'forwarder-two@example.com',
+          chatJid: 'forwarder-two@delta.chat',
+          body:
+              '-------- Forwarded message --------\n'
+              'From: Original Two <second@example.com>\n'
+              'Subject: Quarterly plan\n'
+              '\n'
+              'Forwarded second',
+          subject: 'Quarterly plan',
+          timestamp: DateTime.now(),
+          deltaMsgId: 78,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ];
+
+      final forwarded = await service.forwardMessages(
+        messages: sourceMessages,
+        toChat: targetChat,
+      );
+
+      expect(forwarded, isTrue);
+      verify(
+        () => transport.forwardMessages(
+          messageIds: [77, 78],
+          toChatId: 88,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>()
+                .having((message) => message.deltaMsgId, 'deltaMsgId', 301)
+                .having(
+                  (message) => message.pseudoMessageData,
+                  'pseudoMessageData',
+                  allOf(
+                    containsPair('forwarded', true),
+                    containsPair(
+                      'forwardedFromJid',
+                      'forwarder-one@example.com',
+                    ),
+                    containsPair(
+                      'forwardedOriginalSenderLabel',
+                      'first@example.com',
+                    ),
+                  ),
+                ),
+          ),
+        ),
+      ).called(1);
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>()
+                .having((message) => message.deltaMsgId, 'deltaMsgId', 303)
+                .having(
+                  (message) => message.pseudoMessageData,
+                  'pseudoMessageData',
+                  allOf(
+                    containsPair('forwarded', true),
+                    containsPair(
+                      'forwardedFromJid',
+                      'forwarder-two@example.com',
+                    ),
+                    containsPair(
+                      'forwardedOriginalSenderLabel',
+                      'second@example.com',
+                    ),
+                  ),
+                ),
+          ),
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>().having(
+              (message) => message.deltaMsgId,
+              'deltaMsgId',
+              302,
+            ),
+          ),
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'sendMessage repairs synthetic stored email addresses after resolution',
     () async {
       final service = EmailService(

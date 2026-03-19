@@ -1003,6 +1003,10 @@ extension MessageForwardingX on Message {
         bareAddressOrNull(subjectSender) != null) {
       return subjectSender;
     }
+    final bodySender = forwardedBodySenderLabel(body);
+    if (bodySender != null && bodySender.isNotEmpty) {
+      return bodySender;
+    }
     final resource = parseJid(senderJid)?.resource.trim();
     if (resource != null && resource.isNotEmpty) {
       return resource;
