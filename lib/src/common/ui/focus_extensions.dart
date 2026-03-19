@@ -7,17 +7,33 @@ import 'package:flutter/material.dart';
 extension TextInputFocusManager on FocusManager {
   bool get isTextInputFocused {
     final FocusNode? focusNode = primaryFocus;
-    if (focusNode == null) {
-      return false;
-    }
-    final BuildContext? focusContext = focusNode.context;
-    if (focusContext == null) {
-      return false;
-    }
-    if (!focusContext.mounted) {
-      return false;
-    }
-    final Widget focusedWidget = focusContext.widget;
-    return focusedWidget is EditableText || focusedWidget is axi.EditableText;
+    return focusNode?.isTextInputFocused ?? false;
   }
+}
+
+extension TextInputFocusNode on FocusNode {
+  bool get isTextInputFocused {
+    final BuildContext? focusContext = context;
+    if (focusContext == null || !focusContext.mounted) {
+      return false;
+    }
+    final Element focusElement = focusContext as Element;
+    if (_isTextInputElement(focusElement)) {
+      return true;
+    }
+    var isFocusedTextInput = false;
+    focusElement.visitAncestorElements((ancestor) {
+      if (_isTextInputElement(ancestor)) {
+        isFocusedTextInput = true;
+        return false;
+      }
+      return true;
+    });
+    return isFocusedTextInput;
+  }
+}
+
+bool _isTextInputElement(Element element) {
+  final Widget widget = element.widget;
+  return widget is EditableText || widget is axi.EditableText;
 }

@@ -4415,23 +4415,42 @@ class EditableTextState extends State<EditableText>
 
   late double _lastBottomViewInset;
 
+  bool _shouldRepairFocusAfterKeyboardDismiss(double nextBottomInset) {
+    if (kIsWeb || !_hasFocus) {
+      return false;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+      case TargetPlatform.iOS:
+      case TargetPlatform.fuchsia:
+        return _lastBottomViewInset > 0 && nextBottomInset == 0;
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return false;
+    }
+  }
+
   @override
   void didChangeMetrics() {
     if (!mounted) {
       return;
     }
     final ui.FlutterView view = View.of(context);
-    if (_lastBottomViewInset != view.viewInsets.bottom) {
+    final double nextBottomInset = view.viewInsets.bottom;
+    if (_lastBottomViewInset != nextBottomInset) {
       SchedulerBinding.instance.addPostFrameCallback((Duration _) {
         _selectionOverlay?.updateForScroll();
       }, debugLabel: 'EditableText.updateForScroll');
-      if (_lastBottomViewInset < view.viewInsets.bottom) {
+      if (_lastBottomViewInset < nextBottomInset) {
         // Because the metrics change signal from engine will come here every frame
         // (on both iOS and Android). So we don't need to show caret with animation.
         _scheduleShowCaretOnScreen(withAnimation: false);
+      } else if (_shouldRepairFocusAfterKeyboardDismiss(nextBottomInset)) {
+        widget.focusNode.unfocus();
       }
     }
-    _lastBottomViewInset = view.viewInsets.bottom;
+    _lastBottomViewInset = nextBottomInset;
   }
 
   Future<void> _performSpellCheck(final String text) async {
