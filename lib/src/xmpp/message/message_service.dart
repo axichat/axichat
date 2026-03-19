@@ -76,8 +76,6 @@ const String _attachmentUploadStartLog =
     'Uploading attachment to HTTP upload slot.';
 const String _attachmentUploadCompleteLog = 'Upload complete for attachment.';
 const String _attachmentUploadFailedLog = 'Failed to upload attachment.';
-const String _pinSyncFlushFailedLog = 'Failed to flush pending pin sync.';
-const String _pinSyncFlushAbortedLog = 'Pending pin sync aborted.';
 const String _pinSyncFlushOperationName =
     'MessageService.flushPendingPinSyncOnNegotiations';
 const String _httpUploadBootstrapOperationName =
@@ -5029,9 +5027,90 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return EncryptionProtocol.none;
   }
 
+  Future<void> sendLocalOnlyMessage({
+    required String jid,
+    required String text,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    String? htmlBody,
+    bool forwarded = false,
+    String? forwardedFromJid,
+    Message? quotedMessage,
+    MessageReference? quotedReference,
+    CalendarFragment? calendarFragment,
+    CalendarTask? calendarTaskIcs,
+    bool calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
+    CalendarAvailabilityMessage? calendarAvailabilityMessage,
+    List<mox.StanzaHandlerExtension> extraExtensions = const [],
+    ChatType chatType = ChatType.chat,
+    void Function(String stanzaId)? onLocalMessageStored,
+  }) {
+    return _sendMessageInternal(
+      jid: jid,
+      text: text,
+      encryptionProtocol: encryptionProtocol,
+      htmlBody: htmlBody,
+      forwarded: forwarded,
+      forwardedFromJid: forwardedFromJid,
+      quotedMessage: quotedMessage,
+      quotedReference: quotedReference,
+      calendarFragment: calendarFragment,
+      calendarTaskIcs: calendarTaskIcs,
+      calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
+      calendarAvailabilityMessage: calendarAvailabilityMessage,
+      storeLocally: true,
+      noStore: false,
+      extraExtensions: extraExtensions,
+      chatType: chatType,
+      onLocalMessageStored: onLocalMessageStored,
+      localOnly: true,
+    );
+  }
+
   Future<void> sendMessage({
     required String jid,
     required String text,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    String? htmlBody,
+    bool forwarded = false,
+    String? forwardedFromJid,
+    Message? quotedMessage,
+    MessageReference? quotedReference,
+    CalendarFragment? calendarFragment,
+    CalendarTask? calendarTaskIcs,
+    bool calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
+    CalendarAvailabilityMessage? calendarAvailabilityMessage,
+    bool? storeLocally,
+    bool noStore = false,
+    List<mox.StanzaHandlerExtension> extraExtensions = const [],
+    ChatType chatType = ChatType.chat,
+    void Function(String stanzaId)? onLocalMessageStored,
+  }) {
+    return _sendMessageInternal(
+      jid: jid,
+      text: text,
+      encryptionProtocol: encryptionProtocol,
+      htmlBody: htmlBody,
+      forwarded: forwarded,
+      forwardedFromJid: forwardedFromJid,
+      quotedMessage: quotedMessage,
+      quotedReference: quotedReference,
+      calendarFragment: calendarFragment,
+      calendarTaskIcs: calendarTaskIcs,
+      calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
+      calendarAvailabilityMessage: calendarAvailabilityMessage,
+      storeLocally: storeLocally,
+      noStore: noStore,
+      extraExtensions: extraExtensions,
+      chatType: chatType,
+      onLocalMessageStored: onLocalMessageStored,
+      localOnly: false,
+    );
+  }
+
+  Future<void> _sendMessageInternal({
+    required String jid,
+    required String text,
+    required bool localOnly,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlBody,
     bool forwarded = false,
@@ -5148,9 +5227,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       quoting: resolvedQuotedReference?.value,
       quotingReferenceKind: resolvedQuotedReference?.kind,
       timestamp: timestamp,
-      acked: false,
-      received: false,
-      displayed: false,
+      acked: localOnly,
+      received: localOnly,
+      displayed: localOnly,
       pseudoMessageType: resolvedPseudoType,
       pseudoMessageData: resolvedPseudoData,
     );
@@ -5161,6 +5240,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (shouldStore) {
       await _storeMessage(message, chatType: resolvedChatType);
       onLocalMessageStored?.call(message.stanzaID);
+    }
+    if (localOnly) {
+      return;
     }
     if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
         resolvedChatType == ChatType.chat) {
@@ -5331,9 +5413,76 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<XmppAttachmentUpload> sendLocalOnlyAttachment({
+    required String jid,
+    required Attachment attachment,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    String? htmlCaption,
+    bool forwarded = false,
+    String? forwardedFromJid,
+    String? transportGroupId,
+    int? attachmentOrder,
+    Message? quotedMessage,
+    MessageReference? quotedReference,
+    ChatType chatType = ChatType.chat,
+    XmppAttachmentUpload? upload,
+    void Function(String stanzaId)? onLocalMessageStored,
+  }) {
+    return _sendAttachmentInternal(
+      jid: jid,
+      attachment: attachment,
+      encryptionProtocol: encryptionProtocol,
+      htmlCaption: htmlCaption,
+      forwarded: forwarded,
+      forwardedFromJid: forwardedFromJid,
+      transportGroupId: transportGroupId,
+      attachmentOrder: attachmentOrder,
+      quotedMessage: quotedMessage,
+      quotedReference: quotedReference,
+      chatType: chatType,
+      upload: upload,
+      onLocalMessageStored: onLocalMessageStored,
+      localOnly: true,
+    );
+  }
+
   Future<XmppAttachmentUpload> sendAttachment({
     required String jid,
     required Attachment attachment,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    String? htmlCaption,
+    bool forwarded = false,
+    String? forwardedFromJid,
+    String? transportGroupId,
+    int? attachmentOrder,
+    Message? quotedMessage,
+    MessageReference? quotedReference,
+    ChatType chatType = ChatType.chat,
+    XmppAttachmentUpload? upload,
+    void Function(String stanzaId)? onLocalMessageStored,
+  }) {
+    return _sendAttachmentInternal(
+      jid: jid,
+      attachment: attachment,
+      encryptionProtocol: encryptionProtocol,
+      htmlCaption: htmlCaption,
+      forwarded: forwarded,
+      forwardedFromJid: forwardedFromJid,
+      transportGroupId: transportGroupId,
+      attachmentOrder: attachmentOrder,
+      quotedMessage: quotedMessage,
+      quotedReference: quotedReference,
+      chatType: chatType,
+      upload: upload,
+      onLocalMessageStored: onLocalMessageStored,
+      localOnly: false,
+    );
+  }
+
+  Future<XmppAttachmentUpload> _sendAttachmentInternal({
+    required String jid,
+    required Attachment attachment,
+    required bool localOnly,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlCaption,
     bool forwarded = false,
@@ -5408,6 +5557,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       fileMetadataID: metadata.id,
       quoting: resolvedQuotedReference?.value,
       quotingReferenceKind: resolvedQuotedReference?.kind,
+      acked: localOnly,
+      received: localOnly,
+      displayed: localOnly,
       pseudoMessageData: forwarded
           ? <String, dynamic>{
               'forwarded': true,
@@ -5445,6 +5597,25 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           sortOrder: attachmentOrder,
         );
       });
+    }
+    if (localOnly) {
+      await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+      final localFile = File(attachment.path);
+      final localContentType = metadata.mimeType ?? 'application/octet-stream';
+      final localSize = metadata.sizeBytes ?? attachment.sizeBytes;
+      final localSourceUrls = metadata.sourceUrls;
+      final localUrl = localSourceUrls != null && localSourceUrls.isNotEmpty
+          ? localSourceUrls.first
+          : Uri.file(attachment.path).toString();
+      return XmppAttachmentUpload._(
+        metadata: metadata,
+        getUrl: localUrl,
+        putUrl: localUrl,
+        headers: const [],
+        contentType: localContentType,
+        sizeBytes: localSize,
+        file: localFile,
+      );
     }
     if (demoOfflineMode) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
@@ -5814,6 +5985,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<void> sendLocalOnlyAvailabilityMessage({
+    required String jid,
+    required CalendarAvailabilityMessage message,
+    ChatType chatType = ChatType.chat,
+  }) async {
+    final fallbackText = _availabilityFallbackText(message);
+    await sendLocalOnlyMessage(
+      jid: jid,
+      text: fallbackText,
+      encryptionProtocol: EncryptionProtocol.none,
+      calendarAvailabilityMessage: message,
+      chatType: chatType,
+    );
+  }
+
   Future<CalendarSnapshotUploadResult> uploadCalendarSnapshot(File file) async {
     final accountJid = myJid;
     if (accountJid == null) {
@@ -6146,6 +6332,49 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     } catch (error, stackTrace) {
       _log.fine('Failed to log HTTP upload IQ error.', error, stackTrace);
     }
+  }
+
+  Future<bool> reactToMessageLocally({
+    required String stanzaID,
+    required String emoji,
+  }) async {
+    final normalizedEmoji = emoji.trim();
+    if (normalizedEmoji.isEmpty) return false;
+    if (!isWithinUtf8ByteLimit(
+      normalizedEmoji,
+      maxBytes: maxReactionEmojiBytes,
+    )) {
+      return false;
+    }
+    final sender = myJid;
+    if (sender == null) return false;
+    final message = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(stanzaID),
+    );
+    if (message == null) return false;
+    final existing = await _dbOpReturning<XmppDatabase, List<Reaction>>(
+      (db) => db.getReactionsForMessageSender(
+        messageId: message.stanzaID,
+        senderJid: sender,
+      ),
+    );
+    final emojis = existing.map((reaction) => reaction.emoji).toList();
+    if (emojis.contains(normalizedEmoji)) {
+      emojis.remove(normalizedEmoji);
+    } else {
+      emojis.add(normalizedEmoji);
+    }
+    final sanitizedEmojis = emojis.clampReactionEmojis();
+    await _dbOp<XmppDatabase>(
+      (db) => db.replaceReactions(
+        messageId: message.stanzaID,
+        senderJid: sender,
+        emojis: sanitizedEmojis,
+        updatedAt: DateTime.timestamp(),
+        identityVerified: true,
+      ),
+    );
+    return true;
   }
 
   Future<bool> reactToMessage({

@@ -510,6 +510,54 @@ String? _resolveWelcomeChatJid(List<m.Chat> items) {
   return null;
 }
 
+enum HomeSecondaryPaneKind { none, openChat, welcomeFallback }
+
+@immutable
+final class HomeSecondaryPane {
+  const HomeSecondaryPane.none()
+    : kind = HomeSecondaryPaneKind.none,
+      jid = null;
+
+  const HomeSecondaryPane.openChat(this.jid)
+    : kind = HomeSecondaryPaneKind.openChat;
+
+  const HomeSecondaryPane.welcomeFallback(this.jid)
+    : kind = HomeSecondaryPaneKind.welcomeFallback;
+
+  final HomeSecondaryPaneKind kind;
+  final String? jid;
+
+  bool get hasChatPane => jid != null;
+
+  bool get syncWithOpenChatRoute => kind == HomeSecondaryPaneKind.openChat;
+
+  String get scopeKey => switch (kind) {
+    HomeSecondaryPaneKind.none => 'none',
+    HomeSecondaryPaneKind.openChat => 'open:$jid',
+    HomeSecondaryPaneKind.welcomeFallback => 'welcome:$jid',
+  };
+}
+
+@visibleForTesting
+HomeSecondaryPane resolveHomeSecondaryPane({
+  required String? openJid,
+  required NavPlacement navPlacement,
+  required List<m.Chat> items,
+}) {
+  final trimmedOpenJid = openJid?.trim();
+  if (trimmedOpenJid != null && trimmedOpenJid.isNotEmpty) {
+    return HomeSecondaryPane.openChat(trimmedOpenJid);
+  }
+  if (navPlacement == NavPlacement.bottom) {
+    return const HomeSecondaryPane.none();
+  }
+  final welcomeJid = _resolveWelcomeChatJid(items)?.trim();
+  if (welcomeJid == null || welcomeJid.isEmpty) {
+    return const HomeSecondaryPane.none();
+  }
+  return HomeSecondaryPane.welcomeFallback(welcomeJid);
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -1093,12 +1141,11 @@ class _HomeContent extends StatelessWidget {
     final chatItems = context.select<ChatsCubit, List<m.Chat>>(
       (cubit) => cubit.state.items ?? const <m.Chat>[],
     );
-    final String? effectiveOpenJid =
-        openJid ??
-        switch (navPlacement) {
-          NavPlacement.bottom => null,
-          _ => _resolveWelcomeChatJid(chatItems),
-        };
+    final pane = resolveHomeSecondaryPane(
+      openJid: openJid,
+      navPlacement: navPlacement,
+      items: chatItems,
+    );
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
@@ -1126,12 +1173,13 @@ class _HomeContent extends StatelessWidget {
                       builder: (context, state) {
                         final chatsState = context.watch<ChatsCubit>().state;
                         final chatRoute = chatsState.openChatRoute;
-                        final Widget chatPaneContent = effectiveOpenJid == null
-                            ? const SizedBox.shrink()
-                            : const Chat();
                         final Widget chatPane = Align(
                           alignment: Alignment.topLeft,
-                          child: chatPaneContent,
+                          child: _HomeSecondaryChatPane(
+                            pane: pane,
+                            settings: settings,
+                            emailEnabled: emailEnabled,
+                          ),
                         );
 
                         Widget chatLayout({required bool showChatCalendar}) {
@@ -1140,7 +1188,7 @@ class _HomeContent extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: AxiAdaptiveLayout(
-                                  invertPriority: effectiveOpenJid != null,
+                                  invertPriority: pane.hasChatPane,
                                   showPrimary: !showChatCalendar,
                                   centerSecondary: false,
                                   centerPrimary: false,
@@ -1272,7 +1320,7 @@ class _HomeContent extends StatelessWidget {
           )
         : mainContent;
     final shouldResizeForKeyboard =
-        navPlacement != NavPlacement.bottom || effectiveOpenJid != null;
+        navPlacement != NavPlacement.bottom || pane.hasChatPane;
 
     final scaffold = Scaffold(
       resizeToAvoidBottomInset: shouldResizeForKeyboard,
@@ -1287,57 +1335,9 @@ class _HomeContent extends StatelessWidget {
         ),
       ),
     );
-    Widget buildHomeLayer({required Widget child}) {
-      return BlocProvider(
-        create: (context) => HomeBloc(
-          xmppService: context.read<XmppService>(),
-          emailService: endpointConfig.smtpEnabled
-              ? context.read<EmailService>()
-              : null,
-          tabs: tabs.map((tab) => tab.id).toList(),
-          initialFilters: initialTabFilters,
-        ),
-        child: MultiBlocListener(
-          listeners: [
-            BlocListener<SettingsCubit, SettingsState>(
-              listenWhen: (previous, current) =>
-                  previous.endpointConfig != current.endpointConfig,
-              listener: (context, settings) {
-                final locate = context.read;
-                locate<HomeBloc>().add(
-                  HomeEmailServiceChanged(
-                    settings.endpointConfig.smtpEnabled
-                        ? locate<EmailService>()
-                        : null,
-                  ),
-                );
-              },
-            ),
-            BlocListener<HomeBloc, HomeState>(
-              listenWhen: (previous, current) =>
-                  previous.refreshStatus != current.refreshStatus,
-              listener: (context, state) {
-                final locate = context.read;
-                if (state.refreshStatus.isSuccess) {
-                  locate<HomeBloc>().add(const HomeRefreshStatusCleared());
-                  return;
-                }
-                if (!state.refreshStatus.isFailure) {
-                  return;
-                }
-                ShadToaster.maybeOf(context)?.show(
-                  FeedbackToast.error(message: context.l10n.chatsRefreshFailed),
-                );
-                locate<HomeBloc>().add(const HomeRefreshStatusCleared());
-              },
-            ),
-          ],
-          child: child,
-        ),
-      );
-    }
-
-    final Widget baseLayer = buildHomeLayer(
+    return _HomeBlocScope(
+      tabs: tabs,
+      initialFilters: initialTabFilters,
       child: _HomeActionLayer(
         hasCalendarBloc: hasCalendarBloc,
         shortcutFocusNode: shortcutFocusNode,
@@ -1345,65 +1345,138 @@ class _HomeContent extends StatelessWidget {
         child: scaffold,
       ),
     );
-    if (effectiveOpenJid == null) {
-      return baseLayer;
-    }
-    final String resolvedJid = effectiveOpenJid;
-    return buildHomeLayer(
-      child: MultiBlocProvider(
-        key: ValueKey(resolvedJid),
-        providers: [
-          BlocProvider(
-            create: (context) {
+  }
+}
+
+class _HomeBlocScope extends StatelessWidget {
+  const _HomeBlocScope({
+    required this.tabs,
+    required this.initialFilters,
+    required this.child,
+  });
+
+  final List<HomeTabEntry> tabs;
+  final Map<HomeTab, SearchFilterId?> initialFilters;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) {
+        final locate = context.read;
+        final settings = locate<SettingsCubit>().state;
+        return HomeBloc(
+          xmppService: locate<XmppService>(),
+          emailService: settings.endpointConfig.smtpEnabled
+              ? locate<EmailService>()
+              : null,
+          tabs: tabs.map((tab) => tab.id).toList(growable: false),
+          initialFilters: initialFilters,
+        );
+      },
+      child: MultiBlocListener(
+        listeners: [
+          BlocListener<SettingsCubit, SettingsState>(
+            listenWhen: (previous, current) =>
+                previous.endpointConfig != current.endpointConfig,
+            listener: (context, settings) {
               final locate = context.read;
-              final settingsSnapshot = ChatSettingsSnapshot(
-                language: settings.language,
-                chatReadReceipts: settings.chatReadReceipts,
-                emailReadReceipts: settings.emailReadReceipts,
-                shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
-                autoDownloadImages: settings.autoDownloadImages,
-                autoDownloadVideos: settings.autoDownloadVideos,
-                autoDownloadDocuments: settings.autoDownloadDocuments,
-                autoDownloadArchives: settings.autoDownloadArchives,
-              );
-              return ChatBloc(
-                jid: resolvedJid,
-                messageService: locate<XmppService>(),
-                chatsService: locate<XmppService>(),
-                mucService: locate<XmppService>(),
-                notificationService: locate<NotificationService>(),
-                emailService: emailEnabled ? locate<EmailService>() : null,
-                settings: settingsSnapshot,
+              locate<HomeBloc>().add(
+                HomeEmailServiceChanged(
+                  settings.endpointConfig.smtpEnabled
+                      ? locate<EmailService>()
+                      : null,
+                ),
               );
             },
           ),
-          BlocProvider(
-            create: (context) {
+          BlocListener<HomeBloc, HomeState>(
+            listenWhen: (previous, current) =>
+                previous.refreshStatus != current.refreshStatus,
+            listener: (context, state) {
               final locate = context.read;
-              return ChatSearchCubit(
-                jid: resolvedJid,
-                messageService: locate<XmppService>(),
-                emailService: emailEnabled ? locate<EmailService>() : null,
+              if (state.refreshStatus.isSuccess) {
+                locate<HomeBloc>().add(const HomeRefreshStatusCleared());
+                return;
+              }
+              if (!state.refreshStatus.isFailure) {
+                return;
+              }
+              ShadToaster.maybeOf(context)?.show(
+                FeedbackToast.error(message: context.l10n.chatsRefreshFailed),
               );
+              locate<HomeBloc>().add(const HomeRefreshStatusCleared());
             },
-          ),
-          BlocProvider(
-            create: (context) => ImportantMessagesCubit(
-              xmppService: context.read<XmppService>(),
-              chatJid: resolvedJid,
-            ),
           ),
         ],
-        child: Builder(
-          builder: (context) => _HomeActionLayer(
-            hasCalendarBloc: hasCalendarBloc,
-            shortcutFocusNode: shortcutFocusNode,
-            onHomeKeyEvent: onHomeKeyEvent,
-            chatLocate: context.read,
-            child: scaffold,
+        child: child,
+      ),
+    );
+  }
+}
+
+class _HomeSecondaryChatPane extends StatelessWidget {
+  const _HomeSecondaryChatPane({
+    required this.pane,
+    required this.settings,
+    required this.emailEnabled,
+  });
+
+  final HomeSecondaryPane pane;
+  final SettingsState settings;
+  final bool emailEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedJid = pane.jid;
+    if (resolvedJid == null || resolvedJid.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return MultiBlocProvider(
+      key: ValueKey(pane.scopeKey),
+      providers: [
+        BlocProvider(
+          create: (context) {
+            final locate = context.read;
+            final settingsSnapshot = ChatSettingsSnapshot(
+              language: settings.language,
+              chatReadReceipts: settings.chatReadReceipts,
+              emailReadReceipts: settings.emailReadReceipts,
+              shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+              autoDownloadImages: settings.autoDownloadImages,
+              autoDownloadVideos: settings.autoDownloadVideos,
+              autoDownloadDocuments: settings.autoDownloadDocuments,
+              autoDownloadArchives: settings.autoDownloadArchives,
+            );
+            return ChatBloc(
+              jid: resolvedJid,
+              messageService: locate<XmppService>(),
+              chatsService: locate<XmppService>(),
+              mucService: locate<XmppService>(),
+              notificationService: locate<NotificationService>(),
+              emailService: emailEnabled ? locate<EmailService>() : null,
+              settings: settingsSnapshot,
+            );
+          },
+        ),
+        BlocProvider(
+          create: (context) {
+            final locate = context.read;
+            return ChatSearchCubit(
+              jid: resolvedJid,
+              messageService: locate<XmppService>(),
+              emailService: emailEnabled ? locate<EmailService>() : null,
+            );
+          },
+        ),
+        BlocProvider(
+          create: (context) => ImportantMessagesCubit(
+            xmppService: context.read<XmppService>(),
+            chatJid: resolvedJid,
           ),
         ),
-      ),
+      ],
+      child: Chat(syncWithOpenChatRoute: pane.syncWithOpenChatRoute),
     );
   }
 }
@@ -1414,14 +1487,12 @@ class _HomeActionLayer extends StatelessWidget {
     required this.shortcutFocusNode,
     required this.onHomeKeyEvent,
     required this.child,
-    this.chatLocate,
   });
 
   final bool hasCalendarBloc;
   final FocusNode shortcutFocusNode;
   final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
   final Widget child;
-  final T Function<T>()? chatLocate;
 
   @override
   Widget build(BuildContext context) {
@@ -1527,7 +1598,7 @@ class _HomeActionLayer extends StatelessWidget {
                     child: XmppOperationOverlay(),
                   ),
                 ),
-                AccessibilityActionMenu(chatLocate: chatLocate),
+                const AccessibilityActionMenu(),
               ],
             ),
           ),

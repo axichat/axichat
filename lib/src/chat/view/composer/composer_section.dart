@@ -222,7 +222,7 @@ class _ChatComposerSection extends StatelessWidget {
       (attachment) => attachment.isPreparing,
     );
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
-    final hasRecipients = recipients.includedRecipients.isNotEmpty;
+    final hasRecipients = recipients.isNotEmpty;
     final sendEnabled =
         enabled &&
         !hasPreparingAttachments &&

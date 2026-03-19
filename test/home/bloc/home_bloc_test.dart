@@ -114,22 +114,27 @@ void main() {
     verifyNever(() => xmppService.syncSessionState());
   });
 
-  test('already-ready email service triggers unread refresh on attach', () async {
-    when(() => emailService.syncState).thenReturn(const EmailSyncState.ready());
+  test(
+    'already-ready email service triggers unread refresh on attach',
+    () async {
+      when(
+        () => emailService.syncState,
+      ).thenReturn(const EmailSyncState.ready());
 
-    final bloc = HomeBloc(
-      xmppService: xmppService,
-      emailService: emailService,
-      tabs: const [HomeTab.chats],
-    );
-    addTearDown(bloc.close);
+      final bloc = HomeBloc(
+        xmppService: xmppService,
+        emailService: emailService,
+        tabs: const [HomeTab.chats],
+      );
+      addTearDown(bloc.close);
 
-    await pumpEventQueue();
+      await pumpEventQueue();
 
-    verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
-    verifyNever(() => emailService.syncSessionState());
-    verifyNever(() => xmppService.syncSessionState());
-  });
+      verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
+      verifyNever(() => emailService.syncSessionState());
+      verifyNever(() => xmppService.syncSessionState());
+    },
+  );
 
   test('refresh delegates to the two session sync owners only', () async {
     final bloc = HomeBloc(

@@ -71,6 +71,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/axi_input.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -244,9 +245,14 @@ BorderRadius _bubbleBorderRadius({
 }
 
 class Chat extends StatefulWidget {
-  const Chat({super.key, this.readOnly = false});
+  const Chat({
+    super.key,
+    this.readOnly = false,
+    this.syncWithOpenChatRoute = true,
+  });
 
   final bool readOnly;
+  final bool syncWithOpenChatRoute;
 
   @override
   State<Chat> createState() => _ChatState();
@@ -2138,6 +2144,11 @@ class _ChatState extends State<Chat> {
         : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
     final displayMessageText = messageText;
     final trimmedDisplayMessageText = displayMessageText.trim();
+    final textBubbleMessageText =
+        isEmailMessage && trimmedDisplayMessageText.isEmpty
+        ? (normalizedHtmlText ?? displayMessageText)
+        : displayMessageText;
+    final trimmedTextBubbleMessageText = textBubbleMessageText.trim();
     final (
       :hideFragmentText,
       :hideAvailabilityText,
@@ -2188,8 +2199,6 @@ class _ChatState extends State<Chat> {
         !isSingleSelection &&
         collapsedEmailPreviewText.isNotEmpty &&
         collapsedEmailPreviewText != fullEmailPreviewText;
-    final hasVisibleEmailText =
-        trimmedDisplayMessageText.isNotEmpty || subjectText.isNotEmpty;
     final shouldPreferRichEmailHtml =
         isEmailMessage &&
         HtmlContentCodec.shouldRenderRichEmailHtml(
@@ -2198,18 +2207,18 @@ class _ChatState extends State<Chat> {
           renderedText: displayMessageText,
         );
     final hasEmailHtmlBody = isEmailMessage && normalizedHtmlBody != null;
+    final hasRichEmailHtmlBody = hasEmailHtmlBody && shouldPreferRichEmailHtml;
     final defaultShowsInlineEmailHtmlBody =
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
-        hasEmailHtmlBody &&
-        (!hasVisibleEmailText || shouldPreferRichEmailHtml);
+        hasRichEmailHtmlBody;
     final shouldRenderInlineEmailHtmlBody =
-        hasEmailHtmlBody &&
+        hasRichEmailHtmlBody &&
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
         (defaultShowsInlineEmailHtmlBody || isSingleSelection);
     final shouldShowViewFullEmailAction =
-        hasEmailHtmlBody &&
+        hasRichEmailHtmlBody &&
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
         !isSingleSelection;
@@ -2272,8 +2281,8 @@ class _ChatState extends State<Chat> {
         shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
         messageId: messageModel.stanzaID,
         bubbleContentKey: bubbleContentKey,
-        displayMessageText: displayMessageText,
-        trimmedDisplayMessageText: trimmedDisplayMessageText,
+        displayMessageText: textBubbleMessageText,
+        trimmedDisplayMessageText: trimmedTextBubbleMessageText,
         baseTextStyle: baseTextStyle,
         linkStyle: linkStyle,
         messageDetails: messageDetails,
@@ -3187,8 +3196,8 @@ class _ChatState extends State<Chat> {
     return recipients.hasEmailRecipients(allowHint: true);
   }
 
-  bool _hasIncludedEmailRecipient(List<ComposerRecipient> recipients) =>
-      recipients.includedRecipients.hasEmailRecipients(allowHint: true);
+  bool _hasEmailRecipient(List<ComposerRecipient> recipients) =>
+      recipients.hasEmailRecipients(allowHint: true);
 
   bool _isEmailComposerActive({
     required ChatState chatState,
@@ -3198,7 +3207,7 @@ class _ChatState extends State<Chat> {
         (chatState.chat?.defaultTransport.isEmail ?? false)) {
       return true;
     }
-    return _hasIncludedEmailRecipient(recipients ?? _recipients);
+    return _hasEmailRecipient(recipients ?? _recipients);
   }
 
   String _emailComposerWatermarkLabel() {
@@ -3346,9 +3355,8 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
     required SettingsState settings,
   }) {
-    final includedRecipients = recipients.includedRecipients;
-    final hasEmail = includedRecipients.hasEmailRecipients();
-    final hasXmpp = includedRecipients.hasXmppRecipients();
+    final hasEmail = recipients.hasEmailRecipients();
+    final hasXmpp = recipients.hasXmppRecipients();
     if (hasEmail && hasXmpp) {
       return settings.chatSendOnEnter && settings.emailSendOnEnter;
     }
@@ -3941,7 +3949,7 @@ class _ChatState extends State<Chat> {
   List<String> _resolveDraftRecipients({
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
-  }) => recipients.includedRecipients.recipientIds(fallbackJid: chat.jid);
+  }) => recipients.recipientIds(fallbackJid: chat.jid);
 
   Future<void> _handleEditMessage(Message message) async {
     if (!mounted) return;
@@ -4881,7 +4889,8 @@ class _ChatState extends State<Chat> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _consumePendingOpenMessageSelection(context.read<ChatsCubit>().state);
+    final chatsState = context.read<ChatsCubit>().state;
+    _consumePendingOpenMessageSelection(chatsState);
     final currentKey = _scrollStorageKey;
     if (_lastScrollStorageKey == null) {
       _lastScrollStorageKey = currentKey;
@@ -5013,6 +5022,9 @@ class _ChatState extends State<Chat> {
               listenWhen: (previous, current) =>
                   previous.openChatRoute != current.openChatRoute,
               listener: (context, chatsState) {
+                if (!widget.syncWithOpenChatRoute) {
+                  return;
+                }
                 if (!mounted) return;
                 final storedRoute = chatsState.openChatRoute;
                 if (_chatRoute == storedRoute) return;
@@ -5334,7 +5346,9 @@ class _ChatState extends State<Chat> {
                     recipients: recipients,
                   );
               final attachmentsEnabled =
-                  state.supportsHttpFileUpload || canSendEmailAttachments;
+                  isWelcomeChat ||
+                  state.supportsHttpFileUpload ||
+                  canSendEmailAttachments;
               final latestStatuses = _latestRecipientStatuses(state);
               final fanOutReports = state.fanOutReports;
               final warningEntry = fanOutReports.entries.isEmpty
@@ -5962,11 +5976,10 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
   }) {
     if (chat == null) return null;
-    final included = recipients.includedRecipients;
-    if (included.length <= 1) return null;
+    if (recipients.length <= 1) return null;
     final shouldFanOut = shouldFanOutRecipients(
       chat: chat,
-      recipients: included,
+      recipients: recipients,
     );
     if (!shouldFanOut) return null;
     return context.l10n.chatRecipientVisibilityBccLabel;
@@ -6099,6 +6112,9 @@ class _ChatState extends State<Chat> {
   }
 
   void _syncChatRoute() {
+    if (!widget.syncWithOpenChatRoute) {
+      return;
+    }
     final storedRoute = context.read<ChatsCubit>().state.openChatRoute;
     final nextRoute = _resolvedStoredChatRoute(
       route: storedRoute,
@@ -6143,6 +6159,10 @@ class _ChatState extends State<Chat> {
   }
 
   void _updateChatRouteHistoryEntry() {
+    if (!widget.syncWithOpenChatRoute) {
+      _clearChatRouteHistoryEntry();
+      return;
+    }
     final route = ModalRoute.of(context);
     if (route == null) {
       _clearChatRouteHistoryEntry();
@@ -6160,7 +6180,10 @@ class _ChatState extends State<Chat> {
     route.addLocalHistoryEntry(entry);
   }
 
-  void _setChatRoute(ChatRouteIndex nextRoute) {
+  void _setChatRoute(
+    ChatRouteIndex nextRoute, {
+    bool persistToNavigationSession = true,
+  }) {
     if (!mounted) return;
     final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
     final bool wasSettings = _chatRoute.isSettings;
@@ -6189,7 +6212,9 @@ class _ChatState extends State<Chat> {
     if (!nextRoute.isSearch) {
       context.read<ChatSearchCubit>().setActive(false);
     }
-    context.read<ChatsCubit>().setOpenChatRoute(route: nextRoute);
+    if (widget.syncWithOpenChatRoute && persistToNavigationSession) {
+      context.read<ChatsCubit>().setOpenChatRoute(route: nextRoute);
+    }
     _updateChatRouteHistoryEntry();
     _scheduleReadThresholdSync();
   }

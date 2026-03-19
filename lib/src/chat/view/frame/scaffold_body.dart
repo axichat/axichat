@@ -736,10 +736,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                       } else {
                         composerChild = _ChatComposerSection(
                           key: const ValueKey<String>('inline-composer'),
-                          enabled:
-                              !isWelcomeChat &&
-                              !roomBootstrapInProgress &&
-                              !roomJoinFailed,
+                          enabled: !roomBootstrapInProgress && !roomJoinFailed,
                           hintText: composerHintText,
                           recipients: recipients,
                           availableChats: availableChats,

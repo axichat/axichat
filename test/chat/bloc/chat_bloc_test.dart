@@ -195,6 +195,9 @@ Occupant _occupant({
   );
 }
 
+class MockXmppAttachmentUpload extends Mock
+    implements xmpp.XmppAttachmentUpload {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -202,6 +205,7 @@ void main() {
   late MockChatsService chatsService;
   late MockNotificationService notificationService;
   late MockMucService mucService;
+  late MockXmppAttachmentUpload attachmentUpload;
   late StreamController<List<Message>> messageStreamController;
   late StreamController<Chat?> chatStreamController;
 
@@ -236,6 +240,7 @@ void main() {
     chatsService = MockChatsService();
     notificationService = MockNotificationService();
     mucService = MockMucService();
+    attachmentUpload = MockXmppAttachmentUpload();
     messageStreamController = StreamController<List<Message>>.broadcast();
     chatStreamController = StreamController<Chat?>.broadcast();
 
@@ -338,7 +343,65 @@ void main() {
         onLocalMessageStored: any(named: 'onLocalMessageStored'),
       ),
     ).thenAnswer((_) async {});
-
+    when(
+      () => messageService.sendLocalOnlyMessage(
+        jid: any(named: 'jid'),
+        text: any(named: 'text'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlBody: any(named: 'htmlBody'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        quotedMessage: any(named: 'quotedMessage'),
+        quotedReference: any(named: 'quotedReference'),
+        calendarFragment: any(named: 'calendarFragment'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        calendarAvailabilityMessage: any(named: 'calendarAvailabilityMessage'),
+        extraExtensions: any(named: 'extraExtensions'),
+        chatType: any(named: 'chatType'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.sendAttachment(
+        jid: any(named: 'jid'),
+        attachment: any(named: 'attachment'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlCaption: any(named: 'htmlCaption'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        transportGroupId: any(named: 'transportGroupId'),
+        attachmentOrder: any(named: 'attachmentOrder'),
+        quotedMessage: any(named: 'quotedMessage'),
+        quotedReference: any(named: 'quotedReference'),
+        chatType: any(named: 'chatType'),
+        upload: any(named: 'upload'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((_) async => attachmentUpload);
+    when(
+      () => messageService.sendLocalOnlyAttachment(
+        jid: any(named: 'jid'),
+        attachment: any(named: 'attachment'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlCaption: any(named: 'htmlCaption'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        transportGroupId: any(named: 'transportGroupId'),
+        attachmentOrder: any(named: 'attachmentOrder'),
+        quotedMessage: any(named: 'quotedMessage'),
+        quotedReference: any(named: 'quotedReference'),
+        chatType: any(named: 'chatType'),
+        upload: any(named: 'upload'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((_) async => attachmentUpload);
+    when(
+      () => messageService.reactToMessageLocally(
+        stanzaID: any(named: 'stanzaID'),
+        emoji: any(named: 'emoji'),
+      ),
+    ).thenAnswer((_) async => true);
     when(
       () => messageService.countLocalMessages(
         jid: any(named: 'jid'),
@@ -449,6 +512,13 @@ void main() {
     title: 'peer',
     type: ChatType.chat,
     lastChangeTimestamp: DateTime.now(),
+  );
+  final welcomeChat = Chat(
+    jid: 'axichat@welcome.axichat.invalid',
+    title: 'Axichat',
+    type: ChatType.chat,
+    lastChangeTimestamp: DateTime.now(),
+    contactJid: 'axichat@welcome.axichat.invalid',
   );
 
   test(
@@ -1308,6 +1378,143 @@ void main() {
     await bloc.close();
   });
 
+  test('welcome chat sends text through the local-only message path', () async {
+    final bloc = ChatBloc(
+      jid: welcomeChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(welcomeChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      _messageSent(
+        chat: welcomeChat,
+        text: 'Hello welcome',
+        recipients: [
+          ComposerRecipient(
+            target: Contact.chat(
+              chat: welcomeChat,
+              shareSignatureEnabled: false,
+            ),
+          ),
+        ],
+        settings: _defaultChatSettings(),
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.sendLocalOnlyMessage(
+        jid: welcomeChat.jid,
+        text: 'Hello welcome',
+        encryptionProtocol: EncryptionProtocol.none,
+        quotedMessage: any(named: 'quotedMessage'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        chatType: ChatType.chat,
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).called(1);
+    verifyNever(
+      () => messageService.sendMessage(
+        jid: welcomeChat.jid,
+        text: any(named: 'text'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        quotedMessage: any(named: 'quotedMessage'),
+        calendarTaskIcs: any(named: 'calendarTaskIcs'),
+        calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+        chatType: any(named: 'chatType'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    );
+
+    await bloc.close();
+  });
+
+  test(
+    'welcome chat attachments use the local-only attachment path without upload support',
+    () async {
+      final bloc = ChatBloc(
+        jid: welcomeChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(welcomeChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        _messageSent(
+          chat: welcomeChat,
+          text: '',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(
+                chat: welcomeChat,
+                shareSignatureEnabled: false,
+              ),
+            ),
+          ],
+          pendingAttachments: const [
+            PendingAttachment(
+              id: 'welcome-attachment',
+              attachment: EmailAttachment(
+                path: '/tmp/mock',
+                fileName: 'mock.txt',
+                sizeBytes: 0,
+              ),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+          supportsHttpFileUpload: false,
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendLocalOnlyAttachment(
+          jid: welcomeChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: EncryptionProtocol.none,
+          chatType: ChatType.chat,
+          quotedMessage: any(named: 'quotedMessage'),
+          htmlCaption: any(named: 'htmlCaption'),
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          upload: any(named: 'upload'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendAttachment(
+          jid: welcomeChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          chatType: any(named: 'chatType'),
+          quotedMessage: any(named: 'quotedMessage'),
+          htmlCaption: any(named: 'htmlCaption'),
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          upload: any(named: 'upload'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      );
+      expect(bloc.state.composerError, isNull);
+
+      await bloc.close();
+    },
+  );
+
   test('forwarding supports a raw email address target', () async {
     const syntheticForwardSubject = 'FWD: peer@axi.im';
     final emailService = MockEmailService();
@@ -1721,6 +1928,59 @@ void main() {
 
     await bloc.close();
   });
+
+  test(
+    'chat send uses the event recipient list as the source of truth',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 4,
+        emailAddress: 'ally@example.com',
+      );
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      final recipients = <ComposerRecipient>[
+        ComposerRecipient(
+          target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
+          included: false,
+        ),
+      ];
+      bloc.add(
+        _messageSent(
+          chat: emailChat,
+          text: 'Hello from UI list',
+          recipients: recipients,
+          settings: _defaultChatSettings(),
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => emailService.sendMessage(
+          chat: emailChat,
+          body: 'Hello from UI list',
+          subject: null,
+          htmlBody: HtmlContentCodec.fromPlainText('Hello from UI list'),
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
 
   test('skips MAM hydrate when local window already cached', () async {
     when(

@@ -832,7 +832,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _xmppAllowedForChat(Chat chat) {
-    if (chat.isEmailBacked) return false;
+    if (chat.isEmailBacked || chat.isAxichatWelcomeThread) return false;
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return candidate.trim().isNotEmpty;
   }
@@ -1512,9 +1512,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final capabilitiesShouldReset =
         resetContext ||
         previousChat?.defaultTransport != event.chat.defaultTransport;
-    final showXmppCapabilities = event.chat.defaultTransport.isXmpp;
+    final showXmppCapabilities = _xmppAllowedForChat(event.chat);
     final typingShouldClear =
-        typingContextChanged || event.chat.defaultTransport.isEmail;
+        typingContextChanged || !_xmppAllowedForChat(event.chat);
     const forcedViewFilter = MessageTimelineFilter.allWithContact;
     final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
         ? forcedViewFilter
@@ -1772,7 +1772,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chat = state.chat;
-    if (chat == null || !chat.defaultTransport.isXmpp) {
+    if (chat == null || !_xmppAllowedForChat(chat)) {
       emit(state.copyWith(xmppCapabilities: null));
       return;
     }
@@ -3826,7 +3826,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chat = event.chat;
-    if (chat.defaultTransport.isEmail) {
+    if (!_xmppAllowedForChat(chat)) {
       return;
     }
     if (_typingTimer case final timer?) {
@@ -3870,8 +3870,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final quotedDraft = event.quotedDraft;
     final settings = event.settings;
     final attachments = List<PendingAttachment>.from(event.pendingAttachments);
-    final recipients = event.recipients.includedRecipients;
-    if (recipients.isEmpty) {
+    if (event.recipients.isEmpty) {
       event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
@@ -3933,9 +3932,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _ensureMucMembership(chat);
     }
     final split = _splitRecipientsForSend(
-      recipients: recipients,
+      recipients: event.recipients,
       forceEmail: false,
     );
+    final isLocalOnlyChat = chat.isAxichatWelcomeThread;
     final emailRecipients = split.emailRecipients;
     final xmppRecipients = split.xmppRecipients;
     final rawAttachmentsViaEmail =
@@ -4013,7 +4013,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
-    if (attachmentsViaXmpp && !event.supportsHttpFileUpload) {
+    if (attachmentsViaXmpp &&
+        !event.supportsHttpFileUpload &&
+        !isLocalOnlyChat) {
       emit(
         state.copyWith(
           composerError: ChatMessageKey.chatComposerFileUploadUnavailable,
@@ -4278,16 +4280,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             quotedDraft != null && quotedDraft.chatJid == chat.jid
             ? quotedDraft
             : null;
-        await _messageService.sendMessage(
-          jid: chat.jid,
-          text: xmppBody,
-          encryptionProtocol: chat.encryptionProtocol,
-          quotedMessage: sameChatQuote,
-          calendarTaskIcs: taskForXmpp,
-          calendarTaskIcsReadOnly: taskReadOnly,
-          chatType: chat.type,
-          onLocalMessageStored: storedStanzaIds.add,
-        );
+        if (isLocalOnlyChat) {
+          await _messageService.sendLocalOnlyMessage(
+            jid: chat.jid,
+            text: xmppBody,
+            encryptionProtocol: chat.encryptionProtocol,
+            quotedMessage: sameChatQuote,
+            calendarTaskIcs: taskForXmpp,
+            calendarTaskIcsReadOnly: taskReadOnly,
+            chatType: chat.type,
+            onLocalMessageStored: storedStanzaIds.add,
+          );
+        } else {
+          await _messageService.sendMessage(
+            jid: chat.jid,
+            text: xmppBody,
+            encryptionProtocol: chat.encryptionProtocol,
+            quotedMessage: sameChatQuote,
+            calendarTaskIcs: taskForXmpp,
+            calendarTaskIcsReadOnly: taskReadOnly,
+            chatType: chat.type,
+            onLocalMessageStored: storedStanzaIds.add,
+          );
+        }
         xmppBodySent = true;
         if (taskForXmpp != null) {
           xmppCalendarTaskSent = true;
@@ -4377,6 +4392,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(typing: false));
     final chat = event.chat;
     if (chat.defaultTransport.isEmail) {
+      return;
+    }
+    if (chat.isAxichatWelcomeThread) {
+      try {
+        await _messageService.sendLocalOnlyAvailabilityMessage(
+          jid: chat.jid,
+          message: event.message,
+          chatType: chat.type,
+        );
+      } catch (error, stackTrace) {
+        _log.warning(_availabilitySendFailureLog, error, stackTrace);
+      }
       return;
     }
     if (chat.type == ChatType.groupChat) {
@@ -4867,10 +4894,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           )) {
         return;
       }
-      success = await _messageService.reactToMessage(
-        stanzaID: event.message.stanzaID,
-        emoji: event.emoji,
-      );
+      success = chat?.isAxichatWelcomeThread == true
+          ? await _messageService.reactToMessageLocally(
+              stanzaID: event.message.stanzaID,
+              emoji: event.emoji,
+            )
+          : await _messageService.reactToMessage(
+              stanzaID: event.message.stanzaID,
+              emoji: event.emoji,
+            );
     } on Exception catch (error, stackTrace) {
       _log.fine(_messageReactionFailedLogMessage, error, stackTrace);
     } finally {
@@ -5233,19 +5265,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chat = event.chat;
-    final recipients = event.recipients.includedRecipients;
-    if (recipients.isEmpty) {
+    if (event.recipients.isEmpty) {
       event.completer.complete(null);
       return;
     }
     final split = _splitRecipientsForSend(
-      recipients: recipients,
+      recipients: event.recipients,
       forceEmail: false,
     );
     final requiresXmpp = split.xmppRecipients.isNotEmpty;
     final shouldUseEmail = _shouldSendAttachmentsViaEmail(
       chat: chat,
-      recipients: recipients,
+      recipients: event.recipients,
     );
     final service = _emailService;
     if (shouldUseEmail && service == null) {
@@ -5253,7 +5284,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     if (shouldUseEmail &&
-        !_hasEmailTarget(chat: chat, recipients: recipients)) {
+        !_hasEmailTarget(chat: chat, recipients: event.recipients)) {
       const message =
           ChatMessageKey.chatComposerEmailAttachmentRecipientRequired;
       emit(
@@ -5355,13 +5386,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       event.completer.complete(pending);
       return;
     }
-    final recipients = event.recipients.includedRecipients;
-    if (recipients.isEmpty) {
+    if (event.recipients.isEmpty) {
       event.completer.complete(pending);
       return;
     }
     final split = _splitRecipientsForSend(
-      recipients: recipients,
+      recipients: event.recipients,
       forceEmail: false,
     );
     final emailRecipients = split.emailRecipients;
@@ -5473,10 +5503,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final draft = event.draft;
-    final recipients = event.recipients.includedRecipients;
-    if (recipients.isEmpty) return;
+    if (event.recipients.isEmpty) return;
     await _sendFanOut(
-      recipients: recipients,
+      recipients: event.recipients,
       text: draft.body,
       attachment: draft.attachment,
       shareId: draft.shareId,
@@ -5507,7 +5536,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _stopTyping({required Chat chat}) async {
     _typingTimer?.cancel();
     _typingTimer = null;
-    if (!chat.defaultTransport.isEmail) {
+    if (_xmppAllowedForChat(chat)) {
       await _chatsService.sendTyping(jid: chat.jid, typing: false);
     }
   }
@@ -5998,7 +6027,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? htmlCaption,
     void Function(String stanzaId)? onLocalMessageStored,
   }) async {
-    if (!supportsHttpFileUpload) {
+    if (!supportsHttpFileUpload && !chat.isAxichatWelcomeThread) {
       emit(
         state.copyWith(
           composerError: ChatMessageKey.chatComposerFileUploadUnavailable,
@@ -6063,21 +6092,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? quotedDraft
               : null;
           final groupId = attachmentGroupIds[targetJid];
-          upload = await _messageService.sendAttachment(
-            jid: targetJid,
-            attachment: current.attachment,
-            encryptionProtocol: target.encryptionProtocol,
-            chatType: target.chatType,
-            quotedMessage: quote,
-            htmlCaption: shouldApplyCaption ? htmlCaption : null,
-            transportGroupId: groupId,
-            attachmentOrder: index,
-            upload: upload,
-            onLocalMessageStored: (stanzaId) {
-              storedStanzaId = stanzaId;
-              onLocalMessageStored?.call(stanzaId);
-            },
-          );
+          upload = chat.isAxichatWelcomeThread
+              ? await _messageService.sendLocalOnlyAttachment(
+                  jid: targetJid,
+                  attachment: current.attachment,
+                  encryptionProtocol: target.encryptionProtocol,
+                  chatType: target.chatType,
+                  quotedMessage: quote,
+                  htmlCaption: shouldApplyCaption ? htmlCaption : null,
+                  transportGroupId: groupId,
+                  attachmentOrder: index,
+                  upload: upload,
+                  onLocalMessageStored: (stanzaId) {
+                    storedStanzaId = stanzaId;
+                    onLocalMessageStored?.call(stanzaId);
+                  },
+                )
+              : await _messageService.sendAttachment(
+                  jid: targetJid,
+                  attachment: current.attachment,
+                  encryptionProtocol: target.encryptionProtocol,
+                  chatType: target.chatType,
+                  quotedMessage: quote,
+                  htmlCaption: shouldApplyCaption ? htmlCaption : null,
+                  transportGroupId: groupId,
+                  attachmentOrder: index,
+                  upload: upload,
+                  onLocalMessageStored: (stanzaId) {
+                    storedStanzaId = stanzaId;
+                    onLocalMessageStored?.call(stanzaId);
+                  },
+                );
         }
         _removePendingAttachmentFromList(pendingAttachments, current.id);
       } on XmppFileTooBigException catch (_) {
@@ -6922,16 +6967,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final quote = quotedDraft != null && quotedDraft.chatJid == targetJid
           ? quotedDraft
           : null;
-      await _messageService.sendMessage(
-        jid: targetJid,
-        text: body,
-        encryptionProtocol: recipient.target.encryptionProtocol,
-        quotedMessage: quote,
-        calendarTaskIcs: calendarTaskIcs,
-        calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
-        chatType: recipient.target.chatType,
-        onLocalMessageStored: onLocalMessageStored,
-      );
+      if (recipient.target.chat?.isAxichatWelcomeThread == true) {
+        await _messageService.sendLocalOnlyMessage(
+          jid: targetJid,
+          text: body,
+          encryptionProtocol: recipient.target.encryptionProtocol,
+          quotedMessage: quote,
+          calendarTaskIcs: calendarTaskIcs,
+          calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
+          chatType: recipient.target.chatType,
+          onLocalMessageStored: onLocalMessageStored,
+        );
+      } else {
+        await _messageService.sendMessage(
+          jid: targetJid,
+          text: body,
+          encryptionProtocol: recipient.target.encryptionProtocol,
+          quotedMessage: quote,
+          calendarTaskIcs: calendarTaskIcs,
+          calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
+          chatType: recipient.target.chatType,
+          onLocalMessageStored: onLocalMessageStored,
+        );
+      }
     }
   }
 
