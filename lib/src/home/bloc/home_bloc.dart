@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -221,6 +222,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     _emailSyncSubscription = emailService.readyTransitionStream.listen(
       (_) => _runEmailReconnectSync(),
     );
+    if (emailService.syncState.status == EmailSyncStatus.ready) {
+      await _runEmailReconnectSync();
+    }
   }
 
   Future<void> _runEmailReconnectSync() async {

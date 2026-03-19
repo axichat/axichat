@@ -134,6 +134,9 @@ class _ProfileBodyState extends State<_ProfileBody> {
 
   Future<void> _getApplicationVersion() async {
     final result = (await PackageInfo.fromPlatform()).version;
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _applicationVersion = result;
     });

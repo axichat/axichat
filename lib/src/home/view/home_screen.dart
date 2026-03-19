@@ -1287,7 +1287,7 @@ class _HomeContent extends StatelessWidget {
         ),
       ),
     );
-    Widget buildHomeLayer({T Function<T>()? chatLocate}) {
+    Widget buildHomeLayer({required Widget child}) {
       return BlocProvider(
         create: (context) => HomeBloc(
           xmppService: context.read<XmppService>(),
@@ -1332,68 +1332,77 @@ class _HomeContent extends StatelessWidget {
               },
             ),
           ],
-          child: _HomeActionLayer(
-            hasCalendarBloc: hasCalendarBloc,
-            shortcutFocusNode: shortcutFocusNode,
-            onHomeKeyEvent: onHomeKeyEvent,
-            chatLocate: chatLocate,
-            child: scaffold,
-          ),
+          child: child,
         ),
       );
     }
 
-    final Widget baseLayer = buildHomeLayer();
+    final Widget baseLayer = buildHomeLayer(
+      child: _HomeActionLayer(
+        hasCalendarBloc: hasCalendarBloc,
+        shortcutFocusNode: shortcutFocusNode,
+        onHomeKeyEvent: onHomeKeyEvent,
+        child: scaffold,
+      ),
+    );
     if (effectiveOpenJid == null) {
       return baseLayer;
     }
     final String resolvedJid = effectiveOpenJid;
-    return MultiBlocProvider(
-      key: ValueKey(resolvedJid),
-      providers: [
-        BlocProvider(
-          create: (context) {
-            final locate = context.read;
-            final settingsSnapshot = ChatSettingsSnapshot(
-              language: settings.language,
-              chatReadReceipts: settings.chatReadReceipts,
-              emailReadReceipts: settings.emailReadReceipts,
-              shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
-              autoDownloadImages: settings.autoDownloadImages,
-              autoDownloadVideos: settings.autoDownloadVideos,
-              autoDownloadDocuments: settings.autoDownloadDocuments,
-              autoDownloadArchives: settings.autoDownloadArchives,
-            );
-            return ChatBloc(
-              jid: resolvedJid,
-              messageService: locate<XmppService>(),
-              chatsService: locate<XmppService>(),
-              mucService: locate<XmppService>(),
-              notificationService: locate<NotificationService>(),
-              emailService: emailEnabled ? locate<EmailService>() : null,
-              settings: settingsSnapshot,
-            );
-          },
-        ),
-        BlocProvider(
-          create: (context) {
-            final locate = context.read;
-            return ChatSearchCubit(
-              jid: resolvedJid,
-              messageService: locate<XmppService>(),
-              emailService: emailEnabled ? locate<EmailService>() : null,
-            );
-          },
-        ),
-        BlocProvider(
-          create: (context) => ImportantMessagesCubit(
-            xmppService: context.read<XmppService>(),
-            chatJid: resolvedJid,
+    return buildHomeLayer(
+      child: MultiBlocProvider(
+        key: ValueKey(resolvedJid),
+        providers: [
+          BlocProvider(
+            create: (context) {
+              final locate = context.read;
+              final settingsSnapshot = ChatSettingsSnapshot(
+                language: settings.language,
+                chatReadReceipts: settings.chatReadReceipts,
+                emailReadReceipts: settings.emailReadReceipts,
+                shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+                autoDownloadImages: settings.autoDownloadImages,
+                autoDownloadVideos: settings.autoDownloadVideos,
+                autoDownloadDocuments: settings.autoDownloadDocuments,
+                autoDownloadArchives: settings.autoDownloadArchives,
+              );
+              return ChatBloc(
+                jid: resolvedJid,
+                messageService: locate<XmppService>(),
+                chatsService: locate<XmppService>(),
+                mucService: locate<XmppService>(),
+                notificationService: locate<NotificationService>(),
+                emailService: emailEnabled ? locate<EmailService>() : null,
+                settings: settingsSnapshot,
+              );
+            },
+          ),
+          BlocProvider(
+            create: (context) {
+              final locate = context.read;
+              return ChatSearchCubit(
+                jid: resolvedJid,
+                messageService: locate<XmppService>(),
+                emailService: emailEnabled ? locate<EmailService>() : null,
+              );
+            },
+          ),
+          BlocProvider(
+            create: (context) => ImportantMessagesCubit(
+              xmppService: context.read<XmppService>(),
+              chatJid: resolvedJid,
+            ),
+          ),
+        ],
+        child: Builder(
+          builder: (context) => _HomeActionLayer(
+            hasCalendarBloc: hasCalendarBloc,
+            shortcutFocusNode: shortcutFocusNode,
+            onHomeKeyEvent: onHomeKeyEvent,
+            chatLocate: context.read,
+            child: scaffold,
           ),
         ),
-      ],
-      child: Builder(
-        builder: (context) => buildHomeLayer(chatLocate: context.read),
       ),
     );
   }
