@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:convert';
+import 'dart:typed_data';
+
 const syntheticForwardSubjectMarker = '\u2060';
 const syntheticForwardSubjectPrefix = 'FWD:';
 const forwardedBodySubjectPrefix = 'Subject:';
@@ -97,7 +100,7 @@ String? preferredForwardedPreviewSenderLabel({
 }
 
 bool hasForwardedBodyHeader(String? body) {
-  final normalizedBody = body?.replaceAll('\r\n', '\n');
+  final normalizedBody = _normalizedForwardedBody(body);
   if (normalizedBody == null || normalizedBody.trim().isEmpty) {
     return false;
   }
@@ -105,7 +108,7 @@ bool hasForwardedBodyHeader(String? body) {
 }
 
 String? forwardedBodySenderLabel(String? body) {
-  final normalizedBody = body?.replaceAll('\r\n', '\n');
+  final normalizedBody = _normalizedForwardedBody(body);
   if (normalizedBody == null || normalizedBody.trim().isEmpty) {
     return null;
   }
@@ -114,41 +117,170 @@ String? forwardedBodySenderLabel(String? body) {
   if (headerIndex == null) {
     return null;
   }
-  for (final line in lines.skip(headerIndex + 1)) {
-    final trimmedLine = line.trim();
-    if (trimmedLine.isEmpty) {
+  final headerLinesStartIndex = _isForwardedBodyHeaderLine(lines[headerIndex])
+      ? headerIndex + 1
+      : headerIndex;
+  final rawValue = _forwardedBodyHeaders(
+    lines.skip(headerLinesStartIndex),
+  )['from'];
+  if (rawValue == null || rawValue.isEmpty) {
+    return null;
+  }
+  final match = RegExp(
+    r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}',
+    caseSensitive: false,
+  ).firstMatch(rawValue);
+  if (match == null) {
+    return rawValue;
+  }
+  final email = match.group(0)?.trim();
+  return email == null || email.isEmpty ? rawValue : email;
+}
+
+String? _normalizedForwardedBody(String? body) {
+  final normalizedBody = body?.replaceAll('\r\n', '\n');
+  if (normalizedBody == null || normalizedBody.isEmpty) {
+    return normalizedBody;
+  }
+  return _decodeQuotedPrintable(normalizedBody);
+}
+
+Map<String, String> _forwardedBodyHeaders(Iterable<String> lines) {
+  final headers = <String, String>{};
+  String? currentHeaderName;
+  var currentHeaderValue = '';
+
+  void commitCurrentHeader() {
+    final headerName = currentHeaderName;
+    if (headerName == null) {
+      return;
+    }
+    final resolvedValue = currentHeaderValue.trim();
+    if (resolvedValue.isNotEmpty) {
+      headers[headerName] = resolvedValue;
+    }
+    currentHeaderName = null;
+    currentHeaderValue = '';
+  }
+
+  for (final line in lines) {
+    if (line.trim().isEmpty) {
       break;
     }
-    final separatorIndex = trimmedLine.indexOf(':');
-    if (separatorIndex == -1) {
+    if (currentHeaderName != null &&
+        (line.startsWith(' ') || line.startsWith('\t'))) {
+      currentHeaderValue = currentHeaderValue.isEmpty
+          ? line.trim()
+          : '$currentHeaderValue ${line.trim()}';
       continue;
     }
-    final headerName = trimmedLine
+    final trimmedLine = line.trimLeft();
+    final separatorIndex = trimmedLine.indexOf(':');
+    if (separatorIndex == -1) {
+      if (currentHeaderName != null && currentHeaderValue.isNotEmpty) {
+        currentHeaderValue = '$currentHeaderValue$trimmedLine';
+      }
+      continue;
+    }
+    commitCurrentHeader();
+    currentHeaderName = trimmedLine
         .substring(0, separatorIndex)
         .trim()
         .toLowerCase();
-    if (headerName != 'from') {
+    currentHeaderValue = trimmedLine.substring(separatorIndex + 1).trim();
+  }
+  commitCurrentHeader();
+  return headers;
+}
+
+String _decodeQuotedPrintable(String value) {
+  if (!value.contains('=')) {
+    return value;
+  }
+  final normalized = value.replaceAll('\r\n', '\n');
+  final bytes = BytesBuilder(copy: false);
+  var segmentStart = 0;
+  for (var index = 0; index < normalized.length; index += 1) {
+    if (normalized.codeUnitAt(index) != _asciiEquals) {
       continue;
     }
-    final rawValue = trimmedLine.substring(separatorIndex + 1).trim();
-    if (rawValue.isEmpty) {
-      return null;
+    if (index + 1 < normalized.length &&
+        normalized.codeUnitAt(index + 1) == _asciiLineFeed) {
+      _appendForwardedBodySegment(
+        bytes,
+        normalized,
+        start: segmentStart,
+        end: index,
+      );
+      segmentStart = index + 2;
+      index += 1;
+      continue;
     }
-    final match = RegExp(
-      r'[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}',
-      caseSensitive: false,
-    ).firstMatch(rawValue);
-    if (match == null) {
-      return rawValue;
+    if (index + 2 >= normalized.length) {
+      continue;
     }
-    final email = match.group(0)?.trim();
-    return email == null || email.isEmpty ? rawValue : email;
+    final decodedByte = _decodeQuotedPrintableByte(
+      normalized.codeUnitAt(index + 1),
+      normalized.codeUnitAt(index + 2),
+    );
+    if (decodedByte == null) {
+      continue;
+    }
+    _appendForwardedBodySegment(
+      bytes,
+      normalized,
+      start: segmentStart,
+      end: index,
+    );
+    bytes.addByte(decodedByte);
+    segmentStart = index + 3;
+    index += 2;
+  }
+  _appendForwardedBodySegment(
+    bytes,
+    normalized,
+    start: segmentStart,
+    end: normalized.length,
+  );
+  return utf8.decode(bytes.takeBytes(), allowMalformed: true);
+}
+
+void _appendForwardedBodySegment(
+  BytesBuilder bytes,
+  String source, {
+  required int start,
+  required int end,
+}) {
+  if (start >= end) {
+    return;
+  }
+  bytes.add(utf8.encode(source.substring(start, end)));
+}
+
+int? _decodeQuotedPrintableByte(int first, int second) {
+  final firstNibble = _hexNibble(first);
+  final secondNibble = _hexNibble(second);
+  if (firstNibble == null || secondNibble == null) {
+    return null;
+  }
+  return (firstNibble << 4) | secondNibble;
+}
+
+int? _hexNibble(int codeUnit) {
+  if (codeUnit >= _asciiZero && codeUnit <= _asciiNine) {
+    return codeUnit - _asciiZero;
+  }
+  final lowerCaseCodeUnit = codeUnit >= _asciiUpperA && codeUnit <= _asciiUpperF
+      ? codeUnit + (_asciiLowerA - _asciiUpperA)
+      : codeUnit;
+  if (lowerCaseCodeUnit >= _asciiLowerA && lowerCaseCodeUnit <= _asciiLowerF) {
+    return lowerCaseCodeUnit - _asciiLowerA + 10;
   }
   return null;
 }
 
 int? _forwardedBodyHeaderIndex(List<String> lines) {
-  const maxHeaderSearchLines = 12;
+  const maxHeaderSearchLines = 48;
   final limit = lines.length < maxHeaderSearchLines
       ? lines.length
       : maxHeaderSearchLines;
@@ -157,7 +289,50 @@ int? _forwardedBodyHeaderIndex(List<String> lines) {
       return index;
     }
   }
+  return _inlineForwardedHeaderBlockIndex(lines, limit: limit);
+}
+
+int? _inlineForwardedHeaderBlockIndex(
+  List<String> lines, {
+  required int limit,
+}) {
+  for (var index = 0; index < limit; index += 1) {
+    if (!_isInlineForwardedHeaderStart(lines[index])) {
+      continue;
+    }
+    final headers = _forwardedBodyHeaders(lines.skip(index));
+    final fromHeader = headers['from'];
+    if (fromHeader == null || fromHeader.isEmpty) {
+      continue;
+    }
+    const supportingHeaderNames = <String>{
+      'date',
+      'sent',
+      'subject',
+      'to',
+      'cc',
+    };
+    final supportingHeaderCount = supportingHeaderNames
+        .where((name) => headers[name]?.isNotEmpty == true)
+        .length;
+    if (supportingHeaderCount > 0) {
+      return index;
+    }
+  }
   return null;
+}
+
+bool _isInlineForwardedHeaderStart(String line) {
+  final normalized = line.trimLeft().toLowerCase();
+  if (normalized.isEmpty) {
+    return false;
+  }
+  return normalized.startsWith('from:') ||
+      normalized.startsWith('date:') ||
+      normalized.startsWith('sent:') ||
+      normalized.startsWith('subject:') ||
+      normalized.startsWith('to:') ||
+      normalized.startsWith('cc:');
 }
 
 bool _isForwardedBodyHeaderLine(String line) {
@@ -176,6 +351,15 @@ bool _isForwardedBodyHeaderLine(String line) {
     r'^-{2,}\s*(?:forwarded|original)\s+message\s*-{0,}:?$',
   ).hasMatch(normalized);
 }
+
+const _asciiZero = 0x30;
+const _asciiNine = 0x39;
+const _asciiUpperA = 0x41;
+const _asciiUpperF = 0x46;
+const _asciiEquals = 0x3D;
+const _asciiLineFeed = 0x0A;
+const _asciiLowerA = 0x61;
+const _asciiLowerF = 0x66;
 
 ({String? subject, String body}) splitSyntheticForwardBody(String body) {
   final trimmedBody = body.trimLeft();

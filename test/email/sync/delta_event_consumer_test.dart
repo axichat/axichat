@@ -207,6 +207,192 @@ void main() {
     },
   );
 
+  test(
+    'persists original sender metadata for quoted-printable forwarded emails',
+    () async {
+      const chatId = 7;
+      const msgId = 26;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text:
+            '---------- Forwarded message ---------\n'
+            'From: Original=20Person=20=3Coriginal@=\n'
+            'example.com=3E\n'
+            'Subject: Quarterly plan\n'
+            '\n'
+            'Forwarded body',
+        subject: 'Fwd: Quarterly plan',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Forwarder',
+        contactAddress: 'forwarder@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persistedMessage =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.last
+              as Message;
+      expect(persistedMessage.isForwarded, isTrue);
+      expect(
+        persistedMessage.forwardedOriginalSenderLabel,
+        'original@example.com',
+      );
+    },
+  );
+
+  test(
+    'persists original sender metadata for top-level forwarded header blocks',
+    () async {
+      const chatId = 7;
+      const msgId = 27;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text:
+            'From: Original=20Person=20=3Coriginal@example.com=3E\n'
+            'Date: Tue, 19 Mar 2026 10:00:00 +0000\n'
+            'Subject: Quarterly plan\n'
+            'To: Forwarder <forwarder@example.com>\n'
+            '\n'
+            'Forwarded body',
+        subject: 'Fwd: Quarterly plan',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Forwarder',
+        contactAddress: 'forwarder@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persistedMessage =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.last
+              as Message;
+      expect(persistedMessage.isForwarded, isTrue);
+      expect(
+        persistedMessage.forwardedOriginalSenderLabel,
+        'original@example.com',
+      );
+    },
+  );
+
+  test(
+    'persists original sender metadata when MIME preambles precede forwarded headers',
+    () async {
+      const chatId = 7;
+      const msgId = 28;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text:
+            'Content-Type: text/plain; charset="utf-8"\n'
+            'Content-Transfer-Encoding: quoted-printable\n'
+            '\n'
+            'From: Original=20Person=20=3Coriginal@example.com=3E\n'
+            'Date: Tue, 19 Mar 2026 10:00:00 +0000\n'
+            'Subject: Quarterly plan\n'
+            'To: Forwarder <forwarder@example.com>\n'
+            '\n'
+            'Forwarded body',
+        subject: 'Fwd: Quarterly plan',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Forwarder',
+        contactAddress: 'forwarder@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persistedMessage =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.last
+              as Message;
+      expect(persistedMessage.isForwarded, isTrue);
+      expect(
+        persistedMessage.forwardedOriginalSenderLabel,
+        'original@example.com',
+      );
+    },
+  );
+
   test('chatModified updates stored metadata', () async {
     const chatId = 11;
     final existingChat = Chat(

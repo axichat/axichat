@@ -224,4 +224,160 @@ void main() {
       );
     },
   );
+
+  test(
+    'email forwards extract the original author from top-level header blocks',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'forwarder@example.com',
+        title: 'Forwarder',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        emailAddress: 'forwarder@example.com',
+        emailFromAddress: 'self@example.com',
+      );
+      final message = Message(
+        stanzaID: 'forwarded-email-inline-1',
+        senderJid: 'forwarder@example.com',
+        chatJid: chat.jid,
+        subject: 'Fwd: Quarterly plan',
+        body:
+            'From: Original=20Person=20=3Coriginal@example.com=3E\n'
+            'Date: Tue, 19 Mar 2026 10:00:00 +0000\n'
+            'Subject: Quarterly plan\n'
+            'To: Forwarder <forwarder@example.com>\n'
+            '\n'
+            'Forwarded body',
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+      );
+
+      final items = buildMainChatTimelineItems(
+        messages: [message],
+        loadingMessages: false,
+        unreadBoundaryStanzaId: null,
+        emptyStateCreatedAt: DateTime.utc(2024, 1, 1),
+        unreadDividerItemId: 'unread-divider',
+        unreadDividerLabel: 'Unread',
+        emptyStateItemId: 'empty-state',
+        emptyStateLabel: 'Empty',
+        isGroupChat: false,
+        isEmailChat: true,
+        profileJid: 'self@example.com',
+        resolvedEmailSelfJid: 'self@example.com',
+        currentUserId: 'self@example.com',
+        selfUserId: 'self@example.com',
+        selfDisplayName: 'Self',
+        selfAvatarPath: null,
+        myOccupantJid: null,
+        selfNick: 'self',
+        roomState: null,
+        roomMemberSections: const [],
+        chat: chat,
+        messageById: const {},
+        shareContexts: const {},
+        shareReplies: const {},
+        emailFullHtmlByDeltaId: const {},
+        revokedInviteTokens: const {},
+        inviteRoomFallbackLabel: 'Room',
+        inviteBodyLabel: 'Invite',
+        inviteRevokedBodyLabel: 'Invite revoked',
+        unknownAuthorLabel: 'Unknown',
+        inviteActionLabel: (roomDisplayName) => 'Open $roomDisplayName',
+        supportsMarkers: false,
+        supportsReceipts: false,
+        attachmentsForMessage: (_) => const <String>[],
+        reactionPreviewsForMessage: (_) => const <ReactionPreview>[],
+        participantsForBanner: (_, _, _) => const <chat_models.Chat>[],
+        avatarPathForBareJid: (_) => null,
+        ownerJidForShare: (_) => null,
+        errorLabel: (_) => 'Error',
+        errorLabelWithBody: (_, body) => body,
+      );
+
+      final timelineMessage = items.whereType<ChatTimelineMessageItem>().single;
+      expect(timelineMessage.isForwarded, isTrue);
+      expect(
+        timelineMessage.forwardedSubjectSenderLabel,
+        equals('original@example.com'),
+      );
+    },
+  );
+
+  test('email forwards extract the original author after MIME preambles', () {
+    final chat = chat_models.Chat(
+      jid: 'forwarder@example.com',
+      title: 'Forwarder',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      emailAddress: 'forwarder@example.com',
+      emailFromAddress: 'self@example.com',
+    );
+    final message = Message(
+      stanzaID: 'forwarded-email-mime-preamble-1',
+      senderJid: 'forwarder@example.com',
+      chatJid: chat.jid,
+      subject: 'Fwd: Quarterly plan',
+      body:
+          'Content-Type: text/plain; charset="utf-8"\n'
+          'Content-Transfer-Encoding: quoted-printable\n'
+          '\n'
+          'From: Original=20Person=20=3Coriginal@example.com=3E\n'
+          'Date: Tue, 19 Mar 2026 10:00:00 +0000\n'
+          'Subject: Quarterly plan\n'
+          'To: Forwarder <forwarder@example.com>\n'
+          '\n'
+          'Forwarded body',
+      timestamp: DateTime.utc(2024, 1, 1, 10),
+    );
+
+    final items = buildMainChatTimelineItems(
+      messages: [message],
+      loadingMessages: false,
+      unreadBoundaryStanzaId: null,
+      emptyStateCreatedAt: DateTime.utc(2024, 1, 1),
+      unreadDividerItemId: 'unread-divider',
+      unreadDividerLabel: 'Unread',
+      emptyStateItemId: 'empty-state',
+      emptyStateLabel: 'Empty',
+      isGroupChat: false,
+      isEmailChat: true,
+      profileJid: 'self@example.com',
+      resolvedEmailSelfJid: 'self@example.com',
+      currentUserId: 'self@example.com',
+      selfUserId: 'self@example.com',
+      selfDisplayName: 'Self',
+      selfAvatarPath: null,
+      myOccupantJid: null,
+      selfNick: 'self',
+      roomState: null,
+      roomMemberSections: const [],
+      chat: chat,
+      messageById: const {},
+      shareContexts: const {},
+      shareReplies: const {},
+      emailFullHtmlByDeltaId: const {},
+      revokedInviteTokens: const {},
+      inviteRoomFallbackLabel: 'Room',
+      inviteBodyLabel: 'Invite',
+      inviteRevokedBodyLabel: 'Invite revoked',
+      unknownAuthorLabel: 'Unknown',
+      inviteActionLabel: (roomDisplayName) => 'Open $roomDisplayName',
+      supportsMarkers: false,
+      supportsReceipts: false,
+      attachmentsForMessage: (_) => const <String>[],
+      reactionPreviewsForMessage: (_) => const <ReactionPreview>[],
+      participantsForBanner: (_, _, _) => const <chat_models.Chat>[],
+      avatarPathForBareJid: (_) => null,
+      ownerJidForShare: (_) => null,
+      errorLabel: (_) => 'Error',
+      errorLabelWithBody: (_, body) => body,
+    );
+
+    final timelineMessage = items.whereType<ChatTimelineMessageItem>().single;
+    expect(timelineMessage.isForwarded, isTrue);
+    expect(
+      timelineMessage.forwardedSubjectSenderLabel,
+      equals('original@example.com'),
+    );
+  });
 }

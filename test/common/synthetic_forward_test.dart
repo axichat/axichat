@@ -82,6 +82,70 @@ void main() {
     );
   });
 
+  test('forwarded body sender labels decode quoted-printable headers', () {
+    expect(
+      forwardedBodySenderLabel(
+        '---------- Forwarded message ---------\n'
+        'From: Original=20Person=20=3Coriginal@example.com=3E\n'
+        'Subject: Hello\n'
+        '\n'
+        'Body',
+      ),
+      'original@example.com',
+    );
+  });
+
+  test(
+    'forwarded body sender labels decode quoted-printable soft line breaks',
+    () {
+      expect(
+        forwardedBodySenderLabel(
+          '---------- Forwarded message ---------\n'
+          'From: Original=20Person=20=3Coriginal@=\n'
+          'example.com=3E\n'
+          'Subject: Hello\n'
+          '\n'
+          'Body',
+        ),
+        'original@example.com',
+      );
+    },
+  );
+
+  test('forwarded body sender labels support top-level header blocks', () {
+    expect(
+      forwardedBodySenderLabel(
+        'From: Original Person <original@example.com>\n'
+        'Date: Tue, 19 Mar 2026 10:00:00 +0000\n'
+        'Subject: Hello\n'
+        'To: Forwarder <forwarder@example.com>\n'
+        '\n'
+        'Body',
+      ),
+      'original@example.com',
+    );
+  });
+
+  test(
+    'forwarded body sender labels skip MIME preambles before forwarded headers',
+    () {
+      expect(
+        forwardedBodySenderLabel(
+          'Content-Type: text/plain; charset="utf-8"\n'
+          'Content-Transfer-Encoding: quoted-printable\n'
+          '\n'
+          'From: Original=20Person=20=3Coriginal@example.com=3E\n'
+          'Date: Tue, 19 Mar 2026 10:00:00 +0000\n'
+          'Subject: Quarterly plan\n'
+          'To: Forwarder <forwarder@example.com>\n'
+          '\n'
+          'Forwarded body',
+        ),
+        'original@example.com',
+      );
+    },
+  );
+
   test('forwarded preview labels prefer stored original senders', () {
     expect(
       preferredForwardedPreviewSenderLabel(

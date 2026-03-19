@@ -53,8 +53,10 @@ Message mergeOriginMessages({
   final resolvedDeviceId = primary.deviceID ?? duplicate.deviceID;
   final resolvedPseudoType =
       primary.pseudoMessageType ?? duplicate.pseudoMessageType;
-  final resolvedPseudoData =
-      primary.pseudoMessageData ?? duplicate.pseudoMessageData;
+  final resolvedPseudoData = _mergePseudoMessageData(
+    primary.pseudoMessageData,
+    duplicate.pseudoMessageData,
+  );
   final resolvedReactions = primary.reactionsPreview.isNotEmpty
       ? primary.reactionsPreview
       : duplicate.reactionsPreview;
@@ -90,6 +92,55 @@ Message mergeOriginMessages({
     deltaChatId: resolvedDeltaChatId,
     deltaMsgId: resolvedDeltaMsgId,
   );
+}
+
+Map<String, dynamic>? _mergePseudoMessageData(
+  Map<String, dynamic>? primary,
+  Map<String, dynamic>? duplicate,
+) {
+  if (primary == null || primary.isEmpty) {
+    return duplicate;
+  }
+  if (duplicate == null || duplicate.isEmpty) {
+    return primary;
+  }
+  final merged = <String, dynamic>{...duplicate, ...primary};
+  final forwarded =
+      primary['forwarded'] == true || duplicate['forwarded'] == true;
+  if (forwarded) {
+    merged['forwarded'] = true;
+  }
+  final forwardedFromJid = _preferredPseudoString(
+    primary['forwardedFromJid'],
+    duplicate['forwardedFromJid'],
+  );
+  if (forwardedFromJid != null) {
+    merged['forwardedFromJid'] = forwardedFromJid;
+  }
+  final forwardedOriginalSenderLabel = _preferredPseudoString(
+    primary['forwardedOriginalSenderLabel'],
+    duplicate['forwardedOriginalSenderLabel'],
+  );
+  if (forwardedOriginalSenderLabel != null) {
+    merged['forwardedOriginalSenderLabel'] = forwardedOriginalSenderLabel;
+  }
+  return merged;
+}
+
+String? _preferredPseudoString(Object? primary, Object? duplicate) {
+  final primaryValue = _pseudoString(primary);
+  if (primaryValue != null) {
+    return primaryValue;
+  }
+  return _pseudoString(duplicate);
+}
+
+String? _pseudoString(Object? value) {
+  if (value is! String) {
+    return null;
+  }
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }
 
 Message resolveOriginMergePrimary({
