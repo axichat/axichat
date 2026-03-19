@@ -309,8 +309,13 @@ resolveMainChatTimelineMessageAuthor({
   final occupant = !isGroupChat || roomState == null
       ? null
       : resolveRoomMessageOccupant(message: message, roomState: roomState);
+  final senderNick = addressResourcePart(message.senderJid)?.trim();
+  final senderBareAddress = bareAddress(message.senderJid)?.trim();
   final fallbackNick = isGroupChat
-      ? roomState?.senderNick(message.senderJid) ?? chat?.title ?? ''
+      ? roomState?.senderNick(message.senderJid) ??
+            senderNick ??
+            senderBareAddress ??
+            ''
       : chat?.title ?? '';
   final authorDisplayName = isSelf
       ? selfDisplayName

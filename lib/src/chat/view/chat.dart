@@ -69,6 +69,7 @@ import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/axi_input.dart';
@@ -278,6 +279,7 @@ class _ChatState extends State<Chat> {
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
+  final _loggedInlineEmailHtmlMessageIds = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   static final Map<String, double> _scrollOffsetCache = {};
@@ -1716,6 +1718,14 @@ class _ChatState extends State<Chat> {
         autoLoadEmailImages ||
         (messageDatabaseId != null &&
             _loadedEmailImageMessageIds.contains(messageDatabaseId));
+    if (_loggedInlineEmailHtmlMessageIds.add(messageId)) {
+      SafeLogging.debugLog(
+        'EMAIL_HTML_TRACE|message=$messageId|raw_html_start\n'
+        '$normalizedHtmlBody\n'
+        'EMAIL_HTML_TRACE|message=$messageId|raw_html_end',
+        name: 'EmailHtmlTrace',
+      );
+    }
     final onLoadRequested = messageDatabaseId == null
         ? null
         : () => _handleEmailImagesApproved(messageDatabaseId);
@@ -3871,8 +3881,48 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  void _clearInlineComposerControllers() {
+    _subjectChangeSuppressed = true;
+    _subjectController.clear();
+    _lastSubjectValue = _emptyText;
+    _subjectChangeSuppressed = false;
+    _textController.clear();
+  }
+
+  void _clearInlineComposerState({required bool clearExpandedComposerDraftId}) {
+    _composerHasText = false;
+    _quotedDraft = null;
+    _pendingAttachments = const [];
+    _pendingCalendarTaskIcs = null;
+    _pendingCalendarSeedText = null;
+    if (clearExpandedComposerDraftId) {
+      _expandedComposerDraftId = null;
+    }
+    _expandingComposerDraft = false;
+    _expandedComposerSeed = null;
+  }
+
+  void _resetInlineComposer({
+    required bool clearExpandedComposerDraftId,
+    bool requestFocus = false,
+  }) {
+    _clearInlineComposerControllers();
+    if (!mounted) return;
+    setState(() {
+      _clearInlineComposerState(
+        clearExpandedComposerDraftId: clearExpandedComposerDraftId,
+      );
+    });
+    _syncEmailComposerWatermark(
+      chatState: context.read<ChatBloc>().state,
+      forceInsert: true,
+    );
+    if (requestFocus) {
+      _focusNode.requestFocus();
+    }
+  }
+
   void _collapseExpandedDraftComposer({required bool clearInlineComposer}) {
-    final locate = context.read;
     if (!mounted) return;
     setState(() {
       _expandedComposerSeed = null;
@@ -3885,15 +3935,7 @@ class _ChatState extends State<Chat> {
       _focusNode.requestFocus();
       return;
     }
-    _subjectChangeSuppressed = true;
-    _subjectController.clear();
-    _lastSubjectValue = _emptyText;
-    _subjectChangeSuppressed = false;
-    _textController.clear();
-    _composerHasText = false;
-    _pendingAttachments = const [];
-    final chatState = locate<ChatBloc>().state;
-    _syncEmailComposerWatermark(chatState: chatState, forceInsert: true);
+    _resetInlineComposer(clearExpandedComposerDraftId: true);
   }
 
   List<String> _resolveDraftRecipients({
@@ -5086,28 +5128,10 @@ class _ChatState extends State<Chat> {
                   current.composerClearId != 0 &&
                   previous.composerClearId != current.composerClearId,
               listener: (_, _) {
-                _textController.clear();
-                _composerHasText = false;
-                _quotedDraft = null;
-                _subjectChangeSuppressed = true;
-                _subjectController.clear();
-                _lastSubjectValue = _emptyText;
-                _subjectChangeSuppressed = false;
-                _expandedComposerDraftId = null;
-                _expandingComposerDraft = false;
-                _expandedComposerSeed = null;
-                if (_pendingCalendarTaskIcs != null ||
-                    _pendingCalendarSeedText != null) {
-                  setState(() {
-                    _pendingCalendarTaskIcs = null;
-                    _pendingCalendarSeedText = null;
-                  });
-                }
-                _syncEmailComposerWatermark(
-                  chatState: context.read<ChatBloc>().state,
-                  forceInsert: true,
+                _resetInlineComposer(
+                  clearExpandedComposerDraftId: true,
+                  requestFocus: true,
                 );
-                _focusNode.requestFocus();
               },
             ),
             BlocListener<ChatBloc, ChatState>(
@@ -5116,22 +5140,8 @@ class _ChatState extends State<Chat> {
               listener: (_, state) {
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
-                _textController.clear();
-                _composerHasText = false;
-                _quotedDraft = null;
-                _pendingAttachments = const [];
-                _subjectChangeSuppressed = true;
-                _subjectController.clear();
-                _lastSubjectValue = _emptyText;
-                _subjectChangeSuppressed = false;
-                _expandedComposerDraftId = null;
-                _expandingComposerDraft = false;
-                _expandedComposerSeed = null;
-                if (_pendingCalendarTaskIcs != null ||
-                    _pendingCalendarSeedText != null) {
-                  _pendingCalendarTaskIcs = null;
-                  _pendingCalendarSeedText = null;
-                }
+                _clearInlineComposerControllers();
+                _clearInlineComposerState(clearExpandedComposerDraftId: true);
                 _resetRecipientsForChat(state.chat);
                 _syncEmailComposerWatermark(chatState: state);
                 if (state.messagesLoaded) {
@@ -5370,12 +5380,7 @@ class _ChatState extends State<Chat> {
                   return avatarPathForBareJid(bareParticipant);
                 }
                 final roomState = state.roomState!;
-                final occupant = roomState.occupantForSenderJid(
-                  trimmed,
-                  preferRealJid: true,
-                );
-
-                final realJid = occupant?.realJid?.trim();
+                final realJid = roomState.senderRealJid(trimmed);
                 if (realJid == null || realJid.isEmpty) return null;
                 final bareRealJid = bareAddress(realJid) ?? realJid;
                 return avatarPathForBareJid(bareRealJid);

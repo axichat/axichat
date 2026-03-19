@@ -645,8 +645,11 @@ pre, code {
         }
         if (_flutterTableCellTags.contains(tag)) {
           final cellNode = _formatFlutterTableCell(node);
+          if (cellNode == null) {
+            nodes.removeAt(index);
+            continue;
+          }
           nodes[index] = cellNode;
-          _flattenFlutterTableLayout(cellNode.nodes);
           index++;
           continue;
         }
@@ -779,25 +782,46 @@ pre, code {
         formattedRow.nodes.add(child);
         continue;
       }
+      final formattedCell = _formatFlutterTableCell(child);
+      if (formattedCell == null) {
+        continue;
+      }
       if (hadCells) {
         formattedRow.nodes.add(dom.Text(' \u00A0 '));
       }
-      formattedRow.nodes.add(_formatFlutterTableCell(child));
+      formattedRow.nodes.add(formattedCell);
       hadCells = true;
     }
     if (!hadCells) {
-      formattedRow.nodes.addAll(children);
+      final fallbackText = _compactFlutterTablePreviewText(row.innerHtml);
+      if (fallbackText.isNotEmpty) {
+        formattedRow.nodes.add(dom.Text(fallbackText));
+      }
     }
     return formattedRow;
   }
 
-  static dom.Element _formatFlutterTableCell(dom.Element cell) {
+  static dom.Element? _formatFlutterTableCell(dom.Element cell) {
+    final flattenedText = _compactFlutterTablePreviewText(cell.innerHtml);
+    if (flattenedText.isEmpty) {
+      return null;
+    }
     final isHeader = (cell.localName ?? '').toLowerCase() == 'th';
     return dom.Element.tag('span')
       ..attributes['style'] = isHeader
           ? _tableCellHeaderStyle
           : _tableCellInlineDisplayStyle
-      ..nodes.addAll(cell.nodes.toList());
+      ..nodes.add(dom.Text(flattenedText));
+  }
+
+  static String _compactFlutterTablePreviewText(String html) {
+    final plainText = toPlainText(
+      html,
+    ).replaceAll('\u00A0', ' ').replaceAll(_spaceCollapse, ' ').trim();
+    if (plainText.isEmpty) {
+      return '';
+    }
+    return plainText;
   }
 
   static void _normalizeFlutterHtmlNodes(
