@@ -701,4 +701,70 @@ void main() {
       expect(chat?.lastChangeTimestamp, DateTime.fromMillisecondsSinceEpoch(0));
     },
   );
+
+  test(
+    'hidden multi-device sync placeholders do not consume timeline or count windows',
+    () async {
+      const selfJid = 'me@example.com';
+      final selfChat = Chat(
+        jid: selfJid,
+        title: 'Saved Messages',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1, 9),
+        transport: MessageTransport.email,
+        emailAddress: selfJid,
+      );
+      await db.createChat(selfChat);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'visible-self-message',
+          senderJid: selfJid,
+          chatJid: selfJid,
+          timestamp: DateTime.utc(2024, 1, 1, 10),
+          body: 'Keep me visible',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'hidden-sync-message',
+          senderJid: selfJid,
+          chatJid: selfJid,
+          timestamp: DateTime.utc(2024, 1, 1, 11),
+          subject: 'Multi Device Synchronization',
+          body:
+              'This message is used to synchronize data between your devices. '
+              'Please ignore it.',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      final latestVisible = await db.getChatMessages(
+        selfJid,
+        start: 0,
+        end: 1,
+        filter: MessageTimelineFilter.allWithContact,
+      );
+      final totalVisible = await db.countChatMessages(
+        selfJid,
+        filter: MessageTimelineFilter.allWithContact,
+      );
+      final throughVisible = await db.countChatMessagesThrough(
+        selfJid,
+        throughTimestamp: DateTime.utc(2024, 1, 1, 10),
+        throughStanzaId: 'visible-self-message',
+        filter: MessageTimelineFilter.allWithContact,
+      );
+
+      expect(latestVisible.map((message) => message.stanzaID), [
+        'visible-self-message',
+      ]);
+      expect(totalVisible, 1);
+      expect(throughVisible, 1);
+    },
+  );
 }

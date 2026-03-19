@@ -765,4 +765,139 @@ void main() {
       );
     },
   );
+
+  test(
+    'ingests peer emails that match the sync placeholder copy outside the self chat',
+    () async {
+      const chatId = 21;
+      const msgId = 77;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        subject: 'Multi Device Synchronization',
+        text:
+            'This message is used to synchronize data between your devices. '
+            'Please ignore it.',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        isOutgoing: false,
+      );
+
+      when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.upsertEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persisted =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.single
+              as Message;
+      expect(persisted.stanzaID, equals('dc-msg-$msgId'));
+      expect(persisted.subject, equals(deltaMessage.subject));
+      expect(persisted.body, contains('synchronize data between your devices'));
+    },
+  );
+
+  test(
+    'summary repair preserves the existing timestamp when no visible message remains',
+    () async {
+      const chatId = 22;
+      const msgId = 78;
+      final chat = Chat(
+        jid: 'me@example.com',
+        title: 'Saved Messages',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 5, 9),
+        lastMessage: 'Old preview',
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Visible text',
+        timestamp: DateTime.utc(2024, 1, 6, 10),
+        isOutgoing: true,
+      );
+
+      when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.upsertEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(
+        () => database.getChatMessages(
+          chat.jid,
+          start: 0,
+          end: 1,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer((_) async => const <Message>[]);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final updatedChat =
+          verify(() => database.updateChat(captureAny())).captured.last as Chat;
+      expect(updatedChat.lastMessage, isNull);
+      expect(updatedChat.lastChangeTimestamp, chat.lastChangeTimestamp);
+    },
+  );
 }

@@ -1353,26 +1353,6 @@ class EmailService {
     );
   }
 
-  bool _isBlockedMultiDeviceSyncMessage({
-    required String? subject,
-    required String? body,
-    String? htmlBody,
-  }) {
-    final String? inferredBody = body?.trim().isNotEmpty == true
-        ? body
-        : (htmlBody?.trim().isNotEmpty == true
-              ? HtmlContentCodec.toPlainText(htmlBody!)
-              : null);
-    return isMultiDeviceSyncMessage(subject: subject, body: inferredBody);
-  }
-
-  Never _throwBlockedMultiDeviceSyncMessage({required String operation}) {
-    throw DeltaInternalException(
-      operation: operation,
-      message: 'Blocked Multi Device Synchronization placeholder message.',
-    );
-  }
-
   Future<int> sendMessage({
     required Chat chat,
     required String body,
@@ -1404,13 +1384,6 @@ class EmailService {
         : (normalizedHtml == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
-    if (_isBlockedMultiDeviceSyncMessage(
-      subject: normalizedSubject,
-      body: effectiveBody,
-      htmlBody: normalizedHtml,
-    )) {
-      _throwBlockedMultiDeviceSyncMessage(operation: 'send email message');
-    }
     String? shareId;
     String? subjectToken;
     if (normalizedSubject != null) {
@@ -1534,13 +1507,6 @@ class EmailService {
     var captionText = effectiveAttachment.caption?.trim() ?? '';
     if (captionText.isEmpty && normalizedHtml != null) {
       captionText = HtmlContentCodec.toPlainText(normalizedHtml);
-    }
-    if (_isBlockedMultiDeviceSyncMessage(
-      subject: normalizedSubject,
-      body: captionText,
-      htmlBody: normalizedHtml,
-    )) {
-      _throwBlockedMultiDeviceSyncMessage(operation: 'send email attachment');
     }
     String? shareId;
     if (normalizedSubject != null) {
@@ -1707,15 +1673,6 @@ class EmailService {
     var captionText = attachment?.caption?.trim() ?? '';
     if (captionText.isEmpty && normalizedHtmlCaption != null) {
       captionText = HtmlContentCodec.toPlainText(normalizedHtmlCaption);
-    }
-    if (_isBlockedMultiDeviceSyncMessage(
-      subject: effectiveSubject,
-      body: hasAttachment ? captionText : bodyText,
-      htmlBody: hasAttachment ? normalizedHtmlCaption : normalizedHtmlBody,
-    )) {
-      _throwBlockedMultiDeviceSyncMessage(
-        operation: hasAttachment ? 'fan-out attachment' : 'fan-out message',
-      );
     }
     final transmitCaption = subjectShareToken != null
         ? ShareTokenCodec.injectToken(
@@ -5338,13 +5295,6 @@ class EmailService {
         : (normalizedHtml == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
-    if (_isBlockedMultiDeviceSyncMessage(
-      subject: normalizedSubject,
-      body: effectiveBody,
-      htmlBody: normalizedHtml,
-    )) {
-      _throwBlockedMultiDeviceSyncMessage(operation: 'send reply');
-    }
     final msgId = await _guardDeltaOperation(
       operation: 'send reply',
       body: () => _transport.sendTextWithQuote(

@@ -2023,6 +2023,7 @@ WHERE transport IS NULL
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
         AND (? = 1 OR m.pseudo_message_type IS NULL)
+        AND ${_visibleMessageSqlPredicate('m')}
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
@@ -2043,8 +2044,20 @@ WHERE transport IS NULL
     return query.read<int>('count');
   }
 
+  String _visibleMessageSqlPredicate(String alias) => '''
+    NOT (
+      $alias.received = 0
+      AND lower(trim(COALESCE($alias.sender_jid, ''))) =
+          lower(trim(COALESCE($alias.chat_jid, '')))
+      AND lower(trim(COALESCE($alias.subject, ''))) =
+          'multi device synchronization'
+      AND lower(trim(COALESCE($alias.body, ''))) LIKE
+          'this message is used to synchronize data between your devices%'
+    )
+  ''';
+
   bool _shouldDisplayMessage(Message message) =>
-      !isMultiDeviceSyncMessage(subject: message.subject, body: message.body);
+      !message.isHiddenMultiDeviceSyncMessage;
 
   List<Message> _filterMessagesForDisplay(Iterable<Message> messages) {
     return messages.where(_shouldDisplayMessage).toList(growable: false);
@@ -2070,6 +2083,7 @@ WHERE transport IS NULL
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
+        AND ${_visibleMessageSqlPredicate('m')}
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
@@ -2120,6 +2134,7 @@ WHERE transport IS NULL
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
+        AND ${_visibleMessageSqlPredicate('m')}
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
@@ -2168,6 +2183,7 @@ WHERE transport IS NULL
       LEFT JOIN message_participants mp
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
+        AND ${_visibleMessageSqlPredicate('m')}
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)

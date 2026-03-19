@@ -40,6 +40,22 @@ bool isMultiDeviceSyncMessage({
       true;
 }
 
+bool isHiddenInternalMultiDeviceSyncMessage({
+  required String? subject,
+  required String? body,
+  required String senderJid,
+  required String chatJid,
+  required bool received,
+}) {
+  if (received) {
+    return false;
+  }
+  if (!sameNormalizedAddressValue(senderJid, chatJid)) {
+    return false;
+  }
+  return isMultiDeviceSyncMessage(subject: subject, body: body);
+}
+
 final class DeltaAccountDefaults {
   static const int legacyId = 0;
 }
@@ -676,6 +692,15 @@ abstract class Message with _$Message implements Insertable<Message> {
 extension MessageContent on Message {
   bool get isEmailBacked => deltaChatId != null || deltaMsgId != null;
 
+  bool get isHiddenMultiDeviceSyncMessage =>
+      isHiddenInternalMultiDeviceSyncMessage(
+        subject: subject,
+        body: body,
+        senderJid: senderJid,
+        chatJid: chatJid,
+        received: received,
+      );
+
   String? get normalizedHtmlBody => HtmlContentCodec.normalizeHtml(htmlBody);
 
   String get plainText {
@@ -789,7 +814,7 @@ extension MessageReferenceIds on Message {
     final hasBody = body?.trim().isNotEmpty == true;
     final hasAttachment = fileMetadataID?.trim().isNotEmpty == true;
     final pseudoMessageType = this.pseudoMessageType;
-    if (isMultiDeviceSyncMessage(subject: subject, body: body)) {
+    if (isHiddenMultiDeviceSyncMessage) {
       return false;
     }
     if (!(hasBody || hasAttachment)) {
