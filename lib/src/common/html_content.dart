@@ -713,6 +713,10 @@ pre, code {
           continue;
         }
         final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'img') {
+          node.remove();
+          continue;
+        }
         if (tag == 'style') {
           final sanitizedStyleText = _sanitizeWebViewStyleElementText(
             node.text,
@@ -801,19 +805,32 @@ pre, code {
     final formattedRow = dom.Element.tag('div')
       ..attributes['style'] = _tableRowStyle;
     var hadCells = false;
+    var cellCount = 0;
+    dom.Element? singleCell;
+    var hasNonCellContent = false;
     final children = row.nodes.toList();
     for (final child in children) {
       final isCell =
           child is dom.Element &&
           _flutterTableCellTags.contains((child.localName ?? '').toLowerCase());
       if (!isCell) {
+        if (child is dom.Comment) {
+          continue;
+        }
+        if (child is dom.Text &&
+            child.text.replaceAll('\u00A0', ' ').trim().isEmpty) {
+          continue;
+        }
         formattedRow.nodes.add(child);
+        hasNonCellContent = true;
         continue;
       }
       final formattedCell = _formatFlutterTableCell(child);
       if (formattedCell == null) {
         continue;
       }
+      cellCount++;
+      singleCell = formattedCell;
       if (hadCells) {
         formattedRow.nodes.add(dom.Text(' \u00A0 '));
       }
@@ -824,6 +841,12 @@ pre, code {
       formattedRow.nodes.addAll(
         _compactFlutterTablePreviewNodes(row.innerHtml),
       );
+    }
+    if (!hasNonCellContent &&
+        cellCount == 1 &&
+        singleCell != null &&
+        (singleCell.localName ?? '').toLowerCase() == 'div') {
+      return singleCell;
     }
     return formattedRow;
   }
@@ -1170,13 +1193,8 @@ pre, code {
             node.attributes[attributeName] = safeValue;
             continue;
           }
-          if (normalizedName == 'style') {
-            final sanitizedStyle = _sanitizeFlutterHtmlInlineStyle(rawValue);
-            if (sanitizedStyle == null) {
-              node.attributes.remove(attributeName);
-            } else {
-              node.attributes[attributeName] = sanitizedStyle;
-            }
+          if (!_shouldKeepFlutterHtmlAttribute(tag, normalizedName)) {
+            node.attributes.remove(attributeName);
           }
         }
         if (removeNode) {
@@ -1191,6 +1209,26 @@ pre, code {
         );
       }
     }
+  }
+
+  static bool _shouldKeepFlutterHtmlAttribute(
+    String tag,
+    String attributeName,
+  ) {
+    if (attributeName == _titleAttribute) {
+      return true;
+    }
+    if (tag == 'a' && const <String>{'rel', 'target'}.contains(attributeName)) {
+      return true;
+    }
+    if (tag == 'img' &&
+        const <String>{
+          _altAttribute,
+          _titleAttribute,
+        }.contains(attributeName)) {
+      return true;
+    }
+    return false;
   }
 
   static bool _containsBlockedWebViewNodes(
