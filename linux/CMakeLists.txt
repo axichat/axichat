@@ -142,6 +142,6 @@ if(EXISTS "${LINUX_APP_ICON}")
     COMPONENT Runtime)
 endif()
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/axichat.desktop"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/im.axi.axichat.desktop"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications"
   COMPONENT Runtime)

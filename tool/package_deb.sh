@@ -28,7 +28,7 @@ fi
 package_name="axichat-linux-${architecture}"
 package_root="${repo_root}/build/linux/deb/${package_name}"
 install_root="${package_root}/opt/axichat"
-desktop_file="${repo_root}/linux/axichat.desktop"
+desktop_file="${repo_root}/linux/im.axi.axichat.desktop"
 icon_file="${repo_root}/assets/icons/generated/app_icon_linux.png"
 package_file="${output_dir}/${package_name}.deb"
 substvars_file="${package_root}/DEBIAN/substvars"
