@@ -424,8 +424,6 @@ class AccessibilityChatBloc
     if (contact.chatType != ChatType.chat) {
       return false;
     }
-    final messageService = _messageService;
-    if (messageService is! XmppService) return true;
     return contact.transport.isEmail;
   }
 

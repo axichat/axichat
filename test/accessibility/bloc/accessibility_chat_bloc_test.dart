@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axichat/src/accessibility/accessibility_flow.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -10,6 +12,11 @@ import '../../mocks.dart';
 void main() {
   late MockMessageService messageService;
   late MockXmppDatabase database;
+
+  setUpAll(() {
+    registerFallbackValue(EncryptionProtocol.none);
+    registerFallbackValue(ChatType.chat);
+  });
 
   setUp(() {
     messageService = MockMessageService();
@@ -126,8 +133,7 @@ void main() {
         ],
       ),
     );
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
+    await bloc.stream.firstWhere((state) => state.sendCount == 1);
 
     expect(bloc.state.sendCount, 1);
 
