@@ -16,7 +16,6 @@ final class AxiSurfaceController extends ChangeNotifier {
       return;
     }
     _focusScopeNode = focusScopeNode;
-    notifyListeners();
   }
 
   void detachFocusScope(FocusScopeNode focusScopeNode) {
@@ -24,7 +23,6 @@ final class AxiSurfaceController extends ChangeNotifier {
       return;
     }
     _focusScopeNode = null;
-    notifyListeners();
   }
 
   void registerSurface({
