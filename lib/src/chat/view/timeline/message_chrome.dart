@@ -234,10 +234,12 @@ Widget? _timelineForwardedPreview({
     currentUserId: currentUserId,
     l10n: l10n,
   );
+  final preferredPreviewSenderLabel = preferredForwardedPreviewSenderLabel(
+    forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
+    forwardedFromJid: forwardedFromJid,
+  );
   return _ForwardedPreviewText(
-    senderLabel: forwardedFromJid?.trim().isNotEmpty == true
-        ? resolvedForwardedSenderLabel
-        : (forwardedSubjectSenderLabel ?? resolvedForwardedSenderLabel),
+    senderLabel: preferredPreviewSenderLabel ?? resolvedForwardedSenderLabel,
     isSelf: isSelfBubble,
   );
 }

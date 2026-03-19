@@ -42,4 +42,27 @@ void main() {
     expect(split.subject, 'Original subject');
     expect(split.body, 'Original body');
   });
+
+  test(
+    'forwarded preview labels prefer the original sender over the forwarder',
+    () {
+      expect(
+        preferredForwardedPreviewSenderLabel(
+          forwardedSubjectSenderLabel: 'original@example.com',
+          forwardedFromJid: 'forwarder@example.com',
+        ),
+        'original@example.com',
+      );
+    },
+  );
+
+  test('forwarded preview labels fall back to the forwarder', () {
+    expect(
+      preferredForwardedPreviewSenderLabel(
+        forwardedSubjectSenderLabel: null,
+        forwardedFromJid: 'forwarder@example.com',
+      ),
+      'forwarder@example.com',
+    );
+  });
 }

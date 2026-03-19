@@ -375,13 +375,12 @@ class _PinnedMessageTile extends StatelessWidget {
     required String? forwardedFromJid,
     required String? forwardedSubjectSenderLabel,
   }) {
-    final source = forwardedFromJid?.trim();
-    if (source != null && source.isNotEmpty) {
-      return source;
-    }
-    final subjectSender = forwardedSubjectSenderLabel?.trim();
-    if (subjectSender != null && subjectSender.isNotEmpty) {
-      return subjectSender;
+    final preferredPreviewSenderLabel = preferredForwardedPreviewSenderLabel(
+      forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
+      forwardedFromJid: forwardedFromJid,
+    );
+    if (preferredPreviewSenderLabel != null) {
+      return preferredPreviewSenderLabel;
     }
     if (isSelf) {
       return context.l10n.chatSenderYou;

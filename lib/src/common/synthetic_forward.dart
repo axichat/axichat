@@ -76,6 +76,21 @@ String? syntheticForwardDisplaySenderLabel({
   return syntheticForwardSenderLabel(subjectLabel);
 }
 
+String? preferredForwardedPreviewSenderLabel({
+  required String? forwardedSubjectSenderLabel,
+  required String? forwardedFromJid,
+}) {
+  final subjectSender = forwardedSubjectSenderLabel?.trim();
+  if (subjectSender != null && subjectSender.isNotEmpty) {
+    return subjectSender;
+  }
+  final forwarder = forwardedFromJid?.trim();
+  if (forwarder != null && forwarder.isNotEmpty) {
+    return forwarder;
+  }
+  return null;
+}
+
 ({String? subject, String body}) splitSyntheticForwardBody(String body) {
   final trimmedBody = body.trimLeft();
   final lowerCasePrefix = forwardedBodySubjectPrefix.toLowerCase();
