@@ -588,14 +588,11 @@ void main() {
     );
 
     test(
-      'Keeps self avatar hydrating until the latest stream-ready bootstrap completes.',
+      'Runs only one proactive self avatar refresh per connection lifecycle.',
       () async {
         final pubsubManager = MockPubSubManager();
         final userAvatarManager = MockUserAvatarManager();
-        final metadataGates = <Completer<void>>[
-          Completer<void>(),
-          Completer<void>(),
-        ];
+        final metadataGate = Completer<void>();
         final metadataPayload =
             (mox.XmlBuilder.withNamespace(
                   'metadata',
@@ -632,7 +629,6 @@ void main() {
           buildDatabase: (_, _) => database,
           notificationService: mockNotificationService,
         );
-        xmppService.deferSelfAvatarBootstrapForNextConnect();
         await connectSuccessfully(xmppService);
         when(() => mockConnection.hasConnectionSettings).thenReturn(true);
         when(
@@ -652,11 +648,8 @@ void main() {
             maxItems: any(named: 'maxItems'),
           ),
         ).thenAnswer((_) async {
-          final callIndex = metadataCalls;
           metadataCalls += 1;
-          if (callIndex < metadataGates.length) {
-            await metadataGates[callIndex].future;
-          }
+          await metadataGate.future;
           return moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>(
             <mox.PubSubItem>[metadataItem],
           );
@@ -671,30 +664,20 @@ void main() {
 
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
         await pumpEventQueue();
-        xmppService.scheduleSelfAvatarBootstrap();
-        await pumpEventQueue();
 
         expect(metadataCalls, equals(1));
         expect(xmppService.selfAvatarHydrating, isTrue);
 
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
         await pumpEventQueue();
-        xmppService.scheduleSelfAvatarBootstrap();
-        await pumpEventQueue();
 
         expect(metadataCalls, equals(1));
         expect(xmppService.selfAvatarHydrating, isTrue);
 
-        metadataGates.first.complete();
+        metadataGate.complete();
         await pumpEventQueue();
 
-        expect(metadataCalls, equals(2));
-        expect(xmppService.selfAvatarHydrating, isTrue);
-
-        metadataGates.last.complete();
-        await pumpEventQueue();
-
-        expect(metadataCalls, equals(2));
+        expect(metadataCalls, equals(1));
         expect(xmppService.selfAvatarHydrating, isFalse);
       },
     );

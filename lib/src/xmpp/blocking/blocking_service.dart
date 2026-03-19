@@ -1678,17 +1678,4 @@ mixin BlockingService on XmppBase, BaseStreamService {
     _spamReportingSupported = true;
     return true;
   }
-
-  mox.JID? _reportingDiscoTarget() {
-    final host = _myJid?.domain;
-    final trimmed = host?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-    try {
-      return mox.JID.fromString(trimmed);
-    } on Exception {
-      return null;
-    }
-  }
 }

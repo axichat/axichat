@@ -545,6 +545,8 @@ abstract interface class XmppBase {
 
   Future<void> runBootstrapOperations(XmppBootstrapTrigger trigger) async {}
 
+  Future<bool> requestLifecycleResumeReconnect() async => false;
+
   void resetEventHandlers() {
     _eventManagerInstance?.unregisterAllHandlers();
     _eventManagerInstance = null;
@@ -644,6 +646,7 @@ final class XmppBootstrapOperation {
     required this.triggers,
     required this.operationName,
     required this.run,
+    this.lane,
   });
 
   final Object key;
@@ -651,12 +654,21 @@ final class XmppBootstrapOperation {
   final Set<XmppBootstrapTrigger> triggers;
   final String operationName;
   final Future<void> Function() run;
+  final Object? lane;
 }
+
+enum _XmppBootstrapOperationOutcome { success, failed, aborted, skipped }
 
 final class _XmppBootstrapPass {
   _XmppBootstrapPass();
 
   final Map<Object, Future<void>> tasks = <Object, Future<void>>{};
+  final Map<Object, _XmppBootstrapOperationOutcome> completedOperations =
+      <Object, _XmppBootstrapOperationOutcome>{};
+  final Map<Object, Map<int, _XmppBootstrapOperationOutcome>> laneOutcomes =
+      <Object, Map<int, _XmppBootstrapOperationOutcome>>{};
+  Future<void> scheduler = Future<void>.value();
+  int queuedRuns = 0;
 }
 
 class XmppService extends XmppBase
@@ -1126,6 +1138,11 @@ class XmppService extends XmppBase
     }
 
     _connectionState = state;
+    if (state == ConnectionState.connected ||
+        state == ConnectionState.notConnected ||
+        state == ConnectionState.error) {
+      _lifecycleResumeReconnectOwned = false;
+    }
     if (!_connectivityStream.isClosed) {
       _connectivityStream.add(state);
     }
@@ -1246,24 +1263,122 @@ class XmppService extends XmppBase
       }
       return;
     }
-    var index = 0;
-    while (index < operations.length) {
-      final priority = operations[index].priority;
-      final futures = <Future<void>>[];
-      while (index < operations.length &&
-          operations[index].priority == priority) {
-        futures.add(_startBootstrapOperation(activePass, operations[index]));
-        index++;
-      }
-      await Future.wait<void>(
-        futures.map(
-          (future) => future.catchError(
-            (Object _, StackTrace _) {},
-            test: (Object error) => error is Exception,
-          ),
-        ),
-      );
+    activePass.queuedRuns++;
+    final scheduled = activePass.scheduler
+        .then((_) async {
+          var index = 0;
+          while (index < operations.length) {
+            final priority = operations[index].priority;
+            final futures = <Future<void>>[];
+            while (index < operations.length &&
+                operations[index].priority == priority) {
+              futures.add(
+                _startBootstrapOperationIfAllowed(
+                  activePass,
+                  operations[index],
+                ),
+              );
+              index++;
+            }
+            await Future.wait<void>(
+              futures.map(
+                (future) => future.catchError(
+                  (Object _, StackTrace _) {},
+                  test: (Object error) => error is Exception,
+                ),
+              ),
+            );
+          }
+        })
+        .whenComplete(() {
+          activePass.queuedRuns--;
+          _maybeClearActiveBootstrapPass(activePass);
+        });
+    activePass.scheduler = scheduled.catchError(
+      (Object _, StackTrace _) {},
+      test: (Object error) => error is Exception,
+    );
+    await scheduled;
+  }
+
+  Future<void> _startBootstrapOperationIfAllowed(
+    _XmppBootstrapPass pass,
+    XmppBootstrapOperation operation,
+  ) {
+    final completed = pass.completedOperations[operation.key];
+    if (completed == _XmppBootstrapOperationOutcome.success ||
+        completed == _XmppBootstrapOperationOutcome.aborted) {
+      return Future<void>.value();
     }
+    if (!_canRunBootstrapOperation(pass, operation)) {
+      _recordBootstrapOutcome(
+        pass: pass,
+        operation: operation,
+        outcome: _XmppBootstrapOperationOutcome.skipped,
+      );
+      _xmppLogger.fine(
+        '${operation.operationName} skipped due to unmet lane prerequisites.',
+      );
+      return Future<void>.value();
+    }
+    return _startBootstrapOperation(pass, operation);
+  }
+
+  bool _canRunBootstrapOperation(
+    _XmppBootstrapPass pass,
+    XmppBootstrapOperation operation,
+  ) {
+    final lane = operation.lane;
+    if (lane == null) {
+      return true;
+    }
+    final lowerPriorities = _bootstrapOperations.values
+        .where(
+          (candidate) =>
+              candidate.lane == lane && candidate.priority < operation.priority,
+        )
+        .map((candidate) => candidate.priority)
+        .toSet();
+    if (lowerPriorities.isEmpty) {
+      return true;
+    }
+    final outcomes = pass.laneOutcomes[lane];
+    if (outcomes == null) {
+      return false;
+    }
+    for (final priority in lowerPriorities) {
+      if (outcomes[priority] != _XmppBootstrapOperationOutcome.success) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _recordBootstrapOutcome({
+    required _XmppBootstrapPass pass,
+    required XmppBootstrapOperation operation,
+    required _XmppBootstrapOperationOutcome outcome,
+  }) {
+    pass.completedOperations[operation.key] = outcome;
+    final lane = operation.lane;
+    if (lane == null) {
+      return;
+    }
+    final laneOutcomes = pass.laneOutcomes.putIfAbsent(
+      lane,
+      () => <int, _XmppBootstrapOperationOutcome>{},
+    );
+    laneOutcomes[operation.priority] = outcome;
+  }
+
+  void _maybeClearActiveBootstrapPass(_XmppBootstrapPass pass) {
+    if (!identical(_activeBootstrapPass, pass)) {
+      return;
+    }
+    if (pass.tasks.isNotEmpty || pass.queuedRuns > 0) {
+      return;
+    }
+    _activeBootstrapPass = null;
   }
 
   Future<void> _startBootstrapOperation(
@@ -1274,31 +1389,44 @@ class XmppService extends XmppBase
     if (existing != null) {
       return existing;
     }
-    final future = Future<void>.sync(operation.run);
+    late final Future<void> future;
+    future = Future<void>.microtask(() async {
+      try {
+        await operation.run();
+        _recordBootstrapOutcome(
+          pass: pass,
+          operation: operation,
+          outcome: _XmppBootstrapOperationOutcome.success,
+        );
+      } on XmppAbortedException {
+        _recordBootstrapOutcome(
+          pass: pass,
+          operation: operation,
+          outcome: _XmppBootstrapOperationOutcome.aborted,
+        );
+        _xmppLogger.fine('${operation.operationName} aborted.');
+        rethrow;
+      } on Exception catch (error, stackTrace) {
+        _recordBootstrapOutcome(
+          pass: pass,
+          operation: operation,
+          outcome: _XmppBootstrapOperationOutcome.failed,
+        );
+        _xmppLogger.fine(
+          '${operation.operationName} failed.',
+          error,
+          stackTrace,
+        );
+        rethrow;
+      } finally {
+        final current = pass.tasks[operation.key];
+        if (identical(current, future)) {
+          pass.tasks.remove(operation.key);
+        }
+        _maybeClearActiveBootstrapPass(pass);
+      }
+    });
     pass.tasks[operation.key] = future;
-    unawaited(
-      future
-          .catchError((Object error, StackTrace stackTrace) {
-            if (error is XmppAbortedException) {
-              _xmppLogger.fine('${operation.operationName} aborted.');
-              return;
-            }
-            _xmppLogger.fine(
-              '${operation.operationName} failed.',
-              error as Exception,
-              stackTrace,
-            );
-          }, test: (Object error) => error is Exception)
-          .whenComplete(() {
-            final current = pass.tasks[operation.key];
-            if (identical(current, future)) {
-              pass.tasks.remove(operation.key);
-            }
-            if (identical(_activeBootstrapPass, pass) && pass.tasks.isEmpty) {
-              _activeBootstrapPass = null;
-            }
-          }),
-    );
     return future;
   }
 
@@ -1306,6 +1434,7 @@ class XmppService extends XmppBase
   bool _sessionReconnectEnabled = false;
   bool _connectInFlight = false;
   bool _reconnectBlocked = false;
+  bool _lifecycleResumeReconnectOwned = false;
   var _foregroundServiceNotificationSent = false;
   var _connectionPasswordPreHashed = false;
   final Set<int> _timeoutErrorCodes = {60, 110, 10060};
@@ -1315,20 +1444,6 @@ class XmppService extends XmppBase
   Timer? _foregroundSocketMigrationTimer;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
-  var _deferSelfAvatarBootstrapOnNextConnect = false;
-
-  void deferSelfAvatarBootstrapForNextConnect() {
-    _deferSelfAvatarBootstrapOnNextConnect = true;
-  }
-
-  void scheduleSelfAvatarBootstrap() {
-    fireAndForget(() async {
-      await _bootstrapSelfAvatarIfReady();
-      if (!_hasSelfAvatarNegotiatedStream) {
-        await refreshSelfAvatarIfNeeded();
-      }
-    }, operationName: 'XmppService.scheduleSelfAvatarBootstrap');
-  }
 
   @override
   Future<String?> connect({
@@ -1350,8 +1465,6 @@ class XmppService extends XmppBase
     if (!_synchronousConnection.isCompleted) {
       _synchronousConnection.complete();
     }
-    final deferSelfAvatarBootstrap = _deferSelfAvatarBootstrapOnNextConnect;
-    _deferSelfAvatarBootstrapOnNextConnect = false;
 
     return await deferToError(
       defer: _reset,
@@ -1365,7 +1478,6 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
-            deferSelfAvatarBootstrap: deferSelfAvatarBootstrap,
             endpoint: endpoint,
           );
         } on ForegroundServiceUnavailableException catch (error, stackTrace) {
@@ -1400,7 +1512,6 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
-            deferSelfAvatarBootstrap: deferSelfAvatarBootstrap,
             endpoint: endpoint,
           );
           _scheduleForegroundSocketMigration();
@@ -1543,7 +1654,6 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
     required bool preHashed,
-    required bool deferSelfAvatarBootstrap,
     EndpointOverride? endpoint,
   }) async {
     _xmppLogger.info(
@@ -1661,12 +1771,6 @@ class XmppService extends XmppBase
     );
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
-    if (!deferSelfAvatarBootstrap) {
-      await _bootstrapSelfAvatarIfReady();
-      if (!_hasSelfAvatarNegotiatedStream) {
-        await refreshSelfAvatarIfNeeded();
-      }
-    }
     fireAndForget(
       _verifyMamSupportOnLogin,
       operationName: 'XmppService.verifyMamSupportOnLogin',
@@ -2415,6 +2519,12 @@ class XmppService extends XmppBase
           if (!availability.isAvailable) {
             return;
           }
+          if (_lifecycleResumeReconnectOwned) {
+            _xmppLogger.fine(
+              'Skipping network-available reconnect because lifecycle resume owns current recovery.',
+            );
+            return;
+          }
           fireAndForget(
             () => requestReconnect(ReconnectTrigger.networkAvailable),
             operationName: 'XmppService.reconnectOnNetworkAvailable',
@@ -2519,6 +2629,26 @@ class XmppService extends XmppBase
     return true;
   }
 
+  @override
+  Future<bool> requestLifecycleResumeReconnect() async {
+    _lifecycleResumeReconnectOwned = true;
+    if (connected ||
+        _hasMamNegotiatedStream ||
+        _streamNegotiationsDone.isCompleted) {
+      return true;
+    }
+    try {
+      final requested = await requestReconnect(ReconnectTrigger.resume);
+      if (!requested) {
+        _lifecycleResumeReconnectOwned = false;
+      }
+      return requested;
+    } on Exception {
+      _lifecycleResumeReconnectOwned = false;
+      rethrow;
+    }
+  }
+
   Future<void> ensureConnected({
     ReconnectTrigger trigger = ReconnectTrigger.immediateRetry,
     Duration timeout = const Duration(seconds: 20),
@@ -2555,6 +2685,7 @@ class XmppService extends XmppBase
       return false;
     }
     await runBootstrapOperations(XmppBootstrapTrigger.manualRefresh);
+    await refreshSelfAvatarIfNeeded(force: true);
     return true;
   }
 

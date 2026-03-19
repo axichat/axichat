@@ -94,6 +94,10 @@ const _mucServiceDiscoveryBootstrapOperationName =
     'MucService.discoverServiceHostOnNegotiations';
 const _mucBookmarksBootstrapOperationName =
     'MucService.syncBookmarksOnNegotiations';
+const _mucRoomAvatarBootstrapOperationName =
+    'MucService.refreshRoomAvatarsOnNegotiations';
+const _mucAutojoinBootstrapOperationName =
+    'MucService.autojoinBookmarkedRoomsOnNegotiations';
 const _mucCreateRoomBookmarkTimeoutLog =
     'Bookmark upsert still running for newly created room.';
 const _mucCreateConflictLog =
@@ -368,6 +372,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   int _nextMucJoinAttemptId = _mucJoinAttemptIdStart;
   String? _mucServiceHost;
   Future<List<MucBookmark>>? _mucBookmarksSync;
+  List<MucBookmark> _latestBootstrapBookmarks = <MucBookmark>[];
   final Set<String> _mucMamUnsupportedRooms = {};
   final Map<String, String> _outboundGroupchatStanzaRooms = <String, String>{};
 
@@ -1792,6 +1797,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       XmppBootstrapOperation(
         key: _mucBookmarksBootstrapOperationName,
         priority: 0,
+        lane: 'mucBookmarks',
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -1804,10 +1810,38 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     );
     registerBootstrapOperation(
       XmppBootstrapOperation(
+        key: _mucRoomAvatarBootstrapOperationName,
+        priority: 1,
+        lane: 'mucBookmarks',
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _mucRoomAvatarBootstrapOperationName,
+        run: () async {
+          await _refreshRoomAvatarsFromLatestBookmarks();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mucAutojoinBootstrapOperationName,
+        priority: 1,
+        lane: 'mucBookmarks',
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+        },
+        operationName: _mucAutojoinBootstrapOperationName,
+        run: () async {
+          await _autojoinLatestBookmarkedRooms();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
         key: _mucResumeRecoveryOperationName,
         priority: 2,
         triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,
         },
         operationName: _mucResumeRecoveryOperationName,
@@ -4030,16 +4064,8 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     await _connection.sendStanza(mox.StanzaDetails(stanza, awaitable: false));
   }
 
-  Future<void> _applyMucBookmarksState(List<MucBookmark> bookmarks) async {
+  Future<void> _autojoinBookmarks(List<MucBookmark> bookmarks) async {
     if (bookmarks.isEmpty) return;
-    await _upsertChatsFromBookmarks(bookmarks);
-    await refreshRoomAvatars(bookmarks);
-  }
-
-  Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
-    if (bookmarks.isEmpty) return;
-    await _applyMucBookmarksState(bookmarks);
-
     for (final bookmark in bookmarks) {
       final roomJid = bookmark.roomBare.toString();
       final password = _normalizePassword(bookmark.password);
@@ -4068,11 +4094,32 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
   }
 
+  Future<void> _autojoinLatestBookmarkedRooms() async {
+    await _autojoinBookmarks(List<MucBookmark>.from(_latestBootstrapBookmarks));
+  }
+
+  Future<void> _refreshRoomAvatarsFromLatestBookmarks() async {
+    await refreshRoomAvatars(List<MucBookmark>.from(_latestBootstrapBookmarks));
+  }
+
+  Future<void> _applyMucBookmarksState(List<MucBookmark> bookmarks) async {
+    if (bookmarks.isEmpty) return;
+    await _upsertChatsFromBookmarks(bookmarks);
+  }
+
+  Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
+    if (bookmarks.isEmpty) return;
+    await _applyMucBookmarksState(bookmarks);
+    await refreshRoomAvatars(bookmarks);
+    await _autojoinBookmarks(bookmarks);
+  }
+
   Future<void> applyMucBookmarksSnapshot(
     ({List<MucBookmark> items, bool isSuccess, bool isComplete}) snapshot,
   ) async {
     if (!snapshot.isSuccess) return;
     final bookmarks = snapshot.items;
+    _latestBootstrapBookmarks = List<MucBookmark>.from(bookmarks);
     await _applyMucBookmarksState(bookmarks);
     if (snapshot.isComplete) {
       await _reconcileMucBookmarkRemovals(bookmarks);

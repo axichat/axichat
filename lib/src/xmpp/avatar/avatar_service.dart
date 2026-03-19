@@ -378,6 +378,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   static const Duration _conversationAvatarRefreshCooldown = Duration(
     minutes: 2,
   );
+  static const Duration _avatarRefreshTimeout = Duration(seconds: 12);
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
   static const int _avatarPublishVerificationAttempts = 2;
@@ -415,6 +416,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
   final Map<String, Future<Uint8List?>> _avatarLoadsInFlight = {};
   final Map<String, Future<void>> _avatarFileOperations = {};
   DateTime? _selfAvatarRepairLastAttempt;
+  int? _selfAvatarRefreshLifecycleEpoch;
+  int _selfAvatarRefreshInFlightCount = 0;
   @override
   final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
   @override
@@ -457,7 +460,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
         connectionState != ConnectionState.connecting) {
       return false;
     }
-    return !_selfAvatarInitialSyncCompleted;
+    return !_selfAvatarInitialSyncCompleted ||
+        _selfAvatarRefreshInFlightCount > 0;
   }
 
   @override
@@ -719,6 +723,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       XmppBootstrapOperation(
         key: _avatarRosterRefreshOperationName,
         priority: 1,
+        lane: 'roster',
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -733,6 +738,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       XmppBootstrapOperation(
         key: _avatarConversationRefreshOperationName,
         priority: 1,
+        lane: 'conversationIndex',
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -765,6 +771,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
       );
       _setCachedSelfAvatar(Avatar(path: path, hash: payload.hash));
       if (waitForPublish) {
+        if (_hasSelfAvatarNegotiatedStream) {
+          _selfAvatarInitialSyncCompleted = false;
+          _emitSelfAvatarHydrating();
+        }
         await _bootstrapSelfAvatarIfReady();
       } else {
         fireAndForget(
@@ -856,6 +866,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _avatarFileOperations.clear();
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
+    _selfAvatarRefreshLifecycleEpoch = null;
+    _selfAvatarRefreshInFlightCount = 0;
     _selfAvatarBootstrapFuture = null;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
@@ -1109,8 +1121,9 @@ mixin AvatarService on XmppBase, BaseStreamService {
         return;
       }
 
-      final vcardResult = await manager.requestVCard(
-        mox.JID.fromString(normalizedJid),
+      final vcardResult = await _withAvatarRefreshTimeout(
+        manager.requestVCard(mox.JID.fromString(normalizedJid)),
+        operationName: 'Avatar vCard fetch',
       );
       if (vcardResult.isType<mox.VCardError>()) {
         _avatarLog.fine('VCard request failed; aborting refresh.');
@@ -1219,10 +1232,15 @@ mixin AvatarService on XmppBase, BaseStreamService {
       _avatarLog.fine('Avatar refresh already in progress; skipping.');
       return;
     }
+    var isSelf = false;
     try {
       final manager = _connection.getManager<mox.UserAvatarManager>();
       final myBareJid = _myJid?.toBare().toString();
-      final isSelf = myBareJid != null && myBareJid == bareJid;
+      isSelf = myBareJid != null && myBareJid == bareJid;
+      if (isSelf) {
+        _selfAvatarRefreshInFlightCount += 1;
+        _emitSelfAvatarHydrating();
+      }
       _avatarLog.fine(
         'Refreshing avatar. isSelf=$isSelf force=$force '
         'metadataProvided=${metadata != null}.',
@@ -1230,6 +1248,18 @@ mixin AvatarService on XmppBase, BaseStreamService {
       if (manager == null) {
         _avatarLog.fine('UserAvatarManager unavailable; skipping refresh.');
         return;
+      }
+      if (isSelf &&
+          metadata == null &&
+          !force &&
+          _selfAvatarRefreshLifecycleEpoch == lifecycleEpoch) {
+        _avatarLog.fine(
+          'Self avatar refresh skipped; lifecycle already refreshed.',
+        );
+        return;
+      }
+      if (isSelf && metadata == null && !force) {
+        _selfAvatarRefreshLifecycleEpoch = lifecycleEpoch;
       }
       final existingHash = await _storedAvatarHash(bareJid);
       if (metadata != null && metadata.isEmpty) {
@@ -1288,9 +1318,12 @@ mixin AvatarService on XmppBase, BaseStreamService {
         }
       }
 
-      final avatarDataResult = await manager.getUserAvatarData(
-        mox.JID.fromString(bareJid),
-        selectedMetadata.id,
+      final avatarDataResult = await _withAvatarRefreshTimeout(
+        manager.getUserAvatarData(
+          mox.JID.fromString(bareJid),
+          selectedMetadata.id,
+        ),
+        operationName: 'Avatar data fetch',
       );
       if (avatarDataResult.isType<mox.AvatarError>()) {
         _avatarLog.fine('Avatar data fetch failed; aborting refresh.');
@@ -1321,6 +1354,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh avatar.', error, stackTrace);
     } finally {
+      if (isSelf && _selfAvatarRefreshInFlightCount > 0) {
+        _selfAvatarRefreshInFlightCount -= 1;
+        _emitSelfAvatarHydrating();
+      }
       _avatarRefreshInProgress.remove(bareJid);
     }
   }
@@ -1346,7 +1383,14 @@ mixin AvatarService on XmppBase, BaseStreamService {
       _avatarLog.fine('VCard refresh already in progress; skipping.');
       return;
     }
+    var isSelf = false;
     try {
+      final myBareJid = _myJid?.toBare().toString();
+      isSelf = myBareJid != null && myBareJid == bareJid;
+      if (isSelf) {
+        _selfAvatarRefreshInFlightCount += 1;
+        _emitSelfAvatarHydrating();
+      }
       final existingHash = await _storedAvatarHash(bareJid);
       if (existingHash == hash) {
         final existingPath = await _storedAvatarPath(bareJid);
@@ -1361,8 +1405,9 @@ mixin AvatarService on XmppBase, BaseStreamService {
         return;
       }
 
-      final vcardResult = await manager.requestVCard(
-        mox.JID.fromString(bareJid),
+      final vcardResult = await _withAvatarRefreshTimeout(
+        manager.requestVCard(mox.JID.fromString(bareJid)),
+        operationName: 'Avatar vCard fetch',
       );
       if (vcardResult.isType<mox.VCardError>()) {
         _avatarLog.fine('VCard request failed; aborting refresh.');
@@ -1405,6 +1450,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
     } finally {
+      if (isSelf && _selfAvatarRefreshInFlightCount > 0) {
+        _selfAvatarRefreshInFlightCount -= 1;
+        _emitSelfAvatarHydrating();
+      }
       _avatarRefreshInProgress.remove(bareJid);
     }
   }
@@ -1426,7 +1475,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
       maxItems: maxItems,
     );
 
-    var result = await getItems(maxMetadataItems);
+    var result = await _withAvatarRefreshTimeout(
+      getItems(maxMetadataItems),
+      operationName: 'Avatar metadata fetch',
+    );
     if (result.isType<mox.PubSubError>()) {
       final error = result.get<mox.PubSubError>();
       final shouldRetry =
@@ -1437,7 +1489,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
         'Metadata fetch failed with ${error.runtimeType}; retry=$shouldRetry.',
       );
       if (shouldRetry) {
-        result = await getItems(null);
+        result = await _withAvatarRefreshTimeout(
+          getItems(null),
+          operationName: 'Avatar metadata fetch retry',
+        );
       }
     }
 
@@ -1550,6 +1605,18 @@ mixin AvatarService on XmppBase, BaseStreamService {
       return null;
     } on XmppAbortedException {
       return null;
+    }
+  }
+
+  Future<T> _withAvatarRefreshTimeout<T>(
+    Future<T> future, {
+    required String operationName,
+  }) async {
+    try {
+      return await future.timeout(_avatarRefreshTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _avatarLog.fine('$operationName timed out.', error, stackTrace);
+      rethrow;
     }
   }
 

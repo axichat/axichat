@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -76,4 +77,28 @@ void main() {
     expect(cubit.state.avatarHydrating, isFalse);
     await cubit.close();
   });
+
+  test(
+    'clears avatar hydrating once a cached self avatar is loaded.',
+    () async {
+      var hydrating = true;
+      when(() => xmppService.myJid).thenReturn('newuser@axi.im');
+      when(() => xmppService.selfAvatarHydrating).thenAnswer((_) => hydrating);
+      when(() => xmppService.getOwnAvatar()).thenAnswer((_) async {
+        hydrating = false;
+        return const Avatar(path: '/tmp/self.enc', hash: 'self-hash');
+      });
+      when(
+        () => xmppService.loadAvatarBytes('/tmp/self.enc'),
+      ).thenAnswer((_) async => null);
+
+      final cubit = ProfileCubit(xmppService: xmppService);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cubit.state.avatarPath, '/tmp/self.enc');
+      expect(cubit.state.avatarHash, 'self-hash');
+      expect(cubit.state.avatarHydrating, isFalse);
+      await cubit.close();
+    },
+  );
 }

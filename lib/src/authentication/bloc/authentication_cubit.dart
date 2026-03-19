@@ -1012,7 +1012,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     try {
-      await _xmppService.requestReconnect(ReconnectTrigger.resume);
+      await _xmppService.requestLifecycleResumeReconnect();
     } on Exception {
       // Ignore: network failures are non-fatal for sticky sessions.
     }
@@ -1067,7 +1067,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool reuseExistingSession,
     required EndpointOverride? endpoint,
   }) async {
-    _xmppService.deferSelfAvatarBootstrapForNextConnect();
     return _xmppService
         .connect(
           jid: jid,
@@ -2299,9 +2298,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
-    if (pendingAvatar == null) {
-      _xmppService.scheduleSelfAvatarBootstrap();
-    }
     unawaited(_triggerEmailReconnect());
   }
 

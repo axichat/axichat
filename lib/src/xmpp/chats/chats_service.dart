@@ -160,6 +160,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       XmppBootstrapOperation(
         key: _conversationIndexBootstrapOperationName,
         priority: 0,
+        lane: 'conversationIndex',
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -503,6 +504,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required String jid,
     required mox.ChatState state,
   }) async {
+    if (_isLocalOnlyChatJid(jid)) {
+      return;
+    }
     await _sendChatState(jid: jid, state: state);
   }
 
@@ -727,6 +731,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         }
       }
     });
+    if (_isLocalOnlyChatJid(jid)) {
+      return;
+    }
     rosterTitle ??= addressDisplayLabel(jid) ?? mox.JID.fromString(jid).local;
     if (transport?.isXmpp == true && rosterTitle != null) {
       final renamed = await _connection.addToRoster(jid, title: rosterTitle);
@@ -937,8 +944,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     }
   }
 
-  bool _isConversationIndexLocalOnlyChatJid(String jid) =>
+  bool _isLocalOnlyChatJid(String jid) =>
       sameNormalizedAddressValue(jid, _signupWelcomeChatJid);
+
+  bool _isConversationIndexLocalOnlyChatJid(String jid) =>
+      _isLocalOnlyChatJid(jid);
 }
 
 class MUCManager extends mox.MUCManager {
