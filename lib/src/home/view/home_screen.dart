@@ -590,6 +590,13 @@ class _HomeScreenState extends State<HomeScreen> {
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
   ValueNotifier<int>? _bottomNavIndexNotifier;
+  final ValueNotifier<bool> _calendarCanHandleBack = ValueNotifier<bool>(false);
+
+  @override
+  void initState() {
+    super.initState();
+    _calendarCanHandleBack.addListener(_handleCalendarCanHandleBackChanged);
+  }
 
   @override
   void dispose() {
@@ -600,6 +607,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _clearOpenCalendarHistoryEntry();
     _bottomNavIndexNotifier?.removeListener(_handleBottomNavIndexChanged);
     _bottomNavIndexNotifier = null;
+    _calendarCanHandleBack.removeListener(_handleCalendarCanHandleBackChanged);
+    _calendarCanHandleBack.dispose();
     super.dispose();
   }
 
@@ -673,7 +682,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _updateOpenCalendarHistoryEntry() {
     final route = ModalRoute.of(context);
-    if (route == null || !_isPrimaryCalendarActive) {
+    if (route == null ||
+        !_isPrimaryCalendarActive ||
+        _calendarCanHandleBack.value) {
       _clearOpenCalendarHistoryEntry();
       return;
     }
@@ -697,6 +708,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleBottomNavIndexChanged() {
+    if (!mounted) {
+      return;
+    }
+    if (!_isPrimaryCalendarActive && _calendarCanHandleBack.value) {
+      _calendarCanHandleBack.value = false;
+    }
+    final locate = context.read;
+    _syncHomeHistoryEntries(locate<ChatsCubit>().state);
+  }
+
+  void _handleCalendarCanHandleBackChanged() {
     if (!mounted) {
       return;
     }
@@ -905,10 +927,12 @@ class _HomeScreenState extends State<HomeScreen> {
       child: _HomeExitPopGuard(
         homeTabIndex: homeTabIndex,
         bottomNavIndex: bottomNavIndex,
+        calendarCanHandleBack: _calendarCanHandleBack,
         child: _HomeContent(
           storageManager: storageManager,
           shortcutFocusNode: _shortcutFocusNode,
           bottomNavIndex: bottomNavIndex,
+          calendarCanHandleBack: _calendarCanHandleBack,
           calendarBottomDragSession: calendarBottomDragSession,
           tabs: tabs,
           railCollapsed: _railCollapsed,
@@ -934,11 +958,13 @@ class _HomeExitPopGuard extends StatelessWidget {
   const _HomeExitPopGuard({
     required this.homeTabIndex,
     required this.bottomNavIndex,
+    required this.calendarCanHandleBack,
     required this.child,
   });
 
   final ValueNotifier<int>? homeTabIndex;
   final ValueNotifier<int>? bottomNavIndex;
+  final ValueListenable<bool> calendarCanHandleBack;
   final Widget child;
 
   @override
@@ -969,10 +995,13 @@ class _HomeExitPopGuard extends StatelessWidget {
                 final selectedBottomIndex = bottomNotifier?.value ?? 0;
                 final bool isPrimaryCalendar =
                     selectedBottomIndex == 1 || selectedBottomIndex == 2;
+                final bool calendarHandlesBack =
+                    isPrimaryCalendar && calendarCanHandleBack.value;
                 final canPop =
-                    !isPrimaryCalendar &&
-                    !openChatOnPrimaryRoute &&
-                    activeIndex == 0;
+                    calendarHandlesBack ||
+                    (!isPrimaryCalendar &&
+                        !openChatOnPrimaryRoute &&
+                        activeIndex == 0);
                 return PopScope(
                   canPop: canPop,
                   onPopInvokedWithResult: (didPop, _) {
@@ -1002,11 +1031,17 @@ class _HomeExitPopGuard extends StatelessWidget {
               },
             );
         if (bottomNotifier == null) {
-          return content;
+          return ValueListenableBuilder<bool>(
+            valueListenable: calendarCanHandleBack,
+            builder: (context, _, child) => content,
+          );
         }
-        return ValueListenableBuilder<int>(
-          valueListenable: bottomNotifier,
-          builder: (context, _, _) => content,
+        return ValueListenableBuilder<bool>(
+          valueListenable: calendarCanHandleBack,
+          builder: (context, _, child) => ValueListenableBuilder<int>(
+            valueListenable: bottomNotifier,
+            builder: (context, _, innerChild) => content,
+          ),
         );
       },
     );
@@ -1103,6 +1138,7 @@ class _HomeContent extends StatelessWidget {
     required this.storageManager,
     required this.shortcutFocusNode,
     required this.bottomNavIndex,
+    required this.calendarCanHandleBack,
     required this.calendarBottomDragSession,
     required this.tabs,
     required this.railCollapsed,
@@ -1115,6 +1151,7 @@ class _HomeContent extends StatelessWidget {
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
   final ValueNotifier<int>? bottomNavIndex;
+  final ValueNotifier<bool> calendarCanHandleBack;
   final ValueNotifier<CalendarBottomDragSession?>? calendarBottomDragSession;
   final List<HomeTabEntry> tabs;
   final bool railCollapsed;
@@ -1219,24 +1256,37 @@ class _HomeContent extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Expanded(
-                                child: CalendarWidget(
-                                  mobileTabIndex: calendarTabIndex,
-                                  surfacePopEnabled: surfacePopEnabled,
-                                  onMobileTabIndexChanged: (tabIndex) {
-                                    final safeTab = tabIndex
-                                        .clamp(0, 1)
-                                        .toInt();
-                                    final scope = HomeShellScope.maybeOf(
-                                      context,
-                                    );
-                                    if (scope != null) {
-                                      scope.bottomNavIndex.value = safeTab == 0
-                                          ? 1
-                                          : 2;
-                                    }
-                                  },
-                                  bottomDragSession: calendarBottomDragSession,
-                                ),
+                                child:
+                                    NotificationListener<
+                                      NavigationNotification
+                                    >(
+                                      onNotification: (notification) {
+                                        if (calendarCanHandleBack.value !=
+                                            notification.canHandlePop) {
+                                          calendarCanHandleBack.value =
+                                              notification.canHandlePop;
+                                        }
+                                        return false;
+                                      },
+                                      child: CalendarWidget(
+                                        mobileTabIndex: calendarTabIndex,
+                                        surfacePopEnabled: surfacePopEnabled,
+                                        onMobileTabIndexChanged: (tabIndex) {
+                                          final safeTab = tabIndex
+                                              .clamp(0, 1)
+                                              .toInt();
+                                          final scope = HomeShellScope.maybeOf(
+                                            context,
+                                          );
+                                          if (scope != null) {
+                                            scope.bottomNavIndex.value =
+                                                safeTab == 0 ? 1 : 2;
+                                          }
+                                        },
+                                        bottomDragSession:
+                                            calendarBottomDragSession,
+                                      ),
+                                    ),
                               ),
                             ],
                           );
