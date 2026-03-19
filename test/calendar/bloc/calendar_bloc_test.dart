@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
@@ -55,6 +58,13 @@ void main() {
 
     setUpAll(() {
       registerFallbackValue(CalendarTask.create(title: 'fallback'));
+      registerFallbackValue(
+        CalendarCriticalPath(
+          id: 'fallback-path',
+          name: 'Fallback',
+          createdAt: DateTime.utc(2024, 1, 1),
+        ),
+      );
     });
 
     setUp(() {
@@ -67,6 +77,9 @@ void main() {
 
       when(
         () => syncManager.sendTaskUpdate(any(), any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => syncManager.sendCriticalPathUpdate(any(), any()),
       ).thenAnswer((_) async {});
       when(() => syncManager.requestFullSync()).thenAnswer((_) async {});
       when(() => syncManager.pushFullSync()).thenAnswer((_) async {});
@@ -82,6 +95,55 @@ void main() {
       expect(bloc.state.viewMode, CalendarView.week);
       expect(bloc.state.model.tasks, isEmpty);
     });
+
+    test('taskAdded updates the local model before sync completes', () async {
+      final syncCompleter = Completer<void>();
+      when(
+        () => syncManager.sendTaskUpdate(any(), 'add'),
+      ).thenAnswer((_) => syncCompleter.future);
+
+      final localBloc = buildBloc();
+      addTearDown(localBloc.close);
+
+      localBloc.add(const CalendarEvent.taskAdded(title: 'Write spec'));
+      await pumpEventQueue();
+
+      expect(
+        localBloc.state.model.tasks.values.map((task) => task.title),
+        contains('Write spec'),
+      );
+      expect(localBloc.state.isTaskCreationSubmitting, isFalse);
+
+      syncCompleter.complete();
+      await pumpEventQueue();
+    });
+
+    test(
+      'criticalPathCreated updates the local model before sync completes',
+      () async {
+        final syncCompleter = Completer<void>();
+        when(
+          () => syncManager.sendCriticalPathUpdate(any(), 'add'),
+        ).thenAnswer((_) => syncCompleter.future);
+
+        final localBloc = buildBloc();
+        addTearDown(localBloc.close);
+
+        localBloc.add(
+          const CalendarEvent.criticalPathCreated(name: 'Launch path'),
+        );
+        await pumpEventQueue();
+
+        expect(
+          localBloc.state.model.criticalPaths.values.map((path) => path.name),
+          contains('Launch path'),
+        );
+        expect(localBloc.state.isCriticalPathMutating, isFalse);
+
+        syncCompleter.complete();
+        await pumpEventQueue();
+      },
+    );
 
     blocTest<CalendarBloc, CalendarState>(
       'started computes helper fields for empty model',

@@ -612,8 +612,8 @@ abstract class BaseCalendarBloc
       ).copyWith(modifiedAt: now);
 
       createdTask = task;
-      await onTaskAdded(task);
       updatedModel = state.model.addTask(task);
+      var updatedPaths = const <CalendarCriticalPath>[];
       if (event.queuedCriticalPathIds.isNotEmpty) {
         final result = await _applyQueuedCriticalPathAdds(
           model: updatedModel,
@@ -623,6 +623,7 @@ abstract class BaseCalendarBloc
         updatedModel = result.$1;
         lastAddedPathId = result.$2;
         lastAddedTaskId = result.$3;
+        updatedPaths = result.$4;
       }
       emitModel(
         updatedModel,
@@ -636,6 +637,8 @@ abstract class BaseCalendarBloc
         lastCriticalPathTaskAddedPathId: lastAddedPathId,
         lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
       );
+      await onTaskAdded(task);
+      await _syncCriticalPathUpdates(updatedPaths);
     } catch (error) {
       if (createdTask == null) {
         _emitTaskCreationError(error, 'Failed to add task', emit);
@@ -1543,8 +1546,8 @@ abstract class BaseCalendarBloc
       );
 
       createdTask = task;
-      await onTaskAdded(task);
       updatedModel = state.model.addTask(task);
+      var updatedPaths = const <CalendarCriticalPath>[];
       if (event.queuedCriticalPathIds.isNotEmpty) {
         final result = await _applyQueuedCriticalPathAdds(
           model: updatedModel,
@@ -1554,6 +1557,7 @@ abstract class BaseCalendarBloc
         updatedModel = result.$1;
         lastAddedPathId = result.$2;
         lastAddedTaskId = result.$3;
+        updatedPaths = result.$4;
       }
       emitModel(
         updatedModel,
@@ -1567,6 +1571,8 @@ abstract class BaseCalendarBloc
         lastCriticalPathTaskAddedPathId: lastAddedPathId,
         lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
       );
+      await onTaskAdded(task);
+      await _syncCriticalPathUpdates(updatedPaths);
     } catch (error) {
       if (createdTask == null) {
         _emitTaskCreationError(error, 'Failed to add quick task', emit);
@@ -2521,9 +2527,6 @@ abstract class BaseCalendarBloc
         additions[next.id] = next.copyWith(modifiedAt: now);
         existingIds.add(next.id);
       }
-      for (final task in additions.values) {
-        await onTaskAdded(task);
-      }
       final updatedModel = state.model.replaceTasks(additions);
       emitModel(
         updatedModel,
@@ -2535,6 +2538,9 @@ abstract class BaseCalendarBloc
         lastImportedTaskIds: additions.keys.toList(growable: false),
         lastImportedModelChecksum: null,
       );
+      for (final task in additions.values) {
+        await onTaskAdded(task);
+      }
     } catch (error) {
       _emitImportError(error, 'Failed to import tasks', emit);
     }
@@ -2615,7 +2621,6 @@ abstract class BaseCalendarBloc
         }
       }
       final createdPath = updatedModel.criticalPaths[path.id]!;
-      await onCriticalPathAdded(createdPath);
       emitModel(
         updatedModel,
         emit,
@@ -2627,6 +2632,7 @@ abstract class BaseCalendarBloc
         criticalPathMutationError: null,
         lastCreatedCriticalPathId: path.id,
       );
+      await onCriticalPathAdded(createdPath);
     } catch (error) {
       _emitCriticalPathMutationError(
         error,
@@ -2742,7 +2748,6 @@ abstract class BaseCalendarBloc
         index: event.index,
       );
       final updatedPath = updatedModel.criticalPaths[path.id]!;
-      await onCriticalPathUpdated(updatedPath);
       emitModel(
         updatedModel,
         emit,
@@ -2753,6 +2758,7 @@ abstract class BaseCalendarBloc
         lastCriticalPathTaskAddedPathId: path.id,
         lastCriticalPathTaskAddedTaskId: task.baseId,
       );
+      await onCriticalPathUpdated(updatedPath);
     } catch (error) {
       _emitCriticalPathMutationError(
         error,
@@ -3491,7 +3497,8 @@ abstract class BaseCalendarBloc
     return candidate;
   }
 
-  Future<(CalendarModel, String?, String?)> _applyQueuedCriticalPathAdds({
+  Future<(CalendarModel, String?, String?, List<CalendarCriticalPath>)>
+  _applyQueuedCriticalPathAdds({
     required CalendarModel model,
     required CalendarTask task,
     required List<String> pathIds,
@@ -3499,6 +3506,7 @@ abstract class BaseCalendarBloc
     CalendarModel updatedModel = model;
     String? lastAddedPathId;
     String? lastAddedTaskId;
+    final updatedPaths = <CalendarCriticalPath>[];
     for (final String pathId in pathIds) {
       final CalendarCriticalPath? path = updatedModel.criticalPaths[pathId];
       if (path == null || path.isArchived) {
@@ -3514,12 +3522,20 @@ abstract class BaseCalendarBloc
         pathId: path.id,
         taskId: task.baseId,
       );
-      await onCriticalPathUpdated(nextModel.criticalPaths[path.id]!);
+      updatedPaths.add(nextModel.criticalPaths[path.id]!);
       updatedModel = nextModel;
       lastAddedPathId = path.id;
       lastAddedTaskId = task.baseId;
     }
-    return (updatedModel, lastAddedPathId, lastAddedTaskId);
+    return (updatedModel, lastAddedPathId, lastAddedTaskId, updatedPaths);
+  }
+
+  Future<void> _syncCriticalPathUpdates(
+    Iterable<CalendarCriticalPath> paths,
+  ) async {
+    for (final path in paths) {
+      await onCriticalPathUpdated(path);
+    }
   }
 
   Set<String> _filterSelectionForFocus({
