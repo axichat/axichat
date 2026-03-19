@@ -181,12 +181,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         initialState?.config ?? initialEndpointConfig ?? const EndpointConfig();
     _handleEndpointConfigUpdated(initialConfig);
     _lifecycleListener = AppLifecycleListener(
-      onResume: _handleLifecycleResume,
-      onShow: _handleLifecycleResume,
-      onRestart: _handleLifecycleResume,
+      onResume: () => _handleLifecycleResume('onResume'),
+      onShow: () => _handleLifecycleResume('onShow'),
+      onRestart: () => _handleLifecycleResume('onRestart'),
       onDetach: _handleLifecycleDetach,
       onExitRequested: _handleExitRequested,
       onStateChange: (lifeCycleState) async {
+        _log.info(
+          'Lifecycle state changed: state=$lifeCycleState '
+          'xmppConnected=${_xmppService.connected} '
+          'xmppHasSettings=${_xmppService.hasConnectionSettings} '
+          'foregroundActive=${foregroundServiceActive.value} '
+          'stickyAuth=$_stickyAuthActive',
+        );
         await _xmppService.setClientState(
           lifeCycleState == AppLifecycleState.resumed ||
               lifeCycleState == AppLifecycleState.inactive,
@@ -936,11 +943,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  Future<void> _handleLifecycleResume() async {
+  Future<void> _handleLifecycleResume(String source) async {
+    _log.info(
+      'Handling lifecycle resume: source=$source '
+      'state=${state.runtimeType} '
+      'xmppConnected=${_xmppService.connected} '
+      'xmppHasSettings=${_xmppService.hasConnectionSettings} '
+      'foregroundActive=${foregroundServiceActive.value}',
+    );
     if (state is! AuthenticationComplete) {
       return;
     }
-    await _resumeStickySession();
+    await _resumeStickySession(source: source);
   }
 
   Future<void> _handleLifecycleDetach() async {
@@ -974,13 +988,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return false;
   }
 
-  Future<void> _resumeStickySession() async {
+  Future<void> _resumeStickySession({required String source}) async {
+    _log.info(
+      'Resuming sticky session: source=$source '
+      'canReconnect=${_canReconnectWithInMemoryCredentials()} '
+      'xmppConnected=${_xmppService.connected} '
+      'xmppHasSettings=${_xmppService.hasConnectionSettings}',
+    );
     if (!_canReconnectWithInMemoryCredentials()) {
       await logout();
       return;
     }
 
-    await _reconnectXmppForStickySession();
+    await _reconnectXmppForStickySession(source: source);
     await _triggerEmailReconnect();
   }
 
@@ -996,22 +1016,37 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return xmppReady && emailReady;
   }
 
-  Future<void> _reconnectXmppForStickySession() async {
+  Future<void> _reconnectXmppForStickySession({required String source}) async {
     if (!endpointConfig.xmppEnabled) {
+      _log.fine(
+        'Skipping sticky-session XMPP reconnect: source=$source xmppDisabled=true',
+      );
       return;
     }
     if (withForeground && foregroundServiceActive.value) {
       try {
+        _log.info(
+          'Checking foreground socket migration before sticky-session reconnect: '
+          'source=$source',
+        );
         await _xmppService.ensureForegroundSocketIfActive();
       } on Exception {
         // Ignore: reconnection remains best-effort for sticky sessions.
       }
     }
     if (_xmppService.connected) {
+      _log.info(
+        'Skipping sticky-session XMPP reconnect because XMPP is already connected. '
+        'source=$source',
+      );
       return;
     }
 
     try {
+      _log.info(
+        'Requesting lifecycle-resume XMPP reconnect. '
+        'source=$source',
+      );
       await _xmppService.requestLifecycleResumeReconnect();
     } on Exception {
       // Ignore: network failures are non-fatal for sticky sessions.

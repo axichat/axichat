@@ -1141,6 +1141,11 @@ class XmppService extends XmppBase
     if (state == ConnectionState.connected ||
         state == ConnectionState.notConnected ||
         state == ConnectionState.error) {
+      if (_lifecycleResumeReconnectOwned) {
+        _xmppLogger.info(
+          'Clearing lifecycle-resume reconnect ownership at state=$state.',
+        );
+      }
       _lifecycleResumeReconnectOwned = false;
     }
     if (!_connectivityStream.isClosed) {
@@ -1443,8 +1448,27 @@ class XmppService extends XmppBase
   var _consecutiveConnectTimeouts = 0;
   DateTime? _lastForegroundSocketMigrationAttempt;
   Timer? _foregroundSocketMigrationTimer;
+  var _nextReconnectRequestId = 0;
+  var _nextForegroundMigrationAttemptId = 0;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
+
+  Future<String> _reconnectStateSummary() async {
+    final bool policyReconnecting = await _connection.isReconnecting();
+    final bool policyShouldReconnect = await _connection.reconnectionPolicy
+        .getShouldReconnect();
+    final AppLifecycleState? lifecycleState =
+        SchedulerBinding.instance.lifecycleState;
+    return 'connectionState=$connectionState '
+        'sessionReconnectEnabled=$_sessionReconnectEnabled '
+        'reconnectBlocked=$_reconnectBlocked '
+        'connectInFlight=$_connectInFlight '
+        'lifecycleOwned=$_lifecycleResumeReconnectOwned '
+        'policyReconnecting=$policyReconnecting '
+        'policyShouldReconnect=$policyShouldReconnect '
+        'lifecycle=$lifecycleState '
+        'hasSettings=${_connection.hasConnectionSettings}';
+  }
 
   @override
   Future<String?> connect({
@@ -1581,24 +1605,26 @@ class XmppService extends XmppBase
       );
       return;
     }
+    final int migrationAttemptId = ++_nextForegroundMigrationAttemptId;
     _xmppLogger.info(
-      'Scheduling foreground socket migration in '
-      '${_foregroundSocketMigrationDelay.inSeconds}s. '
+      'Scheduling foreground socket migration: attemptId=$migrationAttemptId '
+      'delay=${_foregroundSocketMigrationDelay.inSeconds}s. '
       '${_foregroundMigrationStateSummary()}',
     );
     _foregroundSocketMigrationTimer?.cancel();
     _foregroundSocketMigrationTimer = Timer(
       _foregroundSocketMigrationDelay,
       () {
-        _runForegroundSocketMigration();
+        _runForegroundSocketMigration(migrationAttemptId);
       },
     );
   }
 
-  Future<void> _runForegroundSocketMigration() async {
+  Future<void> _runForegroundSocketMigration(int migrationAttemptId) async {
     _foregroundSocketMigrationTimer = null;
     _xmppLogger.info(
-      'Running scheduled foreground socket migration. '
+      'Running scheduled foreground socket migration: '
+      'attemptId=$migrationAttemptId. '
       '${_foregroundMigrationStateSummary()}',
     );
     try {
@@ -2517,6 +2543,11 @@ class XmppService extends XmppBase
         .instance
         .stream
         .listen((availability) {
+          _xmppLogger.info(
+            'Network availability event received: availability=$availability '
+            'lifecycleOwned=$_lifecycleResumeReconnectOwned '
+            'connectionState=$connectionState',
+          );
           if (!availability.isAvailable) {
             return;
           }
@@ -2587,26 +2618,52 @@ class XmppService extends XmppBase
   }
 
   Future<bool> requestReconnect(ReconnectTrigger trigger) async {
+    final int requestId = ++_nextReconnectRequestId;
+    _xmppLogger.info(
+      'Reconnect request[$requestId] started: trigger=$trigger '
+      '${await _reconnectStateSummary()}',
+    );
     if (!_synchronousConnection.isCompleted) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: synchronous connection incomplete.',
+      );
       return false;
     }
     if (!_connection.hasConnectionSettings) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: missing connection settings.',
+      );
       return false;
     }
     if (!_sessionReconnectEnabled) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: session reconnect disabled.',
+      );
       return false;
     }
     if (_reconnectBlocked) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: reconnect blocked.',
+      );
       return false;
     }
     if (_connectInFlight) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: connect already in flight.',
+      );
       return true;
     }
     if (connected) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: already connected.',
+      );
       return true;
     }
     final bool reconnecting = await _connection.isReconnecting();
     if (reconnecting && !trigger.shouldBypassBackoff) {
+      _xmppLogger.info(
+        'Reconnect request[$requestId] ignored: policy already reconnecting and trigger does not bypass backoff.',
+      );
       return true;
     }
 
@@ -2617,6 +2674,9 @@ class XmppService extends XmppBase
         await _connection.setShouldReconnect(true);
       } catch (error, stackTrace) {
         _xmppLogger.finer(_reconnectEnableFailedLog, error, stackTrace);
+        _xmppLogger.info(
+          'Reconnect request[$requestId] failed while enabling reconnection.',
+        );
         return false;
       }
     }
@@ -2627,21 +2687,35 @@ class XmppService extends XmppBase
     }
 
     await _connection.requestReconnect(trigger);
+    _xmppLogger.info(
+      'Reconnect request[$requestId] dispatched: trigger=$trigger '
+      '${await _reconnectStateSummary()}',
+    );
     return true;
   }
 
   @override
   Future<bool> requestLifecycleResumeReconnect() async {
+    _xmppLogger.info(
+      'Lifecycle-resume reconnect requested. '
+      '${await _reconnectStateSummary()}',
+    );
     _lifecycleResumeReconnectOwned = true;
     if (connected ||
         _hasMamNegotiatedStream ||
         _streamNegotiationsDone.isCompleted) {
+      _xmppLogger.info(
+        'Lifecycle-resume reconnect short-circuited because the stream is already connected or negotiated.',
+      );
       return true;
     }
     try {
       final requested = await requestReconnect(ReconnectTrigger.resume);
       if (!requested) {
         _lifecycleResumeReconnectOwned = false;
+        _xmppLogger.info(
+          'Lifecycle-resume reconnect request was not accepted.',
+        );
       }
       return requested;
     } on Exception {
@@ -2713,6 +2787,10 @@ class XmppService extends XmppBase
   }
 
   Future<void> ensureForegroundSocketIfActive() async {
+    _xmppLogger.info(
+      'ensureForegroundSocketIfActive invoked. '
+      '${_foregroundMigrationStateSummary()}',
+    );
     if (!withForeground) {
       _logForegroundMigrationSkip('withForeground disabled');
       return;
