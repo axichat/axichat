@@ -286,6 +286,7 @@ class _ChatState extends State<Chat> {
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
   final _loggedInlineEmailHtmlMessageIds = <String>{};
+  final _loggedPreparedInlineEmailHtmlMessageIds = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   static final Map<String, double> _scrollOffsetCache = {};
@@ -1739,6 +1740,14 @@ class _ChatState extends State<Chat> {
       normalizedHtmlBody,
       allowRemoteImages: false,
     );
+    if (_loggedPreparedInlineEmailHtmlMessageIds.add(messageId)) {
+      SafeLogging.debugLog(
+        'EMAIL_HTML_TRACE|message=$messageId|prepared_html_start\n'
+        '$preparedHtmlBody\n'
+        'EMAIL_HTML_TRACE|message=$messageId|prepared_html_end',
+        name: 'EmailHtmlTrace',
+      );
+    }
     final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
         ? normalizedHtmlText
         : null;

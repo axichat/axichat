@@ -677,6 +677,7 @@ pre, code {
             continue;
           }
           nodes[index] = cellNode;
+          _flattenFlutterTableLayout(cellNode.nodes);
           index++;
           continue;
         }
@@ -848,21 +849,25 @@ pre, code {
   }
 
   static bool _shouldCompactFlutterTableCell(dom.Element cell) {
+    const maxCompactPreviewTextLength = 160;
     final tag = (cell.localName ?? '').toLowerCase();
     if (tag == 'th') {
       return true;
     }
-    if (cell.querySelector('table') != null) {
-      return true;
-    }
     final style = cell.attributes['style']?.trim().toLowerCase() ?? '';
-    if (style.contains('font-size:0pt') ||
+    final isZeroPointLayoutCell =
+        style.contains('font-size:0pt') ||
         style.contains('font-size: 0pt') ||
         style.contains('line-height:0pt') ||
-        style.contains('line-height: 0pt')) {
-      return true;
+        style.contains('line-height: 0pt');
+    if (!isZeroPointLayoutCell) {
+      return false;
     }
-    return false;
+    final previewText = _normalizePlainText(toPlainText(cell.innerHtml));
+    if (previewText.length > maxCompactPreviewTextLength) {
+      return false;
+    }
+    return true;
   }
 
   static List<dom.Node> _normalizeFlutterContentCellNodes(
@@ -901,10 +906,19 @@ pre, code {
         .replaceAll('\u00A0', ' ');
     final paragraphs = normalizedLineEndings
         .split(RegExp(r'\n\s*\n+'))
-        .map(
-          (segment) => segment.replaceAll(RegExp(r'[ \t\n\f\v]+'), ' ').trim(),
-        )
-        .where((segment) => segment.isNotEmpty)
+        .map((segment) {
+          final collapsed = segment.replaceAll(RegExp(r'[ \t\n\f\v]+'), ' ');
+          final trimmed = collapsed.trim();
+          if (trimmed.isEmpty) {
+            return null;
+          }
+          final hasLeadingWhitespace = collapsed.startsWith(' ');
+          final hasTrailingWhitespace = collapsed.endsWith(' ');
+          return '${hasLeadingWhitespace ? ' ' : ''}'
+              '$trimmed'
+              '${hasTrailingWhitespace ? ' ' : ''}';
+        })
+        .whereType<String>()
         .toList();
     if (paragraphs.isEmpty) {
       return const <dom.Node>[];
