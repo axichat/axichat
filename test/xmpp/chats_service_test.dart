@@ -71,6 +71,7 @@ void main() {
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
+    registerFallbackValue(FakeStanzaDetails());
     registerFallbackValue(MessageNotificationChannel.chat);
     registerFallbackValue(mox.ChatState.active);
     registerFallbackValue(FakeUserAgent());
@@ -459,6 +460,32 @@ void main() {
         ),
       ).called(1);
     });
+
+    test('Opening the local welcome chat does not send chat state.', () async {
+      await connectSuccessfully(xmppService);
+      clearInteractions(mockConnection);
+
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
+
+      const welcomeJid = 'axichat@welcome.axichat.invalid';
+      await xmppService.openChat(welcomeJid);
+
+      await pumpEventQueue();
+
+      final chat = await database.getChat(welcomeJid);
+      expect(chat?.open, isTrue);
+      verifyNever(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      );
+    });
   });
 
   test('closeChat closes any open chats.', () async {
@@ -489,6 +516,38 @@ void main() {
           mockConnection.sendChatState(jid: jid, state: mox.ChatState.inactive),
     ).called(1);
   });
+
+  test(
+    'closeChat does not send chat state for the local welcome chat.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
+
+      const welcomeJid = 'axichat@welcome.axichat.invalid';
+      await database.createChat(Chat.fromJid(welcomeJid));
+      await database.openChat(welcomeJid);
+      clearInteractions(mockConnection);
+
+      await xmppService.closeChat();
+
+      await pumpEventQueue();
+
+      final afterClose = await database.getChat(welcomeJid);
+      expect(afterClose?.open, isFalse);
+      verifyNever(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      );
+    },
+  );
 
   test(
     'MUCManager.sendAdminIq throws when the server rejects the admin IQ',

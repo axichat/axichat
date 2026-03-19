@@ -1437,6 +1437,62 @@ void main() {
     await bloc.close();
   });
 
+  test('welcome chat bootstrap skips XMPP hydrate and pin sync', () async {
+    final bloc = ChatBloc(
+      jid: welcomeChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(welcomeChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    );
+    verifyNever(() => messageService.syncPinnedMessagesForChat(any()));
+
+    await bloc.close();
+  });
+
+  test('welcome chat typing never sends chat-state traffic', () async {
+    final bloc = ChatBloc(
+      jid: welcomeChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(welcomeChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(ChatTypingStarted(chat: welcomeChat));
+    await _pumpBloc();
+
+    verifyNever(
+      () => chatsService.sendTyping(
+        jid: any(named: 'jid'),
+        typing: any(named: 'typing'),
+      ),
+    );
+
+    await bloc.close();
+  });
+
   test(
     'welcome chat attachments use the local-only attachment path without upload support',
     () async {

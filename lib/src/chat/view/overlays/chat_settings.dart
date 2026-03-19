@@ -53,7 +53,8 @@ class _ChatSettingsButtons extends StatelessWidget {
     final bool hasBlockAddress =
         resolvedBlockAddress != null && resolvedBlockAddress.isNotEmpty;
     final bool hasBlockEntry = blocklistEntry != null;
-    final bool showXmppCapabilities = chat.defaultTransport.isXmpp;
+    final bool showXmppCapabilities =
+        chat.defaultTransport.isXmpp && !chat.isAxichatWelcomeThread;
     final blockTransport = chat.isEmailBacked
         ? MessageTransport.email
         : chat.defaultTransport;

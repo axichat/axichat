@@ -3534,6 +3534,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         active: true,
       ),
     );
+    if (isAxichatWelcomeThreadJid(normalizedChat)) {
+      return;
+    }
     await _queuePinPublish(normalizedChat, messageId);
     await _flushPendingPinSyncForChat(normalizedChat);
   }
@@ -3570,6 +3573,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         active: false,
       ),
     );
+    if (isAxichatWelcomeThreadJid(normalizedChat)) {
+      return;
+    }
     await _queuePinRetraction(normalizedChat, messageId);
     await _flushPendingPinSyncForChat(normalizedChat);
   }
@@ -3577,6 +3583,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<void> syncPinnedMessagesForChat(String chatJid) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
     if (normalizedChat == null) {
+      return;
+    }
+    if (isAxichatWelcomeThreadJid(normalizedChat)) {
       return;
     }
     if (!_connection.hasConnectionSettings) {

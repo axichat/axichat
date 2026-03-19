@@ -849,6 +849,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required CalendarSyncOutbound outbound,
     required ChatType chatType,
   }) async {
+    if (isAxichatWelcomeThreadJid(jid) ||
+        state.chat?.isAxichatWelcomeThread == true) {
+      return;
+    }
     final xmppService = _xmppService;
     if (xmppService == null) return;
     await xmppService.sendCalendarSyncMessage(
@@ -859,6 +863,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<CalendarSnapshotUploadResult> uploadCalendarSnapshot(File file) async {
+    if (state.chat?.isAxichatWelcomeThread == true) {
+      final snapshot = await CalendarSnapshotCodec.decodeFile(file);
+      if (snapshot == null) {
+        throw XmppMessageException();
+      }
+      return CalendarSnapshotUploadResult(
+        url: Uri.file(file.path).toString(),
+        checksum: snapshot.checksum,
+        version: snapshot.version,
+      );
+    }
     final xmppService = _xmppService;
     if (xmppService == null) {
       throw XmppMessageException();
@@ -1422,6 +1437,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _syncPinnedMessagesForChat(Chat chat) async {
     final chatJid = _resolvePinnedMessagesChatJid(chat);
     if (chatJid == null) {
+      return;
+    }
+    if (!_xmppAllowedForChat(chat)) {
       return;
     }
     try {
