@@ -1778,6 +1778,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mucServiceDiscoveryBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
         },
@@ -1790,6 +1791,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mucBookmarksBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -1803,7 +1805,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mucResumeRecoveryOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,
         },
         operationName: _mucResumeRecoveryOperationName,
@@ -4026,10 +4030,15 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     await _connection.sendStanza(mox.StanzaDetails(stanza, awaitable: false));
   }
 
-  Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
+  Future<void> _applyMucBookmarksState(List<MucBookmark> bookmarks) async {
     if (bookmarks.isEmpty) return;
     await _upsertChatsFromBookmarks(bookmarks);
     await refreshRoomAvatars(bookmarks);
+  }
+
+  Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
+    if (bookmarks.isEmpty) return;
+    await _applyMucBookmarksState(bookmarks);
 
     for (final bookmark in bookmarks) {
       final roomJid = bookmark.roomBare.toString();
@@ -4064,7 +4073,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   ) async {
     if (!snapshot.isSuccess) return;
     final bookmarks = snapshot.items;
-    await applyMucBookmarks(bookmarks);
+    await _applyMucBookmarksState(bookmarks);
     if (snapshot.isComplete) {
       await _reconcileMucBookmarkRemovals(bookmarks);
       await _persistMucPrejoinRoomsFromBookmarks(bookmarks);

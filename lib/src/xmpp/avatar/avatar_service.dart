@@ -701,9 +701,11 @@ mixin AvatarService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: 'AvatarService.refreshSelfAvatarOnNegotiations',
+        priority: 1,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
         },
         operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
         run: () async {
@@ -716,8 +718,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _avatarRosterRefreshOperationName,
+        priority: 1,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
         },
         operationName: _avatarRosterRefreshOperationName,
         run: () async {
@@ -728,13 +732,14 @@ mixin AvatarService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _avatarConversationRefreshOperationName,
+        priority: 1,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
         },
         operationName: _avatarConversationRefreshOperationName,
         run: () async {
-          await refreshAvatarsForConversationIndex();
+          await _refreshConversationIndexAvatars();
         },
       ),
     );
@@ -938,6 +943,12 @@ mixin AvatarService on XmppBase, BaseStreamService {
   }
 
   Future<bool> refreshAvatarsForConversationIndex() async {
+    final refreshed = await _refreshConversationIndexAvatars();
+    await refreshSelfAvatarIfNeeded(force: true);
+    return refreshed;
+  }
+
+  Future<bool> _refreshConversationIndexAvatars() async {
     List<Chat> chats;
     try {
       chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
@@ -960,7 +971,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (directJids.isNotEmpty) {
       await _refreshConversationAvatars(directJids);
     }
-    await refreshSelfAvatarIfNeeded(force: true);
     return true;
   }
 

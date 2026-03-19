@@ -640,12 +640,14 @@ enum XmppBootstrapTrigger { fullNegotiation, resumedNegotiation, manualRefresh }
 final class XmppBootstrapOperation {
   const XmppBootstrapOperation({
     required this.key,
+    required this.priority,
     required this.triggers,
     required this.operationName,
     required this.run,
   });
 
   final Object key;
+  final int priority;
   final Set<XmppBootstrapTrigger> triggers;
   final String operationName;
   final Future<void> Function() run;
@@ -1230,9 +1232,11 @@ class XmppService extends XmppBase
     XmppBootstrapTrigger trigger, {
     _XmppBootstrapPass? pass,
   }) async {
-    final operations = _bootstrapOperations.values
-        .where((operation) => operation.triggers.contains(trigger))
-        .toList(growable: false);
+    final operations =
+        _bootstrapOperations.values
+            .where((operation) => operation.triggers.contains(trigger))
+            .toList(growable: false)
+          ..sort((left, right) => left.priority.compareTo(right.priority));
     final activePass = pass ?? _activeBootstrapPass ?? _XmppBootstrapPass();
     _activeBootstrapPass ??= activePass;
     if (operations.isEmpty) {
@@ -1242,18 +1246,24 @@ class XmppService extends XmppBase
       }
       return;
     }
-    final futures = <Future<void>>[
-      for (final operation in operations)
-        _startBootstrapOperation(activePass, operation),
-    ];
-    await Future.wait<void>(
-      futures.map(
-        (future) => future.catchError(
-          (Object _, StackTrace _) {},
-          test: (Object error) => error is Exception,
+    var index = 0;
+    while (index < operations.length) {
+      final priority = operations[index].priority;
+      final futures = <Future<void>>[];
+      while (index < operations.length &&
+          operations[index].priority == priority) {
+        futures.add(_startBootstrapOperation(activePass, operations[index]));
+        index++;
+      }
+      await Future.wait<void>(
+        futures.map(
+          (future) => future.catchError(
+            (Object _, StackTrace _) {},
+            test: (Object error) => error is Exception,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   Future<void> _startBootstrapOperation(

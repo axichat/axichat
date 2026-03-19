@@ -31,6 +31,7 @@ mixin RosterService
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _rosterFetchOnLoginOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,

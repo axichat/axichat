@@ -4107,6 +4107,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _draftSyncSnapshotBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -4120,6 +4121,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _draftSyncFlushPendingOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.resumedNegotiation,
         },
@@ -4132,6 +4134,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _messageCollectionSyncSnapshotBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -4145,6 +4148,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _messageCollectionSyncFlushPendingOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.resumedNegotiation,
         },
@@ -4157,6 +4161,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _httpUploadBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,
@@ -4170,6 +4175,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mamGlobalBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
         },
@@ -4182,6 +4188,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mamCalendarBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -4195,6 +4202,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _pinSyncFlushOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,

@@ -582,6 +582,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _blocklistFetchOnLoginOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -596,6 +597,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _spamSyncSnapshotBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -609,6 +611,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _spamSyncFlushPendingOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.resumedNegotiation,
         },
@@ -621,6 +624,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _addressBlockSnapshotBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -634,6 +638,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _addressBlockFlushPendingOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.resumedNegotiation,
         },

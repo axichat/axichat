@@ -159,6 +159,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _conversationIndexBootstrapOperationName,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,

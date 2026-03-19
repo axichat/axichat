@@ -21,6 +21,7 @@ mixin OmemoService on XmppBase {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _omemoPublishBootstrapOperationName,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
         },
