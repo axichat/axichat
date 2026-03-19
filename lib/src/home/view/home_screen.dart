@@ -1644,7 +1644,7 @@ class _HomeOperationOverlays extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomNotifier = bottomNavIndex;
     if (bottomNotifier == null) {
-      return const _VisibleHomeOperationOverlays();
+      return const _VisibleHomeOperationOverlays(visible: true);
     }
     return ValueListenableBuilder<int>(
       valueListenable: bottomNotifier,
@@ -1652,38 +1652,39 @@ class _HomeOperationOverlays extends StatelessWidget {
         final int safeSelectedBottomIndex = selectedBottomIndex
             .clamp(0, 3)
             .toInt();
-        if (safeSelectedBottomIndex != 0) {
-          return const SizedBox.shrink();
-        }
-        return const _VisibleHomeOperationOverlays();
+        return _VisibleHomeOperationOverlays(
+          visible: safeSelectedBottomIndex == 0,
+        );
       },
     );
   }
 }
 
 class _VisibleHomeOperationOverlays extends StatelessWidget {
-  const _VisibleHomeOperationOverlays();
+  const _VisibleHomeOperationOverlays({required this.visible});
+
+  final bool visible;
 
   @override
   Widget build(BuildContext context) {
     return BlocSelector<ChatsCubit, ChatsState, bool>(
       selector: (state) => state.openChatRoute.isCalendar,
       builder: (context, isChatCalendarRoute) {
-        if (isChatCalendarRoute) {
-          return const SizedBox.shrink();
-        }
-        return Stack(
-          fit: StackFit.expand,
-          children: const [
-            Material(
-              type: MaterialType.transparency,
-              child: OmemoOperationOverlay(),
-            ),
-            Material(
-              type: MaterialType.transparency,
-              child: XmppOperationOverlay(),
-            ),
-          ],
+        return Offstage(
+          offstage: !visible || isChatCalendarRoute,
+          child: const Stack(
+            fit: StackFit.expand,
+            children: [
+              Material(
+                type: MaterialType.transparency,
+                child: OmemoOperationOverlay(),
+              ),
+              Material(
+                type: MaterialType.transparency,
+                child: XmppOperationOverlay(),
+              ),
+            ],
+          ),
         );
       },
     );
