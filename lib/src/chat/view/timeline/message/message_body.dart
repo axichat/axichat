@@ -122,23 +122,29 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         textTheme.p.fontSize ??
         textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
-    return html_widget.Html(
-      data: widget.html,
-      shrinkWrap: true,
-      extensions: createEmailHtmlExtensions(
-        shouldLoadImages: widget.shouldLoadImages,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: double.infinity,
+        child: html_widget.Html(
+          data: widget.html,
+          shrinkWrap: true,
+          extensions: createEmailHtmlExtensions(
+            shouldLoadImages: widget.shouldLoadImages,
+          ),
+          style: createEmailHtmlStyles(
+            fallbackFontSize: fallbackFontSize,
+            textColor: widget.textColor,
+            linkColor: widget.linkColor,
+          ),
+          onLinkTap: (url, _, _) {
+            if (url == null) {
+              return;
+            }
+            widget.onLinkTap(url);
+          },
+        ),
       ),
-      style: createEmailHtmlStyles(
-        fallbackFontSize: fallbackFontSize,
-        textColor: widget.textColor,
-        linkColor: widget.linkColor,
-      ),
-      onLinkTap: (url, _, _) {
-        if (url == null) {
-          return;
-        }
-        widget.onLinkTap(url);
-      },
     );
   }
 }
