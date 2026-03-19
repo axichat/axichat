@@ -3723,7 +3723,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   bool _pendingPinSyncLoaded = false;
   final Map<String, _PinChatSyncSession> _pinChatSyncSessions = {};
   final Map<String, Map<String, Map<String, _PendingInboundReaction>>>
-      _pendingInboundReactionsByChatAndReference = {};
+  _pendingInboundReactionsByChatAndReference = {};
   final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
   final Set<String> _pinCreateRetryKeys = <String>{};
   mox.JID? _pinPubSubHost;
@@ -4104,38 +4104,113 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _draftSyncSnapshotBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _draftSyncSnapshotBootstrapOperationName,
+        run: () async {
+          await syncDraftsSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _draftSyncFlushPendingOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _draftSyncFlushPendingOperationName,
+        run: () async {
+          await _flushPendingDraftSync();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _messageCollectionSyncSnapshotBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _messageCollectionSyncSnapshotBootstrapOperationName,
+        run: () async {
+          await syncMessageCollectionsSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _messageCollectionSyncFlushPendingOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _messageCollectionSyncFlushPendingOperationName,
+        run: () async {
+          await _flushPendingMessageCollectionSync();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _httpUploadBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _httpUploadBootstrapOperationName,
+        run: () async {
+          await refreshHttpUploadSupport();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mamGlobalBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+        },
+        operationName: _mamGlobalBootstrapOperationName,
+        run: () async {
+          await syncGlobalMamCatchUp();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mamCalendarBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _mamCalendarBootstrapOperationName,
+        run: () async {
+          await rehydrateCalendarFromMam();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _pinSyncFlushOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _pinSyncFlushOperationName,
+        run: () async {
+          await _flushPendingPinSync();
+        },
+      ),
+    );
     manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) {
-          fireAndForget(
-            _flushPendingDraftSync,
-            operationName: _draftSyncFlushPendingOperationName,
-          );
-          return;
-        }
-        fireAndForget(
-          syncDraftsSnapshot,
-          operationName: _draftSyncSnapshotBootstrapOperationName,
-        );
-      })
       ..registerHandler<DraftSyncUpdatedEvent>((event) async {
         await _applyDraftSyncUpdate(event.payload);
       })
       ..registerHandler<DraftSyncRetractedEvent>((event) async {
         await _applyDraftSyncRetraction(event.syncId);
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) {
-          fireAndForget(
-            _flushPendingMessageCollectionSync,
-            operationName: _messageCollectionSyncFlushPendingOperationName,
-          );
-          return;
-        }
-        fireAndForget(
-          syncMessageCollectionsSnapshot,
-          operationName: _messageCollectionSyncSnapshotBootstrapOperationName,
-        );
       })
       ..registerHandler<MessageCollectionSyncUpdatedEvent>((event) async {
         await _applyMessageCollectionSyncUpdate(event.payload);
@@ -4383,54 +4458,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       })
       ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
         await _handlePinRetraction(event);
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        _hasMamNegotiatedStream = true;
-        _mamNegotiationResumed = event.resumed;
-        _mamGlobalSyncCompletedSinceConnect = false;
-        _outboundPinMutationsByStanzaId.clear();
-        fireAndForget(() async {
-          try {
-            await refreshHttpUploadSupport();
-          } on XmppAbortedException {
-            _log.fine('HTTP upload support bootstrap aborted.');
-          } on Exception catch (error, stackTrace) {
-            _log.fine(
-              'HTTP upload support bootstrap failed.',
-              error,
-              stackTrace,
-            );
-          }
-        }, operationName: _httpUploadBootstrapOperationName);
-        if (!event.resumed) {
-          fireAndForget(() async {
-            try {
-              await syncGlobalMamCatchUp();
-            } on XmppAbortedException {
-              _log.fine('Global MAM bootstrap aborted.');
-            } on Exception catch (error, stackTrace) {
-              _log.fine('Global MAM bootstrap failed.', error, stackTrace);
-            }
-          }, operationName: _mamGlobalBootstrapOperationName);
-          fireAndForget(() async {
-            try {
-              await rehydrateCalendarFromMam();
-            } on XmppAbortedException {
-              _log.fine('Calendar MAM bootstrap aborted.');
-            } on Exception catch (error, stackTrace) {
-              _log.fine('Calendar MAM bootstrap failed.', error, stackTrace);
-            }
-          }, operationName: _mamCalendarBootstrapOperationName);
-        }
-        fireAndForget(() async {
-          try {
-            await _flushPendingPinSync();
-          } on XmppAbortedException {
-            _log.fine(_pinSyncFlushAbortedLog);
-          } on Exception catch (error, stackTrace) {
-            _log.fine(_pinSyncFlushFailedLog, error, stackTrace);
-          }
-        }, operationName: _pinSyncFlushOperationName);
       });
   }
 

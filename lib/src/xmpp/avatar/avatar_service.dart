@@ -697,25 +697,47 @@ mixin AvatarService on XmppBase, BaseStreamService {
           bareJid,
           reason: _avatarClearReasonPubSubNodePurged,
         );
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        _avatarLog.fine('Stream negotiations done. resumed=${event.resumed}.');
-        _hasSelfAvatarNegotiatedStream = true;
-        _emitSelfAvatarHydrating();
-        fireAndForget(
-          _bootstrapSelfAvatarIfReady,
-          operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
-        );
-        if (event.resumed) return;
-        fireAndForget(
-          _refreshRosterAvatarsFromCache,
-          operationName: _avatarRosterRefreshOperationName,
-        );
-        fireAndForget(
-          refreshAvatarsForConversationIndex,
-          operationName: _avatarConversationRefreshOperationName,
-        );
       });
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: 'AvatarService.refreshSelfAvatarOnNegotiations',
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
+        run: () async {
+          _hasSelfAvatarNegotiatedStream = true;
+          _emitSelfAvatarHydrating();
+          await _bootstrapSelfAvatarIfReady();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _avatarRosterRefreshOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+        },
+        operationName: _avatarRosterRefreshOperationName,
+        run: () async {
+          await _refreshRosterAvatarsFromCache();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _avatarConversationRefreshOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _avatarConversationRefreshOperationName,
+        run: () async {
+          await refreshAvatarsForConversationIndex();
+        },
+      ),
+    );
   }
 
   Future<void> cacheSelfAvatarDraft(

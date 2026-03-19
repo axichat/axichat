@@ -532,15 +532,23 @@ abstract interface class XmppBase {
 
   EventManager<mox.XmppEvent> _buildEventManager() {
     final manager = EventManager<mox.XmppEvent>();
+    resetBootstrapOperations();
     configureEventHandlers(manager);
     return manager;
   }
 
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {}
 
+  void resetBootstrapOperations() {}
+
+  void registerBootstrapOperation(XmppBootstrapOperation operation) {}
+
+  Future<void> runBootstrapOperations(XmppBootstrapTrigger trigger) async {}
+
   void resetEventHandlers() {
     _eventManagerInstance?.unregisterAllHandlers();
     _eventManagerInstance = null;
+    resetBootstrapOperations();
   }
 
   List<String> get discoFeatures => const <String>[];
@@ -625,6 +633,28 @@ class _AxiEntityCapabilitiesManager extends mox.EntityCapabilitiesManager {
     // ignore: invalid_use_of_visible_for_testing_member
     return super.onPresence(stanza, state);
   }
+}
+
+enum XmppBootstrapTrigger { fullNegotiation, resumedNegotiation, manualRefresh }
+
+final class XmppBootstrapOperation {
+  const XmppBootstrapOperation({
+    required this.key,
+    required this.triggers,
+    required this.operationName,
+    required this.run,
+  });
+
+  final Object key;
+  final Set<XmppBootstrapTrigger> triggers;
+  final String operationName;
+  final Future<void> Function() run;
+}
+
+final class _XmppBootstrapPass {
+  _XmppBootstrapPass();
+
+  final Map<Object, Future<void>> tasks = <Object, Future<void>>{};
 }
 
 class XmppService extends XmppBase
@@ -1077,6 +1107,9 @@ class XmppService extends XmppBase
   StreamController<ConnectionState> _connectivityStream =
       StreamController<ConnectionState>.broadcast();
   Completer<void> _streamNegotiationsDone = Completer<void>();
+  _XmppBootstrapPass? _activeBootstrapPass;
+  final LinkedHashMap<Object, XmppBootstrapOperation> _bootstrapOperations =
+      LinkedHashMap<Object, XmppBootstrapOperation>();
 
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
@@ -1098,6 +1131,7 @@ class XmppService extends XmppBase
     if (state != ConnectionState.connected) {
       _clearMamNegotiationState();
       _clearSelfAvatarNegotiationState();
+      _activeBootstrapPass = null;
       if (_streamNegotiationsDone.isCompleted) {
         _streamNegotiationsDone = Completer<void>();
       }
@@ -1123,7 +1157,7 @@ class XmppService extends XmppBase
   Future<void> _handleXmppEvent(mox.XmppEvent event) async {
     try {
       if (event is mox.StreamNegotiationsDoneEvent) {
-        await _handleRootStreamNegotiationsDone();
+        await _handleRootStreamNegotiationsDone(event);
         await _eventManager.executeHandlers(event);
         return;
       }
@@ -1137,7 +1171,13 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> _handleRootStreamNegotiationsDone() async {
+  Future<void> _handleRootStreamNegotiationsDone(
+    mox.StreamNegotiationsDoneEvent event,
+  ) async {
+    _hasMamNegotiatedStream = true;
+    _mamNegotiationResumed = event.resumed;
+    _mamGlobalSyncCompletedSinceConnect = false;
+    _outboundPinMutationsByStanzaId.clear();
     try {
       if (_connection.carbonsEnabled != true) {
         _xmppLogger.info('Enabling carbons...');
@@ -1148,10 +1188,108 @@ class XmppService extends XmppBase
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
     }
+    final pass = _XmppBootstrapPass();
+    _activeBootstrapPass = pass;
+    unawaited(
+      _runBootstrapOperations(
+        event.resumed
+            ? XmppBootstrapTrigger.resumedNegotiation
+            : XmppBootstrapTrigger.fullNegotiation,
+        pass: pass,
+      ),
+    );
     if (!_streamNegotiationsDone.isCompleted) {
       _streamNegotiationsDone.complete();
     }
     // Connection handling is automatic in moxxmpp v0.5.0.
+  }
+
+  @override
+  void resetBootstrapOperations() {
+    _bootstrapOperations.clear();
+    _activeBootstrapPass = null;
+  }
+
+  @override
+  void registerBootstrapOperation(XmppBootstrapOperation operation) {
+    final existing = _bootstrapOperations[operation.key];
+    if (existing != null) {
+      throw StateError(
+        'Duplicate XMPP bootstrap operation key: ${operation.key}',
+      );
+    }
+    _bootstrapOperations[operation.key] = operation;
+  }
+
+  @override
+  Future<void> runBootstrapOperations(XmppBootstrapTrigger trigger) async {
+    await _runBootstrapOperations(trigger);
+  }
+
+  Future<void> _runBootstrapOperations(
+    XmppBootstrapTrigger trigger, {
+    _XmppBootstrapPass? pass,
+  }) async {
+    final operations = _bootstrapOperations.values
+        .where((operation) => operation.triggers.contains(trigger))
+        .toList(growable: false);
+    final activePass = pass ?? _activeBootstrapPass ?? _XmppBootstrapPass();
+    _activeBootstrapPass ??= activePass;
+    if (operations.isEmpty) {
+      if (identical(_activeBootstrapPass, activePass) &&
+          activePass.tasks.isEmpty) {
+        _activeBootstrapPass = null;
+      }
+      return;
+    }
+    final futures = <Future<void>>[
+      for (final operation in operations)
+        _startBootstrapOperation(activePass, operation),
+    ];
+    await Future.wait<void>(
+      futures.map(
+        (future) => future.catchError(
+          (Object _, StackTrace _) {},
+          test: (Object error) => error is Exception,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _startBootstrapOperation(
+    _XmppBootstrapPass pass,
+    XmppBootstrapOperation operation,
+  ) {
+    final existing = pass.tasks[operation.key];
+    if (existing != null) {
+      return existing;
+    }
+    final future = Future<void>.sync(operation.run);
+    pass.tasks[operation.key] = future;
+    unawaited(
+      future
+          .catchError((Object error, StackTrace stackTrace) {
+            if (error is XmppAbortedException) {
+              _xmppLogger.fine('${operation.operationName} aborted.');
+              return;
+            }
+            _xmppLogger.fine(
+              '${operation.operationName} failed.',
+              error as Exception,
+              stackTrace,
+            );
+          }, test: (Object error) => error is Exception)
+          .whenComplete(() {
+            final current = pass.tasks[operation.key];
+            if (identical(current, future)) {
+              pass.tasks.remove(operation.key);
+            }
+            if (identical(_activeBootstrapPass, pass) && pass.tasks.isEmpty) {
+              _activeBootstrapPass = null;
+            }
+          }),
+    );
+    return future;
   }
 
   var _synchronousConnection = Completer<void>();
@@ -2406,21 +2544,7 @@ class XmppService extends XmppBase
     if (!_isAcceptableSessionSyncMamOutcome(mamOutcome)) {
       return false;
     }
-    await Future.wait<void>([
-      _runBestEffortSessionSyncVoid(requestBlocklist),
-      _runBestEffortSessionSyncBool(syncSpamSnapshot),
-      _runBestEffortSessionSyncBool(syncAddressBlockSnapshot),
-      _runBestEffortSessionSyncBool(rehydrateCalendarFromMam),
-      _runBestEffortSessionSyncBool(syncDraftsSnapshot),
-      _runBestEffortSessionSyncVoid(() async {
-        await syncConversationIndexSnapshot();
-      }),
-      _runBestEffortSessionSyncVoid(() async {
-        await syncMucBookmarksSnapshot();
-      }),
-      _runBestEffortSessionSyncVoid(syncMessageCollectionsSnapshot),
-    ]);
-    await _runBestEffortSessionSyncBool(refreshAvatarsForConversationIndex);
+    await runBootstrapOperations(XmppBootstrapTrigger.manualRefresh);
     return true;
   }
 
@@ -2443,26 +2567,6 @@ class XmppService extends XmppBase
         return true;
       case MamGlobalSyncOutcome.failed:
         return false;
-    }
-  }
-
-  Future<void> _runBestEffortSessionSyncBool(
-    Future<bool> Function() operation,
-  ) async {
-    try {
-      await operation();
-    } on Exception {
-      // Home refresh is best-effort once the stream is healthy enough to sync.
-    }
-  }
-
-  Future<void> _runBestEffortSessionSyncVoid(
-    Future<void> Function() operation,
-  ) async {
-    try {
-      await operation();
-    } on Exception {
-      // Home refresh is best-effort once the stream is healthy enough to sync.
     }
   }
 
@@ -3025,7 +3129,8 @@ class XmppService extends XmppBase
           _activeDbOperations -= 1;
           if (_activeDbOperations == 0) {
             final dbOperationsDrained = _dbOperationsDrained;
-            if (dbOperationsDrained != null && !dbOperationsDrained.isCompleted) {
+            if (dbOperationsDrained != null &&
+                !dbOperationsDrained.isCompleted) {
               dbOperationsDrained.complete();
             }
             _dbOperationsDrained = null;

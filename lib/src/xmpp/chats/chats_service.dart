@@ -156,14 +156,20 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _conversationIndexBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _conversationIndexBootstrapOperationName,
+        run: () async {
+          await syncConversationIndexSnapshot();
+        },
+      ),
+    );
     manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) return;
-        fireAndForget(
-          syncConversationIndexSnapshot,
-          operationName: _conversationIndexBootstrapOperationName,
-        );
-      })
       ..registerHandler<InboundChatStateEvent>((event) async {
         _trackTypingParticipant(
           chatJid: event.chatJid,

@@ -28,6 +28,8 @@ const String _spamSyncPendingRetractionsKeyName =
     'spam_sync_pending_retractions';
 const String _spamSyncSnapshotAtKeyName = 'spam_sync_last_snapshot_at';
 const String _spamSyncSnapshotIdsKeyName = 'spam_sync_last_snapshot_ids';
+const String _blocklistFetchOnLoginOperationName =
+    'BlockingService.requestBlocklistOnLogin';
 const String _spamSyncFlushPendingOperationName =
     'BlockingService.flushPendingSpamSyncOnResume';
 const String _spamSyncSnapshotBootstrapOperationName =
@@ -577,51 +579,79 @@ mixin BlockingService on XmppBase, BaseStreamService {
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     _startBlocklistCache();
-    const String blocklistFetchOnLoginOperationName =
-        'BlockingService.requestBlocklistOnLogin';
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _blocklistFetchOnLoginOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _blocklistFetchOnLoginOperationName,
+        run: () async {
+          _blockingLogger.info('Fetching blocklist...');
+          await requestBlocklist();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _spamSyncSnapshotBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _spamSyncSnapshotBootstrapOperationName,
+        run: () async {
+          await syncSpamSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _spamSyncFlushPendingOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _spamSyncFlushPendingOperationName,
+        run: () async {
+          await _flushPendingSpamSync();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _addressBlockSnapshotBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _addressBlockSnapshotBootstrapOperationName,
+        run: () async {
+          await syncAddressBlockSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _addressBlockFlushPendingOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName: _addressBlockFlushPendingOperationName,
+        run: () async {
+          await _flushPendingAddressBlockSync();
+        },
+      ),
+    );
     manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((_) async {
         _spamReportingSupportResolved = false;
-        if (event.resumed) {
-          return;
-        }
-        _blockingLogger.info('Fetching blocklist...');
-        fireAndForget(
-          requestBlocklist,
-          operationName: blocklistFetchOnLoginOperationName,
-        );
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) {
-          fireAndForget(
-            _flushPendingSpamSync,
-            operationName: _spamSyncFlushPendingOperationName,
-          );
-          return;
-        }
-        fireAndForget(
-          syncSpamSnapshot,
-          operationName: _spamSyncSnapshotBootstrapOperationName,
-        );
       })
       ..registerHandler<SpamSyncUpdatedEvent>((event) async {
         await _applySpamSyncUpdate(event.payload);
       })
       ..registerHandler<SpamSyncRetractedEvent>((event) async {
         await _applySpamSyncRetraction(event.jid);
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) {
-          fireAndForget(
-            _flushPendingAddressBlockSync,
-            operationName: _addressBlockFlushPendingOperationName,
-          );
-          return;
-        }
-        fireAndForget(
-          syncAddressBlockSnapshot,
-          operationName: _addressBlockSnapshotBootstrapOperationName,
-        );
       })
       ..registerHandler<AddressBlockSyncUpdatedEvent>((event) async {
         await _applyAddressBlockSyncUpdate(event.payload);

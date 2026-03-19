@@ -4,6 +4,8 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 final _omemoLogger = Logger('OmemoService');
+const String _omemoPublishBootstrapOperationName =
+    'OmemoService.ensureDevicePublishedOnNegotiations';
 
 mixin OmemoService on XmppBase {
   var _omemoManager = ImpatientCompleter(Completer<mox.OmemoManager>());
@@ -16,20 +18,28 @@ mixin OmemoService on XmppBase {
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
-    manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) return;
-        _omemoLogger.info(
-          'Stream negotiation done, ensuring OMEMO device is published...',
-        );
-        if (_omemoManager.isCompleted) {
-          await _ensureOmemoDevicePublished();
-        } else {
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _omemoPublishBootstrapOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+        },
+        operationName: _omemoPublishBootstrapOperationName,
+        run: () async {
+          _omemoLogger.info(
+            'Stream negotiation done, ensuring OMEMO device is published...',
+          );
+          if (_omemoManager.isCompleted) {
+            await _ensureOmemoDevicePublished();
+            return;
+          }
           _omemoLogger.warning(
             'OMEMO manager not ready during stream negotiation done',
           );
-        }
-      })
+        },
+      ),
+    );
+    manager
       ..registerHandler<mox.OmemoDeviceListUpdatedEvent>((event) async {
         final isSelfUpdate =
             myJid != null && event.jid.toBare().toString() == myJid;

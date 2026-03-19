@@ -28,41 +28,48 @@ mixin RosterService
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
-    manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) return;
-        _rosterLog.info('Fetching roster...');
-        fireAndForget(
-          requestRoster,
-          operationName: _rosterFetchOnLoginOperationName,
-        );
-      })
-      ..registerHandler<mox.SubscriptionRequestReceivedEvent>((event) async {
-        final requester = event.from.toBare().toString();
-        _rosterLog.info('Subscription request received');
-        await _dbOp<XmppDatabase>((db) async {
-          final item = await db.getRosterItem(requester);
-          if (item != null) {
-            _rosterLog.info('Accepting subscription request...');
-            try {
-              await _acceptSubscriptionRequest(item);
-            } on XmppRosterException catch (error, stackTrace) {
-              _rosterLog.severe(
-                'Failed to auto-accept subscription request',
-                error,
-                stackTrace,
-              );
-            }
-            return;
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _rosterFetchOnLoginOperationName,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _rosterFetchOnLoginOperationName,
+        run: () async {
+          _rosterLog.info('Fetching roster...');
+          await requestRoster();
+        },
+      ),
+    );
+    manager.registerHandler<mox.SubscriptionRequestReceivedEvent>((
+      event,
+    ) async {
+      final requester = event.from.toBare().toString();
+      _rosterLog.info('Subscription request received');
+      await _dbOp<XmppDatabase>((db) async {
+        final item = await db.getRosterItem(requester);
+        if (item != null) {
+          _rosterLog.info('Accepting subscription request...');
+          try {
+            await _acceptSubscriptionRequest(item);
+          } on XmppRosterException catch (error, stackTrace) {
+            _rosterLog.severe(
+              'Failed to auto-accept subscription request',
+              error,
+              stackTrace,
+            );
           }
-          await db.saveInvite(
-            Invite(
-              jid: requester,
-              title: addressDisplayLabel(requester) ?? event.from.local,
-            ),
-          );
-        });
+          return;
+        }
+        await db.saveInvite(
+          Invite(
+            jid: requester,
+            title: addressDisplayLabel(requester) ?? event.from.local,
+          ),
+        );
       });
+    });
   }
 
   @override
