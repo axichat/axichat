@@ -1570,6 +1570,10 @@ class RenderCalendarSurface extends RenderBox
     final DateTime today = demoNow();
     final double slotHeight = metrics.slotHeight;
     final int totalSlots = layoutTheme.visibleHourRows * metrics.slotsPerHour;
+    final int inertSlotStart = math.max(
+      0,
+      (endHour - startHour) * metrics.slotsPerHour,
+    );
     final double maxHeight = size.height;
 
     final Paint paint = Paint();
@@ -1584,6 +1588,7 @@ class RenderCalendarSurface extends RenderBox
             (startHour * 60) + (slot * metrics.minutesPerSlot);
         final int hour = (totalMinutes ~/ 60) % 24;
         paint.color = _slotBackgroundColor(
+          isInert: slot >= inertSlotStart,
           isToday: isToday,
           hour: hour,
           isEvenSlot: slot.isEven,
@@ -2523,10 +2528,23 @@ class RenderCalendarSurface extends RenderBox
   }
 
   Color _slotBackgroundColor({
+    required bool isInert,
     required bool isToday,
     required int hour,
     required bool isEvenSlot,
   }) {
+    if (isInert) {
+      final Color inactiveBase =
+          Color.lerp(
+            calendarSidebarBackgroundColor,
+            calendarTitleColor,
+            0.18,
+          ) ??
+          calendarSidebarBackgroundColor;
+      final Color inactiveAlt =
+          Color.lerp(inactiveBase, calendarTitleColor, 0.08) ?? inactiveBase;
+      return isEvenSlot ? inactiveBase : inactiveAlt;
+    }
     if (isToday) {
       final double targetAlpha = isEvenSlot
           ? calendarTodaySlotLightOpacity
