@@ -427,10 +427,6 @@ final class _CalendarSurfaceNavigatorState
   late final FocusScopeNode _focusScopeNode = FocusScopeNode(
     debugLabel: 'CalendarSurfaceScope',
   );
-  late final ValueNotifier<bool> _navigatorCanPop = ValueNotifier<bool>(false);
-  late final NavigatorObserver _navigatorObserver = _CalendarSurfaceObserver(
-    onStackChanged: _syncNavigatorCanPop,
-  );
 
   @override
   void initState() {
@@ -442,112 +438,99 @@ final class _CalendarSurfaceNavigatorState
   void dispose() {
     _surfaceController.detachFocusScope(_focusScopeNode);
     _focusScopeNode.dispose();
-    _navigatorCanPop.dispose();
     _surfaceController.dispose();
     super.dispose();
   }
 
-  void _syncNavigatorCanPop() {
-    final bool canPop = widget.navigatorKey.currentState?.canPop() ?? false;
-    if (_navigatorCanPop.value != canPop) {
-      _navigatorCanPop.value = canPop;
-    }
-  }
-
-  bool _shouldInterceptBack() {
-    return _surfaceController.hasFocusedTextInput() ||
-        _surfaceController.hasOpenSurface ||
-        _navigatorCanPop.value;
-  }
-
-  void _handleBack() {
-    if (_surfaceController.dismissActiveTextInput()) {
-      return;
-    }
-    if (_surfaceController.dismissTopSurface()) {
-      return;
-    }
-    final NavigatorState? navigator = widget.navigatorKey.currentState;
-    if (navigator != null && navigator.canPop()) {
-      navigator.maybePop();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return AxiSurfaceScope(
-      controller: _surfaceController,
-      child: CalendarModalScope(
-        navigatorKey: widget.navigatorKey,
-        modalAnchorKey: widget.modalAnchorKey,
-        surfaceController: _surfaceController,
-        child: ListenableBuilder(
-          listenable: Listenable.merge([
-            _surfaceController,
-            _navigatorCanPop,
-            FocusManager.instance,
-          ]),
-          builder: (context, _) {
-            final bool shouldInterceptBack = _shouldInterceptBack();
-            return PopScope(
-              canPop: widget.enablePop && !shouldInterceptBack,
-              onPopInvokedWithResult: (didPop, _) {
-                if (didPop) {
-                  return;
-                }
-                _handleBack();
-              },
-              child: FocusScope(
-                node: _focusScopeNode,
-                child: Navigator(
-                  key: widget.navigatorKey,
-                  observers: <NavigatorObserver>[_navigatorObserver],
-                  onDidRemovePage: (page) => _syncNavigatorCanPop(),
-                  pages: [
-                    MaterialPage<void>(
-                      key: _calendarSurfacePageKey,
-                      child: Overlay.wrap(
-                        clipBehavior: Clip.none,
-                        child: KeyedSubtree(
-                          key: widget.modalAnchorKey,
-                          child: widget.child,
-                        ),
+    return CalendarModalScope(
+      navigatorKey: widget.navigatorKey,
+      modalAnchorKey: widget.modalAnchorKey,
+      surfaceController: _surfaceController,
+      child: NavigatorPopHandler<void>(
+        enabled: widget.enablePop,
+        onPopWithResult: (_) {
+          final NavigatorState? navigator = widget.navigatorKey.currentState;
+          if (navigator == null || !navigator.canPop()) {
+            return;
+          }
+          navigator.maybePop();
+        },
+        child: Navigator(
+          key: widget.navigatorKey,
+          onDidRemovePage: (page) {},
+          pages: [
+            MaterialPage<void>(
+              key: _calendarSurfacePageKey,
+              child: Overlay.wrap(
+                clipBehavior: Clip.none,
+                child: AxiSurfaceScope(
+                  controller: _surfaceController,
+                  child: FocusScope(
+                    node: _focusScopeNode,
+                    child: _CalendarSurfacePageBackScope(
+                      enablePop: widget.enablePop,
+                      surfaceController: _surfaceController,
+                      child: KeyedSubtree(
+                        key: widget.modalAnchorKey,
+                        child: widget.child,
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-final class _CalendarSurfaceObserver extends NavigatorObserver {
-  _CalendarSurfaceObserver({required VoidCallback onStackChanged})
-    : _onStackChanged = onStackChanged;
+class _CalendarSurfacePageBackScope extends StatelessWidget {
+  const _CalendarSurfacePageBackScope({
+    required this.enablePop,
+    required this.surfaceController,
+    required this.child,
+  });
 
-  final VoidCallback _onStackChanged;
+  final bool enablePop;
+  final AxiSurfaceController surfaceController;
+  final Widget child;
 
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _onStackChanged();
+  void _handleBack() {
+    if (surfaceController.dismissActiveTextInput()) {
+      return;
+    }
+    surfaceController.dismissTopSurface();
   }
 
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _onStackChanged();
-  }
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _onStackChanged();
-  }
-
-  @override
-  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    _onStackChanged();
+  Widget build(BuildContext context) {
+    if (!enablePop) {
+      return child;
+    }
+    return ListenableBuilder(
+      listenable: Listenable.merge([surfaceController, FocusManager.instance]),
+      builder: (context, _) {
+        final bool shouldInterceptBack =
+            surfaceController.hasFocusedTextInput() ||
+            surfaceController.hasOpenSurface;
+        if (!shouldInterceptBack) {
+          return child;
+        }
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) {
+              return;
+            }
+            _handleBack();
+          },
+          child: child,
+        );
+      },
+    );
   }
 }
