@@ -190,12 +190,21 @@ class AccessibilityChatBloc
         continue;
       }
       try {
-        await _messageService.sendMessage(
-          jid: contact.jid,
-          text: trimmedMessage,
-          encryptionProtocol: contact.encryptionProtocol,
-          chatType: contact.chatType,
-        );
+        if (isAxichatWelcomeThreadJid(contact.jid)) {
+          await _messageService.sendLocalOnlyMessage(
+            jid: contact.jid,
+            text: trimmedMessage,
+            encryptionProtocol: contact.encryptionProtocol,
+            chatType: contact.chatType,
+          );
+        } else {
+          await _messageService.sendMessage(
+            jid: contact.jid,
+            text: trimmedMessage,
+            encryptionProtocol: contact.encryptionProtocol,
+            chatType: contact.chatType,
+          );
+        }
       } on XmppException catch (error, stackTrace) {
         _log.warning(
           'Failed to send accessibility message to ${contact.jid}',
