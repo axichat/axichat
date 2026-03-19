@@ -82,6 +82,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late List<ComposerRecipient> _renderedRecipients;
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
+  final Set<String> _revealedAddressKeys = <String>{};
   List<Contact> _suggestions = const <Contact>[];
   final ValueNotifier<int?> _highlightedSuggestionIndex = ValueNotifier<int?>(
     null,
@@ -160,6 +161,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
     _syncRenderedRecipients();
     _prunePendingRemoval();
+    _pruneRevealedAddresses();
     _refreshAvatarPaths();
     _refreshSuggestionPools();
   }
@@ -193,9 +195,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
             recipient: recipient,
             avatarPathsByJid: avatarPathsByJid,
             selfIdentity: widget.selfIdentity,
+            showAddress: _revealedAddressKeys.contains(recipient.key),
             status: _statusFor(recipient),
             pendingRemoval: _pendingRemovalKey == recipient.key,
-            onToggle: () => widget.onRecipientToggled(recipient.key),
+            onToggle: () => _toggleRecipientLabel(recipient.key),
             onRemove: recipient.pinned
                 ? null
                 : () => _removeRecipient(recipient.key),
@@ -752,11 +755,27 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
   }
 
+  void _pruneRevealedAddresses() {
+    final validKeys = widget.recipients
+        .map((recipient) => recipient.key)
+        .toSet();
+    _revealedAddressKeys.removeWhere((key) => !validKeys.contains(key));
+  }
+
   void _removeRecipient(String key) {
     if (_pendingRemovalKey == key) {
       _clearPendingRemoval();
     }
     widget.onRecipientRemoved(key);
+  }
+
+  void _toggleRecipientLabel(String key) {
+    _clearPendingRemoval();
+    setState(() {
+      if (!_revealedAddressKeys.add(key)) {
+        _revealedAddressKeys.remove(key);
+      }
+    });
   }
 
   List<ComposerRecipient> _removableRecipients() =>
@@ -1036,6 +1055,7 @@ class _RecipientChip extends StatelessWidget {
     required this.recipient,
     required this.avatarPathsByJid,
     required this.selfIdentity,
+    required this.showAddress,
     required this.onToggle,
     required this.onRemove,
     this.pendingRemoval = false,
@@ -1045,6 +1065,7 @@ class _RecipientChip extends StatelessWidget {
   final ComposerRecipient recipient;
   final Map<String, String> avatarPathsByJid;
   final SelfAvatar selfIdentity;
+  final bool showAddress;
   final VoidCallback onToggle;
   final VoidCallback? onRemove;
   final bool pendingRemoval;
@@ -1085,7 +1106,7 @@ class _RecipientChip extends StatelessWidget {
       elevation: included ? 1.5 : 0,
       shadowColor: colors.foreground.withValues(alpha: 0.18),
       onPressed: onToggle,
-      selected: included,
+      selected: false,
       semanticLabel: _label(context),
       padding: EdgeInsets.symmetric(horizontal: spacing.s),
       child: Row(
@@ -1117,6 +1138,9 @@ class _RecipientChip extends StatelessWidget {
   }
 
   String _label(BuildContext context) {
+    if (showAddress) {
+      return recipient.target.jid;
+    }
     final displayName = recipient.target.displayName.trim();
     return displayName.isNotEmpty
         ? displayName
@@ -1228,11 +1252,7 @@ class _RecipientChipAvatar extends StatelessWidget {
         size: statusBadgeSize - 2,
         color: colors.destructive,
       ),
-      FanOutRecipientState.sent => Icon(
-        Icons.check,
-        size: statusBadgeSize - 2,
-        color: colors.primary,
-      ),
+      FanOutRecipientState.sent => null,
       FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
         width: statusBadgeSize - 2,
         height: statusBadgeSize - 2,

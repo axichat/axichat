@@ -33,13 +33,16 @@ void main() {
     expect(added?.address, 'new@example.com');
   });
 
-  testWidgets('tapping chip toggles recipient', (tester) async {
+  testWidgets('tapping chip toggles between display name and address', (
+    tester,
+  ) async {
     String? toggledKey;
     final chat = Chat(
       jid: 'dc-1@delta.chat',
       title: 'Bob',
       type: ChatType.chat,
       lastChangeTimestamp: DateTime.now(),
+      emailAddress: 'bob@example.com',
     );
     final recipient = ComposerRecipient(
       target: Contact.chat(chat: chat, shareSignatureEnabled: true),
@@ -60,7 +63,15 @@ void main() {
     );
 
     await tester.tap(find.text('Bob'));
-    expect(toggledKey, recipient.key);
+    await tester.pumpAndSettle();
+
+    expect(find.text('bob@example.com'), findsOneWidget);
+    expect(toggledKey, isNull);
+
+    await tester.tap(find.text('bob@example.com'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob'), findsOneWidget);
   });
 
   testWidgets('backspace removes last non pinned recipient', (tester) async {
@@ -112,36 +123,15 @@ void main() {
   testWidgets('tapping delete icon removes recipient without toggling', (
     tester,
   ) async {
-    String? removedKey;
-    String? toggledKey;
-    final chat = Chat(
-      jid: 'dc-1@delta.chat',
-      title: 'Bob',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.now(),
-    );
-    final recipient = ComposerRecipient(
-      target: Contact.chat(chat: chat, shareSignatureEnabled: true),
-    );
-
     await tester.pumpWidget(
-      _wrapWithTheme(
-        RecipientChipsBar(
-          recipients: [recipient],
-          availableChats: const [],
-          latestStatuses: const {},
-          selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
-          onRecipientRemoved: (key) => removedKey = key,
-          onRecipientToggled: (key) => toggledKey = key,
-        ),
-      ),
+      _wrapWithTheme(const _RecipientChipsBarRemovalHarness()),
     );
 
+    expect(find.text('Bob'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
 
-    expect(removedKey, recipient.key);
-    expect(toggledKey, isNull);
+    expect(find.text('Bob'), findsNothing);
   });
 
   testWidgets('shows latest status for typed recipient via email key', (
@@ -170,6 +160,34 @@ void main() {
     );
 
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+  });
+
+  testWidgets('does not show sent status checkmarks on recipient chips', (
+    tester,
+  ) async {
+    final recipient = ComposerRecipient(
+      target: Contact.address(
+        address: 'CaseSensitive@Example.com',
+        shareSignatureEnabled: true,
+      ),
+    );
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: [recipient],
+          availableChats: const [],
+          latestStatuses: const {
+            'casesensitive@example.com': FanOutRecipientState.sent,
+          },
+          selfIdentity: const SelfAvatar(),
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (_) {},
+          onRecipientToggled: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.check), findsNothing);
   });
 
   testWidgets('autocomplete suggests chats by prefix', (tester) async {
@@ -317,3 +335,53 @@ Widget _wrapWithTheme(Widget child) {
 }
 
 class _MockSettingsCubit extends Mock implements SettingsCubit {}
+
+class _RecipientChipsBarRemovalHarness extends StatefulWidget {
+  const _RecipientChipsBarRemovalHarness();
+
+  @override
+  State<_RecipientChipsBarRemovalHarness> createState() =>
+      _RecipientChipsBarRemovalHarnessState();
+}
+
+class _RecipientChipsBarRemovalHarnessState
+    extends State<_RecipientChipsBarRemovalHarness> {
+  late List<ComposerRecipient> _recipients;
+
+  @override
+  void initState() {
+    super.initState();
+    _recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: Contact.chat(
+          chat: Chat(
+            jid: 'dc-1@delta.chat',
+            title: 'Bob',
+            type: ChatType.chat,
+            lastChangeTimestamp: DateTime(2024, 1, 1),
+          ),
+          shareSignatureEnabled: true,
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RecipientChipsBar(
+      recipients: _recipients,
+      availableChats: const [],
+      latestStatuses: const {},
+      selfIdentity: const SelfAvatar(),
+      onRecipientAdded: (_) {},
+      onRecipientRemoved: (key) {
+        setState(() {
+          _recipients = _recipients
+              .where((recipient) => recipient.key != key)
+              .toList(growable: false);
+        });
+      },
+      onRecipientToggled: (_) {},
+    );
+  }
+}
