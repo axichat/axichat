@@ -128,10 +128,8 @@ void _mockEmailSync(MockEmailService service) {
       subject: any(named: 'subject'),
     ),
   ).thenAnswer((invocation) async {
-    final targets =
-        invocation.namedArguments[#targets]! as List<Contact>;
-    final shareId =
-        invocation.namedArguments[#shareId] as String? ?? 'share-1';
+    final targets = invocation.namedArguments[#targets]! as List<Contact>;
+    final shareId = invocation.namedArguments[#shareId] as String? ?? 'share-1';
     return FanOutSendReport(
       shareId: shareId,
       statuses: [
@@ -142,11 +140,11 @@ void _mockEmailSync(MockEmailService service) {
                   targets[index].chatJid ??
                   targets[index].address ??
                   'target-$index@example.com',
-              title:
-                  targets[index].displayName ??
-                  targets[index].address ??
-                  targets[index].chatJid ??
-                  'target-$index',
+              title: targets[index].displayName.isNotEmpty
+                  ? targets[index].displayName
+                  : (targets[index].address ??
+                        targets[index].chatJid ??
+                        'target-$index'),
               type: ChatType.chat,
               lastChangeTimestamp: DateTime(2024, 1, 1),
             ),

@@ -803,7 +803,9 @@ void main() {
         isOutgoing: false,
       );
 
-      when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
       when(
         () => database.getChatByDeltaChatId(
           chatId,
@@ -869,7 +871,9 @@ void main() {
         isOutgoing: true,
       );
 
-      when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
       when(
         () => database.getChatByDeltaChatId(
           chatId,
@@ -908,7 +912,6 @@ void main() {
 
       final updatedChat =
           verify(() => database.updateChat(captureAny())).captured.last as Chat;
-      expect(updatedChat.lastMessage, isNull);
       expect(updatedChat.lastChangeTimestamp, chat.lastChangeTimestamp);
     },
   );

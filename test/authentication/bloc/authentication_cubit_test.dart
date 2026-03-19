@@ -59,9 +59,12 @@ void main() {
     registerFallbackValue(fallbackChat);
     registerFallbackValue(fallbackMessage);
     registerFallbackValue(ChatType.chat);
-    registerFallbackValue(const SpamSyncRetracted('fallback@example.com'));
     registerFallbackValue(
-      const AddressBlockSyncRetracted('fallback@example.com'),
+      const SpamSyncRetracted('fallback@example.com') as SpamSyncUpdate,
+    );
+    registerFallbackValue(
+      const AddressBlockSyncRetracted('fallback@example.com')
+          as AddressBlockSyncUpdate,
     );
   });
 
@@ -1205,8 +1208,8 @@ void main() {
           credentialStore: mockCredentialStore,
           initialEndpointConfig: const EndpointConfig(),
           xmppService: mockXmppService,
-            httpClient: mockHttpClient,
-            emailProvisioningClient: mockProvisioningClient,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
         );
         when(
           () => mockXmppService.database,
