@@ -829,10 +829,11 @@ pre, code {
 
   static dom.Element? _formatFlutterTableCell(dom.Element cell) {
     if (!_shouldCompactFlutterTableCell(cell)) {
-      if (!_compactFlutterTablePreviewHasContent(cell.nodes)) {
+      final normalizedNodes = _normalizeFlutterContentCellNodes(cell.nodes);
+      if (!_compactFlutterTablePreviewHasContent(normalizedNodes)) {
         return null;
       }
-      return dom.Element.tag('div')..nodes.addAll(cell.nodes.toList());
+      return dom.Element.tag('div')..nodes.addAll(normalizedNodes);
     }
     final compactNodes = _compactFlutterTablePreviewNodes(cell.innerHtml);
     if (!_compactFlutterTablePreviewHasContent(compactNodes)) {
@@ -862,6 +863,61 @@ pre, code {
       return true;
     }
     return false;
+  }
+
+  static List<dom.Node> _normalizeFlutterContentCellNodes(
+    List<dom.Node> nodes,
+  ) {
+    final normalized = <dom.Node>[];
+    for (final node in nodes) {
+      if (node is dom.Text) {
+        normalized.addAll(_normalizeFlutterContentTextNode(node.text));
+        continue;
+      }
+      if (node is! dom.Element) {
+        normalized.addAll(_normalizeFlutterContentCellNodes(node.nodes));
+        continue;
+      }
+      final element = dom.Element.tag(node.localName ?? 'span');
+      for (final entry in node.attributes.entries) {
+        element.attributes[entry.key.toString()] = entry.value;
+      }
+      element.nodes.addAll(_normalizeFlutterContentCellNodes(node.nodes));
+      if (node.nodes.isEmpty ||
+          _compactFlutterTablePreviewHasContent(element.nodes) ||
+          element.localName == 'br' ||
+          element.localName == 'hr' ||
+          element.localName == 'img') {
+        normalized.add(element);
+      }
+    }
+    return normalized;
+  }
+
+  static List<dom.Node> _normalizeFlutterContentTextNode(String text) {
+    final normalizedLineEndings = text
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll('\u00A0', ' ');
+    final paragraphs = normalizedLineEndings
+        .split(RegExp(r'\n\s*\n+'))
+        .map(
+          (segment) => segment.replaceAll(RegExp(r'[ \t\n\f\v]+'), ' ').trim(),
+        )
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    if (paragraphs.isEmpty) {
+      return const <dom.Node>[];
+    }
+    final normalized = <dom.Node>[];
+    for (var index = 0; index < paragraphs.length; index++) {
+      if (index > 0) {
+        normalized.add(dom.Element.tag('br'));
+        normalized.add(dom.Element.tag('br'));
+      }
+      normalized.add(dom.Text(paragraphs[index]));
+    }
+    return normalized;
   }
 
   static List<dom.Node> _compactFlutterTablePreviewNodes(String html) {
