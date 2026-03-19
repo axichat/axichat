@@ -927,7 +927,6 @@ class _HomeScreenState extends State<HomeScreen> {
       child: _HomeExitPopGuard(
         homeTabIndex: homeTabIndex,
         bottomNavIndex: bottomNavIndex,
-        calendarCanHandleBack: _calendarCanHandleBack,
         child: _HomeContent(
           storageManager: storageManager,
           shortcutFocusNode: _shortcutFocusNode,
@@ -958,13 +957,11 @@ class _HomeExitPopGuard extends StatelessWidget {
   const _HomeExitPopGuard({
     required this.homeTabIndex,
     required this.bottomNavIndex,
-    required this.calendarCanHandleBack,
     required this.child,
   });
 
   final ValueNotifier<int>? homeTabIndex;
   final ValueNotifier<int>? bottomNavIndex;
-  final ValueListenable<bool> calendarCanHandleBack;
   final Widget child;
 
   @override
@@ -995,13 +992,9 @@ class _HomeExitPopGuard extends StatelessWidget {
                 final selectedBottomIndex = bottomNotifier?.value ?? 0;
                 final bool isPrimaryCalendar =
                     selectedBottomIndex == 1 || selectedBottomIndex == 2;
-                final bool calendarHandlesBack =
-                    isPrimaryCalendar && calendarCanHandleBack.value;
                 final canPop =
-                    calendarHandlesBack ||
-                    (!isPrimaryCalendar &&
-                        !openChatOnPrimaryRoute &&
-                        activeIndex == 0);
+                    isPrimaryCalendar ||
+                    (!openChatOnPrimaryRoute && activeIndex == 0);
                 return PopScope(
                   canPop: canPop,
                   onPopInvokedWithResult: (didPop, _) {
@@ -1018,10 +1011,6 @@ class _HomeExitPopGuard extends StatelessWidget {
                       locate<ChatsCubit>().closeAllChats();
                       return;
                     }
-                    if (isPrimaryCalendar) {
-                      bottomNotifier?.value = 0;
-                      return;
-                    }
                     if (homeNotifier.value != 0) {
                       homeNotifier.value = 0;
                     }
@@ -1031,17 +1020,11 @@ class _HomeExitPopGuard extends StatelessWidget {
               },
             );
         if (bottomNotifier == null) {
-          return ValueListenableBuilder<bool>(
-            valueListenable: calendarCanHandleBack,
-            builder: (context, _, child) => content,
-          );
+          return content;
         }
-        return ValueListenableBuilder<bool>(
-          valueListenable: calendarCanHandleBack,
-          builder: (context, _, child) => ValueListenableBuilder<int>(
-            valueListenable: bottomNotifier,
-            builder: (context, _, innerChild) => content,
-          ),
+        return ValueListenableBuilder<int>(
+          valueListenable: bottomNotifier,
+          builder: (context, _, child) => content,
         );
       },
     );
@@ -1390,6 +1373,7 @@ class _HomeContent extends StatelessWidget {
       initialFilters: initialTabFilters,
       child: _HomeActionLayer(
         hasCalendarBloc: hasCalendarBloc,
+        bottomNavIndex: bottomNavIndex,
         shortcutFocusNode: shortcutFocusNode,
         onHomeKeyEvent: onHomeKeyEvent,
         child: scaffold,
@@ -1534,12 +1518,14 @@ class _HomeSecondaryChatPane extends StatelessWidget {
 class _HomeActionLayer extends StatelessWidget {
   const _HomeActionLayer({
     required this.hasCalendarBloc,
+    required this.bottomNavIndex,
     required this.shortcutFocusNode,
     required this.onHomeKeyEvent,
     required this.child,
   });
 
   final bool hasCalendarBloc;
+  final ValueNotifier<int>? bottomNavIndex;
   final FocusNode shortcutFocusNode;
   final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
   final Widget child;
@@ -1636,17 +1622,8 @@ class _HomeActionLayer extends StatelessWidget {
                     child: ComposeWindowOverlay(),
                   ),
                 ),
-                const Positioned.fill(
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: OmemoOperationOverlay(),
-                  ),
-                ),
-                const Positioned.fill(
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: XmppOperationOverlay(),
-                  ),
+                Positioned.fill(
+                  child: _HomeOperationOverlays(bottomNavIndex: bottomNavIndex),
                 ),
                 const AccessibilityActionMenu(),
               ],
@@ -1654,6 +1631,61 @@ class _HomeActionLayer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HomeOperationOverlays extends StatelessWidget {
+  const _HomeOperationOverlays({required this.bottomNavIndex});
+
+  final ValueNotifier<int>? bottomNavIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomNotifier = bottomNavIndex;
+    if (bottomNotifier == null) {
+      return const _VisibleHomeOperationOverlays();
+    }
+    return ValueListenableBuilder<int>(
+      valueListenable: bottomNotifier,
+      builder: (context, selectedBottomIndex, _) {
+        final int safeSelectedBottomIndex = selectedBottomIndex
+            .clamp(0, 3)
+            .toInt();
+        if (safeSelectedBottomIndex != 0) {
+          return const SizedBox.shrink();
+        }
+        return const _VisibleHomeOperationOverlays();
+      },
+    );
+  }
+}
+
+class _VisibleHomeOperationOverlays extends StatelessWidget {
+  const _VisibleHomeOperationOverlays();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<ChatsCubit, ChatsState, bool>(
+      selector: (state) => state.openChatRoute.isCalendar,
+      builder: (context, isChatCalendarRoute) {
+        if (isChatCalendarRoute) {
+          return const SizedBox.shrink();
+        }
+        return Stack(
+          fit: StackFit.expand,
+          children: const [
+            Material(
+              type: MaterialType.transparency,
+              child: OmemoOperationOverlay(),
+            ),
+            Material(
+              type: MaterialType.transparency,
+              child: XmppOperationOverlay(),
+            ),
+          ],
+        );
+      },
     );
   }
 }
