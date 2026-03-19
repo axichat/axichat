@@ -76,6 +76,18 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) async => const <Message>[]);
+    when(
+      () => database.countUnreadMessagesForChat(
+        any(),
+        selfJid: any(named: 'selfJid'),
+      ),
+    ).thenAnswer((_) async => 0);
+    when(
+      () => database.getPendingOutgoingDeltaMessages(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
+    ).thenAnswer((_) async => const <Message>[]);
     when(() => context.getChat(any())).thenAnswer(
       (invocation) async => DeltaChat(
         id: invocation.positionalArguments.first as int,

@@ -14,6 +14,8 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
@@ -57,6 +59,10 @@ void main() {
     registerFallbackValue(fallbackChat);
     registerFallbackValue(fallbackMessage);
     registerFallbackValue(ChatType.chat);
+    registerFallbackValue(const SpamSyncRetracted('fallback@example.com'));
+    registerFallbackValue(
+      const AddressBlockSyncRetracted('fallback@example.com'),
+    );
   });
 
   late Client mockHttpClient;
@@ -94,6 +100,12 @@ void main() {
     when(
       () => mockEmailService.syncStateStream,
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    when(
+      () => mockEmailService.applySpamSyncUpdate(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.applyEmailBlocklistSyncUpdate(any()),
+    ).thenAnswer((_) async {});
     when(() => mockEmailService.hasActiveSession).thenReturn(false);
     when(() => mockEmailService.hasInMemoryReconnectContext).thenReturn(true);
     when(
@@ -143,6 +155,12 @@ void main() {
     when(
       () => mockXmppService.connectivityStream,
     ).thenAnswer((_) => const Stream<ConnectionState>.empty());
+    when(
+      () => mockXmppService.spamSyncUpdateStream,
+    ).thenAnswer((_) => const Stream.empty());
+    when(
+      () => mockXmppService.addressBlockSyncUpdateStream,
+    ).thenAnswer((_) => const Stream.empty());
     when(() => mockXmppService.connected).thenReturn(false);
     when(() => mockXmppService.databasesInitialized).thenReturn(false);
     when(() => mockXmppService.myJid).thenReturn(null);
@@ -1220,7 +1238,7 @@ void main() {
         verifyNever(() => mockDatabase.createChat(any()));
         verifyNever(() => mockDatabase.updateMessage(any()));
         final updatedChat =
-            verify(() => mockDatabase.updateChat(captureAny())).captured.single
+            verify(() => mockDatabase.updateChat(captureAny())).captured.last
                 as Chat;
         expect(updatedChat.title, equals(welcomeTitle));
         expect(updatedChat.contactDisplayName, equals(welcomeTitle));

@@ -19,8 +19,6 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
-import 'package:axichat/src/xmpp/message/message_service.dart'
-    show XmppAttachmentUpload;
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -173,8 +171,6 @@ void _mockEmailSync(MockEmailService service) {
   when(() => service.getMessageFullHtml(any())).thenAnswer((_) async => null);
   when(() => service.getQuotedMessage(any())).thenAnswer((_) async => null);
 }
-
-class FakeXmppAttachmentUpload extends Fake implements XmppAttachmentUpload {}
 
 Chat _groupChat(String jid, {String title = 'Room'}) => Chat(
   jid: jid,
@@ -344,23 +340,6 @@ void main() {
         onLocalMessageStored: any(named: 'onLocalMessageStored'),
       ),
     ).thenAnswer((_) async {});
-    when(
-      () => messageService.sendAttachment(
-        jid: any(named: 'jid'),
-        attachment: any(named: 'attachment'),
-        encryptionProtocol: any(named: 'encryptionProtocol'),
-        htmlCaption: any(named: 'htmlCaption'),
-        forwarded: any(named: 'forwarded'),
-        forwardedFromJid: any(named: 'forwardedFromJid'),
-        transportGroupId: any(named: 'transportGroupId'),
-        attachmentOrder: any(named: 'attachmentOrder'),
-        quotedMessage: any(named: 'quotedMessage'),
-        quotedReference: any(named: 'quotedReference'),
-        chatType: any(named: 'chatType'),
-        upload: any(named: 'upload'),
-        onLocalMessageStored: any(named: 'onLocalMessageStored'),
-      ),
-    ).thenAnswer((_) async => FakeXmppAttachmentUpload());
 
     when(
       () => messageService.countLocalMessages(

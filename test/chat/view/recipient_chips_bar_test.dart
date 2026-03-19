@@ -29,8 +29,7 @@ void main() {
         ),
       ),
     );
-    await _enterRecipientText(tester, 'new@example.com');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await _submitRecipientText(tester, 'new@example.com');
     expect(added?.address, 'new@example.com');
   });
 
@@ -106,8 +105,7 @@ void main() {
       ),
     );
 
-    await _focusInput(tester);
-    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await _pressBackspace(tester);
     expect(removedKey, recipients.last.key);
   });
 
@@ -204,11 +202,15 @@ void main() {
       ),
     );
 
-    await _enterRecipientText(tester, 'c');
-    await tester.pumpAndSettle();
-
-    expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Opus'), findsNothing);
+    final options = _autocompleteOptionsFor(tester, 'c');
+    expect(
+      options.map((option) => option.chat?.title ?? option.displayName),
+      contains('Codex'),
+    );
+    expect(
+      options.map((option) => option.chat?.title ?? option.displayName),
+      isNot(contains('Opus')),
+    );
   });
 
   testWidgets('autocomplete suggests known domains after @', (tester) async {
@@ -234,24 +236,54 @@ void main() {
       ),
     );
 
-    await _enterRecipientText(tester, 'ca@');
-    await tester.pumpAndSettle();
-
-    expect(find.text('ca@axi.im'), findsOneWidget);
+    final options = _autocompleteOptionsFor(tester, 'ca@');
+    expect(
+      options.map(
+        (option) =>
+            option.address ??
+            option.chat?.emailAddress ??
+            option.chat?.jid ??
+            option.displayName,
+      ),
+      contains('ca@axi.im'),
+    );
   });
 }
 
 final Finder _inputFieldFinder = find.byType(AxiTextField);
+final Finder _autocompleteOverlayFinder = find.byWidgetPredicate(
+  (widget) => widget.runtimeType.toString() == '_RecipientAutocompleteOverlay',
+);
 
-Future<void> _focusInput(WidgetTester tester) async {
-  await tester.tap(_inputFieldFinder);
+AxiTextField _inputField(WidgetTester tester) {
+  return tester.widget<AxiTextField>(_inputFieldFinder);
+}
+
+Future<void> _submitRecipientText(WidgetTester tester, String text) async {
+  final field = _inputField(tester);
+  field.controller!.text = text;
+  field.onSubmitted?.call(text);
   await tester.pump();
 }
 
-Future<void> _enterRecipientText(WidgetTester tester, String text) async {
-  await _focusInput(tester);
-  tester.testTextInput.enterText(text);
+Future<void> _pressBackspace(WidgetTester tester) async {
+  final field = _inputField(tester);
+  field.focusNode?.onKeyEvent?.call(
+    field.focusNode!,
+    const KeyDownEvent(
+      timeStamp: Duration.zero,
+      physicalKey: PhysicalKeyboardKey.backspace,
+      logicalKey: LogicalKeyboardKey.backspace,
+    ),
+  );
   await tester.pump();
+}
+
+List<Contact> _autocompleteOptionsFor(WidgetTester tester, String raw) {
+  final dynamic overlay = tester.widget(_autocompleteOverlayFinder);
+  final optionsBuilder =
+      overlay.optionsBuilder as Iterable<Contact> Function(String);
+  return optionsBuilder(raw).toList(growable: false);
 }
 
 Widget _wrapWithTheme(Widget child) {

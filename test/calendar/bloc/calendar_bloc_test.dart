@@ -63,6 +63,7 @@ void main() {
           id: 'fallback-path',
           name: 'Fallback',
           createdAt: DateTime.utc(2024, 1, 1),
+          modifiedAt: DateTime.utc(2024, 1, 1),
         ),
       );
     });
@@ -83,6 +84,15 @@ void main() {
       ).thenAnswer((_) async {});
       when(() => syncManager.requestFullSync()).thenAnswer((_) async {});
       when(() => syncManager.pushFullSync()).thenAnswer((_) async {});
+      when(
+        () => xmppService.calendarSyncDispatchStream,
+      ).thenAnswer((_) => const Stream.empty());
+      when(
+        () => xmppService.calendarSyncWarningStream,
+      ).thenAnswer((_) => const Stream.empty());
+      when(
+        () => xmppService.chatCalendarSyncDispatchStream,
+      ).thenAnswer((_) => const Stream.empty());
 
       bloc = buildBloc();
     });
