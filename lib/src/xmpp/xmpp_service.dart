@@ -1175,12 +1175,13 @@ class XmppService extends XmppBase
 
   Future<void> _handleXmppEvent(mox.XmppEvent event) async {
     try {
+      final manager = _eventManager;
       if (event is mox.StreamNegotiationsDoneEvent) {
         await _handleRootStreamNegotiationsDone(event);
-        await _eventManager.executeHandlers(event);
+        await manager.executeHandlers(event);
         return;
       }
-      await _eventManager.executeHandlers(event);
+      await manager.executeHandlers(event);
     } catch (error, stackTrace) {
       _xmppLogger.warning(
         'Unhandled XMPP event handler error for ${event.runtimeType}: ${error.runtimeType}.',

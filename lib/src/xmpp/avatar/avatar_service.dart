@@ -450,13 +450,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   );
 
   @override
-  bool get selfAvatarHydrating {
-    if (connectionState != ConnectionState.connected &&
-        connectionState != ConnectionState.connecting) {
-      return false;
-    }
-    return _isSelfAvatarRefreshRunning();
-  }
+  bool get selfAvatarHydrating => _isSelfAvatarRefreshRunning();
 
   @override
   Stream<bool> get selfAvatarHydratingStream =>
@@ -712,7 +706,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: 'AvatarService.refreshSelfAvatarOnNegotiations',
-        priority: 1,
+        priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,

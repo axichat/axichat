@@ -770,6 +770,14 @@ void main() {
 
       eventStreamController.add(
         mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.connecting,
+        ),
+      );
+      await pumpEventQueue();
+
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
           mox.XmppConnectionState.notConnected,
           mox.XmppConnectionState.connected,
         ),
