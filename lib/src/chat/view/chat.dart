@@ -69,7 +69,6 @@ import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -1726,14 +1725,6 @@ class _ChatState extends State<Chat> {
         autoLoadEmailImages ||
         (messageDatabaseId != null &&
             _loadedEmailImageMessageIds.contains(messageDatabaseId));
-    if (_loggedInlineEmailHtmlMessageIds.add(messageId)) {
-      SafeLogging.debugLog(
-        'EMAIL_HTML_TRACE|message=$messageId|raw_html_start\n'
-        '$normalizedHtmlBody\n'
-        'EMAIL_HTML_TRACE|message=$messageId|raw_html_end',
-        name: 'EmailHtmlTrace',
-      );
-    }
     final onLoadRequested = messageDatabaseId == null
         ? null
         : () => _handleEmailImagesApproved(messageDatabaseId);
@@ -1741,14 +1732,6 @@ class _ChatState extends State<Chat> {
       normalizedHtmlBody,
       allowRemoteImages: false,
     );
-    if (_loggedPreparedInlineEmailHtmlMessageIds.add(messageId)) {
-      SafeLogging.debugLog(
-        'EMAIL_HTML_TRACE|message=$messageId|prepared_html_start\n'
-        '$preparedHtmlBody\n'
-        'EMAIL_HTML_TRACE|message=$messageId|prepared_html_end',
-        name: 'EmailHtmlTrace',
-      );
-    }
     final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
         ? normalizedHtmlText
         : null;

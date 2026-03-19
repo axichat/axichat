@@ -56,6 +56,32 @@ void main() {
     );
   });
 
+  test('forwarded body sender labels support variable dash envelopes', () {
+    expect(
+      forwardedBodySenderLabel(
+        '---------- Forwarded message ---------\n'
+        'From: Person <original@example.com>\n'
+        'Subject: Hello\n'
+        '\n'
+        'Body',
+      ),
+      'original@example.com',
+    );
+  });
+
+  test('forwarded body sender labels support begin forwarded envelopes', () {
+    expect(
+      forwardedBodySenderLabel(
+        'Begin forwarded message:\n'
+        'From: Person <original@example.com>\n'
+        'Subject: Hello\n'
+        '\n'
+        'Body',
+      ),
+      'original@example.com',
+    );
+  });
+
   test('forwarded preview labels prefer stored original senders', () {
     expect(
       preferredForwardedPreviewSenderLabel(

@@ -96,17 +96,25 @@ String? preferredForwardedPreviewSenderLabel({
   return null;
 }
 
-String? forwardedBodySenderLabel(String? body) {
-  final normalizedBody = body?.replaceAll('\r\n', '\n').trimLeft();
-  if (normalizedBody == null || normalizedBody.isEmpty) {
-    return null;
+bool hasForwardedBodyHeader(String? body) {
+  final normalizedBody = body?.replaceAll('\r\n', '\n');
+  if (normalizedBody == null || normalizedBody.trim().isEmpty) {
+    return false;
   }
-  const forwardedHeader = '-------- forwarded message --------';
-  if (!normalizedBody.toLowerCase().startsWith(forwardedHeader)) {
+  return _forwardedBodyHeaderIndex(normalizedBody.split('\n')) != null;
+}
+
+String? forwardedBodySenderLabel(String? body) {
+  final normalizedBody = body?.replaceAll('\r\n', '\n');
+  if (normalizedBody == null || normalizedBody.trim().isEmpty) {
     return null;
   }
   final lines = normalizedBody.split('\n');
-  for (final line in lines.skip(1)) {
+  final headerIndex = _forwardedBodyHeaderIndex(lines);
+  if (headerIndex == null) {
+    return null;
+  }
+  for (final line in lines.skip(headerIndex + 1)) {
     final trimmedLine = line.trim();
     if (trimmedLine.isEmpty) {
       break;
@@ -137,6 +145,36 @@ String? forwardedBodySenderLabel(String? body) {
     return email == null || email.isEmpty ? rawValue : email;
   }
   return null;
+}
+
+int? _forwardedBodyHeaderIndex(List<String> lines) {
+  const maxHeaderSearchLines = 12;
+  final limit = lines.length < maxHeaderSearchLines
+      ? lines.length
+      : maxHeaderSearchLines;
+  for (var index = 0; index < limit; index += 1) {
+    if (_isForwardedBodyHeaderLine(lines[index])) {
+      return index;
+    }
+  }
+  return null;
+}
+
+bool _isForwardedBodyHeaderLine(String line) {
+  final normalized = line.trim().toLowerCase();
+  if (normalized.isEmpty) {
+    return false;
+  }
+  if (normalized == 'begin forwarded message:' ||
+      normalized == 'forwarded message:' ||
+      normalized == 'forwarded message' ||
+      normalized == 'original message:' ||
+      normalized == 'original message') {
+    return true;
+  }
+  return RegExp(
+    r'^-{2,}\s*(?:forwarded|original)\s+message\s*-{0,}:?$',
+  ).hasMatch(normalized);
 }
 
 ({String? subject, String body}) splitSyntheticForwardBody(String body) {

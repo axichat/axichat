@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/chat/models/chat_timeline.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
@@ -94,7 +95,7 @@ bool looksForwardedMessage({
   final normalizedBody = bodyText.trimLeft().toLowerCase();
   return normalizedBody.startsWith('fwd:') ||
       normalizedBody.startsWith('fw:') ||
-      normalizedBody.startsWith('-------- forwarded message --------');
+      hasForwardedBodyHeader(bodyText);
 }
 
 Occupant? resolveRoomMessageOccupant({
@@ -625,6 +626,9 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final resolvedForwardHtml = deltaMessageId == null
       ? message.htmlBody
       : emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
+  final forwardedHtmlText = resolvedForwardHtml == null
+      ? null
+      : HtmlContentCodec.toPlainText(resolvedForwardHtml);
   final forwardedSubjectSenderLabel =
       syntheticForwardDisplaySenderLabel(
         subjectLabel: rawSubjectLabel,
@@ -632,7 +636,8 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
             isEmailMessage &&
             hasSyntheticForwardHtmlMarker(html: resolvedForwardHtml),
       ) ??
-      forwardedBodySenderLabel(rawBodyText);
+      forwardedBodySenderLabel(rawBodyText) ??
+      forwardedBodySenderLabel(forwardedHtmlText);
   if (forwardedSubjectSenderLabel != null) {
     final forwardedContent = splitSyntheticForwardBody(bodyText);
     subjectLabel = forwardedContent.subject;
@@ -658,6 +663,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final bodyTextTrimmed = bodyText.trim();
   final isForwardedMessage =
       forwardedSubjectSenderLabel != null ||
+      hasForwardedBodyHeader(forwardedHtmlText) ||
       looksForwardedMessage(
         message: message,
         bodyText: rawBodyText,

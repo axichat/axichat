@@ -804,11 +804,33 @@ pre, code {
   static dom.Element _formatFlutterTableRow(dom.Element row) {
     final formattedRow = dom.Element.tag('div')
       ..attributes['style'] = _tableRowStyle;
+    final children = row.nodes.toList();
+    final meaningfulCells = <dom.Element>[];
     var hadCells = false;
     var cellCount = 0;
     dom.Element? singleCell;
     var hasNonCellContent = false;
-    final children = row.nodes.toList();
+    for (final child in children) {
+      final isCell =
+          child is dom.Element &&
+          _flutterTableCellTags.contains((child.localName ?? '').toLowerCase());
+      if (!isCell) {
+        if (child is dom.Comment) {
+          continue;
+        }
+        if (child is dom.Text &&
+            child.text.replaceAll('\u00A0', ' ').trim().isEmpty) {
+          continue;
+        }
+        hasNonCellContent = true;
+        continue;
+      }
+      meaningfulCells.add(child);
+    }
+    final forceSemanticSingleCell =
+        !hasNonCellContent &&
+        meaningfulCells.length == 1 &&
+        _shouldKeepFlutterTableRowSemantic(meaningfulCells.single);
     for (final child in children) {
       final isCell =
           child is dom.Element &&
@@ -822,10 +844,12 @@ pre, code {
           continue;
         }
         formattedRow.nodes.add(child);
-        hasNonCellContent = true;
         continue;
       }
-      final formattedCell = _formatFlutterTableCell(child);
+      final formattedCell = _formatFlutterTableCell(
+        child,
+        forceSemantic: forceSemanticSingleCell,
+      );
       if (formattedCell == null) {
         continue;
       }
@@ -851,8 +875,11 @@ pre, code {
     return formattedRow;
   }
 
-  static dom.Element? _formatFlutterTableCell(dom.Element cell) {
-    if (!_shouldCompactFlutterTableCell(cell)) {
+  static dom.Element? _formatFlutterTableCell(
+    dom.Element cell, {
+    bool forceSemantic = false,
+  }) {
+    if (forceSemantic || !_shouldCompactFlutterTableCell(cell)) {
       final normalizedNodes = _normalizeFlutterContentCellNodes(cell.nodes);
       if (!_compactFlutterTablePreviewHasContent(normalizedNodes)) {
         return null;
@@ -887,17 +914,27 @@ pre, code {
       return false;
     }
     final previewText = _normalizePlainText(toPlainText(cell.innerHtml));
-    if (previewText.length > maxCompactPreviewTextLength) {
-      return false;
+    if (previewText.isEmpty) {
+      return true;
     }
-    return true;
+    final hasNestedTables = _containsNestedFlutterTableStructure(cell.nodes);
+    final hasSemanticBlocks = _containsFlutterSemanticBlockContent(cell.nodes);
+    if (hasNestedTables || _isFlutterZeroPointLayoutCell(cell)) {
+      return previewText.length <= maxCompactPreviewTextLength ||
+          !hasSemanticBlocks;
+    }
+    if (tag == 'th') {
+      return !hasSemanticBlocks ||
+          previewText.length <= maxCompactPreviewTextLength;
+    }
+    return false;
   }
 
   static List<dom.Node> _normalizeFlutterContentCellNodes(
     List<dom.Node> nodes,
   ) {
     final normalized = <dom.Node>[];
-    for (final node in nodes) {
+    for (final node in List<dom.Node>.from(nodes)) {
       if (node is dom.Text) {
         normalized.addAll(_normalizeFlutterContentTextNode(node.text));
         continue;
@@ -906,7 +943,34 @@ pre, code {
         normalized.addAll(_normalizeFlutterContentCellNodes(node.nodes));
         continue;
       }
-      final element = dom.Element.tag(node.localName ?? 'span');
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'img') {
+        continue;
+      }
+      if (tag == 'table' ||
+          tag == 'tbody' ||
+          tag == 'thead' ||
+          tag == 'tfoot' ||
+          tag == 'colgroup' ||
+          tag == 'col') {
+        normalized.addAll(_normalizeFlutterContentCellNodes(node.nodes));
+        continue;
+      }
+      if (tag == 'tr') {
+        final formattedRow = _formatFlutterTableRow(node);
+        if (_compactFlutterTablePreviewHasContent(formattedRow.nodes)) {
+          normalized.add(formattedRow);
+        }
+        continue;
+      }
+      if (_flutterTableCellTags.contains(tag)) {
+        final formattedCell = _formatFlutterTableCell(node);
+        if (formattedCell != null) {
+          normalized.add(formattedCell);
+        }
+        continue;
+      }
+      final element = dom.Element.tag(_promoteFlutterPreviewTag(node));
       for (final entry in node.attributes.entries) {
         element.attributes[entry.key.toString()] = entry.value;
       }
@@ -952,7 +1016,7 @@ pre, code {
         normalized.add(dom.Element.tag('br'));
         normalized.add(dom.Element.tag('br'));
       }
-      normalized.add(dom.Text(paragraphs[index]));
+      _appendCollapsedFlutterPreviewText(normalized, paragraphs[index]);
     }
     return normalized;
   }
@@ -972,13 +1036,7 @@ pre, code {
     final compacted = <dom.Node>[];
     for (final node in nodes) {
       if (node is dom.Text) {
-        final normalizedText = node.text
-            .replaceAll('\u00A0', ' ')
-            .replaceAll(RegExp(r'\s+'), ' ');
-        if (normalizedText.trim().isEmpty) {
-          continue;
-        }
-        compacted.add(dom.Text(normalizedText));
+        _appendCollapsedFlutterPreviewText(compacted, node.text);
         continue;
       }
       if (node is! dom.Element) {
@@ -1066,13 +1124,7 @@ pre, code {
     final compacted = <dom.Node>[];
     for (final node in nodes) {
       if (node is dom.Text) {
-        final normalizedText = node.text
-            .replaceAll('\u00A0', ' ')
-            .replaceAll(RegExp(r'\s+'), ' ');
-        if (normalizedText.isEmpty) {
-          continue;
-        }
-        compacted.add(dom.Text(normalizedText));
+        _appendCollapsedFlutterPreviewText(compacted, node.text);
         continue;
       }
       if (node is! dom.Element) {
@@ -1115,6 +1167,132 @@ pre, code {
     return compacted;
   }
 
+  static bool _shouldKeepFlutterTableRowSemantic(dom.Element cell) {
+    if (_containsNestedFlutterTableStructure(cell.nodes)) {
+      return false;
+    }
+    if (_isFlutterZeroPointLayoutCell(cell)) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _isFlutterZeroPointLayoutCell(dom.Element cell) {
+    final style = cell.attributes['style']?.trim().toLowerCase() ?? '';
+    return style.contains('font-size:0pt') ||
+        style.contains('font-size: 0pt') ||
+        style.contains('line-height:0pt') ||
+        style.contains('line-height: 0pt');
+  }
+
+  static bool _containsNestedFlutterTableStructure(List<dom.Node> nodes) {
+    for (final node in nodes) {
+      if (node is! dom.Element) {
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'table' ||
+          tag == 'tbody' ||
+          tag == 'thead' ||
+          tag == 'tfoot' ||
+          tag == 'tr' ||
+          _flutterTableCellTags.contains(tag)) {
+        return true;
+      }
+      if (_containsNestedFlutterTableStructure(node.nodes)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _containsFlutterSemanticBlockContent(List<dom.Node> nodes) {
+    for (final node in nodes) {
+      if (node is! dom.Element) {
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'p' ||
+          tag == 'blockquote' ||
+          tag == 'ul' ||
+          tag == 'ol' ||
+          tag == 'li' ||
+          tag == 'pre' ||
+          tag == 'code' ||
+          tag == 'hr' ||
+          tag == 'br' ||
+          tag == 'h1' ||
+          tag == 'h2' ||
+          tag == 'h3' ||
+          tag == 'h4' ||
+          tag == 'h5' ||
+          tag == 'h6') {
+        return true;
+      }
+      if (_containsFlutterSemanticBlockContent(node.nodes)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static String _promoteFlutterPreviewTag(dom.Element node) {
+    final tag = (node.localName ?? 'span').toLowerCase();
+    if (tag == 'b') {
+      return 'strong';
+    }
+    if (tag == 'i') {
+      return 'em';
+    }
+    if (tag != 'span' && tag != 'font') {
+      return tag;
+    }
+    final style = node.attributes['style']?.trim().toLowerCase() ?? '';
+    if (style.contains('font-weight:bold') ||
+        style.contains('font-weight: bold') ||
+        RegExp(r'font-weight:\s*[6-9]00').hasMatch(style)) {
+      return 'strong';
+    }
+    if (style.contains('font-style:italic') ||
+        style.contains('font-style: italic')) {
+      return 'em';
+    }
+    if (style.contains('text-decoration:underline') ||
+        style.contains('text-decoration: underline')) {
+      return 'u';
+    }
+    return tag;
+  }
+
+  static void _appendCollapsedFlutterPreviewText(
+    List<dom.Node> nodes,
+    String text,
+  ) {
+    final normalizedText = _collapseFlutterPreviewWhitespace(text);
+    if (normalizedText == null) {
+      return;
+    }
+    if (nodes.isNotEmpty && nodes.last is dom.Text) {
+      (nodes.last as dom.Text).text += normalizedText;
+      return;
+    }
+    nodes.add(dom.Text(normalizedText));
+  }
+
+  static String? _collapseFlutterPreviewWhitespace(String text) {
+    final normalizedText = text.replaceAll('\u00A0', ' ');
+    final collapsed = normalizedText.replaceAll(RegExp(r'\s+'), ' ');
+    final trimmed = collapsed.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final hasLeadingWhitespace = RegExp(r'^\s').hasMatch(normalizedText);
+    final hasTrailingWhitespace = RegExp(r'\s$').hasMatch(normalizedText);
+    return '${hasLeadingWhitespace ? ' ' : ''}'
+        '$trimmed'
+        '${hasTrailingWhitespace ? ' ' : ''}';
+  }
+
   static bool _compactFlutterTablePreviewEndsWithBreak(List<dom.Node> nodes) {
     if (nodes.isEmpty) {
       return false;
@@ -1138,6 +1316,19 @@ pre, code {
           continue;
         }
         final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'center') {
+          final replacementNodes = node.nodes.toList();
+          final index = nodes.indexOf(node);
+          node.remove();
+          for (
+            var offset = replacementNodes.length - 1;
+            offset >= 0;
+            offset--
+          ) {
+            nodes.insert(index, replacementNodes[offset]);
+          }
+          continue;
+        }
         if (tag == 'style') {
           final sanitizedStyleText = _sanitizeWebViewStyleElementText(
             node.text,
