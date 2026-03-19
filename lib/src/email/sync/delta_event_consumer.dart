@@ -370,7 +370,8 @@ class DeltaEventConsumer {
       }
       if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
         final last = await _context.getMessage(entry.msgId);
-        if (last == null || !_isHiddenMultiDeviceSyncMessage(last, chat: chat)) {
+        if (last == null ||
+            !_isHiddenMultiDeviceSyncMessage(last, chat: chat)) {
           final timestamp = last?.timestamp;
           final preview = _previewTextForDeltaMessage(last, chat: chat);
           if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
@@ -1473,7 +1474,8 @@ class DeltaEventConsumer {
             db: resolvedDb,
             message: lastMessage,
           );
-    final lastChangeTimestamp = lastMessage?.timestamp ?? chat.lastChangeTimestamp;
+    final lastChangeTimestamp =
+        lastMessage?.timestamp ?? chat.lastChangeTimestamp;
     final updated = chat.copyWith(
       lastMessage: preview,
       lastChangeTimestamp: lastChangeTimestamp,

@@ -2044,7 +2044,8 @@ WHERE transport IS NULL
     return query.read<int>('count');
   }
 
-  String _visibleMessageSqlPredicate(String alias) => '''
+  String _visibleMessageSqlPredicate(String alias) =>
+      '''
     NOT (
       $alias.received = 0
       AND lower(trim(COALESCE($alias.sender_jid, ''))) =

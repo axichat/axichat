@@ -176,6 +176,13 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
+      () => transport.setCoreConfig(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
       () => transport.sendText(
         chatId: any(named: 'chatId'),
         body: any(named: 'body'),
@@ -523,8 +530,10 @@ void main() {
     expect(
       capturedAdditional,
       equals({
+        'sync_msgs': '0',
         'show_emails': '2',
-        'mdns_enabled': '1',
+        'send_pw': 'password',
+        'mdns_enabled': '0',
         'mail_server': 'axi.im',
         'mail_port': '993',
         'mail_security': 'ssl',
@@ -537,6 +546,47 @@ void main() {
     );
     addTearDown(service.shutdown);
   });
+
+  test(
+    'start reapplies Delta self-sync suppression for all active sessions',
+    () async {
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[1, 2]);
+      when(() => transport.activeAccountId).thenReturn(1);
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+      clearInteractions(transport);
+
+      await service.stop();
+      clearInteractions(transport);
+
+      await service.start();
+
+      verify(
+        () =>
+            transport.setCoreConfig(key: 'sync_msgs', value: '0', accountId: 1),
+      ).called(1);
+      verify(
+        () =>
+            transport.setCoreConfig(key: 'sync_msgs', value: '0', accountId: 2),
+      ).called(1);
+      addTearDown(service.shutdown);
+    },
+  );
 
   test('handleNetworkAvailable/lost call transport when provisioned', () async {
     final service = EmailService(

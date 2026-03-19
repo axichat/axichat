@@ -303,6 +303,7 @@ class EmailService {
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
   static const String _mdnsEnabledValue = '1';
   static const String _mdnsDisabledValue = '0';
+  static const String _syncMsgsConfigKey = 'sync_msgs';
   static const String _mailServerConfigKey = 'mail_server';
   static const String _mailPortConfigKey = 'mail_port';
   static const String _mailSecurityConfigKey = 'mail_security';
@@ -528,6 +529,7 @@ class EmailService {
     overrides[_mdnsEnabledConfigKey] = _mdnsConfigValue(
       _emailReadReceiptsEnabled,
     );
+    overrides[_syncMsgsConfigKey] = '0';
     if (fetchExistingMessages) {
       overrides[_fetchExistingMsgsConfigKey] = _fetchExistingMsgsEnabledValue;
     }
@@ -1220,6 +1222,7 @@ class EmailService {
     }
     await _transport.start();
     await _applyEmailReadReceiptPreference();
+    await _applyDeltaSelfSyncSuppression();
     _runtimePhase = _EmailRuntimePhase.running;
     _startImapSyncLoop();
   }
@@ -4377,6 +4380,27 @@ class EmailService {
       await _transport.setCoreConfig(
         key: _mdnsEnabledConfigKey,
         value: value,
+        accountId: accountId,
+      );
+    }
+  }
+
+  Future<void> _applyDeltaSelfSyncSuppression() async {
+    if (!hasActiveSession) {
+      return;
+    }
+    final resolvedAccountIds = await _transport.accountIds();
+    final targetAccountIds = resolvedAccountIds.isEmpty
+        ? <int>[_transport.activeAccountId]
+        : resolvedAccountIds;
+    final appliedAccountIds = <int>{};
+    for (final accountId in targetAccountIds) {
+      if (!appliedAccountIds.add(accountId)) {
+        continue;
+      }
+      await _transport.setCoreConfig(
+        key: _syncMsgsConfigKey,
+        value: '0',
         accountId: accountId,
       );
     }

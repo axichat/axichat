@@ -17,6 +17,33 @@ class HtmlContentCodec {
     'colgroup',
   };
   static const Set<String> _flutterTableCellTags = <String>{'td', 'th'};
+  static const Set<String> _flutterTablePreviewInlineTags = <String>{
+    'a',
+    'b',
+    'code',
+    'em',
+    'i',
+    'span',
+    'strong',
+    'sub',
+    'sup',
+    'u',
+  };
+  static const Set<String> _flutterTablePreviewBlockTags = <String>{
+    'blockquote',
+    'div',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    'ul',
+  };
   static const String _tableCellInlineDisplayStyle =
       'display:inline-block; vertical-align:top; margin-right:8px;';
   static const String _tableCellHeaderStyle =
@@ -793,17 +820,16 @@ pre, code {
       hadCells = true;
     }
     if (!hadCells) {
-      final fallbackText = _compactFlutterTablePreviewText(row.innerHtml);
-      if (fallbackText.isNotEmpty) {
-        formattedRow.nodes.add(dom.Text(fallbackText));
-      }
+      formattedRow.nodes.addAll(
+        _compactFlutterTablePreviewNodes(row.innerHtml),
+      );
     }
     return formattedRow;
   }
 
   static dom.Element? _formatFlutterTableCell(dom.Element cell) {
-    final flattenedText = _compactFlutterTablePreviewText(cell.innerHtml);
-    if (flattenedText.isEmpty) {
+    final compactNodes = _compactFlutterTablePreviewNodes(cell.innerHtml);
+    if (!_compactFlutterTablePreviewHasContent(compactNodes)) {
       return null;
     }
     final isHeader = (cell.localName ?? '').toLowerCase() == 'th';
@@ -811,17 +837,177 @@ pre, code {
       ..attributes['style'] = isHeader
           ? _tableCellHeaderStyle
           : _tableCellInlineDisplayStyle
-      ..nodes.add(dom.Text(flattenedText));
+      ..nodes.addAll(compactNodes);
   }
 
-  static String _compactFlutterTablePreviewText(String html) {
-    final plainText = toPlainText(
-      html,
-    ).replaceAll('\u00A0', ' ').replaceAll(_spaceCollapse, ' ').trim();
-    if (plainText.isEmpty) {
-      return '';
+  static List<dom.Node> _compactFlutterTablePreviewNodes(String html) {
+    final trimmed = html.trim();
+    if (trimmed.isEmpty) {
+      return const <dom.Node>[];
     }
-    return plainText;
+    final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+    return _compactFlutterTablePreviewNodeList(fragment.nodes);
+  }
+
+  static List<dom.Node> _compactFlutterTablePreviewNodeList(
+    List<dom.Node> nodes,
+  ) {
+    final compacted = <dom.Node>[];
+    for (final node in nodes) {
+      if (node is dom.Text) {
+        final normalizedText = node.text
+            .replaceAll('\u00A0', ' ')
+            .replaceAll(RegExp(r'\s+'), ' ');
+        if (normalizedText.trim().isEmpty) {
+          continue;
+        }
+        compacted.add(dom.Text(normalizedText));
+        continue;
+      }
+      if (node is! dom.Element) {
+        compacted.addAll(_compactFlutterTablePreviewNodeList(node.nodes));
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'img') {
+        continue;
+      }
+      if (tag == 'br') {
+        if (_compactFlutterTablePreviewEndsWithBreak(compacted)) {
+          continue;
+        }
+        compacted.add(dom.Element.tag('br'));
+        continue;
+      }
+      if (tag == 'hr') {
+        if (!_compactFlutterTablePreviewEndsWithBreak(compacted)) {
+          compacted.add(dom.Element.tag('br'));
+        }
+        continue;
+      }
+      final compactChildren = _compactFlutterTablePreviewNodeList(node.nodes);
+      if (_flutterTablePreviewBlockTags.contains(tag)) {
+        if (!_compactFlutterTablePreviewHasContent(compactChildren)) {
+          continue;
+        }
+        if (_compactFlutterTablePreviewHasContent(compacted) &&
+            !_compactFlutterTablePreviewEndsWithBreak(compacted)) {
+          compacted.add(dom.Text(' '));
+        }
+        if (tag == 'li') {
+          compacted.add(dom.Text('\u2022 '));
+        }
+        compacted.addAll(compactChildren);
+        continue;
+      }
+      if (!_flutterTablePreviewInlineTags.contains(tag)) {
+        compacted.addAll(compactChildren);
+        continue;
+      }
+      final inlineChildren = _compactFlutterTablePreviewInlineNodes(
+        compactChildren,
+      );
+      final element = dom.Element.tag(tag);
+      for (final entry in node.attributes.entries) {
+        final key = entry.key.toString();
+        if (key.trim().toLowerCase() == 'style') {
+          continue;
+        }
+        element.attributes[key] = entry.value;
+      }
+      element.nodes.addAll(inlineChildren);
+      if (tag != 'br' &&
+          tag != 'hr' &&
+          !_compactFlutterTablePreviewHasContent(element.nodes)) {
+        continue;
+      }
+      compacted.add(element);
+    }
+    while (_compactFlutterTablePreviewEndsWithBreak(compacted)) {
+      compacted.removeLast();
+    }
+    return compacted;
+  }
+
+  static bool _compactFlutterTablePreviewHasContent(List<dom.Node> nodes) {
+    for (final node in nodes) {
+      if (node is dom.Text &&
+          node.text.replaceAll('\u00A0', ' ').trim().isNotEmpty) {
+        return true;
+      }
+      if (node is dom.Element &&
+          _compactFlutterTablePreviewHasContent(node.nodes)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static List<dom.Node> _compactFlutterTablePreviewInlineNodes(
+    List<dom.Node> nodes,
+  ) {
+    final compacted = <dom.Node>[];
+    for (final node in nodes) {
+      if (node is dom.Text) {
+        final normalizedText = node.text
+            .replaceAll('\u00A0', ' ')
+            .replaceAll(RegExp(r'\s+'), ' ');
+        if (normalizedText.isEmpty) {
+          continue;
+        }
+        compacted.add(dom.Text(normalizedText));
+        continue;
+      }
+      if (node is! dom.Element) {
+        compacted.addAll(_compactFlutterTablePreviewInlineNodes(node.nodes));
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'br' || tag == 'hr') {
+        if (compacted.isEmpty) {
+          continue;
+        }
+        final lastNode = compacted.last;
+        if (lastNode is dom.Text && lastNode.text.endsWith(' ')) {
+          continue;
+        }
+        compacted.add(dom.Text(' '));
+        continue;
+      }
+      final element = dom.Element.tag(tag);
+      for (final entry in node.attributes.entries) {
+        final key = entry.key.toString();
+        if (key.trim().toLowerCase() == 'style') {
+          continue;
+        }
+        element.attributes[key] = entry.value;
+      }
+      element.nodes.addAll(_compactFlutterTablePreviewInlineNodes(node.nodes));
+      if (!_compactFlutterTablePreviewHasContent(element.nodes)) {
+        continue;
+      }
+      compacted.add(element);
+    }
+    while (compacted.isNotEmpty) {
+      final lastNode = compacted.last;
+      if (lastNode is! dom.Text || lastNode.text.trim().isNotEmpty) {
+        break;
+      }
+      compacted.removeLast();
+    }
+    return compacted;
+  }
+
+  static bool _compactFlutterTablePreviewEndsWithBreak(List<dom.Node> nodes) {
+    if (nodes.isEmpty) {
+      return false;
+    }
+    final last = nodes.last;
+    if (last is! dom.Element) {
+      return false;
+    }
+    final tag = (last.localName ?? '').toLowerCase();
+    return tag == 'br' || tag == 'hr';
   }
 
   static void _normalizeFlutterHtmlNodes(
