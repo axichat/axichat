@@ -294,6 +294,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     DateTime? timestamp,
     String? id,
     String? originID,
+    String? serverStanzaId,
     String? mucStanzaId,
     String? occupantID,
     String? body,
@@ -330,6 +331,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required String id,
     required String stanzaID,
     required String? originID,
+    required String? serverStanzaId,
     required String? mucStanzaId,
     required String? occupantID,
     required String senderJid,
@@ -365,7 +367,11 @@ abstract class Message with _$Message implements Insertable<Message> {
     required int? deltaMsgId,
   }) = _MessageFromDb;
 
-  factory Message.fromMox(mox.MessageEvent event, {String? accountJid}) {
+  factory Message.fromMox(
+    mox.MessageEvent event, {
+    String? accountJid,
+    String? serverStanzaId,
+  }) {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
@@ -453,6 +459,9 @@ abstract class Message with _$Message implements Insertable<Message> {
           ? MessageReferenceKind.mucStanzaId
           : null,
       originID: stableIdData?.originId,
+      serverStanzaId: serverStanzaId?.trim().isNotEmpty == true
+          ? serverStanzaId!.trim()
+          : null,
       mucStanzaId: mucStanzaId == null || mucStanzaId.isEmpty
           ? null
           : mucStanzaId,
@@ -634,6 +643,9 @@ abstract class Message with _$Message implements Insertable<Message> {
     if (originID != null) {
       map['origin_i_d'] = Variable<String>(originID);
     }
+    if (serverStanzaId != null) {
+      map['server_stanza_id'] = Variable<String>(serverStanzaId);
+    }
     if (mucStanzaId != null) {
       map['muc_stanza_id'] = Variable<String>(mucStanzaId);
     }
@@ -754,6 +766,14 @@ extension MessageReferenceIds on Message {
     return originId;
   }
 
+  String? get trimmedServerStanzaId {
+    final serverId = serverStanzaId?.trim();
+    if (serverId == null || serverId.isEmpty) {
+      return null;
+    }
+    return serverId;
+  }
+
   String? get trimmedMucStanzaId {
     final mucId = mucStanzaId?.trim();
     if (mucId == null || mucId.isEmpty) {
@@ -851,6 +871,7 @@ extension MessageReferenceIds on Message {
   Set<String> get referenceIds => <String>{
     ?trimmedStanzaId,
     ?trimmedOriginId,
+    ?trimmedServerStanzaId,
     ?trimmedMucStanzaId,
   };
 
@@ -1334,6 +1355,8 @@ class Messages extends Table {
 
   TextColumn get originID => text().nullable()();
 
+  TextColumn get serverStanzaId => text().nullable()();
+
   TextColumn get mucStanzaId => text().nullable()();
 
   TextColumn get occupantID => text().nullable()();
@@ -1413,6 +1436,7 @@ class Messages extends Table {
 
   List<Index> get indexes => [
     Index('idx_messages_chat_timestamp', 'chat_jid, timestamp'),
+    Index('idx_messages_chat_server_stanza_id', 'chat_jid, server_stanza_id'),
   ];
 }
 

@@ -260,6 +260,10 @@ void main() {
     when(
       () => mucService.roomStateStream(any()),
     ).thenAnswer((_) => const Stream<RoomState>.empty());
+    when(() => mucService.roomStateForOrEmpty(any())).thenAnswer(
+      (invocation) =>
+          RoomState(roomJid: invocation.positionalArguments.first as String),
+    );
     when(
       () => mucService.warmRoomFromHistory(roomJid: any(named: 'roomJid')),
     ).thenAnswer(
@@ -476,18 +480,40 @@ void main() {
     when(
       () => mockDatabase.getPinnedMessages(any()),
     ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+    when(() => mockDatabase.getChat(any())).thenAnswer(
+      (invocation) async =>
+          Chat.fromJid(invocation.positionalArguments.first as String),
+    );
+    when(
+      () => mockDatabase.countUnreadMessagesForChat(
+        any(),
+        selfJid: any(named: 'selfJid'),
+      ),
+    ).thenAnswer((_) async => 0);
     when(
       () => mockDatabase.getMessageAttachments(any()),
     ).thenAnswer((_) async => const <MessageAttachmentData>[]);
     when(
       () => mockDatabase.getMessageAttachmentsForGroup(any()),
     ).thenAnswer((_) async => const <MessageAttachmentData>[]);
+    when(
+      () => mockDatabase.markMessageDisplayed(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async {});
 
     when(
       () => messageService.sendReadMarker(
         any(),
         any(),
         chatType: any(named: 'chatType'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.recordDisplayedMessageForOwnDevices(
+        chat: any(named: 'chat'),
+        message: any(named: 'message'),
       ),
     ).thenAnswer((_) async {});
 

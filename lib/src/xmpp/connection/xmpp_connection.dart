@@ -130,6 +130,9 @@ class XmppConnection extends mox.XmppConnection {
         return pubSubHubManager?.getDelegate<ConversationIndexManager>() as T?;
       case == DraftsPubSubManager:
         return pubSubHubManager?.getDelegate<DraftsPubSubManager>() as T?;
+      case == MessageDisplayedSyncManager:
+        return pubSubHubManager?.getDelegate<MessageDisplayedSyncManager>()
+            as T?;
       case == MessageCollectionsPubSubManager:
         return pubSubHubManager?.getDelegate<MessageCollectionsPubSubManager>()
             as T?;

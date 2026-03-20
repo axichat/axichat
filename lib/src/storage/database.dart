@@ -127,6 +127,17 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID, {String? chatJid});
 
+  Future<Message?> getMessageByServerStanzaId(
+    String serverStanzaId, {
+    String? chatJid,
+  });
+
+  Future<bool> isServerStanzaAtOrAfterMessage({
+    required String serverStanzaId,
+    required String stanzaID,
+    required String chatJid,
+  });
+
   Future<Message?> getMessageByReferenceId(String messageId, {String? chatJid});
 
   Future<Message?> getMessageByDeltaId(
@@ -192,6 +203,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> saveMessageMucStanzaId({
     required String stanzaID,
     required String mucStanzaId,
+  });
+
+  Future<void> saveMessageServerStanzaId({
+    required String stanzaID,
+    required String serverStanzaId,
   });
 
   Future<void> saveMessageError({
@@ -326,6 +342,12 @@ abstract interface class XmppDatabase implements Database {
     required String messageId,
     required String chatJid,
     required String senderJid,
+  });
+
+  Future<void> markIncomingMessagesDisplayedThroughServerStanzaId({
+    required String serverStanzaId,
+    required String chatJid,
+    required String selfJid,
   });
 
   Future<void> deleteMessage(String stanzaID);
@@ -838,6 +860,19 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
   Future<Message?> selectOneByOriginID(String originID) => (select(
     table,
   )..where((table) => table.originID.equals(originID))).getSingleOrNull();
+
+  Future<Message?> selectOneByServerStanzaId(
+    String serverStanzaId, {
+    String? chatJid,
+  }) {
+    final query = select(table)
+      ..where((tbl) => tbl.serverStanzaId.equals(serverStanzaId));
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
+    }
+    return query.getSingleOrNull();
+  }
 
   Future<Message?> selectOneByMucStanzaId(
     String mucStanzaId, {
@@ -1652,7 +1687,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 37;
+  int get schemaVersion => 38;
 
   @override
   MigrationStrategy get migration {
@@ -1929,6 +1964,19 @@ WHERE transport IS NULL
         }
         if (from < 37) {
           await m.addColumn(chats, chats.primaryView);
+        }
+        if (from < 38 &&
+            !await _tableHasColumn(
+              messages.actualTableName,
+              'server_stanza_id',
+            )) {
+          await m.addColumn(messages, messages.serverStanzaId);
+          await m.createIndex(
+            Index(
+              'idx_messages_chat_server_stanza_id',
+              'chat_jid, server_stanza_id',
+            ),
+          );
         }
       },
       beforeOpen: (_) async {
@@ -2488,6 +2536,64 @@ WHERE transport IS NULL
   }
 
   @override
+  Future<Message?> getMessageByServerStanzaId(
+    String serverStanzaId, {
+    String? chatJid,
+  }) async {
+    final normalizedServerStanzaId = serverStanzaId.trim();
+    if (normalizedServerStanzaId.isEmpty) {
+      return null;
+    }
+    return messagesAccessor.selectOneByServerStanzaId(
+      normalizedServerStanzaId,
+      chatJid: chatJid,
+    );
+  }
+
+  @override
+  Future<bool> isServerStanzaAtOrAfterMessage({
+    required String serverStanzaId,
+    required String stanzaID,
+    required String chatJid,
+  }) async {
+    final normalizedServerStanzaId = serverStanzaId.trim();
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedServerStanzaId.isEmpty ||
+        normalizedStanzaId.isEmpty ||
+        normalizedChatJid.isEmpty) {
+      return false;
+    }
+
+    final row = await customSelect(
+      '''
+SELECT CASE
+         WHEN target.timestamp IS NULL OR anchor.timestamp IS NULL THEN 0
+         WHEN target.timestamp > anchor.timestamp THEN 1
+         WHEN target.timestamp = anchor.timestamp AND target.rowid >= anchor.rowid THEN 1
+         ELSE 0
+       END AS covered
+FROM messages target
+JOIN messages anchor
+  ON anchor.stanza_i_d = ?
+ AND anchor.chat_jid = ?
+WHERE target.server_stanza_id = ?
+  AND target.chat_jid = ?
+LIMIT 1
+''',
+      variables: [
+        Variable<String>(normalizedStanzaId),
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedServerStanzaId),
+        Variable<String>(normalizedChatJid),
+      ],
+      readsFrom: {messages},
+    ).getSingleOrNull();
+
+    return row?.read<int>('covered') == 1;
+  }
+
+  @override
   Future<Message?> getMessageByReferenceId(
     String messageId, {
     String? chatJid,
@@ -2503,12 +2609,14 @@ WHERE transport IS NULL
                 tbl.chatJid.equals(normalizedChatJid) &
                 (tbl.stanzaID.equals(normalized) |
                     tbl.originID.equals(normalized) |
+                    tbl.serverStanzaId.equals(normalized) |
                     tbl.mucStanzaId.equals(normalized)),
           ))
           .getSingleOrNull();
     }
     return await getMessageByStanzaID(normalized) ??
         await getMessageByOriginID(normalized) ??
+        await getMessageByServerStanzaId(normalized) ??
         await messagesAccessor.selectOneByMucStanzaId(normalized);
   }
 
@@ -2587,6 +2695,7 @@ WHERE transport IS NULL
         (tbl) =>
             tbl.stanzaID.isIn(normalized) |
             tbl.originID.isIn(normalized) |
+            tbl.serverStanzaId.isIn(normalized) |
             tbl.mucStanzaId.isIn(normalized),
       );
     final normalizedChatJid = chatJid?.trim();
@@ -2900,6 +3009,12 @@ WHERE transport IS NULL
 
       final persistedMetadataId = persisted.fileMetadataID?.trim();
       final hasPersistedMetadataId = persistedMetadataId?.isNotEmpty == true;
+      final incomingServerStanzaId = messageToSave.serverStanzaId?.trim();
+      final hasIncomingServerStanzaId =
+          incomingServerStanzaId?.isNotEmpty == true;
+      final persistedServerStanzaId = persisted.serverStanzaId?.trim();
+      final hasPersistedServerStanzaId =
+          persistedServerStanzaId?.isNotEmpty == true;
       final incomingMucStanzaId = messageToSave.mucStanzaId?.trim();
       final hasIncomingMucStanzaId = incomingMucStanzaId?.isNotEmpty == true;
       final persistedMucStanzaId = persisted.mucStanzaId?.trim();
@@ -2909,11 +3024,14 @@ WHERE transport IS NULL
       final shouldMergeHtml = hasIncomingHtml && !hasPersistedHtml;
       final shouldMergeMetadataId =
           hasIncomingMetadataId && !hasPersistedMetadataId;
+      final shouldMergeServerStanzaId =
+          hasIncomingServerStanzaId && !hasPersistedServerStanzaId;
       final shouldMergeMucStanzaId =
           hasIncomingMucStanzaId && !hasPersistedMucStanzaId;
       if (!shouldMergeBody &&
           !shouldMergeHtml &&
           !shouldMergeMetadataId &&
+          !shouldMergeServerStanzaId &&
           !shouldMergeMucStanzaId) {
         return;
       }
@@ -2930,6 +3048,9 @@ WHERE transport IS NULL
               : const Value.absent(),
           fileMetadataID: shouldMergeMetadataId
               ? Value(incomingMetadataId)
+              : const Value.absent(),
+          serverStanzaId: shouldMergeServerStanzaId
+              ? Value(incomingServerStanzaId)
               : const Value.absent(),
           mucStanzaId: shouldMergeMucStanzaId
               ? Value(incomingMucStanzaId)
@@ -3286,6 +3407,65 @@ WHERE chat_jid = ?
         'Marking outgoing messages displayed through $normalizedMessageId',
       );
     }
+  }
+
+  @override
+  Future<void> markIncomingMessagesDisplayedThroughServerStanzaId({
+    required String serverStanzaId,
+    required String chatJid,
+    required String selfJid,
+  }) async {
+    final normalizedServerStanzaId = serverStanzaId.trim();
+    final normalizedChatJid = chatJid.trim();
+    final normalizedSelfJid = selfJid.trim();
+    if (normalizedServerStanzaId.isEmpty ||
+        normalizedChatJid.isEmpty ||
+        normalizedSelfJid.isEmpty) {
+      return;
+    }
+
+    await customUpdate(
+      '''
+UPDATE messages
+SET displayed = 1
+WHERE chat_jid = ?
+  AND LOWER(sender_jid) != LOWER(?)
+  AND displayed = 0
+  AND EXISTS (
+    SELECT 1
+    FROM messages target
+    WHERE target.chat_jid = ?
+      AND target.server_stanza_id = ?
+      AND (
+        messages.timestamp < target.timestamp
+        OR (
+          messages.timestamp = target.timestamp
+          AND messages.rowid <= target.rowid
+        )
+      )
+  )
+''',
+      variables: [
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedSelfJid),
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedServerStanzaId),
+      ],
+      updates: {messages},
+    );
+
+    final chat = await getChat(normalizedChatJid);
+    if (chat == null) {
+      return;
+    }
+    final unreadCount = await countUnreadMessagesForChat(
+      normalizedChatJid,
+      selfJid: normalizedSelfJid,
+    );
+    if (chat.unreadCount == unreadCount) {
+      return;
+    }
+    await updateChat(chat.copyWith(unreadCount: unreadCount));
   }
 
   @override
@@ -3877,6 +4057,23 @@ WHERE email_from_address IN ($placeholderClause)
     await (update(messages)
           ..where((tbl) => tbl.stanzaID.equals(normalizedStanzaId)))
         .write(MessagesCompanion(mucStanzaId: Value(normalizedMucStanzaId)));
+  }
+
+  @override
+  Future<void> saveMessageServerStanzaId({
+    required String stanzaID,
+    required String serverStanzaId,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedServerStanzaId = serverStanzaId.trim();
+    if (normalizedStanzaId.isEmpty || normalizedServerStanzaId.isEmpty) {
+      return;
+    }
+    await (update(
+      messages,
+    )..where((tbl) => tbl.stanzaID.equals(normalizedStanzaId))).write(
+      MessagesCompanion(serverStanzaId: Value(normalizedServerStanzaId)),
+    );
   }
 
   @override

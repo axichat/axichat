@@ -16,6 +16,7 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/pubsub/message_displayed_sync_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -170,6 +171,7 @@ RosterItem generateRandomRosterItem({
 
 void prepareMockConnection() {
   final managersById = <String, mox.XmppManagerBase>{};
+  final reconnectionPolicy = XmppReconnectionPolicy.exponential();
 
   T? lookupManagerById<T extends mox.XmppManagerBase>(String id) =>
       managersById[id] as T?;
@@ -209,7 +211,22 @@ void prepareMockConnection() {
   });
 
   when(() => mockConnection.loadStreamState()).thenAnswer((_) async {});
-  when(() => mockConnection.setShouldReconnect(any())).thenAnswer((_) async {});
+  when(() => mockConnection.reconnectionPolicy).thenReturn(reconnectionPolicy);
+  when(
+    () => mockConnection.isReconnecting(),
+  ).thenAnswer((_) => reconnectionPolicy.getIsReconnecting());
+  when(() => mockConnection.setShouldReconnect(any())).thenAnswer((
+    invocation,
+  ) async {
+    await reconnectionPolicy.setShouldReconnect(
+      invocation.positionalArguments.first as bool,
+    );
+  });
+  for (final trigger in ReconnectTrigger.values) {
+    when(
+      () => mockConnection.requestReconnect(trigger),
+    ).thenAnswer((_) async {});
+  }
   when(() => mockConnection.setUserAgent(any())).thenAnswer((_) {});
   when(() => mockConnection.setFastToken(any())).thenAnswer((_) {});
 
@@ -263,6 +280,13 @@ void prepareMockConnection() {
   ).thenAnswer((_) => lookupManagerById<mox.VCardManager>(mox.vcardManager));
   when(() => mockConnection.getManager<mox.BlockingManager>()).thenAnswer(
     (_) => lookupManagerById<mox.BlockingManager>(mox.blockingManager),
+  );
+  when(
+    () => mockConnection.getManager<MessageDisplayedSyncManager>(),
+  ).thenAnswer(
+    (_) => lookupManagerById<MessageDisplayedSyncManager>(
+      MessageDisplayedSyncManager.managerId,
+    ),
   );
   when(
     () => mockConnection.getManager<MUCManager>(),
