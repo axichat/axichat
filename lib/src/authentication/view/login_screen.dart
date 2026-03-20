@@ -20,6 +20,7 @@ import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart' as models;
 import 'package:axichat/src/xmpp/xmpp_service.dart' hide ConnectionState;
@@ -205,21 +206,18 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _preloadSelfAvatarCache() async {
-    XmppService xmppService;
+    ProfileCubit profileCubit;
     try {
-      xmppService = context.read<XmppService>();
+      profileCubit = context.read<ProfileCubit>();
     } on Exception {
       return;
     }
-    final storedAvatar =
-        xmppService.cachedSelfAvatar ?? await xmppService.getOwnAvatar();
-    if (storedAvatar == null) return;
-    final path = storedAvatar.path;
-    final bytes = await xmppService.loadAvatarBytes(path);
-    if (bytes == null || bytes.isEmpty || !mounted) return;
-    final safeBytes = await sanitizeAvatarBytes(bytes);
+    final avatarPath = profileCubit.state.avatarPath?.trim();
+    if (avatarPath == null || avatarPath.isEmpty) return;
+    final safeBytes = await profileCubit.resolveSafeAvatarBytes(
+      path: avatarPath,
+    );
     if (safeBytes == null || safeBytes.isEmpty || !mounted) return;
-    xmppService.cacheSafeAvatarBytes(path, safeBytes);
     try {
       await precacheImage(MemoryImage(safeBytes), context);
     } on Exception {

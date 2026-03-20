@@ -609,7 +609,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         return;
       }
       final payload = refreshed.payload;
-      final result = await _xmppService.publishAvatar(payload);
+      final result = await _xmppService.saveSelfAvatar(payload);
       emit(
         state.copyWith(
           publishing: false,

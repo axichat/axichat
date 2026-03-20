@@ -190,6 +190,7 @@ void main() {
     registerFallbackValue(FakeUserAgent());
     registerFallbackValue(FakeStanzaDetails());
     registerFallbackValue(FakeJid());
+    registerFallbackValue(ReconnectTrigger.resume);
     registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
   });
@@ -960,6 +961,229 @@ void main() {
       },
     );
 
+    test(
+      'Runs one follow-up self refresh when a self avatar update arrives during a running refresh.',
+      () async {
+        final pubsubManager = MockPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        final firstDataGate = Completer<void>();
+        final oldMetadataPayload =
+            (mox.XmlBuilder.withNamespace(
+                  'metadata',
+                  mox.userAvatarMetadataXmlns,
+                )..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', 'old-hash')
+                        ..attr('bytes', '3')
+                        ..attr('type', 'image/png')
+                        ..attr('width', '1')
+                        ..attr('height', '1'))
+                      .build(),
+                ))
+                .build();
+        final oldMetadataItem = mox.PubSubItem(
+          id: 'old-hash',
+          node: mox.userAvatarMetadataXmlns,
+          payload: oldMetadataPayload,
+        );
+        const newMetadata = mox.UserAvatarMetadata(
+          'new-hash',
+          3,
+          1,
+          1,
+          'image/png',
+          null,
+        );
+        var metadataCalls = 0;
+        final dataIds = <String>[];
+
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        await xmppService.close();
+        database = XmppDrift(
+          file: File(''),
+          passphrase: '',
+          executor: NativeDatabase.memory(),
+        );
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+        );
+        await connectSuccessfully(xmppService);
+        when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+        when(
+          () => mockConnection.getManager<mox.PubSubManager>(),
+        ).thenReturn(pubsubManager);
+        when(
+          () => mockConnection.getManager<mox.UserAvatarManager>(),
+        ).thenReturn(userAvatarManager);
+        when(
+          () => mockConnection.getManager<mox.VCardManager>(),
+        ).thenReturn(null);
+        when(
+          () => pubsubManager.getItems(
+            any(),
+            mox.userAvatarMetadataXmlns,
+            maxItems: any(named: 'maxItems'),
+          ),
+        ).thenAnswer((_) async {
+          metadataCalls += 1;
+          return moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>(
+            <mox.PubSubItem>[oldMetadataItem],
+          );
+        });
+        when(
+          () => userAvatarManager.getUserAvatarData(any(), any()),
+        ).thenAnswer((invocation) async {
+          final hash = invocation.positionalArguments[1] as String;
+          dataIds.add(hash);
+          if (hash == 'old-hash') {
+            await firstDataGate.future;
+            return const moxlib.Result<mox.AvatarError, mox.UserAvatarData>(
+              mox.UserAvatarData('AQID', 'old-hash'),
+            );
+          }
+          return const moxlib.Result<mox.AvatarError, mox.UserAvatarData>(
+            mox.UserAvatarData('BAUG', 'new-hash'),
+          );
+        });
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+        await pumpEventQueue();
+
+        expect(metadataCalls, equals(1));
+        expect(dataIds, equals(<String>['old-hash']));
+        expect(xmppService.selfAvatarHydrating, isTrue);
+
+        eventStreamController.add(
+          mox.UserAvatarUpdatedEvent(
+            mox.JID.fromString('jid@axi.im'),
+            <mox.UserAvatarMetadata>[newMetadata],
+          ),
+        );
+        await pumpEventQueue(times: 10);
+
+        expect(dataIds, equals(<String>['old-hash']));
+        expect(xmppService.selfAvatarHydrating, isTrue);
+
+        firstDataGate.complete();
+        await pumpEventQueue(times: 10);
+
+        expect(metadataCalls, equals(1));
+        expect(dataIds, equals(<String>['old-hash', 'new-hash']));
+        expect(xmppService.selfAvatarHydrating, isFalse);
+        expect(xmppService.cachedSelfAvatar?.hash, equals('new-hash'));
+      },
+    );
+
+    test(
+      'Saves self avatar locally before stream ready and publishes it after negotiations complete.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axi-avatar-publish',
+        );
+        final pubsubManager = RecordingAvatarPubSubManager();
+        final stateStoreValues = <String, Object?>{};
+        try {
+          PathProviderPlatform.instance = _FakePathProviderPlatform(
+            tempDir.path,
+          );
+          when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+            invocation,
+          ) {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            return stateStoreValues[key.value];
+          });
+          when(
+            () => mockStateStore.write(
+              key: any(named: 'key'),
+              value: any(named: 'value'),
+            ),
+          ).thenAnswer((invocation) async {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            stateStoreValues[key.value] = invocation.namedArguments[#value];
+            return true;
+          });
+          when(
+            () => mockStateStore.writeAll(data: any(named: 'data')),
+          ).thenAnswer((invocation) async {
+            final data =
+                invocation.namedArguments[#data]
+                    as Map<RegisteredStateKey, Object?>;
+            for (final entry in data.entries) {
+              stateStoreValues[entry.key.value] = entry.value;
+            }
+            return true;
+          });
+          await xmppService.close();
+          database = XmppDrift(
+            file: File(''),
+            passphrase: '',
+            executor: NativeDatabase.memory(),
+          );
+          xmppService = XmppService(
+            buildConnection: () => mockConnection,
+            buildStateStore: (_, _) => mockStateStore,
+            buildDatabase: (_, _) => database,
+            notificationService: mockNotificationService,
+          );
+          await connectSuccessfully(xmppService);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(null);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+
+          final result = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: Uint8List.fromList(<int>[
+                0x89,
+                0x50,
+                0x4E,
+                0x47,
+                0x0D,
+                0x0A,
+                0x1A,
+                0x0A,
+                0x00,
+              ]),
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: 'saved-before-ready',
+            ),
+          );
+
+          expect(result.hash, equals('saved-before-ready'));
+          expect(
+            xmppService.cachedSelfAvatar?.hash,
+            equals('saved-before-ready'),
+          );
+          expect(pubsubManager.publishCount, equals(0));
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 10);
+
+          expect(pubsubManager.publishCount, equals(2));
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
     test('Manual session sync refreshes the self avatar once.', () async {
       final pubsubManager = MockPubSubManager();
       final userAvatarManager = MockUserAvatarManager();
@@ -1625,6 +1849,378 @@ void main() {
         for (final subscription in subscriptions) {
           await subscription.cancel();
         }
+      },
+    );
+  });
+
+  group('reconnect coalescing', () {
+    late XmppReconnectionPolicy reconnectionPolicy;
+    late List<ReconnectTrigger> reconnectTriggers;
+
+    setUp(() async {
+      reconnectionPolicy = XmppReconnectionPolicy.exponential();
+      reconnectTriggers = <ReconnectTrigger>[];
+      when(
+        () => mockConnection.reconnectionPolicy,
+      ).thenReturn(reconnectionPolicy);
+      when(
+        () => mockConnection.isReconnecting(),
+      ).thenAnswer((_) async => false);
+      when(() => mockConnection.setShouldReconnect(any())).thenAnswer((
+        invocation,
+      ) async {
+        await reconnectionPolicy.setShouldReconnect(
+          invocation.positionalArguments.first as bool,
+        );
+      });
+      when(() => mockConnection.requestReconnect(any())).thenAnswer((
+        invocation,
+      ) async {
+        reconnectTriggers.add(
+          invocation.positionalArguments.first as ReconnectTrigger,
+        );
+      });
+
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(xmppService);
+    });
+
+    tearDown(() async {
+      await xmppService.close();
+      await pumpEventQueue();
+    });
+
+    test(
+      'Coalesces lifecycle and network reconnect requests onto one active operation.',
+      () async {
+        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+        expect(
+          reconnectTriggers,
+          equals(<ReconnectTrigger>[ReconnectTrigger.resume]),
+        );
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connecting,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+        expect(
+          reconnectTriggers,
+          equals(<ReconnectTrigger>[
+            ReconnectTrigger.resume,
+            ReconnectTrigger.networkAvailable,
+          ]),
+        );
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.connecting,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+        expect(
+          reconnectTriggers,
+          equals(<ReconnectTrigger>[
+            ReconnectTrigger.resume,
+            ReconnectTrigger.networkAvailable,
+          ]),
+        );
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+        await pumpEventQueue();
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+        expect(
+          reconnectTriggers,
+          equals(<ReconnectTrigger>[
+            ReconnectTrigger.resume,
+            ReconnectTrigger.networkAvailable,
+            ReconnectTrigger.networkAvailable,
+          ]),
+        );
+      },
+    );
+  });
+
+  group('reconnect ownership', () {
+    late List<ReconnectTrigger> reconnectTriggers;
+
+    setUp(() async {
+      reconnectTriggers = <ReconnectTrigger>[];
+      when(() => mockConnection.requestReconnect(any())).thenAnswer((
+        invocation,
+      ) async {
+        reconnectTriggers.add(
+          invocation.positionalArguments.first as ReconnectTrigger,
+        );
+      });
+
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(xmppService);
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.connecting,
+        ),
+      );
+      await pumpEventQueue();
+    });
+
+    tearDown(() async {
+      withForeground = false;
+      foregroundServiceActive.value = false;
+      await xmppService.close();
+      await pumpEventQueue();
+    });
+
+    test(
+      'Stream undefined condition recovery creates a service-owned reconnect op.',
+      () async {
+        expect(xmppService.hasActiveReconnectForTest, isFalse);
+
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(mox.StreamUndefinedConditionError()),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.hasActiveReconnectForTest, isTrue);
+        expect(xmppService.activeReconnectPhaseForTest, ReconnectPhase.backoff);
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+
+        expect(
+          reconnectTriggers,
+          equals(<ReconnectTrigger>[ReconnectTrigger.networkAvailable]),
+        );
+        expect(
+          xmppService.activeReconnectPhaseForTest,
+          ReconnectPhase.connecting,
+        );
+      },
+    );
+
+    test('disconnect clears the active reconnect operation.', () async {
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.notConnected,
+          mox.XmppConnectionState.connected,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+      expect(xmppService.hasActiveReconnectForTest, isTrue);
+
+      await xmppService.disconnect();
+      await pumpEventQueue();
+
+      expect(xmppService.hasActiveReconnectForTest, isFalse);
+    });
+
+    test(
+      'Non-recoverable failures clear the active reconnect operation.',
+      () async {
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+        expect(xmppService.hasActiveReconnectForTest, isTrue);
+
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(mox.StreamConflictError()),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.hasActiveReconnectForTest, isFalse);
+      },
+    );
+
+    test(
+      'syncSessionState returns false when reconnect setup fails before dispatch.',
+      () async {
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        await mockConnection.reconnectionPolicy.setShouldReconnect(false);
+        when(
+          () => mockConnection.setShouldReconnect(true),
+        ).thenAnswer((_) async => throw Exception('enable failed'));
+
+        expect(await xmppService.syncSessionState(), isFalse);
+        expect(xmppService.hasActiveReconnectForTest, isFalse);
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        verifyNever(() => mockConnection.requestReconnect(any()));
+      },
+    );
+
+    test(
+      'ensureConnected throws promptly when reconnect dispatch fails locally.',
+      () async {
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        when(
+          () => mockConnection.requestReconnect(any()),
+        ).thenAnswer((_) async => throw Exception('dispatch failed'));
+
+        await expectLater(
+          xmppService.ensureConnected(
+            trigger: ReconnectTrigger.networkAvailable,
+          ),
+          throwsA(isA<XmppDisconnectedException>()),
+        );
+        expect(xmppService.hasActiveReconnectForTest, isFalse);
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+      },
+    );
+
+    test(
+      'Foreground migration is skipped while the active reconnect is connecting.',
+      () async {
+        final originalBridge = foregroundTaskBridge;
+
+        foregroundTaskBridge = _FakeForegroundBridge();
+        withForeground = true;
+        foregroundServiceActive.value = true;
+        when(() => mockConnection.disconnect()).thenAnswer((_) async {});
+        addTearDown(() {
+          foregroundTaskBridge = originalBridge;
+          withForeground = false;
+          foregroundServiceActive.value = false;
+        });
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+        expect(
+          xmppService.activeReconnectPhaseForTest,
+          ReconnectPhase.connecting,
+        );
+
+        TestWidgetsFlutterBinding.ensureInitialized()
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+        await xmppService.ensureForegroundSocketIfActive();
+
+        expect(
+          xmppService.activeReconnectPhaseForTest,
+          ReconnectPhase.connecting,
+        );
+        verifyNever(() => mockConnection.disconnect());
+      },
+    );
+
+    test(
+      'Foreground migration is skipped while the active reconnect is negotiating.',
+      () async {
+        final originalBridge = foregroundTaskBridge;
+
+        foregroundTaskBridge = _FakeForegroundBridge();
+        withForeground = true;
+        foregroundServiceActive.value = true;
+        when(() => mockConnection.disconnect()).thenAnswer((_) async {});
+        addTearDown(() {
+          foregroundTaskBridge = originalBridge;
+          withForeground = false;
+          foregroundServiceActive.value = false;
+        });
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.connecting,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(
+          xmppService.activeReconnectPhaseForTest,
+          ReconnectPhase.negotiating,
+        );
+
+        TestWidgetsFlutterBinding.ensureInitialized()
+            .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+        await xmppService.ensureForegroundSocketIfActive();
+
+        expect(
+          xmppService.activeReconnectPhaseForTest,
+          ReconnectPhase.negotiating,
+        );
+        verifyNever(() => mockConnection.disconnect());
       },
     );
   });

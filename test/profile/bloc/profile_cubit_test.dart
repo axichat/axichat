@@ -9,29 +9,32 @@ import '../../mocks.dart';
 
 void main() {
   late MockXmppService xmppService;
+  late StreamController<Avatar?> selfAvatarController;
   late StreamController<bool> selfAvatarHydratingController;
 
   setUp(() {
     xmppService = MockXmppService();
+    selfAvatarController = StreamController<Avatar?>.broadcast();
     selfAvatarHydratingController = StreamController<bool>.broadcast();
     when(() => xmppService.myJid).thenReturn(null);
     when(() => xmppService.resource).thenReturn(null);
     when(() => xmppService.username).thenReturn(null);
     when(() => xmppService.cachedSelfAvatar).thenReturn(null);
+    when(() => xmppService.getOwnAvatar()).thenAnswer((_) async => null);
     when(() => xmppService.selfAvatarHydrating).thenReturn(false);
+    when(
+      () => xmppService.selfAvatarStream,
+    ).thenAnswer((_) => selfAvatarController.stream);
     when(
       () => xmppService.selfAvatarHydratingStream,
     ).thenAnswer((_) => selfAvatarHydratingController.stream);
     when(
-      () => xmppService.selfAvatarStream,
-    ).thenAnswer((_) => const Stream.empty());
-    when(
       () => xmppService.storedConversationMessageCountStream(),
     ).thenAnswer((_) => const Stream<int>.empty());
-    when(() => xmppService.getOwnAvatar()).thenAnswer((_) async => null);
   });
 
   tearDown(() async {
+    await selfAvatarController.close();
     await selfAvatarHydratingController.close();
   });
 
@@ -82,20 +85,32 @@ void main() {
     'keeps avatar hydrating while a cached self avatar is loaded during an active refresh.',
     () async {
       when(() => xmppService.myJid).thenReturn('newuser@axi.im');
-      when(() => xmppService.selfAvatarHydrating).thenReturn(true);
-      when(() => xmppService.getOwnAvatar()).thenAnswer(
-        (_) async => const Avatar(path: '/tmp/self.enc', hash: 'self-hash'),
-      );
       when(
-        () => xmppService.loadAvatarBytes('/tmp/self.enc'),
-      ).thenAnswer((_) async => null);
+        () => xmppService.cachedSelfAvatar,
+      ).thenReturn(const Avatar(path: '/tmp/self.enc', hash: 'self-hash'));
+      when(() => xmppService.selfAvatarHydrating).thenReturn(true);
 
       final cubit = ProfileCubit(xmppService: xmppService);
-      await Future<void>.delayed(Duration.zero);
 
       expect(cubit.state.avatarPath, '/tmp/self.enc');
       expect(cubit.state.avatarHash, 'self-hash');
       expect(cubit.state.avatarHydrating, isTrue);
+      await cubit.close();
+    },
+  );
+
+  test(
+    'hydrates a stored self avatar when the in-memory cache is empty.',
+    () async {
+      when(() => xmppService.getOwnAvatar()).thenAnswer(
+        (_) async => const Avatar(path: '/tmp/stored.enc', hash: 'stored-hash'),
+      );
+
+      final cubit = ProfileCubit(xmppService: xmppService);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cubit.state.avatarPath, '/tmp/stored.enc');
+      expect(cubit.state.avatarHash, 'stored-hash');
       await cubit.close();
     },
   );

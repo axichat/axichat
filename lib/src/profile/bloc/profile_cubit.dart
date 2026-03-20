@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -25,27 +26,11 @@ class ProfileCubit extends Cubit<ProfileState> {
           avatarHash: xmppService.cachedSelfAvatar?.hash,
         ),
       ) {
-    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen((
-      avatar,
-    ) async {
-      if (avatar == null) {
-        emit(
-          state.copyWith(
-            avatarPath: null,
-            avatarHash: null,
-            avatarHydrating: _xmppService.selfAvatarHydrating,
-          ),
-        );
-        return;
-      }
-      final path = avatar.path.trim();
-      if (path.isNotEmpty) {
-        await _xmppService.loadAvatarBytes(path);
-      }
+    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen((avatar) {
       emit(
         state.copyWith(
-          avatarPath: path,
-          avatarHash: avatar.hash ?? state.avatarHash,
+          avatarPath: avatar?.path,
+          avatarHash: avatar?.hash,
           avatarHydrating: _xmppService.selfAvatarHydrating,
         ),
       );
@@ -60,7 +45,7 @@ class ProfileCubit extends Cubit<ProfileState> {
           (count) =>
               emit(state.copyWith(storedConversationMessageCount: count)),
         );
-    unawaited(_loadAvatar());
+    unawaited(_hydrateStoredSelfAvatar());
     if (_omemoService != null) {
       loadFingerprints();
     }
@@ -88,16 +73,28 @@ class ProfileCubit extends Cubit<ProfileState> {
     emit(state.copyWith(fingerprint: fingerprint));
   }
 
+  Future<void> _hydrateStoredSelfAvatar() async {
+    final avatar = await _xmppService.getOwnAvatar();
+    emit(
+      state.copyWith(
+        avatarPath: avatar?.path,
+        avatarHash: avatar?.hash,
+        avatarHydrating: _xmppService.selfAvatarHydrating,
+      ),
+    );
+  }
+
   void syncSessionIdentity() {
     emit(
       state.copyWith(
         jid: _xmppService.myJid ?? '',
         resource: _xmppService.resource ?? '',
         username: _xmppService.username ?? '',
+        avatarPath: _xmppService.cachedSelfAvatar?.path,
+        avatarHash: _xmppService.cachedSelfAvatar?.hash,
         avatarHydrating: _xmppService.selfAvatarHydrating,
       ),
     );
-    unawaited(_loadAvatar());
     if (_omemoService != null) {
       unawaited(loadFingerprints());
     }
@@ -126,29 +123,11 @@ class ProfileCubit extends Cubit<ProfileState> {
     emit(state.copyWith(regenerating: false));
   }
 
-  Future<void> _loadAvatar() async {
-    final stored = await _xmppService.getOwnAvatar();
-    if (stored == null) {
-      emit(state.copyWith(avatarHydrating: _xmppService.selfAvatarHydrating));
-      return;
+  Future<Uint8List?> resolveSafeAvatarBytes({String? path}) {
+    final avatarPath = path?.trim() ?? state.avatarPath?.trim();
+    if (avatarPath == null || avatarPath.isEmpty) {
+      return Future<Uint8List?>.value(null);
     }
-    final path = stored.path;
-    await _xmppService.loadAvatarBytes(path);
-    emit(
-      state.copyWith(
-        avatarPath: path,
-        avatarHash: stored.hash ?? state.avatarHash,
-        avatarHydrating: _xmppService.selfAvatarHydrating,
-      ),
-    );
-  }
-
-  void updateAvatar({String? path, String? hash}) {
-    emit(
-      state.copyWith(
-        avatarPath: path ?? state.avatarPath,
-        avatarHash: hash ?? state.avatarHash,
-      ),
-    );
+    return _xmppService.resolveSafeAvatarBytes(avatarPath: avatarPath);
   }
 }

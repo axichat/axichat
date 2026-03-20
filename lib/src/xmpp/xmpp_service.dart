@@ -59,6 +59,7 @@ import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
+import 'package:axichat/src/xmpp/pubsub/message_displayed_sync_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_events.dart';
@@ -671,6 +672,24 @@ final class _XmppBootstrapPass {
   int queuedRuns = 0;
 }
 
+enum ReconnectPhase { backoff, connecting, negotiating }
+
+final class _ReconnectOperation {
+  _ReconnectOperation({
+    required this.completer,
+    required this.phase,
+    required this.triggers,
+    required this.lifecycleRequested,
+  });
+
+  final Completer<void> completer;
+  ReconnectPhase phase;
+  final Set<ReconnectTrigger> triggers;
+  bool lifecycleRequested;
+
+  bool get isActive => !completer.isCompleted;
+}
+
 class XmppService extends XmppBase
     with
         BaseStreamService,
@@ -1001,15 +1020,21 @@ class XmppService extends XmppBase
           await sm?.resetState();
           await sm?.clearPersistedState();
           _reconnectBlocked = false;
-          await _connection.setShouldReconnect(true);
-          if (await _connection.reconnectionPolicy.canTriggerFailure()) {
-            await _connection.reconnectionPolicy.onFailure();
+          if (!await _requestReconnect(
+            ReconnectTrigger.autoFailure,
+            lifecycleRequested: false,
+            allowWhileConnected: true,
+          )) {
+            _xmppLogger.info(
+              'Stream undefined condition recovery reconnect was not accepted.',
+            );
           }
           return;
         }
 
         _reconnectBlocked = true;
         _sessionReconnectEnabled = false;
+        _finishActiveReconnect(reason: 'non-recoverable XMPP error');
         try {
           await _connection.setShouldReconnect(false);
         } catch (error, stackTrace) {
@@ -1138,15 +1163,33 @@ class XmppService extends XmppBase
     }
 
     _connectionState = state;
-    if (state == ConnectionState.connected ||
-        state == ConnectionState.notConnected ||
-        state == ConnectionState.error) {
-      if (_lifecycleResumeReconnectOwned) {
-        _xmppLogger.info(
-          'Clearing lifecycle-resume reconnect ownership at state=$state.',
-        );
+    final activeReconnect = _currentActiveReconnect();
+    if (activeReconnect != null) {
+      switch (state) {
+        case ConnectionState.notConnected:
+          _setActiveReconnectPhase(
+            activeReconnect,
+            ReconnectPhase.backoff,
+            reason: 'connection state changed to notConnected',
+          );
+          break;
+        case ConnectionState.connecting:
+          _setActiveReconnectPhase(
+            activeReconnect,
+            ReconnectPhase.connecting,
+            reason: 'connection state changed to connecting',
+          );
+          break;
+        case ConnectionState.connected:
+          _setActiveReconnectPhase(
+            activeReconnect,
+            ReconnectPhase.negotiating,
+            reason: 'connection state changed to connected',
+          );
+          break;
+        case ConnectionState.error:
+          break;
       }
-      _lifecycleResumeReconnectOwned = false;
     }
     if (!_connectivityStream.isClosed) {
       _connectivityStream.add(state);
@@ -1226,6 +1269,7 @@ class XmppService extends XmppBase
     if (!_streamNegotiationsDone.isCompleted) {
       _streamNegotiationsDone.complete();
     }
+    _finishActiveReconnect(reason: 'stream negotiations complete');
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
 
@@ -1440,7 +1484,7 @@ class XmppService extends XmppBase
   bool _sessionReconnectEnabled = false;
   bool _connectInFlight = false;
   bool _reconnectBlocked = false;
-  bool _lifecycleResumeReconnectOwned = false;
+  _ReconnectOperation? _activeReconnect;
   var _foregroundServiceNotificationSent = false;
   var _connectionPasswordPreHashed = false;
   final Set<int> _timeoutErrorCodes = {60, 110, 10060};
@@ -1448,10 +1492,106 @@ class XmppService extends XmppBase
   var _consecutiveConnectTimeouts = 0;
   DateTime? _lastForegroundSocketMigrationAttempt;
   Timer? _foregroundSocketMigrationTimer;
-  var _nextReconnectRequestId = 0;
-  var _nextForegroundMigrationAttemptId = 0;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
+
+  String _activeReconnectSummary() {
+    final activeReconnect = _activeReconnect;
+    if (activeReconnect == null) {
+      return 'activeReconnect=none';
+    }
+    return 'activeReconnect='
+        'active=${activeReconnect.isActive} '
+        'phase=${activeReconnect.phase} '
+        'triggers=${activeReconnect.triggers} '
+        'lifecycleRequested=${activeReconnect.lifecycleRequested}';
+  }
+
+  @visibleForTesting
+  bool get hasActiveReconnectForTest => _currentActiveReconnect() != null;
+
+  @visibleForTesting
+  ReconnectPhase? get activeReconnectPhaseForTest =>
+      _currentActiveReconnect()?.phase;
+
+  _ReconnectOperation? _currentActiveReconnect() {
+    final activeReconnect = _activeReconnect;
+    if (activeReconnect == null) {
+      return null;
+    }
+    if (activeReconnect.isActive) {
+      return activeReconnect;
+    }
+    if (identical(_activeReconnect, activeReconnect)) {
+      _activeReconnect = null;
+    }
+    return null;
+  }
+
+  bool _isCurrentActiveReconnect(_ReconnectOperation operation) =>
+      identical(_currentActiveReconnect(), operation);
+
+  _ReconnectOperation _startActiveReconnect({
+    required ReconnectTrigger trigger,
+    required bool lifecycleRequested,
+  }) {
+    final operation = _ReconnectOperation(
+      completer: Completer<void>(),
+      phase: trigger.shouldBypassBackoff
+          ? ReconnectPhase.connecting
+          : ReconnectPhase.backoff,
+      triggers: <ReconnectTrigger>{trigger},
+      lifecycleRequested: lifecycleRequested,
+    );
+    _activeReconnect = operation;
+    _xmppLogger.info(
+      'Reconnect operation started: trigger=$trigger ${_activeReconnectSummary()}',
+    );
+    return operation;
+  }
+
+  void _setActiveReconnectPhase(
+    _ReconnectOperation operation,
+    ReconnectPhase phase, {
+    required String reason,
+  }) {
+    if (!_isCurrentActiveReconnect(operation) || operation.phase == phase) {
+      return;
+    }
+    _xmppLogger.info(
+      'Reconnect phase ${operation.phase} -> $phase reason=$reason.',
+    );
+    operation.phase = phase;
+  }
+
+  void _finishActiveReconnect({required String reason}) {
+    final activeReconnect = _currentActiveReconnect();
+    if (activeReconnect == null) {
+      return;
+    }
+    _xmppLogger.info(
+      'Reconnect operation finished: reason=$reason '
+      '${_activeReconnectSummary()}',
+    );
+    if (!activeReconnect.completer.isCompleted) {
+      activeReconnect.completer.complete();
+    }
+    if (identical(_activeReconnect, activeReconnect)) {
+      _activeReconnect = null;
+    }
+  }
+
+  Future<void> _dispatchReconnectTrigger(ReconnectTrigger trigger) async {
+    if (trigger == ReconnectTrigger.autoFailure) {
+      final policy = _connection.reconnectionPolicy;
+      final startedReconnectCycle = await policy.canTriggerFailure();
+      if (startedReconnectCycle || await _connection.isReconnecting()) {
+        await policy.onFailure();
+      }
+      return;
+    }
+    await _connection.requestReconnect(trigger);
+  }
 
   Future<String> _reconnectStateSummary() async {
     final bool policyReconnecting = await _connection.isReconnecting();
@@ -1463,7 +1603,7 @@ class XmppService extends XmppBase
         'sessionReconnectEnabled=$_sessionReconnectEnabled '
         'reconnectBlocked=$_reconnectBlocked '
         'connectInFlight=$_connectInFlight '
-        'lifecycleOwned=$_lifecycleResumeReconnectOwned '
+        '${_activeReconnectSummary()} '
         'policyReconnecting=$policyReconnecting '
         'policyShouldReconnect=$policyShouldReconnect '
         'lifecycle=$lifecycleState '
@@ -1605,26 +1745,22 @@ class XmppService extends XmppBase
       );
       return;
     }
-    final int migrationAttemptId = ++_nextForegroundMigrationAttemptId;
     _xmppLogger.info(
-      'Scheduling foreground socket migration: attemptId=$migrationAttemptId '
+      'Scheduling foreground socket migration: '
       'delay=${_foregroundSocketMigrationDelay.inSeconds}s. '
       '${_foregroundMigrationStateSummary()}',
     );
     _foregroundSocketMigrationTimer?.cancel();
     _foregroundSocketMigrationTimer = Timer(
       _foregroundSocketMigrationDelay,
-      () {
-        _runForegroundSocketMigration(migrationAttemptId);
-      },
+      _runForegroundSocketMigration,
     );
   }
 
-  Future<void> _runForegroundSocketMigration(int migrationAttemptId) async {
+  Future<void> _runForegroundSocketMigration() async {
     _foregroundSocketMigrationTimer = null;
     _xmppLogger.info(
-      'Running scheduled foreground socket migration: '
-      'attemptId=$migrationAttemptId. '
+      'Running scheduled foreground socket migration. '
       '${_foregroundMigrationStateSummary()}',
     );
     try {
@@ -2545,16 +2681,10 @@ class XmppService extends XmppBase
         .listen((availability) {
           _xmppLogger.info(
             'Network availability event received: availability=$availability '
-            'lifecycleOwned=$_lifecycleResumeReconnectOwned '
+            '${_activeReconnectSummary()} '
             'connectionState=$connectionState',
           );
           if (!availability.isAvailable) {
-            return;
-          }
-          if (_lifecycleResumeReconnectOwned) {
-            _xmppLogger.fine(
-              'Skipping network-available reconnect because lifecycle resume owns current recovery.',
-            );
             return;
           }
           fireAndForget(
@@ -2617,52 +2747,86 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<bool> requestReconnect(ReconnectTrigger trigger) async {
-    final int requestId = ++_nextReconnectRequestId;
+  Future<bool> _requestReconnect(
+    ReconnectTrigger trigger, {
+    required bool lifecycleRequested,
+    bool allowWhileConnected = false,
+  }) async {
     _xmppLogger.info(
-      'Reconnect request[$requestId] started: trigger=$trigger '
-      '${await _reconnectStateSummary()}',
+      'Reconnect request started: trigger=$trigger '
+      '${_activeReconnectSummary()}',
     );
     if (!_synchronousConnection.isCompleted) {
       _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: synchronous connection incomplete.',
+        'Reconnect request ignored: synchronous connection incomplete.',
       );
       return false;
     }
     if (!_connection.hasConnectionSettings) {
       _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: missing connection settings.',
+        'Reconnect request ignored: missing connection settings.',
       );
       return false;
     }
     if (!_sessionReconnectEnabled) {
       _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: session reconnect disabled.',
+        'Reconnect request ignored: session reconnect disabled.',
       );
       return false;
     }
     if (_reconnectBlocked) {
-      _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: reconnect blocked.',
-      );
+      _xmppLogger.info('Reconnect request ignored: reconnect blocked.');
       return false;
     }
     if (_connectInFlight) {
-      _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: connect already in flight.',
-      );
+      _xmppLogger.info('Reconnect request ignored: connect already in flight.');
       return true;
     }
-    if (connected) {
+    final existingReconnect = _currentActiveReconnect();
+    late final _ReconnectOperation activeReconnect;
+    if (existingReconnect != null) {
+      activeReconnect = existingReconnect;
+      activeReconnect.triggers.add(trigger);
+      if (lifecycleRequested) {
+        activeReconnect.lifecycleRequested = true;
+      }
       _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: already connected.',
+        'Reconnect request joined active operation: '
+        'phase=${activeReconnect.phase} trigger=$trigger '
+        '${_activeReconnectSummary()}',
       );
+      if (trigger == ReconnectTrigger.autoFailure) {
+        _setActiveReconnectPhase(
+          activeReconnect,
+          ReconnectPhase.backoff,
+          reason: 'trigger upgrade $trigger',
+        );
+      } else if (activeReconnect.phase == ReconnectPhase.connecting ||
+          activeReconnect.phase == ReconnectPhase.negotiating) {
+        return true;
+      } else if (!trigger.shouldBypassBackoff) {
+        return true;
+      } else {
+        _setActiveReconnectPhase(
+          activeReconnect,
+          ReconnectPhase.connecting,
+          reason: 'trigger upgrade $trigger',
+        );
+      }
+    } else if (connected && !allowWhileConnected) {
+      _xmppLogger.info('Reconnect request ignored: already connected.');
       return true;
+    } else {
+      activeReconnect = _startActiveReconnect(
+        trigger: trigger,
+        lifecycleRequested: lifecycleRequested,
+      );
     }
-    final bool reconnecting = await _connection.isReconnecting();
-    if (reconnecting && !trigger.shouldBypassBackoff) {
+
+    if (!_isCurrentActiveReconnect(activeReconnect)) {
       _xmppLogger.info(
-        'Reconnect request[$requestId] ignored: policy already reconnecting and trigger does not bypass backoff.',
+        'Reconnect request completed before dispatch: '
+        'active operation is no longer current.',
       );
       return true;
     }
@@ -2674,11 +2838,19 @@ class XmppService extends XmppBase
         await _connection.setShouldReconnect(true);
       } catch (error, stackTrace) {
         _xmppLogger.finer(_reconnectEnableFailedLog, error, stackTrace);
+        _finishActiveReconnect(reason: 'failed while enabling reconnection');
         _xmppLogger.info(
-          'Reconnect request[$requestId] failed while enabling reconnection.',
+          'Reconnect request failed while enabling reconnection.',
         );
         return false;
       }
+    }
+    if (!_isCurrentActiveReconnect(activeReconnect)) {
+      _xmppLogger.info(
+        'Reconnect request completed after enabling policy: '
+        'active operation is no longer current.',
+      );
+      return true;
     }
 
     if (trigger.shouldBypassBackoff &&
@@ -2686,13 +2858,29 @@ class XmppService extends XmppBase
       _setConnectionState(ConnectionState.connecting);
     }
 
-    await _connection.requestReconnect(trigger);
+    try {
+      await _dispatchReconnectTrigger(trigger);
+    } on Exception catch (error, stackTrace) {
+      if (connectionState == ConnectionState.connecting) {
+        _setConnectionState(ConnectionState.notConnected);
+      }
+      _finishActiveReconnect(reason: 'dispatch failed ${error.runtimeType}');
+      _xmppLogger.warning(
+        'Reconnect request failed during dispatch.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
     _xmppLogger.info(
-      'Reconnect request[$requestId] dispatched: trigger=$trigger '
+      'Reconnect request dispatched: trigger=$trigger '
       '${await _reconnectStateSummary()}',
     );
     return true;
   }
+
+  Future<bool> requestReconnect(ReconnectTrigger trigger) =>
+      _requestReconnect(trigger, lifecycleRequested: false);
 
   @override
   Future<bool> requestLifecycleResumeReconnect() async {
@@ -2700,28 +2888,20 @@ class XmppService extends XmppBase
       'Lifecycle-resume reconnect requested. '
       '${await _reconnectStateSummary()}',
     );
-    _lifecycleResumeReconnectOwned = true;
-    if (connected ||
-        _hasMamNegotiatedStream ||
-        _streamNegotiationsDone.isCompleted) {
+    if (_hasMamNegotiatedStream || _streamNegotiationsDone.isCompleted) {
       _xmppLogger.info(
-        'Lifecycle-resume reconnect short-circuited because the stream is already connected or negotiated.',
+        'Lifecycle-resume reconnect short-circuited because the stream is already negotiated.',
       );
       return true;
     }
-    try {
-      final requested = await requestReconnect(ReconnectTrigger.resume);
-      if (!requested) {
-        _lifecycleResumeReconnectOwned = false;
-        _xmppLogger.info(
-          'Lifecycle-resume reconnect request was not accepted.',
-        );
-      }
-      return requested;
-    } on Exception {
-      _lifecycleResumeReconnectOwned = false;
-      rethrow;
+    final requested = await _requestReconnect(
+      ReconnectTrigger.resume,
+      lifecycleRequested: true,
+    );
+    if (!requested) {
+      _xmppLogger.info('Lifecycle-resume reconnect request was not accepted.');
     }
+    return requested;
   }
 
   Future<void> ensureConnected({
@@ -2730,8 +2910,11 @@ class XmppService extends XmppBase
   }) async {
     if (!hasConnectionSettings) return;
     if (connectionState == ConnectionState.connected) return;
-    await requestReconnect(trigger);
+    final requested = await requestReconnect(trigger);
     if (connectionState == ConnectionState.connected) return;
+    if (!requested) {
+      throw XmppDisconnectedException();
+    }
     await connectivityStream
         .firstWhere((state) => state == ConnectionState.connected)
         .timeout(timeout);
@@ -2823,9 +3006,16 @@ class XmppService extends XmppBase
       _logForegroundMigrationSkip('connect already in flight');
       return;
     }
-    if (await _connection.isReconnecting()) {
-      _logForegroundMigrationSkip('connection already reconnecting');
-      return;
+    switch (_currentActiveReconnect()?.phase) {
+      case ReconnectPhase.connecting:
+      case ReconnectPhase.negotiating:
+        _logForegroundMigrationSkip(
+          'active reconnect is ${_currentActiveReconnect()!.phase}',
+        );
+        return;
+      case ReconnectPhase.backoff:
+      case null:
+        break;
     }
     final bool usingForegroundSocket =
         _connection.socketWrapper is ForegroundSocketWrapper;
@@ -3027,6 +3217,9 @@ class XmppService extends XmppBase
           fallbackStackTrace,
         );
         if (fallbackError is XmppAuthenticationException) {
+          _finishActiveReconnect(
+            reason: 'foreground migration failed with authentication error',
+          );
           _setConnectionState(ConnectionState.error);
           return;
         }
@@ -3107,6 +3300,7 @@ class XmppService extends XmppBase
     _lifecycleEpoch += 1;
     _myJid = null;
     _synchronousConnection = Completer<void>();
+    _finishActiveReconnect(reason: 'reset');
     _setConnectionState(ConnectionState.notConnected);
     _pingController.stop();
     await _stopNetworkAvailabilityListener();
