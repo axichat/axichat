@@ -54,6 +54,7 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
       _connectivityState = const ConnectivityNotConnected(
         emailState: EmailSyncState.ready(),
         emailEnabled: true,
+        demoOffline: true,
       );
       _display = _ConnectivityIndicatorDisplay.notConnected;
       return;

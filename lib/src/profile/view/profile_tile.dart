@@ -9,7 +9,6 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -22,7 +21,7 @@ class ProfileTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
-        final demoOffline = context.watch<XmppService>().demoOfflineMode;
+        final demoOffline = connectivityState.demoOffline;
         final connectionState = _xmppStateFor(
           connectivityState,
           demoOffline: demoOffline,

@@ -22,15 +22,17 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
          stateMap(
            xmppBase.connectionState,
            emailState: emailService?.syncState ?? const EmailSyncState.ready(),
-           emailEnabled: emailEnabled,
-         ),
-       ) {
+            emailEnabled: emailEnabled,
+            demoOffline: xmppBase.demoOfflineMode,
+          ),
+        ) {
     _connectivitySubscription = _xmppBase.connectivityStream.listen(
       (e) => emit(
         stateMap(
           e,
           emailState: state.emailState,
           emailEnabled: state.emailEnabled,
+          demoOffline: _xmppBase.demoOfflineMode,
         ),
       ),
     );
@@ -43,22 +45,27 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     ConnectionState connectionState, {
     required EmailSyncState emailState,
     required bool emailEnabled,
+    required bool demoOffline,
   }) => switch (connectionState) {
     ConnectionState.connected => ConnectivityConnected(
       emailState: emailState,
       emailEnabled: emailEnabled,
+      demoOffline: demoOffline,
     ),
     ConnectionState.connecting => ConnectivityConnecting(
       emailState: emailState,
       emailEnabled: emailEnabled,
+      demoOffline: demoOffline,
     ),
     ConnectionState.notConnected => ConnectivityNotConnected(
       emailState: emailState,
       emailEnabled: emailEnabled,
+      demoOffline: demoOffline,
     ),
     ConnectionState.error => ConnectivityError(
       emailState: emailState,
       emailEnabled: emailEnabled,
+      demoOffline: demoOffline,
     ),
   };
 
@@ -75,6 +82,7 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
         _xmppBase.connectionState,
         emailState: emailState,
         emailEnabled: _emailEnabled,
+        demoOffline: _xmppBase.demoOfflineMode,
       ),
     );
   }
@@ -102,6 +110,21 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
         _xmppBase.connectionState,
         emailState: emailService?.syncState ?? const EmailSyncState.ready(),
         emailEnabled: _emailEnabled,
+        demoOffline: _xmppBase.demoOfflineMode,
+      ),
+    );
+  }
+
+  Future<void> resetDemoInteractivePhase() async {
+    final xmppBase = _xmppBase;
+    if (xmppBase is! XmppService) return;
+    await xmppBase.resetDemoInteractivePhase();
+    emit(
+      stateMap(
+        _xmppBase.connectionState,
+        emailState: state.emailState,
+        emailEnabled: state.emailEnabled,
+        demoOffline: _xmppBase.demoOfflineMode,
       ),
     );
   }
