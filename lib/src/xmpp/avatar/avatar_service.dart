@@ -955,9 +955,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (targetJid == null || targetJid != myBareJid) {
       throw XmppAvatarException();
     }
-    if (_hasSelfAvatarNegotiatedStream) {
-      return publishAvatar(payload, public: public);
-    }
     final result = await _storeSelfAvatarDraft(payload, public: public);
     if (_hasSelfAvatarNegotiatedStream) {
       fireAndForget(() async {
@@ -1080,7 +1077,10 @@ mixin AvatarService on XmppBase, BaseStreamService {
             (pending?.includesBootstrapWork ?? false);
         if (nextRequest.isBootstrapOnly && bootstrapAlreadyQueued) {
           await running;
-          return;
+          if (await _readPendingSelfAvatarPublish() == null) {
+            return;
+          }
+          continue;
         }
         _pendingSelfAvatarRefreshRequest = pending == null
             ? nextRequest
@@ -1387,7 +1387,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
 
   Future<bool> refreshAvatarsForConversationIndex() async {
     final refreshed = await _refreshConversationIndexAvatars();
-    await refreshSelfAvatarIfNeeded(force: true);
+    await refreshSelfAvatarIfNeeded();
     return refreshed;
   }
 
@@ -2079,6 +2079,19 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } on XmppAbortedException {
       return null;
     }
+  }
+
+  Future<bool> _hasStoredAvatarForHash(String jid, String? hash) async {
+    final normalizedHash = hash?.trim();
+    if (normalizedHash == null || normalizedHash.isEmpty) {
+      return false;
+    }
+    final existingHash = await _storedAvatarHash(jid);
+    if (existingHash == null || existingHash != normalizedHash) {
+      return false;
+    }
+    final existingPath = await _storedAvatarPath(jid);
+    return _hasCachedAvatarFile(existingPath);
   }
 
   Future<T> _withAvatarRefreshTimeout<T>(

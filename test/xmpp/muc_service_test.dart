@@ -2185,6 +2185,133 @@ void main() {
         ).called(1);
       },
     );
+
+    test(
+      'ROOM-AVATAR-003 [HP] matching MUC vCard avatar hashes skip room vCard fetches',
+      () async {
+        const roomAvatarHash = 'room-avatar-hash';
+        final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
+        await avatarDir.create(recursive: true);
+        final cachedAvatarPath = p.join(
+          avatarDir.path,
+          'cached-room-avatar.enc',
+        );
+        await File(cachedAvatarPath).writeAsBytes(_pngLikeBytes, flush: true);
+
+        when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: _roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: _roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: _roomJid,
+            avatarPath: cachedAvatarPath,
+            avatarHash: roomAvatarHash,
+          ),
+        );
+
+        clearInteractions(mockConnection);
+
+        eventStreamController.add(
+          RoomVCardAvatarUpdatedEvent(
+            mox.JID.fromString(_roomJid),
+            roomAvatarHash,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        verifyNever(() => mockConnection.sendStanza(any()));
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-004 [HP] matching room-info avatar hashes skip room vCard fetches after join refresh',
+      () async {
+        const roomAvatarHash = 'room-avatar-hash';
+        final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
+        await avatarDir.create(recursive: true);
+        final cachedAvatarPath = p.join(
+          avatarDir.path,
+          'cached-room-avatar.enc',
+        );
+        await File(cachedAvatarPath).writeAsBytes(_pngLikeBytes, flush: true);
+
+        when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: _roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: _roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: _roomJid,
+            avatarPath: cachedAvatarPath,
+            avatarHash: roomAvatarHash,
+          ),
+        );
+
+        var requestedRoomVCard = false;
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final type = stanza.attributes[_typeAttr]?.toString();
+          if (stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
+              type == _iqTypeGet) {
+            requestedRoomVCard = true;
+            return Future<mox.XMLNode?>.value(null);
+          }
+          if (stanza.firstTag(_queryTag, xmlns: _discoInfoXmlns) != null) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _discoInfoXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'result'},
+                        children: [
+                          _formTypeField(_mucRoomInfoFormType),
+                          _singleValueField(
+                            'muc#roominfo_avatar_hash',
+                            roomAvatarHash,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: _roomNick,
+            affiliation: OccupantAffiliation.member.xmlValue,
+            role: OccupantRole.participant.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+        await pumpEventQueue(times: 20);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await pumpEventQueue(times: 20);
+
+        expect(requestedRoomVCard, isFalse);
+      },
+    );
   });
 
   group('Nickname changes', () {
