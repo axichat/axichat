@@ -22,10 +22,10 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
          stateMap(
            xmppBase.connectionState,
            emailState: emailService?.syncState ?? const EmailSyncState.ready(),
-            emailEnabled: emailEnabled,
-            demoOffline: xmppBase.demoOfflineMode,
-          ),
-        ) {
+           emailEnabled: emailEnabled,
+           demoOffline: xmppBase.demoOfflineMode,
+         ),
+       ) {
     _connectivitySubscription = _xmppBase.connectivityStream.listen(
       (e) => emit(
         stateMap(

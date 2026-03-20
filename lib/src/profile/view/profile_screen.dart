@@ -162,7 +162,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final colors = context.colorScheme;
         final spacing = context.spacing;
         final sizing = context.sizing;
-        final demoOffline = context.read<XmppService>().demoOfflineMode;
+        final demoOffline = connectivityState.demoOffline;
         final profileSidebarColor = colors.background;
         final showingProfileSubpage = _profileRoute != _ProfileRoute.main;
         return PopScope(
@@ -211,7 +211,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       iconData: LucideIcons.refreshCcw,
                       tooltip: l10n.commonRetry,
                       onPressed: () async => await context
-                          .read<XmppService>()
+                          .read<ConnectivityCubit>()
                           .resetDemoInteractivePhase(),
                     ),
                   ),
