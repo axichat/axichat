@@ -56,11 +56,10 @@ ChatRouteIndex resolveStoredChatRoute({
   if (route.isDetails && !hasFocusedMessage) {
     return ChatRouteIndex.main;
   }
-  if ((route.isSettings ||
-          route.isImportant ||
-          route.isGallery ||
-          route.isCalendar) &&
-      !hasChat) {
+  if (route.isCalendar && !hasChat) {
+    return ChatRouteIndex.calendar;
+  }
+  if ((route.isSettings || route.isImportant || route.isGallery) && !hasChat) {
     return ChatRouteIndex.main;
   }
   return route;
