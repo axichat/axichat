@@ -1070,7 +1070,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'Requesting lifecycle-resume XMPP reconnect. '
         'source=$source',
       );
-      await _xmppService.requestLifecycleResumeReconnect();
+      await _xmppService.requestReconnect(ReconnectTrigger.resume);
     } on Exception {
       // Ignore: network failures are non-fatal for sticky sessions.
     }
