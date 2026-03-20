@@ -175,6 +175,32 @@ void main() {
     });
   });
 
+  test('resume and networkAvailable share one reconnect action', () {
+    fakeAsync((async) {
+      final policy = XmppReconnectionPolicy.exponential();
+      final reconnectCompleter = Completer<void>();
+      var reconnectCalls = 0;
+      policy.register(() async {
+        reconnectCalls++;
+        await reconnectCompleter.future;
+      });
+
+      fireAndForget(() => policy.setShouldReconnect(true));
+      fireAndForget(() async {
+        await Future.wait([
+          policy.requestReconnect(ReconnectTrigger.resume),
+          policy.requestReconnect(ReconnectTrigger.networkAvailable),
+        ]);
+      });
+
+      async.flushMicrotasks();
+      expect(reconnectCalls, 1);
+
+      reconnectCompleter.complete();
+      async.flushMicrotasks();
+    });
+  });
+
   test(
     'requestReconnect stays latched through reset and onSuccess until completeReconnect',
     () async {

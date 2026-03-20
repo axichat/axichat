@@ -2480,7 +2480,7 @@ void main() {
     );
   });
 
-  group('reconnect coalescing', () {
+  group('reconnect admission', () {
     late XmppReconnectionPolicy reconnectionPolicy;
     late List<ReconnectTrigger> reconnectTriggers;
 
@@ -2522,191 +2522,103 @@ void main() {
       await pumpEventQueue();
     });
 
-    test(
-      'Coalesces lifecycle and network reconnect requests onto one active operation.',
-      () async {
-        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-        expect(
-          reconnectTriggers,
-          equals(<ReconnectTrigger>[ReconnectTrigger.resume]),
-        );
-
-        eventStreamController.add(
-          mox.ConnectionStateChangedEvent(
-            mox.XmppConnectionState.notConnected,
-            mox.XmppConnectionState.connecting,
-          ),
-        );
-        await pumpEventQueue();
-
-        expect(
-          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
-          isTrue,
-        );
-        expect(
-          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
-          isTrue,
-        );
-        expect(
-          reconnectTriggers,
-          equals(<ReconnectTrigger>[
-            ReconnectTrigger.resume,
-            ReconnectTrigger.networkAvailable,
-          ]),
-        );
-
-        eventStreamController.add(
-          mox.ConnectionStateChangedEvent(
-            mox.XmppConnectionState.connected,
-            mox.XmppConnectionState.connecting,
-          ),
-        );
-        await pumpEventQueue();
-
-        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-        expect(
-          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
-          isTrue,
-        );
-        expect(
-          reconnectTriggers,
-          equals(<ReconnectTrigger>[
-            ReconnectTrigger.resume,
-            ReconnectTrigger.networkAvailable,
-          ]),
-        );
-
-        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
-        await pumpEventQueue();
-
-        eventStreamController.add(
-          mox.ConnectionStateChangedEvent(
-            mox.XmppConnectionState.notConnected,
-            mox.XmppConnectionState.connected,
-          ),
-        );
-        await pumpEventQueue();
-
-        expect(
-          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
-          isTrue,
-        );
-        expect(
-          reconnectTriggers,
-          equals(<ReconnectTrigger>[
-            ReconnectTrigger.resume,
-            ReconnectTrigger.networkAvailable,
-            ReconnectTrigger.networkAvailable,
-          ]),
-        );
-      },
-    );
-  });
-
-  group('reconnect ownership', () {
-    late List<ReconnectTrigger> reconnectTriggers;
-
-    setUp(() async {
-      reconnectTriggers = <ReconnectTrigger>[];
-      when(() => mockConnection.requestReconnect(any())).thenAnswer((
-        invocation,
-      ) async {
-        reconnectTriggers.add(
-          invocation.positionalArguments.first as ReconnectTrigger,
-        );
-      });
-
-      xmppService = XmppService(
-        buildConnection: () => mockConnection,
-        buildStateStore: (_, _) => mockStateStore,
-        buildDatabase: (_, _) => database,
-        notificationService: mockNotificationService,
-      );
-      await connectSuccessfully(xmppService);
+    test('requestReconnect returns true when already connected.', () async {
       eventStreamController.add(
         mox.ConnectionStateChangedEvent(
           mox.XmppConnectionState.connected,
-          mox.XmppConnectionState.connecting,
-        ),
-      );
-      await pumpEventQueue();
-    });
-
-    tearDown(() async {
-      withForeground = false;
-      foregroundServiceActive.value = false;
-      await xmppService.close();
-      await pumpEventQueue();
-    });
-
-    test(
-      'Stream undefined condition recovery creates a service-owned reconnect op.',
-      () async {
-        expect(xmppService.hasActiveReconnectForTest, isFalse);
-
-        eventStreamController.add(
-          mox.NonRecoverableErrorEvent(mox.StreamUndefinedConditionError()),
-        );
-        await pumpEventQueue();
-
-        expect(xmppService.hasActiveReconnectForTest, isTrue);
-        expect(xmppService.activeReconnectPhaseForTest, ReconnectPhase.backoff);
-
-        expect(
-          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
-          isTrue,
-        );
-
-        expect(
-          reconnectTriggers,
-          equals(<ReconnectTrigger>[ReconnectTrigger.networkAvailable]),
-        );
-        expect(
-          xmppService.activeReconnectPhaseForTest,
-          ReconnectPhase.connecting,
-        );
-      },
-    );
-
-    test('disconnect clears the active reconnect operation.', () async {
-      eventStreamController.add(
-        mox.ConnectionStateChangedEvent(
           mox.XmppConnectionState.notConnected,
-          mox.XmppConnectionState.connected,
         ),
       );
       await pumpEventQueue();
 
-      expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-      expect(xmppService.hasActiveReconnectForTest, isTrue);
-
-      await xmppService.disconnect();
-      await pumpEventQueue();
-
-      expect(xmppService.hasActiveReconnectForTest, isFalse);
+      expect(
+        await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+        isTrue,
+      );
+      expect(reconnectTriggers, isEmpty);
     });
 
     test(
-      'Non-recoverable failures clear the active reconnect operation.',
+      'requestReconnect returns true when lower reconnect is already active.',
       () async {
-        eventStreamController.add(
-          mox.ConnectionStateChangedEvent(
-            mox.XmppConnectionState.notConnected,
-            mox.XmppConnectionState.connected,
+        await reconnectionPolicy.setShouldReconnect(true);
+        expect(await reconnectionPolicy.canTriggerFailure(), isTrue);
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.autoFailure),
+          isTrue,
+        );
+        expect(reconnectTriggers, isEmpty);
+      },
+    );
+
+    test(
+      'requestReconnect returns true when connect already in flight.',
+      () async {
+        final settings = XmppConnectionSettings(
+          jid: mox.JID.fromString(jid).withResource('test-resource'),
+          password: password,
+        );
+        final connectCompleter =
+            Completer<moxlib.Result<bool, mox.XmppError>>();
+
+        await xmppService.close();
+        await pumpEventQueue();
+
+        when(
+          () => mockNotificationService.notificationPreviewsEnabled,
+        ).thenReturn(false);
+        when(
+          () => mockStateStore.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
           ),
+        ).thenAnswer((_) async => true);
+        when(
+          () => mockStateStore.writeAll(data: any(named: 'data')),
+        ).thenAnswer((_) async => true);
+        when(
+          () => mockStateStore.delete(key: any(named: 'key')),
+        ).thenAnswer((_) async => true);
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        when(() => mockConnection.connectionSettings).thenReturn(settings);
+        when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+        when(
+          () => mockConnection.connect(
+            shouldReconnect: false,
+            waitForConnection: true,
+            waitUntilLogin: true,
+          ),
+        ).thenAnswer((_) => connectCompleter.future);
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+        );
+
+        final connectFuture = xmppService.connect(
+          jid: jid,
+          password: password,
+          databasePrefix: '',
+          databasePassphrase: '',
         );
         await pumpEventQueue();
 
-        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-        expect(xmppService.hasActiveReconnectForTest, isTrue);
-
-        eventStreamController.add(
-          mox.NonRecoverableErrorEvent(mox.StreamConflictError()),
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
         );
-        await pumpEventQueue();
+        verifyNever(() => mockConnection.requestReconnect(any()));
 
-        expect(xmppService.hasActiveReconnectForTest, isFalse);
+        connectCompleter.complete(
+          const moxlib.Result<bool, mox.XmppError>(true),
+        );
+        await connectFuture;
+        await pumpEventQueue();
       },
     );
 
@@ -2727,7 +2639,6 @@ void main() {
         ).thenAnswer((_) async => throw Exception('enable failed'));
 
         expect(await xmppService.syncSessionState(), isFalse);
-        expect(xmppService.hasActiveReconnectForTest, isFalse);
         expect(xmppService.connectionState, ConnectionState.notConnected);
         verifyNever(() => mockConnection.requestReconnect(any()));
       },
@@ -2754,13 +2665,70 @@ void main() {
           ),
           throwsA(isA<XmppDisconnectedException>()),
         );
-        expect(xmppService.hasActiveReconnectForTest, isFalse);
         expect(xmppService.connectionState, ConnectionState.notConnected);
+      },
+    );
+  });
+
+  group('reconnect recovery', () {
+    late XmppReconnectionPolicy reconnectionPolicy;
+    late List<ReconnectTrigger> reconnectTriggers;
+
+    setUp(() async {
+      reconnectionPolicy = XmppReconnectionPolicy.exponential();
+      reconnectTriggers = <ReconnectTrigger>[];
+      when(
+        () => mockConnection.reconnectionPolicy,
+      ).thenReturn(reconnectionPolicy);
+      when(
+        () => mockConnection.isReconnecting(),
+      ).thenAnswer((_) => reconnectionPolicy.getIsReconnecting());
+      when(() => mockConnection.setShouldReconnect(any())).thenAnswer((
+        invocation,
+      ) async {
+        await reconnectionPolicy.setShouldReconnect(
+          invocation.positionalArguments.first as bool,
+        );
+      });
+      when(() => mockConnection.requestReconnect(any())).thenAnswer((
+        invocation,
+      ) async {
+        reconnectTriggers.add(
+          invocation.positionalArguments.first as ReconnectTrigger,
+        );
+      });
+
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(xmppService);
+    });
+
+    tearDown(() async {
+      withForeground = false;
+      foregroundServiceActive.value = false;
+      await xmppService.close();
+      await pumpEventQueue();
+    });
+
+    test(
+      'Stream undefined condition recovery uses the lower auto-failure path.',
+      () async {
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(mox.StreamUndefinedConditionError()),
+        );
+        await pumpEventQueue();
+
+        expect(reconnectTriggers, isEmpty);
+        expect(await reconnectionPolicy.getIsReconnecting(), isTrue);
       },
     );
 
     test(
-      'Foreground migration is skipped while the active reconnect is connecting.',
+      'Foreground migration is skipped while lower reconnect is active.',
       () async {
         final originalBridge = foregroundTaskBridge;
 
@@ -2774,18 +2742,9 @@ void main() {
           foregroundServiceActive.value = false;
         });
 
-        eventStreamController.add(
-          mox.ConnectionStateChangedEvent(
-            mox.XmppConnectionState.notConnected,
-            mox.XmppConnectionState.connected,
-          ),
-        );
-        await pumpEventQueue();
-
-        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-        expect(
-          xmppService.activeReconnectPhaseForTest,
-          ReconnectPhase.connecting,
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
         );
 
         TestWidgetsFlutterBinding.ensureInitialized()
@@ -2793,16 +2752,12 @@ void main() {
 
         await xmppService.ensureForegroundSocketIfActive();
 
-        expect(
-          xmppService.activeReconnectPhaseForTest,
-          ReconnectPhase.connecting,
-        );
         verifyNever(() => mockConnection.disconnect());
       },
     );
 
     test(
-      'Foreground migration is skipped while the active reconnect is negotiating.',
+      'Foreground migration is skipped while stream negotiations are still in progress.',
       () async {
         final originalBridge = foregroundTaskBridge;
 
@@ -2823,30 +2778,19 @@ void main() {
           ),
         );
         await pumpEventQueue();
-        expect(await xmppService.requestLifecycleResumeReconnect(), isTrue);
-
         eventStreamController.add(
           mox.ConnectionStateChangedEvent(
             mox.XmppConnectionState.connected,
-            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
           ),
         );
         await pumpEventQueue();
-
-        expect(
-          xmppService.activeReconnectPhaseForTest,
-          ReconnectPhase.negotiating,
-        );
 
         TestWidgetsFlutterBinding.ensureInitialized()
             .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
 
         await xmppService.ensureForegroundSocketIfActive();
 
-        expect(
-          xmppService.activeReconnectPhaseForTest,
-          ReconnectPhase.negotiating,
-        );
         verifyNever(() => mockConnection.disconnect());
       },
     );
