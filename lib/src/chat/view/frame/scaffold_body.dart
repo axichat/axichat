@@ -96,6 +96,7 @@ class _UnknownSenderBanner extends StatelessWidget {
         if (chat == null ||
             chat.type != ChatType.chat ||
             chat.spam ||
+            chat.isAxichatWelcomeThread ||
             chat.isEmailBacked) {
           return const SizedBox.shrink();
         }
