@@ -215,11 +215,13 @@ class SelfAxiAvatar extends StatelessWidget {
     this.active = false,
     this.shape = AxiAvatarShape.squircle,
     this.size = 50.0,
+    this.avatarBytes,
   });
 
   final bool active;
   final AxiAvatarShape shape;
   final double size;
+  final Uint8List? avatarBytes;
 
   @override
   Widget build(BuildContext context) {
@@ -233,6 +235,7 @@ class SelfAxiAvatar extends StatelessWidget {
           active: active,
           shape: shape,
           size: size,
+          avatarBytes: avatarBytes,
         );
       },
     );
@@ -248,6 +251,7 @@ class _ResolvedSelfAxiAvatar extends StatefulWidget {
     required this.active,
     required this.shape,
     required this.size,
+    required this.avatarBytes,
   });
 
   final String jid;
@@ -257,6 +261,7 @@ class _ResolvedSelfAxiAvatar extends StatefulWidget {
   final bool active;
   final AxiAvatarShape shape;
   final double size;
+  final Uint8List? avatarBytes;
 
   @override
   State<_ResolvedSelfAxiAvatar> createState() => _ResolvedSelfAxiAvatarState();
@@ -264,7 +269,6 @@ class _ResolvedSelfAxiAvatar extends StatefulWidget {
 
 class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
   Uint8List? _resolvedAvatarBytes;
-  String? _loadingPath;
   Object? _loadToken;
 
   String? get _normalizedAvatarPath {
@@ -273,6 +277,14 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
       return null;
     }
     return trimmed;
+  }
+
+  Uint8List? get _providedAvatarBytes {
+    final bytes = widget.avatarBytes;
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+    return bytes;
   }
 
   @override
@@ -286,9 +298,14 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
     super.didUpdateWidget(oldWidget);
     final pathChanged = oldWidget.avatarPath != widget.avatarPath;
     final hashChanged = oldWidget.avatarHash != widget.avatarHash;
+    final bytesChanged = oldWidget.avatarBytes != widget.avatarBytes;
     final loadingSettled = oldWidget.loading && !widget.loading;
     final jidChanged = oldWidget.jid != widget.jid;
-    if (jidChanged || pathChanged || hashChanged || loadingSettled) {
+    if (jidChanged ||
+        pathChanged ||
+        hashChanged ||
+        bytesChanged ||
+        loadingSettled) {
       _resolveAvatarBytes(
         clearStaleBytes: jidChanged || pathChanged || hashChanged,
       );
@@ -296,24 +313,32 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
   }
 
   Future<void> _resolveAvatarBytes({bool clearStaleBytes = false}) async {
+    final providedBytes = _providedAvatarBytes;
+    if (providedBytes != null) {
+      setState(() {
+        _resolvedAvatarBytes = providedBytes;
+      });
+      return;
+    }
+
     final path = _normalizedAvatarPath;
     if (path == null) {
       setState(() {
         _resolvedAvatarBytes = null;
-        _loadingPath = null;
       });
       return;
     }
 
     final profileCubit = context.read<ProfileCubit>();
+    final safeCached = profileCubit.cachedSafeAvatarBytes(path: path);
+    if (safeCached != null && safeCached.isNotEmpty) {
+      setState(() {
+        _resolvedAvatarBytes = safeCached;
+      });
+      return;
+    }
     final loadToken = Object();
     _loadToken = loadToken;
-    setState(() {
-      if (clearStaleBytes) {
-        _resolvedAvatarBytes = null;
-      }
-      _loadingPath = path;
-    });
     Uint8List? safeBytes;
     try {
       safeBytes = await profileCubit.resolveSafeAvatarBytes(path: path);
@@ -329,14 +354,11 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
       } else if (clearStaleBytes) {
         _resolvedAvatarBytes = null;
       }
-      _loadingPath = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final path = _normalizedAvatarPath;
-    final isLoadingAvatarBytes = path != null && _loadingPath == path;
     return AxiAvatar(
       avatar: AvatarPresentation.avatar(
         label: widget.jid,
@@ -345,7 +367,7 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
           path: widget.avatarPath,
           hash: widget.avatarHash,
         ),
-        loading: widget.loading || isLoadingAvatarBytes,
+        loading: widget.loading,
       ),
       subscription: Subscription.both,
       presence: null,

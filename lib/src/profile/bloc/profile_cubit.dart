@@ -131,4 +131,12 @@ class ProfileCubit extends Cubit<ProfileState> {
     }
     return _xmppService.resolveSafeAvatarBytes(avatarPath: avatarPath);
   }
+
+  Uint8List? cachedSafeAvatarBytes({String? path}) {
+    final avatarPath = path?.trim() ?? state.avatarPath?.trim();
+    if (avatarPath == null || avatarPath.isEmpty) {
+      return null;
+    }
+    return _xmppService.cachedSafeAvatarBytes(avatarPath);
+  }
 }

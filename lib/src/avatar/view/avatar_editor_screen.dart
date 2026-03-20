@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/editing/editable_avatar.dart';
@@ -11,7 +10,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
@@ -330,22 +328,7 @@ class _AvatarCenterStage extends StatelessWidget {
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
                 )
-              : HydratedAxiAvatar(
-                  avatar: AvatarPresentation.avatar(
-                    label: profile.jid,
-                    colorSeed: profile.jid,
-                    avatar: previewBytes == null
-                        ? Avatar.tryParseOrNull(
-                            path: profile.avatarPath,
-                            hash: null,
-                          )
-                        : null,
-                    loading: false,
-                  ),
-                  size: avatarSize,
-                  subscription: Subscription.both,
-                  avatarBytes: previewBytes,
-                ),
+              : SelfAxiAvatar(size: avatarSize, avatarBytes: previewBytes),
         ),
         if (hasCropPreview)
           Padding(
