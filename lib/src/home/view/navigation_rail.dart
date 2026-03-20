@@ -233,22 +233,7 @@ class _ProfileRailItem extends StatelessWidget {
     final textTheme = context.textTheme;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
-        final avatar = HydratedAxiAvatar(
-          avatar: AvatarPresentation.avatar(
-            label: state.jid,
-            colorSeed: state.jid,
-            avatar: m.Avatar.tryParseOrNull(
-              path: state.avatarPath,
-              hash: state.avatarHash,
-            ),
-            loading: state.avatarHydrating,
-          ),
-          subscription: m.Subscription.both,
-          presence: null,
-          status: null,
-          active: false,
-          size: sizing.iconButtonSize,
-        );
+        final avatar = SelfAxiAvatar(size: sizing.iconButtonSize);
         if (collapsed) {
           return AxiIconButton.ghost(
             iconData: LucideIcons.user,

@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
@@ -10,7 +9,6 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -54,8 +52,6 @@ class ProfileTile extends StatelessWidget {
                   child: _ProfileTileLayout(
                     username: state.username,
                     jid: state.jid,
-                    avatarPath: state.avatarPath,
-                    avatarLoading: state.avatarHydrating,
                     usernameStyle: usernameStyle,
                     subtitleStyle: subtitleStyle,
                     indicatorMaxWidth: indicatorMaxWidth,
@@ -147,8 +143,6 @@ class _ProfileTileLayout extends StatelessWidget {
   const _ProfileTileLayout({
     required this.username,
     required this.jid,
-    required this.avatarPath,
-    required this.avatarLoading,
     required this.usernameStyle,
     required this.subtitleStyle,
     required this.indicatorMaxWidth,
@@ -159,8 +153,6 @@ class _ProfileTileLayout extends StatelessWidget {
 
   final String username;
   final String jid;
-  final String? avatarPath;
-  final bool avatarLoading;
   final TextStyle usernameStyle;
   final TextStyle subtitleStyle;
   final double indicatorMaxWidth;
@@ -176,10 +168,7 @@ class _ProfileTileLayout extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Hero(
-            tag: 'avatar',
-            child: const SelfAxiAvatar(),
-          ),
+          Hero(tag: 'avatar', child: const SelfAxiAvatar()),
           SizedBox(width: spacing.m),
           Expanded(
             child: Column(

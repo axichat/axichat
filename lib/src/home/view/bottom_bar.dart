@@ -585,7 +585,6 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
         }
       }
     }
-    final profile = context.watch<ProfileCubit>().state;
     final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -645,20 +644,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   dragHintActive && dragSourceTab == 1;
               final bool tasksSwitchHintActive =
                   dragHintActive && dragSourceTab == 0;
-              final avatar = HydratedAxiAvatar(
-                avatar: AvatarPresentation.avatar(
-                  label: profile.jid,
-                  colorSeed: profile.jid,
-                  avatar: m.Avatar.tryParseOrNull(
-                    path: profile.avatarPath,
-                    hash: profile.avatarHash,
-                  ),
-                  loading: profile.avatarHydrating,
-                ),
-                subscription: m.Subscription.both,
-                presence: null,
-                status: null,
-                active: false,
+              final avatar = SelfAxiAvatar(
                 size: sizing.iconButtonIconSize + spacing.xxs,
               );
               final Widget navBar = GNav(

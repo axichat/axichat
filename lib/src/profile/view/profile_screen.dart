@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
@@ -23,7 +22,6 @@ import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/update/view/update_prompt.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -513,9 +511,6 @@ class _ProfileCardSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     _EditableAvatarButton(
-                      avatarPath: profileState.avatarPath,
-                      loading: profileState.avatarHydrating,
-                      jid: profileState.jid,
                       onTap: () => context.push(
                         const AvatarEditorRoute().location,
                         extra: locate,
@@ -617,16 +612,8 @@ class _ProfileStatusHeader extends StatelessWidget {
 }
 
 class _EditableAvatarButton extends StatefulWidget {
-  const _EditableAvatarButton({
-    required this.avatarPath,
-    required this.loading,
-    required this.jid,
-    required this.onTap,
-  });
+  const _EditableAvatarButton({required this.onTap});
 
-  final String? avatarPath;
-  final bool loading;
-  final String jid;
   final VoidCallback onTap;
 
   @override
@@ -693,22 +680,7 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                HydratedAxiAvatar(
-                  avatar: AvatarPresentation.avatar(
-                    label: widget.jid,
-                    colorSeed: widget.jid,
-                    avatar: Avatar.tryParseOrNull(
-                      path: widget.avatarPath,
-                      hash: null,
-                    ),
-                    loading: widget.loading,
-                  ),
-                  subscription: Subscription.both,
-                  presence: null,
-                  status: null,
-                  active: false,
-                  size: avatarSize,
-                ),
+                SelfAxiAvatar(size: avatarSize),
                 AnimatedSwitcher(
                   duration: animationDuration,
                   switchInCurve: _profileFadeCurve,
