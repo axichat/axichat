@@ -2793,10 +2793,7 @@ class EmailService {
         }
         break;
       case DeltaEventType.incomingMsgBunch:
-        _suppressQueuedNotificationsThroughCurrentSequence(
-          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
-          chatId: event.data1 > 0 ? event.data1 : null,
-        );
+        await _flushQueuedNotifications();
         break;
       case DeltaEventType.incomingReaction:
         await _handleIncomingReaction(
@@ -2922,16 +2919,6 @@ class EmailService {
     );
   }
 
-  void _suppressQueuedNotificationsThroughCurrentSequence({
-    required int accountId,
-    int? chatId,
-  }) {
-    _notificationQueue.suppressThroughCurrentSequence(
-      accountId: accountId,
-      chatId: chatId,
-    );
-  }
-
   void _dropPendingNotificationsForChat(int chatId, {required int accountId}) {
     _notificationQueue.dropForChat(chatId, accountId: accountId);
   }
@@ -2965,14 +2952,6 @@ class EmailService {
     final pending = _notificationQueue.drain();
     if (pending.isEmpty) return;
     for (final entry in pending) {
-      final scope = _PendingNotificationScope(
-        accountId: entry.accountId,
-        chatId: entry.chatId,
-      );
-      final dropThroughSequence = _notificationQueue.dropThroughSequence(scope);
-      if (entry.sequence <= dropThroughSequence) {
-        continue;
-      }
       await _notifyIncoming(
         chatId: entry.chatId,
         msgId: entry.msgId,
@@ -6162,10 +6141,6 @@ final class _EmailCredentialScopeState {
 final class _EmailNotificationQueueSession {
   final List<_PendingNotification> _pendingNotifications =
       <_PendingNotification>[];
-  int _pendingNotificationSequence = 0;
-  final Map<_PendingNotificationScope, int>
-  _pendingNotificationDropThroughSequenceByScope =
-      <_PendingNotificationScope, int>{};
   Timer? _notificationFlushTimer;
 
   void enqueue({
@@ -6175,53 +6150,13 @@ final class _EmailNotificationQueueSession {
     required Duration flushDelay,
     required void Function() onFlush,
   }) {
-    final sequence = _pendingNotificationSequence + 1;
-    _pendingNotificationSequence = sequence;
     _pendingNotifications.add(
-      _PendingNotification(
-        chatId: chatId,
-        msgId: msgId,
-        accountId: accountId,
-        sequence: sequence,
-      ),
+      _PendingNotification(chatId: chatId, msgId: msgId, accountId: accountId),
     );
     _notificationFlushTimer ??= Timer(flushDelay, () {
       _notificationFlushTimer = null;
       onFlush();
     });
-  }
-
-  void suppressThroughCurrentSequence({required int accountId, int? chatId}) {
-    if (_pendingNotifications.isEmpty) {
-      return;
-    }
-    final currentSequence = _pendingNotificationSequence;
-    if (chatId != null) {
-      _pendingNotificationDropThroughSequenceByScope[_PendingNotificationScope(
-            accountId: accountId,
-            chatId: chatId,
-          )] =
-          currentSequence;
-      return;
-    }
-    final countsByScope = <_PendingNotificationScope, int>{};
-    for (final entry in _pendingNotifications) {
-      if (entry.accountId != accountId || entry.sequence > currentSequence) {
-        continue;
-      }
-      final scope = _PendingNotificationScope(
-        accountId: entry.accountId,
-        chatId: entry.chatId,
-      );
-      countsByScope.update(scope, (count) => count + 1, ifAbsent: () => 1);
-    }
-    for (final entry in countsByScope.entries) {
-      if (entry.value < 2) {
-        continue;
-      }
-      _pendingNotificationDropThroughSequenceByScope[entry.key] =
-          currentSequence;
-    }
   }
 
   void dropForChat(int chatId, {required int accountId}) {
@@ -6246,15 +6181,10 @@ final class _EmailNotificationQueueSession {
     return pending;
   }
 
-  int dropThroughSequence(_PendingNotificationScope scope) =>
-      _pendingNotificationDropThroughSequenceByScope[scope] ?? 0;
-
   void clear() {
     _notificationFlushTimer?.cancel();
     _notificationFlushTimer = null;
     _pendingNotifications.clear();
-    _pendingNotificationSequence = 0;
-    _pendingNotificationDropThroughSequenceByScope.clear();
   }
 }
 
@@ -6263,33 +6193,11 @@ class _PendingNotification {
     required this.chatId,
     required this.msgId,
     required this.accountId,
-    required this.sequence,
   });
 
   final int chatId;
   final int msgId;
   final int accountId;
-  final int sequence;
-}
-
-class _PendingNotificationScope {
-  const _PendingNotificationScope({
-    required this.accountId,
-    required this.chatId,
-  });
-
-  final int accountId;
-  final int chatId;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _PendingNotificationScope &&
-        other.accountId == accountId &&
-        other.chatId == chatId;
-  }
-
-  @override
-  int get hashCode => Object.hash(accountId, chatId);
 }
 
 final class _EmailNotificationTarget {

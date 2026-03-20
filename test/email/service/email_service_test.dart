@@ -429,6 +429,119 @@ void main() {
   );
 
   test(
+    'flushes multiple pending notifications immediately for a chat-scoped bunch',
+    () async {
+      const chatId = 11;
+      const firstMsgId = 88;
+      const secondMsgId = 89;
+      final firstMessage = Message(
+        stanzaID: 'dc-msg-$firstMsgId',
+        senderJid: 'peer@axi.im',
+        chatJid: 'dc-$chatId@delta.chat',
+        timestamp: DateTime.now(),
+        body: 'First batched hello',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final secondMessage = Message(
+        stanzaID: 'dc-msg-$secondMsgId',
+        senderJid: 'peer@axi.im',
+        chatJid: 'dc-$chatId@delta.chat',
+        timestamp: DateTime.now().add(const Duration(seconds: 1)),
+        body: 'Second batched hello',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final chat = Chat(
+        jid: 'dc-$chatId@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: chatId,
+        emailAddress: 'peer@example.com',
+      );
+
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$firstMsgId'),
+      ).thenAnswer((_) async => firstMessage);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$secondMsgId'),
+      ).thenAnswer((_) async => secondMessage);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      addTearDown(service.shutdown);
+
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: firstMsgId,
+        ),
+      );
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: secondMsgId,
+        ),
+      );
+
+      await pumpMicrotasks();
+      verifyNever(
+        () => notificationService.sendMessageNotification(
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          senderName: any(named: 'senderName'),
+          senderKey: any(named: 'senderKey'),
+          conversationTitle: any(named: 'conversationTitle'),
+          sentAt: any(named: 'sentAt'),
+          isGroupConversation: any(named: 'isGroupConversation'),
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+          threadKey: any(named: 'threadKey'),
+          showPreviewOverride: any(named: 'showPreviewOverride'),
+          channel: any(named: 'channel'),
+        ),
+      );
+
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsgBunch.code,
+          data1: chatId,
+          data2: 0,
+        ),
+      );
+
+      await pumpMicrotasks();
+
+      verify(
+        () => notificationService.sendMessageNotification(
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          senderName: any(named: 'senderName'),
+          senderKey: any(named: 'senderKey'),
+          conversationTitle: any(named: 'conversationTitle'),
+          sentAt: any(named: 'sentAt'),
+          isGroupConversation: any(named: 'isGroupConversation'),
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+          threadKey: any(named: 'threadKey'),
+          showPreviewOverride: any(named: 'showPreviewOverride'),
+          channel: any(named: 'channel'),
+        ),
+      ).called(2);
+    },
+  );
+
+  test(
     'flushes pending notifications after debounce when no bunch arrives',
     () async {
       const chatId = 9;
