@@ -302,6 +302,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   bool get _stickyAuthActive => state is AuthenticationComplete;
   Completer<void>? _deferredEmailProvisioningCompleter;
+  Future<void>? _activeLifecycleResume;
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
   final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
@@ -944,6 +945,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleLifecycleResume(String source) async {
+    final activeLifecycleResume = _activeLifecycleResume;
+    if (activeLifecycleResume != null) {
+      _log.info(
+        'Joining active lifecycle resume: source=$source '
+        'state=${state.runtimeType}',
+      );
+      await activeLifecycleResume;
+      return;
+    }
+
+    final lifecycleResume = _runLifecycleResume(source: source);
+    _activeLifecycleResume = lifecycleResume;
+    try {
+      await lifecycleResume;
+    } finally {
+      if (identical(_activeLifecycleResume, lifecycleResume)) {
+        _activeLifecycleResume = null;
+      }
+    }
+  }
+
+  Future<void> _runLifecycleResume({required String source}) async {
     _log.info(
       'Handling lifecycle resume: source=$source '
       'state=${state.runtimeType} '
