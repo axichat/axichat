@@ -20,10 +20,14 @@ String _prepareEmailHtmlData(Map<String, Object> arguments) {
     html,
     allowRemoteImages: allowRemoteImages,
   );
-  if (preparedHtml.contains('</head>')) {
-    return preparedHtml.replaceFirst('</head>', '$themeStyle</head>');
+  return _injectEmailThemeStyle(preparedHtml, themeStyle);
+}
+
+String _injectEmailThemeStyle(String html, String themeStyle) {
+  if (html.contains('</head>')) {
+    return html.replaceFirst('</head>', '$themeStyle</head>');
   }
-  return '$themeStyle$preparedHtml';
+  return '$themeStyle$html';
 }
 
 String _emailWebViewCssColor(Color color) {
@@ -232,7 +236,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         widget.html,
         allowRemoteImages: widget.allowRemoteImages,
       );
-      preparedHtmlData = '$themeStyle$fallbackHtml';
+      preparedHtmlData = _injectEmailThemeStyle(fallbackHtml, themeStyle);
     }
     if (!mounted || _preparedHtmlInputKey != inputKey) {
       return;

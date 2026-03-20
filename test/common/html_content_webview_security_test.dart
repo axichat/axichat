@@ -35,6 +35,38 @@ void main() {
       );
       expect(prepared.contains('https://example.com/x.png'), isFalse);
       expect(prepared.contains('data:image/png;base64,AAAA'), isTrue);
+      expect(RegExp(r'<img\b').allMatches(prepared), hasLength(1));
+    });
+
+    test('keeps remote images when explicitly allowed', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<img src="http://example.com/x.png" />'
+        '<img src="data:image/png;base64,AAAA" />',
+        allowRemoteImages: true,
+      );
+      expect(prepared.contains('http://example.com/x.png'), isTrue);
+      expect(prepared.contains('data:image/png;base64,AAAA'), isTrue);
+      expect(RegExp(r'<img\b').allMatches(prepared), hasLength(2));
+    });
+
+    test('drops blocked css but keeps readable formatting', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<style>.note { position: absolute; top: 0; z-index: 9999; '
+        'color: red; margin: 8px; }</style>'
+        '<p class="note" style="display:none; left:0; pointer-events:auto; '
+        'transform:translateY(-12px); color:red; margin:8px; width:999px;">ok</p>',
+        allowRemoteImages: true,
+      );
+      expect(prepared.contains('position: absolute'), isFalse);
+      expect(prepared.contains('top: 0'), isFalse);
+      expect(prepared.contains('left: 0'), isFalse);
+      expect(prepared.contains('z-index'), isFalse);
+      expect(prepared.contains('pointer-events'), isFalse);
+      expect(prepared.contains('transform'), isFalse);
+      expect(prepared.contains('display:none'), isFalse);
+      expect(prepared.contains('width:999px'), isFalse);
+      expect(prepared.contains('color: red'), isTrue);
+      expect(prepared.contains('margin: 8px'), isTrue);
     });
 
     test('strips inline svg and namespaced href content', () {
@@ -54,7 +86,7 @@ void main() {
   });
 
   group('HtmlContentCodec.prepareEmailHtmlForFlutterHtml', () {
-    test('returns a stripped fragment with image sizing metadata', () {
+    test('returns a stripped fragment without inline styling', () {
       final prepared = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
         '<style>.lead { font-size: 22px; color: #123456; }</style>'
         '<p class="lead" style="font-size:18px; line-height:1.6;">ok</p>'
@@ -64,8 +96,7 @@ void main() {
       expect(prepared.contains('<style'), isFalse);
       expect(prepared.contains('style='), isFalse);
       expect(prepared.contains('<p>ok</p>'), isTrue);
-      expect(prepared.contains('width="320"'), isTrue);
-      expect(prepared.contains('height="160"'), isTrue);
+      expect(prepared.contains('src="https://example.com/x.png"'), isTrue);
     });
   });
 
@@ -120,6 +151,36 @@ void main() {
           '<svg xmlns="http://www.w3.org/2000/svg">'
           '<image xlink:href="https://evil.test/track.png" />'
           '</svg>',
+        ),
+        isTrue,
+      );
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<p style="position:fixed; color:red">bad</p>',
+        ),
+        isTrue,
+      );
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<p style="position:absolute; top:0; z-index:9999; color:red">bad</p>',
+        ),
+        isTrue,
+      );
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<p style="width:999px; color:red">ok</p>',
+        ),
+        isFalse,
+      );
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<div style=url(https://evil.test/x.png)>bad</div',
+        ),
+        isTrue,
+      );
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<a href=javascript:alert(1)>bad',
         ),
         isTrue,
       );

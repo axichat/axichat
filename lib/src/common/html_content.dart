@@ -124,6 +124,46 @@ pre, code {
     'white-space',
     'width',
   };
+  static const Set<String> _webViewBlockedStyleProperties = <String>{
+    'animation',
+    'animation-delay',
+    'animation-direction',
+    'animation-duration',
+    'animation-fill-mode',
+    'animation-iteration-count',
+    'animation-name',
+    'animation-play-state',
+    'animation-timing-function',
+    'backdrop-filter',
+    'behavior',
+    'bottom',
+    'clip',
+    'clip-path',
+    'content',
+    'filter',
+    'inset',
+    'left',
+    'mask',
+    'mask-image',
+    'pointer-events',
+    'right',
+    'transform',
+    'transform-origin',
+    'transition',
+    'transition-delay',
+    'transition-duration',
+    'transition-property',
+    'transition-timing-function',
+    'top',
+    'z-index',
+    '-moz-binding',
+  };
+  static const Map<String, Set<String>> _webViewBlockedStyleKeywords =
+      <String, Set<String>>{
+        'display': <String>{'none'},
+        'position': <String>{'absolute', 'fixed', 'sticky'},
+        'visibility': <String>{'collapse', 'hidden'},
+      };
   static const Set<String> _blockTags = <String>{
     'address',
     'article',
@@ -278,7 +318,11 @@ pre, code {
     'mailto',
     'xmpp',
   };
-  static const Set<String> _sanitizedImageSchemes = <String>{'https', 'data'};
+  static const Set<String> _sanitizedImageSchemes = <String>{
+    'http',
+    'https',
+    'data',
+  };
   static const Set<String> _webViewRemovedTags = <String>{
     'audio',
     'base',
@@ -324,10 +368,7 @@ pre, code {
     r'@import\b[^;]*;?',
     caseSensitive: false,
   );
-  static final RegExp _cssUrlPattern = RegExp(
-    r'url\s*\([^)]*\)',
-    caseSensitive: false,
-  );
+  static final RegExp _cssCommentPattern = RegExp(r'/\*[\s\S]*?\*/');
   static final RegExp _cssExpressionPattern = RegExp(
     r'expression\s*\([^)]*\)',
     caseSensitive: false,
@@ -342,6 +383,10 @@ pre, code {
     r'\bxlink:href\s*=|'
     r'\b(?:action|formaction|poster|ping|srcdoc|srcset)\s*=|'
     r'javascript\s*:|vbscript\s*:|expression\s*\(|@import\b|url\s*\(|-moz-binding|behavior\s*:',
+    caseSensitive: false,
+  );
+  static final RegExp _blockedMalformedWebViewMarkupPattern = RegExp(
+    r"""\bhref\s*=\s*(?:"[^"]*(?:javascript\s*:|vbscript\s*:)[^"]*"|'[^']*(?:javascript\s*:|vbscript\s*:)[^']*'|[^\s>]*(?:javascript\s*:|vbscript\s*:)[^\s>]*)|\bstyle\s*=\s*(?:"[^"]*(?:javascript\s*:|vbscript\s*:|expression\s*\(|@import\b|url\s*\(|-moz-binding|behavior\s*:)[^"]*"|'[^']*(?:javascript\s*:|vbscript\s*:|expression\s*\(|@import\b|url\s*\(|-moz-binding|behavior\s*:)[^']*'|[^\s>]*(?:javascript\s*:|vbscript\s*:|expression\s*\(|@import\b|url\s*\(|-moz-binding|behavior\s*:)[^\s>]*)|<style\b[^>]*>[\s\S]*(?:javascript\s*:|vbscript\s*:|expression\s*\(|@import\b|url\s*\(|-moz-binding|behavior\s*:)""",
     caseSensitive: false,
   );
   static const Map<String, Set<String>> _sanitizedAllowedAttributes =
@@ -548,7 +593,8 @@ pre, code {
         maxDepth: _maxHtmlDepth,
         maxDuration: _maxHtmlParseDuration,
       );
-      return _containsBlockedWebViewNodes(fragment.nodes, budget, 0);
+      return _containsBlockedWebViewNodes(fragment.nodes, budget, 0) ||
+          _blockedMalformedWebViewMarkupPattern.hasMatch(trimmed);
     } on Exception {
       return _blockedWebViewContentPattern.hasMatch(trimmed);
     }
@@ -713,10 +759,6 @@ pre, code {
           continue;
         }
         final tag = (node.localName ?? '').toLowerCase();
-        if (tag == 'img') {
-          node.remove();
-          continue;
-        }
         if (tag == 'style') {
           final sanitizedStyleText = _sanitizeWebViewStyleElementText(
             node.text,
@@ -807,8 +849,6 @@ pre, code {
     final children = row.nodes.toList();
     final meaningfulCells = <dom.Element>[];
     var hadCells = false;
-    var cellCount = 0;
-    dom.Element? singleCell;
     var hasNonCellContent = false;
     for (final child in children) {
       final isCell =
@@ -853,8 +893,6 @@ pre, code {
       if (formattedCell == null) {
         continue;
       }
-      cellCount++;
-      singleCell = formattedCell;
       if (hadCells) {
         formattedRow.nodes.add(dom.Text(' \u00A0 '));
       }
@@ -1481,44 +1519,11 @@ pre, code {
   }
 
   static bool _containsBlockedWebViewInlineStyle(String style) {
-    for (final declaration in style.split(';')) {
-      final trimmed = declaration.trim();
-      if (trimmed.isEmpty) {
-        continue;
-      }
-      final separatorIndex = trimmed.indexOf(':');
-      if (separatorIndex <= 0) {
-        continue;
-      }
-      final property = trimmed
-          .substring(0, separatorIndex)
-          .trim()
-          .toLowerCase();
-      final value = trimmed.substring(separatorIndex + 1).trim();
-      if (value.isEmpty) {
-        continue;
-      }
-      if (property == 'behavior' || property == '-moz-binding') {
-        return true;
-      }
-      if (_containsUnsafeCssValue(value)) {
-        return true;
-      }
-    }
-    return false;
+    return _sanitizeWebViewStyleDeclarations(style).blocked;
   }
 
   static bool _containsBlockedWebViewStyleElement(String cssText) {
-    final trimmed = cssText.trim();
-    if (trimmed.isEmpty) {
-      return false;
-    }
-    return containsUnsafeUriText(trimmed) ||
-        containsSuspiciousUriText(trimmed) ||
-        _cssImportPattern.hasMatch(trimmed) ||
-        _cssUrlPattern.hasMatch(trimmed) ||
-        _cssExpressionPattern.hasMatch(trimmed) ||
-        _cssBehaviorPattern.hasMatch(trimmed);
+    return _sanitizeWebViewStyleSheet(cssText).blocked;
   }
 
   static String? _sanitizeWebViewImageSource(
@@ -1535,81 +1540,6 @@ pre, code {
       return null;
     }
     return safeValue;
-  }
-
-  static String? _sanitizeFlutterHtmlInlineStyle(String style) {
-    final declarations = style
-        .split(';')
-        .map(_sanitizeFlutterHtmlStyleDeclaration)
-        .whereType<String>()
-        .toList();
-    if (declarations.isEmpty) {
-      return null;
-    }
-    return declarations.join('; ');
-  }
-
-  static String? _sanitizeFlutterHtmlStyleDeclaration(String declaration) {
-    final trimmed = declaration.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    final separatorIndex = trimmed.indexOf(':');
-    if (separatorIndex <= 0) {
-      return null;
-    }
-    final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
-    final value = trimmed.substring(separatorIndex + 1).trim();
-    if (value.isEmpty) {
-      return null;
-    }
-    if (property == 'behavior' || property == '-moz-binding') {
-      return null;
-    }
-    if (!const <String>{
-      'color',
-      'background-color',
-      'font',
-      'font-size',
-      'font-style',
-      'font-weight',
-      'font-family',
-      'text-decoration',
-      'text-align',
-      'line-height',
-      'letter-spacing',
-      'white-space',
-      'word-break',
-      'overflow-wrap',
-      'vertical-align',
-      'margin',
-      'margin-top',
-      'margin-right',
-      'margin-bottom',
-      'margin-left',
-      'padding',
-      'padding-top',
-      'padding-right',
-      'padding-bottom',
-      'padding-left',
-      'border',
-      'border-top',
-      'border-right',
-      'border-bottom',
-      'border-left',
-      'border-color',
-      'border-style',
-      'border-width',
-      'border-radius',
-      'list-style',
-      'list-style-type',
-    }.contains(property)) {
-      return null;
-    }
-    if (_containsUnsafeCssValue(value)) {
-      return null;
-    }
-    return '$property: $value';
   }
 
   static void _trimEmptyFlutterHtmlNodes(List<dom.Node> nodes) {
@@ -1668,58 +1598,127 @@ pre, code {
   }
 
   static String? _sanitizeWebViewInlineStyle(String style) {
-    final declarations = style
-        .split(';')
-        .map(_sanitizeWebViewStyleDeclaration)
-        .whereType<String>()
-        .toList();
-    if (declarations.isEmpty) {
-      return null;
-    }
-    return declarations.join('; ');
-  }
-
-  static String? _sanitizeWebViewStyleDeclaration(String declaration) {
-    final trimmed = declaration.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    final separatorIndex = trimmed.indexOf(':');
-    if (separatorIndex <= 0) {
-      return null;
-    }
-    final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
-    if (_webViewStylePropertiesToStrip.contains(property)) {
-      return null;
-    }
-    final value = trimmed.substring(separatorIndex + 1).trim();
-    if (value.isEmpty) {
-      return null;
-    }
-    if (_containsUnsafeCssValue(value)) {
-      return null;
-    }
-    return '$property: $value';
-  }
-
-  static String? _sanitizeWebViewStyleElementText(String cssText) {
-    final trimmed = cssText.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    if (containsUnsafeUriText(trimmed) || containsSuspiciousUriText(trimmed)) {
-      return null;
-    }
-    final sanitized = trimmed
-        .replaceAll(_cssImportPattern, '')
-        .replaceAll(_cssUrlPattern, '')
-        .replaceAll(_cssExpressionPattern, '')
-        .replaceAll(_cssBehaviorPattern, '')
-        .trim();
+    final sanitized = _sanitizeWebViewStyleDeclarations(style).sanitized;
     if (sanitized.isEmpty) {
       return null;
     }
-    return sanitized;
+    return sanitized.join('; ');
+  }
+
+  static ({List<String> sanitized, bool blocked})
+  _sanitizeWebViewStyleDeclarations(String rawDeclarations) {
+    final sanitized = <String>[];
+    var blocked = false;
+    for (final declaration in rawDeclarations.split(';')) {
+      final result = _sanitizeWebViewStyleDeclaration(declaration);
+      if (result.sanitized case final String value) {
+        sanitized.add(value);
+      }
+      if (result.blocked) {
+        blocked = true;
+      }
+    }
+    return (sanitized: sanitized, blocked: blocked);
+  }
+
+  static ({String? sanitized, bool blocked}) _sanitizeWebViewStyleDeclaration(
+    String declaration,
+  ) {
+    final trimmed = declaration.trim();
+    if (trimmed.isEmpty) {
+      return (sanitized: null, blocked: false);
+    }
+    final separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0) {
+      return (sanitized: null, blocked: _containsUnsafeCssValue(trimmed));
+    }
+    final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
+    if (_webViewStylePropertiesToStrip.contains(property)) {
+      return (sanitized: null, blocked: false);
+    }
+    final value = trimmed.substring(separatorIndex + 1).trim();
+    if (value.isEmpty) {
+      return (sanitized: null, blocked: false);
+    }
+    if (_webViewBlockedStyleProperties.contains(property)) {
+      return (sanitized: null, blocked: true);
+    }
+    final blockedKeywords = _webViewBlockedStyleKeywords[property];
+    if (blockedKeywords != null &&
+        blockedKeywords.contains(_normalizeCssKeywordValue(value))) {
+      return (sanitized: null, blocked: true);
+    }
+    if (_containsUnsafeCssValue(value)) {
+      return (sanitized: null, blocked: true);
+    }
+    return (sanitized: '$property: $value', blocked: false);
+  }
+
+  static String? _sanitizeWebViewStyleElementText(String cssText) {
+    return _sanitizeWebViewStyleSheet(cssText).sanitized;
+  }
+
+  static ({String? sanitized, bool blocked}) _sanitizeWebViewStyleSheet(
+    String cssText,
+  ) {
+    final trimmed = cssText.trim();
+    if (trimmed.isEmpty) {
+      return (sanitized: null, blocked: false);
+    }
+    var blocked =
+        _cssImportPattern.hasMatch(trimmed) ||
+        _cssExpressionPattern.hasMatch(trimmed) ||
+        _cssBehaviorPattern.hasMatch(trimmed);
+    final normalized = trimmed
+        .replaceAll(_cssCommentPattern, ' ')
+        .replaceAll(_cssImportPattern, '')
+        .replaceAll(_cssExpressionPattern, '')
+        .replaceAll(_cssBehaviorPattern, '')
+        .trim();
+    if (normalized.isEmpty) {
+      return (sanitized: null, blocked: blocked);
+    }
+    final rulePattern = RegExp(r'([^{}]+)\{([^{}]*)\}');
+    final sanitizedRules = <String>[];
+    for (final match in rulePattern.allMatches(normalized)) {
+      final selector = match.group(1)?.trim() ?? '';
+      if (selector.isEmpty || selector.startsWith('@')) {
+        continue;
+      }
+      final declarations = _sanitizeWebViewStyleDeclarations(
+        match.group(2) ?? '',
+      );
+      if (declarations.blocked) {
+        blocked = true;
+      }
+      if (declarations.sanitized.isEmpty) {
+        continue;
+      }
+      sanitizedRules.add('$selector { ${declarations.sanitized.join('; ')}; }');
+    }
+    if (sanitizedRules.isNotEmpty) {
+      return (sanitized: sanitizedRules.join('\n'), blocked: blocked);
+    }
+    final declarations = _sanitizeWebViewStyleDeclarations(normalized);
+    if (declarations.blocked) {
+      blocked = true;
+    }
+    if (declarations.sanitized.isEmpty) {
+      return (sanitized: null, blocked: blocked);
+    }
+    return (sanitized: declarations.sanitized.join('; '), blocked: blocked);
+  }
+
+  static String _normalizeCssKeywordValue(String value) {
+    final normalized = value
+        .trim()
+        .toLowerCase()
+        .replaceAll('!important', '')
+        .trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    return normalized.split(RegExp(r'\s+')).first;
   }
 
   static bool _containsUnsafeCssValue(String value) {
