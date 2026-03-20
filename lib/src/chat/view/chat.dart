@@ -2963,9 +2963,27 @@ class _ChatState extends State<Chat> {
                           );
                           return completer.future;
                         },
-                        onOpenDirectChat: (jid) {
+                        onOpenDirectChat: (jid) async {
                           final locate = context.read;
-                          return locate<ChatsCubit>().openChat(jid: jid);
+                          final chatsCubit = locate<ChatsCubit>();
+                          final normalizedJid = jid.trim();
+                          var opened = false;
+                          try {
+                            await chatsCubit.openChat(jid: jid);
+                            opened = true;
+                          } on XmppException {
+                            opened =
+                                chatsCubit.state.openJid?.trim() ==
+                                normalizedJid;
+                          }
+                          if (!opened) {
+                            return false;
+                          }
+                          if (!context.mounted) {
+                            return true;
+                          }
+                          navigator.pop();
+                          return true;
                         },
                         onChangeNickname: (nick) {
                           final locate = context.read;

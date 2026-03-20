@@ -59,7 +59,7 @@ void main() {
           avatarUpdateInFlight: false,
           onInvite: (_) {},
           onAction: (_, _, _) async {},
-          onOpenDirectChat: (_) async {},
+          onOpenDirectChat: (_) async => true,
         ),
       ),
     );
@@ -148,6 +148,7 @@ void main() {
             },
             onOpenDirectChat: (_) async {
               directChatCalls += 1;
+              return true;
             },
           ),
         ),
@@ -244,7 +245,7 @@ void main() {
           avatarUpdateInFlight: false,
           onInvite: (_) {},
           onAction: (_, _, _) async {},
-          onOpenDirectChat: (_) async {},
+          onOpenDirectChat: (_) async => true,
         ),
       ),
     );
@@ -263,10 +264,86 @@ void main() {
     expect(bubbleRect.right, closeTo(sheetRect.right - axiSpacing.m, 0.001));
   });
 
-  testWidgets('member action timeout clears loading after 10 seconds', (
+  testWidgets('direct chat failure shows feedback and clears loading', (
     tester,
   ) async {
-    final neverCompletes = Completer<void>();
+    var directChatCalls = 0;
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    const memberOccupantId = '$roomJid/alice';
+
+    await tester.pumpWidget(
+      _RoomMembersSheetTestApp(
+        child: RoomMembersSheet(
+          roomState: RoomState(
+            roomJid: roomJid,
+            myOccupantJid: selfOccupantId,
+            occupants: <String, Occupant>{
+              selfOccupantId: Occupant(
+                occupantId: selfOccupantId,
+                nick: 'self',
+                realJid: 'self@axi.im',
+                affiliation: OccupantAffiliation.member,
+                role: OccupantRole.participant,
+              ),
+              memberOccupantId: Occupant(
+                occupantId: memberOccupantId,
+                nick: 'alice',
+                realJid: 'alice@axi.im',
+                affiliation: OccupantAffiliation.member,
+                role: OccupantRole.participant,
+              ),
+            },
+          ),
+          memberSections: <RoomMemberSection>[
+            RoomMemberSection(
+              kind: RoomMemberSectionKind.members,
+              members: <RoomMemberEntry>[
+                RoomMemberEntry(
+                  occupant: Occupant(
+                    occupantId: memberOccupantId,
+                    nick: 'alice',
+                    realJid: 'alice@axi.im',
+                    affiliation: OccupantAffiliation.member,
+                    role: OccupantRole.participant,
+                  ),
+                  actions: const <MucModerationAction>[],
+                  directChatJid: 'alice@axi.im',
+                ),
+              ],
+            ),
+          ],
+          canInvite: false,
+          avatarUpdateInFlight: false,
+          onInvite: (_) {},
+          onAction: (_, _, _) async {},
+          onOpenDirectChat: (_) async {
+            directChatCalls += 1;
+            return false;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('alice'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open DM'));
+    await tester.pumpAndSettle();
+
+    expect(directChatCalls, 1);
+    expect(
+      find.text(
+        'Could not complete that action. Check permissions or connectivity.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(AxiProgressIndicator), findsNothing);
+  });
+
+  testWidgets('direct chat timeout clears loading after 15 seconds', (
+    tester,
+  ) async {
+    final neverCompletes = Completer<bool>();
     const roomJid = 'room@conference.axi.im';
     const selfOccupantId = '$roomJid/self';
     const memberOccupantId = '$roomJid/alice';
@@ -306,7 +383,8 @@ void main() {
                     affiliation: OccupantAffiliation.member,
                     role: OccupantRole.participant,
                   ),
-                  actions: <MucModerationAction>[MucModerationAction.kick],
+                  actions: const <MucModerationAction>[],
+                  directChatJid: 'alice@axi.im',
                 ),
               ],
             ),
@@ -314,27 +392,28 @@ void main() {
           canInvite: false,
           avatarUpdateInFlight: false,
           onInvite: (_) {},
-          onAction: (occupantId, action, actionLabel) {
-            expect(occupantId, memberOccupantId);
-            expect(action, MucModerationAction.kick);
-            expect(actionLabel, 'Kick');
-            return neverCompletes.future;
-          },
-          onOpenDirectChat: (_) async {},
+          onAction: (_, _, _) async {},
+          onOpenDirectChat: (_) => neverCompletes.future,
         ),
       ),
     );
 
     await tester.tap(find.text('alice'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Kick'));
+    await tester.tap(find.text('Open DM'));
     await tester.pump();
 
     expect(find.byType(AxiProgressIndicator), findsWidgets);
 
-    await tester.pump(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 15));
     await tester.pumpAndSettle();
 
+    expect(
+      find.text(
+        'Could not complete that action. Check permissions or connectivity.',
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(AxiProgressIndicator), findsNothing);
   });
 
@@ -369,7 +448,7 @@ void main() {
           avatarUpdateInFlight: false,
           onInvite: (_) {},
           onAction: (_, _, _) async {},
-          onOpenDirectChat: (_) async {},
+          onOpenDirectChat: (_) async => true,
           onLeaveRoom: () {
             leaveCalls += 1;
             return leaveCompleter.future;

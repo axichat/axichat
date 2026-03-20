@@ -59,7 +59,7 @@ class RoomMembersSheet extends StatelessWidget {
     String actionLabel,
   )
   onAction;
-  final Future<void> Function(String jid) onOpenDirectChat;
+  final Future<bool> Function(String jid) onOpenDirectChat;
   final String? roomAvatarPath;
   final ValueChanged<String>? onChangeNickname;
   final Future<void> Function()? onLeaveRoom;
@@ -533,7 +533,7 @@ class _MemberSection extends StatelessWidget {
     String actionLabel,
   )
   onAction;
-  final Future<void> Function(String jid) onOpenDirectChat;
+  final Future<bool> Function(String jid) onOpenDirectChat;
   final String? myOccupantJid;
   final AppLocalizations l10n;
   final Duration animationDuration;
@@ -630,7 +630,7 @@ class _MemberTile extends StatefulWidget {
     String actionLabel,
   )
   onAction;
-  final Future<void> Function(String jid) onOpenDirectChat;
+  final Future<bool> Function(String jid) onOpenDirectChat;
   final bool isSelf;
   final AppLocalizations l10n;
   final Duration animationDuration;
@@ -717,7 +717,14 @@ class _MemberTileState extends State<_MemberTile> {
           id: 'chat:${widget.directChatJid}',
           label: widget.l10n.mucActionOpenChat,
           icon: LucideIcons.messagesSquare,
-          onPressed: () => widget.onOpenDirectChat(widget.directChatJid!),
+          timeoutMessage: widget.l10n.chatModerationFailed,
+          onPressed: () async {
+            final opened = await widget.onOpenDirectChat(widget.directChatJid!);
+            if (opened || !context.mounted) {
+              return;
+            }
+            FeedbackSystem.showError(context, widget.l10n.chatModerationFailed);
+          },
         ),
       ...widget.actions.map((action) {
         final descriptor = _MemberActionDescriptor.forAction(

@@ -25,7 +25,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
     String actionLabel,
   )
   onAction;
-  final Future<void> Function(String jid) onOpenDirectChat;
+  final Future<bool> Function(String jid) onOpenDirectChat;
   final ValueChanged<String> onChangeNickname;
   final Future<void> Function() onLeaveRoom;
   final Future<void> Function() onDestroyRoom;
