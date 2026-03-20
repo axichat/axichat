@@ -26,6 +26,7 @@ void main() {
     emailSyncStateController = StreamController<EmailSyncState>.broadcast();
     emailReadyTransitionController = StreamController<void>.broadcast();
 
+    when(() => xmppService.hasConnectionSettings).thenReturn(true);
     when(() => xmppService.syncSessionState()).thenAnswer((_) async => true);
 
     when(
@@ -159,6 +160,127 @@ void main() {
     verify(() => emailService.syncSessionState()).called(1);
     verify(() => xmppService.syncSessionState()).called(1);
   });
+
+  test(
+    'email sync failure still runs XMPP sync and reports success when XMPP is configured',
+    () async {
+      when(
+        () => emailService.syncSessionState(),
+      ).thenAnswer((_) async => false);
+
+      final bloc = HomeBloc(
+        xmppService: xmppService,
+        emailService: emailService,
+        tabs: const [HomeTab.chats],
+      );
+      final emittedStates = <HomeState>[];
+      final subscription = bloc.stream.listen(emittedStates.add);
+      addTearDown(() async {
+        await subscription.cancel();
+        await bloc.close();
+      });
+
+      bloc.add(const HomeRefreshRequested());
+      await pumpEventQueue();
+
+      expect(emittedStates.map((state) => state.refreshStatus), [
+        RequestStatus.loading,
+        RequestStatus.success,
+      ]);
+      verify(() => emailService.syncSessionState()).called(1);
+      verify(() => xmppService.syncSessionState()).called(1);
+    },
+  );
+
+  test('email sync failure reports failure for SMTP-only refresh', () async {
+    when(() => xmppService.hasConnectionSettings).thenReturn(false);
+    when(() => emailService.syncSessionState()).thenAnswer((_) async => false);
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(() async {
+      await subscription.cancel();
+      await bloc.close();
+    });
+
+    bloc.add(const HomeRefreshRequested());
+    await pumpEventQueue();
+
+    expect(emittedStates.map((state) => state.refreshStatus), [
+      RequestStatus.loading,
+      RequestStatus.failure,
+    ]);
+    verify(() => emailService.syncSessionState()).called(1);
+    verifyNever(() => xmppService.syncSessionState());
+  });
+
+  test(
+    'close during email subscription reconcile does not leave a later listener active',
+    () async {
+      final firstCancelStarted = Completer<void>();
+      final firstCancelCompleter = Completer<void>();
+      final firstReadyTransitionController = StreamController<void>.broadcast(
+        onCancel: () async {
+          if (!firstCancelStarted.isCompleted) {
+            firstCancelStarted.complete();
+          }
+          await firstCancelCompleter.future;
+        },
+      );
+      final secondReadyTransitionController =
+          StreamController<void>.broadcast();
+      final firstEmailService = MockEmailService();
+      final secondEmailService = MockEmailService();
+      addTearDown(() async {
+        await firstReadyTransitionController.close();
+        await secondReadyTransitionController.close();
+      });
+
+      when(
+        () => firstEmailService.syncState,
+      ).thenReturn(const EmailSyncState.offline('offline'));
+      when(
+        () => firstEmailService.readyTransitionStream,
+      ).thenAnswer((_) => firstReadyTransitionController.stream);
+      when(
+        () => firstEmailService.refreshUnreadForHomeRefresh(),
+      ).thenAnswer((_) async => true);
+
+      when(
+        () => secondEmailService.syncState,
+      ).thenReturn(const EmailSyncState.offline('offline'));
+      when(
+        () => secondEmailService.readyTransitionStream,
+      ).thenAnswer((_) => secondReadyTransitionController.stream);
+      when(
+        () => secondEmailService.refreshUnreadForHomeRefresh(),
+      ).thenAnswer((_) async => true);
+
+      final bloc = HomeBloc(
+        xmppService: xmppService,
+        emailService: firstEmailService,
+        tabs: const [HomeTab.chats],
+      );
+      await pumpEventQueue();
+
+      bloc.add(HomeEmailServiceChanged(secondEmailService));
+      await firstCancelStarted.future;
+
+      final closeFuture = bloc.close();
+      firstCancelCompleter.complete();
+      await closeFuture;
+
+      secondReadyTransitionController.add(null);
+      await pumpEventQueue();
+
+      verifyNever(() => secondEmailService.refreshUnreadForHomeRefresh());
+    },
+  );
 
   test(
     'close cancels subscriptions and tolerates in-flight refresh work',

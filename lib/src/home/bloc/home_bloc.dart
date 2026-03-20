@@ -25,6 +25,18 @@ enum _HomeRefreshOutcome {
   bool get isFailure => this == failure;
 }
 
+enum _HomeRefreshTargetOutcome {
+  success,
+  failure,
+  skipped;
+
+  bool get isFailure => this == failure;
+
+  bool get isSuccess => this == success;
+
+  bool get isSkipped => this == skipped;
+}
+
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   HomeBloc({
     required XmppService xmppService,
@@ -51,6 +63,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final Logger _log = Logger('HomeBloc');
   EmailService? _emailService;
   StreamSubscription<void>? _emailSyncSubscription;
+  EmailService? _emailSyncSubscriptionService;
+  Future<void>? _emailSyncSubscriptionTask;
   Future<_HomeRefreshOutcome>? _syncTask;
 
   void _onActiveTabChanged(
@@ -204,25 +218,70 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   @override
   Future<void> close() async {
-    final emailSubscription = _emailSyncSubscription;
-    _emailSyncSubscription = null;
-    await emailSubscription?.cancel();
+    _emailService = null;
+    await _reconcileEmailSyncSubscription();
     return super.close();
   }
 
   Future<void> _attachEmailSyncSubscription(EmailService? emailService) async {
+    _emailService = emailService;
+    await _reconcileEmailSyncSubscription();
+  }
+
+  Future<void> _reconcileEmailSyncSubscription() async {
+    while (true) {
+      final activeTask = _emailSyncSubscriptionTask;
+      if (activeTask != null) {
+        await activeTask;
+        if (identical(_emailSyncSubscriptionService, _emailService)) {
+          return;
+        }
+        continue;
+      }
+
+      final task = _runEmailSyncSubscriptionReconcile();
+      _emailSyncSubscriptionTask = task;
+      try {
+        await task;
+      } finally {
+        if (identical(_emailSyncSubscriptionTask, task)) {
+          _emailSyncSubscriptionTask = null;
+        }
+      }
+      if (identical(_emailSyncSubscriptionService, _emailService)) {
+        return;
+      }
+    }
+  }
+
+  Future<void> _runEmailSyncSubscriptionReconcile() async {
     final existingSubscription = _emailSyncSubscription;
     _emailSyncSubscription = null;
+    _emailSyncSubscriptionService = null;
     await existingSubscription?.cancel();
 
+    final emailService = _emailService;
     if (emailService == null) {
       return;
     }
 
-    _emailSyncSubscription = emailService.readyTransitionStream.listen(
-      (_) => _runEmailReconnectSync(),
-    );
-    if (emailService.syncState.status == EmailSyncStatus.ready) {
+    final subscription = emailService.readyTransitionStream.listen((_) {
+      if (!identical(_emailSyncSubscriptionService, emailService)) {
+        return;
+      }
+      _runEmailReconnectSync();
+    });
+    if (!identical(_emailService, emailService)) {
+      await subscription.cancel();
+      return;
+    }
+
+    _emailSyncSubscription = subscription;
+    _emailSyncSubscriptionService = emailService;
+
+    if (identical(_emailService, emailService) &&
+        identical(_emailSyncSubscriptionService, emailService) &&
+        emailService.syncState.status == EmailSyncStatus.ready) {
       await _runEmailReconnectSync();
     }
   }
@@ -235,14 +294,37 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<_HomeRefreshOutcome> _runRefreshGesture() async {
-    final emailService = _emailService;
-    if (emailService != null && !await emailService.syncSessionState()) {
+    final emailOutcome = await _runEmailSessionSync();
+    final xmppOutcome = await _runXmppSessionSync();
+
+    if (xmppOutcome.isFailure) {
       return _HomeRefreshOutcome.failure;
     }
-    if (!await _xmppService.syncSessionState()) {
+    if (emailOutcome.isFailure && xmppOutcome.isSkipped) {
       return _HomeRefreshOutcome.failure;
     }
     return _HomeRefreshOutcome.success;
+  }
+
+  Future<_HomeRefreshTargetOutcome> _runEmailSessionSync() async {
+    final emailService = _emailService;
+    if (emailService == null) {
+      return _HomeRefreshTargetOutcome.skipped;
+    }
+    final didSync = await emailService.syncSessionState();
+    return didSync
+        ? _HomeRefreshTargetOutcome.success
+        : _HomeRefreshTargetOutcome.failure;
+  }
+
+  Future<_HomeRefreshTargetOutcome> _runXmppSessionSync() async {
+    if (!_xmppService.hasConnectionSettings) {
+      return _HomeRefreshTargetOutcome.skipped;
+    }
+    final didSync = await _xmppService.syncSessionState();
+    return didSync
+        ? _HomeRefreshTargetOutcome.success
+        : _HomeRefreshTargetOutcome.failure;
   }
 
   Future<_HomeRefreshOutcome> _runEmailUnreadRefreshGesture() async {
