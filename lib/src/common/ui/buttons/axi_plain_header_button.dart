@@ -62,9 +62,15 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
     final VoidCallback? onTap = enabled
         ? withSelectionHaptic(widget.onPressed)
         : null;
-    final VoidCallback? onLongPress = enabled
+    final VoidCallback? handleLongPress = enabled
         ? withSelectionHaptic(widget.onLongPress)
         : null;
+    final VoidCallback? onLongPress = handleLongPress == null
+        ? null
+        : () {
+            _setPressed(false);
+            handleLongPress();
+          };
     final baseBackground = widget.backgroundColor ?? Colors.transparent;
     final hoverBackground =
         widget.hoverBackgroundColor ??

@@ -289,9 +289,16 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final VoidCallback? onTap = enabled
             ? withSelectionHaptic(widget.onPressed)
             : null;
-        final VoidCallback? onLongPress = enabled
+        final VoidCallback? handleLongPress = enabled
             ? withSelectionHaptic(widget.onLongPress)
             : null;
+        final VoidCallback? onLongPress = handleLongPress == null
+            ? null
+            : () {
+                _updateState(WidgetState.pressed, false);
+                _bounceController.setPressed(false);
+                handleLongPress();
+              };
         final bool hovered = states.contains(WidgetState.hovered);
         final bool focused = states.contains(WidgetState.focused);
         final bool pressed = states.contains(WidgetState.pressed);
