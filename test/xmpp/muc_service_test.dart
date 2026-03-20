@@ -2187,7 +2187,107 @@ void main() {
     );
 
     test(
-      'ROOM-AVATAR-003 [HP] matching MUC vCard avatar hashes skip room vCard fetches',
+      'ROOM-AVATAR-003 [HP] MUC vCard avatar updates use room-info payloads before falling back to vCard',
+      () async {
+        const roomAvatarHash = 'room-avatar-hash';
+        final encodedAvatar = base64Encode(_pngLikeBytes);
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: _roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: _roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: _roomJid,
+          ),
+        );
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).thenAnswer((_) async {});
+
+        var requestedRoomInfo = false;
+        var requestedRoomVCard = false;
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final type = stanza.attributes[_typeAttr]?.toString();
+          if (stanza.firstTag(_queryTag, xmlns: _discoInfoXmlns) != null &&
+              type == _iqTypeGet) {
+            requestedRoomInfo = true;
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _discoInfoXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'result'},
+                        children: [
+                          _formTypeField(_mucRoomInfoFormType),
+                          _singleValueField(
+                            'muc#roominfo_avatar',
+                            encodedAvatar,
+                          ),
+                          _singleValueField(
+                            'muc#roominfo_avatar_hash',
+                            roomAvatarHash,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          if (stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
+              type == _iqTypeGet) {
+            requestedRoomVCard = true;
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(tag: 'vCard', xmlns: 'vcard-temp'),
+                ],
+              ),
+            );
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        eventStreamController.add(
+          RoomVCardAvatarUpdatedEvent(
+            mox.JID.fromString(_roomJid),
+            roomAvatarHash,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        expect(requestedRoomInfo, isTrue);
+        expect(requestedRoomVCard, isFalse);
+        verify(
+          () => mockDatabase.updateChatAvatar(
+            jid: _roomJid,
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-004 [HP] matching MUC vCard avatar hashes skip room vCard fetches',
       () async {
         const roomAvatarHash = 'room-avatar-hash';
         final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
@@ -2227,7 +2327,7 @@ void main() {
     );
 
     test(
-      'ROOM-AVATAR-004 [HP] matching room-info avatar hashes skip room vCard fetches after join refresh',
+      'ROOM-AVATAR-005 [HP] matching room-info avatar hashes skip room vCard fetches after join refresh',
       () async {
         const roomAvatarHash = 'room-avatar-hash';
         final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
