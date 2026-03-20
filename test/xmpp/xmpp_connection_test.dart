@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -68,4 +69,58 @@ void main() {
 
     expect(completed, isTrue);
   });
+
+  test(
+    'replacing the active socket ignores stale closure events from the old socket',
+    () async {
+      final firstServer = await ServerSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      final secondServer = await ServerSocket.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      addTearDown(firstServer.close);
+      addTearDown(secondServer.close);
+
+      final firstPeerFuture = firstServer.first;
+      final secondPeerFuture = secondServer.first;
+      final wrapper = XmppSocketWrapper();
+      final events = <mox.XmppSocketEvent>[];
+      final eventSubscription = wrapper.getEventStream().listen(events.add);
+      addTearDown(eventSubscription.cancel);
+
+      expect(
+        await wrapper.connect(
+          'axi.im',
+          host: InternetAddress.loopbackIPv4.address,
+          port: firstServer.port,
+        ),
+        isTrue,
+      );
+      final firstPeer = await firstPeerFuture;
+
+      expect(
+        await wrapper.connect(
+          'axi.im',
+          host: InternetAddress.loopbackIPv4.address,
+          port: secondServer.port,
+        ),
+        isTrue,
+      );
+      final secondPeer = await secondPeerFuture;
+
+      await pumpEventQueue();
+      expect(events, isEmpty);
+
+      firstPeer.destroy();
+      await pumpEventQueue(times: 10);
+
+      expect(events, isEmpty);
+
+      await wrapper.closeStreams();
+      secondPeer.destroy();
+    },
+  );
 }

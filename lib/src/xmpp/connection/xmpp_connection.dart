@@ -43,6 +43,7 @@ class XmppConnection extends mox.XmppConnection {
              connectivityManager ??
              XmppConnectivityManager.forXmppConnection(
                domainProvider: domainProvider.provide,
+               networkAvailability: NetworkAvailabilityService.instance,
                shouldContinue: reconnectionPolicy.getShouldReconnect,
              ),
          negotiationsHandler: negotiationsHandler,
@@ -130,9 +131,6 @@ class XmppConnection extends mox.XmppConnection {
         return pubSubHubManager?.getDelegate<ConversationIndexManager>() as T?;
       case == DraftsPubSubManager:
         return pubSubHubManager?.getDelegate<DraftsPubSubManager>() as T?;
-      case == MessageDisplayedSyncManager:
-        return pubSubHubManager?.getDelegate<MessageDisplayedSyncManager>()
-            as T?;
       case == MessageCollectionsPubSubManager:
         return pubSubHubManager?.getDelegate<MessageCollectionsPubSubManager>()
             as T?;
@@ -337,6 +335,8 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<void> requestReconnect(ReconnectTrigger trigger) =>
       _reconnectionPolicy.requestReconnect(trigger);
+
+  Future<void> completeReconnect() => _reconnectionPolicy.completeReconnect();
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
@@ -434,9 +434,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _shouldReconnect = value;
     _log.info('setShouldReconnect($value): ${_stateSummary()}');
     if (!value) {
-      _cancelBackoff();
-      _reconnectionInProgress = false;
-      _activeCycleId = null;
+      _clearReconnectCycle(resetAttempts: false);
       _log.info('Reconnect disabled and cycle cleared.');
     }
   }
@@ -589,20 +587,42 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _reconnectionAttempts = 0;
   }
 
+  void _clearReconnectCycle({required bool resetAttempts}) {
+    _cancelBackoff();
+    _reconnectionInProgress = false;
+    _activeCycleId = null;
+    if (resetAttempts) {
+      _reconnectionAttempts = 0;
+    }
+  }
+
   @override
   Future<void> onSuccess() async {
     _log.info('onSuccess called: cycleId=$_activeCycleId ${_stateSummary()}');
-    _reconnectionAttempts = 0;
-    await reset();
+    if (!_reconnectionInProgress) {
+      _reconnectionAttempts = 0;
+      return;
+    }
+    _log.info(
+      'Reconnect socket connect succeeded; waiting for stream negotiations before clearing reconnect state.',
+    );
   }
 
   @override
   Future<void> reset() async {
     _log.info('reset() called: ${_stateSummary()}');
-    _cancelBackoff();
-    _reconnectionInProgress = false;
-    _activeCycleId = null;
+    if (_reconnectionInProgress && _shouldReconnect) {
+      _cancelBackoff();
+      _log.info('reset() retaining active reconnect during connect handoff.');
+      return;
+    }
+    _clearReconnectCycle(resetAttempts: false);
     // _shouldReconnect = false;
+  }
+
+  Future<void> completeReconnect() async {
+    _log.info('completeReconnect() called: ${_stateSummary()}');
+    _clearReconnectCycle(resetAttempts: true);
   }
 }
 
@@ -617,16 +637,19 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   XmppConnectivityManager._(
     this._endpoints, {
     required String? Function() domainProvider,
+    NetworkAvailabilityService? networkAvailability,
     Duration? pollInterval,
     Duration? waitTimeout,
     this.shouldContinue,
   }) : _domainProvider = domainProvider,
+       _networkAvailability = networkAvailability,
        _pollInterval = pollInterval ?? _defaultPollInterval,
        _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
   final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
   final Future<bool> Function()? shouldContinue;
+  final NetworkAvailabilityService? _networkAvailability;
 
   final Duration _pollInterval;
   final Duration? _waitTimeout;
@@ -637,11 +660,13 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   XmppConnectivityManager.forXmppConnection({
     required String? Function() domainProvider,
     required Future<bool> Function() shouldContinue,
+    NetworkAvailabilityService? networkAvailability,
     Duration? pollInterval,
     Duration? waitTimeout,
   }) : this._(
          const [],
          domainProvider: domainProvider,
+         networkAvailability: networkAvailability,
          pollInterval: pollInterval,
          waitTimeout: waitTimeout,
          shouldContinue: shouldContinue,
@@ -651,18 +676,24 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   static const _offlineErrnos = <int>{
     50, // ENETDOWN (macOS)
     51, // ENETUNREACH (macOS)
+    60, // ETIMEDOUT (macOS)
     64, // EHOSTDOWN (macOS)
     65, // EHOSTUNREACH (macOS)
     103, // ECONNABORTED (Linux)
     101, // ENETUNREACH (Linux)
+    110, // ETIMEDOUT (Linux)
     113, // EHOSTUNREACH (Linux)
     10050, // WSAENETDOWN (Windows)
     10051, // WSAENETUNREACH (Windows)
+    10060, // WSAETIMEDOUT (Windows)
     10065, // WSAEHOSTUNREACH (Windows)
   };
 
   @override
   Future<bool> hasConnection() {
+    if (_networkAvailability?.current == NetworkAvailability.unavailable) {
+      return Future.value(false);
+    }
     final endpoints = _resolveEndpoints();
     if (endpoints.isEmpty) {
       return Future.value(true);
@@ -676,12 +707,26 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
     final stopwatch = Stopwatch()..start();
     var hasWarned = false;
-    while (!await hasConnection()) {
+    while (true) {
       if (shouldContinue != null && !await shouldContinue!()) return;
+      if (_networkAvailability?.current == NetworkAvailability.unavailable) {
+        await _networkAvailability?.waitForAvailable(timeout: _waitTimeout);
+        final timeout = _waitTimeout;
+        if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
+          _log.warning(
+            'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
+          );
+          hasWarned = true;
+        }
+        continue;
+      }
+      if (await hasConnection()) {
+        return;
+      }
       final timeout = _waitTimeout;
       if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
         _log.warning(
-          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Continuing to retry.',
+          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
         );
         hasWarned = true;
       }
@@ -714,6 +759,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     return message.contains('network is unreachable') ||
         message.contains('no route to host') ||
         message.contains('not connected') ||
+        message.contains('timed out') ||
         message.contains('connection abort');
   }
 

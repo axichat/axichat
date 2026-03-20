@@ -727,6 +727,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   @override
   Future<bool> secure(String domain) {
+    _secure = Completer<bool>();
     _sendToTask([securePrefix, domain]);
     return _secure.future;
   }
@@ -751,6 +752,9 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   @override
   Future<bool> connect(String domain, {String? host, int? port}) async {
     await reset();
+    _connect = Completer<bool>();
+    _secure = Completer<bool>();
+    _secureResult = false;
 
     final target = _resolveTarget(domain, host: host, port: port);
     if (target == null) {
@@ -847,11 +851,9 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Resetting foreground socket wrapper. '
       'serviceAcquired=$_serviceAcquired listenerRegistered=$_listenerRegistered',
     );
-    _connect = Completer<bool>();
-    _secure = Completer<bool>();
     _secureResult = false;
-    await _releaseService();
     _detachListener();
+    await _releaseService();
   }
 
   Future<void> _releaseService() async {

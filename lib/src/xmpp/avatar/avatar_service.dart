@@ -354,6 +354,16 @@ final class _SelfAvatarRefreshRequest {
   final String? vcardHash;
   final String? clearReason;
 
+  bool get includesBootstrapWork =>
+      preferPubSub && notifyCached && publishPending;
+
+  bool get isBootstrapOnly =>
+      includesBootstrapWork &&
+      !force &&
+      metadata == null &&
+      vcardHash == null &&
+      clearReason == null;
+
   _SelfAvatarRefreshRequest merge(_SelfAvatarRefreshRequest other) {
     return _SelfAvatarRefreshRequest(
       force: force || other.force,
@@ -400,6 +410,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
   Future<void>? _selfAvatarRefreshFuture;
   Object _selfAvatarRefreshOwner = Object();
+  _SelfAvatarRefreshRequest? _activeSelfAvatarRefreshRequest;
   _SelfAvatarRefreshRequest? _pendingSelfAvatarRefreshRequest;
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
@@ -498,6 +509,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _hasSelfAvatarNegotiatedStream = false;
     _selfAvatarRefreshOwner = Object();
     _selfAvatarRefreshFuture = null;
+    _activeSelfAvatarRefreshRequest = null;
     _pendingSelfAvatarRefreshRequest = null;
     _setSelfAvatarHydrating(false);
   }
@@ -948,7 +960,9 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
     final result = await _storeSelfAvatarDraft(payload, public: public);
     if (_hasSelfAvatarNegotiatedStream) {
-      await _bootstrapSelfAvatarIfReady();
+      fireAndForget(() async {
+        await _bootstrapSelfAvatarIfReady();
+      }, operationName: 'AvatarService.publishSavedSelfAvatar');
     }
     return result;
   }
@@ -1033,6 +1047,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarRefreshFuture = null;
     _selfAvatarRefreshOwner = Object();
+    _activeSelfAvatarRefreshRequest = null;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
     _cachedSelfAvatar = null;
@@ -1060,6 +1075,13 @@ mixin AvatarService on XmppBase, BaseStreamService {
       final running = _selfAvatarRefreshFuture;
       if (running != null) {
         final pending = _pendingSelfAvatarRefreshRequest;
+        final bootstrapAlreadyQueued =
+            (_activeSelfAvatarRefreshRequest?.includesBootstrapWork ?? false) ||
+            (pending?.includesBootstrapWork ?? false);
+        if (nextRequest.isBootstrapOnly && bootstrapAlreadyQueued) {
+          await running;
+          return;
+        }
         _pendingSelfAvatarRefreshRequest = pending == null
             ? nextRequest
             : pending.merge(nextRequest);
@@ -1068,6 +1090,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       }
 
       final owner = _selfAvatarRefreshOwner;
+      _activeSelfAvatarRefreshRequest = nextRequest;
       final next = _runSelfAvatarRefreshRequest(owner, nextRequest);
       _selfAvatarRefreshFuture = next;
       try {
@@ -1075,6 +1098,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       } finally {
         if (identical(_selfAvatarRefreshFuture, next)) {
           _selfAvatarRefreshFuture = null;
+          _activeSelfAvatarRefreshRequest = null;
         }
       }
       if (!_ownsSelfAvatarRefresh(owner)) {

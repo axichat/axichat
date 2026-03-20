@@ -51,4 +51,41 @@ void main() {
 
     await manager.waitForConnection();
   });
+
+  test(
+    'waitForConnection stops polling once reconnect should no longer continue',
+    () async {
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = probe.port;
+      await probe.close();
+
+      const domain = 'wait-stop.test';
+      final previousEndpoint = serverLookup[domain];
+      serverLookup[domain] = IOEndpoint(
+        InternetAddress.loopbackIPv4.address,
+        port,
+      );
+      addTearDown(() {
+        if (previousEndpoint == null) {
+          serverLookup.remove(domain);
+        } else {
+          serverLookup[domain] = previousEndpoint;
+        }
+      });
+
+      var keepWaiting = true;
+      final manager = XmppConnectivityManager.forXmppConnection(
+        domainProvider: () => domain,
+        shouldContinue: () async => keepWaiting,
+        pollInterval: const Duration(milliseconds: 1),
+        waitTimeout: const Duration(milliseconds: 2),
+      );
+
+      final waitFuture = manager.waitForConnection();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      keepWaiting = false;
+
+      await waitFuture.timeout(const Duration(seconds: 1));
+    },
+  );
 }

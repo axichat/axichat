@@ -59,7 +59,6 @@ import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
-import 'package:axichat/src/xmpp/pubsub/message_displayed_sync_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_events.dart';
@@ -1269,6 +1268,7 @@ class XmppService extends XmppBase
     if (!_streamNegotiationsDone.isCompleted) {
       _streamNegotiationsDone.complete();
     }
+    await _connection.completeReconnect();
     _finishActiveReconnect(reason: 'stream negotiations complete');
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
@@ -2675,6 +2675,10 @@ class XmppService extends XmppBase
     if (_networkAvailabilitySubscription != null) {
       return;
     }
+    fireAndForget(
+      () => NetworkAvailabilityService.instance.start(),
+      operationName: 'XmppService.startNetworkAvailabilityListener',
+    );
     _networkAvailabilitySubscription = NetworkAvailabilityService
         .instance
         .stream
@@ -2697,6 +2701,7 @@ class XmppService extends XmppBase
   Future<void> _stopNetworkAvailabilityListener() async {
     await _networkAvailabilitySubscription?.cancel();
     _networkAvailabilitySubscription = null;
+    await NetworkAvailabilityService.instance.stop();
   }
 
   void _resetConnectTimeoutTracking() {
@@ -3861,8 +3866,6 @@ abstract class XmppTrafficTracker {
   DateTime? get lastOutgoingAt;
 }
 
-/// Stream management negotiator that tolerates missing managers and avoids null
-/// dereferences during feature matching.
 class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   XmppSocketWrapper();
 
@@ -3905,7 +3908,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   StreamSubscription<dynamic>? _socketSubscription;
   final Set<Socket> _expectedClosures = {};
   bool _secure = false;
-  bool _streamsClosed = false;
   String _xmlTokenCarry = '';
   DateTime? _lastIncomingAt;
   DateTime? _lastOutgoingAt;
@@ -3953,7 +3955,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       _socket = await Socket.connect(
         host,
         port,
-        timeout: const Duration(seconds: 15),
+        timeout: const Duration(seconds: 5),
       );
       _onConnectSuccess?.call();
       _log.finest('Success!');
@@ -3961,11 +3963,10 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     } on SocketException catch (error) {
       _onConnectError?.call(error);
       _log.finest('Socket connection failed: $error');
-      return false;
     } on Exception catch (error) {
       _log.finest('Socket connection failed: $error');
-      return false;
     }
+    return false;
   }
 
   Future<bool> _axiImDnsARecordFallback({
@@ -4051,10 +4052,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   }
 
   void _setupStreams() {
-    if (_streamsClosed) {
-      _log.warning('Ignoring stream setup because the wrapper is closed.');
-      return;
-    }
     final socket = _socket;
     if (socket == null) {
       _log.severe('Failed to setup streams as _socket is null');
@@ -4074,7 +4071,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
         final data = utf8.decode(event);
         if (_containsForbiddenXml(data)) {
           _log.warning(_xmlForbiddenLog);
-          _addSocketEvent(
+          _eventStream.add(
             mox.XmppSocketErrorEvent(const FormatException(_xmlForbiddenError)),
           );
           _dropSocket(expectClosure: false);
@@ -4087,7 +4084,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
               _log.warning(
                 'Blocked inbound stanza exceeding $maxXmppStanzaBytes bytes.',
               );
-              _addSocketEvent(
+              _eventStream.add(
                 mox.XmppSocketErrorEvent(
                   const FormatException(_stanzaOversizeError),
                 ),
@@ -4097,7 +4094,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
               _log.warning(
                 'Blocked inbound stanza exceeding $maxXmppStanzaDepth depth.',
               );
-              _addSocketEvent(
+              _eventStream.add(
                 mox.XmppSocketErrorEvent(
                   const FormatException(_stanzaDepthError),
                 ),
@@ -4105,7 +4102,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
               break;
             case _XmppStanzaGuardResult.malformed:
               _log.warning('Blocked inbound stanza due to parse error.');
-              _addSocketEvent(
+              _eventStream.add(
                 mox.XmppSocketErrorEvent(
                   const FormatException(_stanzaMalformedError),
                 ),
@@ -4117,11 +4114,11 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
           _dropSocket(expectClosure: false);
           return;
         }
-        _addSocketData(data);
+        _dataStream.add(data);
       },
       onError: (Object error) {
         _log.severe(error.toString());
-        _addSocketEvent(mox.XmppSocketErrorEvent(error));
+        _eventStream.add(mox.XmppSocketErrorEvent(error));
       },
       onDone: () {
         _socketSubscription = null;
@@ -4135,14 +4132,14 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     try {
       await socket.done;
       _markSocketClosed(socket);
-      _addSocketEvent(
+      _eventStream.add(
         mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
       );
     } on Exception catch (error, stackTrace) {
       _log.fine(_socketClosedWithErrorLog, error, stackTrace);
-      _addSocketEvent(mox.XmppSocketErrorEvent(error));
+      _eventStream.add(mox.XmppSocketErrorEvent(error));
       _markSocketClosed(socket);
-      _addSocketEvent(
+      _eventStream.add(
         mox.XmppSocketClosureEvent(_expectedClosures.remove(socket)),
       );
     }
@@ -4195,7 +4192,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     } on Exception catch (error) {
       _log.severe('Failed to secure socket: $error');
       if (error is HandshakeException) {
-        _addSocketEvent(mox_tcp.XmppSocketTLSFailedEvent());
+        _eventStream.add(mox_tcp.XmppSocketTLSFailedEvent());
       }
       return false;
     }
@@ -4219,12 +4216,12 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   }
 
   Future<void> closeStreams() async {
-    if (_streamsClosed) return;
-
-    _streamsClosed = true;
-    await _shutdownSocket();
-    await _dataStream.close();
-    await _eventStream.close();
+    if (!_dataStream.isClosed) {
+      await _dataStream.close();
+    }
+    if (!_eventStream.isClosed) {
+      await _eventStream.close();
+    }
   }
 
   @override
@@ -4240,7 +4237,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       socket.write(data);
     } on Exception catch (error) {
       _log.severe(error);
-      _addSocketEvent(mox.XmppSocketErrorEvent(error));
+      _eventStream.add(mox.XmppSocketErrorEvent(error));
     }
   }
 
@@ -4256,20 +4253,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     _dropSocket(expectClosure: true);
   }
 
-  void _addSocketData(String data) {
-    if (_streamsClosed) {
-      return;
-    }
-    _dataStream.add(data);
-  }
-
-  void _addSocketEvent(mox.XmppSocketEvent event) {
-    if (_streamsClosed) {
-      return;
-    }
-    _eventStream.add(event);
-  }
-
   void _dropSocket({required bool expectClosure}) {
     final socket = _socket;
     if (socket == null) return;
@@ -4283,32 +4266,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     if (subscription != null) {
       _cancelSocketSubscription(subscription);
     }
-    try {
-      socket.destroy();
-    } catch (error) {
-      _log.warning('Closing socket threw exception: $error');
-    }
-  }
-
-  Future<void> _shutdownSocket() async {
-    final socket = _socket;
-    _socket = null;
-    _secure = false;
-
-    final subscription = _socketSubscription;
-    _socketSubscription = null;
-    if (subscription != null) {
-      try {
-        await subscription.cancel();
-      } catch (error, stackTrace) {
-        _log.fine(_socketCancelFailedLog, error, stackTrace);
-      }
-    }
-
-    if (socket == null) {
-      return;
-    }
-
     try {
       socket.destroy();
     } catch (error) {

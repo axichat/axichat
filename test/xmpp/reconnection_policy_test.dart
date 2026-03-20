@@ -175,22 +175,31 @@ void main() {
     });
   });
 
-  test('requestReconnect stays latched until onSuccess', () async {
-    final policy = XmppReconnectionPolicy.exponential();
-    var reconnectCalls = 0;
-    policy.register(() async {
-      reconnectCalls++;
-    });
+  test(
+    'requestReconnect stays latched through reset and onSuccess until completeReconnect',
+    () async {
+      final policy = XmppReconnectionPolicy.exponential();
+      var reconnectCalls = 0;
+      policy.register(() async {
+        reconnectCalls++;
+      });
 
-    await policy.setShouldReconnect(true);
-    await policy.requestReconnect(ReconnectTrigger.immediateRetry);
-    await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      await policy.setShouldReconnect(true);
+      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      await policy.reset();
+      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
 
-    expect(reconnectCalls, 1);
+      expect(reconnectCalls, 1);
 
-    await policy.onSuccess();
-    await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      await policy.onSuccess();
+      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
 
-    expect(reconnectCalls, 2);
-  });
+      expect(reconnectCalls, 1);
+
+      await policy.completeReconnect();
+      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+
+      expect(reconnectCalls, 2);
+    },
+  );
 }

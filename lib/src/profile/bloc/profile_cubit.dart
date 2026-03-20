@@ -85,13 +85,14 @@ class ProfileCubit extends Cubit<ProfileState> {
   }
 
   void syncSessionIdentity() {
+    final cachedAvatar = _xmppService.cachedSelfAvatar;
     emit(
       state.copyWith(
         jid: _xmppService.myJid ?? '',
         resource: _xmppService.resource ?? '',
         username: _xmppService.username ?? '',
-        avatarPath: _xmppService.cachedSelfAvatar?.path,
-        avatarHash: _xmppService.cachedSelfAvatar?.hash,
+        avatarPath: cachedAvatar?.path ?? state.avatarPath,
+        avatarHash: cachedAvatar?.hash ?? state.avatarHash,
         avatarHydrating: _xmppService.selfAvatarHydrating,
       ),
     );

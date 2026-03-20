@@ -52,6 +52,28 @@ void main() {
     await cubit.close();
   });
 
+  test(
+    'syncSessionIdentity keeps the current avatar when the in-memory cache is still empty.',
+    () async {
+      when(() => xmppService.getOwnAvatar()).thenAnswer(
+        (_) async => const Avatar(path: '/tmp/stored.enc', hash: 'stored-hash'),
+      );
+      final cubit = ProfileCubit(xmppService: xmppService);
+      await Future<void>.delayed(Duration.zero);
+
+      when(() => xmppService.myJid).thenReturn('newuser@axi.im');
+      when(() => xmppService.resource).thenReturn('phone');
+      when(() => xmppService.username).thenReturn('newuser');
+      when(() => xmppService.cachedSelfAvatar).thenReturn(null);
+
+      cubit.syncSessionIdentity();
+
+      expect(cubit.state.avatarPath, '/tmp/stored.enc');
+      expect(cubit.state.avatarHash, 'stored-hash');
+      await cubit.close();
+    },
+  );
+
   test('clearSessionIdentity clears visible profile identity.', () async {
     when(() => xmppService.myJid).thenReturn('newuser@axi.im');
     when(() => xmppService.resource).thenReturn('phone');
