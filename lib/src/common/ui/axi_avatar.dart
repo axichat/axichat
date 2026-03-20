@@ -7,6 +7,7 @@ import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -206,6 +207,155 @@ class HydratedAxiAvatar extends StatefulWidget {
 
   @override
   State<HydratedAxiAvatar> createState() => _HydratedAxiAvatarState();
+}
+
+class SelfAxiAvatar extends StatelessWidget {
+  const SelfAxiAvatar({
+    super.key,
+    this.active = false,
+    this.shape = AxiAvatarShape.squircle,
+    this.size = 50.0,
+  });
+
+  final bool active;
+  final AxiAvatarShape shape;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, state) {
+        return _ResolvedSelfAxiAvatar(
+          jid: state.jid,
+          avatarPath: state.avatarPath,
+          avatarHash: state.avatarHash,
+          loading: state.avatarHydrating,
+          active: active,
+          shape: shape,
+          size: size,
+        );
+      },
+    );
+  }
+}
+
+class _ResolvedSelfAxiAvatar extends StatefulWidget {
+  const _ResolvedSelfAxiAvatar({
+    required this.jid,
+    required this.avatarPath,
+    required this.avatarHash,
+    required this.loading,
+    required this.active,
+    required this.shape,
+    required this.size,
+  });
+
+  final String jid;
+  final String? avatarPath;
+  final String? avatarHash;
+  final bool loading;
+  final bool active;
+  final AxiAvatarShape shape;
+  final double size;
+
+  @override
+  State<_ResolvedSelfAxiAvatar> createState() => _ResolvedSelfAxiAvatarState();
+}
+
+class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
+  Uint8List? _resolvedAvatarBytes;
+  String? _loadingPath;
+  Object? _loadToken;
+
+  String? get _normalizedAvatarPath {
+    final trimmed = widget.avatarPath?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAvatarBytes(clearStaleBytes: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ResolvedSelfAxiAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final pathChanged = oldWidget.avatarPath != widget.avatarPath;
+    final hashChanged = oldWidget.avatarHash != widget.avatarHash;
+    final loadingSettled = oldWidget.loading && !widget.loading;
+    final jidChanged = oldWidget.jid != widget.jid;
+    if (jidChanged || pathChanged || hashChanged || loadingSettled) {
+      _resolveAvatarBytes(
+        clearStaleBytes: jidChanged || pathChanged || hashChanged,
+      );
+    }
+  }
+
+  Future<void> _resolveAvatarBytes({bool clearStaleBytes = false}) async {
+    final path = _normalizedAvatarPath;
+    if (path == null) {
+      setState(() {
+        _resolvedAvatarBytes = null;
+        _loadingPath = null;
+      });
+      return;
+    }
+
+    final profileCubit = context.read<ProfileCubit>();
+    final loadToken = Object();
+    _loadToken = loadToken;
+    setState(() {
+      if (clearStaleBytes) {
+        _resolvedAvatarBytes = null;
+      }
+      _loadingPath = path;
+    });
+    Uint8List? safeBytes;
+    try {
+      safeBytes = await profileCubit.resolveSafeAvatarBytes(path: path);
+    } catch (_) {
+      safeBytes = null;
+    }
+    if (!mounted || !identical(_loadToken, loadToken)) {
+      return;
+    }
+    setState(() {
+      if (safeBytes != null) {
+        _resolvedAvatarBytes = safeBytes;
+      } else if (clearStaleBytes) {
+        _resolvedAvatarBytes = null;
+      }
+      _loadingPath = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final path = _normalizedAvatarPath;
+    final isLoadingAvatarBytes = path != null && _loadingPath == path;
+    return AxiAvatar(
+      avatar: AvatarPresentation.avatar(
+        label: widget.jid,
+        colorSeed: widget.jid,
+        avatar: Avatar.tryParseOrNull(
+          path: widget.avatarPath,
+          hash: widget.avatarHash,
+        ),
+        loading: widget.loading || isLoadingAvatarBytes,
+      ),
+      subscription: Subscription.both,
+      presence: null,
+      status: null,
+      active: widget.active,
+      shape: widget.shape,
+      size: widget.size,
+      avatarBytes: _resolvedAvatarBytes,
+    );
+  }
 }
 
 class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {

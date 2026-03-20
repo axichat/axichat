@@ -178,19 +178,7 @@ class _ProfileTileLayout extends StatelessWidget {
         children: [
           Hero(
             tag: 'avatar',
-            child: HydratedAxiAvatar(
-              avatar: AvatarPresentation.avatar(
-                label: jid,
-                colorSeed: jid,
-                avatar: Avatar.tryParseOrNull(path: avatarPath, hash: null),
-                loading: avatarLoading,
-              ),
-              subscription: Subscription.both,
-              // Presence is parsed for backend features but hidden in UI.
-              presence: null,
-              status: null,
-              active: false,
-            ),
+            child: const SelfAxiAvatar(),
           ),
           SizedBox(width: spacing.m),
           Expanded(
