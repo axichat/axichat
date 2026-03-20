@@ -2527,7 +2527,7 @@ class _ChatState extends State<Chat> {
     final recipientCutoutParticipants = timelineMessageItem.shareParticipants;
     final attachmentIds = timelineMessageItem.attachmentIds;
     final showReplyStrip = isEmailMessage && replyParticipants.isNotEmpty;
-    final canReact = !isEmailChat && _reactionsEnabledForChat(state);
+    final canReact = !isEmailChat;
     final requiresMucReference = messageModel.awaitsMucReference(
       isGroupChat: isGroupChat,
       isEmailBacked: isEmailChat,
@@ -3238,14 +3238,6 @@ class _ChatState extends State<Chat> {
       return false;
     }
     return context.read<XmppService>().demoOfflineMode;
-  }
-
-  bool _reactionsEnabledForChat(ChatState state) {
-    if (_isDemoModeActive()) {
-      return true;
-    }
-    return state.xmppCapabilities?.supportsFeature(mox.messageReactionsXmlns) ??
-        false;
   }
 
   bool _isEmailComposerWatermarkOnly({

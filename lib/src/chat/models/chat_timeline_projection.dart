@@ -933,10 +933,10 @@ ChatTimelineMessageDelivery _messageDelivery(
     }
     return ChatTimelineMessageDelivery.pending;
   }
-  if (message.displayed && supportsMarkers) {
+  if (message.displayed) {
     return ChatTimelineMessageDelivery.read;
   }
-  if (message.received && (supportsMarkers || supportsReceipts)) {
+  if (message.received) {
     return ChatTimelineMessageDelivery.received;
   }
   if (message.acked) {

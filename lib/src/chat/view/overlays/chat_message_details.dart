@@ -186,14 +186,18 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   xmppCapabilities?.supportsMarkers == true;
               final supportsXmppReceipts =
                   xmppCapabilities?.supportsReceipts == true;
+              final hasDeliveryFailure = message.error.isNotNone;
               final showsReceivedStatus =
                   isEmailTransport ||
+                  message.received ||
+                  hasDeliveryFailure ||
                   supportsXmppMarkers ||
                   supportsXmppReceipts;
               final showsDisplayedStatus = isEmailTransport
                   ? isFromSelf
-                  : supportsXmppMarkers;
-              final hasDeliveryFailure = message.error.isNotNone;
+                  : message.displayed ||
+                        hasDeliveryFailure ||
+                        supportsXmppMarkers;
               final bool? sentStatus = message.acked
                   ? true
                   : (hasDeliveryFailure ? false : null);

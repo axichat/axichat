@@ -667,8 +667,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                         selectedMessages,
                         growable: false,
                       );
-                      final canReact =
-                          !isEmailChat && owner._reactionsEnabledForChat(state);
+                      final canReact = !isEmailChat;
                       composerOverlayBanner = _MessageSelectionToolbar(
                         count: targets.length,
                         onClear: owner._clearMultiSelection,
