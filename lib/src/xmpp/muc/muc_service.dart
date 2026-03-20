@@ -1894,14 +1894,11 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         if (event.hash.isEmpty) {
           await _clearAvatarForJid(
             bareJid,
-              reason: AvatarService._avatarClearReasonVcardEmpty,
+            reason: AvatarService._avatarClearReasonVcardEmpty,
           );
           return;
         }
-        await _refreshRoomAvatarFromVCard(
-          bareJid,
-          expectedHash: event.hash,
-        );
+        await _refreshRoomAvatar(bareJid, expectedHash: event.hash);
       })
       ..registerHandler<mox.OwnDataChangedEvent>((event) async {
         await _handleOwnDataChanged(
@@ -4204,19 +4201,27 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
   }
 
-  Future<void> _refreshRoomAvatar(String roomJid) async {
+  Future<void> _refreshRoomAvatar(
+    String roomJid, {
+    String? expectedHash,
+  }) async {
     if (!_mucAvatarSupportEnabled) return;
     final normalizedRoom = _roomKey(roomJid);
     try {
+      if (await _roomAvatarMatchesStoredHash(normalizedRoom, expectedHash)) {
+        return;
+      }
       final payload = await _fetchRoomAvatarPayload(normalizedRoom);
       final payloadHash = payload.hash?.trim();
-      if (await _hasStoredAvatarForHash(normalizedRoom, payloadHash)) {
+      if (await _roomAvatarMatchesStoredHash(normalizedRoom, payloadHash)) {
         return;
       }
       if (payload.data == null || payload.data!.isEmpty) {
         await _refreshRoomAvatarFromVCard(
           normalizedRoom,
-          expectedHash: payloadHash,
+          expectedHash: payloadHash?.isNotEmpty == true
+              ? payloadHash
+              : expectedHash,
         );
         return;
       }
@@ -4224,10 +4229,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       if (decoded == null) {
         return;
       }
-      final resolvedHash =
-          payloadHash?.isNotEmpty == true
-              ? payloadHash!
-              : sha1.convert(decoded).toString();
+      final resolvedHash = payloadHash?.isNotEmpty == true
+          ? payloadHash!
+          : sha1.convert(decoded).toString();
       await storeAvatarBytesForJid(
         jid: normalizedRoom,
         bytes: decoded,
@@ -4238,12 +4242,28 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
   }
 
+  Future<bool> _roomAvatarMatchesStoredHash(
+    String roomJid,
+    String? hash,
+  ) async {
+    final normalizedHash = hash?.trim();
+    if (normalizedHash == null || normalizedHash.isEmpty) {
+      return false;
+    }
+    final existingHash = await _storedAvatarHash(roomJid);
+    if (existingHash == null || existingHash != normalizedHash) {
+      return false;
+    }
+    final existingPath = await _storedAvatarPath(roomJid);
+    return _hasCachedAvatarFile(existingPath);
+  }
+
   Future<void> _refreshRoomAvatarFromVCard(
     String roomJid, {
     String? expectedHash,
   }) async {
     final normalizedRoom = _roomKey(roomJid);
-    if (await _hasStoredAvatarForHash(normalizedRoom, expectedHash)) {
+    if (await _roomAvatarMatchesStoredHash(normalizedRoom, expectedHash)) {
       return;
     }
     final vcardBytes = await _fetchRoomVCardAvatarBytes(normalizedRoom);

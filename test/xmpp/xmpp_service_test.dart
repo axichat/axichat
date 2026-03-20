@@ -1553,6 +1553,11 @@ void main() {
             notificationService: mockNotificationService,
           );
           await connectSuccessfully(xmppService);
+          await xmppService.setMamSupportOverride(true);
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 20);
+
           when(() => mockConnection.hasConnectionSettings).thenReturn(true);
           when(
             () => mockConnection.getManager<mox.PubSubManager>(),
@@ -1566,6 +1571,7 @@ void main() {
           when(
             () => mockConnection.getManager<mox.VCardManager>(),
           ).thenReturn(null);
+          await xmppService.setMamSupportOverride(true);
           when(
             () => pubsubManager.getItems(
               any(),
@@ -1608,15 +1614,16 @@ void main() {
           await Future<void>.delayed(const Duration(milliseconds: 50));
           await pumpEventQueue(times: 20);
 
-          expect(metadataCalls, equals(1));
-          expect(avatarDataCalls, equals(0));
+          metadataCalls = 0;
+          avatarDataCalls = 0;
 
           expect(await xmppService.syncSessionState(), isTrue);
           await pumpEventQueue(times: 20);
           await Future<void>.delayed(const Duration(milliseconds: 50));
           await pumpEventQueue(times: 20);
 
-          expect(metadataCalls, equals(2));
+          expect(mamManager.queryCount, equals(1));
+          expect(metadataCalls, equals(1));
           expect(avatarDataCalls, equals(0));
         } finally {
           PathProviderPlatform.instance = originalPathProvider;

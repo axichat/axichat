@@ -1387,7 +1387,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
 
   Future<bool> refreshAvatarsForConversationIndex() async {
     final refreshed = await _refreshConversationIndexAvatars();
-    await refreshSelfAvatarIfNeeded();
+    await refreshSelfAvatarIfNeeded(force: true);
     return refreshed;
   }
 
@@ -2079,19 +2079,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
     } on XmppAbortedException {
       return null;
     }
-  }
-
-  Future<bool> _hasStoredAvatarForHash(String jid, String? hash) async {
-    final normalizedHash = hash?.trim();
-    if (normalizedHash == null || normalizedHash.isEmpty) {
-      return false;
-    }
-    final existingHash = await _storedAvatarHash(jid);
-    if (existingHash == null || existingHash != normalizedHash) {
-      return false;
-    }
-    final existingPath = await _storedAvatarPath(jid);
-    return _hasCachedAvatarFile(existingPath);
   }
 
   Future<T> _withAvatarRefreshTimeout<T>(

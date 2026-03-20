@@ -2948,7 +2948,7 @@ class XmppService extends XmppBase
       return false;
     }
     await runBootstrapOperations(XmppBootstrapTrigger.manualRefresh);
-    await refreshSelfAvatarIfNeeded();
+    await refreshSelfAvatarIfNeeded(force: true);
     return true;
   }
 
