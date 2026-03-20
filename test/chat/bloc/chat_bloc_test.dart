@@ -510,12 +510,6 @@ void main() {
         chatType: any(named: 'chatType'),
       ),
     ).thenAnswer((_) async {});
-    when(
-      () => messageService.recordDisplayedMessageForOwnDevices(
-        chat: any(named: 'chat'),
-        message: any(named: 'message'),
-      ),
-    ).thenAnswer((_) async {});
 
     when(
       () => chatsService.sendTyping(

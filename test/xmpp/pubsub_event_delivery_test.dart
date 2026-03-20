@@ -1,7 +1,6 @@
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
-import 'package:axichat/src/xmpp/pubsub/message_displayed_sync_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,9 +26,6 @@ const _messageCollectionsNode = 'urn:axi:message-collections';
 const _collectionId = 'important';
 const _messageReferenceId = 'important-message-id';
 const _messageChatJid = 'chat@example.com';
-const _displayedSyncChatJid = 'displayed@example.com';
-const _displayedSyncServerStanzaId = 'server-stanza-id-1';
-const _displayedSyncServerBy = _userBareJid;
 
 const _peerBareJid = 'peer@example.com';
 const _convTag = 'conv';
@@ -153,38 +149,6 @@ void main() {
     expect(update.bookmark.autojoin, isTrue);
     expect(update.bookmark.nick, equals(_roomNick));
   });
-
-  test(
-    'MessageDisplayedSyncManager emits update from pubsub notification',
-    () async {
-      final sentEvents = <mox.XmppEvent>[];
-      final manager = MessageDisplayedSyncManager()
-        ..register(_testAttributes(sentEvents: sentEvents));
-
-      final payload = MessageDisplayedSyncPayload(
-        chatJid: _displayedSyncChatJid,
-        serverStanzaId: _displayedSyncServerStanzaId,
-        serverStanzaBy: _displayedSyncServerBy,
-      );
-      final item = mox.PubSubItem(
-        id: payload.itemId,
-        node: messageDisplayedSyncNode,
-        payload: payload.toXml(),
-      );
-      final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
-
-      await manager.onXmppEvent(event);
-      await pumpEventQueue();
-
-      expect(sentEvents, hasLength(1));
-      expect(sentEvents.single, isA<MessageDisplayedSyncUpdatedEvent>());
-
-      final update = sentEvents.single as MessageDisplayedSyncUpdatedEvent;
-      expect(update.payload.chatJid, _displayedSyncChatJid);
-      expect(update.payload.serverStanzaId, _displayedSyncServerStanzaId);
-      expect(update.payload.serverStanzaBy, _displayedSyncServerBy);
-    },
-  );
 
   test(
     'MessageCollectionsPubSubManager emits update from pubsub notification',

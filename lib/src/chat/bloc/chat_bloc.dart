@@ -678,10 +678,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (_xmppAllowedForChat(chat)) {
       await _markMessagesDisplayedLocally([message]);
-      await _messageService.recordDisplayedMessageForOwnDevices(
-        chat: chat,
-        message: message,
-      );
     }
     final shouldSendChatReadReceipts =
         chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
@@ -752,10 +748,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         : unreadCandidates;
     if (_xmppAllowedForChat(chat) && unreadVisibleCandidates.isNotEmpty) {
       await _markMessagesDisplayedLocally(unreadVisibleCandidates);
-      await _messageService.recordDisplayedMessageForOwnDevices(
-        chat: chat,
-        message: unreadVisibleCandidates.last,
-      );
     }
     final seenCandidates = chat.defaultTransport.isEmail
         ? unreadVisibleCandidates

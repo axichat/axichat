@@ -832,25 +832,6 @@ class MamPageResult {
   final int? count;
 }
 
-enum _MessageDisplayedSyncPhase { unknown, syncing, ready, stale }
-
-final class _MessageDisplayedSyncChatState {
-  _MessageDisplayedSyncChatState({
-    required this.chatJid,
-    required this.phase,
-  });
-
-  final String chatJid;
-  _MessageDisplayedSyncPhase phase;
-  String? pendingLocalStanzaId;
-  String? unresolvedRemoteServerStanzaId;
-  String? exhaustedRemoteServerStanzaId;
-  Future<void>? recoveryTask;
-
-  bool get hasDurableState =>
-      pendingLocalStanzaId != null || unresolvedRemoteServerStanzaId != null;
-}
-
 final class _ChatMamSession {
   _ChatMamSession({this.chatJid});
 
@@ -895,34 +876,15 @@ const String _messageCollectionSyncSourceKeyName =
     'message_collection_sync_source_id';
 const String _messageCollectionSyncPendingPublishesKeyName =
     'message_collection_sync_pending_publishes';
-const String _messageDisplayedSyncStateKeyName =
-    'message_displayed_sync_state_v1';
-const String _messageDisplayedSyncPendingPublishesKeyName =
-    'message_displayed_sync_pending_publishes';
-const String _messageDisplayedSyncPendingRemoteCursorsKeyName =
-    'message_displayed_sync_pending_remote_cursors';
 const String _messageCollectionSyncFlushPendingOperationName =
     'MessageService.flushPendingMessageCollectionSyncOnResume';
 const String _messageCollectionSyncSnapshotBootstrapOperationName =
     'MessageService.bootstrapMessageCollectionSnapshotOnNegotiations';
-const String _messageDisplayedSyncFlushPendingOperationName =
-    'MessageService.flushPendingMessageDisplayedSyncOnResume';
-const String _messageDisplayedSyncSnapshotBootstrapOperationName =
-    'MessageService.bootstrapMessageDisplayedSyncSnapshotOnNegotiations';
 final _messageCollectionSyncSourceKey = XmppStateStore.registerKey(
   _messageCollectionSyncSourceKeyName,
 );
 final _messageCollectionSyncPendingPublishesKey = XmppStateStore.registerKey(
   _messageCollectionSyncPendingPublishesKeyName,
-);
-final _messageDisplayedSyncStateKey = XmppStateStore.registerKey(
-  _messageDisplayedSyncStateKeyName,
-);
-final _messageDisplayedSyncPendingPublishesKey = XmppStateStore.registerKey(
-  _messageDisplayedSyncPendingPublishesKeyName,
-);
-final _messageDisplayedSyncPendingRemoteCursorsKey = XmppStateStore.registerKey(
-  _messageDisplayedSyncPendingRemoteCursorsKeyName,
 );
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
@@ -1140,20 +1102,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   DateTime? _draftLastSnapshotAt;
   final Set<String> _draftLastSnapshotIds = <String>{};
   bool _messageCollectionSnapshotInFlight = false;
-  _MessageDisplayedSyncPhase _messageDisplayedSyncSnapshotPhase =
-      _MessageDisplayedSyncPhase.unknown;
-  Future<bool>? _messageDisplayedSyncSnapshotTask;
   String? _messageCollectionSourceId;
   bool _pendingMessageCollectionSyncLoaded = false;
   final Set<String> _pendingMessageCollectionPublishes = <String>{};
-  bool _messageDisplayedSyncStateLoaded = false;
-  final Map<String, _MessageDisplayedSyncChatState>
-  _messageDisplayedSyncStates = <String, _MessageDisplayedSyncChatState>{};
 
   DraftsPubSubManager? get _draftsManager =>
       _connection.getManager<DraftsPubSubManager>();
-  MessageDisplayedSyncManager? get _messageDisplayedSyncManager =>
-      _connection.getManager<MessageDisplayedSyncManager>();
   MessageCollectionsPubSubManager? get _messageCollectionsManager =>
       _connection.getManager<MessageCollectionsPubSubManager>();
 
@@ -1535,44 +1489,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     } finally {
       _messageCollectionSnapshotInFlight = false;
     }
-  }
-
-  Future<bool> syncMessageDisplayedSnapshot() async {
-    await _ensureMessageDisplayedSyncStateLoaded();
-    final activeTask = _messageDisplayedSyncSnapshotTask;
-    if (activeTask != null) {
-      return activeTask;
-    }
-
-    final task = _runMessageDisplayedSyncSnapshot();
-    _messageDisplayedSyncSnapshotTask = task;
-    return task.whenComplete(() {
-      if (identical(_messageDisplayedSyncSnapshotTask, task)) {
-        _messageDisplayedSyncSnapshotTask = null;
-      }
-    });
-  }
-
-  Future<void> recordDisplayedMessageForOwnDevices({
-    required Chat chat,
-    required Message message,
-  }) async {
-    final chatJid = _messageDisplayedSyncChatJid(chat);
-    if (chatJid == null) {
-      return;
-    }
-    final messageId = message.stanzaID.trim();
-    if (messageId.isEmpty) {
-      return;
-    }
-    await _ensureMessageDisplayedSyncStateLoaded();
-    final state = _ensureMessageDisplayedSyncChatState(chatJid);
-    if (state.pendingLocalStanzaId == messageId) {
-      return;
-    }
-    state.pendingLocalStanzaId = messageId;
-    await _persistMessageDisplayedSyncState();
-    await _advanceMessageDisplayedSyncForChat(chatJid);
   }
 
   Future<void> publishDraftSync(Draft draft) async {
@@ -2495,7 +2411,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
     await _applyPendingInboundReactionsForMessage(message);
-    await _advanceMessageDisplayedSyncForChat(message.chatJid);
   }
 
   Future<ChatType> _resolvePersistedChatType({
@@ -2879,12 +2794,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           (incoming.received || shouldUpdateDisplayed) && !existing.received;
       final shouldUpdateAcked =
           (incoming.acked || shouldUpdateReceived) && !existing.acked;
-      final incomingServerStanzaId = incoming.trimmedServerStanzaId;
-      final existingServerStanzaId = existing.trimmedServerStanzaId;
-      final shouldUpdateServerStanzaId =
-          incomingServerStanzaId != null &&
-          incomingServerStanzaId.isNotEmpty &&
-          (existingServerStanzaId == null || existingServerStanzaId.isEmpty);
       final incomingMucStanzaId = incoming.trimmedMucStanzaId;
       final existingMucStanzaId = existing.trimmedMucStanzaId;
       final shouldUpdateMucStanzaId =
@@ -2899,7 +2808,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           hasText && (existing.body == null || existing.body!.isEmpty);
       if (!needsMetadata &&
           !needsBody &&
-          !shouldUpdateServerStanzaId &&
           !shouldUpdateMucStanzaId &&
           !shouldUpdateAcked &&
           !shouldUpdateReceived &&
@@ -2912,13 +2820,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         metadata: needsMetadata ? metadata : null,
         body: needsBody ? body : null,
       );
-      if (shouldUpdateServerStanzaId) {
-        updatedMessageId = existing.stanzaID;
-        await db.saveMessageServerStanzaId(
-          stanzaID: existing.stanzaID,
-          serverStanzaId: incomingServerStanzaId,
-        );
-      }
       if (shouldUpdateMucStanzaId) {
         updatedMessageId = existing.stanzaID;
         await db.saveMessageMucStanzaId(
@@ -2954,7 +2855,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
     if (updatedMessage != null) {
       await _applyPendingInboundReactionsForMessage(updatedMessage);
-      await _advanceMessageDisplayedSyncForChat(updatedMessage.chatJid);
     }
   }
 
@@ -4208,512 +4108,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _persistPendingMessageCollectionSync();
   }
 
-  String? _normalizeMessageDisplayedSyncChatJid(String? chatJid) {
-    final trimmedChatJid = chatJid?.trim();
-    if (trimmedChatJid == null || trimmedChatJid.isEmpty) {
-      return null;
-    }
-    try {
-      return mox.JID.fromString(trimmedChatJid).toBare().toString();
-    } on Exception {
-      return null;
-    }
-  }
-
-  String? _messageDisplayedSyncChatJid(Chat chat) {
-    if (chat.type != ChatType.chat ||
-        chat.defaultTransport.isEmail ||
-        chat.isAxichatWelcomeThread) {
-      return null;
-    }
-    final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
-    return _normalizeMessageDisplayedSyncChatJid(candidate);
-  }
-
-  String? _messageDisplayedSyncAccountBareJid() {
-    final accountJid = myJid?.trim();
-    if (accountJid == null || accountJid.isEmpty) {
-      return null;
-    }
-    try {
-      return mox.JID.fromString(accountJid).toBare().toString();
-    } on Exception {
-      return null;
-    }
-  }
-
-  Map<String, String> _normalizeMessageDisplayedSyncMap(Object? raw) {
-    if (raw is! Map) {
-      return const <String, String>{};
-    }
-    final normalized = <String, String>{};
-    for (final entry in raw.entries) {
-      final chatJid = _normalizeMessageDisplayedSyncChatJid(
-        entry.key?.toString(),
-      );
-      final value = entry.value?.toString().trim();
-      if (chatJid == null || value == null || value.isEmpty) {
-        continue;
-      }
-      normalized[chatJid] = value;
-    }
-    return normalized;
-  }
-
-  Future<MessageDisplayedSyncPayload?> _buildMessageDisplayedSyncPayload(
-    String chatJid,
-    Message message,
-  ) async {
-    final normalizedChatJid = _normalizeMessageDisplayedSyncChatJid(chatJid);
-    final serverStanzaId = message.trimmedServerStanzaId;
-    final accountBareJid = _messageDisplayedSyncAccountBareJid();
-    if (normalizedChatJid == null ||
-        serverStanzaId == null ||
-        accountBareJid == null) {
-      return null;
-    }
-    return MessageDisplayedSyncPayload(
-      chatJid: normalizedChatJid,
-      serverStanzaId: serverStanzaId,
-      serverStanzaBy: accountBareJid,
-    );
-  }
-
-  Future<bool> _messageDisplayedSyncCoveredByCachedState({
-    required String chatJid,
-    required Message anchorMessage,
-    required MessageDisplayedSyncManager manager,
-  }) async {
-    final cached = manager.cachedForChat(chatJid);
-    if (cached == null) {
-      return false;
-    }
-    if (cached.serverStanzaId == anchorMessage.trimmedServerStanzaId) {
-      return true;
-    }
-    return _dbOpReturning<XmppDatabase, bool>(
-      (db) => db.isServerStanzaAtOrAfterMessage(
-        serverStanzaId: cached.serverStanzaId,
-        stanzaID: anchorMessage.stanzaID,
-        chatJid: chatJid,
-      ),
-    );
-  }
-
-  _MessageDisplayedSyncChatState _ensureMessageDisplayedSyncChatState(
-    String chatJid,
-  ) {
-    final normalizedChatJid = _normalizeMessageDisplayedSyncChatJid(chatJid);
-    if (normalizedChatJid == null) {
-      throw StateError('Invalid chat JID for displayed sync state.');
-    }
-    return _messageDisplayedSyncStates.putIfAbsent(
-      normalizedChatJid,
-      () => _MessageDisplayedSyncChatState(
-        chatJid: normalizedChatJid,
-        phase: _messageDisplayedSyncSnapshotPhase,
-      ),
-    );
-  }
-
-  void _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase phase) {
-    _messageDisplayedSyncSnapshotPhase = phase;
-    for (final state in _messageDisplayedSyncStates.values) {
-      state.phase = phase;
-    }
-  }
-
-  Future<void> _ensureMessageDisplayedSyncStateLoaded() async {
-    if (_messageDisplayedSyncStateLoaded) {
-      return;
-    }
-    await _dbOp<XmppStateStore>((ss) async {
-      final rawState = ss.read(key: _messageDisplayedSyncStateKey);
-      final Map<String, String> pendingLocalByChat;
-      final Map<String, String> unresolvedRemoteByChat;
-      if (rawState case final Map<Object?, Object?> rawMap) {
-        pendingLocalByChat = _normalizeMessageDisplayedSyncMap(
-          rawMap['pending_local_by_chat'],
-        );
-        unresolvedRemoteByChat = _normalizeMessageDisplayedSyncMap(
-          rawMap['unresolved_remote_by_chat'],
-        );
-      } else {
-        pendingLocalByChat = _normalizeMessageDisplayedSyncMap(
-          ss.read(key: _messageDisplayedSyncPendingPublishesKey),
-        );
-        unresolvedRemoteByChat = _normalizeMessageDisplayedSyncMap(
-          ss.read(key: _messageDisplayedSyncPendingRemoteCursorsKey),
-        );
-        if (pendingLocalByChat.isNotEmpty ||
-            unresolvedRemoteByChat.isNotEmpty) {
-          await ss.write(
-            key: _messageDisplayedSyncStateKey,
-            value: {
-              'pending_local_by_chat': pendingLocalByChat,
-              'unresolved_remote_by_chat': unresolvedRemoteByChat,
-            },
-          );
-        }
-      }
-      _messageDisplayedSyncStates.clear();
-      for (final entry in pendingLocalByChat.entries) {
-        _ensureMessageDisplayedSyncChatState(entry.key).pendingLocalStanzaId =
-            entry.value;
-      }
-      for (final entry in unresolvedRemoteByChat.entries) {
-        _ensureMessageDisplayedSyncChatState(
-          entry.key,
-        ).unresolvedRemoteServerStanzaId = entry.value;
-      }
-      await ss.delete(key: _messageDisplayedSyncPendingPublishesKey);
-      await ss.delete(key: _messageDisplayedSyncPendingRemoteCursorsKey);
-    }, awaitDatabase: true);
-    _messageDisplayedSyncStateLoaded = true;
-  }
-
-  Future<void> _persistMessageDisplayedSyncState() async {
-    if (!_messageDisplayedSyncStateLoaded) {
-      return;
-    }
-    final pendingLocalByChat = <String, String>{};
-    final unresolvedRemoteByChat = <String, String>{};
-    for (final state in _messageDisplayedSyncStates.values) {
-      final pendingLocal = state.pendingLocalStanzaId?.trim();
-      if (pendingLocal != null && pendingLocal.isNotEmpty) {
-        pendingLocalByChat[state.chatJid] = pendingLocal;
-      }
-      final unresolvedRemote = state.unresolvedRemoteServerStanzaId?.trim();
-      if (unresolvedRemote != null && unresolvedRemote.isNotEmpty) {
-        unresolvedRemoteByChat[state.chatJid] = unresolvedRemote;
-      }
-    }
-    await _dbOp<XmppStateStore>((ss) async {
-      if (pendingLocalByChat.isEmpty && unresolvedRemoteByChat.isEmpty) {
-        await ss.delete(key: _messageDisplayedSyncStateKey);
-        return;
-      }
-      await ss.write(
-        key: _messageDisplayedSyncStateKey,
-        value: {
-          'pending_local_by_chat': pendingLocalByChat,
-          'unresolved_remote_by_chat': unresolvedRemoteByChat,
-        },
-      );
-    }, awaitDatabase: true);
-  }
-
-  Future<bool> _runMessageDisplayedSyncSnapshot() async {
-    _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase.syncing);
-    try {
-      await database;
-      final support = await refreshPubSubSupport();
-      final decision = decidePubSubSupport(
-        supported: support.canUsePepNodes,
-        featureLabel: 'message displayed sync',
-      );
-      if (!decision.isAllowed) {
-        _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase.ready);
-        await _advanceTrackedMessageDisplayedSyncChats();
-        return true;
-      }
-      final manager = _messageDisplayedSyncManager;
-      if (manager == null) {
-        _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase.ready);
-        await _advanceTrackedMessageDisplayedSyncChats();
-        return true;
-      }
-      await manager.ensureNode();
-      await manager.subscribe();
-      final snapshot = await manager.fetchAllWithStatus();
-      if (!snapshot.isSuccess) {
-        _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase.stale);
-        return false;
-      }
-      for (final payload in snapshot.items) {
-        await _applyMessageDisplayedSyncUpdate(payload);
-      }
-      _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase.ready);
-      await _advanceTrackedMessageDisplayedSyncChats();
-      return true;
-    } on XmppAbortedException {
-      _setMessageDisplayedSyncPhase(_MessageDisplayedSyncPhase.stale);
-      return false;
-    }
-  }
-
-  Future<bool> _tryApplyMessageDisplayedSyncRemoteCursor({
-    required String chatJid,
-    required String serverStanzaId,
-    required String selfJid,
-  }) async {
-    final target = await _dbOpReturning<XmppDatabase, Message?>(
-      (db) => db.getMessageByServerStanzaId(serverStanzaId, chatJid: chatJid),
-    );
-    if (target == null) {
-      return false;
-    }
-    await _dbOp<XmppDatabase>((db) async {
-      await db.markIncomingMessagesDisplayedThroughServerStanzaId(
-        serverStanzaId: serverStanzaId,
-        chatJid: chatJid,
-        selfJid: selfJid,
-      );
-    });
-    return true;
-  }
-
-  Future<bool> _resolveMessageDisplayedSyncRemoteCursor(
-    String chatJid,
-    _MessageDisplayedSyncChatState state,
-  ) async {
-    final unresolvedRemote = state.unresolvedRemoteServerStanzaId?.trim();
-    final accountBareJid = _messageDisplayedSyncAccountBareJid();
-    if (unresolvedRemote == null ||
-        unresolvedRemote.isEmpty ||
-        accountBareJid == null) {
-      return false;
-    }
-    final resolved = await _tryApplyMessageDisplayedSyncRemoteCursor(
-      chatJid: chatJid,
-      serverStanzaId: unresolvedRemote,
-      selfJid: accountBareJid,
-    );
-    if (!resolved) {
-      return false;
-    }
-    state.unresolvedRemoteServerStanzaId = null;
-    state.exhaustedRemoteServerStanzaId = null;
-    await _persistMessageDisplayedSyncState();
-    return true;
-  }
-
-  Future<void> _applyMessageDisplayedSyncUpdate(
-    MessageDisplayedSyncPayload payload,
-  ) async {
-    await _ensureMessageDisplayedSyncStateLoaded();
-    final normalizedChatJid = _normalizeMessageDisplayedSyncChatJid(
-      payload.chatJid,
-    );
-    final normalizedServerStanzaId = payload.serverStanzaId.trim();
-    if (normalizedChatJid == null || normalizedServerStanzaId.isEmpty) {
-      return;
-    }
-    final state = _ensureMessageDisplayedSyncChatState(normalizedChatJid);
-    state.unresolvedRemoteServerStanzaId = normalizedServerStanzaId;
-    if (state.exhaustedRemoteServerStanzaId != normalizedServerStanzaId) {
-      state.exhaustedRemoteServerStanzaId = null;
-    }
-    await _persistMessageDisplayedSyncState();
-    await _advanceMessageDisplayedSyncForChat(normalizedChatJid);
-  }
-
-  bool _hasActiveChatMamLoadForMessageDisplayedSync(String chatJid) {
-    for (final session in _chatMamSessions.values) {
-      if (session.chatJid != chatJid) {
-        continue;
-      }
-      if (session.loading || session.catchingUp) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  void _scheduleMessageDisplayedSyncRecoveryForChat(String chatJid) {
-    final normalizedChatJid = _normalizeMessageDisplayedSyncChatJid(chatJid);
-    if (normalizedChatJid == null) {
-      return;
-    }
-    final state = _ensureMessageDisplayedSyncChatState(normalizedChatJid);
-    if (state.recoveryTask != null) {
-      return;
-    }
-    late final Future<void> recoveryTask;
-    recoveryTask = _runMessageDisplayedSyncRecoveryForChat(normalizedChatJid)
-        .whenComplete(() {
-          final current = _messageDisplayedSyncStates[normalizedChatJid];
-          if (current != null &&
-              identical(current.recoveryTask, recoveryTask)) {
-            current.recoveryTask = null;
-          }
-        });
-    state.recoveryTask = recoveryTask;
-    fireAndForget(
-      () async => recoveryTask,
-      operationName: 'MessageService.recoverMessageDisplayedSyncCursor',
-    );
-  }
-
-  Future<void> _runMessageDisplayedSyncRecoveryForChat(String chatJid) async {
-    final normalizedChatJid = _normalizeMessageDisplayedSyncChatJid(chatJid);
-    if (normalizedChatJid == null) {
-      return;
-    }
-    final state = _messageDisplayedSyncStates[normalizedChatJid];
-    final targetServerStanzaId = state?.unresolvedRemoteServerStanzaId?.trim();
-    final accountBareJid = _messageDisplayedSyncAccountBareJid();
-    if (state == null ||
-        targetServerStanzaId == null ||
-        targetServerStanzaId.isEmpty ||
-        accountBareJid == null ||
-        _mamGlobalSyncInFlight ||
-        _hasActiveChatMamLoadForMessageDisplayedSync(normalizedChatJid)) {
-      return;
-    }
-    final chat =
-        await _dbOpReturning<XmppDatabase, Chat?>(
-          (db) => db.getChat(normalizedChatJid),
-        ) ??
-        Chat.fromJid(normalizedChatJid);
-    if (!await _canFetchMamForChat(chat)) {
-      state.exhaustedRemoteServerStanzaId = targetServerStanzaId;
-      return;
-    }
-
-    String? beforeId;
-    try {
-      while (state.unresolvedRemoteServerStanzaId == targetServerStanzaId) {
-        if (await _tryApplyMessageDisplayedSyncRemoteCursor(
-          chatJid: normalizedChatJid,
-          serverStanzaId: targetServerStanzaId,
-          selfJid: accountBareJid,
-        )) {
-          state.unresolvedRemoteServerStanzaId = null;
-          state.exhaustedRemoteServerStanzaId = null;
-          await _persistMessageDisplayedSyncState();
-          break;
-        }
-
-        final result = beforeId == null
-            ? await fetchLatestFromArchiveForChat(chat: chat)
-            : await fetchBeforeFromArchiveForChat(chat: chat, before: beforeId);
-
-        if (await _resolveMessageDisplayedSyncRemoteCursor(
-          normalizedChatJid,
-          state,
-        )) {
-          break;
-        }
-
-        final nextBeforeId = result.firstId ?? result.lastId ?? beforeId;
-        if (result.complete ||
-            nextBeforeId == null ||
-            nextBeforeId == beforeId) {
-          state.exhaustedRemoteServerStanzaId = targetServerStanzaId;
-          break;
-        }
-        beforeId = nextBeforeId;
-      }
-    } on XmppAbortedException {
-      return;
-    } on XmppMessageException {
-      return;
-    } finally {
-      await _advanceMessageDisplayedSyncForChat(normalizedChatJid);
-    }
-  }
-
-  Future<void> _advanceTrackedMessageDisplayedSyncChats() async {
-    await _ensureMessageDisplayedSyncStateLoaded();
-    final chatJids = _messageDisplayedSyncStates.values
-        .where((state) => state.hasDurableState)
-        .map((state) => state.chatJid)
-        .toList(growable: false);
-    for (final chatJid in chatJids) {
-      await _advanceMessageDisplayedSyncForChat(chatJid);
-    }
-  }
-
-  Future<void> _advanceMessageDisplayedSyncForChat(String chatJid) async {
-    await _ensureMessageDisplayedSyncStateLoaded();
-    final normalizedChatJid = _normalizeMessageDisplayedSyncChatJid(chatJid);
-    if (normalizedChatJid == null) {
-      return;
-    }
-    final state = _messageDisplayedSyncStates[normalizedChatJid];
-    if (state == null) {
-      return;
-    }
-
-    await _resolveMessageDisplayedSyncRemoteCursor(normalizedChatJid, state);
-
-    switch (state.phase) {
-      case _MessageDisplayedSyncPhase.unknown:
-      case _MessageDisplayedSyncPhase.stale:
-        if (_mamGlobalSyncInFlight) {
-          return;
-        }
-        state.phase = _MessageDisplayedSyncPhase.syncing;
-        await syncMessageDisplayedSnapshot();
-        return;
-      case _MessageDisplayedSyncPhase.syncing:
-        return;
-      case _MessageDisplayedSyncPhase.ready:
-        break;
-    }
-
-    final unresolvedRemote = state.unresolvedRemoteServerStanzaId;
-    if (unresolvedRemote != null) {
-      if (_mamGlobalSyncInFlight ||
-          _hasActiveChatMamLoadForMessageDisplayedSync(normalizedChatJid) ||
-          state.recoveryTask != null ||
-          state.exhaustedRemoteServerStanzaId == unresolvedRemote) {
-        return;
-      }
-      _scheduleMessageDisplayedSyncRecoveryForChat(normalizedChatJid);
-      return;
-    }
-
-    final anchorMessageId = state.pendingLocalStanzaId;
-    if (anchorMessageId == null || !_connection.hasConnectionSettings) {
-      return;
-    }
-    final anchorMessage = await _dbOpReturning<XmppDatabase, Message?>(
-      (db) => db.getMessageByStanzaID(anchorMessageId),
-    );
-    if (anchorMessage == null) {
-      state.pendingLocalStanzaId = null;
-      await _persistMessageDisplayedSyncState();
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'message displayed sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _messageDisplayedSyncManager;
-    if (manager == null) {
-      return;
-    }
-    final payload = await _buildMessageDisplayedSyncPayload(
-      normalizedChatJid,
-      anchorMessage,
-    );
-    if (payload == null) {
-      return;
-    }
-    if (await _messageDisplayedSyncCoveredByCachedState(
-      chatJid: normalizedChatJid,
-      anchorMessage: anchorMessage,
-      manager: manager,
-    )) {
-      state.pendingLocalStanzaId = null;
-      await _persistMessageDisplayedSyncState();
-      return;
-    }
-    await manager.ensureNode();
-    final published = await manager.publishDisplayed(payload);
-    if (!published) {
-      return;
-    }
-    state.pendingLocalStanzaId = null;
-    await _persistMessageDisplayedSyncState();
-  }
-
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
@@ -4741,33 +4135,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         operationName: _draftSyncFlushPendingOperationName,
         run: () async {
           await _flushPendingDraftSync();
-        },
-      ),
-    );
-    registerBootstrapOperation(
-      XmppBootstrapOperation(
-        key: _messageDisplayedSyncSnapshotBootstrapOperationName,
-        priority: 1,
-        triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.fullNegotiation,
-          XmppBootstrapTrigger.manualRefresh,
-        },
-        operationName: _messageDisplayedSyncSnapshotBootstrapOperationName,
-        run: () async {
-          await syncMessageDisplayedSnapshot();
-        },
-      ),
-    );
-    registerBootstrapOperation(
-      XmppBootstrapOperation(
-        key: _messageDisplayedSyncFlushPendingOperationName,
-        priority: 2,
-        triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.resumedNegotiation,
-        },
-        operationName: _messageDisplayedSyncFlushPendingOperationName,
-        run: () async {
-          await _advanceTrackedMessageDisplayedSyncChats();
         },
       ),
     );
@@ -4860,9 +4227,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       ..registerHandler<DraftSyncRetractedEvent>((event) async {
         await _applyDraftSyncRetraction(event.syncId);
       })
-      ..registerHandler<MessageDisplayedSyncUpdatedEvent>((event) async {
-        await _applyMessageDisplayedSyncUpdate(event.payload);
-      })
       ..registerHandler<MessageCollectionSyncUpdatedEvent>((event) async {
         await _applyMessageCollectionSyncUpdate(event.payload);
       })
@@ -4898,11 +4262,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         final metadata = _extractFileMetadata(event);
         final hasAttachmentMetadata = metadata != null;
 
-        var message = Message.fromMox(
-          event,
-          accountJid: myJid,
-          serverStanzaId: _trimmedIncomingMessageServerStanzaId(event),
-        );
+        var message = Message.fromMox(event, accountJid: myJid);
         final shouldPersistAttachment = metadata != null && !message.noStore;
         final isGroupChat = event.type == 'groupchat';
         final stableKey = _stableKeyForEvent(event);
@@ -5329,7 +4689,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   List<mox.XmppManagerBase> get pubSubFeatureManagers => <mox.XmppManagerBase>[
     ...super.pubSubFeatureManagers,
     DraftsPubSubManager(),
-    MessageDisplayedSyncManager(),
     MessageCollectionsPubSubManager(),
   ];
 
@@ -5337,7 +4696,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   List<String> get discoFeatures => <String>[
     ...super.discoFeatures,
     draftsNotifyFeature,
-    messageDisplayedSyncNotifyFeature,
     messageCollectionsNotifyFeature,
   ];
 
@@ -7351,7 +6709,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           updateTotal: false,
           updateBeforeCursor: false,
         );
-        await _advanceMessageDisplayedSyncForChat(chat.jid);
       }
       session.catchUpCompleted = true;
       final latestResult = outcome.latestResult;
@@ -7362,7 +6719,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           result: latestResult,
           filter: filter,
         );
-        await _advanceMessageDisplayedSyncForChat(chat.jid);
       }
     } finally {
       _finishChatMamLoad(session, loadingToken);
@@ -7414,7 +6770,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         result: result,
         filter: filter,
       );
-      await _advanceMessageDisplayedSyncForChat(chat.jid);
     } finally {
       _finishChatMamLoad(session, loadingToken);
     }
@@ -7487,7 +6842,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           updateTotal: false,
           updateBeforeCursor: false,
         );
-        await _advanceMessageDisplayedSyncForChat(chat.jid);
       }
       session.catchUpCompleted = true;
     } finally {
@@ -8475,33 +7829,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return originId;
   }
 
-  String? _trimmedIncomingMessageServerStanzaId(mox.MessageEvent event) {
-    if (event.type == _messageTypeGroupchat) {
-      return null;
-    }
-    final accountBareJid = _messageDisplayedSyncAccountBareJid();
-    if (accountBareJid == null) {
-      return null;
-    }
-    final stanzaIds = event.extensions.get<mox.StableIdData>()?.stanzaIds;
-    if (stanzaIds == null || stanzaIds.isEmpty) {
-      return null;
-    }
-    for (final stanzaId in stanzaIds) {
-      if (!sameNormalizedAddressValue(
-        stanzaId.by.toBare().toString(),
-        accountBareJid,
-      )) {
-        continue;
-      }
-      final resolvedId = stanzaId.id.trim();
-      if (resolvedId.isNotEmpty) {
-        return resolvedId;
-      }
-    }
-    return null;
-  }
-
   String? _trimmedIncomingMessageMucStanzaId(
     mox.MessageEvent event, {
     required String chatJid,
@@ -8763,10 +8090,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     _chatMamSessions.clear();
     _pendingPinSyncLoaded = false;
-    _messageDisplayedSyncStateLoaded = false;
-    _messageDisplayedSyncSnapshotPhase = _MessageDisplayedSyncPhase.unknown;
-    _messageDisplayedSyncSnapshotTask = null;
-    _messageDisplayedSyncStates.clear();
     _pinCreateRetryKeys.clear();
     _pinPubSubHost = null;
   }
