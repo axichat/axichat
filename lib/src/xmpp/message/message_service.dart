@@ -52,6 +52,116 @@ class MamStreamManagementGuard extends mox.XmppManagerBase {
   }
 }
 
+class XmppTransportChatMarkerEvent extends mox.XmppEvent {
+  XmppTransportChatMarkerEvent({
+    required this.from,
+    required this.to,
+    required this.type,
+    required this.id,
+    required this.isCarbon,
+    required this.isFromMAM,
+    required this.messageType,
+    this.thread,
+  });
+
+  final mox.JID from;
+  final mox.JID to;
+  final mox.ChatMarker type;
+  final String id;
+  final bool isCarbon;
+  final bool isFromMAM;
+  final String? messageType;
+  final String? thread;
+}
+
+class TransportChatMarkerManager extends mox.XmppManagerBase {
+  TransportChatMarkerManager() : super('axi.transport.chat_markers');
+
+  @override
+  List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
+    mox.StanzaHandler(
+      stanzaTag: 'message',
+      tagXmlns: mox.chatMarkersXmlns,
+      callback: _onMessage,
+      priority: -98,
+    ),
+  ];
+
+  @override
+  Future<bool> isSupported() async => true;
+
+  Future<mox.StanzaHandlerData> _onMessage(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    final element = stanza.firstTagByXmlns(mox.chatMarkersXmlns);
+    if (element == null || element.tag == 'markable') {
+      return state;
+    }
+
+    final fromAttr = stanza.attributes['from'] as String?;
+    if (fromAttr == null) {
+      return state;
+    }
+    final toAttr =
+        stanza.attributes['to'] as String? ??
+        getAttributes().getConnectionSettings().jid.toString();
+    final idAttr = element.attributes['id'] as String?;
+    if (idAttr == null || idAttr.trim().isEmpty) {
+      return state;
+    }
+    final threadText = stanza.firstTag('thread')?.innerText().trim();
+
+    try {
+      getAttributes().sendEvent(
+        XmppTransportChatMarkerEvent(
+          from: mox.JID.fromString(fromAttr),
+          to: mox.JID.fromString(toAttr),
+          type: mox.ChatMarker.fromName(element.tag),
+          id: idAttr,
+          isCarbon: state.extensions.get<mox.CarbonsData>()?.isCarbon ?? false,
+          isFromMAM:
+              state.extensions.get<mox.MAMContextData>()?.isFromMAM ?? false,
+          messageType: stanza.attributes['type'] as String?,
+          thread: threadText == null || threadText.isEmpty ? null : threadText,
+        ),
+      );
+    } on Exception {
+      return state;
+    }
+
+    return state;
+  }
+}
+
+final class _PendingOutboundMessageStatus {
+  const _PendingOutboundMessageStatus({
+    this.acked = false,
+    this.received = false,
+    this.displayed = false,
+    this.applyThrough = false,
+  });
+
+  final bool acked;
+  final bool received;
+  final bool displayed;
+  final bool applyThrough;
+
+  _PendingOutboundMessageStatus merge({
+    bool acked = false,
+    bool received = false,
+    bool displayed = false,
+    bool applyThrough = false,
+  }) {
+    return _PendingOutboundMessageStatus(
+      acked: this.acked || acked,
+      received: this.received || received,
+      displayed: this.displayed || displayed,
+      applyThrough: this.applyThrough || applyThrough,
+    );
+  }
+}
+
 final RegExp _crlfPattern = RegExp(r'[\r\n]');
 const CalendarTaskIcsCodec _calendarTaskIcsCodec = CalendarTaskIcsCodec();
 const String _calendarSyncOperationUpdate = 'update';
@@ -475,7 +585,8 @@ bool _hasInvalidArchiveOrigin(mox.MessageEvent event, String? accountJid) {
   if (normalizedAccount == null) return false;
   if (event.isCarbon) {
     final fromBare = normalizedBareAddressValue(event.from.toBare().toString());
-    if (fromBare == null || fromBare != normalizedAccount) {
+    final toBare = normalizedBareAddressValue(event.to.toBare().toString());
+    if (fromBare != normalizedAccount && toBare != normalizedAccount) {
       return true;
     }
   }
@@ -2410,6 +2521,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _dbOp<XmppDatabase>((db) async {
       await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
+    await _applyPendingSelfDisplayedMarkersForChat(message.chatJid);
+    await _applyPendingOutboundMessageStatusesForChat(message.chatJid);
     await _applyPendingInboundReactionsForMessage(message);
   }
 
@@ -3717,6 +3830,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
   final Set<String> _suppressedMessageNotificationIds = <String>{};
   final Set<String> _internalEnvelopeChats = <String>{};
+  final Map<String, Map<String, _PendingOutboundMessageStatus>>
+  _pendingOutboundMessageStatusesByChat = {};
+  final Map<String, Map<String, XmppTransportChatMarkerEvent>>
+  _pendingSelfDisplayedMarkersByChat = {};
   int? _attachmentCacheBytes;
   Directory? _attachmentDirectory;
   String? _attachmentCacheSessionPrefix;
@@ -4317,7 +4434,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             metadata: metadata,
             body: message.body,
           );
-          await _acknowledgeMessage(event, allowArchivedAcknowledgement: true);
+          await _acknowledgeMessage(event);
           return;
         }
 
@@ -4352,10 +4469,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
         message = _applyArchivedUnreadState(message, event);
 
-        final acknowledgement = await _acknowledgeMessage(
-          event,
-          allowArchivedAcknowledgement: true,
-        );
+        final acknowledgement = await _acknowledgeMessage(event);
         if (acknowledgement.acked || acknowledgement.received) {
           message = message.copyWith(
             acked: message.acked || acknowledgement.acked,
@@ -4443,30 +4557,49 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           chatType: ChatType.groupChat,
         );
       })
+      ..registerHandler<XmppTransportChatMarkerEvent>((event) async {
+        await _applySelfDisplayedChatMarker(event);
+      })
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
         _log.info('Received chat marker');
 
-        final isDisplayed = event.type == mox.ChatMarker.displayed;
-        final isReceived = isDisplayed || event.type == mox.ChatMarker.received;
-        const bool isAcked = true;
         final chatJid = event.from.toBare().toString();
-        await _dbOp<XmppDatabase>((db) async {
-          await _applyOutboundMessageStatus(
-            db,
-            id: event.id,
-            chatJid: chatJid,
-            acked: isAcked,
-            received: isReceived,
-            displayed: isDisplayed,
-          );
-        });
+        if (sameNormalizedAddressValue(chatJid, myJid)) {
+          return;
+        }
+        await _recordObservedPeerCapabilities(
+          jid: chatJid,
+          supportsMarkers: true,
+        );
+        final isDisplayed = _chatMarkerCountsAsDisplayed(event.type);
+        final isReceived = _chatMarkerCountsAsReceived(event.type);
+        const bool isAcked = true;
+        await _applyPeerOutboundMessageStatus(
+          chatJid: chatJid,
+          id: event.id,
+          acked: isAcked,
+          received: isReceived,
+          displayed: isDisplayed,
+          applyThrough: true,
+        );
       })
       ..registerHandler<mox.DeliveryReceiptReceivedEvent>((event) async {
         final chatJid = event.from.toBare().toString();
-        await _dbOp<XmppDatabase>((db) async {
-          await db.markMessageReceived(event.id, chatJid: chatJid);
-          await db.markMessageAcked(event.id, chatJid: chatJid);
-        });
+        if (sameNormalizedAddressValue(chatJid, myJid)) {
+          return;
+        }
+        await _recordObservedPeerCapabilities(
+          jid: chatJid,
+          supportsReceipts: true,
+        );
+        await _applyPeerOutboundMessageStatus(
+          chatJid: chatJid,
+          id: event.id,
+          acked: true,
+          received: true,
+          displayed: false,
+          applyThrough: false,
+        );
       })
       ..registerHandler<mox.PubSubNotificationEvent>((event) async {
         await _handlePinNotification(event);
@@ -4667,6 +4800,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     mox.MAMManager(),
     MamStreamManagementGuard(),
     mox.MessageDeliveryReceiptManager(),
+    TransportChatMarkerManager(),
     mox.ChatMarkerManager(),
     mox.MessageRepliesManager(),
     mox.ChatStateManager(),
@@ -6428,18 +6562,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       requestedChatType: ChatType.chat,
     );
     final isGroupChat = resolvedChatType == ChatType.groupChat;
-    final decision = await _featureDecision(
-      jid: message.chatJid,
-      feature: mox.messageReactionsXmlns,
-    );
-    if (!decision.isAllowed) {
-      _logCapabilityDecision(
-        featureLabel: 'reactions',
-        jid: message.chatJid,
-        decision: decision,
-      );
-      return false;
-    }
     final existing = await _dbOpReturning<XmppDatabase, List<Reaction>>(
       (db) => db.getReactionsForMessageSender(
         messageId: message.stanzaID,
@@ -6533,18 +6655,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     if (chatType == ChatType.groupChat) return false;
     if (to == myJid) return false;
-    final decision = await _featureDecision(
-      jid: to,
-      feature: mox.chatMarkersXmlns,
-    );
-    if (!decision.isAllowed) {
-      _logCapabilityDecision(
-        featureLabel: 'chat markers',
-        jid: to,
-        decision: decision,
-      );
-      return false;
-    }
     return true;
   }
 
@@ -7893,15 +8003,279 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return null;
   }
 
-  Future<({bool acked, bool received})> _acknowledgeMessage(
-    mox.MessageEvent event, {
-    bool allowArchivedAcknowledgement = false,
+  bool _chatMarkerCountsAsDisplayed(mox.ChatMarker type) {
+    return type == mox.ChatMarker.displayed;
+  }
+
+  bool _chatMarkerCountsAsReceived(mox.ChatMarker type) {
+    return _chatMarkerCountsAsDisplayed(type) ||
+        type == mox.ChatMarker.acknowledged ||
+        type == mox.ChatMarker.received;
+  }
+
+  Future<void> _recordObservedPeerCapabilities({
+    required String jid,
+    bool supportsMarkers = false,
+    bool supportsReceipts = false,
   }) async {
+    final normalizedJid = normalizedBareAddressValue(jid) ?? jid.trim();
+    if (normalizedJid.isEmpty || !supportsMarkers && !supportsReceipts) {
+      return;
+    }
+    await _ensureCapabilityCacheLoaded();
+    final cached = _capabilityCache[normalizedJid] ?? _PeerCapabilities.empty;
+    final next = _withCapabilityAssumptions(
+      jid: normalizedJid,
+      capabilities: _PeerCapabilities(
+        supportsMarkers: cached.supportsMarkers || supportsMarkers,
+        supportsReceipts: cached.supportsReceipts || supportsReceipts,
+        features: <String>{
+          ...cached.features,
+          if (supportsMarkers) mox.chatMarkersXmlns,
+          if (supportsReceipts) mox.deliveryXmlns,
+        }.toList()..sort(),
+        assumeAllFeatures: cached.assumeAllFeatures,
+        capabilitiesResolvedAt: cached.capabilitiesResolvedAt ?? DateTime.now(),
+      ),
+    );
+    await _cachePeerCapabilities(jid: normalizedJid, capabilities: next);
+  }
+
+  Future<void> _updateUnreadCountForChat(String chatJid) async {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) return;
+    await _dbOp<XmppDatabase>((db) async {
+      final chat = await db.getChat(normalizedChatJid);
+      if (chat == null) {
+        return;
+      }
+      final unreadCount = await db.countUnreadMessagesForChat(
+        normalizedChatJid,
+        selfJid: chat.defaultTransport.isEmail ? null : myJid,
+      );
+      if (chat.unreadCount != unreadCount) {
+        await db.updateChat(chat.copyWith(unreadCount: unreadCount));
+      }
+    });
+  }
+
+  void _queuePendingOutboundMessageStatus({
+    required String chatJid,
+    required String messageId,
+    required bool acked,
+    required bool received,
+    required bool displayed,
+    required bool applyThrough,
+  }) {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedMessageId = messageId.trim();
+    if (normalizedChatJid.isEmpty ||
+        normalizedMessageId.isEmpty ||
+        !acked && !received && !displayed) {
+      return;
+    }
+    final pendingById = _pendingOutboundMessageStatusesByChat.putIfAbsent(
+      normalizedChatJid,
+      () => <String, _PendingOutboundMessageStatus>{},
+    );
+    final current =
+        pendingById[normalizedMessageId] ??
+        const _PendingOutboundMessageStatus();
+    pendingById[normalizedMessageId] = current.merge(
+      acked: acked,
+      received: received,
+      displayed: displayed,
+      applyThrough: applyThrough,
+    );
+  }
+
+  Future<void> _applyPendingOutboundMessageStatusesForChat(
+    String chatJid,
+  ) async {
+    final normalizedChatJid = chatJid.trim();
+    final pendingById =
+        _pendingOutboundMessageStatusesByChat[normalizedChatJid];
+    if (pendingById == null || pendingById.isEmpty) {
+      return;
+    }
+    for (final entry in pendingById.entries.toList(growable: false)) {
+      final applied = await _applyPeerOutboundMessageStatus(
+        chatJid: normalizedChatJid,
+        id: entry.key,
+        acked: entry.value.acked,
+        received: entry.value.received,
+        displayed: entry.value.displayed,
+        applyThrough: entry.value.applyThrough,
+        allowQueue: false,
+      );
+      if (applied) {
+        pendingById.remove(entry.key);
+      }
+    }
+    if (pendingById.isEmpty) {
+      _pendingOutboundMessageStatusesByChat.remove(normalizedChatJid);
+    }
+  }
+
+  Future<bool> _applyPeerOutboundMessageStatus({
+    required String chatJid,
+    required String id,
+    required bool acked,
+    required bool received,
+    required bool displayed,
+    required bool applyThrough,
+    bool allowQueue = true,
+  }) async {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedId = id.trim();
+    if (normalizedChatJid.isEmpty ||
+        normalizedId.isEmpty ||
+        !acked && !received && !displayed) {
+      return false;
+    }
+    final accountJid = myJid;
+    if (accountJid == null || accountJid.isEmpty) {
+      return false;
+    }
+
+    final resolved = await _dbOpReturning<XmppDatabase, bool>((db) async {
+      final target = await db.getMessageByReferenceId(
+        normalizedId,
+        chatJid: normalizedChatJid,
+      );
+      if (target == null ||
+          !sameNormalizedAddressValue(target.senderJid, accountJid)) {
+        return false;
+      }
+      await _applyOutboundMessageStatus(
+        db,
+        id: normalizedId,
+        chatJid: normalizedChatJid,
+        acked: acked,
+        received: received,
+        displayed: displayed,
+        applyThrough: applyThrough,
+      );
+      return true;
+    });
+    if (!resolved) {
+      if (allowQueue) {
+        _queuePendingOutboundMessageStatus(
+          chatJid: normalizedChatJid,
+          messageId: normalizedId,
+          acked: acked,
+          received: received,
+          displayed: displayed,
+          applyThrough: applyThrough,
+        );
+      }
+      return false;
+    }
+    return true;
+  }
+
+  void _queuePendingSelfDisplayedMarker(XmppTransportChatMarkerEvent event) {
+    final chatJid = event.to.toBare().toString();
+    final referenceId = event.id.trim();
+    if (chatJid.isEmpty || referenceId.isEmpty) {
+      return;
+    }
+    final pendingById = _pendingSelfDisplayedMarkersByChat.putIfAbsent(
+      chatJid,
+      () => <String, XmppTransportChatMarkerEvent>{},
+    );
+    pendingById[referenceId] = event;
+  }
+
+  Future<void> _applyPendingSelfDisplayedMarkersForChat(String chatJid) async {
+    final normalizedChatJid = chatJid.trim();
+    final pendingById = _pendingSelfDisplayedMarkersByChat[normalizedChatJid];
+    if (pendingById == null || pendingById.isEmpty) {
+      return;
+    }
+    for (final referenceId in pendingById.keys.toList(growable: false)) {
+      final event = pendingById[referenceId];
+      if (event == null) {
+        continue;
+      }
+      final applied = await _applySelfDisplayedChatMarker(
+        event,
+        allowQueue: false,
+      );
+      if (applied) {
+        pendingById.remove(referenceId);
+      }
+    }
+    if (pendingById.isEmpty) {
+      _pendingSelfDisplayedMarkersByChat.remove(normalizedChatJid);
+    }
+  }
+
+  Future<bool> _applySelfDisplayedChatMarker(
+    XmppTransportChatMarkerEvent event, {
+    bool allowQueue = true,
+  }) async {
+    if (!_chatMarkerCountsAsDisplayed(event.type)) {
+      return false;
+    }
+    if (!(event.isCarbon || event.isFromMAM) ||
+        event.messageType == _messageTypeGroupchat ||
+        event.thread?.trim().isNotEmpty == true) {
+      return false;
+    }
+    final accountJid = myJid;
+    if (accountJid == null || accountJid.isEmpty) {
+      return false;
+    }
+    final fromBare = event.from.toBare().toString();
+    if (!sameNormalizedAddressValue(fromBare, accountJid)) {
+      return false;
+    }
+    final chatJid = event.to.toBare().toString();
+    if (chatJid.isEmpty || sameNormalizedAddressValue(chatJid, accountJid)) {
+      return false;
+    }
+    final referenceId = event.id.trim();
+    if (referenceId.isEmpty) {
+      return false;
+    }
+
+    final resolved = await _dbOpReturning<XmppDatabase, bool>((db) async {
+      final target = await db.getMessageByReferenceId(
+        referenceId,
+        chatJid: chatJid,
+      );
+      if (target == null ||
+          !sameNormalizedAddressValue(target.senderJid, chatJid)) {
+        return false;
+      }
+      await db.markMessagesStatusThrough(
+        messageId: referenceId,
+        chatJid: chatJid,
+        senderJid: chatJid,
+        displayed: true,
+      );
+      return true;
+    });
+    if (!resolved) {
+      if (allowQueue) {
+        _queuePendingSelfDisplayedMarker(event);
+      }
+      return false;
+    }
+
+    await _updateUnreadCountForChat(chatJid);
+    return true;
+  }
+
+  Future<({bool acked, bool received})> _acknowledgeMessage(
+    mox.MessageEvent event,
+  ) async {
     if (event.isCarbon) return (acked: false, received: false);
     final bool isDelayed =
         event.extensions.get<mox.DelayedDeliveryData>() != null;
     final isArchived = event.isFromMAM || isDelayed;
-    if (isArchived && !allowArchivedAcknowledgement) {
+    if (isArchived) {
       return (acked: false, received: false);
     }
 
@@ -7917,20 +8291,15 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return (acked: false, received: false);
     }
 
-    final peer = event.from.toBare().toString();
-    if (sameNormalizedAddressValue(peer, myJid)) {
+    final peerBare = event.from.toBare().toString();
+    if (sameNormalizedAddressValue(peerBare, myJid)) {
       return (acked: false, received: false);
     }
     final chatJid = _chatJidForEvent(event);
     final isMuc = event.type == 'groupchat';
-    final trackedMessage = isArchived || isMuc
+    final trackedMessage = isMuc
         ? await _resolveIncomingReferencedMessage(event, chatJid: chatJid)
         : null;
-    if (isArchived) {
-      if (trackedMessage?.received == true) {
-        return (acked: false, received: false);
-      }
-    }
     if (isMuc) {
       final localReferenceId =
           trackedMessage?.stanzaID ??
@@ -7950,61 +8319,32 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _log.fine('Skipping IM acknowledgement for message without stanza id.');
       return (acked: false, received: false);
     }
-    final target = peer;
+    final target = event.from.toString();
     const messageType = _messageTypeChat;
-    final capabilities = await _capabilitiesFor(peer);
     var acknowledged = false;
 
     if (markable) {
-      final decision = _decisionFromCapabilityFlag(
-        supported: capabilities.supportsMarkers,
-        capabilitiesResolvedAt: capabilities.capabilitiesResolvedAt,
+      await _connection.sendChatMarker(
+        to: target,
+        stanzaID: directStanzaId,
+        marker: mox.ChatMarker.received,
+        messageType: messageType,
       );
-      if (!decision.isAllowed) {
-        if (!decision.isUnsupported) {
-          _logCapabilityDecision(
-            featureLabel: 'chat markers',
-            jid: peer,
-            decision: decision,
-          );
-        }
-      } else {
-        await _connection.sendChatMarker(
-          to: target,
-          stanzaID: directStanzaId,
-          marker: mox.ChatMarker.received,
-          messageType: messageType,
-        );
-        acknowledged = true;
-      }
+      acknowledged = true;
     }
     if (deliveryReceiptRequested) {
-      final decision = _decisionFromCapabilityFlag(
-        supported: capabilities.supportsReceipts,
-        capabilitiesResolvedAt: capabilities.capabilitiesResolvedAt,
+      await _connection.sendMessage(
+        mox.MessageEvent(
+          _myJid!,
+          mox.JID.fromString(target),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageDeliveryReceivedData(directStanzaId),
+          ]),
+          type: messageType,
+        ),
       );
-      if (!decision.isAllowed) {
-        if (!decision.isUnsupported) {
-          _logCapabilityDecision(
-            featureLabel: 'delivery receipts',
-            jid: peer,
-            decision: decision,
-          );
-        }
-      } else {
-        await _connection.sendMessage(
-          mox.MessageEvent(
-            _myJid!,
-            mox.JID.fromString(target),
-            false,
-            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-              mox.MessageDeliveryReceivedData(directStanzaId),
-            ]),
-            type: messageType,
-          ),
-        );
-        acknowledged = true;
-      }
+      acknowledged = true;
     }
 
     if (!acknowledged) {
@@ -8024,6 +8364,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required bool acked,
     required bool received,
     required bool displayed,
+    bool applyThrough = true,
   }) async {
     final normalizedId = id.trim();
     final normalizedChatJid = chatJid?.trim();
@@ -8035,15 +8376,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return;
     }
     final accountJid = myJid?.trim();
-    if (normalizedDisplayed &&
+    if (applyThrough &&
         accountJid != null &&
         accountJid.isNotEmpty &&
         normalizedChatJid != null &&
         normalizedChatJid.isNotEmpty) {
-      await db.markOutgoingMessagesDisplayedThrough(
+      await db.markMessagesStatusThrough(
         messageId: normalizedId,
         chatJid: normalizedChatJid,
         senderJid: accountJid,
+        acked: normalizedAcked,
+        received: normalizedReceived,
+        displayed: normalizedDisplayed,
       );
     }
     if (normalizedDisplayed) {
@@ -8074,6 +8418,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _capabilityCache.clear();
     _capabilityRequests.clear();
     _capabilityCacheLoaded = false;
+    _pendingOutboundMessageStatusesByChat.clear();
+    _pendingSelfDisplayedMarkersByChat.clear();
     _httpUploadSupport = const HttpUploadSupport(supported: false);
     _outboundPinMutationsByStanzaId.clear();
     _inboundAttachmentDownloads.clear();

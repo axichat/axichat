@@ -1159,6 +1159,47 @@ void main() {
       );
     });
 
+    test('Allows direct reactions without capability lookups', () async {
+      const peerJid = 'friend@example.net';
+      const stanzaId = 'unknown-domain-reaction';
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.ServiceUnavailableError(),
+        ),
+      );
+      when(() => mockConnection.generateId()).thenReturn(uuid.v4());
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
+
+      await database.saveMessage(
+        Message(
+          stanzaID: stanzaId,
+          senderJid: peerJid,
+          chatJid: peerJid,
+          timestamp: DateTime.timestamp(),
+          body: 'hello',
+        ),
+      );
+
+      await xmppService.reactToMessage(stanzaID: stanzaId, emoji: emoji);
+
+      verify(
+        () => mockConnection.sendMessage(
+          any(
+            that: isA<mox.MessageEvent>().having(
+              (event) =>
+                  event.extensions.get<mox.MessageReactionsData>()?.messageId,
+              'reaction target',
+              stanzaId,
+            ),
+          ),
+        ),
+      ).called(1);
+      verifyNever(() => mockConnection.discoInfoQuery(peerJid));
+    });
+
     test('Sends MUC reactions as groupchat stanzas', () async {
       const roomJid = 'room@conference.axi.im';
       const roomNick = 'me';
@@ -1979,9 +2020,9 @@ void main() {
   });
 
   group('sendReadMarker', () {
-    test('Allows @axi.im read markers when disco fails', () async {
-      const axiPeerJid = 'friend@axi.im';
-      const stanzaId = 'axi-read-marker';
+    test('Allows bare-JID read markers when support is unknown', () async {
+      const peerJid = 'friend@example.net';
+      const stanzaId = 'bare-read-marker';
       await connectSuccessfully(xmppService);
       when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
         (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
@@ -1997,39 +2038,63 @@ void main() {
         ),
       ).thenAnswer((_) async => true);
 
-      await xmppService.sendReadMarker(axiPeerJid, stanzaId);
+      await xmppService.sendReadMarker(peerJid, stanzaId);
 
       verify(
         () => mockConnection.sendChatMarker(
-          to: axiPeerJid,
-          stanzaID: stanzaId,
-          marker: mox.ChatMarker.received,
-          messageType: 'chat',
-        ),
-      ).called(1);
-      verify(
-        () => mockConnection.sendChatMarker(
-          to: axiPeerJid,
+          to: peerJid,
           stanzaID: stanzaId,
           marker: mox.ChatMarker.displayed,
           messageType: 'chat',
         ),
       ).called(1);
+      verifyNever(() => mockConnection.discoInfoQuery(peerJid));
+    });
+
+    test('Allows full-JID read markers without capability lookups', () async {
+      const peerJid = 'friend@example.net/phone';
+      const stanzaId = 'full-read-marker';
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.ServiceUnavailableError(),
+        ),
+      );
+      when(
+        () => mockConnection.sendChatMarker(
+          to: any(named: 'to'),
+          stanzaID: any(named: 'stanzaID'),
+          marker: any(named: 'marker'),
+          messageType: any(named: 'messageType'),
+        ),
+      ).thenAnswer((_) async => true);
+
+      await xmppService.sendReadMarker(peerJid, stanzaId);
+
+      verify(
+        () => mockConnection.sendChatMarker(
+          to: peerJid,
+          stanzaID: stanzaId,
+          marker: mox.ChatMarker.displayed,
+          messageType: 'chat',
+        ),
+      ).called(1);
+      verifyNever(() => mockConnection.discoInfoQuery(peerJid));
     });
 
     test(
       'Uses stanza-id for direct read markers even when origin-id exists',
       () async {
-        const axiPeerJid = 'friend@axi.im';
-        const stanzaId = 'axi-read-marker';
-        const originId = 'axi-read-marker-origin';
+        const peerJid = 'friend@example.net';
+        const stanzaId = 'bare-read-marker';
+        const originId = 'bare-read-marker-origin';
         await connectSuccessfully(xmppService);
         await database.saveMessage(
           Message(
             stanzaID: stanzaId,
             originID: originId,
-            senderJid: axiPeerJid,
-            chatJid: axiPeerJid,
+            senderJid: peerJid,
+            chatJid: peerJid,
             timestamp: DateTime.timestamp(),
             body: 'hello',
           ),
@@ -2048,19 +2113,11 @@ void main() {
           ),
         ).thenAnswer((_) async => true);
 
-        await xmppService.sendReadMarker(axiPeerJid, stanzaId);
+        await xmppService.sendReadMarker(peerJid, stanzaId);
 
         verify(
           () => mockConnection.sendChatMarker(
-            to: axiPeerJid,
-            stanzaID: stanzaId,
-            marker: mox.ChatMarker.received,
-            messageType: 'chat',
-          ),
-        ).called(1);
-        verify(
-          () => mockConnection.sendChatMarker(
-            to: axiPeerJid,
+            to: peerJid,
             stanzaID: stanzaId,
             marker: mox.ChatMarker.displayed,
             messageType: 'chat',
@@ -2311,7 +2368,7 @@ void main() {
     );
 
     test(
-      'Applies self status sync to outgoing direct messages by origin-id.',
+      'Does not treat acknowledged chat markers as displayed reads.',
       () async {
         final controller = StreamController<mox.XmppEvent>();
         when(
@@ -2331,26 +2388,11 @@ void main() {
           ),
         );
 
-        final syncBody = jsonEncode({
-          'message_status_sync': {
-            'v': 1,
-            'id': originId,
-            'acked': true,
-            'received': true,
-            'displayed': true,
-          },
-        });
         controller.add(
-          mox.MessageEvent(
-            mox.JID.fromString(xmppService.myJid!),
-            mox.JID.fromString(xmppService.myJid!),
-            false,
-            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-              mox.MessageBodyData(syncBody),
-              mox.MessageIdData(uuid.v4()),
-            ]),
-            id: uuid.v4(),
-            type: 'chat',
+          mox.ChatMarkerEvent(
+            mox.JID.fromString(peerJid),
+            mox.ChatMarker.acknowledged,
+            originId,
           ),
         );
         await pumpEventQueue();
@@ -2359,14 +2401,14 @@ void main() {
         final stored = await database.getMessageByStanzaID(localStanzaId);
         expect(stored?.acked, isTrue);
         expect(stored?.received, isTrue);
-        expect(stored?.displayed, isTrue);
+        expect(stored?.displayed, isFalse);
 
         await controller.close();
       },
     );
 
     test(
-      'Ignores chat-state updates carried by self status sync envelopes.',
+      'Applies received chat markers through the referenced outgoing message.',
       () async {
         final controller = StreamController<mox.XmppEvent>();
         when(
@@ -2377,55 +2419,118 @@ void main() {
 
         await database.saveMessage(
           Message(
+            stanzaID: 'older-outgoing',
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 11, 59),
+            body: 'older',
+          ),
+        );
+        await database.saveMessage(
+          Message(
             stanzaID: localStanzaId,
             originID: originId,
             senderJid: xmppService.myJid!,
             chatJid: peerJid,
-            timestamp: DateTime.timestamp(),
-            body: 'hello',
+            timestamp: DateTime.utc(2026, 3, 18, 12, 0),
+            body: 'latest',
           ),
         );
-        await database.updateChatState(
-          chatJid: peerJid,
-          state: mox.ChatState.composing,
+
+        controller.add(
+          mox.ChatMarkerEvent(
+            mox.JID.fromString(peerJid),
+            mox.ChatMarker.received,
+            originId,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final older = await database.getMessageByStanzaID('older-outgoing');
+        final latest = await database.getMessageByStanzaID(localStanzaId);
+        expect(older?.acked, isTrue);
+        expect(older?.received, isTrue);
+        expect(older?.displayed, isFalse);
+        expect(latest?.acked, isTrue);
+        expect(latest?.received, isTrue);
+        expect(latest?.displayed, isFalse);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Queues delivery receipts until the referenced outgoing message is stored.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        await database.saveMessage(
+          Message(
+            stanzaID: 'older-outgoing-receipt',
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 11, 59),
+            body: 'older',
+          ),
         );
 
-        final syncBody = jsonEncode({
-          'message_status_sync': {
-            'v': 1,
-            'id': originId,
-            'chat_jid': peerJid,
-            'acked': true,
-            'received': true,
-            'displayed': true,
-          },
-        });
+        controller.add(
+          mox.DeliveryReceiptReceivedEvent(
+            from: mox.JID.fromString(peerJid),
+            id: originId,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            originID: originId,
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 12, 0),
+            body: 'latest',
+          ),
+        );
         controller.add(
           mox.MessageEvent(
-            mox.JID.fromString(xmppService.myJid!),
+            mox.JID.fromString(peerJid),
             mox.JID.fromString(xmppService.myJid!),
             false,
             mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-              mox.MessageBodyData(syncBody),
-              mox.MessageIdData(uuid.v4()),
-              mox.ChatState.active,
+              const mox.MessageBodyData('trigger pending receipt replay'),
+              mox.MessageIdData('trigger-pending-receipt'),
             ]),
-            id: uuid.v4(),
+            id: 'trigger-pending-receipt',
             type: 'chat',
           ),
         );
         await pumpEventQueue();
         await pumpEventQueue();
 
-        final chat = await database.getChat(peerJid);
-        expect(chat?.chatState, mox.ChatState.composing);
+        final older = await database.getMessageByStanzaID(
+          'older-outgoing-receipt',
+        );
+        final latest = await database.getMessageByStanzaID(localStanzaId);
+        expect(older?.acked, isFalse);
+        expect(older?.received, isFalse);
+        expect(latest?.acked, isTrue);
+        expect(latest?.received, isTrue);
+        expect(latest?.displayed, isFalse);
 
         await controller.close();
       },
     );
 
     test(
-      'Duplicate archived self status sync envelopes do not re-emit message updates.',
+      'Queues peer chat markers until the referenced outgoing message is stored.',
       () async {
         final controller = StreamController<mox.XmppEvent>();
         when(
@@ -2436,69 +2541,174 @@ void main() {
 
         await database.saveMessage(
           Message(
+            stanzaID: 'older-outgoing-pending-marker',
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 11, 59),
+            body: 'older',
+          ),
+        );
+
+        controller.add(
+          mox.ChatMarkerEvent(
+            mox.JID.fromString(peerJid),
+            mox.ChatMarker.displayed,
+            originId,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        await database.saveMessage(
+          Message(
             stanzaID: localStanzaId,
             originID: originId,
             senderJid: xmppService.myJid!,
             chatJid: peerJid,
-            timestamp: DateTime.timestamp(),
-            body: 'hello',
+            timestamp: DateTime.utc(2026, 3, 18, 12, 0),
+            body: 'latest',
           ),
         );
-
-        final emissions = <List<Message>>[];
-        final subscription = xmppService
-            .messageStreamForChat(peerJid)
-            .listen(emissions.add);
-        await pumpEventQueue();
-
-        final syncBody = jsonEncode({
-          'message_status_sync': {
-            'v': 1,
-            'id': originId,
-            'chat_jid': peerJid,
-            'acked': true,
-            'received': true,
-            'displayed': true,
-          },
-        });
-
-        mox.MessageEvent buildArchivedSyncEvent() => mox.MessageEvent(
-          mox.JID.fromString(xmppService.myJid!),
-          mox.JID.fromString(xmppService.myJid!),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            mox.MessageBodyData(syncBody),
-            mox.MessageIdData(uuid.v4()),
-            mox.ChatState.active,
-            mox.DelayedDeliveryData(
-              mox.JID.fromString('axi.im'),
-              DateTime.timestamp(),
-            ),
-          ]),
-          id: uuid.v4(),
-          type: 'chat',
-          isFromMAM: true,
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(peerJid),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('trigger pending marker replay'),
+              mox.MessageIdData('trigger-pending-marker'),
+            ]),
+            id: 'trigger-pending-marker',
+            type: 'chat',
+          ),
         );
-
-        controller.add(buildArchivedSyncEvent());
-        await pumpEventQueue();
-        await pumpEventQueue();
-        final afterFirstSync = emissions.length;
-
-        controller.add(buildArchivedSyncEvent());
         await pumpEventQueue();
         await pumpEventQueue();
 
-        expect(afterFirstSync, greaterThan(0));
-        expect(emissions.length, afterFirstSync);
+        final older = await database.getMessageByStanzaID(
+          'older-outgoing-pending-marker',
+        );
+        final latest = await database.getMessageByStanzaID(localStanzaId);
+        expect(older?.acked, isTrue);
+        expect(older?.received, isTrue);
+        expect(older?.displayed, isTrue);
+        expect(latest?.acked, isTrue);
+        expect(latest?.received, isTrue);
+        expect(latest?.displayed, isTrue);
 
-        await subscription.cancel();
         await controller.close();
       },
     );
 
     test(
-      'Keeps self status sync scoped to the synced chat when origin-id collides.',
+      'Applies self carbon displayed markers to inbound direct messages through the anchor.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        await database.saveMessage(
+          Message(
+            stanzaID: 'peer-message-1',
+            senderJid: peerJid,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 12, 0),
+            body: 'first',
+          ),
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            originID: originId,
+            senderJid: peerJid,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 12, 1),
+            body: 'second',
+          ),
+        );
+
+        controller.add(
+          XmppTransportChatMarkerEvent(
+            from: mox.JID.fromString(xmppService.myJid!),
+            to: mox.JID.fromString(peerJid),
+            type: mox.ChatMarker.displayed,
+            id: originId,
+            isCarbon: true,
+            isFromMAM: false,
+            messageType: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final firstStored = await database.getMessageByStanzaID(
+          'peer-message-1',
+        );
+        final secondStored = await database.getMessageByStanzaID(localStanzaId);
+        final chat = await database.getChat(peerJid);
+        expect(firstStored?.displayed, isTrue);
+        expect(secondStored?.displayed, isTrue);
+        expect(chat?.unreadCount, 0);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Applies self archived displayed markers after the referenced message arrives.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        controller.add(
+          XmppTransportChatMarkerEvent(
+            from: mox.JID.fromString(xmppService.myJid!),
+            to: mox.JID.fromString(peerJid),
+            type: mox.ChatMarker.displayed,
+            id: originId,
+            isCarbon: false,
+            isFromMAM: true,
+            messageType: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(peerJid),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('late archive message'),
+              mox.MessageIdData(localStanzaId),
+              const mox.StableIdData(originId, null),
+            ]),
+            id: localStanzaId,
+            type: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(localStanzaId);
+        final chat = await database.getChat(peerJid);
+        expect(stored?.displayed, isTrue);
+        expect(chat?.unreadCount, 0);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Keeps self displayed marker replay scoped to the marker destination chat.',
       () async {
         const otherPeerJid = 'other@axi.im';
         final controller = StreamController<mox.XmppEvent>();
@@ -2512,7 +2722,7 @@ void main() {
           Message(
             stanzaID: localStanzaId,
             originID: originId,
-            senderJid: xmppService.myJid!,
+            senderJid: peerJid,
             chatJid: peerJid,
             timestamp: DateTime.timestamp(),
             body: 'peer',
@@ -2522,34 +2732,22 @@ void main() {
           Message(
             stanzaID: 'other-chat-stanza-id',
             originID: originId,
-            senderJid: xmppService.myJid!,
+            senderJid: otherPeerJid,
             chatJid: otherPeerJid,
             timestamp: DateTime.timestamp(),
             body: 'other',
           ),
         );
 
-        final syncBody = jsonEncode({
-          'message_status_sync': {
-            'v': 1,
-            'id': originId,
-            'chat_jid': peerJid,
-            'acked': true,
-            'received': true,
-            'displayed': true,
-          },
-        });
         controller.add(
-          mox.MessageEvent(
-            mox.JID.fromString(xmppService.myJid!),
-            mox.JID.fromString(xmppService.myJid!),
-            false,
-            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-              mox.MessageBodyData(syncBody),
-              mox.MessageIdData(uuid.v4()),
-            ]),
-            id: uuid.v4(),
-            type: 'chat',
+          XmppTransportChatMarkerEvent(
+            from: mox.JID.fromString(xmppService.myJid!),
+            to: mox.JID.fromString(peerJid),
+            type: mox.ChatMarker.displayed,
+            id: originId,
+            isCarbon: true,
+            isFromMAM: false,
+            messageType: 'chat',
           ),
         );
         await pumpEventQueue();
@@ -2559,11 +2757,7 @@ void main() {
         final otherStored = await database.getMessageByStanzaID(
           'other-chat-stanza-id',
         );
-        expect(peerStored?.acked, isTrue);
-        expect(peerStored?.received, isTrue);
         expect(peerStored?.displayed, isTrue);
-        expect(otherStored?.acked, isFalse);
-        expect(otherStored?.received, isFalse);
         expect(otherStored?.displayed, isFalse);
 
         await controller.close();
@@ -3266,7 +3460,66 @@ void main() {
       verify(() => mockConnection.discoInfoQuery(peerJid)).called(1);
     });
 
-    test('Caches disco capabilities per peer', () async {
+    test('Observing peer chat markers updates cached marker support', () async {
+      const peerJid = 'friend@example.net';
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+
+      await connectSuccessfully(xmppService);
+
+      controller.add(
+        mox.ChatMarkerEvent(
+          mox.JID.fromString(peerJid),
+          mox.ChatMarker.displayed,
+          'marker-id',
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      final capabilities = await xmppService.resolvePeerCapabilities(
+        jid: peerJid,
+      );
+
+      expect(capabilities.supportsMarkers, isTrue);
+      expect(capabilities.features, contains(mox.chatMarkersXmlns));
+      verifyNever(() => mockConnection.discoInfoQuery(peerJid));
+
+      await controller.close();
+    });
+
+    test('Observing peer receipts updates cached receipt support', () async {
+      const peerJid = 'friend@example.net';
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+
+      await connectSuccessfully(xmppService);
+
+      controller.add(
+        mox.DeliveryReceiptReceivedEvent(
+          from: mox.JID.fromString(peerJid),
+          id: 'receipt-id',
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      final capabilities = await xmppService.resolvePeerCapabilities(
+        jid: peerJid,
+      );
+
+      expect(capabilities.supportsReceipts, isTrue);
+      expect(capabilities.features, contains(mox.deliveryXmlns));
+      verifyNever(() => mockConnection.discoInfoQuery(peerJid));
+
+      await controller.close();
+    });
+
+    test('Does not disco before direct auto-acks', () async {
       final controller = StreamController<mox.XmppEvent>();
       when(
         () => mockConnection.asBroadcastStream(),
@@ -3289,20 +3542,26 @@ void main() {
 
       await connectSuccessfully(xmppService);
 
-      final event = generateRandomMessageEvent();
-      controller.add(event);
-      await pumpEventQueue();
-      await pumpEventQueue();
-
+      const peerJid = 'friend@example.net/phone';
       controller.add(
-        generateRandomMessageEvent(senderJid: event.from.toString()),
+        mox.MessageEvent(
+          mox.JID.fromString(peerJid),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('hello'),
+            const mox.MarkableData(true),
+            const mox.MessageDeliveryReceiptData(true),
+            mox.MessageIdData('direct-auto-ack'),
+          ]),
+          id: 'direct-auto-ack',
+          type: 'chat',
+        ),
       );
       await pumpEventQueue();
       await pumpEventQueue();
 
-      verify(
-        () => mockConnection.discoInfoQuery(event.from.toBare().toString()),
-      ).called(1);
+      verifyNever(() => mockConnection.discoInfoQuery(any()));
 
       await controller.close();
     });
@@ -3342,108 +3601,100 @@ void main() {
       await controller.close();
     });
 
-    test(
-      'Acknowledges archived direct messages once and persists receipt state',
-      () async {
-        final controller = StreamController<mox.XmppEvent>();
-        when(
-          () => mockConnection.asBroadcastStream(),
-        ).thenAnswer((_) => controller.stream);
-        when(
-          () => mockConnection.sendChatMarker(
-            to: any(named: 'to'),
-            stanzaID: any(named: 'stanzaID'),
-            marker: any(named: 'marker'),
-            messageType: any(named: 'messageType'),
-          ),
-        ).thenAnswer((_) async => true);
-        when(
-          () => mockConnection.sendMessage(any()),
-        ).thenAnswer((_) async => true);
+    test('Accepts valid received carbons from peers', () async {
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
 
-        await connectSuccessfully(xmppService);
+      await connectSuccessfully(xmppService);
 
-        const peerJid = 'friend@axi.im';
-        const stanzaId = 'mam-direct-message';
-        final timestamp = DateTime.utc(2026, 3, 10, 12);
-        final event = mox.MessageEvent(
-          mox.JID.fromString(peerJid),
-          mox.JID.fromString(xmppService.myJid!),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            const mox.MessageBodyData('Missed while offline'),
-            const mox.MarkableData(true),
-            const mox.MessageDeliveryReceiptData(true),
-            mox.MessageIdData(stanzaId),
-            mox.DelayedDeliveryData(mox.JID.fromString(peerJid), timestamp),
-          ]),
-          id: stanzaId,
-          type: 'chat',
-          isFromMAM: true,
-        );
+      const peerJid = 'friend@example.net';
+      const stanzaId = 'received-carbon-message';
+      final carbonEvent = mox.MessageEvent(
+        mox.JID.fromString(peerJid),
+        mox.JID.fromString(xmppService.myJid!),
+        false,
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          const mox.CarbonsData(true),
+          const mox.MessageBodyData('carbon copy'),
+          mox.MessageIdData(stanzaId),
+        ]),
+        id: stanzaId,
+        type: 'chat',
+      );
 
-        controller.add(event);
-        await pumpEventQueue();
-        await pumpEventQueue();
+      controller.add(carbonEvent);
+      await pumpEventQueue();
+      await pumpEventQueue();
 
-        verify(
-          () => mockConnection.sendChatMarker(
-            to: peerJid,
-            stanzaID: stanzaId,
-            marker: mox.ChatMarker.received,
-            messageType: 'chat',
-          ),
-        ).called(1);
-        verify(
-          () => mockConnection.sendMessage(
-            any(
-              that: isA<mox.MessageEvent>().having(
-                (message) => message.extensions
-                    .get<mox.MessageDeliveryReceivedData>()
-                    ?.id,
-                'delivery receipt id',
-                stanzaId,
-              ),
-            ),
-          ),
-        ).called(1);
+      final stored = await database.getMessageByStanzaID(stanzaId);
+      expect(stored?.chatJid, peerJid);
+      expect(stored?.body, 'carbon copy');
 
-        final stored = await database.getMessageByStanzaID(stanzaId);
-        expect(stored?.acked, isTrue);
-        expect(stored?.received, isTrue);
+      await controller.close();
+    });
 
-        controller.add(event);
-        await pumpEventQueue();
-        await pumpEventQueue();
+    test('Does not acknowledge archived direct messages', () async {
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+      when(
+        () => mockConnection.sendChatMarker(
+          to: any(named: 'to'),
+          stanzaID: any(named: 'stanzaID'),
+          marker: any(named: 'marker'),
+          messageType: any(named: 'messageType'),
+        ),
+      ).thenAnswer((_) async => true);
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
 
-        verify(
-          () => mockConnection.sendChatMarker(
-            to: peerJid,
-            stanzaID: stanzaId,
-            marker: mox.ChatMarker.received,
-            messageType: 'chat',
-          ),
-        ).called(1);
-        verify(
-          () => mockConnection.sendMessage(
-            any(
-              that: isA<mox.MessageEvent>().having(
-                (message) => message.extensions
-                    .get<mox.MessageDeliveryReceivedData>()
-                    ?.id,
-                'delivery receipt id',
-                stanzaId,
-              ),
-            ),
-          ),
-        ).called(1);
+      await connectSuccessfully(xmppService);
 
-        await controller.close();
-      },
-    );
+      const peerJid = 'friend@axi.im';
+      const stanzaId = 'mam-direct-message';
+      final timestamp = DateTime.utc(2026, 3, 10, 12);
+      final event = mox.MessageEvent(
+        mox.JID.fromString(peerJid),
+        mox.JID.fromString(xmppService.myJid!),
+        false,
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          const mox.MessageBodyData('Missed while offline'),
+          const mox.MarkableData(true),
+          const mox.MessageDeliveryReceiptData(true),
+          mox.MessageIdData(stanzaId),
+          mox.DelayedDeliveryData(mox.JID.fromString(peerJid), timestamp),
+        ]),
+        id: stanzaId,
+        type: 'chat',
+        isFromMAM: true,
+      );
+
+      controller.add(event);
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      final stored = await database.getMessageByStanzaID(stanzaId);
+      expect(stored?.acked, isFalse);
+      expect(stored?.received, isFalse);
+      verifyNever(
+        () => mockConnection.sendChatMarker(
+          to: any(named: 'to'),
+          stanzaID: any(named: 'stanzaID'),
+          marker: any(named: 'marker'),
+          messageType: any(named: 'messageType'),
+        ),
+      );
+      verifyNever(() => mockConnection.sendMessage(any()));
+
+      await controller.close();
+    });
 
     test(
-      'Uses stanza-id for archived direct acknowledgements when origin-id is present',
+      'Preserves archived origin-id messages without acknowledging them',
       () async {
         final controller = StreamController<mox.XmppEvent>();
         when(
@@ -3488,39 +3739,26 @@ void main() {
         await pumpEventQueue();
         await pumpEventQueue();
 
-        verify(
-          () => mockConnection.sendChatMarker(
-            to: peerJid,
-            stanzaID: stanzaId,
-            marker: mox.ChatMarker.received,
-            messageType: 'chat',
-          ),
-        ).called(1);
-        verify(
-          () => mockConnection.sendMessage(
-            any(
-              that: isA<mox.MessageEvent>().having(
-                (message) => message.extensions
-                    .get<mox.MessageDeliveryReceivedData>()
-                    ?.id,
-                'delivery receipt id',
-                stanzaId,
-              ),
-            ),
-          ),
-        ).called(1);
-
         final stored = await database.getMessageByStanzaID(stanzaId);
         expect(stored?.originID, originId);
-        expect(stored?.acked, isTrue);
-        expect(stored?.received, isTrue);
+        expect(stored?.acked, isFalse);
+        expect(stored?.received, isFalse);
+        verifyNever(
+          () => mockConnection.sendChatMarker(
+            to: any(named: 'to'),
+            stanzaID: any(named: 'stanzaID'),
+            marker: any(named: 'marker'),
+            messageType: any(named: 'messageType'),
+          ),
+        );
+        verifyNever(() => mockConnection.sendMessage(any()));
 
         await controller.close();
       },
     );
 
     test(
-      'Falls back to XEP-0184 for archived direct messages without chat markers',
+      'Does not send XEP-0184 receipts for archived direct messages',
       () async {
         final controller = StreamController<mox.XmppEvent>();
         when(
@@ -3554,19 +3792,9 @@ void main() {
         await pumpEventQueue();
         await pumpEventQueue();
 
-        verify(
-          () => mockConnection.sendMessage(
-            any(
-              that: isA<mox.MessageEvent>().having(
-                (message) => message.extensions
-                    .get<mox.MessageDeliveryReceivedData>()
-                    ?.id,
-                'delivery receipt id',
-                stanzaId,
-              ),
-            ),
-          ),
-        ).called(1);
+        final stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.acked, isFalse);
+        expect(stored?.received, isFalse);
         verifyNever(
           () => mockConnection.sendChatMarker(
             to: any(named: 'to'),
@@ -3575,17 +3803,14 @@ void main() {
             messageType: any(named: 'messageType'),
           ),
         );
-
-        final stored = await database.getMessageByStanzaID(stanzaId);
-        expect(stored?.acked, isTrue);
-        expect(stored?.received, isTrue);
+        verifyNever(() => mockConnection.sendMessage(any()));
 
         await controller.close();
       },
     );
 
     test(
-      'Skips auto-acks for unknown domains when capabilities stay unknown',
+      'Replies to direct receipt requests and markable messages without disco',
       () async {
         final controller = StreamController<mox.XmppEvent>();
         when(
@@ -3610,7 +3835,7 @@ void main() {
 
         await connectSuccessfully(xmppService);
 
-        const peerJid = 'friend@example.net';
+        const peerJid = 'friend@example.net/phone';
         const stanzaId = 'unknown-domain-direct-message';
         final event = mox.MessageEvent(
           mox.JID.fromString(peerJid),
@@ -3630,20 +3855,38 @@ void main() {
         await pumpEventQueue();
         await pumpEventQueue();
 
-        verifyNever(
+        verify(
           () => mockConnection.sendChatMarker(
-            to: any(named: 'to'),
-            stanzaID: any(named: 'stanzaID'),
-            marker: any(named: 'marker'),
-            messageType: any(named: 'messageType'),
+            to: peerJid,
+            stanzaID: stanzaId,
+            marker: mox.ChatMarker.received,
+            messageType: 'chat',
           ),
-        );
-        verifyNever(() => mockConnection.sendMessage(any()));
-        verify(() => mockConnection.discoInfoQuery(peerJid)).called(1);
+        ).called(1);
+        verify(
+          () => mockConnection.sendMessage(
+            any(
+              that: isA<mox.MessageEvent>()
+                  .having(
+                    (message) => message.to.toString(),
+                    'receipt target',
+                    peerJid,
+                  )
+                  .having(
+                    (message) => message.extensions
+                        .get<mox.MessageDeliveryReceivedData>()
+                        ?.id,
+                    'delivery receipt id',
+                    stanzaId,
+                  ),
+            ),
+          ),
+        ).called(1);
+        verifyNever(() => mockConnection.discoInfoQuery(peerJid));
 
         final stored = await database.getMessageByStanzaID(stanzaId);
-        expect(stored?.acked, isFalse);
-        expect(stored?.received, isFalse);
+        expect(stored?.acked, isTrue);
+        expect(stored?.received, isTrue);
 
         await controller.close();
       },

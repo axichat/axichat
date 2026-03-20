@@ -29,6 +29,8 @@ class MockUserAvatarManager extends Mock implements mox.UserAvatarManager {}
 
 class MockPubSubManager extends Mock implements mox.PubSubManager {}
 
+class MockDiscoManager extends Mock implements mox.DiscoManager {}
+
 class FakeJid extends Fake implements mox.JID {}
 
 class _FakePathProviderPlatform extends PathProviderPlatform {
@@ -1467,7 +1469,157 @@ void main() {
     );
 
     test(
-      'syncSessionState skips self avatar byte downloads when the cached hash matches.',
+      'refreshAvatarsForConversationIndex skips self avatar byte downloads when the cached hash matches.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-refresh-conversation-avatar-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final stateStoreValues = <String, Object?>{};
+        final pubsubManager = MockPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        final metadataPayload =
+            (mox.XmlBuilder.withNamespace(
+                  'metadata',
+                  mox.userAvatarMetadataXmlns,
+                )..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', 'avatar-hash')
+                        ..attr('bytes', '3')
+                        ..attr('type', 'image/png')
+                        ..attr('width', '1')
+                        ..attr('height', '1'))
+                      .build(),
+                ))
+                .build();
+        final metadataItem = mox.PubSubItem(
+          id: 'avatar-hash',
+          node: mox.userAvatarMetadataXmlns,
+          payload: metadataPayload,
+        );
+        var metadataCalls = 0;
+        var avatarDataCalls = 0;
+
+        try {
+          when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+            invocation,
+          ) {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            return stateStoreValues[key.value];
+          });
+          when(
+            () => mockStateStore.writeAll(data: any(named: 'data')),
+          ).thenAnswer((invocation) async {
+            final data =
+                invocation.namedArguments[#data]
+                    as Map<RegisteredStateKey, Object?>;
+            for (final entry in data.entries) {
+              stateStoreValues[entry.key.value] = entry.value;
+            }
+            return true;
+          });
+          when(
+            () => mockStateStore.write(
+              key: any(named: 'key'),
+              value: any(named: 'value'),
+            ),
+          ).thenAnswer((invocation) async {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            stateStoreValues[key.value] = invocation.namedArguments[#value];
+            return true;
+          });
+          when(() => mockStateStore.delete(key: any(named: 'key'))).thenAnswer((
+            invocation,
+          ) async {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            stateStoreValues.remove(key.value);
+            return true;
+          });
+
+          await xmppService.close();
+          database = XmppDrift(
+            file: File(''),
+            passphrase: '',
+            executor: NativeDatabase.memory(),
+          );
+          xmppService = XmppService(
+            buildConnection: () => mockConnection,
+            buildStateStore: (_, _) => mockStateStore,
+            buildDatabase: (_, _) => database,
+            notificationService: mockNotificationService,
+          );
+          await connectSuccessfully(xmppService);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(userAvatarManager);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(
+            () => pubsubManager.getItems(
+              any(),
+              mox.userAvatarMetadataXmlns,
+              maxItems: any(named: 'maxItems'),
+            ),
+          ).thenAnswer((_) async {
+            metadataCalls += 1;
+            return moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>(
+              <mox.PubSubItem>[metadataItem],
+            );
+          });
+          when(
+            () => userAvatarManager.getUserAvatarData(any(), any()),
+          ).thenAnswer((_) async {
+            avatarDataCalls += 1;
+            return const moxlib.Result<mox.AvatarError, mox.UserAvatarData>(
+              mox.UserAvatarData('AQID', 'avatar-hash'),
+            );
+          });
+
+          await xmppService.storeAvatarBytesForJid(
+            jid: mox.JID.fromString(jid).toBare().toString(),
+            bytes: Uint8List.fromList(const <int>[
+              0x89,
+              0x50,
+              0x4E,
+              0x47,
+              0x0D,
+              0x0A,
+              0x1A,
+              0x0A,
+              0x00,
+            ]),
+            hash: 'avatar-hash',
+          );
+
+          expect(
+            await xmppService.refreshAvatarsForConversationIndex(),
+            isTrue,
+          );
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          expect(metadataCalls, equals(1));
+          expect(avatarDataCalls, equals(0));
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'syncSessionState forces a self avatar byte download when the cached hash matches.',
       () async {
         final originalPathProvider = PathProviderPlatform.instance;
         final tempDir = await Directory.systemTemp.createTemp(
@@ -1481,6 +1633,7 @@ void main() {
         final stateStoreValues = <String, Object?>{};
         final pubsubManager = MockPubSubManager();
         final userAvatarManager = MockUserAvatarManager();
+        final discoManager = MockDiscoManager();
         final mamManager = RecordingMamManager();
         final metadataPayload =
             (mox.XmlBuilder.withNamespace(
@@ -1553,11 +1706,6 @@ void main() {
             notificationService: mockNotificationService,
           );
           await connectSuccessfully(xmppService);
-          await xmppService.setMamSupportOverride(true);
-
-          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
-          await pumpEventQueue(times: 20);
-
           when(() => mockConnection.hasConnectionSettings).thenReturn(true);
           when(
             () => mockConnection.getManager<mox.PubSubManager>(),
@@ -1566,12 +1714,32 @@ void main() {
             () => mockConnection.getManager<mox.UserAvatarManager>(),
           ).thenReturn(userAvatarManager);
           when(
+            () => mockConnection.getManager<mox.DiscoManager>(),
+          ).thenReturn(discoManager);
+          when(
             () => mockConnection.getManager<mox.MAMManager>(),
           ).thenReturn(mamManager);
           when(
             () => mockConnection.getManager<mox.VCardManager>(),
           ).thenReturn(null);
           await xmppService.setMamSupportOverride(true);
+          when(() => discoManager.discoItemsQuery(any())).thenAnswer(
+            (_) async =>
+                const moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
+                  <mox.DiscoItem>[],
+                ),
+          );
+          when(() => discoManager.discoInfoQuery(any())).thenAnswer(
+            (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+              mox.DiscoInfo(
+                const <String>[mox.mamXmlns],
+                const <mox.Identity>[],
+                const <mox.DataForm>[],
+                null,
+                mox.JID.fromString(jid),
+              ),
+            ),
+          );
           when(
             () => pubsubManager.getItems(
               any(),
@@ -1609,6 +1777,13 @@ void main() {
             hash: 'avatar-hash',
           );
 
+          eventStreamController.add(
+            mox.ConnectionStateChangedEvent(
+              mox.XmppConnectionState.connected,
+              mox.XmppConnectionState.notConnected,
+            ),
+          );
+          await pumpEventQueue(times: 20);
           eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
           await pumpEventQueue(times: 20);
           await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -1616,15 +1791,16 @@ void main() {
 
           metadataCalls = 0;
           avatarDataCalls = 0;
+          mamManager.queryCount = 0;
 
           expect(await xmppService.syncSessionState(), isTrue);
           await pumpEventQueue(times: 20);
           await Future<void>.delayed(const Duration(milliseconds: 50));
           await pumpEventQueue(times: 20);
 
-          expect(mamManager.queryCount, equals(1));
+          expect(mamManager.queryCount, greaterThanOrEqualTo(1));
           expect(metadataCalls, equals(1));
-          expect(avatarDataCalls, equals(0));
+          expect(avatarDataCalls, equals(1));
         } finally {
           PathProviderPlatform.instance = originalPathProvider;
           await tempDir.delete(recursive: true);

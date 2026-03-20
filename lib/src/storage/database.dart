@@ -322,6 +322,15 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageDisplayed(String stanzaID, {String? chatJid});
 
+  Future<int> markMessagesStatusThrough({
+    required String messageId,
+    required String chatJid,
+    required String senderJid,
+    bool acked = false,
+    bool received = false,
+    bool displayed = false,
+  });
+
   Future<void> markOutgoingMessagesDisplayedThrough({
     required String messageId,
     required String chatJid,
@@ -3230,32 +3239,44 @@ WHERE jid = ?
   }
 
   @override
-  Future<void> markOutgoingMessagesDisplayedThrough({
+  Future<int> markMessagesStatusThrough({
     required String messageId,
     required String chatJid,
     required String senderJid,
+    bool acked = false,
+    bool received = false,
+    bool displayed = false,
   }) async {
     final normalizedMessageId = messageId.trim();
     final normalizedChatJid = chatJid.trim();
     final normalizedSenderJid = senderJid.trim();
+    final ackedFlag = acked ? 1 : 0;
+    final receivedFlag = received ? 1 : 0;
+    final displayedFlag = displayed ? 1 : 0;
     if (normalizedMessageId.isEmpty ||
         normalizedChatJid.isEmpty ||
-        normalizedSenderJid.isEmpty) {
-      return;
+        normalizedSenderJid.isEmpty ||
+        !acked && !received && !displayed) {
+      return 0;
     }
 
     final updatedRows = await customUpdate(
       '''
 UPDATE messages
-SET displayed = 1
+SET acked = CASE WHEN ? = 1 THEN 1 ELSE acked END,
+    received = CASE WHEN ? = 1 THEN 1 ELSE received END,
+    displayed = CASE WHEN ? = 1 THEN 1 ELSE displayed END
 WHERE chat_jid = ?
   AND LOWER(sender_jid) = LOWER(?)
-  AND displayed = 0
+  AND (
+    (? = 1 AND acked = 0)
+    OR (? = 1 AND received = 0)
+    OR (? = 1 AND displayed = 0)
+  )
   AND EXISTS (
     SELECT 1
     FROM messages target
     WHERE target.chat_jid = ?
-      AND LOWER(target.sender_jid) = LOWER(?)
       AND (
         target.stanza_i_d = ?
         OR target.origin_i_d = ?
@@ -3271,10 +3292,15 @@ WHERE chat_jid = ?
   )
 ''',
       variables: [
+        Variable<int>(ackedFlag),
+        Variable<int>(receivedFlag),
+        Variable<int>(displayedFlag),
         Variable<String>(normalizedChatJid),
         Variable<String>(normalizedSenderJid),
+        Variable<int>(ackedFlag),
+        Variable<int>(receivedFlag),
+        Variable<int>(displayedFlag),
         Variable<String>(normalizedChatJid),
-        Variable<String>(normalizedSenderJid),
         Variable<String>(normalizedMessageId),
         Variable<String>(normalizedMessageId),
         Variable<String>(normalizedMessageId),
@@ -3283,9 +3309,25 @@ WHERE chat_jid = ?
     );
     if (updatedRows > 0) {
       _log.info(
-        'Marking outgoing messages displayed through $normalizedMessageId',
+        'Marking messages through $normalizedMessageId '
+        '(acked=$acked received=$received displayed=$displayed)',
       );
     }
+    return updatedRows;
+  }
+
+  @override
+  Future<void> markOutgoingMessagesDisplayedThrough({
+    required String messageId,
+    required String chatJid,
+    required String senderJid,
+  }) async {
+    await markMessagesStatusThrough(
+      messageId: messageId,
+      chatJid: chatJid,
+      senderJid: senderJid,
+      displayed: true,
+    );
   }
 
   @override

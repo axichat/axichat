@@ -1387,7 +1387,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
 
   Future<bool> refreshAvatarsForConversationIndex() async {
     final refreshed = await _refreshConversationIndexAvatars();
-    await refreshSelfAvatarIfNeeded(force: true);
+    await refreshSelfAvatarIfNeeded();
     return refreshed;
   }
 
