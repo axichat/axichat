@@ -84,6 +84,7 @@ void main() {
     registerFallbackValue(MessageTransport.xmpp);
     registerFallbackValue(MessageNotificationChannel.chat);
     registerFallbackValue(<FutureOr<bool>>[]);
+    registerFallbackValue(<String>[]);
     registerFallbackValue(MessageTimelineFilter.directOnly);
     registerFallbackValue(<String, String>{});
     registerFallbackValue(Duration.zero);
@@ -926,11 +927,21 @@ void main() {
       attachment: attachment,
     );
 
-    expect(msgId, 77);
+    expect(msgId, 1);
     verify(
       () => transport.sendAttachment(
         chatId: chat.deltaChatId!,
-        attachment: attachment,
+        attachment: any(
+          named: 'attachment',
+          that: predicate<EmailAttachment>(
+            (EmailAttachment sentAttachment) =>
+                sentAttachment.path == attachment.path &&
+                sentAttachment.fileName == attachment.fileName &&
+                sentAttachment.sizeBytes == attachment.sizeBytes &&
+                sentAttachment.mimeType == attachment.mimeType &&
+                (sentAttachment.caption ?? '').isEmpty,
+          ),
+        ),
         subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
         captionOverride: any(named: 'captionOverride'),
@@ -1641,6 +1652,13 @@ void main() {
       when(
         () => database.getParticipantsForShare(shareId),
       ).thenAnswer((_) async => existingParticipants);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'carol@example.com',
+          displayName: 'Carol',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 2);
       final capturedShares = <MessageShareData>[];
       final capturedParticipants = <List<MessageParticipantData>>[];
       when(
@@ -2717,7 +2735,7 @@ void main() {
   );
 
   test(
-    'markNoticedChat clears unread count on the canonical direct chat row',
+    'markNoticedChat resolves the canonical direct chat row before delegating',
     () async {
       final service = EmailService(
         credentialStore: credentialStore,
@@ -2776,13 +2794,16 @@ void main() {
 
       expect(noticed, isTrue);
       verify(
-        () => database.updateChat(
-          any(
-            that: predicate<Chat>(
-              (Chat updated) =>
-                  updated.jid == 'peer@example.com' && updated.unreadCount == 0,
-            ),
-          ),
+        () => database.upsertEmailChatAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).called(1);
+      verify(
+        () => transport.markNoticedChat(
+          91,
+          accountId: DeltaAccountDefaults.legacyId,
         ),
       ).called(1);
       verifyNever(
@@ -3034,14 +3055,22 @@ void main() {
     when(
       () => database.getParticipantsForShare('share-1'),
     ).thenAnswer((_) async => [participant]);
-    when(() => database.getChat('dc-1@delta.chat')).thenAnswer(
-      (_) async => Chat(
-        jid: 'dc-1@delta.chat',
-        title: 'Bob',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-      ),
+    final participantChat = Chat(
+      jid: 'dc-1@delta.chat',
+      title: 'Bob',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
     );
+    when(
+      () => database.getChatsByJids(
+        any(
+          that: predicate<Iterable<String>>(
+            (Iterable<String> jids) =>
+                jids.length == 1 && jids.first == 'dc-1@delta.chat',
+          ),
+        ),
+      ),
+    ).thenAnswer((_) async => [participantChat]);
 
     final contextResult = await service.shareContextForMessage(message);
 

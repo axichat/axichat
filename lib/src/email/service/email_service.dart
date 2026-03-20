@@ -765,23 +765,14 @@ class EmailService {
   }
 
   Future<EmailAccount?> currentAccount(String jid) async {
-    final scope = _scopeForJid(jid);
-    final address = await _credentialStore.read(
-      key: _addressKeyForScope(scope),
-    );
-    final password = await _credentialStore.read(
-      key: _passwordKeyForScope(scope),
-    );
-    if (address == null ||
-        address.isEmpty ||
-        password == null ||
-        password.isEmpty) {
-      return null;
-    }
-    return EmailAccount(address: address, password: password);
+    return _accountForScope(_scopeForJid(jid));
   }
 
   Future<EmailAccount?> _accountForScope(String scope) async {
+    final activeAccount = _accountForActiveScope(scope);
+    if (activeAccount != null) {
+      return activeAccount;
+    }
     final String? address = await _credentialStore.read(
       key: _addressKeyForScope(scope),
     );
@@ -795,6 +786,24 @@ class EmailService {
       return null;
     }
     return EmailAccount(address: address, password: password);
+  }
+
+  EmailAccount? _accountForActiveScope(String scope) {
+    if (_activeCredentialScope != scope) {
+      return null;
+    }
+    final activeAccount = _activeAccount;
+    if (activeAccount != null && activeAccount.password.isNotEmpty) {
+      return activeAccount;
+    }
+    final sessionAccount = sessionCredentials;
+    if (sessionAccount == null || sessionAccount.password.isEmpty) {
+      return null;
+    }
+    if (_scopeForJid(sessionAccount.address) != scope) {
+      return null;
+    }
+    return sessionAccount;
   }
 
   Future<EmailAccount> ensureProvisioned({
