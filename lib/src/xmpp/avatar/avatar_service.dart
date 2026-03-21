@@ -407,7 +407,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
   final Map<String, Object> _avatarRefreshInProgress = <String, Object>{};
   final Set<String> _configuredAvatarNodes = {};
   final Set<String> _pubSubAvatarJids = {};
-  final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
   Future<void>? _selfAvatarRefreshFuture;
   Object _selfAvatarRefreshOwner = Object();
   _SelfAvatarRefreshRequest? _activeSelfAvatarRefreshRequest;
@@ -420,9 +419,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
   static const int _safeAvatarBytesCacheLimit = _avatarBytesCacheLimit;
   static const int _conversationAvatarChatStart = 0;
   static const int _conversationAvatarChatEnd = 0;
-  static const Duration _conversationAvatarRefreshCooldown = Duration(
-    minutes: 2,
-  );
   static const Duration _avatarRefreshTimeout = Duration(seconds: 12);
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
@@ -693,16 +689,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
               ),
             ),
           );
-          return;
         }
-        await _refreshAvatarForJid(bareJid, metadata: event.metadata);
-      })
-      ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
-        final peerJid = event.item.peerBare.toBare().toString();
-        if (peerJid.isEmpty) return;
-        if (peerJid == myJid) return;
-        if (!await _shouldRefreshConversationAvatar(peerJid)) return;
-        await _refreshConversationAvatars([peerJid]);
       })
       ..registerHandler<mox.VCardAvatarUpdatedEvent>((event) async {
         final bareJid = event.jid.toBare().toString();
@@ -739,9 +726,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
               _SelfAvatarRefreshRequest(vcardHash: event.hash),
             ),
           );
-          return;
         }
-        await _refreshAvatarFromVCard(bareJid, event.hash);
       })
       ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
         final node = event.node;
@@ -859,7 +844,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
         priority: 1,
         lane: 'roster',
         triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
         },
         operationName: _avatarRosterRefreshOperationName,
@@ -874,7 +858,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
         priority: 1,
         lane: 'conversationIndex',
         triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
         },
         operationName: _avatarConversationRefreshOperationName,
@@ -1369,26 +1352,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
   Future<void> _refreshConversationAvatars(Iterable<String> jids) async {
     if (jids.isEmpty) return;
     await scheduleAvatarRefresh(jids);
-  }
-
-  Future<bool> _shouldRefreshConversationAvatar(String jid) async {
-    final now = DateTime.timestamp();
-    final lastAttempt = _conversationAvatarRefreshAttempts[jid];
-    if (lastAttempt != null &&
-        now.difference(lastAttempt) < _conversationAvatarRefreshCooldown) {
-      return false;
-    }
-
-    final existingHash = await _storedAvatarHash(jid);
-    if (existingHash != null && existingHash.trim().isNotEmpty) {
-      final existingPath = await _storedAvatarPath(jid);
-      if (await _hasCachedAvatarFile(existingPath)) {
-        return false;
-      }
-    }
-
-    _conversationAvatarRefreshAttempts[jid] = now;
-    return true;
   }
 
   Future<bool> refreshAvatarsForConversationIndex() async {

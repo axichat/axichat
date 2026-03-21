@@ -94,8 +94,6 @@ const _mucServiceDiscoveryBootstrapOperationName =
     'MucService.discoverServiceHostOnNegotiations';
 const _mucBookmarksBootstrapOperationName =
     'MucService.syncBookmarksOnNegotiations';
-const _mucRoomAvatarBootstrapOperationName =
-    'MucService.refreshRoomAvatarsOnNegotiations';
 const _mucAutojoinBootstrapOperationName =
     'MucService.autojoinBookmarkedRoomsOnNegotiations';
 const _mucCreateRoomBookmarkTimeoutLog =
@@ -1810,23 +1808,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     );
     registerBootstrapOperation(
       XmppBootstrapOperation(
-        key: _mucRoomAvatarBootstrapOperationName,
-        priority: 1,
-        lane: 'mucBookmarks',
-        triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.fullNegotiation,
-          XmppBootstrapTrigger.manualRefresh,
-        },
-        operationName: _mucRoomAvatarBootstrapOperationName,
-        run: () async {
-          await refreshRoomAvatars(
-            List<MucBookmark>.from(_latestBootstrapBookmarks),
-          );
-        },
-      ),
-    );
-    registerBootstrapOperation(
-      XmppBootstrapOperation(
         key: _mucAutojoinBootstrapOperationName,
         priority: 1,
         lane: 'mucBookmarks',
@@ -1902,7 +1883,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
           );
           return;
         }
-        await _refreshRoomAvatar(bareJid, expectedHash: event.hash);
       })
       ..registerHandler<mox.OwnDataChangedEvent>((event) async {
         await _handleOwnDataChanged(
@@ -3945,6 +3925,10 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
   }
 
+  Future<void> refreshRoomAvatar(String roomJid) async {
+    await _refreshRoomAvatar(roomJid);
+  }
+
   void _scheduleRoomPostJoinRefresh(String roomJid) {
     final key = _roomKey(roomJid);
     if (_roomHasLeft(key)) return;
@@ -3956,7 +3940,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     fireAndForget(() async {
       try {
         await _awaitInstantRoomConfigurationIfNeeded(key);
-        await _refreshRoomAvatar(key).timeout(_roomQueryTimeout);
         completer.complete();
       } on TimeoutException {
         completer.complete();
@@ -4062,7 +4045,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   Future<void> applyMucBookmarks(List<MucBookmark> bookmarks) async {
     if (bookmarks.isEmpty) return;
     await _applyMucBookmarksState(bookmarks);
-    await refreshRoomAvatars(bookmarks);
     await _autojoinBookmarks(bookmarks);
   }
 
@@ -4135,22 +4117,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         _mucBookmarksSync = null;
       }
     });
-  }
-
-  Future<void> refreshRoomAvatars(List<MucBookmark> bookmarks) async {
-    if (!_mucAvatarSupportEnabled) return;
-    if (bookmarks.isEmpty) return;
-
-    final rooms = <String>{};
-    for (final bookmark in bookmarks) {
-      final roomJid = bookmark.roomBare.toBare().toString().trim();
-      if (roomJid.isEmpty) continue;
-      rooms.add(roomJid);
-    }
-
-    for (final roomJid in rooms) {
-      await _refreshRoomAvatar(roomJid);
-    }
   }
 
   Future<void> _refreshRoomAvatar(
@@ -4703,9 +4669,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
     _scheduleRoomPostJoinRefresh(roomJid);
     _completeJoinAttempt(roomJid);
-    if (event.hasStatus(MucStatusCode.configurationChanged)) {
-      await _refreshRoomAvatar(roomJid);
-    }
     if (event.isAvailable && !event.isNickChange) {
       await _eventManager.executeHandlers(
         MucArchiveSyncRequestedEvent(roomJid: roomJid),

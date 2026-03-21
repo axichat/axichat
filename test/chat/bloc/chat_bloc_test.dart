@@ -271,6 +271,14 @@ void main() {
       (invocation) async =>
           RoomState(roomJid: invocation.namedArguments[#roomJid] as String),
     );
+    when(
+      () => mucService.ensureJoined(
+        roomJid: any(named: 'roomJid'),
+        nickname: any(named: 'nickname'),
+        allowRejoin: any(named: 'allowRejoin'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => mucService.refreshRoomAvatar(any())).thenAnswer((_) async {});
     when(() => mucService.seedDummyRoomData(any())).thenAnswer((_) async {});
     when(
       () => mucService.inviteUserToRoom(
@@ -462,6 +470,26 @@ void main() {
       () =>
           messageService.resendMessage(any(), chatType: any(named: 'chatType')),
     ).thenAnswer((_) async {});
+    when(
+      () => messageService.loadEarlierFromMamForChatSession(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        fallbackBeforeId: any(named: 'fallbackBeforeId'),
+        filter: any(named: 'filter'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.ensureMessageAvailableFromMamForChatSession(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        messageId: any(named: 'messageId'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        fallbackBeforeId: any(named: 'fallbackBeforeId'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async => null);
 
     when(
       () => chatsService.chatStream(any()),
@@ -471,9 +499,8 @@ void main() {
     ).thenAnswer((_) => const Stream<List<String>>.empty());
 
     when(() => chatsService.myJid).thenReturn('self@axi.im');
-    when(() => messageService.database).thenAnswer((_) async => mockDatabase);
     when(
-      () => mockDatabase.countChatMessagesThrough(
+      () => messageService.countChatMessagesThrough(
         any(),
         throughTimestamp: any(named: 'throughTimestamp'),
         throughStanzaId: any(named: 'throughStanzaId'),
@@ -482,30 +509,34 @@ void main() {
       ),
     ).thenAnswer((_) async => 0);
     when(
-      () => mockDatabase.getPinnedMessages(any()),
+      () => messageService.loadPinnedMessages(any()),
     ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
-    when(() => mockDatabase.getChat(any())).thenAnswer(
+    when(
+      () => messageService.loadFileMetadata(any()),
+    ).thenAnswer((_) async => null);
+    when(
+      () => messageService.loadFileMetadataByIds(any()),
+    ).thenAnswer((_) async => const <FileMetadataData>[]);
+    when(
+      () => messageService.loadMessageAttachments(any()),
+    ).thenAnswer((_) async => const <MessageAttachmentData>[]);
+    when(
+      () => messageService.loadMessageAttachmentsForGroup(any()),
+    ).thenAnswer((_) async => const <MessageAttachmentData>[]);
+    when(
+      () => messageService.loadMessageAttachmentsForMessages(any()),
+    ).thenAnswer((_) async => const <String, List<MessageAttachmentData>>{});
+    when(
+      () => messageService.markMessagesDisplayedLocally(
+        messages: any(named: 'messages'),
+        chatJid: any(named: 'chatJid'),
+        selfJid: any(named: 'selfJid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => chatsService.loadChat(any())).thenAnswer(
       (invocation) async =>
           Chat.fromJid(invocation.positionalArguments.first as String),
     );
-    when(
-      () => mockDatabase.countUnreadMessagesForChat(
-        any(),
-        selfJid: any(named: 'selfJid'),
-      ),
-    ).thenAnswer((_) async => 0);
-    when(
-      () => mockDatabase.getMessageAttachments(any()),
-    ).thenAnswer((_) async => const <MessageAttachmentData>[]);
-    when(
-      () => mockDatabase.getMessageAttachmentsForGroup(any()),
-    ).thenAnswer((_) async => const <MessageAttachmentData>[]);
-    when(
-      () => mockDatabase.markMessageDisplayed(
-        any(),
-        chatJid: any(named: 'chatJid'),
-      ),
-    ).thenAnswer((_) async {});
 
     when(
       () => messageService.sendReadMarker(
@@ -1649,7 +1680,7 @@ void main() {
         }
       });
       when(
-        () => mockDatabase.getFileMetadata('forward-welcome-meta'),
+        () => messageService.loadFileMetadata('forward-welcome-meta'),
       ).thenAnswer(
         (_) async => FileMetadataData(
           id: 'forward-welcome-meta',
@@ -1840,6 +1871,9 @@ void main() {
           onLocalMessageStored: any(named: 'onLocalMessageStored'),
         ),
       ).called(1);
+      verify(
+        () => messageService.loadFileMetadata('forward-welcome-meta'),
+      ).called(1);
       verifyNever(
         () => messageService.sendAttachment(
           jid: welcomeChat.jid,
@@ -1929,7 +1963,7 @@ void main() {
         }
       });
       when(
-        () => mockDatabase.getFileMetadata('resend-welcome-meta'),
+        () => messageService.loadFileMetadata('resend-welcome-meta'),
       ).thenAnswer(
         (_) async => FileMetadataData(
           id: 'resend-welcome-meta',
@@ -1978,6 +2012,9 @@ void main() {
           chatType: ChatType.chat,
         ),
       ).called(1);
+      verify(
+        () => messageService.loadFileMetadata('resend-welcome-meta'),
+      ).called(1);
       verifyNever(
         () => messageService.sendAttachment(
           jid: welcomeChat.jid,
@@ -2014,7 +2051,7 @@ void main() {
         }
       });
       when(
-        () => mockDatabase.getFileMetadata('resend-forwarded-meta'),
+        () => messageService.loadFileMetadata('resend-forwarded-meta'),
       ).thenAnswer(
         (_) async => FileMetadataData(
           id: 'resend-forwarded-meta',
@@ -2073,6 +2110,9 @@ void main() {
           upload: any(named: 'upload'),
           onLocalMessageStored: any(named: 'onLocalMessageStored'),
         ),
+      ).called(1);
+      verify(
+        () => messageService.loadFileMetadata('resend-forwarded-meta'),
       ).called(1);
       verifyNever(
         () => messageService.resendMessage(
@@ -2890,10 +2930,13 @@ void main() {
         body: 'Pinned message outside the direct-only view',
       );
       when(
-        () => messageService.loadMessageByStanzaId('filtered-pin'),
+        () => messageService.loadMessageByReferenceId(
+          'filtered-pin',
+          chatJid: initialChat.jid,
+        ),
       ).thenAnswer((_) async => target);
       when(
-        () => mockDatabase.countChatMessagesThrough(
+        () => messageService.countChatMessagesThrough(
           any(),
           throughTimestamp: any(named: 'throughTimestamp'),
           throughStanzaId: any(named: 'throughStanzaId'),
@@ -2933,7 +2976,16 @@ void main() {
           end: any(named: 'end'),
           filter: MessageTimelineFilter.allWithContact,
         ),
-      ).called(1);
+      );
+      verify(
+        () => messageService.countChatMessagesThrough(
+          initialChat.jid,
+          throughTimestamp: target.timestamp!,
+          throughStanzaId: target.stanzaID,
+          throughDeltaMsgId: target.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      );
 
       await bloc.close();
     },
@@ -2956,7 +3008,7 @@ void main() {
         ),
       ).thenAnswer((_) async => target);
       when(
-        () => mockDatabase.countChatMessagesThrough(
+        () => messageService.countChatMessagesThrough(
           any(),
           throughTimestamp: any(named: 'throughTimestamp'),
           throughStanzaId: any(named: 'throughStanzaId'),
@@ -2989,6 +3041,15 @@ void main() {
 
       expect(bloc.state.scrollTargetMessageId, 'filtered-important');
       expect(bloc.state.scrollTargetRequestId, 1);
+      verify(
+        () => messageService.countChatMessagesThrough(
+          initialChat.jid,
+          throughTimestamp: target.timestamp!,
+          throughStanzaId: target.stanzaID,
+          throughDeltaMsgId: target.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).called(1);
 
       await bloc.close();
     },
@@ -3045,9 +3106,12 @@ void main() {
       ).thenAnswer((_) async {});
 
       var targetLookupCount = 0;
-      when(() => messageService.loadMessageByStanzaId(any())).thenAnswer((
-        invocation,
-      ) async {
+      when(
+        () => messageService.loadMessageByReferenceId(
+          any(),
+          chatJid: emailChat.jid,
+        ),
+      ).thenAnswer((invocation) async {
         final messageId = invocation.positionalArguments.first as String;
         if (messageId != target.stanzaID) {
           return null;
@@ -3068,7 +3132,7 @@ void main() {
         return countCalls >= 2 ? 2 : 1;
       });
       when(
-        () => mockDatabase.countChatMessagesThrough(
+        () => messageService.countChatMessagesThrough(
           emailChat.jid,
           throughTimestamp: target.timestamp!,
           throughStanzaId: target.stanzaID,
@@ -3104,7 +3168,16 @@ void main() {
           beforeTimestamp: any(named: 'beforeTimestamp'),
           filter: MessageTimelineFilter.allWithContact,
         ),
-      ).called(1);
+      );
+      verify(
+        () => messageService.countChatMessagesThrough(
+          emailChat.jid,
+          throughTimestamp: target.timestamp!,
+          throughStanzaId: target.stanzaID,
+          throughDeltaMsgId: target.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      );
       verify(
         () => emailService.messageStreamForChat(
           emailChat.jid,
@@ -3195,7 +3268,7 @@ void main() {
         return countCalls >= 2 ? 2 : 1;
       });
       when(
-        () => mockDatabase.countChatMessagesThrough(
+        () => messageService.countChatMessagesThrough(
           emailChat.jid,
           throughTimestamp: target.timestamp!,
           throughStanzaId: target.stanzaID,
@@ -3228,6 +3301,15 @@ void main() {
 
       expect(bloc.state.scrollTargetMessageId, 'email-important-target');
       expect(bloc.state.scrollTargetRequestId, 1);
+      verify(
+        () => messageService.countChatMessagesThrough(
+          emailChat.jid,
+          throughTimestamp: target.timestamp!,
+          throughStanzaId: target.stanzaID,
+          throughDeltaMsgId: target.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      );
 
       await bloc.close();
       await emailMessageStreamController.close();
@@ -3795,6 +3877,185 @@ void main() {
     await connectivityController.close();
   });
 
+  test('opening a direct chat prefetches that peer avatar once', () async {
+    final xmppService = MockXmppService();
+    final connectivityController =
+        StreamController<xmpp.ConnectionState>.broadcast();
+
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(xmpp.ConnectionState.notConnected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => connectivityController.stream);
+    when(
+      () => xmppService.httpUploadSupportStream,
+    ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+    when(
+      () => xmppService.httpUploadSupport,
+    ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(
+      () => xmppService.createChatArchiveSession(),
+    ).thenReturn('xmpp-session-1');
+    when(
+      () => xmppService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => messageStreamController.stream);
+    when(
+      () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => xmppService.syncPinnedMessagesForChat(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.resolvePeerCapabilities(
+        jid: any(named: 'jid'),
+        forceRefresh: any(named: 'forceRefresh'),
+      ),
+    ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+    when(
+      () => xmppService.prefetchAvatarForJid(initialChat.jid),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: xmppService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verify(() => xmppService.prefetchAvatarForJid(initialChat.jid)).called(1);
+
+    chatStreamController.add(initialChat.copyWith(title: 'Renamed peer'));
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyNever(() => xmppService.prefetchAvatarForJid(initialChat.jid));
+
+    await bloc.close();
+    await connectivityController.close();
+  });
+
+  test(
+    'reconnecting a direct chat does not prefetch that peer avatar again',
+    () async {
+      final xmppService = MockXmppService();
+      final connectivityController =
+          StreamController<xmpp.ConnectionState>.broadcast();
+
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(xmpp.ConnectionState.notConnected);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => connectivityController.stream);
+      when(
+        () => xmppService.httpUploadSupportStream,
+      ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+      when(
+        () => xmppService.httpUploadSupport,
+      ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+      when(
+        () => xmppService.createChatArchiveSession(),
+      ).thenReturn('xmpp-session-1');
+      when(
+        () => xmppService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => messageStreamController.stream);
+      when(
+        () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          filter: any(named: 'filter'),
+          visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.catchUpChatFromMamOnConnectForSession(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          filter: any(named: 'filter'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      when(
+        () => xmppService.syncPinnedMessagesForChat(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.resolvePeerCapabilities(
+          jid: any(named: 'jid'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+      when(
+        () => xmppService.prefetchAvatarForJid(initialChat.jid),
+      ).thenAnswer((_) async {});
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: xmppService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(() => xmppService.prefetchAvatarForJid(initialChat.jid)).called(1);
+
+      connectivityController.add(xmpp.ConnectionState.connected);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyNever(() => xmppService.prefetchAvatarForJid(initialChat.jid));
+      verify(
+        () => xmppService.catchUpChatFromMamOnConnectForSession(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          filter: any(named: 'filter'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).called(1);
+
+      await bloc.close();
+      await connectivityController.close();
+    },
+  );
+
   test(
     'room member sections keep participants separate from visitors and skip unresolved occupants',
     () async {
@@ -3980,6 +4241,93 @@ void main() {
     await bloc.close();
     await roomStreamController.close();
   });
+
+  test('opening a group chat refreshes that room avatar once', () async {
+    const roomJid = 'room@conference.axi.im';
+
+    when(
+      () => mucService.roomStateFor(roomJid),
+    ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+    when(
+      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+    ).thenAnswer((_) async => RoomState(roomJid: roomJid, occupants: const {}));
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: null,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(_groupChat(roomJid));
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyInOrder([
+      () => mucService.ensureJoined(
+        roomJid: roomJid,
+        nickname: null,
+        allowRejoin: true,
+      ),
+      () => mucService.refreshRoomAvatar(roomJid),
+    ]);
+
+    chatStreamController.add(_groupChat(roomJid, title: 'Renamed room'));
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyNever(() => mucService.refreshRoomAvatar(roomJid));
+
+    await bloc.close();
+  });
+
+  test(
+    'closing during room join does not refresh the room avatar afterward',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      final joinCompleter = Completer<void>();
+
+      when(
+        () => mucService.roomStateFor(roomJid),
+      ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+        (_) async => RoomState(roomJid: roomJid, occupants: const {}),
+      );
+      when(
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: any(named: 'nickname'),
+          allowRejoin: any(named: 'allowRejoin'),
+        ),
+      ).thenAnswer((_) => joinCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      await bloc.close();
+      joinCompleter.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyNever(() => mucService.refreshRoomAvatar(roomJid));
+    },
+  );
 
   test(
     'closing during room warm-up does not create a late room subscription',

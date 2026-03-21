@@ -105,7 +105,6 @@ mixin RosterService
       (db) => db.saveRosterItems(items),
       awaitDatabase: true,
     );
-    await scheduleAvatarRefresh(items.map((item) => item.jid));
     await _publishConversationIndexForRoster(items);
 
     final version = rosterResult.ver;
@@ -152,7 +151,6 @@ mixin RosterService
         throw XmppRosterException();
       }
     }
-    await scheduleAvatarRefresh([normalized]);
     await _ensureConversationIndexEntryForContact(normalized);
   }
 
@@ -305,9 +303,6 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
         updatedJids.add(item.jid);
       }
     }, awaitDatabase: true);
-    if (updatedJids.isNotEmpty) {
-      await avatarService.scheduleAvatarRefresh(updatedJids);
-    }
     if (createdChatJids.isNotEmpty) {
       for (final jid in createdChatJids) {
         await rosterService._ensureConversationIndexEntryForContact(jid);

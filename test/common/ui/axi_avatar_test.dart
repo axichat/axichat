@@ -113,7 +113,7 @@ void main() {
   });
 
   testWidgets(
-    'hydrated avatars show a spinner while avatar bytes are loading from a path',
+    'hydrated avatars keep the placeholder while avatar bytes load from a path',
     (tester) async {
       final xmppService = _MockXmppService();
       final avatarLoad = Completer<Uint8List?>();
@@ -141,14 +141,14 @@ void main() {
 
       await tester.pump();
 
-      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+      expect(find.byType(AxiProgressIndicator), findsNothing);
 
       avatarLoad.complete(Uint8List.fromList(<int>[1, 2, 3, 4]));
     },
   );
 
   testWidgets(
-    'hydrated avatar spinner clears after avatar bytes finish loading successfully',
+    'hydrated avatars show the image without a spinner after avatar bytes load',
     (tester) async {
       final xmppService = _MockXmppService();
       final avatarLoad = Completer<Uint8List?>();
@@ -175,7 +175,7 @@ void main() {
       );
 
       await tester.pump();
-      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+      expect(find.byType(AxiProgressIndicator), findsNothing);
 
       avatarLoad.complete(Uint8List.fromList(_transparentPngBytes));
       await tester.pumpAndSettle();
@@ -185,7 +185,7 @@ void main() {
   );
 
   testWidgets(
-    'hydrated avatar spinner clears after avatar bytes fail to load',
+    'hydrated avatars do not show a spinner when avatar bytes fail to load',
     (tester) async {
       final xmppService = _MockXmppService();
       final avatarLoad = Completer<Uint8List?>();
@@ -212,12 +212,74 @@ void main() {
       );
 
       await tester.pump();
-      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+      expect(find.byType(AxiProgressIndicator), findsNothing);
 
       avatarLoad.completeError(Exception('avatar load failed'));
       await tester.pumpAndSettle();
 
       expect(find.byType(AxiProgressIndicator), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'hydrated avatars keep the current image visible while a new path resolves',
+    (tester) async {
+      final xmppService = _MockXmppService();
+      final avatarLoad = Completer<Uint8List?>();
+      when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
+      when(
+        () => xmppService.resolveSafeAvatarBytes(
+          avatarPath: any(named: 'avatarPath'),
+          avatarBytes: any(named: 'avatarBytes'),
+        ),
+      ).thenAnswer((invocation) {
+        final path = invocation.namedArguments[#avatarPath] as String?;
+        if (path == '/avatars/new.enc') {
+          return avatarLoad.future;
+        }
+        return Future<Uint8List?>.value(null);
+      });
+
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: HydratedAxiAvatar(
+            avatar: AvatarPresentation.avatar(
+              label: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatar: Avatar(path: '/avatars/old.enc', hash: 'old-hash'),
+              loading: false,
+            ),
+            avatarBytes: Uint8List.fromList(_transparentPngBytes),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Image), findsOneWidget);
+
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: const HydratedAxiAvatar(
+            avatar: AvatarPresentation.avatar(
+              label: 'sample@example.com',
+              colorSeed: 'sample@example.com',
+              avatar: Avatar(path: '/avatars/new.enc', hash: 'new-hash'),
+              loading: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.byType(AxiProgressIndicator), findsNothing);
+
+      avatarLoad.complete(Uint8List.fromList(_transparentPngBytes));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Image), findsOneWidget);
     },
   );
 

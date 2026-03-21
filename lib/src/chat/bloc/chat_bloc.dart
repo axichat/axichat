@@ -1747,6 +1747,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (emit.isDone) return;
       }
       await _ensureMucMembership(event.chat);
+      if (emit.isDone) return;
+      if (resetContext) {
+        await _mucService.refreshRoomAvatar(event.chat.jid);
+      }
     }
   }
 
@@ -3379,7 +3383,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     await _catchUpFromMam();
-    await _prefetchPeerAvatar(chat);
     await _syncPinnedMessagesForChat(chat);
   }
 

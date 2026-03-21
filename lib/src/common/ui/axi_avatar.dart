@@ -382,7 +382,6 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
 
 class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
   Uint8List? _resolvedAvatarBytes;
-  String? _loadingPath;
   Object? _loadToken;
 
   String? get _normalizedAvatarPath {
@@ -437,7 +436,6 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     if (providedBytes != null) {
       setState(() {
         _resolvedAvatarBytes = providedBytes;
-        _loadingPath = null;
       });
       return;
     }
@@ -446,7 +444,6 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     if (path == null) {
       setState(() {
         _resolvedAvatarBytes = null;
-        _loadingPath = null;
       });
       return;
     }
@@ -458,19 +455,12 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     if (safeCached != null && safeCached.isNotEmpty) {
       setState(() {
         _resolvedAvatarBytes = safeCached;
-        _loadingPath = null;
       });
       return;
     }
 
     final loadToken = Object();
     _loadToken = loadToken;
-    setState(() {
-      if (clearStaleBytes) {
-        _resolvedAvatarBytes = null;
-      }
-      _loadingPath = path;
-    });
     Uint8List? safeBytes;
     try {
       safeBytes = await xmpp.resolveSafeAvatarBytes(avatarPath: path);
@@ -486,15 +476,11 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
       } else if (clearStaleBytes) {
         _resolvedAvatarBytes = null;
       }
-      _loadingPath = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final path = _normalizedAvatarPath;
-    final isLoadingAvatarBytes =
-        _providedAvatarBytes == null && path != null && _loadingPath == path;
     final resolvedAvatarPresentation = widget.avatar.isAppIcon
         ? AvatarPresentation.appIcon(
             label: widget.avatar.label,
@@ -504,7 +490,7 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
             label: widget.avatar.label,
             colorSeed: widget.avatar.colorSeed,
             avatar: widget.avatar.avatar,
-            loading: widget.avatar.loading || isLoadingAvatarBytes,
+            loading: widget.avatar.loading,
           );
     return AxiAvatar(
       avatar: resolvedAvatarPresentation,

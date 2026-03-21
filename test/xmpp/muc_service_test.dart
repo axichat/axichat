@@ -2109,11 +2109,15 @@ void main() {
     );
 
     test(
-      'ROOM-AVATAR-002 [HP] MUC vCard avatar updates refresh room avatars',
+      'ROOM-AVATAR-002 [HP] empty MUC vCard avatar hashes clear stored room avatars',
       () async {
-        const roomAvatarHash = 'room-avatar-hash';
-        final encodedAvatar = base64Encode(_pngLikeBytes);
-        await xmppService.setMucServiceHost(_serviceJid);
+        final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
+        await avatarDir.create(recursive: true);
+        final cachedAvatarPath = p.join(
+          avatarDir.path,
+          'cached-room-avatar.enc',
+        );
+        await File(cachedAvatarPath).writeAsBytes(_pngLikeBytes, flush: true);
         when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
           (_) async => Chat(
             jid: _roomJid,
@@ -2122,6 +2126,8 @@ void main() {
             myNickname: _roomNick,
             lastChangeTimestamp: DateTime.timestamp(),
             contactJid: _roomJid,
+            avatarPath: cachedAvatarPath,
+            avatarHash: 'room-avatar-hash',
           ),
         );
         when(
@@ -2131,41 +2137,10 @@ void main() {
             avatarHash: any(named: 'avatarHash'),
           ),
         ).thenAnswer((_) async {});
-        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
-          final details =
-              invocation.positionalArguments.first as mox.StanzaDetails;
-          final stanza = details.stanza;
-          final type = stanza.attributes[_typeAttr]?.toString();
-          if (stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
-              type == _iqTypeGet) {
-            return Future<mox.XMLNode?>.value(
-              mox.Stanza.iq(
-                type: _iqTypeResult,
-                children: [
-                  mox.XMLNode.xmlns(
-                    tag: 'vCard',
-                    xmlns: 'vcard-temp',
-                    children: [
-                      mox.XMLNode(
-                        tag: 'PHOTO',
-                        children: [
-                          mox.XMLNode(tag: 'BINVAL', text: encodedAvatar),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }
-          return Future<mox.XMLNode?>.value(null);
-        });
+        clearInteractions(mockConnection);
 
         eventStreamController.add(
-          RoomVCardAvatarUpdatedEvent(
-            mox.JID.fromString(_roomJid),
-            roomAvatarHash,
-          ),
+          RoomVCardAvatarUpdatedEvent(mox.JID.fromString(_roomJid), ''),
         );
         await pumpEventQueue();
         await pumpEventQueue();
@@ -2173,15 +2148,16 @@ void main() {
         verify(
           () => mockDatabase.updateChatAvatar(
             jid: _roomJid,
-            avatarPath: any(named: 'avatarPath'),
-            avatarHash: any(named: 'avatarHash'),
+            avatarPath: null,
+            avatarHash: null,
           ),
         ).called(1);
+        verifyNever(() => mockConnection.sendStanza(any()));
       },
     );
 
     test(
-      'ROOM-AVATAR-003 [HP] MUC vCard avatar updates use room-info payloads before falling back to vCard',
+      'ROOM-AVATAR-003 [HP] explicit room avatar refresh uses room-info payloads before falling back to vCard',
       () async {
         const roomAvatarHash = 'room-avatar-hash';
         final encodedAvatar = base64Encode(_pngLikeBytes);
@@ -2259,14 +2235,7 @@ void main() {
           return Future<mox.XMLNode?>.value(null);
         });
 
-        eventStreamController.add(
-          RoomVCardAvatarUpdatedEvent(
-            mox.JID.fromString(_roomJid),
-            roomAvatarHash,
-          ),
-        );
-        await pumpEventQueue();
-        await pumpEventQueue();
+        await xmppService.refreshRoomAvatar(_roomJid);
 
         expect(requestedRoomInfo, isTrue);
         expect(requestedRoomVCard, isFalse);
@@ -2281,31 +2250,20 @@ void main() {
     );
 
     test(
-      'ROOM-AVATAR-004 [HP] matching MUC vCard avatar hashes skip room vCard fetches',
+      'ROOM-AVATAR-004 [HP] non-empty MUC vCard avatar updates do not refresh room avatars in background',
       () async {
         const roomAvatarHash = 'room-avatar-hash';
-        final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
-        await avatarDir.create(recursive: true);
-        final cachedAvatarPath = p.join(
-          avatarDir.path,
-          'cached-room-avatar.enc',
-        );
-        await File(cachedAvatarPath).writeAsBytes(_pngLikeBytes, flush: true);
-
-        when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
-          (_) async => Chat(
-            jid: _roomJid,
-            title: _roomName,
-            type: ChatType.groupChat,
-            myNickname: _roomNick,
-            lastChangeTimestamp: DateTime.timestamp(),
-            contactJid: _roomJid,
-            avatarPath: cachedAvatarPath,
-            avatarHash: roomAvatarHash,
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
           ),
-        );
+        ).thenAnswer((_) async {});
 
-        clearInteractions(mockConnection);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => null);
 
         eventStreamController.add(
           RoomVCardAvatarUpdatedEvent(
@@ -2317,11 +2275,18 @@ void main() {
         await pumpEventQueue();
 
         verifyNever(() => mockConnection.sendStanza(any()));
+        verifyNever(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        );
       },
     );
 
     test(
-      'ROOM-AVATAR-005 [HP] matching room-info avatar hashes skip room vCard fetches after join refresh',
+      'ROOM-AVATAR-005 [HP] matching room-info avatar hashes skip room vCard fetches on explicit refresh',
       () async {
         const roomAvatarHash = 'room-avatar-hash';
         final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
@@ -2386,6 +2351,33 @@ void main() {
           return Future<mox.XMLNode?>.value(null);
         });
 
+        await xmppService.refreshRoomAvatar(_roomJid);
+
+        expect(requestedRoomVCard, isFalse);
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-006 [HP] join self presence does not refresh room avatars in background',
+      () async {
+        var requestedRoomInfo = false;
+        var requestedRoomVCard = false;
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final type = stanza.attributes[_typeAttr]?.toString();
+          if (stanza.firstTag(_queryTag, xmlns: _discoInfoXmlns) != null &&
+              type == _iqTypeGet) {
+            requestedRoomInfo = true;
+          }
+          if (stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
+              type == _iqTypeGet) {
+            requestedRoomVCard = true;
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
         eventStreamController.add(
           MucSelfPresenceEvent(
             roomJid: _roomJid,
@@ -2403,6 +2395,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 50));
         await pumpEventQueue(times: 20);
 
+        expect(requestedRoomInfo, isFalse);
         expect(requestedRoomVCard, isFalse);
       },
     );
