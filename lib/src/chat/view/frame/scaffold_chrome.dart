@@ -669,8 +669,12 @@ class _ChatScaffoldAppBar extends StatelessWidget
                         iconData: LucideIcons.arrowLeft,
                         tooltip: context.l10n.commonBack,
                         onPressed: () {
-                          owner._dismissTextInputFocus();
-                          context.read<ChatsCubit>().closeAllChats();
+                          unawaited(
+                            owner._handleCloseAllChatsRequested(
+                              openChatCalendar: showingChatCalendar,
+                              chatState: state,
+                            ),
+                          );
                         },
                       ),
                     if (showCloseButton &&

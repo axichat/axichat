@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
+import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -214,11 +216,13 @@ class _ComposeWindowBody extends StatelessWidget {
     super.key,
     required this.seed,
     required this.availableHeight,
+    required this.draftFormKey,
   });
 
   final int id;
   final ComposeDraftSeed seed;
   final double availableHeight;
+  final GlobalKey<DraftFormState> draftFormKey;
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +232,7 @@ class _ComposeWindowBody extends StatelessWidget {
       child: ComposeDraftContent(
         seed: seed,
         locate: locate,
+        draftFormKey: draftFormKey,
         onClosed: () => context.read<ComposeWindowCubit>().closeWindow(id),
         onDiscarded: () => context.read<ComposeWindowCubit>().closeWindow(id),
         onDraftSaved: (draftId) =>
@@ -258,9 +263,22 @@ class _ComposeWindowShell extends StatefulWidget {
 }
 
 class _ComposeWindowShellState extends State<_ComposeWindowShell> {
+  final GlobalKey<DraftFormState> _draftFormKey = GlobalKey<DraftFormState>();
   Offset? _dragStartPosition;
   Offset? _pointerStart;
   bool _isDragging = false;
+
+  Future<void> _requestClose() async {
+    final draftFormState = _draftFormKey.currentState;
+    if (draftFormState == null) {
+      if (!mounted) {
+        return;
+      }
+      context.read<ComposeWindowCubit>().closeWindow(widget.entry.id);
+      return;
+    }
+    await draftFormState.handleCloseRequest();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -350,8 +368,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
                     : context.read<ComposeWindowCubit>().minimize(entry.id),
                 onToggleExpanded: () =>
                     context.read<ComposeWindowCubit>().toggleExpanded(entry.id),
-                onClose: () =>
-                    context.read<ComposeWindowCubit>().closeWindow(entry.id),
+                onClose: () => unawaited(_requestClose()),
                 onDragStart: (details) =>
                     _handleDragStart(details, resolvedOffset),
                 onDragUpdate: (details) => _handleDragUpdate(
@@ -374,6 +391,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
                       id: entry.id,
                       seed: entry.seed,
                       availableHeight: bodyHeight,
+                      draftFormKey: _draftFormKey,
                     ),
                   ),
                 ),

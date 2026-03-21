@@ -715,6 +715,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                           key: const ValueKey<String>('expanded-composer'),
                           seed: expandedComposerSeed,
                           locate: locate,
+                          draftFormKey: owner._expandedDraftFormKey,
                           onUnexpand: () =>
                               owner._collapseExpandedDraftComposer(
                                 clearInlineComposer: false,

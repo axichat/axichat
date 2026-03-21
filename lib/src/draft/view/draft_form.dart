@@ -76,10 +76,12 @@ class DraftForm extends StatefulWidget {
   final ValueChanged<int>? onDraftSaved;
 
   @override
-  State<DraftForm> createState() => _DraftFormState();
+  State<DraftForm> createState() => DraftFormState();
 }
 
-class _DraftFormState extends State<DraftForm> {
+enum _DraftFormCloseAction { save, discard, cancel }
+
+class DraftFormState extends State<DraftForm> {
   final _formKey = GlobalKey<FormState>();
   bool _showValidationMessages = false;
   String? _sendErrorMessage;
@@ -105,8 +107,10 @@ class _DraftFormState extends State<DraftForm> {
   int? _lastSavedSignature;
   DateTime? _lastAutosaveAt;
   bool _autosaveInFlight = false;
+  Future<void>? _autosaveOperation;
+  Future<void>? _attachmentHydrationOperation;
+  Future<void>? _attachmentPreparationOperation;
   int _saveEpoch = 0;
-  DraftCubit? _draftCubit;
 
   @override
   void initState() {
@@ -119,6 +123,7 @@ class _DraftFormState extends State<DraftForm> {
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
     _recipients = const [];
+    _lastSavedSignature = _savedSignatureFromSeed();
   }
 
   @override
@@ -137,10 +142,7 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
-      final draftCubit = _draftCubit;
-      if (draftCubit != null) {
-        unawaited(_cleanupSeedAttachmentMetadata(draftCubit));
-      }
+      unawaited(_cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>()));
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -189,7 +191,6 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _draftCubit = context.read<DraftCubit>();
     if (_hydrationScheduled || widget.attachmentMetadataIds.isEmpty) {
       return;
     }
@@ -312,6 +313,7 @@ class _DraftFormState extends State<DraftForm> {
                         final subjectText = _subjectTextController.text.trim();
                         final pendingAttachments = _pendingAttachments;
                         final hasAttachments = pendingAttachments.isNotEmpty;
+                        final hasQuoteTarget = widget.quoteTarget != null;
                         final hasPreparingAttachments = pendingAttachments.any(
                           (pending) => pending.isPreparing,
                         );
@@ -334,6 +336,7 @@ class _DraftFormState extends State<DraftForm> {
                             (recipientOnlyDraftAllowed ||
                                 _hasMeaningfulBodyText(bodyText) ||
                                 subjectText.isNotEmpty ||
+                                hasQuoteTarget ||
                                 hasAttachments);
                         final canDiscard =
                             enabled &&
@@ -341,6 +344,7 @@ class _DraftFormState extends State<DraftForm> {
                                 recipientOnlyDraftAllowed ||
                                 _hasMeaningfulBodyText(bodyText) ||
                                 subjectText.isNotEmpty ||
+                                hasQuoteTarget ||
                                 hasAttachments);
                         final sendBlocker = _sendValidationMessage(
                           hasActiveRecipients: hasActiveRecipients,
@@ -460,9 +464,6 @@ class _DraftFormState extends State<DraftForm> {
                                                 style: textTheme.small.copyWith(
                                                   color: colors.mutedForeground,
                                                 ),
-                                              ),
-                                              placeholder: Text(
-                                                l10n.draftSubjectHintOptional,
                                               ),
                                               trailing: widget.subjectTrailing,
                                             ),
@@ -671,6 +672,18 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _hydrateAttachments() async {
+    final operation = _performAttachmentHydration();
+    _attachmentHydrationOperation = operation;
+    try {
+      await operation;
+    } finally {
+      if (_attachmentHydrationOperation == operation) {
+        _attachmentHydrationOperation = null;
+      }
+    }
+  }
+
+  Future<void> _performAttachmentHydration() async {
     if (widget.attachmentMetadataIds.isEmpty) {
       return;
     }
@@ -827,6 +840,18 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleAttachmentAdded() async {
+    final operation = _performAttachmentAdded();
+    _attachmentPreparationOperation = operation;
+    try {
+      await operation;
+    } finally {
+      if (_attachmentPreparationOperation == operation) {
+        _attachmentPreparationOperation = null;
+      }
+    }
+  }
+
+  Future<void> _performAttachmentAdded() async {
     if (_addingAttachment) return;
     setState(() => _addingAttachment = true);
     final attachmentInaccessibleMessage =
@@ -929,6 +954,10 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _handleSaveDraft() async {
     if (_savingDraft) return;
+    await _awaitAttachmentWorkIfNeeded();
+    if (!mounted || _savingDraft) {
+      return;
+    }
     setState(() => _savingDraft = true);
     try {
       await _saveDraft(autoSave: false);
@@ -1028,6 +1057,63 @@ class _DraftFormState extends State<DraftForm> {
     _saveEpoch += 1;
   }
 
+  int? _savedSignatureFromSeed() {
+    if (widget.id == null) {
+      return null;
+    }
+    final recipients = widget.jids
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final attachmentIds = widget.attachmentMetadataIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    return Object.hashAll(<Object?>[
+      widget.body,
+      widget.subject,
+      widget.quoteTarget?.stanzaId,
+      widget.quoteTarget?.referenceKind,
+      ...recipients,
+      ...attachmentIds,
+    ]);
+  }
+
+  Future<void> _awaitAutosaveIfNeeded() async {
+    final operation = _autosaveOperation;
+    if (operation == null) {
+      return;
+    }
+    try {
+      await operation;
+    } on Exception {
+      // Best-effort wait for any in-flight autosave before closing/discarding.
+    }
+  }
+
+  Future<void> _awaitAttachmentWorkIfNeeded() async {
+    while (true) {
+      final hydrationOperation = _attachmentHydrationOperation;
+      if (hydrationOperation != null) {
+        try {
+          await hydrationOperation;
+        } on Exception {
+          // Best-effort wait for attachment hydration before closing/discarding.
+        }
+        continue;
+      }
+      final preparationOperation = _attachmentPreparationOperation;
+      if (preparationOperation == null) {
+        return;
+      }
+      try {
+        await preparationOperation;
+      } on Exception {
+        // Best-effort wait for attachment preparation before closing/discarding.
+      }
+    }
+  }
+
   Future<void> _handleAutosaveTick() async {
     if (!mounted || _autosaveInFlight) {
       return;
@@ -1040,11 +1126,16 @@ class _DraftFormState extends State<DraftForm> {
       return;
     }
     _autosaveInFlight = true;
+    final operation = _saveDraft(autoSave: true);
+    _autosaveOperation = operation;
     try {
-      await _saveDraft(autoSave: true);
+      await operation;
     } on Exception {
       // Best-effort autosave should not block composition.
     } finally {
+      if (_autosaveOperation == operation) {
+        _autosaveOperation = null;
+      }
       _autosaveInFlight = false;
     }
   }
@@ -1066,6 +1157,7 @@ class _DraftFormState extends State<DraftForm> {
     return hasRecipients ||
         _hasMeaningfulBodyText(body) ||
         subject.isNotEmpty ||
+        widget.quoteTarget != null ||
         hasAttachments;
   }
 
@@ -1151,8 +1243,14 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _handleDiscard() async {
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     if (_discardingDraft) return;
-    setState(() => _discardingDraft = true);
     _autosaveTimer?.cancel();
+    await _awaitAttachmentWorkIfNeeded();
+    _autosaveTimer?.cancel();
+    await _awaitAutosaveIfNeeded();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _discardingDraft = true);
     _invalidatePendingSaves();
     try {
       if (id != null) {
@@ -1180,6 +1278,121 @@ class _DraftFormState extends State<DraftForm> {
       if (mounted) {
         setState(() => _discardingDraft = false);
       }
+    }
+  }
+
+  Future<bool> handleCloseRequest() async {
+    if (_savingDraft || _sendingDraft || _discardingDraft) {
+      return false;
+    }
+    _autosaveTimer?.cancel();
+    await _awaitAttachmentWorkIfNeeded();
+    _autosaveTimer?.cancel();
+    await _awaitAutosaveIfNeeded();
+    if (!mounted) {
+      return false;
+    }
+    if (!_shouldPromptBeforeClose()) {
+      _closeComposer();
+      return true;
+    }
+    final action = await _confirmCloseAction();
+    if (!mounted || action == null || action == _DraftFormCloseAction.cancel) {
+      _scheduleAutosave();
+      return false;
+    }
+    if (action == _DraftFormCloseAction.discard) {
+      await _handleDiscard();
+      return true;
+    }
+    final closed = await _saveDraftAndClose();
+    if (!closed) {
+      _scheduleAutosave();
+    }
+    return closed;
+  }
+
+  bool _shouldPromptBeforeClose() {
+    if (_loadingAttachments || _autosaveInFlight) {
+      return true;
+    }
+    final hasDraftContent = _shouldAutosave();
+    if (!hasDraftContent) {
+      return false;
+    }
+    final savedSignature = _lastSavedSignature;
+    if (savedSignature == null) {
+      return true;
+    }
+    return savedSignature != _currentDraftSignature();
+  }
+
+  Future<_DraftFormCloseAction?> _confirmCloseAction() {
+    final l10n = context.l10n;
+    return showFadeScaleDialog<_DraftFormCloseAction>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final pop = Navigator.of(dialogContext).pop;
+        return AxiDialog(
+          constraints: BoxConstraints(
+            maxWidth: dialogContext.sizing.dialogMaxWidth,
+          ),
+          title: Text(
+            l10n.draftCloseComposer,
+            style: dialogContext.modalHeaderTextStyle,
+          ),
+          actions: [
+            AxiButton.outline(
+              onPressed: () => pop(_DraftFormCloseAction.cancel),
+              child: Text(l10n.commonCancel),
+            ),
+            AxiButton.destructive(
+              onPressed: () => pop(_DraftFormCloseAction.discard),
+              child: Text(l10n.draftDiscard),
+            ),
+            AxiButton.primary(
+              onPressed: () => pop(_DraftFormCloseAction.save),
+              child: Text(l10n.draftSave),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _saveDraftAndClose() async {
+    if (_savingDraft) {
+      return false;
+    }
+    setState(() => _savingDraft = true);
+    try {
+      await _saveDraft(autoSave: false);
+    } on Exception {
+      if (mounted) {
+        _showToast(context.l10n.chatDraftSaveFailed);
+      }
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => _savingDraft = false);
+      }
+    }
+    if (!mounted) {
+      return false;
+    }
+    _closeComposer();
+    return true;
+  }
+
+  void _closeComposer() {
+    final onClosed = widget.onClosed;
+    if (onClosed != null) {
+      onClosed();
+      return;
+    }
+    if (Navigator.of(context).canPop()) {
+      context.pop();
     }
   }
 
@@ -1368,12 +1581,7 @@ class _DraftFormState extends State<DraftForm> {
     if (!mounted) {
       return;
     }
-    final onClosed = widget.onClosed;
-    if (onClosed != null) {
-      onClosed();
-    } else if (Navigator.of(context).canPop()) {
-      context.pop();
-    }
+    _closeComposer();
   }
 
   List<String> _recipientStrings() {

@@ -22,6 +22,7 @@ class ComposeDraftContent extends StatelessWidget {
     super.key,
     required this.seed,
     required this.locate,
+    this.draftFormKey,
     this.recipientCountAdjustment = 0,
     this.subjectTrailing,
     this.onClosed,
@@ -31,6 +32,7 @@ class ComposeDraftContent extends StatelessWidget {
 
   final ComposeDraftSeed seed;
   final T Function<T>() locate;
+  final GlobalKey<DraftFormState>? draftFormKey;
   final int recipientCountAdjustment;
   final Widget? subjectTrailing;
   final VoidCallback? onClosed;
@@ -42,6 +44,7 @@ class ComposeDraftContent extends StatelessWidget {
     return _ComposeDraftFormContent(
       seed: seed,
       locate: locate,
+      draftFormKey: draftFormKey,
       recipientCountAdjustment: recipientCountAdjustment,
       subjectTrailing: subjectTrailing,
       onClosed: onClosed,
@@ -57,6 +60,7 @@ class EmbeddedComposeDraftContent extends StatelessWidget {
     super.key,
     required this.seed,
     required this.locate,
+    this.draftFormKey,
     this.recipientCountAdjustment = 0,
     this.subjectTrailing,
     this.onClosed,
@@ -66,6 +70,7 @@ class EmbeddedComposeDraftContent extends StatelessWidget {
 
   final ComposeDraftSeed seed;
   final T Function<T>() locate;
+  final GlobalKey<DraftFormState>? draftFormKey;
   final int recipientCountAdjustment;
   final Widget? subjectTrailing;
   final VoidCallback? onClosed;
@@ -77,6 +82,7 @@ class EmbeddedComposeDraftContent extends StatelessWidget {
     return _ComposeDraftFormContent(
       seed: seed,
       locate: locate,
+      draftFormKey: draftFormKey,
       recipientCountAdjustment: recipientCountAdjustment,
       subjectTrailing: subjectTrailing,
       onClosed: onClosed,
@@ -92,6 +98,7 @@ class _ComposeDraftFormContent extends StatefulWidget {
     required this.seed,
     required this.locate,
     required this.showQuoteBanner,
+    this.draftFormKey,
     this.recipientCountAdjustment = 0,
     this.subjectTrailing,
     this.onClosed,
@@ -102,6 +109,7 @@ class _ComposeDraftFormContent extends StatefulWidget {
   final ComposeDraftSeed seed;
   final T Function<T>() locate;
   final bool showQuoteBanner;
+  final GlobalKey<DraftFormState>? draftFormKey;
   final int recipientCountAdjustment;
   final Widget? subjectTrailing;
   final VoidCallback? onClosed;
@@ -166,6 +174,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
           ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
         };
         return DraftForm(
+          key: widget.draftFormKey,
           id: widget.seed.id,
           jids: widget.seed.jids,
           body: widget.seed.body,

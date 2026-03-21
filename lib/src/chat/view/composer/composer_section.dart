@@ -55,6 +55,7 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
     super.key,
     required this.seed,
     required this.locate,
+    required this.draftFormKey,
     required this.onUnexpand,
     required this.onClosed,
     required this.onDiscarded,
@@ -63,6 +64,7 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
 
   final ComposeDraftSeed seed;
   final T Function<T>() locate;
+  final GlobalKey<DraftFormState> draftFormKey;
   final VoidCallback onUnexpand;
   final VoidCallback onClosed;
   final VoidCallback onDiscarded;
@@ -86,6 +88,7 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
           child: EmbeddedComposeDraftContent(
             seed: seed,
             locate: locate,
+            draftFormKey: draftFormKey,
             recipientCountAdjustment: 1,
             subjectTrailing: AxiIconButton.secondary(
               iconData: LucideIcons.minimize2,
@@ -807,7 +810,9 @@ class _ChatComposerIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final iconColor = colors.mutedForeground;
+    final iconColor = onPressed != null
+        ? (activeColor ?? colors.mutedForeground)
+        : colors.mutedForeground;
     final sizing = context.sizing;
     return AxiIconButton(
       iconData: icon,

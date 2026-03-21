@@ -89,7 +89,6 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
        _emailService = emailService,
        super(const DraftsAvailable(items: null, visibleItems: null)) {
     _draftsSubscription = _messageService.draftsStream().listen((items) {
-      _items = items;
       emit(_stateForItems(items));
     });
   }
@@ -112,11 +111,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   @override
   void onChange(Change<DraftState> change) {
     super.onChange(change);
-    final current = change.currentState;
-    if (current is DraftsAvailable) {
-      cache[itemsCacheKey] = current.items;
-      cache[visibleItemsCacheKey] = current.visibleItems;
-      _items = current.items;
+    final next = change.nextState;
+    if (next is DraftsAvailable) {
+      cache[itemsCacheKey] = next.items;
+      cache[visibleItemsCacheKey] = next.visibleItems;
+      _items = next.items;
     }
   }
 

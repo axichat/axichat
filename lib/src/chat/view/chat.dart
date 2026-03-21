@@ -83,6 +83,7 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
+import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/models/share_context.dart';
@@ -121,7 +122,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:intl/intl.dart' as intl;
-import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -243,6 +243,8 @@ BorderRadius _bubbleBorderRadius({
   );
 }
 
+enum _InlineComposerCloseAction { save, discard, cancel }
+
 class Chat extends StatefulWidget {
   const Chat({
     super.key,
@@ -279,8 +281,11 @@ class _ChatState extends State<Chat> {
   List<ComposerRecipient> _recipients = const [];
   String? _recipientsChatJid;
   int? _expandedComposerDraftId;
+  int _inlineComposerEpoch = 0;
   bool _expandingComposerDraft = false;
   ComposeDraftSeed? _expandedComposerSeed;
+  final GlobalKey<DraftFormState> _expandedDraftFormKey =
+      GlobalKey<DraftFormState>();
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
@@ -328,6 +333,7 @@ class _ChatState extends State<Chat> {
   int? _outsideTapPointer;
   Offset? _outsideTapStart;
   var _sendingAttachment = false;
+  Future<void>? _inlineAttachmentPreparationOperation;
   RequestStatus _shareRequestStatus = RequestStatus.none;
   static const CalendarChatSupport _calendarFragmentPolicy =
       CalendarChatSupport();
@@ -3556,6 +3562,22 @@ class _ChatState extends State<Chat> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _awaitInlineAttachmentPreparationIfNeeded() async {
+    final operation = _inlineAttachmentPreparationOperation;
+    if (operation == null) {
+      return;
+    }
+    try {
+      await operation;
+    } on Exception {
+      // Best-effort wait before saving or closing the inline composer.
+    }
+  }
+
+  bool _isInlineComposerEpochCurrent(int epoch) {
+    return mounted && epoch == _inlineComposerEpoch;
+  }
+
   String _nextLocalPendingAttachmentId() {
     final id = _pendingAttachmentSeed;
     _pendingAttachmentSeed += 1;
@@ -3637,8 +3659,6 @@ class _ChatState extends State<Chat> {
             hasSubject ||
             hasCalendarTask);
     if (!canSend) return;
-    final confirmed = await _confirmMediaMetadataIfNeeded(queuedAttachments);
-    if (!confirmed || !mounted) return;
     final chat = chatState.chat;
     if (chat == null) {
       return;
@@ -3724,29 +3744,6 @@ class _ChatState extends State<Chat> {
     return true;
   }
 
-  Future<bool> _confirmMediaMetadataIfNeeded(
-    List<PendingAttachment> attachments,
-  ) async {
-    if (!mounted) return false;
-    final hasMedia = attachments.any(
-      (attachment) =>
-          attachment.attachment.isImage || attachment.attachment.isVideo,
-    );
-    if (!hasMedia) {
-      return true;
-    }
-    final l10n = context.l10n;
-    final approved = await confirm(
-      context,
-      title: l10n.chatMediaMetadataWarningTitle,
-      message: l10n.chatMediaMetadataWarningMessage,
-      confirmLabel: l10n.commonContinue,
-      cancelLabel: l10n.commonCancel,
-      destructiveConfirm: false,
-    );
-    return approved == true;
-  }
-
   Future<void> _handleSendButtonLongPress() async {
     if (widget.readOnly) return;
     final approved = await confirm(
@@ -3761,13 +3758,17 @@ class _ChatState extends State<Chat> {
     await _saveComposerAsDraft();
   }
 
-  Future<void> _saveComposerAsDraft() async {
+  Future<bool> _saveComposerAsDraft() async {
     final l10n = context.l10n;
+    await _awaitInlineAttachmentPreparationIfNeeded();
+    if (!mounted) {
+      return false;
+    }
     final chatState = context.read<ChatBloc>().state;
     final chat = chatState.chat;
     if (chat == null) {
       _showSnackbar(l10n.chatDraftUnavailable);
-      return;
+      return false;
     }
     final body = _normalizedInlineDraftBody(
       text: _textController.text,
@@ -3778,6 +3779,10 @@ class _ChatState extends State<Chat> {
     final attachments = _pendingAttachments
         .map((pending) => pending.attachment)
         .toList();
+    if (_pendingAttachments.any((pending) => pending.isPreparing)) {
+      _showSnackbar(l10n.chatAttachmentFailed);
+      return false;
+    }
     final quotedReference = _quotedDraft?.replyReference(
       isGroupChat: chat.type == ChatType.groupChat,
     );
@@ -3790,26 +3795,38 @@ class _ChatState extends State<Chat> {
       recipients: _recipients,
     );
     final allowRecipientOnlyDraft = recipients.length - 1 > 0;
-    if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
+    if (body.trim().isEmpty &&
+        trimmedSubject.isEmpty &&
+        attachments.isEmpty &&
+        quoteTarget == null) {
       if (!allowRecipientOnlyDraft) {
         _showSnackbar(l10n.chatDraftMissingContent);
-        return;
+        return false;
       }
     }
     try {
-      await context.read<DraftCubit>().saveDraft(
-        id: null,
+      final draft = await context.read<DraftCubit>().saveDraft(
+        id: _expandedComposerDraftId,
         jids: recipients,
         body: body,
         subject: trimmedSubject.isEmpty ? null : subject,
         quoteTarget: quoteTarget,
         attachments: attachments,
       );
-      if (!mounted) return;
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _expandedComposerDraftId = draft.id;
+      });
       _showSnackbar(l10n.chatDraftSaved);
+      return true;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return false;
+      }
       _showSnackbar(l10n.chatDraftSaveFailed);
+      return false;
     }
   }
 
@@ -3843,9 +3860,8 @@ class _ChatState extends State<Chat> {
     if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
       _dismissTextInputFocus();
       setState(() {
-        _expandedComposerDraftId = null;
         _expandedComposerSeed = ComposeDraftSeed(
-          id: null,
+          id: _expandedComposerDraftId,
           jids: recipients,
           body: body,
           subject: subject,
@@ -3901,6 +3917,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _clearInlineComposerState({required bool clearExpandedComposerDraftId}) {
+    _inlineComposerEpoch += 1;
     _composerHasText = false;
     _quotedDraft = null;
     _pendingAttachments = const [];
@@ -3953,6 +3970,180 @@ class _ChatState extends State<Chat> {
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
   }) => recipients.recipientIds(fallbackJid: chat.jid);
+
+  bool _hasInlineComposerDraftContent(ChatState chatState) {
+    final chat = chatState.chat;
+    if (chat == null) {
+      return false;
+    }
+    final body = _normalizedInlineDraftBody(
+      text: _textController.text,
+      chatState: chatState,
+    );
+    final subject = _subjectController.text.trim();
+    final allowRecipientOnlyDraft =
+        _resolveDraftRecipients(chat: chat, recipients: _recipients).length -
+            1 >
+        0;
+    return allowRecipientOnlyDraft ||
+        body.trim().isNotEmpty ||
+        subject.isNotEmpty ||
+        _quotedDraft != null ||
+        _pendingAttachments.isNotEmpty ||
+        _pendingCalendarTaskIcs != null;
+  }
+
+  Future<_InlineComposerCloseAction?> _confirmInlineComposerClose() {
+    final l10n = context.l10n;
+    return showFadeScaleDialog<_InlineComposerCloseAction>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final pop = Navigator.of(dialogContext).pop;
+        return AxiDialog(
+          constraints: BoxConstraints(
+            maxWidth: dialogContext.sizing.dialogMaxWidth,
+          ),
+          title: Text(
+            l10n.draftCloseComposer,
+            style: dialogContext.modalHeaderTextStyle,
+          ),
+          actions: [
+            AxiButton.outline(
+              onPressed: () => pop(_InlineComposerCloseAction.cancel),
+              child: Text(l10n.commonCancel),
+            ),
+            AxiButton.destructive(
+              onPressed: () => pop(_InlineComposerCloseAction.discard),
+              child: Text(l10n.draftDiscard),
+            ),
+            AxiButton.primary(
+              onPressed: () => pop(_InlineComposerCloseAction.save),
+              child: Text(l10n.chatSaveAsDraft),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _handleInlineComposerCloseRequest(ChatState chatState) async {
+    if (_expandedComposerSeed != null) {
+      final draftFormState = _expandedDraftFormKey.currentState;
+      if (draftFormState == null) {
+        return false;
+      }
+      return draftFormState.handleCloseRequest();
+    }
+    if (!_hasInlineComposerDraftContent(chatState)) {
+      return true;
+    }
+    final action = await _confirmInlineComposerClose();
+    if (!mounted ||
+        action == null ||
+        action == _InlineComposerCloseAction.cancel) {
+      return false;
+    }
+    if (action == _InlineComposerCloseAction.discard) {
+      await _discardInlineComposer();
+      return true;
+    }
+    final saved = await _saveComposerAsDraft();
+    if (!mounted || !saved) {
+      return false;
+    }
+    _resetInlineComposer(clearExpandedComposerDraftId: true);
+    return true;
+  }
+
+  Future<void> _discardInlineComposer() async {
+    final draftId = _expandedComposerDraftId;
+    _resetInlineComposer(clearExpandedComposerDraftId: true);
+    if (draftId == null) {
+      return;
+    }
+    try {
+      await context.read<DraftCubit>().deleteDraft(id: draftId);
+    } on Exception {
+      // Best-effort after local reset; the composer should stay cleared.
+    }
+  }
+
+  Future<void> _handleInlineComposerSendComplete() async {
+    final draftId = _expandedComposerDraftId;
+    _resetInlineComposer(
+      clearExpandedComposerDraftId: true,
+      requestFocus: true,
+    );
+    if (draftId == null) {
+      return;
+    }
+    try {
+      await context.read<DraftCubit>().deleteDraft(id: draftId);
+    } on Exception {
+      // Best-effort after local reset; the composer should stay cleared.
+    }
+  }
+
+  Future<bool> _prepareChatExit({
+    required bool openChatCalendar,
+    required ChatState chatState,
+  }) async {
+    _dismissTextInputFocus();
+    if (!_chatRoute.isMain || openChatCalendar) {
+      _returnToMainRoute();
+      return false;
+    }
+    return _handleInlineComposerCloseRequest(chatState);
+  }
+
+  Future<void> _handleCloseAllChatsRequested({
+    required bool openChatCalendar,
+    required ChatState chatState,
+  }) async {
+    if (!await _prepareChatExit(
+      openChatCalendar: openChatCalendar,
+      chatState: chatState,
+    )) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    context.read<ChatsCubit>().closeAllChats();
+  }
+
+  Future<void> _handlePopChatRequested({
+    required bool openChatCalendar,
+    required ChatState chatState,
+  }) async {
+    if (!await _prepareChatExit(
+      openChatCalendar: openChatCalendar,
+      chatState: chatState,
+    )) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    context.read<ChatsCubit>().popChat();
+  }
+
+  Future<void> _handleRestoreChatRequested({
+    required bool openChatCalendar,
+    required ChatState chatState,
+  }) async {
+    if (!await _prepareChatExit(
+      openChatCalendar: openChatCalendar,
+      chatState: chatState,
+    )) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    context.read<ChatsCubit>().restoreChat();
+  }
 
   Future<void> _handleEditMessage(Message message) async {
     if (!mounted) return;
@@ -4018,7 +4209,20 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleAttachmentPressed(ChatState chatState) async {
+    final operation = _performAttachmentPressed(chatState);
+    _inlineAttachmentPreparationOperation = operation;
+    try {
+      await operation;
+    } finally {
+      if (_inlineAttachmentPreparationOperation == operation) {
+        _inlineAttachmentPreparationOperation = null;
+      }
+    }
+  }
+
+  Future<void> _performAttachmentPressed(ChatState chatState) async {
     if (_sendingAttachment) return;
+    final operationEpoch = _inlineComposerEpoch;
     final l10n = context.l10n;
     setState(() {
       _sendingAttachment = true;
@@ -4029,6 +4233,9 @@ class _ChatState extends State<Chat> {
         withReadStream: false,
       );
       if (result == null || result.files.isEmpty || !mounted) {
+        return;
+      }
+      if (!_isInlineComposerEpochCurrent(operationEpoch)) {
         return;
       }
       final attachments = <Attachment>[];
@@ -4056,7 +4263,7 @@ class _ChatState extends State<Chat> {
         }
         return;
       }
-      if (!mounted) return;
+      if (!_isInlineComposerEpochCurrent(operationEpoch)) return;
       final chat = chatState.chat;
       if (chat == null) {
         return;
@@ -4085,10 +4292,14 @@ class _ChatState extends State<Chat> {
           ),
         );
         final pending = await completer.future;
-        if (!mounted || context.read<ChatBloc>().state.chat?.jid != chatJid) {
+        if (!_isInlineComposerEpochCurrent(operationEpoch) ||
+            context.read<ChatBloc>().state.chat?.jid != chatJid) {
           return;
         }
         _replacePendingAttachment(placeholderId, replacement: pending);
+      }
+      if (!_isInlineComposerEpochCurrent(operationEpoch)) {
+        return;
       }
       if (_quotedDraft != null) {
         setState(() {
@@ -5142,11 +5353,8 @@ class _ChatState extends State<Chat> {
               listenWhen: (previous, current) =>
                   current.composerClearId != 0 &&
                   previous.composerClearId != current.composerClearId,
-              listener: (_, _) {
-                _resetInlineComposer(
-                  clearExpandedComposerDraftId: true,
-                  requestFocus: true,
-                );
+              listener: (_, _) async {
+                await _handleInlineComposerSendComplete();
               },
             ),
             BlocListener<ChatBloc, ChatState>(
@@ -5478,14 +5686,6 @@ class _ChatState extends State<Chat> {
                   chatsState()?.forwardStack ?? const <String>[];
               final bool openChatCalendar =
                   chatsState()?.openChatCalendar ?? false;
-              bool prepareChatExit() {
-                _dismissTextInputFocus();
-                if (!_chatRoute.isMain || openChatCalendar) {
-                  _returnToMainRoute();
-                  return false;
-                }
-                return true;
-              }
 
               final selfUserId = isGroupChat && myOccupantJid != null
                   ? myOccupantJid
@@ -5522,8 +5722,12 @@ class _ChatState extends State<Chat> {
                         label: context.l10n.chatBack,
                         iconData: LucideIcons.arrowLeft,
                         onPressed: () {
-                          if (!prepareChatExit()) return;
-                          context.read<ChatsCubit>().popChat();
+                          unawaited(
+                            _handlePopChatRequested(
+                              openChatCalendar: openChatCalendar,
+                              chatState: state,
+                            ),
+                          );
                         },
                       ),
                     if (!readOnly && forwardStack.isNotEmpty)
@@ -5531,8 +5735,12 @@ class _ChatState extends State<Chat> {
                         label: context.l10n.chatMessageOpenChat,
                         iconData: LucideIcons.arrowRight,
                         onPressed: () {
-                          if (!prepareChatExit()) return;
-                          context.read<ChatsCubit>().restoreChat();
+                          unawaited(
+                            _handleRestoreChatRequested(
+                              openChatCalendar: openChatCalendar,
+                              chatState: state,
+                            ),
+                          );
                         },
                       ),
                   ];
