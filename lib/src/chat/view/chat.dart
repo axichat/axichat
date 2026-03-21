@@ -2868,10 +2868,7 @@ class _ChatState extends State<Chat> {
   Future<void> _showMembers({bool refreshMembership = true}) async {
     final locate = context.read;
     if (refreshMembership) {
-      final completer = Completer<void>();
-      locate<ChatBloc>().add(ChatRoomMembersOpened(completer: completer));
-      await completer.future;
-      if (!mounted) return;
+      locate<ChatBloc>().add(const ChatRoomMembersOpened());
     }
     final navigator = Navigator.of(context);
     final sizing = context.sizing;

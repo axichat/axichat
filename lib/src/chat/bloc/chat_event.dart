@@ -76,12 +76,10 @@ final class ChatImportantMessageSelected extends ChatEvent {
 }
 
 final class ChatRoomMembersOpened extends ChatEvent {
-  const ChatRoomMembersOpened({this.completer});
-
-  final Completer<void>? completer;
+  const ChatRoomMembersOpened();
 
   @override
-  List<Object?> get props => [completer];
+  List<Object?> get props => [];
 }
 
 final class _RoomStateUpdated extends ChatEvent {

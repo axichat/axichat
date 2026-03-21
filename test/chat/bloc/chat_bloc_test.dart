@@ -4438,67 +4438,64 @@ void main() {
     },
   );
 
-  test(
-    'opening room members fetches room affiliations and completes the request',
-    () async {
-      const roomJid = 'room@conference.axi.im';
-      const selfOccupantId = '$roomJid/self';
-      final roomState = RoomState(
-        roomJid: roomJid,
-        myOccupantJid: selfOccupantId,
-        selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
-        occupants: <String, Occupant>{
-          selfOccupantId: _occupant(
-            occupantId: selfOccupantId,
-            nick: 'self',
-            realJid: 'self@axi.im',
-            affiliation: OccupantAffiliation.owner,
-            role: OccupantRole.moderator,
-          ),
-        },
-      );
-
-      when(
-        () => mucService.roomStateFor(roomJid),
-      ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
-      when(
-        () => mucService.warmRoomFromHistory(roomJid: roomJid),
-      ).thenAnswer((_) async => roomState);
-
-      final bloc = ChatBloc(
-        jid: roomJid,
-        messageService: messageService,
-        chatsService: chatsService,
-        mucService: mucService,
-        notificationService: notificationService,
-        emailService: null,
-        settings: _defaultChatSettings(),
-      );
-
-      chatStreamController.add(_groupChat(roomJid));
-      messageStreamController.add(const <Message>[]);
-      await _pumpBloc();
-      await _pumpBloc();
-      clearInteractions(mucService);
-
-      final completer = Completer<void>();
-      bloc.add(ChatRoomMembersOpened(completer: completer));
-      await completer.future;
-
-      verifyInOrder([
-        () => mucService.ensureJoined(
-          roomJid: roomJid,
-          nickname: null,
-          allowRejoin: true,
+  test('opening room members fetches room affiliations', () async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    final roomState = RoomState(
+      roomJid: roomJid,
+      myOccupantJid: selfOccupantId,
+      selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+      occupants: <String, Occupant>{
+        selfOccupantId: _occupant(
+          occupantId: selfOccupantId,
+          nick: 'self',
+          realJid: 'self@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
         ),
-        () => mucService.fetchRoomMembers(roomJid: roomJid),
-        () => mucService.fetchRoomOwners(roomJid: roomJid),
-        () => mucService.fetchRoomAdmins(roomJid: roomJid),
-      ]);
+      },
+    );
 
-      await bloc.close();
-    },
-  );
+    when(
+      () => mucService.roomStateFor(roomJid),
+    ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+    when(
+      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+    ).thenAnswer((_) async => roomState);
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: null,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(_groupChat(roomJid));
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+    clearInteractions(mucService);
+
+    bloc.add(const ChatRoomMembersOpened());
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyInOrder([
+      () => mucService.ensureJoined(
+        roomJid: roomJid,
+        nickname: null,
+        allowRejoin: true,
+      ),
+      () => mucService.fetchRoomMembers(roomJid: roomJid),
+      () => mucService.fetchRoomOwners(roomJid: roomJid),
+      () => mucService.fetchRoomAdmins(roomJid: roomJid),
+    ]);
+
+    await bloc.close();
+  });
 
   test('reopening room members fetches room affiliations again', () async {
     const roomJid = 'room@conference.axi.im';
@@ -4541,13 +4538,13 @@ void main() {
     await _pumpBloc();
     clearInteractions(mucService);
 
-    final firstCompleter = Completer<void>();
-    bloc.add(ChatRoomMembersOpened(completer: firstCompleter));
-    await firstCompleter.future;
+    bloc.add(const ChatRoomMembersOpened());
+    await _pumpBloc();
+    await _pumpBloc();
 
-    final secondCompleter = Completer<void>();
-    bloc.add(ChatRoomMembersOpened(completer: secondCompleter));
-    await secondCompleter.future;
+    bloc.add(const ChatRoomMembersOpened());
+    await _pumpBloc();
+    await _pumpBloc();
 
     verify(() => mucService.fetchRoomMembers(roomJid: roomJid)).called(2);
     verify(() => mucService.fetchRoomOwners(roomJid: roomJid)).called(2);
