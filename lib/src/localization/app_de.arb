@@ -220,6 +220,7 @@
   "draftSend": "Entwurf senden",
   "draftDiscard": "Verwerfen",
   "draftSave": "Entwurf speichern",
+  "draftUnsavedChangesTitle": "Ungespeicherte Änderungen",
   "draftAttachmentInaccessible": "Die ausgewählte Datei ist nicht zugänglich.",
   "draftAttachmentFailed": "Datei konnte nicht angehängt werden.",
   "draftDiscarded": "Entwurf verworfen.",

@@ -721,6 +721,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get draftSave => 'Guardar borrador';
 
   @override
+  String get draftUnsavedChangesTitle => 'Cambios sin guardar';
+
+  @override
   String get draftAttachmentInaccessible =>
       'El archivo seleccionado no es accesible.';
 

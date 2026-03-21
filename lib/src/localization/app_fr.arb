@@ -221,6 +221,7 @@
   "draftSend": "Envoyer le brouillon",
   "draftDiscard": "Supprimer",
   "draftSave": "Enregistrer le brouillon",
+  "draftUnsavedChangesTitle": "Modifications non enregistrées",
   "draftAttachmentInaccessible": "Le fichier sélectionné n’est pas accessible.",
   "draftAttachmentFailed": "Impossible de joindre le fichier.",
   "draftDiscarded": "Brouillon supprimé.",

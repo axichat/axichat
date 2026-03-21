@@ -24,7 +24,6 @@ class ComposeScreen extends StatefulWidget {
 
 class _ComposeScreenState extends State<ComposeScreen> {
   final GlobalKey<DraftFormState> _draftFormKey = GlobalKey<DraftFormState>();
-  var _allowPop = false;
 
   Future<void> _requestClose() async {
     final draftFormState = _draftFormKey.currentState;
@@ -39,10 +38,12 @@ class _ComposeScreenState extends State<ComposeScreen> {
     if (!mounted) {
       return;
     }
-    setState(() {
-      _allowPop = true;
-    });
     Navigator.of(context).pop();
+  }
+
+  Future<bool> _handleWillPop() async {
+    await _requestClose();
+    return false;
   }
 
   @override
@@ -52,14 +53,8 @@ class _ComposeScreenState extends State<ComposeScreen> {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-    return PopScope(
-      canPop: _allowPop,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop || _allowPop) {
-          return;
-        }
-        unawaited(_requestClose());
-      },
+    return WillPopScope(
+      onWillPop: _handleWillPop,
       child: Scaffold(
         backgroundColor: colors.background,
         appBar: AppBar(

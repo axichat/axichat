@@ -679,6 +679,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSave => '保存草稿';
 
   @override
+  String get draftUnsavedChangesTitle => '未保存的更改';
+
+  @override
   String get draftAttachmentInaccessible => '所选文件不可访问。';
 
   @override
@@ -6699,6 +6702,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get draftSave => '儲存草稿';
+
+  @override
+  String get draftUnsavedChangesTitle => '未儲存的變更';
 
   @override
   String get draftAttachmentInaccessible => '所選檔案無法存取。';

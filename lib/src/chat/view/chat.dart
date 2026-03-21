@@ -4011,29 +4011,59 @@ class _ChatState extends State<Chat> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
+        var saving = false;
         final pop = Navigator.of(dialogContext).pop;
-        return AxiDialog(
-          constraints: BoxConstraints(
-            maxWidth: dialogContext.sizing.dialogMaxWidth,
-          ),
-          title: Text(
-            l10n.draftCloseComposer,
-            style: dialogContext.modalHeaderTextStyle,
-          ),
-          actions: [
-            AxiButton.outline(
-              onPressed: () => pop(_InlineComposerCloseAction.cancel),
-              child: Text(l10n.commonCancel),
-            ),
-            AxiButton.destructive(
-              onPressed: () => pop(_InlineComposerCloseAction.discard),
-              child: Text(l10n.draftDiscard),
-            ),
-            AxiButton.primary(
-              onPressed: () => pop(_InlineComposerCloseAction.save),
-              child: Text(l10n.chatSaveAsDraft),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> handleSave() async {
+              if (saving) {
+                return;
+              }
+              setState(() {
+                saving = true;
+              });
+              final saved = await _saveComposerAsDraft();
+              if (!dialogContext.mounted) {
+                return;
+              }
+              if (saved) {
+                pop(_InlineComposerCloseAction.save);
+                return;
+              }
+              setState(() {
+                saving = false;
+              });
+            }
+
+            return AxiDialog(
+              constraints: BoxConstraints(
+                maxWidth: dialogContext.sizing.dialogMaxWidth,
+              ),
+              title: Text(
+                l10n.draftUnsavedChangesTitle,
+                style: dialogContext.modalHeaderTextStyle,
+              ),
+              actions: [
+                AxiButton.outline(
+                  onPressed: saving
+                      ? null
+                      : () => pop(_InlineComposerCloseAction.cancel),
+                  child: Text(l10n.commonCancel),
+                ),
+                AxiButton.destructive(
+                  onPressed: saving
+                      ? null
+                      : () => pop(_InlineComposerCloseAction.discard),
+                  child: Text(l10n.draftDiscard),
+                ),
+                AxiButton.primary(
+                  onPressed: saving ? null : () => unawaited(handleSave()),
+                  loading: saving,
+                  child: Text(l10n.chatSaveAsDraft),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -4059,10 +4089,6 @@ class _ChatState extends State<Chat> {
     if (action == _InlineComposerCloseAction.discard) {
       await _discardInlineComposer();
       return true;
-    }
-    final saved = await _saveComposerAsDraft();
-    if (!mounted || !saved) {
-      return false;
     }
     _resetInlineComposer(clearExpandedComposerDraftId: true);
     return true;

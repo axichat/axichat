@@ -709,6 +709,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftSave => 'Save draft';
 
   @override
+  String get draftUnsavedChangesTitle => 'Unsaved changes';
+
+  @override
   String get draftAttachmentInaccessible => 'Selected file is not accessible.';
 
   @override

@@ -1371,6 +1371,12 @@ abstract class AppLocalizations {
   /// **'Save draft'**
   String get draftSave;
 
+  /// No description provided for @draftUnsavedChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved changes'**
+  String get draftUnsavedChangesTitle;
+
   /// No description provided for @draftAttachmentInaccessible.
   ///
   /// In en, this message translates to:

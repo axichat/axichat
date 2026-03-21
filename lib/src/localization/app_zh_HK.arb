@@ -220,6 +220,7 @@
   "draftSend": "傳送草稿",
   "draftDiscard": "捨棄",
   "draftSave": "儲存草稿",
+  "draftUnsavedChangesTitle": "未儲存的變更",
   "draftAttachmentInaccessible": "所選檔案無法存取。",
   "draftAttachmentFailed": "無法附加檔案。",
   "draftDiscarded": "草稿已捨棄。",

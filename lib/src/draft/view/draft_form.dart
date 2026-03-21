@@ -1339,7 +1339,7 @@ class DraftFormState extends State<DraftForm> {
             maxWidth: dialogContext.sizing.dialogMaxWidth,
           ),
           title: Text(
-            l10n.draftCloseComposer,
+            l10n.draftUnsavedChangesTitle,
             style: dialogContext.modalHeaderTextStyle,
           ),
           actions: [

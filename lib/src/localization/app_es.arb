@@ -221,6 +221,7 @@
   "draftSend": "Enviar borrador",
   "draftDiscard": "Descartar",
   "draftSave": "Guardar borrador",
+  "draftUnsavedChangesTitle": "Cambios sin guardar",
   "draftAttachmentInaccessible": "El archivo seleccionado no es accesible.",
   "draftAttachmentFailed": "No se pudo adjuntar el archivo.",
   "draftDiscarded": "Borrador descartado.",

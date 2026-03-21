@@ -282,6 +282,7 @@
   "emailSendConfirmDontShowAgain": "Don't show this again",
   "draftDiscard": "Discard",
   "draftSave": "Save draft",
+  "draftUnsavedChangesTitle": "Unsaved changes",
   "draftAttachmentInaccessible": "Selected file is not accessible.",
   "draftAttachmentFailed": "Unable to attach file.",
   "draftDiscarded": "Draft discarded.",

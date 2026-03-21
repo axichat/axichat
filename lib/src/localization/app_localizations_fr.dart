@@ -724,6 +724,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftSave => 'Enregistrer le brouillon';
 
   @override
+  String get draftUnsavedChangesTitle => 'Modifications non enregistrées';
+
+  @override
   String get draftAttachmentInaccessible =>
       'Le fichier sélectionné n’est pas accessible.';
 
