@@ -110,11 +110,114 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
   }
 }
 
-class _ChatComposerSection extends StatelessWidget {
+class _InlineComposerController {
+  _InlineComposerBinding? _binding;
+  TextEditingValue _textValue = const TextEditingValue(
+    text: '',
+    selection: TextSelection.collapsed(offset: 0),
+    composing: TextRange.empty,
+  );
+  String _subject = '';
+  var _requestTextFocusOnAttach = false;
+  var _requestSubjectFocusOnAttach = false;
+  var _unfocusOnAttach = false;
+
+  String get text => _binding?.text ?? _textValue.text;
+
+  TextSelection get textSelection =>
+      _binding?.textSelection ?? _textValue.selection;
+
+  String get subject => _binding?.subject ?? _subject;
+
+  bool get hasTextFocus => _binding?.hasTextFocus ?? false;
+
+  void setTextValue(TextEditingValue value) {
+    _textValue = value;
+    _binding?.setTextValue(value);
+  }
+
+  void setSubjectText(String text) {
+    _subject = text;
+    _binding?.setSubjectText(text);
+  }
+
+  void clear() {
+    setSubjectText('');
+    setTextValue(
+      const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+        composing: TextRange.empty,
+      ),
+    );
+  }
+
+  void requestTextFocus() {
+    _requestTextFocusOnAttach = true;
+    _requestSubjectFocusOnAttach = false;
+    _unfocusOnAttach = false;
+    _binding?.requestTextFocus();
+  }
+
+  void requestSubjectFocus() {
+    _requestSubjectFocusOnAttach = true;
+    _requestTextFocusOnAttach = false;
+    _unfocusOnAttach = false;
+    _binding?.requestSubjectFocus();
+  }
+
+  void unfocus() {
+    _unfocusOnAttach = true;
+    _requestTextFocusOnAttach = false;
+    _requestSubjectFocusOnAttach = false;
+    _binding?.unfocus();
+  }
+
+  void _attach(_InlineComposerBinding binding) {
+    _binding = binding;
+    binding.setSubjectText(_subject);
+    binding.setTextValue(_textValue);
+    if (_unfocusOnAttach) {
+      binding.unfocus();
+      _unfocusOnAttach = false;
+      return;
+    }
+    if (_requestSubjectFocusOnAttach) {
+      binding.requestSubjectFocus();
+      _requestSubjectFocusOnAttach = false;
+      return;
+    }
+    if (_requestTextFocusOnAttach) {
+      binding.requestTextFocus();
+      _requestTextFocusOnAttach = false;
+    }
+  }
+
+  void _detach(_InlineComposerBinding binding) {
+    if (identical(_binding, binding)) {
+      _binding = null;
+    }
+  }
+}
+
+abstract class _InlineComposerBinding {
+  String get text;
+  TextSelection get textSelection;
+  String get subject;
+  bool get hasTextFocus;
+  void setTextValue(TextEditingValue value);
+  void setSubjectText(String text);
+  void requestTextFocus();
+  void requestSubjectFocus();
+  void unfocus();
+}
+
+class _ChatComposerSection extends StatefulWidget {
   const _ChatComposerSection({
     super.key,
     this.enabled = true,
     required this.hintText,
+    required this.controller,
     required this.recipients,
     required this.availableChats,
     required this.latestStatuses,
@@ -125,11 +228,9 @@ class _ChatComposerSection extends StatelessWidget {
     required this.composerMaxLines,
     required this.selfJid,
     required this.selfIdentity,
-    required this.subjectController,
-    required this.subjectFocusNode,
-    required this.textController,
-    required this.textFocusNode,
     required this.tapRegionGroup,
+    required this.onTextChanged,
+    required this.onSubjectChanged,
     required this.onSubjectSubmitted,
     required this.showExpandDraftAction,
     required this.expandDraftEnabled,
@@ -156,6 +257,7 @@ class _ChatComposerSection extends StatelessWidget {
 
   final bool enabled;
   final String hintText;
+  final _InlineComposerController controller;
   final List<ComposerRecipient> recipients;
   final List<chat_models.Chat> availableChats;
   final Map<String, FanOutRecipientState> latestStatuses;
@@ -166,11 +268,9 @@ class _ChatComposerSection extends StatelessWidget {
   final int composerMaxLines;
   final String? selfJid;
   final SelfAvatar selfIdentity;
-  final TextEditingController subjectController;
-  final FocusNode subjectFocusNode;
-  final TextEditingController textController;
-  final FocusNode textFocusNode;
   final Object tapRegionGroup;
+  final ValueChanged<String> onTextChanged;
+  final ValueChanged<String> onSubjectChanged;
   final VoidCallback onSubjectSubmitted;
   final bool showExpandDraftAction;
   final bool expandDraftEnabled;
@@ -184,7 +284,11 @@ class _ChatComposerSection extends StatelessWidget {
   final ValueChanged<PendingAttachment>? onPendingAttachmentLongPressed;
   final List<Widget> Function(PendingAttachment pending)?
   pendingAttachmentMenuBuilder;
-  final List<ChatComposerAccessory> Function({required bool canSend})
+  final List<ChatComposerAccessory> Function({
+    required bool canSend,
+    required TextEditingController textController,
+    required FocusNode attachmentButtonFocusNode,
+  })
   buildComposerAccessories;
   final bool sendOnEnter;
   final VoidCallback onSend;
@@ -197,10 +301,136 @@ class _ChatComposerSection extends StatelessWidget {
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
 
   @override
+  State<_ChatComposerSection> createState() => _ChatComposerSectionState();
+}
+
+class _ChatComposerSectionState extends State<_ChatComposerSection>
+    implements _InlineComposerBinding {
+  late final TextEditingController _subjectController;
+  late final FocusNode _subjectFocusNode;
+  late final TextEditingController _textController;
+  late final FocusNode _textFocusNode;
+  late final FocusNode _attachmentButtonFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _subjectController = TextEditingController();
+    _subjectFocusNode = FocusNode()..onKeyEvent = _handleSubjectKeyEvent;
+    _textController = TextEditingController()..addListener(_handleTextChanged);
+    _textFocusNode = FocusNode()..onKeyEvent = _handleComposerKeyEvent;
+    _attachmentButtonFocusNode = FocusNode();
+    _subjectController.addListener(_handleSubjectChanged);
+    widget.controller._attach(this);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatComposerSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller)) {
+      oldWidget.controller._detach(this);
+      widget.controller._attach(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller._detach(this);
+    _subjectController.removeListener(_handleSubjectChanged);
+    _subjectController.dispose();
+    _subjectFocusNode.dispose();
+    _textController.removeListener(_handleTextChanged);
+    _textController.dispose();
+    _textFocusNode.dispose();
+    _attachmentButtonFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleTextChanged() {
+    widget.onTextChanged(_textController.text);
+  }
+
+  void _handleSubjectChanged() {
+    widget.onSubjectChanged(_subjectController.text);
+  }
+
+  KeyEventResult _handleSubjectKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.tab &&
+        !HardwareKeyboard.instance.isShiftPressed &&
+        mounted) {
+      _textFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.tab && mounted) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        _subjectFocusNode.requestFocus();
+      } else if (_attachmentButtonFocusNode.canRequestFocus) {
+        _attachmentButtonFocusNode.requestFocus();
+      } else {
+        FocusScope.of(context).nextFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  String get text => _textController.text;
+
+  @override
+  TextSelection get textSelection => _textController.selection;
+
+  @override
+  String get subject => _subjectController.text;
+
+  @override
+  bool get hasTextFocus => _textFocusNode.hasFocus;
+
+  @override
+  void setTextValue(TextEditingValue value) {
+    _textController.value = value;
+  }
+
+  @override
+  void setSubjectText(String text) {
+    _subjectController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  @override
+  void requestTextFocus() {
+    _textFocusNode.requestFocus();
+  }
+
+  @override
+  void requestSubjectFocus() {
+    _subjectFocusNode.requestFocus();
+  }
+
+  @override
+  void unfocus() {
+    _textFocusNode.unfocus();
+    _subjectFocusNode.unfocus();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final myJid = selfJid;
+    final myJid = widget.selfJid;
     final suggestionAddresses = <String>{
       if (myJid != null && myJid.isNotEmpty) myJid,
     };
@@ -216,6 +446,7 @@ class _ChatComposerSection extends StatelessWidget {
         : composerHorizontalInset;
     final cutoutBalanceInset = context.sizing.iconButtonTapTarget / 2;
     final rightPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
+    final pendingAttachments = widget.pendingAttachments;
     final hasQueuedAttachments = pendingAttachments.any(
       (attachment) =>
           attachment.status == PendingAttachmentStatus.queued &&
@@ -224,21 +455,21 @@ class _ChatComposerSection extends StatelessWidget {
     final hasPreparingAttachments = pendingAttachments.any(
       (attachment) => attachment.isPreparing,
     );
-    final hasSubjectText = subjectController.text.trim().isNotEmpty;
-    final hasRecipients = recipients.isNotEmpty;
+    final hasSubjectText = _subjectController.text.trim().isNotEmpty;
+    final hasRecipients = widget.recipients.isNotEmpty;
     final sendEnabled =
-        enabled &&
+        widget.enabled &&
         !hasPreparingAttachments &&
         hasRecipients &&
-        (composerHasText || hasQueuedAttachments || hasSubjectText);
+        (widget.composerHasText || hasQueuedAttachments || hasSubjectText);
     final subjectHeader = _SubjectTextField(
-      enabled: enabled,
-      controller: subjectController,
-      focusNode: subjectFocusNode,
-      onSubmitted: onSubjectSubmitted,
-      showExpandDraftAction: showExpandDraftAction,
-      expandDraftEnabled: expandDraftEnabled,
-      onExpandDraftPressed: onExpandDraftPressed,
+      enabled: widget.enabled,
+      controller: _subjectController,
+      focusNode: _subjectFocusNode,
+      onSubmitted: widget.onSubjectSubmitted,
+      showExpandDraftAction: widget.showExpandDraftAction,
+      expandDraftEnabled: widget.expandDraftEnabled,
+      onExpandDraftPressed: widget.onExpandDraftPressed,
     );
     final showAttachmentTray = pendingAttachments.isNotEmpty;
     final commandSurface = resolveCommandSurface(context);
@@ -248,12 +479,14 @@ class _ChatComposerSection extends StatelessWidget {
     if (showAttachmentTray) {
       attachmentTray = PendingAttachmentList(
         attachments: pendingAttachments,
-        onRetry: onAttachmentRetry,
-        onRemove: onAttachmentRemove,
-        onPressed: onPendingAttachmentPressed,
-        onLongPress: useDesktopMenu ? null : onPendingAttachmentLongPressed,
+        onRetry: widget.onAttachmentRetry,
+        onRemove: widget.onAttachmentRemove,
+        onPressed: widget.onPendingAttachmentPressed,
+        onLongPress: useDesktopMenu
+            ? null
+            : widget.onPendingAttachmentLongPressed,
         contextMenuBuilder: useDesktopMenu
-            ? pendingAttachmentMenuBuilder
+            ? widget.pendingAttachmentMenuBuilder
             : null,
       );
     }
@@ -286,20 +519,24 @@ class _ChatComposerSection extends StatelessWidget {
                     SizedBox(height: spacing.m),
                   ],
                   _ComposerTaskDropRegion(
-                    onTaskDropped: onTaskDropped,
+                    onTaskDropped: widget.onTaskDropped,
                     child: ChatCutoutComposer(
-                      controller: textController,
-                      focusNode: textFocusNode,
-                      hintText: hintText,
-                      minLines: composerMinLines,
-                      maxLines: composerMaxLines,
+                      controller: _textController,
+                      focusNode: _textFocusNode,
+                      hintText: widget.hintText,
+                      minLines: widget.composerMinLines,
+                      maxLines: widget.composerMaxLines,
                       semanticsLabel: context.l10n.chatComposerSemantics,
-                      onSend: onSend,
+                      onSend: widget.onSend,
                       header: subjectHeader,
-                      actions: buildComposerAccessories(canSend: sendEnabled),
+                      actions: widget.buildComposerAccessories(
+                        canSend: sendEnabled,
+                        textController: _textController,
+                        attachmentButtonFocusNode: _attachmentButtonFocusNode,
+                      ),
                       sendEnabled: sendEnabled,
-                      sendOnEnter: sendOnEnter,
-                      enabled: enabled,
+                      sendOnEnter: widget.sendOnEnter,
+                      enabled: widget.enabled,
                     ),
                   ),
                 ],
@@ -310,8 +547,7 @@ class _ChatComposerSection extends StatelessWidget {
       ),
     );
     final locate = context.read;
-    final children = <Widget>[];
-    children.add(
+    final children = <Widget>[
       BlocSelector<ChatsCubit, ChatsState, List<String>>(
         bloc: locate<ChatsCubit>(),
         selector: (state) => state.recipientAddressSuggestions,
@@ -322,34 +558,34 @@ class _ChatComposerSection extends StatelessWidget {
                   as List<RosterItem>?) ??
               const <RosterItem>[];
           return RecipientChipsBar(
-            recipients: recipients,
-            availableChats: availableChats,
+            recipients: widget.recipients,
+            availableChats: widget.availableChats,
             rosterItems: rosterItems,
             databaseSuggestionAddresses: recipientAddressSuggestions,
             selfJid: locate<ChatsCubit>().selfJid,
-            selfIdentity: selfIdentity,
-            latestStatuses: latestStatuses,
+            selfIdentity: widget.selfIdentity,
+            latestStatuses: widget.latestStatuses,
             collapsedByDefault: true,
             suggestionAddresses: suggestionAddresses,
             suggestionDomains: suggestionDomains,
-            onRecipientAdded: onRecipientAdded,
-            onRecipientRemoved: onRecipientRemoved,
-            onRecipientToggled: onRecipientToggled,
-            visibilityLabel: visibilityLabel,
-            tapRegionGroup: tapRegionGroup,
+            onRecipientAdded: widget.onRecipientAdded,
+            onRecipientRemoved: widget.onRecipientRemoved,
+            onRecipientToggled: widget.onRecipientToggled,
+            visibilityLabel: widget.visibilityLabel,
+            tapRegionGroup: widget.tapRegionGroup,
           );
         },
       ),
-    );
-    children.add(Opacity(opacity: enabled ? 1.0 : 0.56, child: composer));
+      Opacity(opacity: widget.enabled ? 1.0 : 0.56, child: composer),
+    ];
     final content = TapRegion(
-      groupId: tapRegionGroup,
+      groupId: widget.tapRegionGroup,
       onTapUpOutside: (_) {
-        if (!textFocusNode.hasFocus && !subjectFocusNode.hasFocus) {
+        if (!_textFocusNode.hasFocus && !_subjectFocusNode.hasFocus) {
           return;
         }
-        textFocusNode.unfocus();
-        subjectFocusNode.unfocus();
+        _textFocusNode.unfocus();
+        _subjectFocusNode.unfocus();
       },
       child: Padding(
         padding: EdgeInsets.zero,
@@ -359,7 +595,7 @@ class _ChatComposerSection extends StatelessWidget {
         ),
       ),
     );
-    if (enabled) {
+    if (widget.enabled) {
       return content;
     }
     return IgnorePointer(child: content);

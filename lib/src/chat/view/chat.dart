@@ -267,11 +267,8 @@ class _ChatState extends State<Chat> {
   static bool get _debugCycleComposerBanners => kDebugMode && false;
 
   late final ShadPopoverController _emojiPopoverController;
-  late final FocusNode _focusNode;
-  late final TextEditingController _textController;
-  late final TextEditingController _subjectController;
-  late final FocusNode _subjectFocusNode;
-  late final FocusNode _attachmentButtonFocusNode;
+  late Key _inlineComposerKey;
+  late _InlineComposerController _inlineComposerController;
   late ScrollController _scrollController;
   bool _composerHasText = false;
 
@@ -348,7 +345,6 @@ class _ChatState extends State<Chat> {
   Message? _quotedDraft;
   List<PendingAttachment> _pendingAttachments = const [];
   var _pendingAttachmentSeed = 0;
-  var _inlineComposerSessionId = 0;
   var _handledPendingOpenMessageRequestId = 0;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
@@ -369,9 +365,13 @@ class _ChatState extends State<Chat> {
       MediaQuery.maybeOf(context)?.gestureSettings.touchSlop ?? kTouchSlop;
 
   void _dismissTextInputFocus() {
-    _focusNode.unfocus();
-    _subjectFocusNode.unfocus();
+    _inlineComposerController.unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _recreateInlineComposer() {
+    _inlineComposerKey = UniqueKey();
+    _inlineComposerController = _InlineComposerController();
   }
 
   void _armOutsideTapDismiss(PointerDownEvent event) {
@@ -422,8 +422,7 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  void _typingListener() {
-    final text = _textController.text;
+  void _handleComposerTextChanged(String text) {
     final hasText = text.isNotEmpty;
     final chatState = context.read<ChatBloc>().state;
     final settings = context.read<SettingsCubit>().state;
@@ -679,17 +678,19 @@ class _ChatState extends State<Chat> {
   void _appendTaskShareText(CalendarTask task, {String? shareText}) {
     final String resolvedShareText =
         shareText ?? task.toShareText(context.l10n);
-    final String existing = _textController.text;
+    final String existing = _inlineComposerController.text;
     final String separator = existing.trim().isEmpty
         ? _emptyText
         : _composerShareSeparator;
     final String nextText = '$existing$separator$resolvedShareText';
-    _textController.value = _textController.value.copyWith(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: nextText.length),
-      composing: TextRange.empty,
+    _inlineComposerController.setTextValue(
+      TextEditingValue(
+        text: nextText,
+        selection: TextSelection.collapsed(offset: nextText.length),
+        composing: TextRange.empty,
+      ),
     );
-    _focusNode.requestFocus();
+    _inlineComposerController.requestTextFocus();
   }
 
   _CalendarTaskShare? _resolveCalendarTaskShare(CalendarTask task) {
@@ -1134,41 +1135,6 @@ class _ChatState extends State<Chat> {
       start: start,
       duration: duration,
     );
-  }
-
-  KeyEventResult _handleSubjectKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.tab &&
-        !_isShiftPressed(event) &&
-        mounted) {
-      _focusNode.requestFocus();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.tab && mounted) {
-      if (_isShiftPressed(event)) {
-        _subjectFocusNode.requestFocus();
-      } else {
-        final attachmentCanFocus = _attachmentButtonFocusNode.canRequestFocus;
-        if (attachmentCanFocus) {
-          _attachmentButtonFocusNode.requestFocus();
-        } else {
-          FocusScope.of(context).nextFocus();
-        }
-      }
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  bool _isShiftPressed(KeyEvent event) {
-    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    return pressed.contains(LogicalKeyboardKey.shiftLeft) ||
-        pressed.contains(LogicalKeyboardKey.shiftRight);
   }
 
   String get _scrollStorageKey {
@@ -2804,7 +2770,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _quotedDraft = message;
     });
-    _focusNode.requestFocus();
+    _inlineComposerController.requestTextFocus();
   }
 
   void _handleTimelineBubbleTap(
@@ -3150,11 +3116,10 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  void _handleSubjectChanged() {
+  void _handleSubjectChanged(String text) {
     if (_subjectChangeSuppressed) {
       return;
     }
-    final text = _subjectController.text;
     if (_lastSubjectValue == text) {
       return;
     }
@@ -3286,7 +3251,7 @@ class _ChatState extends State<Chat> {
     bool forceInsert = false,
   }) {
     final settingsState = settings ?? context.read<SettingsCubit>().state;
-    final currentText = _textController.text;
+    final currentText = _inlineComposerController.text;
     final watermarkLabel = _emailComposerWatermarkLabel();
     final watermarkSuffix = _emailComposerWatermarkSuffix();
     final legacyWatermarkSuffix = _legacyEmailComposerWatermarkSuffix();
@@ -3298,19 +3263,23 @@ class _ChatState extends State<Chat> {
       if (currentText == watermarkLabel ||
           currentText == watermarkSuffix ||
           currentText == legacyWatermarkSuffix) {
-        _textController.value = _textController.value.copyWith(
-          text: _emptyText,
-          selection: const TextSelection.collapsed(offset: 0),
-          composing: TextRange.empty,
+        _inlineComposerController.setTextValue(
+          const TextEditingValue(
+            text: _emptyText,
+            selection: TextSelection.collapsed(offset: 0),
+            composing: TextRange.empty,
+          ),
         );
       }
       return;
     }
     if (currentText == legacyWatermarkSuffix) {
-      _textController.value = _textController.value.copyWith(
-        text: watermarkSuffix,
-        selection: const TextSelection.collapsed(offset: 0),
-        composing: TextRange.empty,
+      _inlineComposerController.setTextValue(
+        TextEditingValue(
+          text: watermarkSuffix,
+          selection: const TextSelection.collapsed(offset: 0),
+          composing: TextRange.empty,
+        ),
       );
       return;
     }
@@ -3318,10 +3287,12 @@ class _ChatState extends State<Chat> {
       return;
     }
     if (currentText == watermarkLabel) {
-      _textController.value = _textController.value.copyWith(
-        text: watermarkSuffix,
-        selection: const TextSelection.collapsed(offset: 0),
-        composing: TextRange.empty,
+      _inlineComposerController.setTextValue(
+        TextEditingValue(
+          text: watermarkSuffix,
+          selection: const TextSelection.collapsed(offset: 0),
+          composing: TextRange.empty,
+        ),
       );
       return;
     }
@@ -3335,34 +3306,40 @@ class _ChatState extends State<Chat> {
           currentText.length - legacyWatermarkSuffix.length,
         );
         final normalizedWithWatermark = '$normalizedText$watermarkSuffix';
-        final selection = _textController.selection;
+        final selection = _inlineComposerController.textSelection;
         final normalizedOffset = selection.isValid
             ? math.min(selection.extentOffset, normalizedWithWatermark.length)
             : normalizedWithWatermark.length;
-        _textController.value = _textController.value.copyWith(
-          text: normalizedWithWatermark,
-          selection: TextSelection.collapsed(offset: normalizedOffset),
-          composing: TextRange.empty,
+        _inlineComposerController.setTextValue(
+          TextEditingValue(
+            text: normalizedWithWatermark,
+            selection: TextSelection.collapsed(offset: normalizedOffset),
+            composing: TextRange.empty,
+          ),
         );
         return;
       }
-      final selection = _textController.selection;
+      final selection = _inlineComposerController.textSelection;
       final watermarkOffset = forceInsert
           ? currentText.length
           : (selection.isValid
                 ? selection.extentOffset.clamp(0, currentText.length).toInt()
                 : currentText.length);
-      _textController.value = _textController.value.copyWith(
-        text: '$currentText$watermarkSuffix',
-        selection: TextSelection.collapsed(offset: watermarkOffset),
-        composing: TextRange.empty,
+      _inlineComposerController.setTextValue(
+        TextEditingValue(
+          text: '$currentText$watermarkSuffix',
+          selection: TextSelection.collapsed(offset: watermarkOffset),
+          composing: TextRange.empty,
+        ),
       );
       return;
     }
-    _textController.value = _textController.value.copyWith(
-      text: watermarkSuffix,
-      selection: const TextSelection.collapsed(offset: 0),
-      composing: TextRange.empty,
+    _inlineComposerController.setTextValue(
+      const TextEditingValue(
+        text: watermarkSuffix,
+        selection: TextSelection.collapsed(offset: 0),
+        composing: TextRange.empty,
+      ),
     );
   }
 
@@ -3641,7 +3618,11 @@ class _ChatState extends State<Chat> {
     required ChatSettingsSnapshot settingsSnapshot,
   }) async {
     final l10n = context.l10n;
-    final rawComposerText = _textController.text;
+    final initialComposerClearId = context
+        .read<ChatBloc>()
+        .state
+        .composerClearId;
+    final rawComposerText = _inlineComposerController.text;
     final rawText =
         _isEmailComposerWatermarkOnly(
           text: rawComposerText,
@@ -3665,7 +3646,7 @@ class _ChatState extends State<Chat> {
         )
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
-    final bool hasSubject = _subjectController.text.trim().isNotEmpty;
+    final bool hasSubject = _inlineComposerController.subject.trim().isNotEmpty;
     final bool hasCalendarTask = _pendingCalendarTaskIcs != null;
     final bool hasQuotedDraft = _quotedDraft != null;
     final canSend =
@@ -3708,7 +3689,7 @@ class _ChatState extends State<Chat> {
         settings: settingsSnapshot,
         supportsHttpFileUpload: chatState.supportsHttpFileUpload,
         attachmentFallbackLabel: l10n.chatAttachmentFallbackLabel,
-        subject: _subjectController.text,
+        subject: _inlineComposerController.subject,
         quotedDraft: _quotedDraft,
         roomState: chatState.roomState,
         calendarTaskIcs: _pendingCalendarTaskIcs,
@@ -3724,6 +3705,10 @@ class _ChatState extends State<Chat> {
     setState(() {
       _pendingAttachments = updatedAttachments;
     });
+    if (context.read<ChatBloc>().state.composerClearId !=
+        initialComposerClearId) {
+      await _handleInlineComposerSendComplete();
+    }
   }
 
   Future<bool> _confirmEmailSendIfNeeded({
@@ -3788,10 +3773,10 @@ class _ChatState extends State<Chat> {
       return false;
     }
     final body = _normalizedInlineDraftBody(
-      text: _textController.text,
+      text: _inlineComposerController.text,
       chatState: chatState,
     );
-    final subject = _subjectController.text;
+    final subject = _inlineComposerController.subject;
     final trimmedSubject = subject.trim();
     final attachments = _pendingAttachments
         .map((pending) => pending.attachment)
@@ -3869,10 +3854,10 @@ class _ChatState extends State<Chat> {
       referenceKind: quotedReference?.kind,
     );
     final body = _normalizedInlineDraftBody(
-      text: _textController.text,
+      text: _inlineComposerController.text,
       chatState: chatState,
     );
-    final subject = _subjectController.text;
+    final subject = _inlineComposerController.subject;
     final trimmedSubject = subject.trim();
     if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
       _dismissTextInputFocus();
@@ -3927,10 +3912,9 @@ class _ChatState extends State<Chat> {
 
   void _clearInlineComposerControllers() {
     _subjectChangeSuppressed = true;
-    _subjectController.clear();
+    _inlineComposerController.clear();
     _lastSubjectValue = _emptyText;
     _subjectChangeSuppressed = false;
-    _textController.clear();
   }
 
   void _clearInlineComposerState({required bool clearExpandedComposerDraftId}) {
@@ -3950,7 +3934,6 @@ class _ChatState extends State<Chat> {
   void _resetInlineComposer({
     required bool clearExpandedComposerDraftId,
     bool requestFocus = false,
-    bool disposeComposer = false,
   }) {
     _clearInlineComposerControllers();
     if (!mounted) return;
@@ -3958,16 +3941,13 @@ class _ChatState extends State<Chat> {
       _clearInlineComposerState(
         clearExpandedComposerDraftId: clearExpandedComposerDraftId,
       );
-      if (disposeComposer) {
-        _inlineComposerSessionId += 1;
-      }
     });
     _syncEmailComposerWatermark(
       chatState: context.read<ChatBloc>().state,
       forceInsert: true,
     );
     if (requestFocus) {
-      _focusNode.requestFocus();
+      _inlineComposerController.requestTextFocus();
     }
   }
 
@@ -3981,7 +3961,7 @@ class _ChatState extends State<Chat> {
       }
     });
     if (!clearInlineComposer) {
-      _focusNode.requestFocus();
+      _inlineComposerController.requestTextFocus();
       return;
     }
     _resetInlineComposer(clearExpandedComposerDraftId: true);
@@ -3998,10 +3978,10 @@ class _ChatState extends State<Chat> {
       return false;
     }
     final body = _normalizedInlineDraftBody(
-      text: _textController.text,
+      text: _inlineComposerController.text,
       chatState: chatState,
     );
-    final subject = _subjectController.text.trim();
+    final subject = _inlineComposerController.subject.trim();
     final allowRecipientOnlyDraft =
         _resolveDraftRecipients(chat: chat, recipients: _recipients).length -
             1 >
@@ -4118,11 +4098,15 @@ class _ChatState extends State<Chat> {
 
   Future<void> _handleInlineComposerSendComplete() async {
     final draftId = _expandedComposerDraftId;
-    _resetInlineComposer(
-      clearExpandedComposerDraftId: true,
-      disposeComposer: true,
-      requestFocus: true,
+    setState(() {
+      _clearInlineComposerState(clearExpandedComposerDraftId: true);
+      _recreateInlineComposer();
+    });
+    _syncEmailComposerWatermark(
+      chatState: context.read<ChatBloc>().state,
+      forceInsert: true,
     );
+    _inlineComposerController.requestTextFocus();
     if (draftId == null) {
       return;
     }
@@ -4212,6 +4196,8 @@ class _ChatState extends State<Chat> {
   List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
     required bool attachmentsEnabled,
+    required TextEditingController textController,
+    required FocusNode attachmentButtonFocusNode,
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
   }) {
@@ -4221,7 +4207,7 @@ class _ChatState extends State<Chat> {
           order: const NumericFocusOrder(3),
           child: _EmojiPickerAccessory(
             controller: _emojiPopoverController,
-            textController: _textController,
+            textController: textController,
           ),
         ),
       ),
@@ -4229,7 +4215,7 @@ class _ChatState extends State<Chat> {
         child: FocusTraversalOrder(
           order: const NumericFocusOrder(2),
           child: Focus(
-            focusNode: _attachmentButtonFocusNode,
+            focusNode: attachmentButtonFocusNode,
             canRequestFocus: attachmentsEnabled && !_sendingAttachment,
             skipTraversal: !(attachmentsEnabled && !_sendingAttachment),
             child: _AttachmentAccessoryButton(
@@ -4377,7 +4363,7 @@ class _ChatState extends State<Chat> {
           _quotedDraft = null;
         });
       }
-      _focusNode.requestFocus();
+      _inlineComposerController.requestTextFocus();
     } on PlatformException catch (error) {
       _showSnackbar(error.message ?? l10n.chatAttachmentFailed);
     } on Exception {
@@ -4464,7 +4450,7 @@ class _ChatState extends State<Chat> {
         recipients: _recipients,
         chat: chat,
         quotedDraft: quotedDraft,
-        subject: _subjectController.text,
+        subject: _inlineComposerController.subject,
         settings: settingsSnapshot,
         supportsHttpFileUpload: supportsHttpFileUpload,
         completer: completer,
@@ -5130,20 +5116,12 @@ class _ChatState extends State<Chat> {
   void initState() {
     super.initState();
     _emojiPopoverController = ShadPopoverController();
-    _focusNode = FocusNode();
-    _textController = TextEditingController();
-    _subjectController = TextEditingController();
-    _subjectFocusNode = FocusNode();
-    _attachmentButtonFocusNode = FocusNode();
+    _recreateInlineComposer();
     _scrollController = ScrollController(
       initialScrollOffset: _restoreScrollOffset(),
     );
     _scrollController.addListener(_handleScrollChanged);
     _syncSelectionCaches(context.read<ChatBloc>().state, notify: false);
-    _subjectFocusNode.onKeyEvent = _handleSubjectKeyEvent;
-    _focusNode.onKeyEvent = _handleComposerKeyEvent;
-    _textController.addListener(_typingListener);
-    _subjectController.addListener(_handleSubjectChanged);
     _scheduleReadThresholdSync();
     final initialState = context.read<ChatBloc>().state;
     final chat = initialState.chat;
@@ -5200,13 +5178,6 @@ class _ChatState extends State<Chat> {
     _cancelInlineAttachmentPreparation();
     _persistScrollOffset(key: _lastScrollStorageKey, skipPageStorage: true);
     _scrollController.dispose();
-    _focusNode.dispose();
-    _textController.removeListener(_typingListener);
-    _textController.dispose();
-    _subjectController.removeListener(_handleSubjectChanged);
-    _subjectController.dispose();
-    _subjectFocusNode.dispose();
-    _attachmentButtonFocusNode.dispose();
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
     _clearChatRouteHistoryEntry();
@@ -5423,14 +5394,6 @@ class _ChatState extends State<Chat> {
             ),
             BlocListener<ChatBloc, ChatState>(
               listenWhen: (previous, current) =>
-                  current.composerClearId != 0 &&
-                  previous.composerClearId != current.composerClearId,
-              listener: (_, _) async {
-                await _handleInlineComposerSendComplete();
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
                   previous.chat?.jid != current.chat?.jid,
               listener: (_, state) {
                 _animatedMessageIds.clear();
@@ -5512,21 +5475,23 @@ class _ChatState extends State<Chat> {
                   ? (state.emailSubject ?? '')
                   : _emptyText;
               _subjectChangeSuppressed = true;
-              _subjectController
-                ..text = subject
-                ..selection = TextSelection.collapsed(offset: subject.length);
+              _inlineComposerController.setSubjectText(subject);
               _lastSubjectValue = subject;
               _subjectChangeSuppressed = false;
-              _textController
-                ..text = text
-                ..selection = TextSelection.collapsed(offset: text.length);
+              _inlineComposerController.setTextValue(
+                TextEditingValue(
+                  text: text,
+                  selection: TextSelection.collapsed(offset: text.length),
+                  composing: TextRange.empty,
+                ),
+              );
               _composerHasText =
                   _isEmailComposerWatermarkOnly(text: text, chatState: state)
                   ? false
                   : text.trim().isNotEmpty;
               _syncEmailComposerWatermark(chatState: state, forceInsert: true);
-              if (!_focusNode.hasFocus) {
-                _focusNode.requestFocus();
+              if (!_inlineComposerController.hasTextFocus) {
+                _inlineComposerController.requestTextFocus();
               }
             },
             builder: (context, state) {
@@ -6493,8 +6458,8 @@ class _ChatState extends State<Chat> {
       _previousChatRoute = _chatRoute;
       _chatRoute = nextRoute;
       _pinnedPanelVisible = false;
-      if (_focusNode.hasFocus) {
-        _focusNode.unfocus();
+      if (_inlineComposerController.hasTextFocus) {
+        _inlineComposerController.unfocus();
       }
     });
     if (!wasSettings && nextRoute.isSettings) {}
@@ -6603,8 +6568,8 @@ class _ChatState extends State<Chat> {
     }
     setState(() {
       _pinnedPanelVisible = !_pinnedPanelVisible;
-      if (_focusNode.hasFocus) {
-        _focusNode.unfocus();
+      if (_inlineComposerController.hasTextFocus) {
+        _inlineComposerController.unfocus();
       }
     });
   }
