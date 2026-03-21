@@ -91,6 +91,57 @@ void main() {
 
     expect(tapCount, 0);
   });
+
+  testWidgets('long press icon button clears pressed state after callback', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: Builder(
+          builder: (context) {
+            return AxiIconButton(
+              key: const Key('long-press-button'),
+              iconData: Icons.send,
+              backgroundColor: Colors.white,
+              borderColor: Colors.black,
+              onLongPress: () {
+                showDialog<void>(
+                  context: context,
+                  builder: (dialogContext) {
+                    return AlertDialog(
+                      title: const Text('Dialog'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+
+    final materialFinder = find.descendant(
+      of: find.byKey(const Key('long-press-button')),
+      matching: find.byType(Material),
+    );
+    final initialColor = tester.widget<Material>(materialFinder.first).color;
+
+    await tester.longPress(find.byKey(const Key('long-press-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Dialog'), findsOneWidget);
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    final resolvedColor = tester.widget<Material>(materialFinder.first).color;
+    expect(resolvedColor, initialColor);
+  });
 }
 
 double _buttonLabelFontSize(WidgetTester tester, Key buttonKey) {
