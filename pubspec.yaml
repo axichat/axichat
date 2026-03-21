@@ -109,6 +109,7 @@ dependencies:
   charset_converter: ^2.3.0
   google_nav_bar: ^5.0.7
   upgrader: ^12.5.0
+  pixel_snap: ^0.1.5
 
 dependency_overrides:
   pinenacl: ^0.6.0

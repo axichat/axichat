@@ -241,9 +241,11 @@ class _AxiListButtonState extends State<AxiListButton> {
         }
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-            ? BorderSide(
-                color: context.borderSide.color,
-                width: context.borderSide.width,
+            ? context.snapBorderSide(
+                BorderSide(
+                  color: context.borderSide.color,
+                  width: context.borderSide.width,
+                ),
               )
             : null;
         final shape = RoundedSuperellipseBorder(
@@ -259,14 +261,17 @@ class _AxiListButtonState extends State<AxiListButton> {
         );
         final bool replacesLeading = widget.leading != null && widget.loading;
 
+        final double gap = context.snap(context.spacing.s);
         Widget content = ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: context.sizing.listButtonHeight,
+            minHeight: context.snap(context.sizing.listButtonHeight),
           ),
           child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: context.spacing.m,
-              vertical: context.spacing.s,
+            padding: context.snapInsets(
+              EdgeInsets.symmetric(
+                horizontal: context.spacing.m,
+                vertical: context.spacing.s,
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.start,
@@ -277,18 +282,18 @@ class _AxiListButtonState extends State<AxiListButton> {
                     isVisible: widget.loading,
                     spinner: AxiProgressIndicator(color: foreground),
                     slotSize: context.sizing.progressIndicatorSize,
-                    gap: context.spacing.s,
+                    gap: gap,
                     duration: animationDuration,
                   ),
                 if (widget.leading != null)
                   replacesLeading
                       ? AxiProgressIndicator(color: foreground)
                       : widget.leading!,
-                if (widget.leading != null) SizedBox(width: context.spacing.s),
+                if (widget.leading != null) SizedBox(width: gap),
                 Expanded(child: widget.child),
                 if (widget.trailing != null)
                   Padding(
-                    padding: EdgeInsets.only(left: context.spacing.s),
+                    padding: EdgeInsets.only(left: gap),
                     child: widget.trailing,
                   ),
               ],

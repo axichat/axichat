@@ -445,6 +445,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
         ? desktopComposerHorizontalInset
         : composerHorizontalInset;
     final cutoutBalanceInset = context.sizing.iconButtonTapTarget / 2;
+    final leftPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
     final rightPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
     final pendingAttachments = widget.pendingAttachments;
     final hasQueuedAttachments = pendingAttachments.any(
@@ -505,7 +506,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
             ),
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
+                leftPadding,
                 spacing.m,
                 rightPadding,
                 spacing.s,

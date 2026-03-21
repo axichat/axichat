@@ -52,10 +52,30 @@ import 'package:go_router/go_router.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:pixel_snap/pixel_snap.dart';
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'localization/app_localizations.dart';
+
+double _identityPixelSnap(
+  double value,
+  double devicePixelRatio,
+  PixelSnapMode mode,
+) => value;
+
+PixelSnap _buildPixelSnap({
+  required double devicePixelRatio,
+  required bool enabled,
+}) {
+  if (enabled) {
+    return PixelSnap.custom(devicePixelRatio: devicePixelRatio);
+  }
+  return PixelSnap.custom(
+    devicePixelRatio: devicePixelRatio,
+    pixelSnapFunction: _identityPixelSnap,
+  );
+}
 
 class Axichat extends StatefulWidget {
   Axichat({
@@ -464,6 +484,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           darkTheme: darkTheme,
           themeMode: state.themeMode,
           materialThemeBuilder: (context, theme) {
+            final ps = _buildPixelSnap(
+              devicePixelRatio:
+                  MediaQuery.maybeDevicePixelRatioOf(context) ??
+                  View.of(context).devicePixelRatio,
+              enabled: theme.platform.usesPixelSnap,
+            );
             final bool useAppleSystemTypography = theme.platform.isApple;
             final shadTheme = theme.brightness == Brightness.light
                 ? lightTheme
@@ -477,17 +503,23 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             final buttonShape = SquircleBorder(cornerRadius: axiSquircleRadius);
             final listTileShape = buttonShape;
             final outlineInputBorder = OutlineInputBorder(
-              borderRadius: globalRadius,
-              borderSide: BorderSide(color: materialColors.border),
+              borderRadius: globalRadius.pixelSnap(ps),
+              borderSide: BorderSide(
+                color: materialColors.border,
+                width: axiBorders.width,
+              ).pixelSnap(ps),
             );
             final focusedInputBorder = outlineInputBorder.copyWith(
-              borderSide: BorderSide(color: materialColors.primary, width: 1.5),
+              borderSide: BorderSide(
+                color: materialColors.primary,
+                width: 1.5,
+              ).pixelSnap(ps),
             );
             final errorBorder = outlineInputBorder.copyWith(
               borderSide: BorderSide(
                 color: materialColors.destructive,
                 width: 1,
-              ),
+              ).pixelSnap(ps),
             );
             final selectionOverlay = materialColors.primary.withValues(
               alpha: theme.brightness == Brightness.dark ? 0.12 : 0.06,
@@ -558,7 +590,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 disabledBorder: outlineInputBorder.copyWith(
                   borderSide: BorderSide(
                     color: materialColors.border.withValues(alpha: 0.6),
-                  ),
+                    width: axiBorders.width,
+                  ).pixelSnap(ps),
                 ),
                 focusedBorder: focusedInputBorder,
                 errorBorder: errorBorder,
@@ -566,7 +599,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: axiSpaceM,
                   vertical: axiSpaceS,
-                ),
+                ).pixelSnap(ps),
               ),
               filledButtonTheme: FilledButtonThemeData(
                 style: FilledButton.styleFrom(
@@ -577,7 +610,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: axiSpaceM,
                     vertical: axiSpaceS,
-                  ),
+                  ).pixelSnap(ps),
                 ),
               ),
               outlinedButtonTheme: OutlinedButtonThemeData(
@@ -586,11 +619,14 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   backgroundColor: materialColors.card,
                   foregroundColor: materialColors.foreground,
                   shape: buttonShape,
-                  side: BorderSide(color: materialColors.border),
+                  side: BorderSide(
+                    color: materialColors.border,
+                    width: axiBorders.width,
+                  ).pixelSnap(ps),
                   padding: const EdgeInsets.symmetric(
                     horizontal: axiSpaceM,
                     vertical: axiSpaceS,
-                  ),
+                  ).pixelSnap(ps),
                 ),
               ),
               textButtonTheme: TextButtonThemeData(
@@ -600,7 +636,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: axiSpaceS,
                     vertical: axiSpaceXs,
-                  ),
+                  ).pixelSnap(ps),
                 ),
               ),
               checkboxTheme: CheckboxThemeData(
@@ -610,7 +646,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 side: BorderSide(
                   color: materialColors.border,
                   width: axiSpaceXxs,
-                ),
+                ).pixelSnap(ps),
               ),
               scrollbarTheme: ScrollbarThemeData(
                 thickness: const WidgetStatePropertyAll<double>(axiSpaceXs),
@@ -961,16 +997,50 @@ extension ThemeExtension on BuildContext {
 
   AxiMotion get motion => Theme.of(this).extension<AxiMotion>() ?? axiMotion;
 
+  PixelSnap get pixelSnap => _buildPixelSnap(
+    devicePixelRatio:
+        MediaQuery.maybeDevicePixelRatioOf(this) ??
+        View.of(this).devicePixelRatio,
+    enabled: Theme.of(this).platform.usesPixelSnap,
+  );
+
   AxiBorders get borders =>
       Theme.of(this).extension<AxiBorders>() ?? axiBorders;
 
   AxiRadii get radii => Theme.of(this).extension<AxiRadii>() ?? axiRadii;
 
-  BorderSide get borderSide =>
-      BorderSide(color: colorScheme.border, width: borders.width);
+  double snap(double value, [PixelSnapMode mode = PixelSnapMode.snap]) =>
+      pixelSnap(value, mode);
+
+  EdgeInsets snapInsets(
+    EdgeInsets value, [
+    PixelSnapMode mode = PixelSnapMode.snap,
+  ]) => value.pixelSnap(pixelSnap, mode);
+
+  EdgeInsetsGeometry snapInsetsGeometry(
+    EdgeInsetsGeometry value, [
+    PixelSnapMode mode = PixelSnapMode.snap,
+  ]) => value.pixelSnap(pixelSnap, mode);
+
+  BorderSide snapBorderSide(
+    BorderSide value, [
+    PixelSnapMode mode = PixelSnapMode.snap,
+  ]) => value.pixelSnap(pixelSnap, mode);
+
+  BorderRadiusGeometry snapBorderRadiusGeometry(
+    BorderRadiusGeometry value, [
+    PixelSnapMode mode = PixelSnapMode.snap,
+  ]) => value.pixelSnap(pixelSnap, mode);
+
+  BorderSide get borderSide => snapBorderSide(
+    BorderSide(color: colorScheme.border, width: borders.width),
+  );
 }
 
 extension TargetPlatformExtension on TargetPlatform {
+  bool get usesPixelSnap =>
+      this == TargetPlatform.linux || this == TargetPlatform.windows;
+
   bool get isApple =>
       this == TargetPlatform.macOS || this == TargetPlatform.iOS;
 
@@ -1100,22 +1170,10 @@ SingleActivator _calendarActivator(TargetPlatform platform) {
 class AxiDragScrollBehavior extends MaterialScrollBehavior {
   const AxiDragScrollBehavior();
 
-  static const _touchDragDevices = <PointerDeviceKind>{
-    PointerDeviceKind.touch,
-    PointerDeviceKind.stylus,
-    PointerDeviceKind.invertedStylus,
-  };
-
-  static const _mobileDragDevices = <PointerDeviceKind>{
-    ..._touchDragDevices,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-  };
-
   @override
   Set<PointerDeviceKind> get dragDevices => defaultTargetPlatform.isMobile
-      ? _mobileDragDevices
-      : const <PointerDeviceKind>{};
+      ? <PointerDeviceKind>{...super.dragDevices, PointerDeviceKind.mouse}
+      : super.dragDevices;
 }
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {

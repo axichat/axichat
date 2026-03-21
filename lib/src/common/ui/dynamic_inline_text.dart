@@ -5,16 +5,27 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:axichat/src/common/ui/squircle_border.dart';
-import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, mapEquals;
 import 'package:flutter/gestures.dart'
     show TapGestureRecognizer, kLongPressTimeout, kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:pixel_snap/pixel_snap.dart';
 
 typedef LinkTapCallback = void Function(String url);
 
 const double _detailStartGap = 8.0;
 const double _detailSpacing = 6.0;
+
+bool _usesPixelSnap(TargetPlatform platform) =>
+    platform == TargetPlatform.linux || platform == TargetPlatform.windows;
+
+double _identityPixelSnap(
+  double value,
+  double devicePixelRatio,
+  PixelSnapMode mode,
+) => value;
 
 class DynamicInlineDetailAction {
   const DynamicInlineDetailAction({
@@ -69,6 +80,10 @@ class DynamicInlineText extends LeafRenderObjectWidget {
         textDirection: Directionality.of(context),
         textScaler:
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+        devicePixelRatio:
+            MediaQuery.maybeDevicePixelRatioOf(context) ??
+            View.of(context).devicePixelRatio,
+        pixelSnapEnabled: _usesPixelSnap(Theme.of(context).platform),
         links: links,
         onLinkTap: onLinkTap,
         onLinkLongPress: onLinkLongPress,
@@ -87,6 +102,10 @@ class DynamicInlineText extends LeafRenderObjectWidget {
       ..textDirection = Directionality.of(context)
       ..textScaler =
           MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling
+      ..devicePixelRatio =
+          MediaQuery.maybeDevicePixelRatioOf(context) ??
+          View.of(context).devicePixelRatio
+      ..pixelSnapEnabled = _usesPixelSnap(Theme.of(context).platform)
       ..links = links
       ..onLinkTap = onLinkTap
       ..onLinkLongPress = onLinkLongPress;
@@ -101,6 +120,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
     required Map<int, double> detailOpticalOffsetFactors,
     required TextDirection textDirection,
     required TextScaler textScaler,
+    required double devicePixelRatio,
+    required bool pixelSnapEnabled,
     List<DynamicTextLink> links = const [],
     LinkTapCallback? onLinkTap,
     LinkTapCallback? onLinkLongPress,
@@ -112,6 +133,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
        ),
        _textDirection = textDirection,
        _textScaler = textScaler,
+       _devicePixelRatio = devicePixelRatio,
+       _pixelSnapEnabled = pixelSnapEnabled,
        _links = List.unmodifiable(links),
        _onLinkTap = onLinkTap,
        _onLinkLongPress = onLinkLongPress;
@@ -172,6 +195,28 @@ class DynamicInlineTextRenderObject extends RenderBox {
     }
     _textScaler = value;
     markNeedsLayout();
+  }
+
+  double _devicePixelRatio;
+
+  set devicePixelRatio(double value) {
+    if (_devicePixelRatio == value) {
+      return;
+    }
+    _devicePixelRatio = value;
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
+  bool _pixelSnapEnabled;
+
+  set pixelSnapEnabled(bool value) {
+    if (_pixelSnapEnabled == value) {
+      return;
+    }
+    _pixelSnapEnabled = value;
+    markNeedsLayout();
+    markNeedsPaint();
   }
 
   List<DynamicTextLink> _links;
@@ -276,7 +321,10 @@ class DynamicInlineTextRenderObject extends RenderBox {
   void performLayout() {
     final unconstrainedSize = _layout(constraints.maxWidth);
     size = constraints.constrain(
-      Size(unconstrainedSize.width, unconstrainedSize.height),
+      Size(
+        _snap(unconstrainedSize.width, PixelSnapMode.ceil),
+        _snap(unconstrainedSize.height, PixelSnapMode.ceil),
+      ),
     );
   }
 
@@ -301,6 +349,19 @@ class DynamicInlineTextRenderObject extends RenderBox {
   bool _linkLongPressTriggered = false;
   int? _detailTapPointer;
   int? _pressedDetailActionIndex;
+
+  PixelSnap get _pixelSnap => _pixelSnapEnabled
+      ? PixelSnap.custom(devicePixelRatio: _devicePixelRatio)
+      : PixelSnap.custom(
+          devicePixelRatio: _devicePixelRatio,
+          pixelSnapFunction: _identityPixelSnap,
+        );
+
+  double _snap(double value, [PixelSnapMode mode = PixelSnapMode.snap]) =>
+      value.pixelSnap(_pixelSnap, mode);
+
+  Offset _snapOffset(Offset value, [PixelSnapMode mode = PixelSnapMode.snap]) =>
+      value.pixelSnap(_pixelSnap, mode);
 
   bool _hasWidgetSpan(InlineSpan span) {
     var found = false;
@@ -426,7 +487,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _detailWidths = [];
     _detailHeights = [];
     if (_details.isNotEmpty) {
-      _detailsWidth = hasBodyText ? _detailStartGap : 0.0;
+      _detailsWidth = hasBodyText ? _snap(_detailStartGap) : 0.0;
     }
 
     for (var index = 0; index < _details.length; index++) {
@@ -440,15 +501,22 @@ class DynamicInlineTextRenderObject extends RenderBox {
       if (lineMetrics.isNotEmpty) {
         final metrics = lineMetrics.first;
         final action = _detailActions[index];
-        final detailWidth = metrics.width + (action?.padding.horizontal ?? 0);
-        final detailHeight = max(
-          metrics.height + (action?.padding.vertical ?? 0),
-          action?.minimumHeight ?? 0,
+        final detailWidth = _snap(
+          metrics.width + (action?.padding.horizontal ?? 0),
+          PixelSnapMode.ceil,
         );
-        final verticalInset = (detailHeight - metrics.height) / 2;
-        final detailBaselineOffset = verticalInset + metrics.baseline;
-        final detailBelowBaseline =
-            verticalInset + (metrics.height - metrics.baseline);
+        final detailHeight = _snap(
+          max(
+            metrics.height + (action?.padding.vertical ?? 0),
+            action?.minimumHeight ?? 0,
+          ),
+          PixelSnapMode.ceil,
+        );
+        final verticalInset = _snap((detailHeight - metrics.height) / 2);
+        final detailBaselineOffset = _snap(verticalInset + metrics.baseline);
+        final detailBelowBaseline = _snap(
+          verticalInset + (metrics.height - metrics.baseline),
+        );
         _detailsWidth += detailWidth;
         _detailBaselineOffset = max(
           _detailBaselineOffset,
@@ -465,14 +533,17 @@ class DynamicInlineTextRenderObject extends RenderBox {
       _detailPainters.add(painter);
       final hasTrailingDetail = index < _details.length - 1;
       if (hasTrailingDetail) {
-        _detailsWidth += _detailSpacing;
+        _detailsWidth += _snap(_detailSpacing);
       }
     }
-    _detailsHeight = _detailBaselineOffset + _detailBelowBaseline;
+    _detailsHeight = _snap(
+      _detailBaselineOffset + _detailBelowBaseline,
+      PixelSnapMode.ceil,
+    );
 
-    _maxLineWidth = max(
-      textLines.fold(0, (prev, e) => max(prev, e.width)),
-      _detailsWidth,
+    _maxLineWidth = _snap(
+      max(textLines.fold(0, (prev, e) => max(prev, e.width)), _detailsWidth),
+      PixelSnapMode.ceil,
     );
 
     final messageSize = Size(
@@ -480,7 +551,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
       hasBodyText ? _textPainter.height : 0.0,
     );
 
-    _finalLineWidth = textLines.isEmpty ? 0.0 : textLines.last.width;
+    _finalLineWidth = textLines.isEmpty
+        ? 0.0
+        : _snap(textLines.last.width, PixelSnapMode.ceil);
 
     final combinedWidth = _detailsWidth == 0
         ? _finalLineWidth
@@ -497,12 +570,18 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     return _canInlineDetails
         ? Size(
-            textLines.length <= 1
-                ? combinedWidth
-                : max(_maxLineWidth, combinedWidth),
-            messageSize.height,
+            _snap(
+              textLines.length <= 1
+                  ? combinedWidth
+                  : max(_maxLineWidth, combinedWidth),
+              PixelSnapMode.ceil,
+            ),
+            _snap(messageSize.height, PixelSnapMode.ceil),
           )
-        : Size(messageSize.width, messageSize.height + _detailsHeight);
+        : Size(
+            _snap(messageSize.width, PixelSnapMode.ceil),
+            _snap(messageSize.height + _detailsHeight, PixelSnapMode.ceil),
+          );
   }
 
   @override
@@ -516,13 +595,13 @@ class DynamicInlineTextRenderObject extends RenderBox {
     if (_detailPainters.isEmpty) return;
 
     final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
-    final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
+    final detailStartGap = hasBodyText ? _snap(_detailStartGap) : 0.0;
     final detailBaselineY = _canInlineDetails && lastLine != null
-        ? offset.dy + lastLine.baseline
-        : offset.dy + baseTextHeight + _detailBaselineOffset;
+        ? _snap(offset.dy + lastLine.baseline)
+        : _snap(offset.dy + baseTextHeight + _detailBaselineOffset);
     var dx = _canInlineDetails
-        ? offset.dx + _finalLineWidth + detailStartGap
-        : offset.dx + size.width - _detailsWidth;
+        ? _snap(offset.dx + _finalLineWidth + detailStartGap)
+        : _snap(offset.dx + size.width - _detailsWidth);
     for (var i = 0; i < _detailPainters.length; i++) {
       final painter = _detailPainters[i];
       final metrics = _detailLineMetrics.length > i
@@ -542,19 +621,20 @@ class DynamicInlineTextRenderObject extends RenderBox {
       final verticalInset = (detailHeight - textHeight) / 2;
       final opticalOffset =
           textHeight * (_detailOpticalOffsetFactors[i] ?? 0.0);
-      final textTop =
-          detailBaselineY -
-          detailBaseline +
-          opticalOffset +
-          _detailRowVerticalOffset;
-      final backgroundTop = textTop - verticalInset;
+      final textTop = _snap(
+        detailBaselineY -
+            detailBaseline +
+            opticalOffset +
+            _detailRowVerticalOffset,
+      );
+      final backgroundTop = _snap(textTop - verticalInset);
       if (action != null) {
         final backgroundRect = Rect.fromLTWH(
           dx,
           backgroundTop,
           detailWidth,
           detailHeight,
-        );
+        ).pixelSnap(_pixelSnap);
         context.canvas.drawPath(
           SquircleBorder(
             cornerRadius: action.borderRadius,
@@ -566,12 +646,12 @@ class DynamicInlineTextRenderObject extends RenderBox {
       }
       painter.paint(
         context.canvas,
-        Offset(dx + (horizontalPadding / 2), textTop),
+        _snapOffset(Offset(dx + (horizontalPadding / 2), textTop)),
       );
       dx += detailWidth;
       final hasTrailingDetail = i < _detailPainters.length - 1;
       if (hasTrailingDetail) {
-        dx += _detailSpacing;
+        dx += _snap(_detailSpacing);
       }
     }
   }
@@ -583,13 +663,13 @@ class DynamicInlineTextRenderObject extends RenderBox {
     final hasBodyText = _textPainter.text?.toPlainText().isNotEmpty == true;
     final baseTextHeight = hasBodyText ? _textPainter.height : 0.0;
     final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
-    final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
+    final detailStartGap = hasBodyText ? _snap(_detailStartGap) : 0.0;
     final detailBaselineY = _canInlineDetails && lastLine != null
-        ? lastLine.baseline
-        : baseTextHeight + _detailBaselineOffset;
+        ? _snap(lastLine.baseline)
+        : _snap(baseTextHeight + _detailBaselineOffset);
     var dx = _canInlineDetails
-        ? _finalLineWidth + detailStartGap
-        : size.width - _detailsWidth;
+        ? _snap(_finalLineWidth + detailStartGap)
+        : _snap(size.width - _detailsWidth);
     for (var i = 0; i < _detailPainters.length; i++) {
       final action = _detailActions[i];
       final painter = _detailPainters[i];
@@ -609,25 +689,26 @@ class DynamicInlineTextRenderObject extends RenderBox {
         final verticalInset = (detailHeight - textHeight) / 2;
         final opticalOffset =
             textHeight * (_detailOpticalOffsetFactors[i] ?? 0.0);
-        final textTop =
-            detailBaselineY -
-            detailBaseline +
-            opticalOffset +
-            _detailRowVerticalOffset;
-        final backgroundTop = textTop - verticalInset;
+        final textTop = _snap(
+          detailBaselineY -
+              detailBaseline +
+              opticalOffset +
+              _detailRowVerticalOffset,
+        );
+        final backgroundTop = _snap(textTop - verticalInset);
         final rect = Rect.fromLTWH(
           dx,
           backgroundTop,
           detailWidth,
           detailHeight,
-        );
+        ).pixelSnap(_pixelSnap);
         if (rect.contains(position)) {
           return i;
         }
       }
       dx += detailWidth;
       if (i < _detailPainters.length - 1) {
-        dx += _detailSpacing;
+        dx += _snap(_detailSpacing);
       }
     }
     return null;

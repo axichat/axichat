@@ -90,11 +90,11 @@ class _InviteAttachmentCard extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final padding = EdgeInsets.all(spacing.m);
-    final contentSpacing = spacing.s;
-    final headerSpacing = spacing.xs;
-    final accentWidth = spacing.xxs;
-    final leadingInset = sizing.menuItemIconSize + headerSpacing;
+    final padding = context.snapInsets(EdgeInsets.all(spacing.m));
+    final contentSpacing = context.snap(spacing.s);
+    final headerSpacing = context.snap(spacing.xs);
+    final accentWidth = context.snap(spacing.xxs);
+    final leadingInset = context.snap(sizing.menuItemIconSize + headerSpacing);
     final accentColor = enabled ? colors.primary : colors.muted;
     final labelColor = enabled ? colors.foreground : colors.mutedForeground;
     final iconColor = enabled ? colors.primary : colors.mutedForeground;
@@ -107,7 +107,11 @@ class _InviteAttachmentCard extends StatelessWidget {
       child: DecoratedBox(
         decoration: ShapeDecoration(
           color: colors.card,
-          shape: shape.copyWith(side: BorderSide(color: colors.border)),
+          shape: shape.copyWith(
+            side: context.snapBorderSide(
+              BorderSide(color: colors.border, width: context.borders.width),
+            ),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,7 +135,7 @@ class _InviteAttachmentCard extends StatelessWidget {
                       children: [
                         Icon(
                           LucideIcons.userPlus,
-                          size: sizing.menuItemIconSize,
+                          size: context.snap(sizing.menuItemIconSize),
                           color: iconColor,
                         ),
                         SizedBox(width: headerSpacing),
@@ -193,7 +197,7 @@ class _MessageExtraGap extends StatelessWidget {
   final double height;
 
   @override
-  Widget build(BuildContext context) => SizedBox(height: height);
+  Widget build(BuildContext context) => SizedBox(height: context.snap(height));
 }
 
 class _MessageExtraItem extends StatelessWidget {
@@ -985,7 +989,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
     final colors = context.colorScheme;
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.l;
+    final recipientAvatarSize = context.snap(spacing.l);
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     final avatarPath = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
     final avatarImagePath = avatarPath?.isNotEmpty == true ? avatarPath : null;
@@ -995,7 +999,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
       child: DecoratedBox(
         decoration: ShapeDecoration(color: colors.card, shape: shape),
         child: Padding(
-          padding: EdgeInsets.all(borderWidth),
+          padding: context.snapInsets(EdgeInsets.all(borderWidth)),
           child: HydratedAxiAvatar(
             avatar: AvatarPresentation.avatar(
               label: chat.avatarLabel,
@@ -1160,12 +1164,12 @@ class _TypingAvatar extends StatelessWidget {
     final borderColor = context.colorScheme.card;
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.l;
+    final recipientAvatarSize = context.snap(spacing.l);
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     return Container(
       width: recipientAvatarSize,
       height: recipientAvatarSize,
-      padding: EdgeInsets.all(borderWidth),
+      padding: context.snapInsets(EdgeInsets.all(borderWidth)),
       decoration: ShapeDecoration(color: borderColor, shape: shape),
       child: HydratedAxiAvatar(
         avatar: AvatarPresentation.avatar(

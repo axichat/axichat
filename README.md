@@ -309,27 +309,15 @@ Flathub listing is live, prefer Flathub on Linux for the strongest platform-nati
 - **Portable `.tar.gz`** – Extract the archive into a stable folder such as
   `~/.local/opt/axichat`, then launch `~/.local/opt/axichat/axichat`.
 
-  To promote the portable build into a normal desktop application, create a local `.desktop`
-  launcher that points at the extracted bundle:
+  To promote the portable build into a normal desktop application, register the bundle under your
+  local desktop entry and icon directories:
 
   ```bash
-  install -d "$HOME/.local/share/applications"
-  cat > "$HOME/.local/share/applications/im.axi.axichat.desktop" <<EOF
-  [Desktop Entry]
-  Type=Application
-  Name=Axichat
-  Comment=Free chat+email client
-  Exec=$HOME/.local/opt/axichat/axichat
-  Icon=$HOME/.local/opt/axichat/data/app_icon.png
-  Categories=Network;Chat;InstantMessaging;Email;
-  StartupWMClass=axichat
-  Terminal=false
-  EOF
-  update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+  ./tool/install_linux_desktop_entry.sh "$HOME/.local/opt/axichat"
   ```
 
-  If you extracted the archive somewhere else, replace the `Exec=` and `Icon=` paths above to
-  match your folder.
+  That installs `im.axi.axichat.desktop` and the matching icon into
+  `~/.local/share`, which is what Wayland docks look up when matching the running app ID.
 
 ### Windows
 

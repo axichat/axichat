@@ -352,9 +352,11 @@ class _AxiButtonState extends State<AxiButton> {
         );
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-            ? BorderSide(
-                color: context.borderSide.color,
-                width: context.borderSide.width,
+            ? context.snapBorderSide(
+                BorderSide(
+                  color: context.borderSide.color,
+                  width: context.borderSide.width,
+                ),
               )
             : null;
         final shape = RoundedSuperellipseBorder(
@@ -375,13 +377,14 @@ class _AxiButtonState extends State<AxiButton> {
         );
         final bool replacesLeading = widget.leading != null && widget.loading;
 
+        final double gap = context.snap(widget.size.gap(context.spacing));
         final List<Widget> rowChildren = <Widget>[
           if (widget.leading == null)
             ButtonSpinnerSlot(
               isVisible: widget.loading,
               spinner: AxiProgressIndicator(color: foreground),
               slotSize: context.sizing.progressIndicatorSize,
-              gap: widget.size.gap(context.spacing),
+              gap: gap,
               duration: animationDuration,
             ),
           if (widget.leading != null)
@@ -389,19 +392,19 @@ class _AxiButtonState extends State<AxiButton> {
                 ? AxiProgressIndicator(color: foreground)
                 : widget.leading!,
           if (widget.leading != null && widget.child != null)
-            SizedBox(width: widget.size.gap(context.spacing)),
+            SizedBox(width: gap),
           if (widget.child != null) widget.child!,
           if (widget.trailing != null && widget.child != null)
-            SizedBox(width: widget.size.gap(context.spacing)),
+            SizedBox(width: gap),
           if (widget.trailing != null) widget.trailing!,
         ];
 
         Widget content = ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: widget.size.minHeight(context.sizing),
+            minHeight: context.snap(widget.size.minHeight(context.sizing)),
           ),
           child: Padding(
-            padding: widget.size.padding(context.spacing),
+            padding: context.snapInsets(widget.size.padding(context.spacing)),
             child: Row(
               mainAxisSize:
                   widget.widthBehavior == AxiButtonWidth.expand ||

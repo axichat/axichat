@@ -15,7 +15,9 @@ import 'package:flutter/material.dart' show MaterialLocalizations;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/src/material/adaptive_text_selection_toolbar.dart';
 import 'package:flutter/src/material/colors.dart';
 import 'package:flutter/src/material/debug.dart';
@@ -1469,6 +1471,9 @@ class _AxiTextFieldState extends State<AxiTextField>
           cursorRadius: cursorRadius,
           cursorColor: transparentCursorColor,
           typingCaretColor: cursorColor,
+          typingAnimationDuration: context
+              .watch<SettingsCubit>()
+              .animationDuration,
           selectionHeightStyle: widget.selectionHeightStyle,
           selectionWidthStyle: widget.selectionWidthStyle,
           cursorOpacityAnimates: cursorOpacityAnimates,

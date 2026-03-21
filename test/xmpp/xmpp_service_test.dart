@@ -404,6 +404,29 @@ void main() {
     resetMocktailState();
   });
 
+  test(
+    'connection-backed getters are safe before initializing a connection',
+    () async {
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      addTearDown(() async {
+        await xmppService.close();
+      });
+
+      expect(xmppService.hasConnectionSettings, isFalse);
+      expect(xmppService.boundResource, isNull);
+      expect(xmppService.saltedPassword, isNull);
+      expect(xmppService.bookmarksManager, isNull);
+      expect(xmppService.conversationIndexManager, isNull);
+      expect(xmppService.pubSubSupport, isNotNull);
+      expect(() => xmppService.pubSubSupportStream, returnsNormally);
+    },
+  );
+
   group('XmppService event handler', () {
     late mox.MessageEvent messageEvent;
     late Message message;
