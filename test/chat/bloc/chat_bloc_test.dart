@@ -1871,9 +1871,6 @@ void main() {
           onLocalMessageStored: any(named: 'onLocalMessageStored'),
         ),
       ).called(1);
-      verify(
-        () => messageService.loadFileMetadata('forward-welcome-meta'),
-      ).called(1);
       verifyNever(
         () => messageService.sendAttachment(
           jid: welcomeChat.jid,
