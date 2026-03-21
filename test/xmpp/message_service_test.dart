@@ -518,6 +518,61 @@ void main() {
     );
 
     test(
+      'resendMessage preserves forwarded metadata on the resent copy',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        const originalStanzaId = 'forwarded-original';
+        const resentStanzaId = 'forwarded-resent';
+        const resentOriginId = 'forwarded-resent-origin';
+        final originalMessage = Message(
+          stanzaID: originalStanzaId,
+          senderJid: jid,
+          chatJid: jid,
+          body: 'Retry forwarded',
+          timestamp: DateTime.timestamp(),
+          pseudoMessageData: const <String, dynamic>{
+            'forwarded': true,
+            'forwardedFromJid': 'sender@example.com',
+            'forwardedOriginalSenderLabel': 'Sender',
+          },
+        );
+        await database.saveMessage(originalMessage);
+
+        final generatedIds = <String>[resentStanzaId, resentOriginId].iterator;
+        when(() => mockConnection.generateId()).thenAnswer((_) {
+          generatedIds.moveNext();
+          return generatedIds.current;
+        });
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+
+        await xmppService.resendMessage(originalStanzaId);
+
+        final resentMessage = await database.getMessageByStanzaID(
+          resentStanzaId,
+        );
+        expect(
+          resentMessage,
+          isA<Message>()
+              .having((message) => message.body, 'body', 'Retry forwarded')
+              .having((message) => message.isForwarded, 'isForwarded', true)
+              .having(
+                (message) => message.forwardedFromJid,
+                'forwardedFromJid',
+                'sender@example.com',
+              )
+              .having(
+                (message) => message.forwardedOriginalSenderLabel,
+                'forwardedOriginalSenderLabel',
+                'Sender',
+              ),
+        );
+      },
+    );
+
+    test(
       'Repairs stale MUC chat typing before sending a bare room message.',
       () async {
         const roomJid = 'room@conference.axi.im';

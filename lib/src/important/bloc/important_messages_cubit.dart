@@ -35,12 +35,11 @@ class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
   Future<void> _handleEntries(
     List<MessageCollectionMembershipEntry> entries,
   ) async {
-    final db = await _xmppService.database;
     final messageIds = entries
         .map((entry) => entry.messageReferenceId.trim())
         .where((value) => value.isNotEmpty)
         .toSet();
-    final messages = await db.getMessagesByReferenceIds(
+    final messages = await _xmppService.loadMessagesByReferenceIds(
       messageIds,
       chatJid: chatJid,
     );
@@ -51,7 +50,7 @@ class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
       }
     }
     final chatIds = entries.map((entry) => entry.chatJid).toSet();
-    final chats = await db.getChatsByJids(chatIds);
+    final chats = await _xmppService.loadChatsByJids(chatIds);
     final chatByJid = <String, Chat>{for (final chat in chats) chat.jid: chat};
     final items = entries
         .map(

@@ -194,8 +194,10 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   }) async {
     const int chatExportStart = 0;
     const int chatExportEnd = 0;
-    final db = await _xmppService.database;
-    final chats = await db.getChats(start: chatExportStart, end: chatExportEnd);
+    final chats = await _xmppService.loadChats(
+      start: chatExportStart,
+      end: chatExportEnd,
+    );
     final selectedChats = chats
         .where((chat) => chat.transport == transport)
         .toList(growable: false);
@@ -222,8 +224,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     ContactExportFormat format,
     ContactExportLabels labels,
   ) async {
-    final db = await _xmppService.database;
-    final roster = await db.getRoster();
+    final roster = await _xmppService.loadRosterSnapshot();
     final contacts = _sortedContacts(
       roster
           .map(

@@ -217,8 +217,7 @@ class AttachmentGalleryBloc
   }
 
   Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
-    final db = await _xmppService.database;
-    return db.getFileMetadata(metadataId);
+    return _xmppService.loadFileMetadata(metadataId);
   }
 
   bool _isSelfMessage(Message message) {

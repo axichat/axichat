@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:async/async.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
@@ -277,6 +278,9 @@ void main() {
         inviteeJid: any(named: 'inviteeJid'),
         reason: any(named: 'reason'),
       ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mucService.resendInvitePseudoMessage(any()),
     ).thenAnswer((_) async {});
     when(
       () => mucService.kickOccupant(
@@ -660,10 +664,14 @@ void main() {
       () => emailService.fanOutSend(
         targets: any(named: 'targets'),
         body: any(named: 'body'),
+        htmlBody: any(named: 'htmlBody'),
         attachment: any(named: 'attachment'),
+        htmlCaption: any(named: 'htmlCaption'),
         shareId: any(named: 'shareId'),
+        subject: any(named: 'subject'),
         quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
+        tokenAsSignature: any(named: 'tokenAsSignature'),
       ),
     ).thenAnswer((_) async => report);
 
@@ -704,10 +712,14 @@ void main() {
               () => emailService.fanOutSend(
                 targets: captureAny(named: 'targets'),
                 body: 'Team status update',
+                htmlBody: HtmlContentCodec.fromPlainText('Team status update'),
                 attachment: any(named: 'attachment'),
+                htmlCaption: any(named: 'htmlCaption'),
                 shareId: any(named: 'shareId'),
+                subject: any(named: 'subject'),
                 quotedStanzaId: any(named: 'quotedStanzaId'),
                 useSubjectToken: any(named: 'useSubjectToken'),
+                tokenAsSignature: any(named: 'tokenAsSignature'),
               ),
             ).captured.single
             as List<Contact>;
@@ -757,10 +769,14 @@ void main() {
       () => emailService.fanOutSend(
         targets: any(named: 'targets'),
         body: any(named: 'body'),
+        htmlBody: any(named: 'htmlBody'),
         attachment: any(named: 'attachment'),
+        htmlCaption: any(named: 'htmlCaption'),
         shareId: any(named: 'shareId'),
+        subject: any(named: 'subject'),
         quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
+        tokenAsSignature: any(named: 'tokenAsSignature'),
       ),
     ).thenAnswer((_) async => report);
 
@@ -804,10 +820,14 @@ void main() {
               () => emailService.fanOutSend(
                 targets: captureAny(named: 'targets'),
                 body: 'Hello world',
+                htmlBody: HtmlContentCodec.fromPlainText('Hello world'),
                 attachment: any(named: 'attachment'),
+                htmlCaption: any(named: 'htmlCaption'),
                 shareId: any(named: 'shareId'),
+                subject: any(named: 'subject'),
                 quotedStanzaId: any(named: 'quotedStanzaId'),
                 useSubjectToken: any(named: 'useSubjectToken'),
+                tokenAsSignature: any(named: 'tokenAsSignature'),
               ),
             ).captured.single
             as List<Contact>;
@@ -859,10 +879,14 @@ void main() {
       () => emailService.fanOutSend(
         targets: any(named: 'targets'),
         body: any(named: 'body'),
+        htmlBody: any(named: 'htmlBody'),
         attachment: any(named: 'attachment'),
+        htmlCaption: any(named: 'htmlCaption'),
         shareId: any(named: 'shareId'),
+        subject: any(named: 'subject'),
         quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
+        tokenAsSignature: any(named: 'tokenAsSignature'),
       ),
     );
 
@@ -889,10 +913,14 @@ void main() {
       () => emailService.fanOutSend(
         targets: any(named: 'targets'),
         body: any(named: 'body'),
+        htmlBody: any(named: 'htmlBody'),
         attachment: any(named: 'attachment'),
+        htmlCaption: any(named: 'htmlCaption'),
         shareId: any(named: 'shareId'),
+        subject: any(named: 'subject'),
         quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
+        tokenAsSignature: any(named: 'tokenAsSignature'),
       ),
     ).thenThrow(const FanOutTooManyRecipientsException(2));
 
@@ -984,10 +1012,14 @@ void main() {
       () => emailService.fanOutSend(
         targets: any(named: 'targets'),
         body: any(named: 'body'),
+        htmlBody: any(named: 'htmlBody'),
         attachment: any(named: 'attachment'),
+        htmlCaption: any(named: 'htmlCaption'),
         shareId: any(named: 'shareId'),
+        subject: any(named: 'subject'),
         quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
+        tokenAsSignature: any(named: 'tokenAsSignature'),
       ),
     ).thenAnswer((invocation) async {
       capturedTargets.add(
@@ -1092,7 +1124,7 @@ void main() {
         target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
-    final pickCompleter = Completer<PendingAttachment?>();
+    final pickCompleter = CancelableCompleter<PendingAttachment?>();
     bloc.add(
       ChatAttachmentPicked(
         attachment: attachment,
@@ -1103,7 +1135,7 @@ void main() {
       ),
     );
     await _pumpBloc();
-    final picked = await pickCompleter.future;
+    final picked = await pickCompleter.operation.value;
     expect(picked, isNotNull);
     final pending = picked!;
     expect(pending.attachment, attachment);
@@ -1185,7 +1217,7 @@ void main() {
         target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
-    final pickCompleter = Completer<PendingAttachment?>();
+    final pickCompleter = CancelableCompleter<PendingAttachment?>();
     bloc.add(
       ChatAttachmentPicked(
         attachment: attachment,
@@ -1196,7 +1228,7 @@ void main() {
       ),
     );
     await _pumpBloc();
-    final picked = await pickCompleter.future;
+    final picked = await pickCompleter.operation.value;
     expect(picked, isNotNull);
     final pending = picked!;
     expect(pending.status, PendingAttachmentStatus.queued);
@@ -1235,6 +1267,58 @@ void main() {
     await _pumpBloc();
     expect(await retryCompleter.future, isNull);
     expect(attempts, 2);
+
+    await bloc.close();
+  });
+
+  test('cancelled attachment pick ignores late completion', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 1,
+      emailAddress: 'peer@example.com',
+    );
+    const attachment = EmailAttachment(
+      path: '/tmp/file.txt',
+      fileName: 'file.txt',
+      sizeBytes: 2048,
+      mimeType: 'text/plain',
+    );
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    messageStreamController.add(const <Message>[]);
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
+      ),
+    ];
+    final pickCompleter = CancelableCompleter<PendingAttachment?>();
+    await pickCompleter.operation.cancel();
+    bloc.add(
+      ChatAttachmentPicked(
+        attachment: attachment,
+        recipients: recipients,
+        chat: emailChat,
+        quotedDraft: null,
+        completer: pickCompleter,
+      ),
+    );
+
+    await _pumpBloc();
+
+    expect(await pickCompleter.operation.valueOrCancellation(), isNull);
 
     await bloc.close();
   });
@@ -1912,6 +1996,220 @@ void main() {
           chatType: ChatType.chat,
         ),
       );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'resending non-local forwarded attachments preserves forwarded metadata',
+    () async {
+      final file = File(
+        '${Directory.systemTemp.path}/axichat-resend-forwarded-attachment.txt',
+      );
+      await file.writeAsString('resend forwarded attachment');
+      addTearDown(() async {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      });
+      when(
+        () => mockDatabase.getFileMetadata('resend-forwarded-meta'),
+      ).thenAnswer(
+        (_) async => FileMetadataData(
+          id: 'resend-forwarded-meta',
+          filename: 'resend-forwarded.txt',
+          mimeType: 'text/plain',
+          path: file.path,
+          sizeBytes: await file.length(),
+        ),
+      );
+      final message = Message(
+        stanzaID: 'resend-forwarded-attachment',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Forwarded caption',
+        fileMetadataID: 'resend-forwarded-meta',
+        timestamp: DateTime.now(),
+        pseudoMessageData: const <String, dynamic>{
+          'forwarded': true,
+          'forwardedFromJid': 'forwarder@axi.im',
+          'forwardedOriginalSenderLabel': 'Forwarder',
+        },
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      verify(
+        () => messageService.sendAttachment(
+          jid: initialChat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: EncryptionProtocol.none,
+          quotedMessage: any(named: 'quotedMessage'),
+          htmlCaption: any(named: 'htmlCaption'),
+          forwarded: true,
+          forwardedFromJid: 'forwarder@axi.im',
+          forwardedOriginalSenderLabel: 'Forwarder',
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          chatType: ChatType.chat,
+          quotedReference: any(named: 'quotedReference'),
+          upload: any(named: 'upload'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.resendMessage(
+          'resend-forwarded-attachment',
+          chatType: ChatType.chat,
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'resending failed invite pseudo-messages uses the MUC resend path',
+    () async {
+      final message = Message(
+        stanzaID: 'failed-invite',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'You have been invited to a group chat',
+        timestamp: DateTime.now(),
+        pseudoMessageType: PseudoMessageType.mucInvite,
+        pseudoMessageData: const <String, dynamic>{
+          'roomJid': 'room@conference.axi.im',
+          'invitee': 'friend@axi.im',
+          'token': 'invite-token',
+        },
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      verify(() => mucService.resendInvitePseudoMessage(message)).called(1);
+      verifyNever(
+        () => messageService.resendMessage(
+          'failed-invite',
+          chatType: ChatType.chat,
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'email resend fallback preserves forwarded metadata for message bodies',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(
+        () => emailService.resendMessages(any()),
+      ).thenAnswer((_) async => false);
+      when(
+        () => emailService.sendMessage(
+          chat: any(named: 'chat'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          htmlBody: any(named: 'htmlBody'),
+          forwarded: any(named: 'forwarded'),
+          forwardedFromJid: any(named: 'forwardedFromJid'),
+          forwardedOriginalSenderLabel: any(
+            named: 'forwardedOriginalSenderLabel',
+          ),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+        ),
+      ).thenAnswer((_) async => 1);
+      final emailChat = Chat(
+        jid: 'peer@delta.chat',
+        title: 'peer@example.com',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 11,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'failed-email-forward',
+        senderJid: 'self@example.com',
+        chatJid: emailChat.jid,
+        body: 'Retry forwarded email',
+        timestamp: DateTime.now(),
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 44,
+        deltaAccountId: 1,
+        pseudoMessageData: const <String, dynamic>{
+          'forwarded': true,
+          'forwardedFromJid': 'forwarder@example.com',
+          'forwardedOriginalSenderLabel': 'Forwarder',
+        },
+      );
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      verify(() => emailService.resendMessages([message])).called(1);
+      verify(
+        () => emailService.sendMessage(
+          chat: emailChat,
+          body: 'Retry forwarded email',
+          subject: any(named: 'subject'),
+          htmlBody: any(named: 'htmlBody'),
+          forwarded: true,
+          forwardedFromJid: 'forwarder@example.com',
+          forwardedOriginalSenderLabel: 'Forwarder',
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+        ),
+      ).called(1);
 
       await bloc.close();
     },
@@ -2994,6 +3292,105 @@ void main() {
     await bloc.close();
     await emailMessageStreamController.close();
   });
+
+  test(
+    'email details keep html and quoted preloading but load raw headers only on request',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final message = Message(
+        stanzaID: 'email-details-target',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 101,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 9),
+        body: 'Rendered fallback body',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.getMessageFullHtml(any()),
+      ).thenAnswer((_) async => '<p>Full html</p>');
+      when(
+        () => emailService.getQuotedMessage(any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => emailService.getMessageRawHeaders(
+          any(),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 'X-Test: yes');
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(() => emailService.getMessageFullHtml(message)).called(1);
+      verify(() => emailService.getQuotedMessage(message)).called(1);
+      expect(
+        bloc.state.emailFullHtmlByDeltaId[message.deltaMsgId],
+        '<p>Full html</p>',
+      );
+      expect(
+        bloc.state.emailQuotedTextUnavailable.contains(message.deltaMsgId),
+        isTrue,
+      );
+
+      clearInteractions(emailService);
+
+      bloc.add(const ChatMessageFocused('email-details-target'));
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyNever(
+        () => emailService.getMessageRawHeaders(
+          any(),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+
+      bloc.add(ChatEmailHeadersRequested(message));
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => emailService.getMessageRawHeaders(101, accountId: 3),
+      ).called(1);
+      expect(bloc.state.emailRawHeadersByDeltaId[101], 'X-Test: yes');
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
 
   test(
     'email read sync does not repeat seen work for the same unseen messages',

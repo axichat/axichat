@@ -51,7 +51,6 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
-import 'package:drift/drift.dart' hide JsonKey;
 import 'package:equatable/equatable.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
@@ -291,7 +290,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatReadThresholdChanged>(_onChatReadThresholdChanged);
     on<ChatMessageReadRequested>(_onChatMessageReadRequested);
     on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
-    on<ChatEmailDebugDumpRequested>(_onChatEmailDebugDumpRequested);
     on<ChatEmailFullHtmlRequested>(_onChatEmailFullHtmlRequested);
     on<ChatEmailQuotedTextRequested>(_onChatEmailQuotedTextRequested);
     on<ChatTypingStarted>(_onChatTypingStarted);
@@ -581,46 +579,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _markMessagesDisplayedLocally(List<Message> messages) async {
     if (messages.isEmpty) return;
-    if (_messageService case final XmppBase xmppBase) {
-      final db = await xmppBase.database;
-      final stanzaIds = messages
-          .map((message) => message.stanzaID)
-          .where((id) => id.isNotEmpty)
-          .toSet()
-          .toList(growable: false);
-      if (stanzaIds.isEmpty) return;
-      final chatJid = state.chat?.jid;
-      if (chatJid == null || chatJid.isEmpty) return;
-      if (db is XmppDrift) {
-        await db.batch((batch) {
-          batch.update(
-            db.messages,
-            const MessagesCompanion(displayed: Value(true)),
-            where: (tbl) =>
-                tbl.chatJid.equals(chatJid) &
-                (tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds)),
-          );
-        });
-      } else {
-        for (final id in stanzaIds) {
-          await db.markMessageDisplayed(id, chatJid: chatJid);
-        }
-      }
-      final chat = await db.getChat(chatJid);
-      if (chat == null) {
-        return;
-      }
-      final selfJid = chat.defaultTransport.isEmail
-          ? state.emailSelfJid
-          : _chatsService.myJid;
-      final unreadCount = await db.countUnreadMessagesForChat(
-        chatJid,
-        selfJid: selfJid,
-      );
-      if (chat.unreadCount != unreadCount) {
-        await db.updateChat(chat.copyWith(unreadCount: unreadCount));
-      }
-    }
+    final chat = state.chat;
+    final chatJid = chat?.jid;
+    if (chatJid == null || chatJid.isEmpty) return;
+    final selfJid = chat!.defaultTransport.isEmail
+        ? state.emailSelfJid
+        : _chatsService.myJid;
+    await _messageService.markMessagesDisplayedLocally(
+      messages: messages,
+      chatJid: chatJid,
+      selfJid: selfJid,
+    );
   }
 
   Future<void> _handleLifecycleResumed() async {
@@ -1136,8 +1105,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (timestamp == null) {
       return;
     }
-    final db = await _messageService.database;
-    final throughCount = await db.countChatMessagesThrough(
+    final throughCount = await _messageService.countChatMessagesThrough(
       chat.jid,
       throughTimestamp: timestamp,
       throughStanzaId: target.stanzaID,
@@ -1613,15 +1581,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailRawHeadersUnavailable: resetContext
             ? const <int>{}
             : state.emailRawHeadersUnavailable,
-        emailDebugDumpByDeltaId: resetContext
-            ? const <int, String>{}
-            : state.emailDebugDumpByDeltaId,
-        emailDebugDumpLoading: resetContext
-            ? const <int>{}
-            : state.emailDebugDumpLoading,
-        emailDebugDumpUnavailable: resetContext
-            ? const <int>{}
-            : state.emailDebugDumpUnavailable,
         emailFullHtmlByDeltaId: resetContext
             ? const <int, String>{}
             : state.emailFullHtmlByDeltaId,
@@ -2421,8 +2380,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required int deltaMessageId,
   }) async {
-    final db = await _messageService.database;
-    return db.getMessageByDeltaId(deltaMessageId, chatJid: chat.jid);
+    return _messageService.loadMessageByDeltaId(
+      deltaMessageId,
+      chatJid: chat.jid,
+    );
   }
 
   Future<void> _maybeBootstrapUnreadWindow({
@@ -2478,8 +2439,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         orderedIds.add(messageId);
       }
       if (orderedIds.isNotEmpty) {
-        final db = await _messageService.database;
-        final messages = await db.getMessagesByReferenceIds(
+        final messages = await _messageService.loadMessagesByReferenceIds(
           orderedIds,
           chatJid: state.chat?.jid,
         );
@@ -2842,8 +2802,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (missingStanzaIds.isEmpty) {
       return missingStanzaIds;
     }
-    final db = await _messageService.database;
-    final resolvedMessages = await db.getMessagesByReferenceIds(
+    final resolvedMessages = await _messageService.loadMessagesByReferenceIds(
       missingStanzaIds,
       chatJid: state.chat?.jid,
     );
@@ -2863,8 +2822,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (pinnedChatJid == null) {
       return;
     }
-    final db = await _messageService.database;
-    final entries = await db.getPinnedMessages(pinnedChatJid);
+    final entries = await _messageService.loadPinnedMessages(pinnedChatJid);
     add(_PinnedMessagesUpdated(entries));
   }
 
@@ -3467,16 +3425,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 ),
           );
         emit(state.copyWith(items: updatedItems, focused: fetched));
-        _maybeRequestEmailHeaders(fetched);
-        _maybeRequestEmailDebugDump(fetched);
         _maybeRequestEmailFullHtml(fetched);
         _maybeRequestEmailQuotedText(fetched);
         return;
       }
     }
     emit(state.copyWith(focused: target));
-    _maybeRequestEmailHeaders(target);
-    _maybeRequestEmailDebugDump(target);
     _maybeRequestEmailFullHtml(target);
     _maybeRequestEmailQuotedText(target);
   }
@@ -3548,75 +3502,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       state.copyWith(
         emailRawHeadersLoading: updatedLoading,
         emailRawHeadersByDeltaId: updatedHeaders,
-      ),
-    );
-  }
-
-  Future<void> _onChatEmailDebugDumpRequested(
-    ChatEmailDebugDumpRequested event,
-    Emitter<ChatState> emit,
-  ) async {
-    final message = event.message;
-    final deltaMessageId = message.deltaMsgId;
-    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      return;
-    }
-    if (state.emailDebugDumpByDeltaId.containsKey(deltaMessageId)) {
-      return;
-    }
-    if (state.emailDebugDumpLoading.contains(deltaMessageId)) {
-      return;
-    }
-    final loading = Set<int>.from(state.emailDebugDumpLoading)
-      ..add(deltaMessageId);
-    final unavailable = Set<int>.from(state.emailDebugDumpUnavailable)
-      ..remove(deltaMessageId);
-    emit(
-      state.copyWith(
-        emailDebugDumpLoading: loading,
-        emailDebugDumpUnavailable: unavailable,
-      ),
-    );
-    final emailService = _emailService;
-    if (emailService == null) {
-      final updatedLoading = Set<int>.from(state.emailDebugDumpLoading)
-        ..remove(deltaMessageId);
-      final updatedUnavailable = Set<int>.from(state.emailDebugDumpUnavailable)
-        ..add(deltaMessageId);
-      emit(
-        state.copyWith(
-          emailDebugDumpLoading: updatedLoading,
-          emailDebugDumpUnavailable: updatedUnavailable,
-        ),
-      );
-      return;
-    }
-    String? debugDump;
-    try {
-      debugDump = await emailService.getMessageDebugDump(message);
-    } on Exception {
-      debugDump = null;
-    }
-    final updatedLoading = Set<int>.from(state.emailDebugDumpLoading)
-      ..remove(deltaMessageId);
-    if (debugDump == null || debugDump.trim().isEmpty) {
-      final updatedUnavailable = Set<int>.from(state.emailDebugDumpUnavailable)
-        ..add(deltaMessageId);
-      emit(
-        state.copyWith(
-          emailDebugDumpLoading: updatedLoading,
-          emailDebugDumpUnavailable: updatedUnavailable,
-        ),
-      );
-      return;
-    }
-    final updatedDebugDumps = Map<int, String>.from(
-      state.emailDebugDumpByDeltaId,
-    )..[deltaMessageId] = debugDump;
-    emit(
-      state.copyWith(
-        emailDebugDumpLoading: updatedLoading,
-        emailDebugDumpByDeltaId: updatedDebugDumps,
       ),
     );
   }
@@ -3758,34 +3643,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailQuotedTextByDeltaId: updatedQuotedText,
       ),
     );
-  }
-
-  void _maybeRequestEmailHeaders(Message? message) {
-    final deltaMessageId = message?.deltaMsgId;
-    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      return;
-    }
-    if (state.emailRawHeadersByDeltaId.containsKey(deltaMessageId)) {
-      return;
-    }
-    if (state.emailRawHeadersLoading.contains(deltaMessageId)) {
-      return;
-    }
-    add(ChatEmailHeadersRequested(message!));
-  }
-
-  void _maybeRequestEmailDebugDump(Message? message) {
-    final deltaMessageId = message?.deltaMsgId;
-    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      return;
-    }
-    if (state.emailDebugDumpByDeltaId.containsKey(deltaMessageId)) {
-      return;
-    }
-    if (state.emailDebugDumpLoading.contains(deltaMessageId)) {
-      return;
-    }
-    add(ChatEmailDebugDumpRequested(message!));
   }
 
   void _maybeRequestEmailFullHtml(Message? message) {
@@ -4495,9 +4352,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailRawHeadersUnavailable: shouldResetEmailAvailability
             ? const <int>{}
             : state.emailRawHeadersUnavailable,
-        emailDebugDumpUnavailable: shouldResetEmailAvailability
-            ? const <int>{}
-            : state.emailDebugDumpUnavailable,
         emailFullHtmlUnavailable: shouldResetEmailAvailability
             ? const <int>{}
             : state.emailFullHtmlUnavailable,
@@ -5254,11 +5108,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final message = event.message;
     final chatType = event.chatType;
+    final pseudoMessageType = message.pseudoMessageType;
     final isEmailMessage = message.deltaChatId != null;
     final isLocalOnlyChat = isAxichatWelcomeThreadJid(message.chatJid);
     try {
       if (isEmailMessage) {
         await _resendEmailMessage(message, emit);
+        return;
+      }
+      if (pseudoMessageType?.isInvite == true) {
+        await _mucService.resendInvitePseudoMessage(message);
         return;
       }
       final attachments = await _attachmentsForMessage(message);
@@ -6556,8 +6415,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       metadataIds.addAll(ids);
     }
     if (metadataIds.isEmpty) return;
-    final db = await _messageService.database;
-    final metadataList = await db.getFileMetadataForIds(metadataIds);
+    final metadataList = await _messageService.loadFileMetadataByIds(
+      metadataIds,
+    );
     final metadataById = <String, FileMetadataData>{
       for (final metadata in metadataList) metadata.id: metadata,
     };
@@ -6679,8 +6539,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
-    final db = await _messageService.database;
-    return db.getFileMetadata(metadataId);
+    return _messageService.loadFileMetadata(metadataId);
   }
 
   String? get selfJid => _chatsService.myJid;
@@ -6712,7 +6571,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         groupLeaderByMessageId: const <String, String>{},
       );
     }
-    final db = await _messageService.database;
     final messageIds = <String>[];
     final messageById = <String, Message>{};
     final messageIndex = <String, int>{};
@@ -6727,7 +6585,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final attachmentByMessageId = <String, List<String>>{};
     final groupLeaderByMessageId = <String, String>{};
     if (messageIds.isNotEmpty) {
-      final attachments = await db.getMessageAttachmentsForMessages(messageIds);
+      final attachments = await _messageService
+          .loadMessageAttachmentsForMessages(messageIds);
       for (final entry in attachments.entries) {
         final sorted = entry.value.whereType<MessageAttachmentData>().toList(
           growable: false,
@@ -6806,10 +6665,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (allIds.isEmpty) {
       return const <String>{};
     }
-    final db = await _messageService.database;
     final snapshotIds = <String>{};
     for (final metadataId in allIds) {
-      final metadata = await db.getFileMetadata(metadataId);
+      final metadata = await _messageService.loadFileMetadata(metadataId);
       if (metadata == null) {
         continue;
       }
@@ -7458,14 +7316,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<List<Attachment>> _attachmentsForMessage(Message message) async {
     final messageId = message.id;
-    final db = await _messageService.database;
     final metadataIds = <String>[];
     if (messageId != null && messageId.isNotEmpty) {
-      var attachments = await db.getMessageAttachments(messageId);
+      var attachments = await _messageService.loadMessageAttachments(messageId);
       if (attachments.isNotEmpty) {
         final transportGroupId = attachments.first.transportGroupId?.trim();
         if (transportGroupId != null && transportGroupId.isNotEmpty) {
-          attachments = await db.getMessageAttachmentsForGroup(
+          attachments = await _messageService.loadMessageAttachmentsForGroup(
             transportGroupId,
           );
         }
@@ -7488,12 +7345,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<List<Attachment>> _attachmentsFromMetadataIds(
     Iterable<String> metadataIds,
   ) async {
-    final db = await _messageService.database;
     final orderedIds = LinkedHashSet<String>.from(metadataIds);
     if (orderedIds.isEmpty) return const [];
     final resolved = <Attachment>[];
     for (final metadataId in orderedIds) {
-      final metadata = await db.getFileMetadata(metadataId);
+      final metadata = await _messageService.loadFileMetadata(metadataId);
       final path = metadata?.path;
       if (metadata == null || path == null || path.isEmpty) {
         continue;
@@ -7549,7 +7405,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     List<Message> messages,
     Emitter<ChatState> emit,
   ) async {
-    final database = await _messageService.database;
     final contexts = state.shareContexts;
     if (contexts.isEmpty) return;
     final shareContextsById = <String, ShareContext>{};
@@ -7571,7 +7426,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final shareId = entry.key;
       final shareContext = shareContextsById[shareId];
       if (shareContext == null) continue;
-      final shareMessages = await database.getMessagesForShare(shareId);
+      final shareMessages = await _messageService.loadMessagesForShare(shareId);
       final responders = <String>{};
       for (final shareMessage in shareMessages) {
         final senderBare = _bareJid(shareMessage.senderJid);

@@ -2527,6 +2527,176 @@ void main() {
   );
 
   test(
+    'forwardMessages keeps native forward provenance aligned by copy order for repeated bodies',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'target@example.com',
+          displayName: 'target@example.com',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 88);
+
+      var getChatMessageIdsCallCount = 0;
+      when(
+        () => transport.getChatMessageIds(
+          chatId: 88,
+          beforeMessageId: any(named: 'beforeMessageId'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async {
+        getChatMessageIdsCallCount += 1;
+        return getChatMessageIdsCallCount == 1
+            ? const <int>[11]
+            : const <int>[11, 401, 402];
+      });
+      when(
+        () =>
+            transport.getMessage(401, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 401,
+          chatId: 88,
+          text: 'Repeated forwarded body',
+          timestamp: DateTime.now(),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () =>
+            transport.getMessage(402, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 402,
+          chatId: 88,
+          text: 'Repeated forwarded body',
+          subject: 'Alpha',
+          timestamp: DateTime.now(),
+          isOutgoing: true,
+        ),
+      );
+
+      final forwardedCopyOne = Message(
+        stanzaID: 'dc-msg-401',
+        senderJid: 'alice@example.org',
+        chatJid: 'target@delta.chat',
+        body: 'Repeated forwarded body',
+        timestamp: DateTime.now(),
+        deltaMsgId: 401,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      );
+      final forwardedCopyTwo = Message(
+        stanzaID: 'dc-msg-402',
+        senderJid: 'alice@example.org',
+        chatJid: 'target@delta.chat',
+        body: 'Repeated forwarded body',
+        subject: 'Alpha',
+        timestamp: DateTime.now(),
+        deltaMsgId: 402,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      );
+      when(
+        () => database.getMessageByDeltaId(
+          401,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => forwardedCopyOne);
+      when(
+        () => database.getMessageByDeltaId(
+          402,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => forwardedCopyTwo);
+
+      final targetChat = Chat(
+        jid: 'target@delta.chat',
+        title: 'target@example.com',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'target@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+      final sourceMessages = [
+        Message(
+          stanzaID: 'dc-msg-91',
+          senderJid: 'first@example.com',
+          chatJid: 'first@delta.chat',
+          body: 'Repeated forwarded body',
+          subject: 'Alpha',
+          timestamp: DateTime.now(),
+          deltaMsgId: 91,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+        Message(
+          stanzaID: 'dc-msg-92',
+          senderJid: 'second@example.com',
+          chatJid: 'second@delta.chat',
+          body: 'Repeated forwarded body',
+          subject: 'Alpha',
+          timestamp: DateTime.now(),
+          deltaMsgId: 92,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ];
+
+      final forwarded = await service.forwardMessages(
+        messages: sourceMessages,
+        toChat: targetChat,
+      );
+
+      expect(forwarded, isTrue);
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>()
+                .having((message) => message.deltaMsgId, 'deltaMsgId', 401)
+                .having(
+                  (message) => message.forwardedFromJid,
+                  'forwardedFromJid',
+                  'first@example.com',
+                ),
+          ),
+        ),
+      ).called(1);
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>()
+                .having((message) => message.deltaMsgId, 'deltaMsgId', 402)
+                .having(
+                  (message) => message.forwardedFromJid,
+                  'forwardedFromJid',
+                  'second@example.com',
+                ),
+          ),
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'sendMessage repairs synthetic stored email addresses after resolution',
     () async {
       final service = EmailService(

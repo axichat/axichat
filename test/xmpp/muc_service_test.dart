@@ -313,6 +313,7 @@ void main() {
     registerFallbackValue(_emptyXmlNodeList);
     registerFallbackValue(MessageTimelineFilter.directOnly);
     registerFallbackValue(MessageNotificationChannel.chat);
+    registerFallbackValue(MessageError.unknown);
     registerOmemoFallbacks();
     resetForegroundNotifier(value: false);
   });
@@ -1179,7 +1180,7 @@ void main() {
     );
 
     test(
-      'JOIN-021 [HP] joinRoom requests affiliations as soon as self presence arrives',
+      'JOIN-021 [HP] joinRoom does not request affiliations as soon as self presence arrives',
       () async {
         final requestedAffiliations = <String>[];
         when(
@@ -1247,14 +1248,7 @@ void main() {
 
         await xmppService.joinRoom(roomJid: _roomJid, nickname: 'me');
 
-        expect(
-          requestedAffiliations,
-          containsAll(<String>[
-            OccupantAffiliation.member.xmlValue,
-            OccupantAffiliation.owner.xmlValue,
-            OccupantAffiliation.admin.xmlValue,
-          ]),
-        );
+        expect(requestedAffiliations, isEmpty);
       },
     );
 
@@ -2503,6 +2497,104 @@ void main() {
         expect(axiInvite?.roomJid, equals(_roomJid));
         expect(axiInvite?.inviter, equals(_accountBareJid));
         expect(axiInvite?.invitee, equals(_inviteeJid));
+      },
+    );
+
+    test(
+      'DINV-010A [HP] inviteUserToRoom marks the pseudo-message failed when send rejects immediately',
+      () async {
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockDatabase.saveMessageError(
+            stanzaID: any(named: 'stanzaID'),
+            error: any(named: 'error'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => false);
+
+        await expectLater(
+          () => xmppService.inviteUserToRoom(
+            roomJid: _roomJid,
+            inviteeJid: _inviteeJid,
+            reason: _inviteReasonRaw,
+            password: _invitePasswordRaw,
+          ),
+          throwsA(isA<XmppMessageException>()),
+        );
+
+        verify(
+          () => mockDatabase.saveMessageError(
+            stanzaID: _stanzaId,
+            error: MessageError.unknown,
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'DINV-010B [HP] resendInvitePseudoMessage reuses the stored token without membership changes',
+      () async {
+        const originalToken = 'original-token';
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+
+        final message = Message(
+          stanzaID: 'failed-invite',
+          senderJid: _accountBareJid,
+          chatJid: _inviteeJid,
+          body: 'You have been invited to a group chat',
+          timestamp: DateTime.now(),
+          pseudoMessageType: PseudoMessageType.mucInvite,
+          pseudoMessageData: const <String, dynamic>{
+            'roomJid': _roomJid,
+            'invitee': _inviteeJid,
+            'inviter': _accountBareJid,
+            'token': originalToken,
+            'reason': _inviteReasonTrimmed,
+            'roomName': _roomName,
+            'password': _invitePasswordTrimmed,
+          },
+        );
+
+        await xmppService.resendInvitePseudoMessage(message);
+
+        final captured =
+            verify(
+                  () => mockConnection.sendMessage(captureAny()),
+                ).captured.single
+                as mox.MessageEvent;
+        final directInvite = captured.get<DirectMucInviteData>();
+        final axiInvite = captured.get<AxiMucInvitePayload>();
+
+        expect(directInvite, isNotNull);
+        expect(directInvite?.password, equals(_invitePasswordTrimmed));
+        expect(axiInvite, isNotNull);
+        expect(axiInvite?.token, equals(originalToken));
+        expect(axiInvite?.invitee, equals(_inviteeJid));
+        verifyNever(
+          () => mucManager.sendAdminIq(
+            roomJid: any(named: 'roomJid'),
+            items: any(named: 'items'),
+          ),
+        );
       },
     );
 

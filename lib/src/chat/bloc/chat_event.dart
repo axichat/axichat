@@ -199,15 +199,6 @@ final class ChatEmailHeadersRequested extends ChatEvent {
   List<Object?> get props => [message];
 }
 
-final class ChatEmailDebugDumpRequested extends ChatEvent {
-  const ChatEmailDebugDumpRequested(this.message);
-
-  final Message message;
-
-  @override
-  List<Object?> get props => [message];
-}
-
 final class ChatEmailFullHtmlRequested extends ChatEvent {
   const ChatEmailFullHtmlRequested(this.message);
 
@@ -591,7 +582,7 @@ final class ChatAttachmentPicked extends ChatEvent {
   final List<ComposerRecipient> recipients;
   final Chat chat;
   final Message? quotedDraft;
-  final Completer<PendingAttachment?> completer;
+  final CancelableCompleter<PendingAttachment?> completer;
 
   @override
   List<Object?> get props => [

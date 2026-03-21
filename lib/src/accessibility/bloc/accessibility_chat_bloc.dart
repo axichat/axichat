@@ -93,8 +93,7 @@ class AccessibilityChatBloc
 
   Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
     try {
-      final db = await _messageService.database;
-      return db.getFileMetadata(metadataId);
+      return await _messageService.loadFileMetadata(metadataId);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reload accessibility attachment metadata $metadataId',
@@ -354,7 +353,6 @@ class AccessibilityChatBloc
       return const <String, List<FileMetadataData>>{};
     }
     try {
-      final db = await _messageService.database;
       final messageIds = <String>[];
       final messageKeys = <String, String>{};
       for (final message in messages) {
@@ -370,16 +368,15 @@ class AccessibilityChatBloc
         if (metadataCache.containsKey(metadataId)) {
           return metadataCache[metadataId];
         }
-        final resolved = await db.getFileMetadata(metadataId);
+        final resolved = await _messageService.loadFileMetadata(metadataId);
         metadataCache[metadataId] = resolved;
         return resolved;
       }
 
       final attachmentsByMessage = <String, List<FileMetadataData>>{};
       if (messageIds.isNotEmpty) {
-        final attachments = await db.getMessageAttachmentsForMessages(
-          messageIds,
-        );
+        final attachments = await _messageService
+            .loadMessageAttachmentsForMessages(messageIds);
         for (final entry in attachments.entries) {
           final ordered = entry.value.whereType<MessageAttachmentData>().toList(
             growable: false,

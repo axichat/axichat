@@ -1819,7 +1819,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         },
         operationName: _mucRoomAvatarBootstrapOperationName,
         run: () async {
-          await _refreshRoomAvatarsFromLatestBookmarks();
+          await refreshRoomAvatars(
+            List<MucBookmark>.from(_latestBootstrapBookmarks),
+          );
         },
       ),
     );
@@ -1833,7 +1835,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         },
         operationName: _mucAutojoinBootstrapOperationName,
         run: () async {
-          await _autojoinLatestBookmarkedRooms();
+          await _autojoinBookmarks(
+            List<MucBookmark>.from(_latestBootstrapBookmarks),
+          );
         },
       ),
     );
@@ -2905,7 +2909,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       await joinCompleter.future.timeout(_mucJoinTimeout);
       await joinRequestFuture;
       await pollFuture;
-      _scheduleRoomPostJoinRefresh(normalizedRoom);
     } on TimeoutException {
       _takeJoinCompleterForKey(normalizedRoom);
       final roomState = _roomStates[normalizedRoom];
@@ -3942,48 +3945,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
   }
 
-  Future<void> _refreshRoomAffiliations(String roomJid) async {
-    await Future.wait<void>(<Future<void>>[
-      _refreshRoomAffiliation(
-        roomJid: roomJid,
-        affiliation: OccupantAffiliation.member,
-      ),
-      _refreshRoomAffiliation(
-        roomJid: roomJid,
-        affiliation: OccupantAffiliation.owner,
-      ),
-      _refreshRoomAffiliation(
-        roomJid: roomJid,
-        affiliation: OccupantAffiliation.admin,
-      ),
-    ]);
-  }
-
-  Future<void> _refreshRoomAffiliation({
-    required String roomJid,
-    required OccupantAffiliation affiliation,
-  }) async {
-    try {
-      switch (affiliation) {
-        case OccupantAffiliation.member:
-          await fetchRoomMembers(roomJid: roomJid);
-        case OccupantAffiliation.owner:
-          await fetchRoomOwners(roomJid: roomJid);
-        case OccupantAffiliation.admin:
-          await fetchRoomAdmins(roomJid: roomJid);
-        case OccupantAffiliation.outcast:
-        case OccupantAffiliation.none:
-          return;
-      }
-    } on Exception catch (error, stackTrace) {
-      _mucLog.fine(
-        'Failed to refresh ${affiliation.xmlValue} affiliations.',
-        error,
-        stackTrace,
-      );
-    }
-  }
-
   void _scheduleRoomPostJoinRefresh(String roomJid) {
     final key = _roomKey(roomJid);
     if (_roomHasLeft(key)) return;
@@ -3995,7 +3956,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     fireAndForget(() async {
       try {
         await _awaitInstantRoomConfigurationIfNeeded(key);
-        await _refreshRoomAffiliations(key);
         await _refreshRoomAvatar(key).timeout(_roomQueryTimeout);
         completer.complete();
       } on TimeoutException {
@@ -4092,14 +4052,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         _mucLog.fine('Failed to auto-join one or more bookmarked rooms.');
       }
     }
-  }
-
-  Future<void> _autojoinLatestBookmarkedRooms() async {
-    await _autojoinBookmarks(List<MucBookmark>.from(_latestBootstrapBookmarks));
-  }
-
-  Future<void> _refreshRoomAvatarsFromLatestBookmarks() async {
-    await refreshRoomAvatars(List<MucBookmark>.from(_latestBootstrapBookmarks));
   }
 
   Future<void> _applyMucBookmarksState(List<MucBookmark> bookmarks) async {
@@ -5145,54 +5097,130 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     String? reason,
     String? password,
   }) async {
-    final myBare = _myJid?.toBare().toString();
-    if (myBare == null) throw XmppMessageException();
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(roomJid),
     );
-    final roomName = chat?.title;
     final resolvedPassword =
         _normalizePassword(password) ?? _passwordForRoom(roomJid);
-    final token = generateRandomString(length: 10);
+    await _sendInvitePseudoMessage(
+      roomJid: roomJid,
+      inviteeJid: inviteeJid,
+      token: generateRandomString(length: 10),
+      revoked: false,
+      reason: reason,
+      password: resolvedPassword,
+      roomName: chat?.title,
+    );
+  }
+
+  Future<void> resendInvitePseudoMessage(Message message) async {
+    final pseudoMessageType = message.pseudoMessageType;
+    if (pseudoMessageType?.isInvite != true) {
+      throw XmppMessageException();
+    }
+    final payload = message.pseudoMessageData ?? const <String, dynamic>{};
+    final roomJid = (payload['roomJid'] as String?)?.trim();
+    final inviteeJid = (payload['invitee'] as String?)?.trim();
+    final token = (payload['token'] as String?)?.trim();
+    if (roomJid == null ||
+        roomJid.isEmpty ||
+        inviteeJid == null ||
+        inviteeJid.isEmpty ||
+        token == null ||
+        token.isEmpty) {
+      throw XmppMessageException();
+    }
+    await _sendInvitePseudoMessage(
+      roomJid: roomJid,
+      inviteeJid: inviteeJid,
+      token: token,
+      revoked:
+          payload['revoked'] == true ||
+          pseudoMessageType == PseudoMessageType.mucInviteRevocation,
+      reason: (payload['reason'] as String?)?.trim(),
+      password: (payload['password'] as String?)?.trim(),
+      roomName: (payload['roomName'] as String?)?.trim(),
+      displayBody: message.body?.trim(),
+    );
+  }
+
+  Future<void> _sendInvitePseudoMessage({
+    required String roomJid,
+    required String inviteeJid,
+    required String token,
+    required bool revoked,
+    String? reason,
+    String? password,
+    String? roomName,
+    String? displayBody,
+  }) async {
+    final myBare = _myJid?.toBare().toString();
+    if (myBare == null) throw XmppMessageException();
+    final resolvedRoomName = switch (roomName?.trim()) {
+      final String value when value.isNotEmpty => value,
+      _ => (await _dbOpReturning<XmppDatabase, Chat?>(
+        (db) => db.getChat(roomJid),
+      ))?.title,
+    };
+    final resolvedPassword = revoked
+        ? null
+        : (_normalizePassword(password) ?? _passwordForRoom(roomJid));
     final payload = <String, dynamic>{
       'roomJid': roomJid,
       'token': token,
       'inviter': myBare,
       'invitee': inviteeJid,
       if (reason?.isNotEmpty == true) 'reason': reason,
-      if (roomName?.isNotEmpty == true) 'roomName': roomName,
-      if (resolvedPassword?.isNotEmpty == true) 'password': resolvedPassword,
+      if (resolvedRoomName?.isNotEmpty == true) 'roomName': resolvedRoomName,
+      if (resolvedPassword?.isNotEmpty == true && !revoked)
+        'password': resolvedPassword,
+      if (revoked) 'revoked': true,
     };
-    const displayLine = 'You have been invited to a group chat';
-    final displayBody = reason?.isNotEmpty == true
-        ? '$displayLine\n$reason'
-        : displayLine;
-    final message = Message(
+    final resolvedDisplayBody = switch (displayBody?.trim()) {
+      final String value when value.isNotEmpty => value,
+      _ when revoked =>
+        resolvedRoomName?.isNotEmpty == true
+            ? 'Invite revoked for $resolvedRoomName'
+            : 'Invite revoked',
+      _ =>
+        reason?.isNotEmpty == true
+            ? 'You have been invited to a group chat\n$reason'
+            : 'You have been invited to a group chat',
+    };
+    final storedMessage = Message(
       stanzaID: _connection.generateId(),
       senderJid: myBare,
       chatJid: inviteeJid,
-      body: displayBody,
+      body: resolvedDisplayBody,
       timestamp: DateTime.timestamp(),
-      pseudoMessageType: PseudoMessageType.mucInvite,
+      pseudoMessageType: revoked
+          ? PseudoMessageType.mucInviteRevocation
+          : PseudoMessageType.mucInvite,
       pseudoMessageData: payload,
     );
     await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(message, chatType: ChatType.chat, selfJid: myBare),
-    );
-    final inviteExtensions = <mox.StanzaHandlerExtension>[
-      DirectMucInviteData(
-        roomJid: roomJid,
-        reason: reason,
-        password: resolvedPassword,
+      (db) => db.saveMessage(
+        storedMessage,
+        chatType: ChatType.chat,
+        selfJid: myBare,
       ),
+    );
+    final extensions = <mox.StanzaHandlerExtension>[
+      if (!revoked)
+        DirectMucInviteData(
+          roomJid: roomJid,
+          reason: reason,
+          password: resolvedPassword,
+        ),
       AxiMucInvitePayload(
         roomJid: roomJid,
         token: token,
         inviter: myBare,
         invitee: inviteeJid,
-        roomName: roomName,
+        roomName: resolvedRoomName,
         reason: reason,
         password: resolvedPassword,
+        revoked: revoked,
       ),
     ];
     final stanza = mox.MessageEvent(
@@ -5200,17 +5228,41 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       mox.JID.fromString(inviteeJid),
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(displayBody),
-        mox.MessageIdData(message.stanzaID),
+        mox.MessageBodyData(resolvedDisplayBody),
+        mox.MessageIdData(storedMessage.stanzaID),
         const mox.MarkableData(true),
         mox.ChatState.active,
-        ...inviteExtensions,
+        ...extensions,
       ]),
-      id: message.stanzaID,
+      id: storedMessage.stanzaID,
       type: _messageTypeNormal,
     );
-    final sent = await _connection.sendMessage(stanza);
-    if (!sent) throw XmppMessageException();
+    var failureRecorded = false;
+    try {
+      final sent = await _connection.sendMessage(stanza);
+      if (!sent) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: storedMessage.stanzaID,
+            error: MessageError.unknown,
+          ),
+        );
+        failureRecorded = true;
+        throw XmppMessageException();
+      }
+    } on XmppMessageException {
+      rethrow;
+    } on Exception {
+      if (!failureRecorded) {
+        await _dbOp<XmppDatabase>(
+          (db) => db.saveMessageError(
+            stanzaID: storedMessage.stanzaID,
+            error: MessageError.unknown,
+          ),
+        );
+      }
+      throw XmppMessageException();
+    }
   }
 
   Future<void> revokeInvite({
@@ -5218,62 +5270,16 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     required String inviteeJid,
     required String token,
   }) async {
-    final myBare = _myJid?.toBare().toString();
-    if (myBare == null) throw XmppMessageException();
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(roomJid),
     );
-    final roomName = chat?.title;
-    final payload = <String, dynamic>{
-      'roomJid': roomJid,
-      'token': token,
-      'inviter': myBare,
-      'invitee': inviteeJid,
-      'revoked': true,
-      if (roomName?.isNotEmpty == true) 'roomName': roomName,
-    };
-    final displayLine = roomName?.isNotEmpty == true
-        ? 'Invite revoked for $roomName'
-        : 'Invite revoked';
-    final displayBody = displayLine;
-    final message = Message(
-      stanzaID: _connection.generateId(),
-      senderJid: myBare,
-      chatJid: inviteeJid,
-      body: displayBody,
-      timestamp: DateTime.timestamp(),
-      pseudoMessageType: PseudoMessageType.mucInviteRevocation,
-      pseudoMessageData: payload,
+    await _sendInvitePseudoMessage(
+      roomJid: roomJid,
+      inviteeJid: inviteeJid,
+      token: token,
+      revoked: true,
+      roomName: chat?.title,
     );
-    await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(message, chatType: ChatType.chat, selfJid: myBare),
-    );
-    final revokeExtensions = <mox.StanzaHandlerExtension>[
-      AxiMucInvitePayload(
-        roomJid: roomJid,
-        token: token,
-        inviter: myBare,
-        invitee: inviteeJid,
-        roomName: roomName,
-        revoked: true,
-      ),
-    ];
-    final stanza = mox.MessageEvent(
-      mox.JID.fromString(myBare),
-      mox.JID.fromString(inviteeJid),
-      false,
-      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        mox.MessageBodyData(displayBody),
-        mox.MessageIdData(message.stanzaID),
-        const mox.MarkableData(true),
-        mox.ChatState.active,
-        ...revokeExtensions,
-      ]),
-      id: message.stanzaID,
-      type: _messageTypeNormal,
-    );
-    final sent = await _connection.sendMessage(stanza);
-    if (!sent) throw XmppMessageException();
   }
 
   Future<void> _applyLocalNickname({

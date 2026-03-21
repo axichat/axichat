@@ -17,9 +17,7 @@ class ChatMessageDetails extends StatefulWidget {
 }
 
 class _ChatMessageDetailsState extends State<ChatMessageDetails> {
-  final Logger _log = Logger('ChatMessageDetails');
   Locale? _lastLocale;
-  String? _lastLoggedEmailDebugDumpKey;
   late intl.DateFormat _timestampFormat;
 
   @override
@@ -31,502 +29,447 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     _timestampFormat = intl.DateFormat.yMMMMEEEEd(
       locale.toLanguageTag(),
     ).add_jms();
-    _maybeLogEmailDebugDump(context.read<ChatBloc>().state);
-  }
-
-  void _maybeLogEmailDebugDump(ChatState state) {
-    final message = state.focused;
-    final deltaMessageId = message?.deltaMsgId;
-    if (deltaMessageId == null) {
-      return;
-    }
-    final debugDump = state.emailDebugDumpByDeltaId[deltaMessageId]?.trim();
-    if (debugDump == null || debugDump.isEmpty) {
-      return;
-    }
-    final dumpKey = '$deltaMessageId:${debugDump.hashCode}';
-    if (_lastLoggedEmailDebugDumpKey == dumpKey) {
-      return;
-    }
-    _lastLoggedEmailDebugDumpKey = dumpKey;
-    _log.info(
-      '===== AXICHAT DELTA DEBUG DUMP BEGIN delta=$deltaMessageId =====',
-    );
-    for (final line in debugDump.split('\n')) {
-      _log.info(line);
-    }
-    _log.info('===== AXICHAT DELTA DEBUG DUMP END delta=$deltaMessageId =====');
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<ChatBloc, ChatState>(
-      listenWhen: (previous, current) =>
-          previous.focused?.deltaMsgId != current.focused?.deltaMsgId ||
-          previous.emailDebugDumpByDeltaId != current.emailDebugDumpByDeltaId,
-      listener: (context, state) {
-        _maybeLogEmailDebugDump(state);
-      },
-      child: BlocBuilder<ChatBloc, ChatState>(
-        builder: (context, state) {
-          final l10n = context.l10n;
-          final message = state.focused;
-          if (message == null) return const SizedBox.shrink();
-          return BlocSelector<ProfileCubit, ProfileState, String?>(
-            selector: (profileState) => profileState.jid,
-            builder: (context, profileJid) {
-              final resolvedEmailSelfJid = state.emailSelfJid
-                  ?.resolveDeltaPlaceholderJid();
-              final bareSender = bareAddress(message.senderJid);
-              final bool isPlaceholderSender =
-                  bareSender?.isDeltaPlaceholderJid ?? false;
-              final isFromSelf =
-                  isPlaceholderSender ||
-                  bareSender == bareAddress(profileJid) ||
-                  (resolvedEmailSelfJid != null &&
-                      bareSender == bareAddress(resolvedEmailSelfJid));
-              final shareContext = state.shareContexts[message.stanzaID];
-              final shareParticipants = _shareParticipants(
-                shareContext?.participants ?? const <storage_models.Chat>[],
-                state.chat?.jid,
-                profileJid,
-              );
-              final transport = state.chat?.transport;
-              final deltaMessageId = message.deltaMsgId;
-              final isEmailMessage = deltaMessageId != null;
-              final isEmailTransport =
-                  isEmailMessage || transport?.isEmail == true;
-              final protocolLabel = isEmailMessage
-                  ? MessageTransport.email.label
-                  : transport?.label ?? MessageTransport.xmpp.label;
-              final colors = context.colorScheme;
-              final spacing = context.spacing;
-              final sizing = context.sizing;
-              final textTheme = context.textTheme;
-              final settings = context.watch<SettingsCubit>().state;
-              final protocolIcon = Icon(
-                isEmailMessage ? LucideIcons.mail : LucideIcons.messageCircle,
-                size: sizing.menuItemIconSize,
-                color: isEmailMessage ? colors.destructive : colors.primary,
-              );
-              final timestamp = message.timestamp?.toLocal();
-              final timestampLabel = timestamp == null
-                  ? l10n.commonUnknownLabel
-                  : _timestampFormat.format(timestamp);
-              final showEmailRecipients =
-                  isFromSelf &&
-                  (transport?.isEmail ?? false) &&
-                  shareParticipants.isNotEmpty;
-              final showReactions =
-                  (transport == null || transport.isXmpp) &&
-                  message.reactionsPreview.isNotEmpty;
-              final copyLabel = l10n.chatActionCopy;
-              final String? resolvedSenderAddress = message.senderJid
-                  .resolveDeltaPlaceholderJid(resolvedEmailSelfJid);
-              final senderAddress = resolvedSenderAddress?.trim() ?? '';
-              final hideSenderAddress =
-                  state.chat?.isAxichatWelcomeThread == true;
-              final String? rawHeaders = deltaMessageId == null
-                  ? null
-                  : state.emailRawHeadersByDeltaId[deltaMessageId];
-              final bool isHeadersLoading =
-                  deltaMessageId != null &&
-                  state.emailRawHeadersLoading.contains(deltaMessageId);
-              final bool isHeadersUnavailable =
-                  deltaMessageId != null &&
-                  state.emailRawHeadersUnavailable.contains(deltaMessageId);
-              final String? debugDump = deltaMessageId == null
-                  ? null
-                  : state.emailDebugDumpByDeltaId[deltaMessageId];
-              final bool isDebugDumpLoading =
-                  deltaMessageId != null &&
-                  state.emailDebugDumpLoading.contains(deltaMessageId);
-              final bool isDebugDumpUnavailable =
-                  deltaMessageId != null &&
-                  state.emailDebugDumpUnavailable.contains(deltaMessageId);
-              final String? resolvedHtmlBody = deltaMessageId == null
-                  ? message.htmlBody
-                  : state.emailFullHtmlByDeltaId[deltaMessageId] ??
-                        message.htmlBody;
-              final normalizedHtmlBody = resolvedHtmlBody?.trim();
-              final hasHtmlBody =
-                  normalizedHtmlBody != null && normalizedHtmlBody.isNotEmpty;
-              final shouldLoadImages =
-                  settings.autoLoadEmailImages ||
-                  (message.id != null &&
-                      widget.loadedEmailImageMessageIds.contains(message.id));
-              final VoidCallback? onLoadRequested = message.id == null
-                  ? null
-                  : () => widget.onEmailImagesApproved(message.id!);
-              final bool hasRemoteHtmlImages =
-                  hasHtmlBody &&
-                  !shouldLoadImages &&
-                  HtmlContentCodec.containsRemoteImages(normalizedHtmlBody);
-              final bool hasBlockedHtmlContent =
-                  hasHtmlBody &&
-                  HtmlContentCodec.containsBlockedWebViewContent(
-                    normalizedHtmlBody,
+    return BlocBuilder<ChatBloc, ChatState>(
+      builder: (context, state) {
+        final l10n = context.l10n;
+        final locate = context.read;
+        final message = state.focused;
+        if (message == null) return const SizedBox.shrink();
+        return BlocSelector<ProfileCubit, ProfileState, String?>(
+          selector: (profileState) => profileState.jid,
+          builder: (context, profileJid) {
+            final resolvedEmailSelfJid = state.emailSelfJid
+                ?.resolveDeltaPlaceholderJid();
+            final bareSender = bareAddress(message.senderJid);
+            final bool isPlaceholderSender =
+                bareSender?.isDeltaPlaceholderJid ?? false;
+            final isFromSelf =
+                isPlaceholderSender ||
+                bareSender == bareAddress(profileJid) ||
+                (resolvedEmailSelfJid != null &&
+                    bareSender == bareAddress(resolvedEmailSelfJid));
+            final shareContext = state.shareContexts[message.stanzaID];
+            final shareParticipants = _shareParticipants(
+              shareContext?.participants ?? const <storage_models.Chat>[],
+              state.chat?.jid,
+              profileJid,
+            );
+            final transport = state.chat?.transport;
+            final deltaMessageId = message.deltaMsgId;
+            final isEmailMessage = deltaMessageId != null;
+            final isEmailTransport =
+                isEmailMessage || transport?.isEmail == true;
+            final protocolLabel = isEmailMessage
+                ? MessageTransport.email.label
+                : transport?.label ?? MessageTransport.xmpp.label;
+            final colors = context.colorScheme;
+            final spacing = context.spacing;
+            final sizing = context.sizing;
+            final textTheme = context.textTheme;
+            final settings = context.watch<SettingsCubit>().state;
+            final protocolIcon = Icon(
+              isEmailMessage ? LucideIcons.mail : LucideIcons.messageCircle,
+              size: sizing.menuItemIconSize,
+              color: isEmailMessage ? colors.destructive : colors.primary,
+            );
+            final timestamp = message.timestamp?.toLocal();
+            final timestampLabel = timestamp == null
+                ? l10n.commonUnknownLabel
+                : _timestampFormat.format(timestamp);
+            final showEmailRecipients =
+                isFromSelf &&
+                (transport?.isEmail ?? false) &&
+                shareParticipants.isNotEmpty;
+            final showReactions =
+                (transport == null || transport.isXmpp) &&
+                message.reactionsPreview.isNotEmpty;
+            final copyLabel = l10n.chatActionCopy;
+            final String? resolvedSenderAddress = message.senderJid
+                .resolveDeltaPlaceholderJid(resolvedEmailSelfJid);
+            final senderAddress = resolvedSenderAddress?.trim() ?? '';
+            final hideSenderAddress =
+                state.chat?.isAxichatWelcomeThread == true;
+            final String? rawHeaders = deltaMessageId == null
+                ? null
+                : state.emailRawHeadersByDeltaId[deltaMessageId];
+            final bool isHeadersLoading =
+                deltaMessageId != null &&
+                state.emailRawHeadersLoading.contains(deltaMessageId);
+            final bool isHeadersUnavailable =
+                deltaMessageId != null &&
+                state.emailRawHeadersUnavailable.contains(deltaMessageId);
+            final VoidCallback? onHeadersRequested = deltaMessageId == null
+                ? null
+                : () => locate<ChatBloc>().add(
+                    ChatEmailHeadersRequested(message),
                   );
-              final String? fallbackBodyText = switch (message.body?.trim()) {
-                final String text when text.isNotEmpty => text,
-                _ => null,
-              };
-              final String? fallbackQuotedText = deltaMessageId == null
-                  ? null
-                  : switch (state.emailQuotedTextByDeltaId[deltaMessageId]
-                        ?.trim()) {
-                      final String text when text.isNotEmpty => text,
-                      _ => null,
-                    };
-              final String? emailFallbackText =
-                  fallbackBodyText ?? fallbackQuotedText;
-              final bool shouldShowImageGallery = hasRemoteHtmlImages;
-              final xmppCapabilities = state.xmppCapabilities;
-              final supportsXmppMarkers =
-                  xmppCapabilities?.supportsMarkers == true;
-              final supportsXmppReceipts =
-                  xmppCapabilities?.supportsReceipts == true;
-              final hasDeliveryFailure = message.error.isNotNone;
-              final showsReceivedStatus =
-                  isEmailTransport ||
-                  message.received ||
-                  hasDeliveryFailure ||
-                  supportsXmppMarkers ||
-                  supportsXmppReceipts;
-              final showsDisplayedStatus = isEmailTransport
-                  ? isFromSelf
-                  : message.displayed ||
-                        hasDeliveryFailure ||
-                        supportsXmppMarkers;
-              final bool? sentStatus = message.acked
-                  ? true
-                  : (hasDeliveryFailure ? false : null);
-              final bool? receivedStatus = message.received
-                  ? true
-                  : (hasDeliveryFailure ? false : null);
-              final bool? displayedStatus = message.displayed
-                  ? true
-                  : (hasDeliveryFailure ? false : null);
-              final metadataItems = <Widget>[];
-              final stanzaId = message.stanzaID.trim();
-              if (stanzaId.isNotEmpty) {
-                metadataItems.add(
-                  _MessageDetailsInfo(
-                    label: l10n.chatMessageDetailsStanzaIdLabel,
-                    value: stanzaId,
-                    copyValue: stanzaId,
-                    copyLabel: copyLabel,
-                  ),
+            final String? resolvedHtmlBody = deltaMessageId == null
+                ? message.htmlBody
+                : state.emailFullHtmlByDeltaId[deltaMessageId] ??
+                      message.htmlBody;
+            final normalizedHtmlBody = resolvedHtmlBody?.trim();
+            final hasHtmlBody =
+                normalizedHtmlBody != null && normalizedHtmlBody.isNotEmpty;
+            final shouldLoadImages =
+                settings.autoLoadEmailImages ||
+                (message.id != null &&
+                    widget.loadedEmailImageMessageIds.contains(message.id));
+            final VoidCallback? onLoadRequested = message.id == null
+                ? null
+                : () => widget.onEmailImagesApproved(message.id!);
+            final bool hasRemoteHtmlImages =
+                hasHtmlBody &&
+                !shouldLoadImages &&
+                HtmlContentCodec.containsRemoteImages(normalizedHtmlBody);
+            final bool hasBlockedHtmlContent =
+                hasHtmlBody &&
+                HtmlContentCodec.containsBlockedWebViewContent(
+                  normalizedHtmlBody,
                 );
-              }
-              final originId = message.originID?.trim();
-              if (originId?.isNotEmpty == true) {
-                metadataItems.add(
-                  _MessageDetailsInfo(
-                    label: l10n.chatMessageDetailsOriginIdLabel,
-                    value: originId!,
-                    copyValue: originId,
-                    copyLabel: copyLabel,
-                  ),
-                );
-              }
-              final occupantId = message.occupantID?.trim();
-              if (occupantId?.isNotEmpty == true) {
-                metadataItems.add(
-                  _MessageDetailsInfo(
-                    label: l10n.chatMessageDetailsOccupantIdLabel,
-                    value: occupantId!,
-                    copyValue: occupantId,
-                    copyLabel: copyLabel,
-                  ),
-                );
-              }
-              if (deltaMessageId != null) {
-                final deltaLabel = deltaMessageId.toString();
-                metadataItems.add(
-                  _MessageDetailsInfo(
-                    label: l10n.chatMessageDetailsDeltaIdLabel,
-                    value: deltaLabel,
-                    copyValue: deltaLabel,
-                    copyLabel: copyLabel,
-                  ),
-                );
-              }
-              final localId = message.id?.trim();
-              if (localId?.isNotEmpty == true) {
-                metadataItems.add(
-                  _MessageDetailsInfo(
-                    label: l10n.chatMessageDetailsLocalIdLabel,
-                    value: localId!,
-                    copyValue: localId,
-                    copyLabel: copyLabel,
-                  ),
-                );
-              }
-              return SingleChildScrollView(
-                child: Container(
-                  width: double.maxFinite,
-                  padding: EdgeInsets.all(spacing.m),
-                  child: Column(
-                    spacing: spacing.l,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (hasBlockedHtmlContent) const _EmailHtmlSafetyNotice(),
-                      if (hasHtmlBody)
-                        DecoratedBox(
-                          decoration: ShapeDecoration(
-                            color: context.colorScheme.card,
-                            shape: RoundedSuperellipseBorder(
-                              borderRadius: BorderRadius.circular(
-                                context.radii.squircle,
-                              ),
-                              side: context.borderSide,
+            final String? fallbackBodyText = switch (message.body?.trim()) {
+              final String text when text.isNotEmpty => text,
+              _ => null,
+            };
+            final String? fallbackQuotedText = deltaMessageId == null
+                ? null
+                : switch (state.emailQuotedTextByDeltaId[deltaMessageId]
+                      ?.trim()) {
+                    final String text when text.isNotEmpty => text,
+                    _ => null,
+                  };
+            final String? emailFallbackText =
+                fallbackBodyText ?? fallbackQuotedText;
+            final bool shouldShowImageGallery = hasRemoteHtmlImages;
+            final xmppCapabilities = state.xmppCapabilities;
+            final supportsXmppMarkers =
+                xmppCapabilities?.supportsMarkers == true;
+            final supportsXmppReceipts =
+                xmppCapabilities?.supportsReceipts == true;
+            final hasDeliveryFailure = message.error.isNotNone;
+            final showsReceivedStatus =
+                isEmailTransport ||
+                message.received ||
+                hasDeliveryFailure ||
+                supportsXmppMarkers ||
+                supportsXmppReceipts;
+            final showsDisplayedStatus = isEmailTransport
+                ? isFromSelf
+                : message.displayed ||
+                      hasDeliveryFailure ||
+                      supportsXmppMarkers;
+            final bool? sentStatus = message.acked
+                ? true
+                : (hasDeliveryFailure ? false : null);
+            final bool? receivedStatus = message.received
+                ? true
+                : (hasDeliveryFailure ? false : null);
+            final bool? displayedStatus = message.displayed
+                ? true
+                : (hasDeliveryFailure ? false : null);
+            final metadataItems = <Widget>[];
+            final stanzaId = message.stanzaID.trim();
+            if (stanzaId.isNotEmpty) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: l10n.chatMessageDetailsStanzaIdLabel,
+                  value: stanzaId,
+                  copyValue: stanzaId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final originId = message.originID?.trim();
+            if (originId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: l10n.chatMessageDetailsOriginIdLabel,
+                  value: originId!,
+                  copyValue: originId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final occupantId = message.occupantID?.trim();
+            if (occupantId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: l10n.chatMessageDetailsOccupantIdLabel,
+                  value: occupantId!,
+                  copyValue: occupantId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            if (deltaMessageId != null) {
+              final deltaLabel = deltaMessageId.toString();
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: l10n.chatMessageDetailsDeltaIdLabel,
+                  value: deltaLabel,
+                  copyValue: deltaLabel,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            final localId = message.id?.trim();
+            if (localId?.isNotEmpty == true) {
+              metadataItems.add(
+                _MessageDetailsInfo(
+                  label: l10n.chatMessageDetailsLocalIdLabel,
+                  value: localId!,
+                  copyValue: localId,
+                  copyLabel: copyLabel,
+                ),
+              );
+            }
+            return SingleChildScrollView(
+              child: Container(
+                width: double.maxFinite,
+                padding: EdgeInsets.all(spacing.m),
+                child: Column(
+                  spacing: spacing.l,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (hasBlockedHtmlContent) const _EmailHtmlSafetyNotice(),
+                    if (hasHtmlBody)
+                      DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: context.colorScheme.card,
+                          shape: RoundedSuperellipseBorder(
+                            borderRadius: BorderRadius.circular(
+                              context.radii.squircle,
                             ),
+                            side: context.borderSide,
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (shouldShowImageGallery &&
-                                  !shouldLoadImages &&
-                                  onLoadRequested != null)
-                                Padding(
-                                  padding: EdgeInsets.all(spacing.s),
-                                  child: EmailImagePlaceholder(
-                                    onTap: onLoadRequested,
-                                  ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (shouldShowImageGallery &&
+                                !shouldLoadImages &&
+                                onLoadRequested != null)
+                              Padding(
+                                padding: EdgeInsets.all(spacing.s),
+                                child: EmailImagePlaceholder(
+                                  onTap: onLoadRequested,
                                 ),
-                              EmailHtmlWebView.embedded(
-                                html: normalizedHtmlBody,
-                                allowRemoteImages: shouldLoadImages,
-                                backgroundColor: context.colorScheme.card,
-                                textColor: context.colorScheme.foreground,
-                                linkColor: context.colorScheme.primary,
-                                simplifyLayout: true,
-                                minHeight:
-                                    context.sizing.attachmentPreviewExtent,
-                                onLinkTap: (url) =>
-                                    _handleLinkTap(context, url),
                               ),
-                            ],
-                          ),
-                        )
-                      else if (emailFallbackText != null &&
-                          emailFallbackText.isNotEmpty)
-                        SelectableText(emailFallbackText, style: textTheme.lead)
-                      else if (emailFallbackText == null ||
-                          emailFallbackText.isEmpty)
-                        SelectableText(
-                          message.body ?? '',
-                          style: textTheme.lead,
-                        ),
-                      if (shareContext?.subject?.isNotEmpty == true)
-                        Column(
-                          spacing: spacing.s,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              context.l10n.chatMessageSubjectLabel,
-                              style: textTheme.muted,
-                            ),
-                            Text(
-                              shareContext!.subject!,
-                              style: textTheme.p.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
+                            EmailHtmlWebView.embedded(
+                              html: normalizedHtmlBody,
+                              allowRemoteImages: shouldLoadImages,
+                              backgroundColor: context.colorScheme.card,
+                              textColor: context.colorScheme.foreground,
+                              linkColor: context.colorScheme.primary,
+                              simplifyLayout: true,
+                              minHeight: context.sizing.attachmentPreviewExtent,
+                              onLinkTap: (url) => _handleLinkTap(context, url),
                             ),
                           ],
                         ),
-                      if (showEmailRecipients)
-                        Column(
-                          spacing: spacing.s,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              context.l10n.chatMessageRecipientsLabel,
-                              style: textTheme.muted,
-                            ),
-                            Wrap(
-                              spacing: spacing.s,
-                              runSpacing: spacing.s,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                for (final participant in shareParticipants)
-                                  _RecipientChip(
-                                    chat: participant,
-                                    onPressed: () => _showRecipientActions(
-                                      context,
-                                      recipient: participant,
-                                      canCreateEmailChat:
-                                          state.emailServiceAvailable &&
-                                          participant.deltaChatId == null,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        )
-                      else if (shareParticipants.isNotEmpty)
-                        Column(
-                          spacing: spacing.s,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              context.l10n.chatMessageAlsoSentToLabel,
-                              style: textTheme.muted,
-                            ),
-                            Wrap(
-                              spacing: spacing.s,
-                              runSpacing: spacing.s,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                for (final participant in shareParticipants)
-                                  _RecipientChip(
-                                    chat: participant,
-                                    onPressed: () => _showRecipientActions(
-                                      context,
-                                      recipient: participant,
-                                      canCreateEmailChat:
-                                          state.emailServiceAvailable &&
-                                          participant.deltaChatId == null,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      if (transport?.isXmpp ?? false)
-                        _RecipientsRow(
-                          sender: state.chat?.displayName,
-                          recipients: shareParticipants,
-                        ),
-                      if (showReactions)
-                        _ReactionsRow(reactions: message.reactionsPreview),
-                      if (isFromSelf)
-                        Wrap(
-                          spacing: spacing.m,
-                          runSpacing: spacing.m,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            _MessageStatusBadge(
-                              label: l10n.chatMessageStatusSent,
-                              status: sentStatus,
-                            ),
-                            if (showsReceivedStatus)
-                              _MessageStatusBadge(
-                                label: l10n.chatMessageStatusReceived,
-                                status: receivedStatus,
-                              ),
-                            if (showsDisplayedStatus)
-                              _MessageStatusBadge(
-                                label: l10n.chatMessageStatusDisplayed,
-                                status: displayedStatus,
-                              ),
-                          ],
-                        ),
+                      )
+                    else if (emailFallbackText != null &&
+                        emailFallbackText.isNotEmpty)
+                      SelectableText(emailFallbackText, style: textTheme.lead)
+                    else if (emailFallbackText == null ||
+                        emailFallbackText.isEmpty)
+                      SelectableText(message.body ?? '', style: textTheme.lead),
+                    if (shareContext?.subject?.isNotEmpty == true)
                       Column(
-                        spacing: spacing.m,
+                        spacing: spacing.s,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          _MessageDetailsInfo(
-                            label: l10n.chatMessageInfoTimestamp,
-                            value: timestampLabel,
+                          Text(
+                            context.l10n.chatMessageSubjectLabel,
+                            style: textTheme.muted,
+                          ),
+                          Text(
+                            shareContext!.subject!,
+                            style: textTheme.p.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    if (showEmailRecipients)
+                      Column(
+                        spacing: spacing.s,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            context.l10n.chatMessageRecipientsLabel,
+                            style: textTheme.muted,
                           ),
                           Wrap(
-                            spacing: spacing.l,
-                            runSpacing: spacing.m,
+                            spacing: spacing.s,
+                            runSpacing: spacing.s,
                             alignment: WrapAlignment.center,
                             children: [
-                              _MessageDetailsInfo(
-                                label: l10n.chatMessageInfoProtocol,
-                                value: protocolLabel,
-                                leading: protocolIcon,
-                              ),
-                              if (message.deviceID != null)
-                                _MessageDetailsInfo(
-                                  label: l10n.chatMessageInfoDevice,
-                                  value: '#${message.deviceID}',
+                              for (final participant in shareParticipants)
+                                _RecipientChip(
+                                  chat: participant,
+                                  onPressed: () => _showRecipientActions(
+                                    context,
+                                    recipient: participant,
+                                    canCreateEmailChat:
+                                        state.emailServiceAvailable &&
+                                        participant.deltaChatId == null,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      )
+                    else if (shareParticipants.isNotEmpty)
+                      Column(
+                        spacing: spacing.s,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            context.l10n.chatMessageAlsoSentToLabel,
+                            style: textTheme.muted,
+                          ),
+                          Wrap(
+                            spacing: spacing.s,
+                            runSpacing: spacing.s,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              for (final participant in shareParticipants)
+                                _RecipientChip(
+                                  chat: participant,
+                                  onPressed: () => _showRecipientActions(
+                                    context,
+                                    recipient: participant,
+                                    canCreateEmailChat:
+                                        state.emailServiceAvailable &&
+                                        participant.deltaChatId == null,
+                                  ),
                                 ),
                             ],
                           ),
                         ],
                       ),
-                      if (!hideSenderAddress && senderAddress.isNotEmpty)
+                    if (transport?.isXmpp ?? false)
+                      _RecipientsRow(
+                        sender: state.chat?.displayName,
+                        recipients: shareParticipants,
+                      ),
+                    if (showReactions)
+                      _ReactionsRow(reactions: message.reactionsPreview),
+                    if (isFromSelf)
+                      Wrap(
+                        spacing: spacing.m,
+                        runSpacing: spacing.m,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          _MessageStatusBadge(
+                            label: l10n.chatMessageStatusSent,
+                            status: sentStatus,
+                          ),
+                          if (showsReceivedStatus)
+                            _MessageStatusBadge(
+                              label: l10n.chatMessageStatusReceived,
+                              status: receivedStatus,
+                            ),
+                          if (showsDisplayedStatus)
+                            _MessageStatusBadge(
+                              label: l10n.chatMessageStatusDisplayed,
+                              status: displayedStatus,
+                            ),
+                        ],
+                      ),
+                    Column(
+                      spacing: spacing.m,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
                         _MessageDetailsInfo(
-                          label: l10n.chatMessageDetailsSenderLabel,
-                          value: senderAddress,
-                          copyValue: senderAddress,
-                          copyLabel: copyLabel,
+                          label: l10n.chatMessageInfoTimestamp,
+                          value: timestampLabel,
                         ),
-                      if (metadataItems.isNotEmpty)
-                        Column(
-                          spacing: spacing.s,
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                        Wrap(
+                          spacing: spacing.l,
+                          runSpacing: spacing.m,
+                          alignment: WrapAlignment.center,
                           children: [
-                            Text(
-                              l10n.chatMessageDetailsMetadataLabel,
-                              style: textTheme.muted,
+                            _MessageDetailsInfo(
+                              label: l10n.chatMessageInfoProtocol,
+                              value: protocolLabel,
+                              leading: protocolIcon,
                             ),
-                            Wrap(
-                              spacing: spacing.m,
-                              runSpacing: spacing.m,
-                              alignment: WrapAlignment.center,
-                              children: metadataItems,
-                            ),
+                            if (message.deviceID != null)
+                              _MessageDetailsInfo(
+                                label: l10n.chatMessageInfoDevice,
+                                value: '#${message.deviceID}',
+                              ),
                           ],
                         ),
-                      if (isEmailMessage)
-                        _MessageTextDumpSection(
-                          content: rawHeaders,
-                          title: l10n.chatMessageDetailsHeadersLabel,
-                          buttonLabel:
-                              l10n.chatMessageDetailsHeadersActionLabel,
-                          note: l10n.chatMessageDetailsHeadersNote,
-                          loadingLabel:
-                              l10n.chatMessageDetailsHeadersLoadingLabel,
-                          unavailableLabel:
-                              l10n.chatMessageDetailsHeadersUnavailableLabel,
-                          isLoading: isHeadersLoading,
-                          isUnavailable: isHeadersUnavailable,
-                        ),
-                      if (isEmailMessage)
-                        _MessageTextDumpSection(
-                          content: debugDump,
-                          title: l10n.chatMessageDetailsDebugDumpLabel,
-                          buttonLabel:
-                              l10n.chatMessageDetailsDebugDumpActionLabel,
-                          note: l10n.chatMessageDetailsDebugDumpNote,
-                          loadingLabel:
-                              l10n.chatMessageDetailsDebugDumpLoadingLabel,
-                          unavailableLabel:
-                              l10n.chatMessageDetailsDebugDumpUnavailableLabel,
-                          isLoading: isDebugDumpLoading,
-                          isUnavailable: isDebugDumpUnavailable,
-                        ),
-                      if (message.error.isNotNone)
-                        Column(
-                          spacing: spacing.s,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              l10n.chatMessageInfoError,
-                              style: textTheme.muted,
-                            ),
-                            Text(
-                              message.error.label(l10n),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
+                      ],
+                    ),
+                    if (!hideSenderAddress && senderAddress.isNotEmpty)
+                      _MessageDetailsInfo(
+                        label: l10n.chatMessageDetailsSenderLabel,
+                        value: senderAddress,
+                        copyValue: senderAddress,
+                        copyLabel: copyLabel,
+                      ),
+                    if (metadataItems.isNotEmpty)
+                      Column(
+                        spacing: spacing.s,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            l10n.chatMessageDetailsMetadataLabel,
+                            style: textTheme.muted,
+                          ),
+                          Wrap(
+                            spacing: spacing.m,
+                            runSpacing: spacing.m,
+                            alignment: WrapAlignment.center,
+                            children: metadataItems,
+                          ),
+                        ],
+                      ),
+                    if (isEmailMessage)
+                      _MessageTextDumpSection(
+                        content: rawHeaders,
+                        title: l10n.chatMessageDetailsHeadersLabel,
+                        buttonLabel: l10n.chatMessageDetailsHeadersActionLabel,
+                        onLoadRequested: onHeadersRequested,
+                        note: l10n.chatMessageDetailsHeadersNote,
+                        loadingLabel:
+                            l10n.chatMessageDetailsHeadersLoadingLabel,
+                        unavailableLabel:
+                            l10n.chatMessageDetailsHeadersUnavailableLabel,
+                        isLoading: isHeadersLoading,
+                        isUnavailable: isHeadersUnavailable,
+                      ),
+                    if (message.error.isNotNone)
+                      Column(
+                        spacing: spacing.s,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            l10n.chatMessageInfoError,
+                            style: textTheme.muted,
+                          ),
+                          Text(
+                            message.error.label(l10n),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
-              );
-            },
-          );
-        },
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -695,6 +638,7 @@ class _MessageTextDumpSection extends StatelessWidget {
     required this.content,
     required this.title,
     required this.buttonLabel,
+    this.onLoadRequested,
     required this.note,
     required this.loadingLabel,
     required this.unavailableLabel,
@@ -705,6 +649,7 @@ class _MessageTextDumpSection extends StatelessWidget {
   final String? content;
   final String title;
   final String buttonLabel;
+  final VoidCallback? onLoadRequested;
   final String note;
   final String loadingLabel;
   final String unavailableLabel;
@@ -737,7 +682,10 @@ class _MessageTextDumpSection extends StatelessWidget {
           children: [
             AxiButton(
               variant: AxiButtonVariant.secondary,
-              onPressed: _canOpen ? () => _showTextDumpDialog(context) : null,
+              loading: isLoading && !_canOpen,
+              onPressed: _canOpen
+                  ? () => _showTextDumpDialog(context)
+                  : (isLoading ? null : onLoadRequested),
               child: Text(buttonLabel),
             ),
             AxiButton(

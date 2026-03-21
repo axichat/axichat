@@ -1234,6 +1234,81 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return _dbOpReturning<XmppDatabase, int>((db) => db.countDrafts());
   }
 
+  Future<Draft?> loadDraft(int id) async {
+    return _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
+  }
+
+  Future<Chat?> loadChat(String jid) async {
+    return _dbOpReturning<XmppDatabase, Chat?>((db) => db.getChat(jid));
+  }
+
+  Future<List<Chat>> loadChats({
+    int start = 0,
+    int end = basePageItemLimit,
+  }) async {
+    return _dbOpReturning<XmppDatabase, List<Chat>>(
+      (db) => db.getChats(start: start, end: end),
+    );
+  }
+
+  Future<List<Chat>> loadChatsByJids(Iterable<String> jids) async {
+    return _dbOpReturning<XmppDatabase, List<Chat>>(
+      (db) => db.getChatsByJids(jids),
+    );
+  }
+
+  Future<List<Message>> loadAllMessagesForChat(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getAllMessagesForChat(jid, filter: filter),
+    );
+  }
+
+  Future<List<Message>> loadChatMessagesPage(
+    String jid, {
+    required int start,
+    required int end,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getChatMessages(jid, start: start, end: end, filter: filter),
+    );
+  }
+
+  Future<int> countChatMessages(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    bool includePseudoMessages = true,
+  }) async {
+    return _dbOpReturning<XmppDatabase, int>(
+      (db) => db.countChatMessages(
+        jid,
+        filter: filter,
+        includePseudoMessages: includePseudoMessages,
+      ),
+    );
+  }
+
+  Future<int> countChatMessagesThrough(
+    String jid, {
+    required DateTime throughTimestamp,
+    required String throughStanzaId,
+    int? throughDeltaMsgId,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, int>(
+      (db) => db.countChatMessagesThrough(
+        jid,
+        throughTimestamp: throughTimestamp,
+        throughStanzaId: throughStanzaId,
+        throughDeltaMsgId: throughDeltaMsgId,
+        filter: filter,
+      ),
+    );
+  }
+
   Future<List<String>> persistDraftAttachmentMetadata(
     Iterable<Attachment> attachments,
   ) async {
@@ -1561,7 +1636,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       await manager.ensureNode();
       await manager.subscribe();
-      await _flushPendingMessageCollectionSync();
+      await _flushPendingMessageCollectionSync(
+        managerOverride: manager,
+        managerReady: true,
+      );
       final snapshot = await manager.fetchAllWithStatus();
       if (!snapshot.isSuccess) {
         return;
@@ -1581,20 +1659,34 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           await _applyMessageCollectionSyncUpdate(remote);
           continue;
         }
-        switch (_resolveMessageCollectionSyncDecision(local, remote)) {
-          case _MessageCollectionSyncDecision.applyRemote:
-            await _applyMessageCollectionSyncUpdate(remote);
-          case _MessageCollectionSyncDecision.publishLocal:
-            await _publishMessageCollectionSyncEntry(local);
-          case _MessageCollectionSyncDecision.skip:
-            continue;
+        final syncDecision = _resolveMessageCollectionSyncDecision(
+          local,
+          remote,
+        );
+        if (syncDecision == _MessageCollectionSyncDecision.applyRemote) {
+          await _applyMessageCollectionSyncUpdate(remote);
+          continue;
+        }
+        if (syncDecision == _MessageCollectionSyncDecision.publishLocal) {
+          await _publishMessageCollectionSyncEntry(
+            local,
+            managerOverride: manager,
+            managerReady: true,
+          );
         }
       }
 
       for (final local in localByItemId.values) {
-        await _publishMessageCollectionSyncEntry(local);
+        await _publishMessageCollectionSyncEntry(
+          local,
+          managerOverride: manager,
+          managerReady: true,
+        );
       }
-      await _flushPendingMessageCollectionSync();
+      await _flushPendingMessageCollectionSync(
+        managerOverride: manager,
+        managerReady: true,
+      );
     } on XmppAbortedException {
       return;
     } finally {
@@ -3929,8 +4021,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Future<void> _publishMessageCollectionSyncEntry(
-    MessageCollectionMembershipEntry entry,
-  ) async {
+    MessageCollectionMembershipEntry entry, {
+    MessageCollectionsPubSubManager? managerOverride,
+    bool managerReady = false,
+  }) async {
     final itemId = _messageCollectionSyncItemId(entry);
     if (!_connection.hasConnectionSettings) {
       return;
@@ -3944,13 +4038,15 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (!decision.isAllowed) {
         return;
       }
-      final manager = _messageCollectionsManager;
+      final manager = managerOverride ?? _messageCollectionsManager;
       if (manager == null) {
         await _queueMessageCollectionPublish(itemId);
         return;
       }
-      await manager.ensureNode();
-      await manager.subscribe();
+      if (!managerReady) {
+        await manager.ensureNode();
+        await manager.subscribe();
+      }
       final payload = await _buildMessageCollectionPayload(entry);
       final published = await manager.publishEntry(payload);
       if (published) {
@@ -4180,7 +4276,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _persistPendingMessageCollectionSync();
   }
 
-  Future<void> _flushPendingMessageCollectionSync() async {
+  Future<void> _flushPendingMessageCollectionSync({
+    MessageCollectionsPubSubManager? managerOverride,
+    bool managerReady = false,
+  }) async {
     await _ensurePendingMessageCollectionSyncLoaded();
     if (_pendingMessageCollectionPublishes.isEmpty) {
       return;
@@ -4193,12 +4292,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (!decision.isAllowed) {
       return;
     }
-    final manager = _messageCollectionsManager;
+    final manager = managerOverride ?? _messageCollectionsManager;
     if (manager == null) {
       return;
     }
-    await manager.ensureNode();
-    await manager.subscribe();
+    if (!managerReady) {
+      await manager.ensureNode();
+      await manager.subscribe();
+    }
     final localEntries = await _localMessageCollectionEntries(
       includeInactive: true,
     );
@@ -4288,7 +4389,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
-          XmppBootstrapTrigger.resumedNegotiation,
         },
         operationName: _httpUploadBootstrapOperationName,
         run: () async {
@@ -6606,6 +6706,83 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<Message?> loadMessageByDeltaId(
+    int deltaMessageId, {
+    String? chatJid,
+  }) async {
+    return _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByDeltaId(deltaMessageId, chatJid: chatJid),
+    );
+  }
+
+  Future<List<Message>> loadMessagesByReferenceIds(
+    Iterable<String> messageIds, {
+    String? chatJid,
+  }) async {
+    return _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getMessagesByReferenceIds(messageIds, chatJid: chatJid),
+    );
+  }
+
+  Future<List<PinnedMessageEntry>> loadPinnedMessages(String chatJid) async {
+    return _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
+      (db) => db.getPinnedMessages(chatJid),
+    );
+  }
+
+  Future<List<Message>> loadMessagesForShare(String shareId) async {
+    return _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getMessagesForShare(shareId),
+    );
+  }
+
+  Future<void> markMessagesDisplayedLocally({
+    required Iterable<Message> messages,
+    required String chatJid,
+    String? selfJid,
+  }) async {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return;
+    }
+    final stanzaIds = messages
+        .map((message) => message.stanzaID)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (stanzaIds.isEmpty) {
+      return;
+    }
+    await _dbOp<XmppDatabase>((db) async {
+      if (db is XmppDrift) {
+        await db.batch((batch) {
+          batch.update(
+            db.messages,
+            const MessagesCompanion(displayed: Value(true)),
+            where: (tbl) =>
+                tbl.chatJid.equals(normalizedChatJid) &
+                (tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds)),
+          );
+        });
+      } else {
+        for (final id in stanzaIds) {
+          await db.markMessageDisplayed(id, chatJid: normalizedChatJid);
+        }
+      }
+      final chat = await db.getChat(normalizedChatJid);
+      if (chat == null) {
+        return;
+      }
+      final unreadCount = await db.countUnreadMessagesForChat(
+        normalizedChatJid,
+        selfJid: selfJid,
+      );
+      if (chat.unreadCount != unreadCount) {
+        await db.updateChat(chat.copyWith(unreadCount: unreadCount));
+      }
+    });
+  }
+
   Future<void> resendMessage(String stanzaID, {ChatType? chatType}) async {
     final message = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(stanzaID),
@@ -7712,19 +7889,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         stackTrace: stackTrace,
       );
     }
-  }
-
-  CapabilityDecision _decisionFromCapabilityFlag({
-    required bool supported,
-    required DateTime? capabilitiesResolvedAt,
-  }) {
-    if (supported) {
-      return const CapabilityDecision(CapabilityDecisionKind.allowed);
-    }
-    if (capabilitiesResolvedAt == null) {
-      return const CapabilityDecision(CapabilityDecisionKind.unknown);
-    }
-    return const CapabilityDecision(CapabilityDecisionKind.unsupported);
   }
 
   Future<CapabilityDecision> _httpUploadDecision({String? uploadJid}) async {
@@ -10157,6 +10321,44 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           return stream.startWith(initial);
         },
       );
+
+  Future<FileMetadataData?> loadFileMetadata(String id) async {
+    return _dbOpReturning<XmppDatabase, FileMetadataData?>(
+      (db) => db.getFileMetadata(id),
+    );
+  }
+
+  Future<List<FileMetadataData>> loadFileMetadataByIds(
+    Iterable<String> ids,
+  ) async {
+    return _dbOpReturning<XmppDatabase, List<FileMetadataData>>(
+      (db) => db.getFileMetadataForIds(ids),
+    );
+  }
+
+  Future<List<MessageAttachmentData>> loadMessageAttachments(
+    String messageId,
+  ) async {
+    return _dbOpReturning<XmppDatabase, List<MessageAttachmentData>>(
+      (db) => db.getMessageAttachments(messageId),
+    );
+  }
+
+  Future<Map<String, List<MessageAttachmentData>>>
+  loadMessageAttachmentsForMessages(Iterable<String> messageIds) async {
+    return _dbOpReturning<
+      XmppDatabase,
+      Map<String, List<MessageAttachmentData>>
+    >((db) => db.getMessageAttachmentsForMessages(messageIds));
+  }
+
+  Future<List<MessageAttachmentData>> loadMessageAttachmentsForGroup(
+    String transportGroupId,
+  ) async {
+    return _dbOpReturning<XmppDatabase, List<MessageAttachmentData>>(
+      (db) => db.getMessageAttachmentsForGroup(transportGroupId),
+    );
+  }
 
   Stream<Map<String, FileMetadataData?>> fileMetadataByIdsStream(
     Set<String> ids,

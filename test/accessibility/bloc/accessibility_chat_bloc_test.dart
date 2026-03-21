@@ -11,7 +11,6 @@ import '../../mocks.dart';
 
 void main() {
   late MockMessageService messageService;
-  late MockXmppDatabase database;
 
   setUpAll(() {
     registerFallbackValue(EncryptionProtocol.none);
@@ -20,12 +19,10 @@ void main() {
 
   setUp(() {
     messageService = MockMessageService();
-    database = MockXmppDatabase();
 
     when(
       () => messageService.messageStreamForChat(any(), end: any(named: 'end')),
     ).thenAnswer((_) => const Stream<List<Message>>.empty());
-    when(() => messageService.database).thenAnswer((_) async => database);
     when(
       () => messageService.sendMessage(
         jid: any(named: 'jid'),
@@ -77,7 +74,7 @@ void main() {
   });
 
   test(
-    'reloads accessibility attachment metadata through the database',
+    'reloads accessibility attachment metadata through MessageService',
     () async {
       final metadata = FileMetadataData(
         id: 'metadata-1',
@@ -85,7 +82,7 @@ void main() {
         mimeType: 'image/jpeg',
       );
       when(
-        () => database.getFileMetadata('metadata-1'),
+        () => messageService.loadFileMetadata('metadata-1'),
       ).thenAnswer((_) async => metadata);
 
       final bloc = AccessibilityChatBloc(
@@ -101,7 +98,7 @@ void main() {
       final reloaded = await bloc.reloadFileMetadata('metadata-1');
 
       expect(reloaded, same(metadata));
-      verify(() => database.getFileMetadata('metadata-1')).called(1);
+      verify(() => messageService.loadFileMetadata('metadata-1')).called(1);
     },
   );
 

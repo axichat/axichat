@@ -5,6 +5,12 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin RosterService
     on XmppBase, BaseStreamService, MessageService, AvatarService {
+  Future<List<RosterItem>> loadRosterSnapshot() async {
+    return _dbOpReturning<XmppDatabase, List<RosterItem>>(
+      (db) => db.getRoster(),
+    );
+  }
+
   Stream<List<RosterItem>> rosterStream({
     int start = 0,
     int end = basePageItemLimit,

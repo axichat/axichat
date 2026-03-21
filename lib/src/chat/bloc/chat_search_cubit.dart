@@ -172,8 +172,7 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
   Future<Chat?> _chatForSearch() async {
     final cached = _cachedChat;
     if (cached != null) return cached;
-    final db = await _messageService.database;
-    final chat = await db.getChat(jid);
+    final chat = await _messageService.loadChat(jid);
     _cachedChat = chat;
     return chat;
   }

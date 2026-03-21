@@ -10,7 +10,6 @@ import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -154,8 +153,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     String messageId, {
     String? chatJid,
   }) async {
-    final db = await _loadDatabase();
-    return db.getMessageByReferenceId(messageId, chatJid: chatJid);
+    return _messageService.loadMessageByReferenceId(
+      messageId,
+      chatJid: chatJid,
+    );
   }
 
   Future<bool> sendDraft({
@@ -283,12 +284,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   Future<Draft?> _loadDraft(int id) async {
-    final db = await _loadDatabase();
-    return db.getDraft(id);
-  }
-
-  Future<XmppDatabase> _loadDatabase() async {
-    return _messageService.database;
+    return _messageService.loadDraft(id);
   }
 
   Future<int> countDrafts() async {

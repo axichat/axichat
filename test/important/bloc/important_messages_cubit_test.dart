@@ -17,20 +17,17 @@ void main() {
   });
 
   late MockXmppService xmppService;
-  late MockXmppDatabase database;
   late StreamController<List<MessageCollectionMembershipEntry>>
   importantController;
 
   setUp(() {
     xmppService = MockXmppService();
-    database = MockXmppDatabase();
     importantController =
         StreamController<List<MessageCollectionMembershipEntry>>.broadcast();
 
     when(
       () => xmppService.importantMessagesStream(chatJid: any(named: 'chatJid')),
     ).thenAnswer((_) => importantController.stream);
-    when(() => xmppService.database).thenAnswer((_) async => database);
   });
 
   tearDown(() async {
@@ -93,12 +90,14 @@ void main() {
       ];
 
       when(
-        () => database.getMessagesByReferenceIds(
+        () => xmppService.loadMessagesByReferenceIds(
           any(),
           chatJid: any(named: 'chatJid'),
         ),
       ).thenAnswer((_) async => messages);
-      when(() => database.getChatsByJids(any())).thenAnswer((_) async => chats);
+      when(
+        () => xmppService.loadChatsByJids(any()),
+      ).thenAnswer((_) async => chats);
 
       final cubit = ImportantMessagesCubit(xmppService: xmppService);
       addTearDown(cubit.close);

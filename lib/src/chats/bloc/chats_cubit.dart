@@ -11,7 +11,6 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -807,8 +806,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     required Chat chat,
     required EmailService emailService,
   }) async {
-    final db = await _loadDatabase();
-    final messages = await db.getAllMessagesForChat(chat.jid);
+    final messages = await _xmppService.loadAllMessagesForChat(chat.jid);
     if (messages.isEmpty) return;
     await emailService.deleteMessages(messages);
   }
@@ -816,13 +814,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   Future<Chat?> _resolveChat(String jid) async {
     final fromState = _chatFor(jid);
     if (fromState != null) return fromState;
-    final db = await _loadDatabase();
-    return db.getChat(jid);
-  }
-
-  Future<XmppDatabase> _loadDatabase() async {
-    final xmppBase = _chatsService as XmppBase;
-    return xmppBase.database;
+    return _xmppService.loadChat(jid);
   }
 
   Future<void> renameContact({
@@ -922,8 +914,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   Future<int> countChatHistoryMessages(String jid) async {
-    final db = await _loadDatabase();
-    return db.countChatMessages(jid);
+    return _xmppService.countChatMessages(jid);
   }
 
   Future<List<Message>> loadChatHistoryPage({
@@ -931,8 +922,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     required int offset,
     required int limit,
   }) async {
-    final db = await _loadDatabase();
-    return db.getChatMessages(jid, start: offset, end: limit);
+    return _xmppService.loadChatMessagesPage(jid, start: offset, end: limit);
   }
 
   String? get selfJid => _xmppService.myJid;
