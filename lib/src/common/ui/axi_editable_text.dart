@@ -211,6 +211,13 @@ class _RenderCompositionCallback extends RenderProxyBox {
     }
     super.paint(context, offset);
   }
+
+  @override
+  void detach() {
+    _cancelCallback?.call();
+    _cancelCallback = null;
+    super.detach();
+  }
 }
 
 /// A controller for an editable text field.
@@ -4765,8 +4772,7 @@ class EditableTextState extends State<EditableText>
       ? widget.controller as TypingTextEditingController
       : null;
 
-  AxiRenderEditable? get _typingRenderEditable =>
-      _editableKey.currentContext?.findRenderObject() as AxiRenderEditable?;
+  AxiRenderEditable? get _typingRenderEditable => _renderEditableOrNull;
 
   void _handleTypingCursorVisibilityChanged() {
     _typingCaretPainter?.showCaret = _cursorVisibilityNotifier.value;
@@ -5507,22 +5513,26 @@ class EditableTextState extends State<EditableText>
     // The callback can be invoked when the layer is detached.
     // The input connection can be closed by the platform in which case this
     // widget doesn't rebuild.
-    if (!renderEditable.attached || !_hasInputConnection) {
+    if (!_hasInputConnection || !mounted) {
       return;
     }
-    assert(mounted);
+    final renderEditable = _renderEditableOrNull;
+    if (renderEditable == null || !renderEditable.attached) {
+      return;
+    }
     assert((context as Element).debugIsActive);
-    _updateSizeAndTransform();
+    _updateSizeAndTransform(renderEditable);
   }
 
   // Must be called after layout.
   // See https://github.com/flutter/flutter/issues/126312
-  void _updateSizeAndTransform() {
-    if (!_canUpdateTextInputGeometry) {
+  void _updateSizeAndTransform([AxiRenderEditable? renderEditable]) {
+    final resolvedRenderEditable = renderEditable ?? _renderEditableOrNull;
+    if (resolvedRenderEditable == null || !_canUpdateTextInputGeometry) {
       return;
     }
-    final Size size = renderEditable.size;
-    final Matrix4 transform = renderEditable.getTransformTo(null);
+    final Size size = resolvedRenderEditable.size;
+    final Matrix4 transform = resolvedRenderEditable.getTransformTo(null);
     _textInputConnection!.setEditableSizeAndTransform(size, transform);
   }
 
@@ -5541,11 +5551,14 @@ class EditableTextState extends State<EditableText>
 
   _ScribbleCacheKey? _scribbleCacheKey;
 
-  bool get _canUpdateTextInputGeometry =>
-      mounted &&
-      _hasInputConnection &&
-      renderEditable.attached &&
-      renderEditable.hasSize;
+  bool get _canUpdateTextInputGeometry {
+    final renderEditable = _renderEditableOrNull;
+    return mounted &&
+        _hasInputConnection &&
+        renderEditable != null &&
+        renderEditable.attached &&
+        renderEditable.hasSize;
+  }
 
   void _updateSelectionRects({bool force = false}) {
     if (!_canUpdateTextInputGeometry ||
@@ -5697,8 +5710,16 @@ class EditableTextState extends State<EditableText>
   ///
   /// This property is typically used to notify the renderer of input gestures
   /// when [RenderEditable.ignorePointer] is true.
-  AxiRenderEditable get renderEditable =>
-      _editableKey.currentContext!.findRenderObject()! as AxiRenderEditable;
+  AxiRenderEditable get renderEditable => _renderEditableOrNull!;
+
+  AxiRenderEditable? get _renderEditableOrNull {
+    final editableContext = _editableKey.currentContext;
+    if (editableContext is! RenderObjectElement) {
+      return null;
+    }
+    final renderObject = editableContext.renderObject;
+    return renderObject is AxiRenderEditable ? renderObject : null;
+  }
 
   @override
   TextEditingValue get textEditingValue => _value;
