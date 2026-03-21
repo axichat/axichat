@@ -2399,6 +2399,110 @@ void main() {
         expect(requestedRoomVCard, isFalse);
       },
     );
+
+    test(
+      'ROOM-AVATAR-007 [HP] refreshKnownRoomAvatars updates stored room avatars',
+      () async {
+        const roomAvatarHash = 'room-avatar-hash';
+        final roomChat = Chat(
+          jid: _roomJid,
+          title: _roomName,
+          type: ChatType.groupChat,
+          myNickname: _roomNick,
+          lastChangeTimestamp: _fixedTimestamp,
+          contactJid: _roomJid,
+        );
+        when(
+          () => mockDatabase.getChats(
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        ).thenAnswer(
+          (_) async => <Chat>[
+            roomChat,
+            Chat(
+              jid: _inviteeJid,
+              title: 'Friend',
+              type: ChatType.chat,
+              lastChangeTimestamp: _fixedTimestamp,
+              contactJid: _inviteeJid,
+            ),
+          ],
+        );
+        when(
+          () => mockDatabase.getChat(_roomJid),
+        ).thenAnswer((_) async => roomChat);
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).thenAnswer((_) async {});
+
+        var requestedRoomInfo = false;
+        var requestedRoomVCard = false;
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final to = stanza.attributes[_toAttr]?.toString();
+          final type = stanza.attributes[_typeAttr]?.toString();
+          if (to == _roomJid &&
+              stanza.firstTag(_queryTag, xmlns: _discoInfoXmlns) != null &&
+              type == _iqTypeGet) {
+            requestedRoomInfo = true;
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _discoInfoXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'result'},
+                        children: [
+                          _formTypeField(_mucRoomInfoFormType),
+                          _singleValueField(
+                            'muc#roominfo_avatar',
+                            base64Encode(_pngLikeBytes),
+                          ),
+                          _singleValueField(
+                            'muc#roominfo_avatar_hash',
+                            roomAvatarHash,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          if (to == _roomJid &&
+              stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
+              type == _iqTypeGet) {
+            requestedRoomVCard = true;
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        await xmppService.refreshKnownRoomAvatars();
+
+        expect(requestedRoomInfo, isTrue);
+        expect(requestedRoomVCard, isFalse);
+        verify(
+          () => mockDatabase.updateChatAvatar(
+            jid: _roomJid,
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: roomAvatarHash,
+          ),
+        ).called(1);
+      },
+    );
   });
 
   group('Nickname changes', () {

@@ -94,6 +94,8 @@ const _mucServiceDiscoveryBootstrapOperationName =
     'MucService.discoverServiceHostOnNegotiations';
 const _mucBookmarksBootstrapOperationName =
     'MucService.syncBookmarksOnNegotiations';
+const _mucManualRefreshRoomAvatarsOperationName =
+    'MucService.refreshRoomAvatarsOnManualRefresh';
 const _mucAutojoinBootstrapOperationName =
     'MucService.autojoinBookmarkedRoomsOnNegotiations';
 const _mucCreateRoomBookmarkTimeoutLog =
@@ -1803,6 +1805,20 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         operationName: _mucBookmarksBootstrapOperationName,
         run: () async {
           await syncMucBookmarksSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _mucManualRefreshRoomAvatarsOperationName,
+        priority: 1,
+        lane: 'mucBookmarks',
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _mucManualRefreshRoomAvatarsOperationName,
+        run: () async {
+          await refreshKnownRoomAvatars();
         },
       ),
     );
@@ -4046,6 +4062,26 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     if (bookmarks.isEmpty) return;
     await _applyMucBookmarksState(bookmarks);
     await _autojoinBookmarks(bookmarks);
+  }
+
+  Future<void> refreshKnownRoomAvatars() async {
+    final roomJids = <String>{};
+    await _dbOp<XmppDatabase>((db) async {
+      final chats = await db.getChats(
+        start: _mucSnapshotStart,
+        end: _mucSnapshotEnd,
+      );
+      for (final chat in chats) {
+        if (!_isSnapshotRoomChat(chat)) continue;
+        final roomJid = _normalizeBareJid(chat.jid);
+        if (roomJid == null || roomJid.isEmpty) continue;
+        roomJids.add(roomJid);
+      }
+    }, awaitDatabase: true);
+
+    for (final roomJid in roomJids) {
+      await _refreshRoomAvatar(roomJid);
+    }
   }
 
   Future<void> applyMucBookmarksSnapshot(
