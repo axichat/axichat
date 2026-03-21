@@ -2329,16 +2329,14 @@ class EditableTextState extends State<EditableText>
     vsync: this,
     duration: _typingCaretMaxDuration,
   )..addListener(_handleTypingCaretTick);
-  late final Animation<double> _typingCaretCurve = CurvedAnimation(
-    parent: _typingCaretController,
-    curve: _typingCaretSlideCurve,
-  );
   late final Ticker _typingGlyphTicker = createTicker(_handleTypingGlyphTick);
   Duration _typingGlyphElapsed = Duration.zero;
-  Animation<Offset> _typingCaretAnimation =
-      const AlwaysStoppedAnimation<Offset>(Offset.zero);
+  Offset _typingCaretAnimationStart = Offset.zero;
+  Offset _typingCaretAnimationEnd = Offset.zero;
   Offset _typingCaretOffset = Offset.zero;
   TypingCaretPainter? _typingCaretPainter;
+  final Map<_TypingGlyphAdvanceCacheKey, Size> _typingGlyphAdvanceCache =
+      <_TypingGlyphAdvanceCacheKey, Size>{};
   final List<_TypingGlyphEntry> _typingGlyphEntries = <_TypingGlyphEntry>[];
   final List<TextRange> _pendingTypingHiddenRanges = <TextRange>[];
   final List<TypingTextChange> _pendingTypingChanges = <TypingTextChange>[];
@@ -3348,7 +3346,7 @@ class EditableTextState extends State<EditableText>
     _cursorVisibilityNotifier.removeListener(
       _handleTypingCursorVisibilityChanged,
     );
-    _stopTypingGlyphMorphs();
+    _stopTypingGlyphMorphs(clearHiddenRanges: false);
     _typingCaretController.dispose();
     _typingGlyphTicker.dispose();
     _floatingCursorResetController?.dispose();
@@ -4856,6 +4854,10 @@ class EditableTextState extends State<EditableText>
         _pendingTypingHiddenRanges.add(insertedRange);
         _updateTypingHiddenRanges();
       }
+      final AxiRenderEditable? renderEditable = _typingRenderEditable;
+      if (renderEditable != null && renderEditable.hasSize) {
+        _startPredictiveTypingCaret(change, renderEditable);
+      }
     }
     _applyPendingTypingChanges();
   }
@@ -4863,6 +4865,13 @@ class EditableTextState extends State<EditableText>
   void _handleTypingLayout() {
     if (!mounted) {
       return;
+    }
+    final AxiRenderEditable? renderEditable = _typingRenderEditable;
+    if (renderEditable != null && renderEditable.hasSize) {
+      _refreshTypingGlyphRects(renderEditable);
+      if (_typingGlyphEntries.isNotEmpty) {
+        _updateTypingGlyphFrames(_typingGlyphElapsed, removeCompleted: false);
+      }
     }
     _scheduleTypingLayoutCallback();
   }
@@ -4878,6 +4887,13 @@ class EditableTextState extends State<EditableText>
   }
 
   void _handleTypingCaretScroll() {
+    final AxiRenderEditable? renderEditable = _typingRenderEditable;
+    if (renderEditable != null && renderEditable.hasSize) {
+      _refreshTypingGlyphRects(renderEditable);
+      if (_typingGlyphEntries.isNotEmpty) {
+        _updateTypingGlyphFrames(_typingGlyphElapsed, removeCompleted: false);
+      }
+    }
     _syncTypingCaretToSelection();
   }
 
@@ -5165,9 +5181,20 @@ class EditableTextState extends State<EditableText>
       _jumpTypingCaret(end);
       return;
     }
-    final Offset effectiveStart = _typingCaretController.isAnimating
-        ? _typingCaretAnimation.value
-        : start;
+    final bool isAnimating = _typingCaretController.isAnimating;
+    final Duration elapsed =
+        _typingCaretController.lastElapsedDuration ?? Duration.zero;
+    final Offset effectiveStart;
+    if (!isAnimating) {
+      effectiveStart = start;
+    } else if (elapsed > Duration.zero) {
+      effectiveStart = _resolvedTypingCaretAnimationValue();
+    } else {
+      // If a new insertion lands before the first animation frame, advance the
+      // visible caret to the prior predicted endpoint before retargeting.
+      effectiveStart = _typingCaretAnimationEnd;
+      _updateTypingCaretOffset(effectiveStart);
+    }
     if (effectiveStart == end) {
       _jumpTypingCaret(end);
       return;
@@ -5177,14 +5204,150 @@ class EditableTextState extends State<EditableText>
       distance,
       renderEditable,
     );
-    _typingCaretAnimation = Tween<Offset>(
-      begin: effectiveStart,
-      end: end,
-    ).animate(_typingCaretCurve);
+    _typingCaretAnimationStart = effectiveStart;
+    _typingCaretAnimationEnd = end;
     _typingCaretController
       ..duration = duration
       ..reset()
       ..forward();
+  }
+
+  void _startPredictiveTypingCaret(
+    TypingTextChange change,
+    AxiRenderEditable renderEditable,
+  ) {
+    if (!_canPredictTypingCaret(change, renderEditable)) {
+      return;
+    }
+    final Offset? predictedEnd = _predictedTypingCaretOffset(
+      change: change,
+      renderEditable: renderEditable,
+    );
+    if (predictedEnd == null) {
+      return;
+    }
+    _animateTypingCaret(_typingCaretOffset, predictedEnd, renderEditable);
+  }
+
+  bool _canPredictTypingCaret(
+    TypingTextChange change,
+    AxiRenderEditable renderEditable,
+  ) {
+    final TextSelection selection = change.previousValue.selection;
+    final String? insertedText = change.insertedText;
+    final TextAlign textAlign = widget.textAlign;
+    final bool usesLeadingLtrAlignment =
+        renderEditable.textDirection == TextDirection.ltr &&
+        (textAlign == TextAlign.left ||
+            textAlign == TextAlign.start ||
+            textAlign == TextAlign.justify);
+    if (!change.isSingleCharacterInsertion ||
+        !selection.isValid ||
+        !selection.isCollapsed ||
+        insertedText == null ||
+        insertedText.contains('\n') ||
+        insertedText.contains('\r') ||
+        !usesLeadingLtrAlignment ||
+        widget.obscureText ||
+        _spellCheckResultsReceived ||
+        _hasActiveTypingComposingSpan(change.previousValue) ||
+        _hasActiveTypingComposingSpan(change.currentValue) ||
+        (_placeholderLocation >= 0 &&
+            _placeholderLocation <= change.previousValue.text.length) ||
+        renderEditable.size.isEmpty) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _hasActiveTypingComposingSpan(TextEditingValue value) =>
+      !widget.readOnly &&
+      _hasFocus &&
+      value.composing.isValid &&
+      !value.composing.isCollapsed;
+
+  Offset? _predictedTypingCaretOffset({
+    required TypingTextChange change,
+    required AxiRenderEditable renderEditable,
+  }) {
+    final TextSelection selection = change.previousValue.selection;
+    if (!selection.isValid) {
+      return null;
+    }
+    final Size? glyphSize = _predictedTypingGlyphSize(
+      change: change,
+      renderEditable: renderEditable,
+    );
+    if (glyphSize == null || glyphSize.width <= 0) {
+      return null;
+    }
+    final Offset? selectionOffset = _typingCaretOffsetForSelection(
+      selection,
+      renderEditable,
+    );
+    final Offset startOffset = _typingCaretOffset == Offset.zero
+        ? (selectionOffset ?? Offset.zero)
+        : _typingCaretOffset;
+    if (startOffset == Offset.zero) {
+      return null;
+    }
+    final double predictedDx = startOffset.dx + glyphSize.width;
+    if (predictedDx > renderEditable.size.width) {
+      return null;
+    }
+    final double currentCaretHeight =
+        _typingCaretPainter?.caretHeight ?? renderEditable.cursorHeight;
+    _typingCaretPainter?.caretHeight = math.max(
+      currentCaretHeight,
+      glyphSize.height,
+    );
+    return _snapTypingOffset(
+      Offset(predictedDx, startOffset.dy),
+      renderEditable.devicePixelRatio,
+    );
+  }
+
+  Size? _predictedTypingGlyphSize({
+    required TypingTextChange change,
+    required AxiRenderEditable renderEditable,
+  }) {
+    final TextRange? range = change.insertedRange;
+    final String? insertedText = change.insertedText;
+    if (range == null || insertedText == null) {
+      return null;
+    }
+    final TextStyle style = _typingTextStyleForOffset(
+      renderEditable,
+      range.start,
+    );
+    final _TypingGlyphAdvanceCacheKey cacheKey = _TypingGlyphAdvanceCacheKey(
+      text: insertedText,
+      style: style,
+      locale: renderEditable.locale,
+      textDirection: renderEditable.textDirection,
+      textScaler: renderEditable.textScaler,
+    );
+    final Size? cachedSize = _typingGlyphAdvanceCache[cacheKey];
+    if (cachedSize != null) {
+      return cachedSize;
+    }
+    final TextPainter painter = TextPainter(
+      text: TextSpan(text: insertedText, style: style),
+      textDirection: renderEditable.textDirection,
+      textScaler: renderEditable.textScaler,
+      locale: renderEditable.locale,
+      strutStyle: widget.strutStyle,
+      textHeightBehavior: widget.textHeightBehavior,
+    )..layout();
+    final Size size = painter.size;
+    if (size.width <= 0 || size.height <= 0) {
+      return null;
+    }
+    _typingGlyphAdvanceCache[cacheKey] = size;
+    if (_typingGlyphAdvanceCache.length > 128) {
+      _typingGlyphAdvanceCache.remove(_typingGlyphAdvanceCache.keys.first);
+    }
+    return size;
   }
 
   Duration _typingCaretDurationForDistance(
@@ -5261,13 +5424,22 @@ class EditableTextState extends State<EditableText>
 
   void _jumpTypingCaret(Offset target) {
     _typingCaretController.stop();
-    _typingCaretAnimation = AlwaysStoppedAnimation<Offset>(target);
+    _typingCaretAnimationStart = target;
+    _typingCaretAnimationEnd = target;
     _updateTypingCaretOffset(target);
   }
 
   void _handleTypingCaretTick() {
-    _updateTypingCaretOffset(_typingCaretAnimation.value);
+    _updateTypingCaretOffset(_resolvedTypingCaretAnimationValue());
   }
+
+  Offset _resolvedTypingCaretAnimationValue() =>
+      Offset.lerp(
+        _typingCaretAnimationStart,
+        _typingCaretAnimationEnd,
+        _typingCaretSlideCurve.transform(_typingCaretController.value),
+      ) ??
+      _typingCaretAnimationEnd;
 
   void _updateTypingCaretOffset(Offset offset) {
     _typingCaretOffset = offset;
@@ -5334,17 +5506,17 @@ class EditableTextState extends State<EditableText>
       style: style,
     );
     _pendingTypingHiddenRanges.remove(range);
-    _queueTypingGlyphAnimation(animation);
+    _queueTypingGlyphAnimation(animation, glyphRect);
     _updateTypingHiddenRanges();
   }
 
-  void _queueTypingGlyphAnimation(TypingGlyphAnimation animation) {
+  void _queueTypingGlyphAnimation(TypingGlyphAnimation animation, Rect rect) {
     if (!_typingGlyphTicker.isActive) {
       _typingGlyphElapsed = Duration.zero;
     }
     final Duration startTime = _typingGlyphElapsed;
     _typingGlyphEntries.add(
-      _TypingGlyphEntry(animation: animation, startTime: startTime),
+      _TypingGlyphEntry(animation: animation, startTime: startTime, rect: rect),
     );
     if (!_typingGlyphTicker.isActive) {
       _typingGlyphTicker.start();
@@ -5378,8 +5550,16 @@ class EditableTextState extends State<EditableText>
         completedEntries.add(entry);
         continue;
       }
+      final Rect? rect = entry.rect;
+      if (rect == null) {
+        continue;
+      }
       frames.add(
-        TypingGlyphFrame(animation: entry.animation, progress: progress),
+        TypingGlyphFrame(
+          animation: entry.animation,
+          progress: progress,
+          rect: rect,
+        ),
       );
     }
     if (completedEntries.isNotEmpty) {
@@ -5408,16 +5588,34 @@ class EditableTextState extends State<EditableText>
     return _typingGlyphMorphCurve.transform(progress);
   }
 
-  void _stopTypingGlyphMorphs() {
+  void _stopTypingGlyphMorphs({bool clearHiddenRanges = true}) {
     if (_typingGlyphEntries.isEmpty) {
-      _updateTypingHiddenRanges();
+      if (clearHiddenRanges) {
+        _updateTypingHiddenRanges();
+      } else {
+        _typingCaretPainter?.glyphFrames = const <TypingGlyphFrame>[];
+      }
       return;
     }
     _typingGlyphTicker.stop();
     _typingGlyphElapsed = Duration.zero;
     _typingGlyphEntries.clear();
     _typingCaretPainter?.glyphFrames = const <TypingGlyphFrame>[];
-    _updateTypingHiddenRanges();
+    if (clearHiddenRanges) {
+      _updateTypingHiddenRanges();
+    }
+  }
+
+  void _refreshTypingGlyphRects(AxiRenderEditable renderEditable) {
+    if (_typingGlyphEntries.isEmpty) {
+      return;
+    }
+    for (final _TypingGlyphEntry entry in _typingGlyphEntries) {
+      entry.rect = _typingGlyphRectForRange(
+        renderEditable,
+        entry.animation.range,
+      );
+    }
   }
 
   void _applyHiddenRanges(List<TextRange> ranges) {
@@ -5431,9 +5629,12 @@ class EditableTextState extends State<EditableText>
   }
 
   Rect? _typingGlyphRectForRange(
-    AxiRenderEditable renderEditable,
+    AxiRenderEditable? renderEditable,
     TextRange range,
   ) {
+    if (renderEditable == null) {
+      return null;
+    }
     final List<ui.TextBox> boxes = renderEditable.getBoxesForSelection(
       TextSelection(baseOffset: range.start, extentOffset: range.end),
     );
@@ -7814,10 +8015,45 @@ class _EditableTextTapOutsideAction
 enum _TypingChangeApplyState { apply, defer, drop }
 
 class _TypingGlyphEntry {
-  const _TypingGlyphEntry({required this.animation, required this.startTime});
+  _TypingGlyphEntry({
+    required this.animation,
+    required this.startTime,
+    this.rect,
+  });
 
   final TypingGlyphAnimation animation;
   final Duration startTime;
+  Rect? rect;
+}
+
+class _TypingGlyphAdvanceCacheKey {
+  const _TypingGlyphAdvanceCacheKey({
+    required this.text,
+    required this.style,
+    required this.locale,
+    required this.textDirection,
+    required this.textScaler,
+  });
+
+  final String text;
+  final TextStyle style;
+  final Locale? locale;
+  final TextDirection textDirection;
+  final TextScaler textScaler;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _TypingGlyphAdvanceCacheKey &&
+        other.text == text &&
+        other.style == style &&
+        other.locale == locale &&
+        other.textDirection == textDirection &&
+        other.textScaler == textScaler;
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(text, style, locale, textDirection, textScaler);
 }
 
 class _EditableTextTapUpOutsideAction

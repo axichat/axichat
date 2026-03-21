@@ -10,11 +10,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 const double _glyphStartOpacity = 0.0;
 const double _glyphEndOpacity = 1.0;
 const double _hiddenTextAlpha = 0.0;
-const double _typingGlyphScaleMin = 0.2;
+const double _typingGlyphVisualOpacityMin = 0.22;
+const double _typingGlyphScaleMin = 0.6;
 const double _typingGlyphScaleMax = 1.0;
-const Color _typingGlyphRasterColor = Colors.white;
-const FilterQuality _typingGlyphFilterQuality = FilterQuality.low;
-const int _typingGlyphRasterMaxCount = 6;
+const Color _typingGlyphBaseColor = Colors.white;
 
 enum TypingTextChangeKind { none, selection, insert, delete, replace }
 
@@ -59,10 +58,15 @@ class TypingGlyphAnimation {
 
 @immutable
 class TypingGlyphFrame {
-  const TypingGlyphFrame({required this.animation, required this.progress});
+  const TypingGlyphFrame({
+    required this.animation,
+    required this.progress,
+    required this.rect,
+  });
 
   final TypingGlyphAnimation animation;
   final double progress;
+  final Rect rect;
 }
 
 class TypingTextEditingController extends TextEditingController {
@@ -327,8 +331,8 @@ class TypingCaretPainter extends RenderEditablePainter {
   Offset _caretOffset = Offset.zero;
   bool _showCaret = true;
   List<TypingGlyphFrame> _glyphFrames = const <TypingGlyphFrame>[];
-  final Map<TypingGlyphAnimation, _TypingGlyphRaster> _glyphRasters =
-      <TypingGlyphAnimation, _TypingGlyphRaster>{};
+  final Map<TypingGlyphAnimation, _TypingGlyphPicture> _glyphPictures =
+      <TypingGlyphAnimation, _TypingGlyphPicture>{};
   bool _disposed = false;
 
   Color get caretColor => _caretColor;
@@ -391,7 +395,7 @@ class TypingCaretPainter extends RenderEditablePainter {
       return;
     }
     _glyphFrames = value;
-    _pruneGlyphRasters(value);
+    _pruneGlyphPictures(value);
     notifyListeners();
   }
 
@@ -427,209 +431,97 @@ class TypingCaretPainter extends RenderEditablePainter {
       return;
     }
     final TypingGlyphAnimation glyphAnimation = frame.animation;
-    final Rect? glyphRect = _glyphRectForRange(
-      renderEditable,
-      glyphAnimation.range,
-    );
-    if (glyphRect == null) {
+    final Rect glyphRect = frame.rect;
+    final _TypingGlyphPicture? picture =
+        _glyphPictures[glyphAnimation] ??
+        _createGlyphPicture(renderEditable, glyphAnimation);
+    if (picture == null) {
       return;
     }
-    if (!_canRasterizeGlyph(glyphAnimation)) {
-      _paintGlyphMorphVector(
-        canvas,
-        renderEditable,
-        glyphAnimation,
-        glyphRect,
-        progress,
-      );
-      return;
-    }
-    final _TypingGlyphRaster raster = _glyphRasters.putIfAbsent(
-      glyphAnimation,
-      _TypingGlyphRaster.new,
-    );
-    if (raster.image == null && !raster.isGenerating) {
-      _startGlyphRasterization(renderEditable, glyphAnimation, raster);
-    }
-    final ui.Image? image = raster.image;
-    if (image == null) {
-      return;
-    }
+    _glyphPictures[glyphAnimation] = picture;
 
     final Color baseColor = glyphAnimation.style.color ?? _caretColor;
-    final double glyphAlpha = (baseColor.a * progress).clamp(
+    final double glyphOpacity = ui.lerpDouble(
+      _typingGlyphVisualOpacityMin,
+      _glyphEndOpacity,
+      progress,
+    )!;
+    final double glyphAlpha = (baseColor.a * glyphOpacity).clamp(
       _glyphStartOpacity,
       _glyphEndOpacity,
     );
     final Color glyphColor = baseColor.withValues(alpha: glyphAlpha.toDouble());
+    final double scale = ui.lerpDouble(
+      _typingGlyphScaleMin,
+      _typingGlyphScaleMax,
+      progress,
+    )!;
+    final double scaleX = picture.size.width <= 0
+        ? scale
+        : (glyphRect.width / picture.size.width) * scale;
+    final double scaleY = picture.size.height <= 0
+        ? scale
+        : (glyphRect.height / picture.size.height) * scale;
     final Paint paint = Paint()
-      ..colorFilter = ColorFilter.mode(glyphColor, BlendMode.modulate)
-      ..filterQuality = _typingGlyphFilterQuality;
-
-    final Rect src = Rect.fromLTWH(
-      0,
-      0,
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
-    final Rect dst = Rect.fromLTWH(
-      glyphRect.left,
-      glyphRect.top,
-      glyphRect.width,
-      glyphRect.height,
-    );
-    final double scale =
-        _typingGlyphScaleMin +
-        (_typingGlyphScaleMax - _typingGlyphScaleMin) * progress;
-    final Offset glyphCenter = glyphRect.center;
+      ..colorFilter = ColorFilter.mode(glyphColor, BlendMode.modulate);
     canvas
       ..save()
-      ..translate(glyphCenter.dx, glyphCenter.dy)
-      ..scale(scale, scale)
-      ..translate(-glyphCenter.dx, -glyphCenter.dy);
-    canvas.drawImageRect(image, src, dst, paint);
-    canvas.restore();
+      ..translate(glyphRect.center.dx, glyphRect.center.dy)
+      ..scale(scaleX, scaleY)
+      ..translate(-picture.size.width / 2, -picture.size.height / 2)
+      ..saveLayer(Offset.zero & picture.size, paint)
+      ..drawPicture(picture.picture)
+      ..restore()
+      ..restore();
   }
 
-  void _paintGlyphMorphVector(
-    Canvas canvas,
+  _TypingGlyphPicture? _createGlyphPicture(
     RenderEditable renderEditable,
     TypingGlyphAnimation glyphAnimation,
-    Rect glyphRect,
-    double progress,
   ) {
-    final Color baseColor = glyphAnimation.style.color ?? _caretColor;
-    final double glyphAlpha = (baseColor.a * progress).clamp(
-      _glyphStartOpacity,
-      _glyphEndOpacity,
-    );
-    final Color glyphColor = baseColor.withValues(alpha: glyphAlpha.toDouble());
-    final TextStyle glyphStyle = _glyphTextStyle(
+    final TextStyle pictureStyle = _glyphTextStyle(
       glyphAnimation.style,
-      glyphColor,
+      _typingGlyphBaseColor,
     );
     final TextPainter painter = TextPainter(
-      text: TextSpan(text: glyphAnimation.text, style: glyphStyle),
-      textDirection: renderEditable.textDirection,
-      textScaler: renderEditable.textScaler,
-      locale: renderEditable.locale,
-    )..layout();
-
-    final double scale =
-        _typingGlyphScaleMin +
-        (_typingGlyphScaleMax - _typingGlyphScaleMin) * progress;
-    final Offset glyphCenter = glyphRect.center;
-    canvas
-      ..save()
-      ..translate(glyphCenter.dx, glyphCenter.dy)
-      ..scale(scale, scale)
-      ..translate(-glyphCenter.dx, -glyphCenter.dy);
-    painter.paint(canvas, glyphRect.topLeft);
-    canvas.restore();
-  }
-
-  Rect? _glyphRectForRange(RenderEditable renderEditable, TextRange range) {
-    final List<TextBox> boxes = renderEditable.getBoxesForSelection(
-      TextSelection(baseOffset: range.start, extentOffset: range.end),
-    );
-    if (boxes.isEmpty) {
-      return null;
-    }
-    return boxes.first.toRect();
-  }
-
-  bool _canRasterizeGlyph(TypingGlyphAnimation glyphAnimation) {
-    if (_glyphRasters.containsKey(glyphAnimation)) {
-      return true;
-    }
-    return _glyphRasters.length < _typingGlyphRasterMaxCount;
-  }
-
-  void _startGlyphRasterization(
-    RenderEditable renderEditable,
-    TypingGlyphAnimation glyphAnimation,
-    _TypingGlyphRaster raster,
-  ) {
-    raster.isGenerating = true;
-    final TextStyle rasterStyle = _glyphTextStyle(
-      glyphAnimation.style,
-      _typingGlyphRasterColor,
-    );
-    final TextPainter painter = TextPainter(
-      text: TextSpan(text: glyphAnimation.text, style: rasterStyle),
+      text: TextSpan(text: glyphAnimation.text, style: pictureStyle),
       textDirection: renderEditable.textDirection,
       textScaler: renderEditable.textScaler,
       locale: renderEditable.locale,
     )..layout();
     final Size size = painter.size;
-    final double pixelRatio = renderEditable.devicePixelRatio;
-    final int width = (size.width * pixelRatio).ceil();
-    final int height = (size.height * pixelRatio).ceil();
-    if (width <= 0 || height <= 0) {
-      raster.isGenerating = false;
-      return;
+    if (size.width <= 0 || size.height <= 0) {
+      return null;
     }
     final ui.PictureRecorder recorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(recorder);
-    canvas.scale(pixelRatio, pixelRatio);
     painter.paint(canvas, Offset.zero);
-    _finalizeGlyphRaster(
-      recorder: recorder,
-      width: width,
-      height: height,
-      glyphAnimation: glyphAnimation,
-      raster: raster,
-    );
-  }
-
-  Future<void> _finalizeGlyphRaster({
-    required ui.PictureRecorder recorder,
-    required int width,
-    required int height,
-    required TypingGlyphAnimation glyphAnimation,
-    required _TypingGlyphRaster raster,
-  }) async {
-    try {
-      final ui.Image image = await recorder.endRecording().toImage(
-        width,
-        height,
-      );
-      if (_disposed) {
-        image.dispose();
-        return;
-      }
-      final _TypingGlyphRaster? currentRaster = _glyphRasters[glyphAnimation];
-      if (currentRaster == null) {
-        image.dispose();
-        return;
-      }
-      currentRaster
-        ..image = image
-        ..isGenerating = false;
-      notifyListeners();
-    } on Exception {
-      raster.isGenerating = false;
+    if (_disposed) {
+      final ui.Picture picture = recorder.endRecording();
+      picture.dispose();
+      return null;
     }
+    return _TypingGlyphPicture(picture: recorder.endRecording(), size: size);
   }
 
-  void _pruneGlyphRasters(List<TypingGlyphFrame> frames) {
-    if (_glyphRasters.isEmpty) {
+  void _pruneGlyphPictures(List<TypingGlyphFrame> frames) {
+    if (_glyphPictures.isEmpty) {
       return;
     }
     final Set<TypingGlyphAnimation> activeAnimations = frames
         .map((TypingGlyphFrame frame) => frame.animation)
         .toSet();
     final List<TypingGlyphAnimation> toRemove = <TypingGlyphAnimation>[];
-    _glyphRasters.forEach((
+    _glyphPictures.forEach((
       TypingGlyphAnimation key,
-      _TypingGlyphRaster raster,
+      _TypingGlyphPicture picture,
     ) {
       if (!activeAnimations.contains(key)) {
         toRemove.add(key);
       }
     });
     for (final TypingGlyphAnimation key in toRemove) {
-      _glyphRasters.remove(key)?.dispose();
+      _glyphPictures.remove(key)?.dispose();
     }
   }
 
@@ -714,12 +606,12 @@ class TypingCaretPainter extends RenderEditablePainter {
   @override
   void dispose() {
     _disposed = true;
-    for (final _TypingGlyphRaster raster in _glyphRasters.values.toList(
+    for (final _TypingGlyphPicture picture in _glyphPictures.values.toList(
       growable: false,
     )) {
-      raster.dispose();
+      picture.dispose();
     }
-    _glyphRasters.clear();
+    _glyphPictures.clear();
     super.dispose();
   }
 
@@ -732,12 +624,13 @@ class TypingCaretPainter extends RenderEditablePainter {
   }
 }
 
-class _TypingGlyphRaster {
-  ui.Image? image;
-  bool isGenerating = false;
+class _TypingGlyphPicture {
+  const _TypingGlyphPicture({required this.picture, required this.size});
+
+  final ui.Picture picture;
+  final Size size;
 
   void dispose() {
-    image?.dispose();
-    image = null;
+    picture.dispose();
   }
 }
