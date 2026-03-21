@@ -1192,6 +1192,10 @@ class DraftFormState extends State<DraftForm> {
     if (_pendingAttachments.any((pending) => pending.isPreparing)) {
       return false;
     }
+    return _hasDraftableContent();
+  }
+
+  bool _hasDraftableContent() {
     final String body = _bodyTextController.text.trim();
     final String subject = _subjectTextController.text.trim();
     final bool hasAttachments = _pendingAttachments.isNotEmpty;
@@ -1350,7 +1354,7 @@ class DraftFormState extends State<DraftForm> {
     if (_loadingAttachments || _autosaveInFlight) {
       return true;
     }
-    final hasDraftContent = _shouldAutosave();
+    final hasDraftContent = _hasDraftableContent();
     if (!hasDraftContent) {
       return false;
     }
