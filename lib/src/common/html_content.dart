@@ -637,7 +637,17 @@ pre, code {
       );
       return document.outerHtml;
     } on Exception {
-      return sanitizeHtml(html);
+      final simplified = simplifyHtmlForWebView(html);
+      try {
+        final fallbackDocument = _prepareEmailHtmlDocument(
+          simplified,
+          allowRemoteImages: allowRemoteImages,
+          includeWebViewChrome: true,
+        );
+        return fallbackDocument.outerHtml;
+      } on Exception {
+        return simplified;
+      }
     }
   }
 
@@ -1678,26 +1688,12 @@ pre, code {
     if (normalized.isEmpty) {
       return (sanitized: null, blocked: blocked);
     }
-    final rulePattern = RegExp(r'([^{}]+)\{([^{}]*)\}');
-    final sanitizedRules = <String>[];
-    for (final match in rulePattern.allMatches(normalized)) {
-      final selector = match.group(1)?.trim() ?? '';
-      if (selector.isEmpty || selector.startsWith('@')) {
-        continue;
-      }
-      final declarations = _sanitizeWebViewStyleDeclarations(
-        match.group(2) ?? '',
-      );
-      if (declarations.blocked) {
-        blocked = true;
-      }
-      if (declarations.sanitized.isEmpty) {
-        continue;
-      }
-      sanitizedRules.add('$selector { ${declarations.sanitized.join('; ')}; }');
+    final sanitizedRules = _sanitizeWebViewCssRules(normalized);
+    if (sanitizedRules.blocked) {
+      blocked = true;
     }
-    if (sanitizedRules.isNotEmpty) {
-      return (sanitized: sanitizedRules.join('\n'), blocked: blocked);
+    if (sanitizedRules.sanitized.isNotEmpty) {
+      return (sanitized: sanitizedRules.sanitized.join('\n'), blocked: blocked);
     }
     final declarations = _sanitizeWebViewStyleDeclarations(normalized);
     if (declarations.blocked) {
@@ -1707,6 +1703,66 @@ pre, code {
       return (sanitized: null, blocked: blocked);
     }
     return (sanitized: declarations.sanitized.join('; '), blocked: blocked);
+  }
+
+  static ({List<String> sanitized, bool blocked}) _sanitizeWebViewCssRules(
+    String cssText,
+  ) {
+    final sanitized = <String>[];
+    var blocked = false;
+    var index = 0;
+    while (index < cssText.length) {
+      final openBrace = cssText.indexOf('{', index);
+      if (openBrace == -1) {
+        break;
+      }
+      final selector = cssText.substring(index, openBrace).trim();
+      if (selector.isEmpty) {
+        index = openBrace + 1;
+        continue;
+      }
+      var cursor = openBrace + 1;
+      var depth = 1;
+      while (cursor < cssText.length && depth > 0) {
+        final char = cssText[cursor];
+        if (char == '{') {
+          depth += 1;
+        } else if (char == '}') {
+          depth -= 1;
+        }
+        cursor += 1;
+      }
+      if (depth != 0) {
+        blocked = true;
+        break;
+      }
+      final body = cssText.substring(openBrace + 1, cursor - 1).trim();
+      if (selector.startsWith('@media')) {
+        final nested = _sanitizeWebViewCssRules(body);
+        if (nested.blocked) {
+          blocked = true;
+        }
+        if (nested.sanitized.isNotEmpty) {
+          sanitized.add('$selector { ${nested.sanitized.join('\n')} }');
+        }
+        index = cursor;
+        continue;
+      }
+      if (selector.startsWith('@')) {
+        blocked = true;
+        index = cursor;
+        continue;
+      }
+      final declarations = _sanitizeWebViewStyleDeclarations(body);
+      if (declarations.blocked) {
+        blocked = true;
+      }
+      if (declarations.sanitized.isNotEmpty) {
+        sanitized.add('$selector { ${declarations.sanitized.join('; ')}; }');
+      }
+      index = cursor;
+    }
+    return (sanitized: sanitized, blocked: blocked);
   }
 
   static String _normalizeCssKeywordValue(String value) {

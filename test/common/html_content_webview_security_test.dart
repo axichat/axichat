@@ -69,6 +69,24 @@ void main() {
       expect(prepared.contains('margin: 8px'), isTrue);
     });
 
+    test('keeps safe @media rules while stripping blocked declarations', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<style>@media only screen and (max-width: 600px) { '
+        '.note { color: red; position: absolute; transform: translateY(-12px); } '
+        '} .base { margin: 8px; }</style>'
+        '<p class="note base">ok</p>',
+        allowRemoteImages: true,
+      );
+      expect(
+        prepared.contains('@media only screen and (max-width: 600px)'),
+        isTrue,
+      );
+      expect(prepared.contains('color: red'), isTrue);
+      expect(prepared.contains('margin: 8px'), isTrue);
+      expect(prepared.contains('position: absolute'), isFalse);
+      expect(prepared.contains('transform'), isFalse);
+    });
+
     test('strips inline svg and namespaced href content', () {
       final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
         '<svg xmlns="http://www.w3.org/2000/svg" '
