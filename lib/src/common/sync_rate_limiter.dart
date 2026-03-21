@@ -24,6 +24,7 @@ const int _conversationIndexSyncMaxEventsPerWindow = 240;
 const int _messageCollectionSyncMaxEventsPerWindow = 240;
 const int _bookmarksSyncMaxEventsPerWindow = 240;
 const int _pinSyncMaxEventsPerWindow = 240;
+const int _settingsSyncMaxEventsPerWindow = 120;
 
 const SyncRateLimit draftSyncRateLimit = SyncRateLimit(
   maxEvents: _draftSyncMaxEventsPerWindow,
@@ -58,6 +59,11 @@ const SyncRateLimit bookmarksSyncRateLimit = SyncRateLimit(
 );
 const SyncRateLimit pinSyncRateLimit = SyncRateLimit(
   maxEvents: _pinSyncMaxEventsPerWindow,
+  window: _syncRateWindow,
+  refreshCooldown: _syncRefreshCooldown,
+);
+const SyncRateLimit settingsSyncRateLimit = SyncRateLimit(
+  maxEvents: _settingsSyncMaxEventsPerWindow,
   window: _syncRateWindow,
   refreshCooldown: _syncRefreshCooldown,
 );

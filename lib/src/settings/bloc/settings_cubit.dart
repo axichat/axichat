@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -19,10 +21,20 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsCubit({XmppService? xmppService, Capability? capability})
     : _xmppService = xmppService,
       _capability = capability,
-      super(const SettingsState());
+      super(const SettingsState()) {
+    _applyAttachmentAutoDownloadSettings(state);
+    final service = _xmppService;
+    if (service != null) {
+      _settingsSyncSubscription = service.settingsSyncUpdateStream.listen(
+        _handleRemoteSettingsSync,
+      );
+      unawaited(service.seedSettingsSyncSnapshot(state.syncedSettingsJson));
+    }
+  }
 
   final XmppService? _xmppService;
   final Capability? _capability;
+  StreamSubscription<Map<String, dynamic>>? _settingsSyncSubscription;
 
   bool get canForegroundService => _capability?.canForegroundService ?? false;
 
@@ -33,21 +45,21 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       state.lowMotion ? baseAnimationDuration : authCompletionAnimationDuration;
 
   void updateLanguage(AppLanguage language) {
-    emit(state.copyWith(language: language));
+    _emitLocalSettingsState(state.copyWith(language: language));
   }
 
   void updateThemeMode(ThemeMode? themeMode) {
     if (themeMode == null) return;
-    emit(state.copyWith(themeMode: themeMode));
+    _emitLocalSettingsState(state.copyWith(themeMode: themeMode));
   }
 
   void updateColorScheme(ShadColor? shadColor) {
     if (shadColor == null) return;
-    emit(state.copyWith(shadColor: shadColor));
+    _emitLocalSettingsState(state.copyWith(shadColor: shadColor));
   }
 
   void updateEndpointConfig(EndpointConfig config) {
-    emit(state.copyWith(endpointConfig: config));
+    _emitLocalSettingsState(state.copyWith(endpointConfig: config));
   }
 
   void resetEndpointConfig() {
@@ -55,66 +67,76 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   void toggleBackgroundMessaging(bool enabled) {
-    emit(state.copyWith(backgroundMessagingEnabled: enabled));
+    _emitLocalSettingsState(
+      state.copyWith(backgroundMessagingEnabled: enabled),
+    );
   }
 
   void toggleChatNotificationsMuted(bool muted) {
-    emit(state.copyWith(chatNotificationsMuted: muted));
+    _emitLocalSettingsState(state.copyWith(chatNotificationsMuted: muted));
   }
 
   void toggleEmailNotificationsMuted(bool muted) {
-    emit(state.copyWith(emailNotificationsMuted: muted));
+    _emitLocalSettingsState(state.copyWith(emailNotificationsMuted: muted));
   }
 
   void toggleNotificationPreviews(bool enabled) {
-    emit(state.copyWith(notificationPreviewsEnabled: enabled));
+    _emitLocalSettingsState(
+      state.copyWith(notificationPreviewsEnabled: enabled),
+    );
   }
 
   void toggleChatReadReceipts(bool enabled) {
-    emit(state.copyWith(chatReadReceipts: enabled));
+    _emitLocalSettingsState(state.copyWith(chatReadReceipts: enabled));
   }
 
   void toggleEmailReadReceipts(bool enabled) {
-    emit(state.copyWith(emailReadReceipts: enabled));
+    _emitLocalSettingsState(state.copyWith(emailReadReceipts: enabled));
   }
 
   void toggleChatSendOnEnter(bool enabled) {
-    emit(state.copyWith(chatSendOnEnter: enabled));
+    _emitLocalSettingsState(state.copyWith(chatSendOnEnter: enabled));
   }
 
   void toggleEmailSendOnEnter(bool enabled) {
-    emit(state.copyWith(emailSendOnEnter: enabled));
+    _emitLocalSettingsState(state.copyWith(emailSendOnEnter: enabled));
   }
 
   void toggleEmailSendConfirmation(bool enabled) {
-    emit(state.copyWith(emailSendConfirmationEnabled: enabled));
+    _emitLocalSettingsState(
+      state.copyWith(emailSendConfirmationEnabled: enabled),
+    );
   }
 
   void toggleColorfulAvatars(bool colorfulAvatars) {
-    emit(state.copyWith(colorfulAvatars: colorfulAvatars));
+    _emitLocalSettingsState(state.copyWith(colorfulAvatars: colorfulAvatars));
   }
 
   void markEmailForwardingGuideSeen() {
     if (state.emailForwardingGuideSeen) {
       return;
     }
-    emit(state.copyWith(emailForwardingGuideSeen: true));
+    _emitLocalSettingsState(state.copyWith(emailForwardingGuideSeen: true));
   }
 
   void toggleLowMotion(bool lowMotion) {
-    emit(state.copyWith(lowMotion: lowMotion));
+    _emitLocalSettingsState(state.copyWith(lowMotion: lowMotion));
   }
 
   void toggleIndicateTyping(bool indicateTyping) {
-    emit(state.copyWith(indicateTyping: indicateTyping));
+    _emitLocalSettingsState(state.copyWith(indicateTyping: indicateTyping));
   }
 
   void toggleShareTokenSignature(bool enabled) {
-    emit(state.copyWith(shareTokenSignatureEnabled: enabled));
+    _emitLocalSettingsState(
+      state.copyWith(shareTokenSignatureEnabled: enabled),
+    );
   }
 
   void toggleEmailComposerWatermark(bool enabled) {
-    emit(state.copyWith(emailComposerWatermarkEnabled: enabled));
+    _emitLocalSettingsState(
+      state.copyWith(emailComposerWatermarkEnabled: enabled),
+    );
   }
 
   void trackDonationPromptMessageCount({
@@ -128,7 +150,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     if (syncedState == state) {
       return;
     }
-    emit(syncedState);
+    _emitLocalSettingsState(syncedState);
   }
 
   void hideDonationPrompt({
@@ -146,35 +168,39 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     if (nextState == state) {
       return;
     }
-    emit(nextState);
+    _emitLocalSettingsState(nextState);
   }
 
   void toggleHideCompletedScheduled(bool hide) {
-    emit(state.copyWith(hideCompletedScheduled: hide));
+    _emitLocalSettingsState(state.copyWith(hideCompletedScheduled: hide));
   }
 
   void toggleHideCompletedUnscheduled(bool hide) {
-    emit(state.copyWith(hideCompletedUnscheduled: hide));
+    _emitLocalSettingsState(state.copyWith(hideCompletedUnscheduled: hide));
   }
 
   void toggleHideCompletedReminders(bool hide) {
-    emit(state.copyWith(hideCompletedReminders: hide));
+    _emitLocalSettingsState(state.copyWith(hideCompletedReminders: hide));
   }
 
   void saveUnscheduledSidebarOrder(List<String> order) {
-    emit(state.copyWith(unscheduledSidebarOrder: List<String>.from(order)));
+    _emitLocalSettingsState(
+      state.copyWith(unscheduledSidebarOrder: List<String>.from(order)),
+    );
   }
 
   void saveReminderSidebarOrder(List<String> order) {
-    emit(state.copyWith(reminderSidebarOrder: List<String>.from(order)));
+    _emitLocalSettingsState(
+      state.copyWith(reminderSidebarOrder: List<String>.from(order)),
+    );
   }
 
   void updateMessageTextSize(MessageTextSize messageTextSize) {
-    emit(state.copyWith(messageTextSize: messageTextSize));
+    _emitLocalSettingsState(state.copyWith(messageTextSize: messageTextSize));
   }
 
   void toggleAutoLoadEmailImages(bool enabled) {
-    emit(state.copyWith(autoLoadEmailImages: enabled));
+    _emitLocalSettingsState(state.copyWith(autoLoadEmailImages: enabled));
   }
 
   void primeAttachmentAutoDownloadSettings() {
@@ -201,20 +227,58 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         state.autoDownloadArchives == archivesEnabled) {
       return;
     }
-    emit(
-      state.copyWith(
-        autoDownloadImages: imagesEnabled,
-        autoDownloadVideos: videosEnabled,
-        autoDownloadDocuments: documentsEnabled,
-        autoDownloadArchives: archivesEnabled,
-      ),
+    final nextState = state.copyWith(
+      autoDownloadImages: imagesEnabled,
+      autoDownloadVideos: videosEnabled,
+      autoDownloadDocuments: documentsEnabled,
+      autoDownloadArchives: archivesEnabled,
     );
+    _emitLocalSettingsState(nextState);
+    _applyAttachmentAutoDownloadSettings(nextState);
+  }
+
+  void _emitLocalSettingsState(SettingsState nextState) {
+    if (nextState == state) {
+      return;
+    }
+    final previousState = state;
+    emit(nextState);
+    if (const DeepCollectionEquality().equals(
+      previousState.syncedSettingsJson,
+      nextState.syncedSettingsJson,
+    )) {
+      return;
+    }
+    final service = _xmppService;
+    if (service == null) {
+      return;
+    }
+    unawaited(service.updateSettingsSyncSnapshot(nextState.syncedSettingsJson));
+  }
+
+  void _handleRemoteSettingsSync(Map<String, dynamic> syncedSettings) {
+    final nextState = state.mergeSyncedSettingsJson(syncedSettings);
+    if (nextState == state) {
+      return;
+    }
+    emit(nextState);
+    _applyAttachmentAutoDownloadSettings(nextState);
+  }
+
+  void _applyAttachmentAutoDownloadSettings(SettingsState nextState) {
     _xmppService?.updateAttachmentAutoDownloadSettings(
-      imagesEnabled: imagesEnabled,
-      videosEnabled: videosEnabled,
-      documentsEnabled: documentsEnabled,
-      archivesEnabled: archivesEnabled,
+      imagesEnabled: nextState.autoDownloadImages,
+      videosEnabled: nextState.autoDownloadVideos,
+      documentsEnabled: nextState.autoDownloadDocuments,
+      archivesEnabled: nextState.autoDownloadArchives,
     );
+  }
+
+  @override
+  Future<void> close() async {
+    await _settingsSyncSubscription?.cancel();
+    _settingsSyncSubscription = null;
+    return super.close();
   }
 
   @override

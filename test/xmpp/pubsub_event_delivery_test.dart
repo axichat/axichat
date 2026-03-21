@@ -2,6 +2,7 @@ import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -26,6 +27,7 @@ const _messageCollectionsNode = 'urn:axi:message-collections';
 const _collectionId = 'important';
 const _messageReferenceId = 'important-message-id';
 const _messageChatJid = 'chat@example.com';
+const _settingsNode = 'urn:axi:settings';
 
 const _peerBareJid = 'peer@example.com';
 const _convTag = 'conv';
@@ -187,6 +189,40 @@ void main() {
       expect(update.payload.active, isTrue);
     },
   );
+
+  test('SettingsPubSubManager emits update from pubsub notification', () async {
+    final sentEvents = <mox.XmppEvent>[];
+    final manager = SettingsPubSubManager()
+      ..register(_testAttributes(sentEvents: sentEvents));
+
+    final updatedAt = DateTime.utc(2026, 3, 12, 10, 45);
+    final payload = SettingsSyncPayload(
+      settings: const <String, dynamic>{
+        'language': 'german',
+        'auto_download_images': false,
+      },
+      updatedAt: updatedAt,
+      sourceId: 'device-a',
+    );
+    final item = mox.PubSubItem(
+      id: SettingsSyncPayload.currentItemId,
+      node: _settingsNode,
+      payload: payload.toXml(),
+    );
+    final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
+
+    await manager.onXmppEvent(event);
+    await pumpEventQueue();
+
+    expect(sentEvents, hasLength(1));
+    expect(sentEvents.single, isA<SettingsSyncUpdatedEvent>());
+
+    final update = sentEvents.single as SettingsSyncUpdatedEvent;
+    expect(update.payload.settings['language'], 'german');
+    expect(update.payload.settings['auto_download_images'], isFalse);
+    expect(update.payload.updatedAt.toUtc(), updatedAt);
+    expect(update.payload.sourceId, 'device-a');
+  });
 
   test('MucBookmark parses id-only pubsub items', () {
     final item = mox.PubSubItem(id: _roomJid, node: _bookmarksNode);
