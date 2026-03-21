@@ -444,7 +444,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatMessageKey? _emailSyncComposerMessage;
   bool _emailHistoryLoading = false;
   bool _pinHydrationInFlight = false;
-  final Set<String> _roomAffiliationRefreshAttempts = <String>{};
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
   final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
@@ -1284,38 +1283,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatRoomMembersOpened event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null || chat.type != ChatType.groupChat) return;
-    await _ensureMucMembership(chat);
-    final roomState =
-        state.roomState ?? _mucService.roomStateForOrEmpty(chat.jid);
-    if (state.roomState == null) {
-      emit(
-        state.copyWith(
-          roomState: roomState,
-          roomMemberSections: _buildRoomMemberSections(roomState),
-        ),
-      );
+    final completer = event.completer;
+    try {
+      final chat = state.chat;
+      if (chat == null || chat.type != ChatType.groupChat) return;
+      await _ensureMucMembership(chat);
+      final roomState =
+          state.roomState ?? _mucService.roomStateForOrEmpty(chat.jid);
+      if (state.roomState == null) {
+        emit(
+          state.copyWith(
+            roomState: roomState,
+            roomMemberSections: _buildRoomMemberSections(roomState),
+          ),
+        );
+      }
+      await _refreshRoomAffiliations(chat: chat, roomState: roomState);
+    } finally {
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
     }
-    await _refreshRoomAffiliationsIfNeeded(chat: chat, roomState: roomState);
   }
 
-  Future<void> _refreshRoomAffiliationsIfNeeded({
+  Future<void> _refreshRoomAffiliations({
     required Chat chat,
     required RoomState roomState,
   }) async {
     if (!roomState.hasSelfPresence) return;
     final roomJid = _bareJid(chat.jid);
     if (roomJid == null || roomJid.isEmpty) return;
-    if (_roomAffiliationRefreshAttempts.contains(roomJid)) return;
-    _roomAffiliationRefreshAttempts.add(roomJid);
     try {
       await _mucService.fetchRoomMembers(roomJid: roomJid);
       await _mucService.fetchRoomOwners(roomJid: roomJid);
       await _mucService.fetchRoomAdmins(roomJid: roomJid);
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_roomAffiliationRefreshFailedLogMessage, error, stackTrace);
-      _roomAffiliationRefreshAttempts.remove(roomJid);
     }
   }
 
@@ -1808,13 +1811,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         roomState: event.roomState,
         roomMemberSections: nextRoomSections,
       ),
-    );
-    final chat = state.chat;
-    if (chat == null || chat.type != ChatType.groupChat) return;
-    if (emit.isDone) return;
-    await _refreshRoomAffiliationsIfNeeded(
-      chat: chat,
-      roomState: event.roomState,
     );
   }
 

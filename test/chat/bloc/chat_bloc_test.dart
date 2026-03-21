@@ -20,6 +20,7 @@ import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
+import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -318,6 +319,15 @@ void main() {
         role: any(named: 'role'),
       ),
     ).thenAnswer((_) async {});
+    when(
+      () => mucService.fetchRoomMembers(roomJid: any(named: 'roomJid')),
+    ).thenAnswer((_) async => []);
+    when(
+      () => mucService.fetchRoomOwners(roomJid: any(named: 'roomJid')),
+    ).thenAnswer((_) async => []);
+    when(
+      () => mucService.fetchRoomAdmins(roomJid: any(named: 'roomJid')),
+    ).thenAnswer((_) async => []);
 
     when(
       () => messageService.messageStreamForChat(
@@ -4368,6 +4378,183 @@ void main() {
       await roomStreamController.close();
     },
   );
+
+  test(
+    'room state updates do not prefetch room affiliations automatically',
+    () async {
+      final roomStateController = StreamController<RoomState>.broadcast();
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+
+      when(
+        () => mucService.roomStateStream(roomJid),
+      ).thenAnswer((_) => roomStateController.stream);
+      when(
+        () => mucService.roomStateFor(roomJid),
+      ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+        (_) async => RoomState(roomJid: roomJid, occupants: const {}),
+      );
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      roomStateController.add(
+        RoomState(
+          roomJid: roomJid,
+          myOccupantJid: selfOccupantId,
+          occupants: <String, Occupant>{
+            selfOccupantId: _occupant(
+              occupantId: selfOccupantId,
+              nick: 'self',
+              realJid: 'self@axi.im',
+              affiliation: OccupantAffiliation.owner,
+              role: OccupantRole.moderator,
+            ),
+          },
+        ),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyNever(() => mucService.fetchRoomMembers(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomOwners(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomAdmins(roomJid: roomJid));
+
+      await bloc.close();
+      await roomStateController.close();
+    },
+  );
+
+  test(
+    'opening room members fetches room affiliations and completes the request',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      final roomState = RoomState(
+        roomJid: roomJid,
+        myOccupantJid: selfOccupantId,
+        selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+        occupants: <String, Occupant>{
+          selfOccupantId: _occupant(
+            occupantId: selfOccupantId,
+            nick: 'self',
+            realJid: 'self@axi.im',
+            affiliation: OccupantAffiliation.owner,
+            role: OccupantRole.moderator,
+          ),
+        },
+      );
+
+      when(
+        () => mucService.roomStateFor(roomJid),
+      ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+      when(
+        () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      ).thenAnswer((_) async => roomState);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(mucService);
+
+      final completer = Completer<void>();
+      bloc.add(ChatRoomMembersOpened(completer: completer));
+      await completer.future;
+
+      verifyInOrder([
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: null,
+          allowRejoin: true,
+        ),
+        () => mucService.fetchRoomMembers(roomJid: roomJid),
+        () => mucService.fetchRoomOwners(roomJid: roomJid),
+        () => mucService.fetchRoomAdmins(roomJid: roomJid),
+      ]);
+
+      await bloc.close();
+    },
+  );
+
+  test('reopening room members fetches room affiliations again', () async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    final roomState = RoomState(
+      roomJid: roomJid,
+      myOccupantJid: selfOccupantId,
+      selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+      occupants: <String, Occupant>{
+        selfOccupantId: _occupant(
+          occupantId: selfOccupantId,
+          nick: 'self',
+          realJid: 'self@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+        ),
+      },
+    );
+
+    when(
+      () => mucService.roomStateFor(roomJid),
+    ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+    when(
+      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+    ).thenAnswer((_) async => roomState);
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: null,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(_groupChat(roomJid));
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+    clearInteractions(mucService);
+
+    final firstCompleter = Completer<void>();
+    bloc.add(ChatRoomMembersOpened(completer: firstCompleter));
+    await firstCompleter.future;
+
+    final secondCompleter = Completer<void>();
+    bloc.add(ChatRoomMembersOpened(completer: secondCompleter));
+    await secondCompleter.future;
+
+    verify(() => mucService.fetchRoomMembers(roomJid: roomJid)).called(2);
+    verify(() => mucService.fetchRoomOwners(roomJid: roomJid)).called(2);
+    verify(() => mucService.fetchRoomAdmins(roomJid: roomJid)).called(2);
+
+    await bloc.close();
+  });
 
   test(
     'room member actions respect affiliation authority and exposed real JIDs',

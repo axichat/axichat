@@ -2865,10 +2865,13 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatMuted(chatJid: chat.jid, muted: !enable));
   }
 
-  void _showMembers({bool refreshMembership = true}) {
+  Future<void> _showMembers({bool refreshMembership = true}) async {
     final locate = context.read;
     if (refreshMembership) {
-      locate<ChatBloc>().add(const ChatRoomMembersOpened());
+      final completer = Completer<void>();
+      locate<ChatBloc>().add(ChatRoomMembersOpened(completer: completer));
+      await completer.future;
+      if (!mounted) return;
     }
     final navigator = Navigator.of(context);
     final sizing = context.sizing;
@@ -3335,7 +3338,7 @@ class _ChatState extends State<Chat> {
       return;
     }
     _inlineComposerController.setTextValue(
-      const TextEditingValue(
+      TextEditingValue(
         text: watermarkSuffix,
         selection: TextSelection.collapsed(offset: 0),
         composing: TextRange.empty,
