@@ -735,9 +735,10 @@ class _ChatScaffoldBody extends StatelessWidget {
                         );
                       } else {
                         composerChild = _ChatComposerSection(
-                          key: const ValueKey<String>('inline-composer'),
+                          key: owner._inlineComposerKey,
                           enabled: !roomBootstrapInProgress && !roomJoinFailed,
                           hintText: composerHintText,
+                          controller: owner._inlineComposerController,
                           recipients: recipients,
                           availableChats: availableChats,
                           latestStatuses: latestStatuses,
@@ -754,13 +755,12 @@ class _ChatScaffoldBody extends StatelessWidget {
                           retryReport: null,
                           retryShareId: null,
                           onFanOutRetry: null,
-                          subjectController: owner._subjectController,
-                          subjectFocusNode: owner._subjectFocusNode,
-                          textController: owner._textController,
-                          textFocusNode: owner._focusNode,
                           tapRegionGroup: owner._composerTapRegionGroup,
-                          onSubjectSubmitted: () =>
-                              owner._focusNode.requestFocus(),
+                          onTextChanged: owner._handleComposerTextChanged,
+                          onSubjectChanged: owner._handleSubjectChanged,
+                          onSubjectSubmitted: () => owner
+                              ._inlineComposerController
+                              .requestTextFocus(),
                           showExpandDraftAction: isEmailComposer,
                           expandDraftEnabled: !owner._expandingComposerDraft,
                           onExpandDraftPressed: () =>
@@ -798,10 +798,17 @@ class _ChatScaffoldBody extends StatelessWidget {
                                     state.supportsHttpFileUpload,
                                 settingsSnapshot: settingsSnapshot,
                               ),
-                          buildComposerAccessories: ({required bool canSend}) =>
-                              owner._composerAccessories(
+                          buildComposerAccessories:
+                              ({
+                                required bool canSend,
+                                required TextEditingController textController,
+                                required FocusNode attachmentButtonFocusNode,
+                              }) => owner._composerAccessories(
                                 canSend: canSend,
                                 attachmentsEnabled: attachmentsEnabled,
+                                textController: textController,
+                                attachmentButtonFocusNode:
+                                    attachmentButtonFocusNode,
                                 chatState: state,
                                 settingsSnapshot: settingsSnapshot,
                               ),
