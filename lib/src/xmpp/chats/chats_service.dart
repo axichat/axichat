@@ -103,6 +103,7 @@ final class _TypingParticipantsSession {
 }
 
 mixin ChatsService on XmppBase, BaseStreamService, MessageService {
+  final _chatsLog = Logger('ChatsService');
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   static const _typingParticipantLinger = Duration(seconds: 6);
@@ -151,6 +152,103 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       return null;
     }
     return _openChatUnreadBoundarySeedByJid.remove(normalizedJid);
+  }
+
+  Future<void> syncSignupWelcomeMessage({
+    required bool allowInsert,
+    required String title,
+    required String body,
+  }) async {
+    const welcomeStanzaId = 'signup-welcome.axichat';
+    Message? insertedMessage;
+    try {
+      final db = await database;
+      final existingMessage = await db.getMessageByStanzaID(welcomeStanzaId);
+      final existingChat = await db.getChat(_signupWelcomeChatJid);
+      if (existingMessage == null) {
+        if (existingChat != null) {
+          if (existingChat.title != title ||
+              existingChat.contactDisplayName != title ||
+              existingChat.contactJid != _signupWelcomeChatJid) {
+            await db.updateChat(
+              existingChat.copyWith(
+                title: title,
+                contactDisplayName: title,
+                contactJid: _signupWelcomeChatJid,
+              ),
+            );
+          }
+        } else if (!allowInsert) {
+          return;
+        }
+        if (allowInsert) {
+          insertedMessage = Message(
+            stanzaID: welcomeStanzaId,
+            senderJid: _signupWelcomeChatJid,
+            chatJid: _signupWelcomeChatJid,
+            body: body,
+            timestamp: DateTime.timestamp(),
+            acked: true,
+            received: true,
+            displayed: true,
+          );
+          await db.saveMessage(insertedMessage);
+        }
+      } else if (existingMessage.body != body ||
+          existingMessage.htmlBody != null ||
+          existingMessage.senderJid != _signupWelcomeChatJid ||
+          existingMessage.chatJid != _signupWelcomeChatJid ||
+          !existingMessage.displayed) {
+        await db.updateMessage(
+          existingMessage.copyWith(
+            senderJid: _signupWelcomeChatJid,
+            chatJid: _signupWelcomeChatJid,
+            body: body,
+            htmlBody: null,
+            acked: true,
+            received: true,
+            displayed: true,
+          ),
+        );
+      }
+      if (existingChat == null) {
+        if (!allowInsert) {
+          return;
+        }
+        final chatTimestamp =
+            insertedMessage?.timestamp ??
+            existingMessage?.timestamp ??
+            DateTime.timestamp();
+        await db.createChat(
+          Chat(
+            jid: _signupWelcomeChatJid,
+            title: title,
+            type: ChatType.chat,
+            lastChangeTimestamp: chatTimestamp,
+            contactDisplayName: title,
+            contactJid: _signupWelcomeChatJid,
+          ),
+        );
+        return;
+      }
+      if (existingChat.title != title ||
+          existingChat.contactDisplayName != title ||
+          existingChat.contactJid != _signupWelcomeChatJid) {
+        await db.updateChat(
+          existingChat.copyWith(
+            title: title,
+            contactDisplayName: title,
+            contactJid: _signupWelcomeChatJid,
+          ),
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      _chatsLog.warning(
+        'Failed to sync signup welcome chat',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   @override

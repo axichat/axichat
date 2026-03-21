@@ -845,7 +845,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
         priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
-          XmppBootstrapTrigger.resumedNegotiation,
         },
         operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
         run: () async {
@@ -1345,7 +1344,14 @@ mixin AvatarService on XmppBase, BaseStreamService {
     Iterable<String> jids, {
     bool force = false,
   }) async {
-    final refreshes = jids.toList(growable: false);
+    final refreshes = <String>[];
+    final seenJids = <String>{};
+    for (final jid in jids) {
+      final bareJid = _avatarSafeBareJid(jid);
+      if (bareJid == null) continue;
+      if (!seenJids.add(bareJid)) continue;
+      refreshes.add(bareJid);
+    }
     if (refreshes.isEmpty) return;
     const maxConcurrent = 6;
     for (var index = 0; index < refreshes.length; index += maxConcurrent) {

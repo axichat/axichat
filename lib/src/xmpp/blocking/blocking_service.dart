@@ -585,6 +585,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
         priority: 0,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
           XmppBootstrapTrigger.manualRefresh,
         },
         operationName: _blocklistFetchOnLoginOperationName,

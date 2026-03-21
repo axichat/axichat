@@ -26,6 +26,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -70,6 +71,7 @@ import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
 import 'package:cryptography/cryptography.dart';
+import 'package:drift/drift.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -578,6 +580,11 @@ abstract interface class XmppBase {
   });
 
   Future<void> disconnect();
+
+  Future<void> cleanupUnregisterLocalData({
+    required String jid,
+    String? databasePrefix,
+  });
 
   FutureOr<V> _dbOpReturning<D extends Database, V>(
     FutureOr<V> Function(D) operation,
@@ -1198,16 +1205,16 @@ class XmppService extends XmppBase
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
     }
-    final pass = _XmppBootstrapPass();
-    _activeBootstrapPass = pass;
-    unawaited(
-      _runBootstrapOperations(
-        event.resumed
-            ? XmppBootstrapTrigger.resumedNegotiation
-            : XmppBootstrapTrigger.fullNegotiation,
-        pass: pass,
-      ),
-    );
+    final trigger = event.resumed
+        ? XmppBootstrapTrigger.resumedNegotiation
+        : XmppBootstrapTrigger.fullNegotiation;
+    if (_bootstrapOperations.values.any(
+      (operation) => operation.triggers.contains(trigger),
+    )) {
+      final pass = _XmppBootstrapPass();
+      _activeBootstrapPass = pass;
+      unawaited(_runBootstrapOperations(trigger, pass: pass));
+    }
     if (!_streamNegotiationsDone.isCompleted) {
       _streamNegotiationsDone.complete();
     }
@@ -2508,6 +2515,60 @@ class XmppService extends XmppBase
     _xmppLogger.info('Logged out.');
   }
 
+  @override
+  Future<void> cleanupUnregisterLocalData({
+    required String jid,
+    String? databasePrefix,
+  }) async {
+    XmppDatabase? liveDatabase;
+    if (databasesInitialized && sameNormalizedAddressValue(myJid, jid)) {
+      try {
+        liveDatabase = await database;
+      } on Exception catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Failed to capture XMPP database for unregister cleanup',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    if (liveDatabase != null) {
+      try {
+        await liveDatabase.deleteFile();
+      } on FileSystemException catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Failed to delete XMPP database during unregister cleanup',
+          error,
+          stackTrace,
+        );
+      }
+      return;
+    }
+
+    final resolvedPrefix = databasePrefix?.trim();
+    if (resolvedPrefix == null || resolvedPrefix.isEmpty) {
+      return;
+    }
+    try {
+      await _deleteUnregisterDatabaseArtifacts(resolvedPrefix);
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to delete XMPP database during unregister cleanup',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await _deleteUnregisterAttachmentDirectory(resolvedPrefix);
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to delete XMPP attachment directory during unregister cleanup',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   Future<void> clearSessionTokens() async {
     final sm = _connection.getManager<XmppStreamManagementManager>();
     await sm?.resetState();
@@ -2515,6 +2576,82 @@ class XmppService extends XmppBase
     await _dbOp<XmppStateStore>(
       (ss) => ss.delete(key: fastTokenStorageKey),
       awaitDatabase: true,
+    );
+  }
+
+  Future<void> _deleteUnregisterDatabaseArtifacts(String prefix) async {
+    const databaseWalSuffix = '-wal';
+    const databaseShmSuffix = '-shm';
+    const databaseJournalSuffix = '-journal';
+    final expectedDatabaseFile = await dbFileFor(prefix);
+    final basePath = expectedDatabaseFile.path;
+    final candidates = <File>[
+      File(basePath),
+      File('$basePath$databaseWalSuffix'),
+      File('$basePath$databaseShmSuffix'),
+      File('$basePath$databaseJournalSuffix'),
+    ];
+    for (final candidate in candidates) {
+      try {
+        final deleted = await deleteAppOwnedFile(
+          file: candidate,
+          expectedPath: candidate.path,
+        );
+        if (!deleted) {
+          _xmppLogger.warning(
+            'Skipped database artifact cleanup for unexpected path ${candidate.path}',
+          );
+        }
+      } on FileSystemException catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Failed to delete database artifact ${candidate.path}',
+          error,
+          stackTrace,
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteUnregisterAttachmentDirectory(String prefix) async {
+    const attachmentRootDirectoryName = 'attachments';
+    final supportDir = await getApplicationSupportDirectory();
+    final directory = Directory(
+      p.join(
+        supportDir.path,
+        attachmentRootDirectoryName,
+        _normalizeUnregisterAttachmentPrefix(prefix),
+      ),
+    );
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: directory.path,
+      );
+      if (!deleted) {
+        _xmppLogger.warning(
+          'Skipped attachment cleanup for unexpected path ${directory.path}',
+        );
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to delete attachment directory ${directory.path}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  String _normalizeUnregisterAttachmentPrefix(String prefix) {
+    const attachmentPrefixFallback = 'shared';
+    const attachmentPrefixReplacement = '_';
+    final attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
+    final trimmed = prefix.trim();
+    if (trimmed.isEmpty) {
+      return attachmentPrefixFallback;
+    }
+    return trimmed.replaceAll(
+      attachmentPrefixSanitizer,
+      attachmentPrefixReplacement,
     );
   }
 

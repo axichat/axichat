@@ -23,7 +23,6 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -152,6 +151,8 @@ enum LogoutSeverity {
   bool get isNormal => this == normal;
 }
 
+enum _UnregisterPhase { none, emailRemoved }
+
 class AuthenticationCubit extends Cubit<AuthenticationState> {
   AuthenticationCubit({
     required CredentialStore credentialStore,
@@ -276,6 +277,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   );
   final authTransactionStorageKey = CredentialStore.registerKey(
     'auth_transaction_v1',
+  );
+  final partialUnregisterJidKey = CredentialStore.registerKey(
+    'partial_unregister_jid_v1',
   );
 
   final CredentialStore _credentialStore;
@@ -931,6 +935,34 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return parsed ?? true;
   }
 
+  Future<String?> _readPartialUnregisterJid() async {
+    final stored = await _credentialStore.read(key: partialUnregisterJidKey);
+    final trimmed = stored?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return _normalizeJid(trimmed);
+  }
+
+  Future<bool> _hasPartialUnregisterJid(String jid) async {
+    final pendingJid = await _readPartialUnregisterJid();
+    if (pendingJid == null) {
+      return false;
+    }
+    return pendingJid == _normalizeJid(jid);
+  }
+
+  Future<void> _writePartialUnregisterJid(String jid) async {
+    await _credentialStore.write(
+      key: partialUnregisterJidKey,
+      value: _normalizeJid(jid),
+    );
+  }
+
+  Future<void> _clearPartialUnregisterJid() async {
+    await _credentialStore.delete(key: partialUnregisterJidKey);
+  }
+
   Future<_StoredLoginCredentials> _readStoredLoginCredentials() async {
     final storedJid = await _credentialStore.read(key: jidStorageKey);
     final storedPassword = await _credentialStore.read(key: passwordStorageKey);
@@ -1254,7 +1286,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final remember = await loadRememberMeChoice();
     if (!remember) return false;
     final storedLogin = await _readStoredLoginCredentials();
-    return storedLogin.hasUsableCredentials;
+    if (!storedLogin.hasUsableCredentials) {
+      return false;
+    }
+    final jid = storedLogin.jid;
+    if (jid == null) {
+      return false;
+    }
+    if (await _hasPartialUnregisterJid(jid)) {
+      return false;
+    }
+    return true;
   }
 
   Future<_DatabaseSecrets> _readDatabaseSecrets(String jid) async {
@@ -1487,6 +1529,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       storedLogin = await _readStoredLoginCredentials();
       if (!storedLogin.hasUsableCredentials) {
         _log.info('Login aborted due to missing stored credentials.');
+        await _xmppService.disconnect();
+        _emit(const AuthenticationNone());
+        return;
+      }
+      final storedJid = storedLogin.jid;
+      if (storedJid != null && await _hasPartialUnregisterJid(storedJid)) {
+        _log.info(
+          'Login aborted because account deletion is pending for stored credentials.',
+        );
         await _xmppService.disconnect();
         _emit(const AuthenticationNone());
         return;
@@ -2364,93 +2415,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String title,
     required String body,
   }) async {
-    const welcomeChatJid = 'axichat@welcome.axichat.invalid';
-    const welcomeStanzaId = 'signup-welcome.axichat';
-    Message? insertedMessage;
-    try {
-      final db = await _xmppService.database;
-      final existingMessage = await db.getMessageByStanzaID(welcomeStanzaId);
-      final existingChat = await db.getChat(welcomeChatJid);
-      if (existingMessage == null) {
-        if (existingChat != null) {
-          if (existingChat.title != title ||
-              existingChat.contactDisplayName != title ||
-              existingChat.contactJid != welcomeChatJid) {
-            await db.updateChat(
-              existingChat.copyWith(
-                title: title,
-                contactDisplayName: title,
-                contactJid: welcomeChatJid,
-              ),
-            );
-          }
-        } else if (!allowInsert) {
-          return;
-        }
-        if (allowInsert) {
-          insertedMessage = Message(
-            stanzaID: welcomeStanzaId,
-            senderJid: welcomeChatJid,
-            chatJid: welcomeChatJid,
-            body: body,
-            timestamp: DateTime.timestamp(),
-            acked: true,
-            received: true,
-            displayed: true,
-          );
-          await db.saveMessage(insertedMessage);
-        }
-      } else if (existingMessage.body != body ||
-          existingMessage.htmlBody != null ||
-          existingMessage.senderJid != welcomeChatJid ||
-          existingMessage.chatJid != welcomeChatJid ||
-          !existingMessage.displayed) {
-        await db.updateMessage(
-          existingMessage.copyWith(
-            senderJid: welcomeChatJid,
-            chatJid: welcomeChatJid,
-            body: body,
-            htmlBody: null,
-            acked: true,
-            received: true,
-            displayed: true,
-          ),
-        );
-      }
-      if (existingChat == null) {
-        if (!allowInsert) {
-          return;
-        }
-        final chatTimestamp =
-            insertedMessage?.timestamp ??
-            existingMessage?.timestamp ??
-            DateTime.timestamp();
-        await db.createChat(
-          Chat(
-            jid: welcomeChatJid,
-            title: title,
-            type: ChatType.chat,
-            lastChangeTimestamp: chatTimestamp,
-            contactDisplayName: title,
-            contactJid: welcomeChatJid,
-          ),
-        );
-        return;
-      }
-      if (existingChat.title != title ||
-          existingChat.contactDisplayName != title ||
-          existingChat.contactJid != welcomeChatJid) {
-        await db.updateChat(
-          existingChat.copyWith(
-            title: title,
-            contactDisplayName: title,
-            contactJid: welcomeChatJid,
-          ),
-        );
-      }
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to sync signup welcome chat', error, stackTrace);
-    }
+    await _xmppService.syncSignupWelcomeMessage(
+      allowInsert: allowInsert,
+      title: title,
+      body: body,
+    );
   }
 
   Future<void> _persistLoginSecrets({
@@ -2909,6 +2878,66 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _updateEmailForegroundKeepalive();
   }
 
+  Future<void> _disconnectForDelete({
+    required String jid,
+    required bool clearEmail,
+  }) async {
+    await _xmppService.clearSessionTokens();
+    if (endpointConfig.smtpEnabled) {
+      await _emailService?.shutdown(jid: jid, clearCredentials: clearEmail);
+    }
+    await _xmppService.disconnect();
+  }
+
+  // Full unregister removes local secrets/resume state and the safe
+  // account-scoped XMPP DB/attachment tree reachable from auth.
+  Future<void> _finishUnregister({
+    required String jid,
+    required String user,
+    required String host,
+  }) async {
+    final databaseSecrets = await _readDatabaseSecrets(jid);
+    await _disconnectForDelete(jid: jid, clearEmail: true);
+    await _clearStoredSmtpCredentials(jid);
+    await _xmppService.cleanupUnregisterLocalData(
+      jid: jid,
+      databasePrefix: databaseSecrets.prefix,
+    );
+    await _clearLoginSecrets(jid: jid);
+    await _clearPartialUnregisterJid();
+    _emailService?.clearSessionCredentials();
+    await _removeCompletedAccountRecord(user, host);
+    _emit(const AuthenticationNone());
+    _updateEmailForegroundKeepalive();
+  }
+
+  Future<void> _stabilizeAfterEmailDelete(String jid) async {
+    await _writePartialUnregisterJid(jid);
+    await _disconnectForDelete(jid: jid, clearEmail: true);
+    await _clearStoredSmtpCredentials(jid);
+    _emailService?.clearSessionCredentials();
+    _updateEmailForegroundKeepalive();
+  }
+
+  Future<void> _failUnregister({
+    required AuthMessage message,
+    required _UnregisterPhase phase,
+    required String jid,
+  }) async {
+    if (phase == _UnregisterPhase.emailRemoved) {
+      try {
+        await _stabilizeAfterEmailDelete(jid);
+      } on Exception catch (error, stackTrace) {
+        _log.warning(
+          'Failed to stabilize auth after partial unregister',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    _emit(AuthenticationUnregisterFailure(message));
+  }
+
   String? _validatedDatabasePrefix(
     String? databasePrefix, {
     required String logContext,
@@ -3186,6 +3215,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final accountJid = '$normalizedUsername@$effectiveHost';
     final shouldDeleteEmailAccount = endpointConfig.smtpEnabled;
     final shouldDeleteXmppAccount = endpointConfig.xmppEnabled;
+    final emailAlreadyDeleted = await _hasPartialUnregisterJid(accountJid);
     var effectivePassword = password;
     if (passwordWasSkipped) {
       final resolvedPassword = await _resolveDeviceOnlyPassword(
@@ -3209,8 +3239,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
+    var phase = emailAlreadyDeleted
+        ? _UnregisterPhase.emailRemoved
+        : _UnregisterPhase.none;
     try {
-      if (shouldDeleteEmailAccount) {
+      if (shouldDeleteEmailAccount && !emailAlreadyDeleted) {
         final email = await _resolveEmailAddress(
           username: normalizedUsername,
           host: effectiveHost,
@@ -3224,11 +3257,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _emit(AuthenticationUnregisterFailure(emailDeletionError));
           return;
         }
+        phase = _UnregisterPhase.emailRemoved;
       }
 
       if (!shouldDeleteXmppAccount) {
-        await logout(severity: LogoutSeverity.normal);
-        await _removeCompletedAccountRecord(normalizedUsername, effectiveHost);
+        await _finishUnregister(
+          jid: accountJid,
+          user: normalizedUsername,
+          host: effectiveHost,
+        );
         return;
       }
 
@@ -3239,52 +3276,55 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         logContext: 'during unregister',
       );
       if (response == null) {
-        _emit(
-          const AuthenticationUnregisterFailure(
-            AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-          ),
+        await _failUnregister(
+          message: const AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
+          phase: phase,
+          jid: accountJid,
         );
         return;
       }
       if (response.statusCode == 200) {
-        await logout(severity: LogoutSeverity.normal);
-        await _removeCompletedAccountRecord(normalizedUsername, effectiveHost);
+        await _finishUnregister(
+          jid: accountJid,
+          user: normalizedUsername,
+          host: effectiveHost,
+        );
         return;
       }
       if (response.statusCode == 404) {
         final detail = _registerErrorDetail(response);
-        _emit(
-          detail == null
-              ? const AuthenticationUnregisterFailure(
-                  AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-                )
-              : AuthenticationUnregisterFailure(AuthRawMessage(detail)),
+        await _failUnregister(
+          message: detail == null
+              ? const AuthKeyMessage(AuthMessageKey.accountDeletionFailed)
+              : AuthRawMessage(detail),
+          phase: phase,
+          jid: accountJid,
         );
         return;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
-        _emit(
-          const AuthenticationUnregisterFailure(
-            AuthKeyMessage(AuthMessageKey.passwordIncorrect),
-          ),
+        await _failUnregister(
+          message: const AuthKeyMessage(AuthMessageKey.passwordIncorrect),
+          phase: phase,
+          jid: accountJid,
         );
         return;
       }
       final detail = _registerErrorDetail(response);
-      _emit(
-        detail == null
-            ? const AuthenticationUnregisterFailure(
-                AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-              )
-            : AuthenticationUnregisterFailure(AuthRawMessage(detail)),
+      await _failUnregister(
+        message: detail == null
+            ? const AuthKeyMessage(AuthMessageKey.accountDeletionFailed)
+            : AuthRawMessage(detail),
+        phase: phase,
+        jid: accountJid,
       );
       _log.warning('Account deletion failed (${response.statusCode}).');
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to delete account', error, stackTrace);
-      _emit(
-        const AuthenticationUnregisterFailure(
-          AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-        ),
+      await _failUnregister(
+        message: const AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
+        phase: phase,
+        jid: accountJid,
       );
     }
   }

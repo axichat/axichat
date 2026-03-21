@@ -5,6 +5,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -14,8 +15,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
-import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
@@ -36,6 +35,7 @@ const signupWelcomeBody = 'Welcome to Axichat!';
 const _welcomeChatJid = 'axichat@welcome.axichat.invalid';
 const _welcomeStanzaId = 'signup-welcome.axichat';
 const bool clearEmailCredentialsOnLogout = true;
+const _xmppOnlyEndpointConfig = EndpointConfig(smtpEnabled: false);
 
 Uri _registrationMatcher() =>
     any<Uri>(that: predicate((Uri uri) => uri.path.contains('/register/new/')));
@@ -60,11 +60,22 @@ void main() {
     registerFallbackValue(fallbackMessage);
     registerFallbackValue(ChatType.chat);
     registerFallbackValue(
-      const SpamSyncRetracted('fallback@example.com') as SpamSyncUpdate,
+      SpamSyncUpdate(
+        address: 'fallback@example.com',
+        isSpam: false,
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        sourceId: syncLegacySourceId,
+        origin: SyncOrigin.local,
+      ),
     );
     registerFallbackValue(
-      const AddressBlockSyncRetracted('fallback@example.com')
-          as AddressBlockSyncUpdate,
+      AddressBlockSyncUpdate(
+        address: 'fallback@example.com',
+        blocked: false,
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        sourceId: syncLegacySourceId,
+        origin: SyncOrigin.local,
+      ),
     );
   });
 
@@ -169,6 +180,19 @@ void main() {
     when(() => mockXmppService.myJid).thenReturn(null);
     when(() => mockXmppService.localizations).thenReturn(localizations);
     when(() => mockXmppService.database).thenAnswer((_) async => mockDatabase);
+    when(
+      () => mockXmppService.syncSignupWelcomeMessage(
+        allowInsert: any(named: 'allowInsert'),
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockXmppService.cleanupUnregisterLocalData(
+        jid: any(named: 'jid'),
+        databasePrefix: any(named: 'databasePrefix'),
+      ),
+    ).thenAnswer((_) async {});
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
     when(() => mockXmppService.clearSessionTokens()).thenAnswer((_) async {});
     when(() => mockDatabase.getMessageByStanzaID(_welcomeStanzaId)).thenAnswer(
@@ -198,7 +222,6 @@ void main() {
     );
     when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
-
     credentialStorage = <String, String?>{
       'password_prehashed_v1': true.toString(),
     };
@@ -233,6 +256,7 @@ void main() {
     when(() => mockCredentialStore.close()).thenAnswer((_) async {});
 
     when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
+    when(() => mockEmailService.clearSessionCredentials()).thenReturn(null);
     when(
       () => mockEmailService.setForegroundKeepalive(any()),
     ).thenAnswer((_) async {});
@@ -288,7 +312,7 @@ void main() {
     setUp(() {
       bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -324,8 +348,8 @@ void main() {
       act: (bloc) =>
           bloc.login(username: validUsername, password: validPassword),
       expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationComplete(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
       verify: (bloc) {
         verify(
@@ -366,7 +390,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -376,7 +400,7 @@ void main() {
           bloc.login(username: validUsername, password: validPassword),
       wait: const Duration(milliseconds: 20),
       expect: () => const [
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         AuthenticationFailure(AuthKeyMessage(AuthMessageKey.genericError)),
       ],
       verify: (_) {
@@ -393,8 +417,8 @@ void main() {
         rememberMe: false,
       ),
       expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationComplete(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
       verify: (bloc) {
         verifyNever(
@@ -419,7 +443,7 @@ void main() {
       act: (bloc) =>
           bloc.login(username: invalidUsername, password: invalidPassword),
       expect: () => [
-        const AuthenticationLogInInProgress(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
         ),
@@ -446,7 +470,7 @@ void main() {
       act: (bloc) =>
           bloc.login(username: invalidUsername, password: validPassword),
       expect: () => [
-        const AuthenticationLogInInProgress(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
         ),
@@ -473,7 +497,7 @@ void main() {
       act: (bloc) =>
           bloc.login(username: validUsername, password: invalidPassword),
       expect: () => [
-        const AuthenticationLogInInProgress(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
         ),
@@ -500,8 +524,8 @@ void main() {
       act: (bloc) =>
           bloc.login(username: validUsername, password: validPassword),
       expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationComplete(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
       verify: (_) {
         final prefix = credentialStorage['${validJid}_database_prefix'];
@@ -516,7 +540,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(username: validUsername),
       expect: () => [
-        const AuthenticationLogInInProgress(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
@@ -542,7 +566,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(password: validPassword),
       expect: () => [
-        const AuthenticationLogInInProgress(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
@@ -578,8 +602,8 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationComplete(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
     );
 
@@ -794,7 +818,7 @@ void main() {
       act: (bloc) =>
           bloc.login(username: invalidUsername, password: invalidPassword),
       expect: () => const [
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
         ),
@@ -901,7 +925,7 @@ void main() {
       build: () => bloc,
       act: (bloc) => bloc.login(),
       expect: () => [
-        const AuthenticationLogInInProgress(),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationNone(),
       ],
       verify: (bloc) {
@@ -938,10 +962,10 @@ void main() {
         await bloc.login(username: validUsername, password: validPassword);
       },
       expect: () => const [
-        AuthenticationLogInInProgress(),
+        AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         AuthenticationNone(),
-        AuthenticationLogInInProgress(),
-        AuthenticationComplete(),
+        AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
     );
 
@@ -1135,261 +1159,31 @@ void main() {
       ],
     );
 
-    test(
-      'syncSignupWelcomeMessage seeds the welcome chat when both message and chat '
-      'are missing.',
-      () async {
-        const welcomeTitle = 'Axichat';
-        const welcomeBody =
-            'Welcome to Axichat!\n\n'
-            'It is still under active development and per-user storage limits '
-            'are very low, so avoid relying on it for important business at '
-            'the moment.\n\n'
-            'Many features are available by tapping on message bubbles; '
-            'try tapping this one!\n\n'
-            'If you find any bugs, please report them at '
-            'https://github.com/axichat/axichat/issues so I can fix them!';
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-        );
-        when(
-          () => mockXmppService.database,
-        ).thenAnswer((_) async => mockDatabase);
-        when(
-          () => mockDatabase.getMessageByStanzaID(any()),
-        ).thenAnswer((_) async => null);
-        when(
-          () => mockDatabase.getChat(_welcomeChatJid),
-        ).thenAnswer((_) async => null);
-        when(
-          () =>
-              mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
-        ).thenAnswer((_) async {});
-        when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
-        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+    test('syncSignupWelcomeMessage delegates to XmppService.', () async {
+      const welcomeTitle = 'Axichat';
+      const welcomeBody = 'Localized welcome body';
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      );
 
-        await bloc.syncSignupWelcomeMessage(
-          allowInsert: true,
-          title: welcomeTitle,
-          body: welcomeBody,
-        );
+      await bloc.syncSignupWelcomeMessage(
+        allowInsert: false,
+        title: welcomeTitle,
+        body: welcomeBody,
+      );
 
-        final savedMessage =
-            verify(() => mockDatabase.saveMessage(captureAny())).captured.single
-                as Message;
-        expect(savedMessage.senderJid, equals(_welcomeChatJid));
-        expect(savedMessage.chatJid, equals(_welcomeChatJid));
-        expect(savedMessage.body, equals(welcomeBody));
-        expect(savedMessage.htmlBody, isNull);
-        expect(savedMessage.displayed, isTrue);
-        final createdChat =
-            verify(() => mockDatabase.createChat(captureAny())).captured.single
-                as Chat;
-        expect(createdChat.jid, equals(_welcomeChatJid));
-        expect(createdChat.title, equals(welcomeTitle));
-        expect(createdChat.contactDisplayName, equals(welcomeTitle));
-        expect(createdChat.contactJid, equals(_welcomeChatJid));
-        verifyNever(() => mockDatabase.updateChat(any()));
-        verifyNever(() => mockDatabase.updateMessage(any()));
-      },
-    );
-
-    test(
-      'syncSignupWelcomeMessage recreates the welcome message when the welcome '
-      'chat already exists.',
-      () async {
-        const welcomeBody = 'Welcome to Axichat!';
-        const welcomeTitle = 'Axichat';
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-        );
-        when(
-          () => mockXmppService.database,
-        ).thenAnswer((_) async => mockDatabase);
-        when(
-          () => mockDatabase.getMessageByStanzaID(_welcomeStanzaId),
-        ).thenAnswer((_) async => null);
-        when(
-          () => mockDatabase.getChat(_welcomeChatJid),
-        ).thenAnswer((_) async => Chat.fromJid(_welcomeChatJid));
-        when(
-          () =>
-              mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
-        ).thenAnswer((_) async {});
-        when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
-
-        await bloc.syncSignupWelcomeMessage(
-          allowInsert: true,
-          title: welcomeTitle,
-          body: welcomeBody,
-        );
-
-        final savedMessage =
-            verify(() => mockDatabase.saveMessage(captureAny())).captured.single
-                as Message;
-        expect(savedMessage.stanzaID, equals(_welcomeStanzaId));
-        expect(savedMessage.chatJid, equals(_welcomeChatJid));
-        expect(savedMessage.body, equals(welcomeBody));
-        verifyNever(() => mockDatabase.createChat(any()));
-        verifyNever(() => mockDatabase.updateMessage(any()));
-        final updatedChat =
-            verify(() => mockDatabase.updateChat(captureAny())).captured.last
-                as Chat;
-        expect(updatedChat.title, equals(welcomeTitle));
-        expect(updatedChat.contactDisplayName, equals(welcomeTitle));
-      },
-    );
-
-    test(
-      'syncSignupWelcomeMessage recreates the welcome chat when the message exists '
-      'but the chat is missing.',
-      () async {
-        const welcomeChatJid = 'axichat@welcome.axichat.invalid';
-        const welcomeStanzaId = 'signup-welcome.axichat';
-        const welcomeTitle = 'Axichat';
-        const welcomeBody = 'Welcome to Axichat!';
-        final existingMessage = Message(
-          stanzaID: welcomeStanzaId,
-          senderJid: welcomeChatJid,
-          chatJid: welcomeChatJid,
-          body: welcomeBody,
-          timestamp: DateTime.utc(2026, 3, 6),
-          acked: true,
-          received: true,
-        );
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-        );
-        when(
-          () => mockDatabase.getMessageByStanzaID(welcomeStanzaId),
-        ).thenAnswer((_) async => existingMessage);
-        when(
-          () => mockDatabase.getChat(welcomeChatJid),
-        ).thenAnswer((_) async => null);
-
-        await bloc.syncSignupWelcomeMessage(
-          allowInsert: true,
-          title: welcomeTitle,
-          body: welcomeBody,
-        );
-
-        verifyNever(() => mockDatabase.saveMessage(any()));
-        final createdChat =
-            verify(() => mockDatabase.createChat(captureAny())).captured.single
-                as Chat;
-        expect(createdChat.jid, equals(welcomeChatJid));
-        expect(createdChat.title, equals(welcomeTitle));
-        expect(createdChat.contactDisplayName, equals(welcomeTitle));
-        expect(createdChat.contactJid, equals(welcomeChatJid));
-      },
-    );
-
-    test(
-      'syncSignupWelcomeMessage updates the existing welcome message body and clears '
-      'html.',
-      () async {
-        const welcomeChatJid = 'axichat@welcome.axichat.invalid';
-        const welcomeStanzaId = 'signup-welcome.axichat';
-        const welcomeTitle = 'Axichat';
-        const welcomeBody =
-            'Welcome to Axichat!\n\n'
-            'It is still under active development and per-user storage limits '
-            'are very low, so avoid relying on it for important business at '
-            'the moment.\n\n'
-            'Many features are available by tapping on message bubbles; '
-            'try tapping this one!\n\n'
-            'If you find any bugs, please report them at '
-            'https://github.com/axichat/axichat/issues so I can fix them!';
-        final existingMessage = Message(
-          stanzaID: welcomeStanzaId,
-          senderJid: welcomeChatJid,
-          chatJid: welcomeChatJid,
-          body: 'Old welcome copy',
-          htmlBody: '<p>Old welcome copy</p>',
-          timestamp: DateTime.utc(2026, 3, 6),
-        );
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-        );
-        when(
-          () => mockXmppService.database,
-        ).thenAnswer((_) async => mockDatabase);
-        when(
-          () => mockDatabase.getMessageByStanzaID(welcomeStanzaId),
-        ).thenAnswer((_) async => existingMessage);
-        when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
-        when(
-          () => mockDatabase.getChat(welcomeChatJid),
-        ).thenAnswer((_) async => Chat.fromJid(welcomeChatJid));
-        when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
-
-        await bloc.syncSignupWelcomeMessage(
-          allowInsert: true,
-          title: welcomeTitle,
-          body: welcomeBody,
-        );
-
-        verifyNever(() => mockDatabase.saveMessage(any()));
-        final updatedMessage =
-            verify(
-                  () => mockDatabase.updateMessage(captureAny()),
-                ).captured.single
-                as Message;
-        expect(updatedMessage.stanzaID, equals(welcomeStanzaId));
-        expect(updatedMessage.htmlBody, isNull);
-        expect(updatedMessage.body, equals(welcomeBody));
-        expect(updatedMessage.displayed, isTrue);
-      },
-    );
-
-    test(
-      'syncSignupWelcomeMessage skips insert when allowInsert is false and the message '
-      'is missing.',
-      () async {
-        const welcomeTitle = 'Axichat';
-        const welcomeBody = 'Localized welcome body';
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-        );
-        when(
-          () => mockXmppService.database,
-        ).thenAnswer((_) async => mockDatabase);
-        when(
-          () => mockDatabase.getMessageByStanzaID(any()),
-        ).thenAnswer((_) async => null);
-        when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
-
-        await bloc.syncSignupWelcomeMessage(
+      verify(
+        () => mockXmppService.syncSignupWelcomeMessage(
           allowInsert: false,
           title: welcomeTitle,
           body: welcomeBody,
-        );
-
-        verifyNever(() => mockDatabase.saveMessage(any()));
-        verifyNever(() => mockDatabase.updateMessage(any()));
-        verify(() => mockDatabase.getChat(any())).called(1);
-      },
-    );
+        ),
+      ).called(1);
+    });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Rolls back the provisioned email account after captcha rejection.',
@@ -1923,8 +1717,15 @@ void main() {
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Logs out after successful unregister.',
+      'Successful unregister wipes local secrets and XMPP storage.',
       setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockXmppService.databasesInitialized).thenReturn(true);
         when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
           (_) async => const EmailAccount(
             address: 'user@axi.im',
@@ -1967,22 +1768,48 @@ void main() {
         verify(() => mockXmppService.disconnect()).called(1);
         verify(
           () => mockEmailService.shutdown(
-            jid: any(named: 'jid'),
+            jid: validJid,
             clearCredentials: clearEmailCredentialsOnLogout,
           ),
         ).called(1);
+        verify(
+          () => mockEmailService.clearStoredCredentials(
+            jid: validJid,
+            preserveActiveSession: false,
+          ),
+        ).called(1);
+        verify(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: validJid,
+            databasePrefix: 'prefix',
+          ),
+        ).called(1);
+        expect(credentialStorage['jid'], isNull);
+        expect(credentialStorage['password'], isNull);
+        expect(credentialStorage['password_prehashed_v1'], isNull);
+        expect(credentialStorage['${validJid}_database_prefix'], isNull);
+        expect(
+          credentialStorage['validusername@axi.im_database_prefix'],
+          isNull,
+        );
+        expect(credentialStorage['prefix_database_passphrase'], isNull);
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Uses the stored device-only password when unregistering a skipped-password account.',
+      'Skipped-password unregister uses the stored password and wipes skipped secrets.',
       setUp: () {
+        credentialStorage['jid'] = validJid;
         credentialStorage['password_skipped_v1'] = true.toString();
         credentialStorage['skipped_password_raw_v1'] = validPassword;
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockXmppService.databasesInitialized).thenReturn(true);
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(smtpEnabled: false),
+        initialEndpointConfig: const EndpointConfig(),
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -2018,12 +1845,92 @@ void main() {
             },
           ),
         ).called(1);
+        verify(() => mockXmppService.clearSessionTokens()).called(1);
+        verify(() => mockXmppService.disconnect()).called(1);
+        expect(credentialStorage['password_skipped_v1'], isNull);
+        expect(credentialStorage['skipped_password_raw_v1'], isNull);
+        expect(credentialStorage['jid'], isNull);
+        expect(credentialStorage['${validJid}_database_prefix'], isNull);
+        expect(
+          credentialStorage['validusername@axi.im_database_prefix'],
+          isNull,
+        );
+        expect(credentialStorage['prefix_database_passphrase'], isNull);
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Surfaces XMPP delete details from 404 responses.',
+      'Unregister passes the stored database prefix to XMPP cleanup even before DB init.',
       setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockXmppService.databasesInitialized).thenReturn(false);
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'user@axi.im',
+            password: validPassword,
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenAnswer((_) async {});
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (_) {
+        verify(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: validJid,
+            databasePrefix: 'prefix',
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'If email delete succeeds and XMPP delete fails, only the email side is torn down locally.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'user@axi.im',
+            password: validPassword,
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenAnswer((_) async {});
         when(
           () => mockHttpClient.post(any(), body: any(named: 'body')),
         ).thenAnswer(
@@ -2053,6 +1960,173 @@ void main() {
           AuthRawMessage("The account doesn't exist"),
         ),
       ],
+      verify: (bloc) {
+        verifyInOrder([
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+          () => mockXmppService.clearSessionTokens(),
+          () => mockEmailService.shutdown(
+            jid: validJid,
+            clearCredentials: clearEmailCredentialsOnLogout,
+          ),
+          () => mockXmppService.disconnect(),
+        ]);
+        verify(
+          () => mockEmailService.clearStoredCredentials(
+            jid: validJid,
+            preserveActiveSession: false,
+          ),
+        ).called(1);
+        verifyNever(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: any(named: 'jid'),
+            databasePrefix: any(named: 'databasePrefix'),
+          ),
+        );
+        expect(credentialStorage[bloc.jidStorageKey.value], equals(validJid));
+        expect(
+          credentialStorage[bloc.passwordStorageKey.value],
+          equals(validPassword),
+        );
+        expect(
+          credentialStorage[bloc.passwordPreHashedStorageKey.value],
+          equals(true.toString()),
+        );
+        expect(
+          credentialStorage['${validJid}_database_prefix'],
+          equals('prefix'),
+        );
+        expect(
+          credentialStorage['validusername@axi.im_database_prefix'],
+          equals('prefix'),
+        );
+        expect(
+          credentialStorage['prefix_database_passphrase'],
+          equals('passphrase'),
+        );
+        expect(
+          credentialStorage[bloc.partialUnregisterJidKey.value],
+          equals(validJid.toLowerCase()),
+        );
+      },
+    );
+
+    test(
+      'Stored-credential login stays blocked while partial unregister is pending.',
+      () async {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'user@axi.im',
+            password: validPassword,
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer(
+          (_) async => Response(
+            "There was an error deleting the account: The account doesn't exist",
+            404,
+          ),
+        );
+
+        final unregisterBloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        await unregisterBloc.unregister(
+          username: validUsername,
+          host: EndpointConfig.defaultDomain,
+          password: validPassword,
+        );
+        await unregisterBloc.close();
+
+        clearInteractions(mockXmppService);
+        clearInteractions(mockHttpClient);
+
+        final loginBloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+        );
+
+        expect(await loginBloc.hasStoredLoginCredentials(), isFalse);
+
+        await loginBloc.login();
+
+        verify(() => mockXmppService.disconnect()).called(1);
+        verifyNever(() => mockHttpClient.post(any(), body: any(named: 'body')));
+
+        await loginBloc.close();
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Partial unregister retry skips the email delete step once the marker exists.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        credentialStorage['partial_unregister_jid_v1'] = validJid;
+        when(() => mockXmppService.databasesInitialized).thenReturn(true);
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer((_) async => Response('', 200));
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (bloc) {
+        verifyNever(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        );
+        verify(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).called(1);
+        expect(credentialStorage[bloc.partialUnregisterJidKey.value], isNull);
+      },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -2101,6 +2175,123 @@ void main() {
       ],
       verify: (_) {
         verifyNever(() => mockXmppService.disconnect());
+      },
+    );
+
+    test(
+      'Successful unregister waits for teardown and leaves no resumability state.',
+      () async {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockXmppService.databasesInitialized).thenReturn(true);
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'user@axi.im',
+            password: validPassword,
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenAnswer((_) async {});
+
+        final clearTokensCompleter = Completer<void>();
+        final shutdownCompleter = Completer<void>();
+        final disconnectCompleter = Completer<void>();
+        final cleanupCompleter = Completer<void>();
+
+        when(
+          () => mockXmppService.clearSessionTokens(),
+        ).thenAnswer((_) => clearTokensCompleter.future);
+        when(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: any(named: 'clearCredentials'),
+          ),
+        ).thenAnswer((_) => shutdownCompleter.future);
+        when(
+          () => mockXmppService.disconnect(),
+        ).thenAnswer((_) => disconnectCompleter.future);
+        when(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: any(named: 'jid'),
+            databasePrefix: any(named: 'databasePrefix'),
+          ),
+        ).thenAnswer((_) => cleanupCompleter.future);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        final emittedStates = <AuthenticationState>[];
+        final subscription = bloc.stream.listen(emittedStates.add);
+
+        final unregisterFuture = bloc.unregister(
+          username: validUsername,
+          host: EndpointConfig.defaultDomain,
+          password: validPassword,
+        );
+
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, const [AuthenticationUnregisterInProgress()]);
+
+        clearTokensCompleter.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, const [AuthenticationUnregisterInProgress()]);
+
+        shutdownCompleter.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, const [AuthenticationUnregisterInProgress()]);
+
+        disconnectCompleter.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, const [AuthenticationUnregisterInProgress()]);
+
+        cleanupCompleter.complete();
+        await unregisterFuture;
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, const [
+          AuthenticationUnregisterInProgress(),
+          AuthenticationNone(),
+        ]);
+        verifyInOrder([
+          () => mockXmppService.clearSessionTokens(),
+          () => mockEmailService.shutdown(
+            jid: validJid,
+            clearCredentials: clearEmailCredentialsOnLogout,
+          ),
+          () => mockXmppService.disconnect(),
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: validJid,
+            databasePrefix: 'prefix',
+          ),
+        ]);
+        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
+        expect(credentialStorage[bloc.passwordStorageKey.value], isNull);
+        expect(
+          credentialStorage[bloc.passwordPreHashedStorageKey.value],
+          isNull,
+        );
+        expect(credentialStorage['${validJid}_database_prefix'], isNull);
+        expect(
+          credentialStorage['validusername@axi.im_database_prefix'],
+          isNull,
+        );
+        expect(credentialStorage['prefix_database_passphrase'], isNull);
+
+        await subscription.cancel();
+        await bloc.close();
       },
     );
   });
@@ -2328,6 +2519,40 @@ void main() {
             clearCredentials: clearEmailCredentialsOnLogout,
           ),
         ).called(1);
+      },
+    );
+
+    test(
+      'User initiated logout stays blocked for device-only password accounts.',
+      () async {
+        credentialStorage['password_skipped_v1'] = true.toString();
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        await bloc.loadPasswordWasSkippedChoice();
+
+        final emittedStates = <AuthenticationState>[];
+        final subscription = bloc.stream.listen(emittedStates.add);
+
+        await bloc.logout(severity: LogoutSeverity.normal);
+
+        expect(emittedStates, isEmpty);
+        verifyNever(() => mockXmppService.clearSessionTokens());
+        verifyNever(() => mockXmppService.disconnect());
+        verifyNever(() => mockCredentialStore.delete(key: bloc.jidStorageKey));
+        verifyNever(
+          () => mockCredentialStore.delete(key: bloc.passwordStorageKey),
+        );
+
+        await subscription.cancel();
+        await bloc.close();
       },
     );
   });
