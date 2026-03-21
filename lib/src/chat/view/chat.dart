@@ -276,7 +276,9 @@ class _ChatState extends State<Chat> {
   bool _composerHasText = false;
 
   bool get _composerHasContent =>
-      _composerHasText || _pendingCalendarTaskIcs != null;
+      _composerHasText ||
+      _quotedDraft != null ||
+      _pendingCalendarTaskIcs != null;
   String _lastSubjectValue = '';
   bool _subjectChangeSuppressed = false;
   bool _collapseLongEmailMessages = false;
@@ -346,6 +348,7 @@ class _ChatState extends State<Chat> {
   Message? _quotedDraft;
   List<PendingAttachment> _pendingAttachments = const [];
   var _pendingAttachmentSeed = 0;
+  var _inlineComposerSessionId = 0;
   var _handledPendingOpenMessageRequestId = 0;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
@@ -3664,11 +3667,13 @@ class _ChatState extends State<Chat> {
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final bool hasSubject = _subjectController.text.trim().isNotEmpty;
     final bool hasCalendarTask = _pendingCalendarTaskIcs != null;
+    final bool hasQuotedDraft = _quotedDraft != null;
     final canSend =
         !hasPreparingAttachments &&
         (resolvedText.isNotEmpty ||
             hasQueuedAttachments ||
             hasSubject ||
+            hasQuotedDraft ||
             hasCalendarTask);
     if (!canSend) return;
     final chat = chatState.chat;
@@ -3945,6 +3950,7 @@ class _ChatState extends State<Chat> {
   void _resetInlineComposer({
     required bool clearExpandedComposerDraftId,
     bool requestFocus = false,
+    bool disposeComposer = false,
   }) {
     _clearInlineComposerControllers();
     if (!mounted) return;
@@ -3952,6 +3958,9 @@ class _ChatState extends State<Chat> {
       _clearInlineComposerState(
         clearExpandedComposerDraftId: clearExpandedComposerDraftId,
       );
+      if (disposeComposer) {
+        _inlineComposerSessionId += 1;
+      }
     });
     _syncEmailComposerWatermark(
       chatState: context.read<ChatBloc>().state,
@@ -4111,6 +4120,7 @@ class _ChatState extends State<Chat> {
     final draftId = _expandedComposerDraftId;
     _resetInlineComposer(
       clearExpandedComposerDraftId: true,
+      disposeComposer: true,
       requestFocus: true,
     );
     if (draftId == null) {

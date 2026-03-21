@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:async/async.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/task/task_share_formatter.dart';
@@ -110,6 +111,8 @@ class DraftFormState extends State<DraftForm> {
   Future<void>? _autosaveOperation;
   Future<void>? _attachmentHydrationOperation;
   Future<void>? _attachmentPreparationOperation;
+  CancelableCompleter<void>? _attachmentHydrationCancellation;
+  CancelableCompleter<void>? _attachmentPreparationCancellation;
   int _saveEpoch = 0;
 
   @override
@@ -672,7 +675,9 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _hydrateAttachments() async {
-    final operation = _performAttachmentHydration();
+    final cancellation = CancelableCompleter<void>();
+    final operation = _performAttachmentHydration(cancellation: cancellation);
+    _attachmentHydrationCancellation = cancellation;
     _attachmentHydrationOperation = operation;
     try {
       await operation;
@@ -680,10 +685,18 @@ class DraftFormState extends State<DraftForm> {
       if (_attachmentHydrationOperation == operation) {
         _attachmentHydrationOperation = null;
       }
+      if (identical(_attachmentHydrationCancellation, cancellation)) {
+        _attachmentHydrationCancellation = null;
+      }
+      if (!cancellation.isCompleted && !cancellation.isCanceled) {
+        cancellation.complete();
+      }
     }
   }
 
-  Future<void> _performAttachmentHydration() async {
+  Future<void> _performAttachmentHydration({
+    required CancelableCompleter<void> cancellation,
+  }) async {
     if (widget.attachmentMetadataIds.isEmpty) {
       return;
     }
@@ -692,10 +705,11 @@ class DraftFormState extends State<DraftForm> {
       final pending = await _pendingAttachmentsFromMetadata(
         widget.attachmentMetadataIds,
       );
-      if (!mounted) return;
+      if (!mounted || cancellation.isCanceled) return;
       setState(() => _pendingAttachments = pending);
     } finally {
-      if (mounted) {
+      if (mounted &&
+          identical(_attachmentHydrationCancellation, cancellation)) {
         setState(() => _loadingAttachments = false);
       }
     }
@@ -840,7 +854,9 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleAttachmentAdded() async {
-    final operation = _performAttachmentAdded();
+    final cancellation = CancelableCompleter<void>();
+    final operation = _performAttachmentAdded(cancellation: cancellation);
+    _attachmentPreparationCancellation = cancellation;
     _attachmentPreparationOperation = operation;
     try {
       await operation;
@@ -848,10 +864,18 @@ class DraftFormState extends State<DraftForm> {
       if (_attachmentPreparationOperation == operation) {
         _attachmentPreparationOperation = null;
       }
+      if (identical(_attachmentPreparationCancellation, cancellation)) {
+        _attachmentPreparationCancellation = null;
+      }
+      if (!cancellation.isCompleted && !cancellation.isCanceled) {
+        cancellation.complete();
+      }
     }
   }
 
-  Future<void> _performAttachmentAdded() async {
+  Future<void> _performAttachmentAdded({
+    required CancelableCompleter<void> cancellation,
+  }) async {
     if (_addingAttachment) return;
     setState(() => _addingAttachment = true);
     final attachmentInaccessibleMessage =
@@ -865,10 +889,13 @@ class DraftFormState extends State<DraftForm> {
       if (result == null || result.files.isEmpty || !mounted) {
         return;
       }
+      if (cancellation.isCanceled) {
+        return;
+      }
       final file = result.files.single;
       final path = file.path;
       if (path == null) {
-        if (!mounted) return;
+        if (!mounted || cancellation.isCanceled) return;
         _showToast(attachmentInaccessibleMessage);
         return;
       }
@@ -894,22 +921,22 @@ class DraftFormState extends State<DraftForm> {
         path: path,
         fileName: fileName,
       );
-      if (!mounted) return;
+      if (!mounted || cancellation.isCanceled) return;
       attachment = attachment.copyWith(mimeType: resolvedMimeType);
       if (attachment.sizeBytes <= 0) {
         try {
           final resolvedSize = await File(path).length();
-          if (!mounted) return;
+          if (!mounted || cancellation.isCanceled) return;
           attachment = attachment.copyWith(sizeBytes: resolvedSize);
         } on Exception {
           // Best-effort. Keep placeholder size until optimization completes.
         }
       }
-      if (!mounted) return;
+      if (!mounted || cancellation.isCanceled) return;
       attachment = await context.read<DraftCubit>().optimizeAttachment(
         attachment,
       );
-      if (!mounted) return;
+      if (!mounted || cancellation.isCanceled) return;
       setState(() {
         _pendingAttachments = _pendingAttachments
             .map(
@@ -920,7 +947,7 @@ class DraftFormState extends State<DraftForm> {
             .toList();
       });
     } on PlatformException catch (error) {
-      if (!mounted) return;
+      if (!mounted || cancellation.isCanceled) return;
       setState(() {
         _pendingAttachments = _pendingAttachments
             .where((pending) => !pending.isPreparing)
@@ -928,7 +955,7 @@ class DraftFormState extends State<DraftForm> {
       });
       _showToast(error.message ?? attachmentFailedMessage);
     } on Exception {
-      if (!mounted) return;
+      if (!mounted || cancellation.isCanceled) return;
       setState(() {
         _pendingAttachments = _pendingAttachments
             .where((pending) => !pending.isPreparing)
@@ -936,10 +963,13 @@ class DraftFormState extends State<DraftForm> {
       });
       _showToast(attachmentFailedMessage);
     } finally {
-      if (mounted) {
+      if (mounted &&
+          identical(_attachmentPreparationCancellation, cancellation)) {
         setState(() => _addingAttachment = false);
       }
-      _scheduleAutosave();
+      if (!cancellation.isCanceled) {
+        _scheduleAutosave();
+      }
     }
   }
 
@@ -955,6 +985,7 @@ class DraftFormState extends State<DraftForm> {
   Future<void> _handleSaveDraft() async {
     if (_savingDraft) return;
     await _awaitAttachmentWorkIfNeeded();
+    await _awaitAutosaveIfNeeded();
     if (!mounted || _savingDraft) {
       return;
     }
@@ -1055,6 +1086,23 @@ class DraftFormState extends State<DraftForm> {
 
   void _invalidatePendingSaves() {
     _saveEpoch += 1;
+  }
+
+  void _invalidateAttachmentWork() {
+    final hydrationCancellation = _attachmentHydrationCancellation;
+    _attachmentHydrationCancellation = null;
+    if (hydrationCancellation != null) {
+      hydrationCancellation.operation.cancel();
+    }
+    final preparationCancellation = _attachmentPreparationCancellation;
+    _attachmentPreparationCancellation = null;
+    if (preparationCancellation != null) {
+      preparationCancellation.operation.cancel();
+    }
+    _attachmentHydrationOperation = null;
+    _attachmentPreparationOperation = null;
+    _loadingAttachments = false;
+    _addingAttachment = false;
   }
 
   int? _savedSignatureFromSeed() {
@@ -1242,42 +1290,34 @@ class DraftFormState extends State<DraftForm> {
 
   Future<void> _handleDiscard() async {
     final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
+    final draftCubit = context.read<DraftCubit>();
+    final draftId = id;
     if (_discardingDraft) return;
     _autosaveTimer?.cancel();
-    await _awaitAttachmentWorkIfNeeded();
-    _autosaveTimer?.cancel();
-    await _awaitAutosaveIfNeeded();
-    if (!mounted) {
-      return;
-    }
-    setState(() => _discardingDraft = true);
     _invalidatePendingSaves();
-    try {
-      if (id != null) {
-        await context.read<DraftCubit>().deleteDraft(id: id!);
+    _invalidateAttachmentWork();
+    _autosaveOperation = null;
+    _autosaveInFlight = false;
+    setState(() => _discardingDraft = true);
+    final onDiscarded = widget.onDiscarded;
+    if (onDiscarded != null) {
+      onDiscarded();
+    } else {
+      _closeComposer();
+    }
+    if (draftId != null) {
+      try {
+        await draftCubit.deleteDraft(id: draftId);
+      } on Exception {
+        // Best-effort after local close; the discarded form should stay closed.
       }
-      if (!mounted) return;
-      if (shouldCleanupSeedAttachments) {
-        await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
-      }
-      if (!mounted) return;
-      setState(() {
-        id = null;
-        _recipients = [];
-        _recipientsInitialized = false;
-        _pendingAttachments = const [];
-        _bodyTextController.clear();
-        _subjectTextController.clear();
-        _showValidationMessages = false;
-        _lastAutosaveAt = null;
-        _lastSavedSignature = null;
-      });
+    }
+    if (shouldCleanupSeedAttachments) {
+      await _cleanupSeedAttachmentMetadata(draftCubit);
+    }
+    if (mounted) {
       _showToast(context.l10n.draftDiscarded);
-      widget.onDiscarded?.call();
-    } finally {
-      if (mounted) {
-        setState(() => _discardingDraft = false);
-      }
+      setState(() => _discardingDraft = false);
     }
   }
 
@@ -1286,12 +1326,6 @@ class DraftFormState extends State<DraftForm> {
       return false;
     }
     _autosaveTimer?.cancel();
-    await _awaitAttachmentWorkIfNeeded();
-    _autosaveTimer?.cancel();
-    await _awaitAutosaveIfNeeded();
-    if (!mounted) {
-      return false;
-    }
     if (!_shouldPromptBeforeClose()) {
       _closeComposer();
       return true;
@@ -1367,6 +1401,11 @@ class DraftFormState extends State<DraftForm> {
     }
     setState(() => _savingDraft = true);
     try {
+      await _awaitAttachmentWorkIfNeeded();
+      await _awaitAutosaveIfNeeded();
+      if (!mounted) {
+        return false;
+      }
       await _saveDraft(autoSave: false);
     } on Exception {
       if (mounted) {
@@ -1609,6 +1648,7 @@ class DraftFormState extends State<DraftForm> {
   bool _hasContent() {
     return _hasMeaningfulBodyText(_bodyTextController.text.trim()) ||
         _subjectTextController.text.trim().isNotEmpty ||
+        widget.quoteTarget != null ||
         _pendingAttachments.isNotEmpty ||
         _pendingAttachments.any(
           (attachment) => attachment.status == PendingAttachmentStatus.queued,

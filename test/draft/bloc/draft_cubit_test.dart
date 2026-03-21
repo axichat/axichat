@@ -72,4 +72,28 @@ void main() {
       expect(cubit.state.visibleItems, equals([savedDraft]));
     },
   );
+
+  test(
+    'sendDraft still succeeds when deleting the saved draft fails',
+    () async {
+      when(() => messageService.loadDraft(1)).thenAnswer((_) async => null);
+      when(
+        () => messageService.deleteDraft(id: 1),
+      ).thenThrow(Exception('delete failed'));
+
+      final cubit = DraftCubit(messageService: messageService);
+      addTearDown(cubit.close);
+
+      final succeeded = await cubit.sendDraft(
+        id: 1,
+        xmppTargets: const [],
+        emailTargets: const [],
+        body: 'hello',
+        shareTokenSignatureEnabled: false,
+      );
+
+      expect(succeeded, isTrue);
+      expect(cubit.state, isA<DraftSendComplete>());
+    },
+  );
 }

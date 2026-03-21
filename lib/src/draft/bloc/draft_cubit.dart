@@ -227,7 +227,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       return false;
     }
     if (id != null) {
-      await deleteDraft(id: id);
+      try {
+        await deleteDraft(id: id);
+      } on Exception {
+        // Best-effort after a successful send; do not turn success into failure.
+      }
     }
     emit(DraftSendComplete(items: _items, visibleItems: _visibleItems));
     return true;
