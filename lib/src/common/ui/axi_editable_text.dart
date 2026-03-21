@@ -5710,7 +5710,8 @@ class EditableTextState extends State<EditableText>
   ///
   /// This property is typically used to notify the renderer of input gestures
   /// when [RenderEditable.ignorePointer] is true.
-  AxiRenderEditable get renderEditable => _renderEditableOrNull!;
+  late final AxiRenderEditable renderEditable =
+      _editableKey.currentContext!.findRenderObject()! as AxiRenderEditable;
 
   AxiRenderEditable? get _renderEditableOrNull {
     final editableContext = _editableKey.currentContext;
