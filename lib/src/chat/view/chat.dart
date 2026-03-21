@@ -3,6 +3,8 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+
+import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
@@ -281,7 +283,6 @@ class _ChatState extends State<Chat> {
   List<ComposerRecipient> _recipients = const [];
   String? _recipientsChatJid;
   int? _expandedComposerDraftId;
-  int _inlineComposerEpoch = 0;
   bool _expandingComposerDraft = false;
   ComposeDraftSeed? _expandedComposerSeed;
   final GlobalKey<DraftFormState> _expandedDraftFormKey =
@@ -333,7 +334,9 @@ class _ChatState extends State<Chat> {
   int? _outsideTapPointer;
   Offset? _outsideTapStart;
   var _sendingAttachment = false;
+  CancelableCompleter<void>? _inlineAttachmentPreparationCancellation;
   Future<void>? _inlineAttachmentPreparationOperation;
+  CancelableOperation<PendingAttachment?>? _inlinePendingAttachmentOperation;
   RequestStatus _shareRequestStatus = RequestStatus.none;
   static const CalendarChatSupport _calendarFragmentPolicy =
       CalendarChatSupport();
@@ -3574,8 +3577,17 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  bool _isInlineComposerEpochCurrent(int epoch) {
-    return mounted && epoch == _inlineComposerEpoch;
+  void _cancelInlineAttachmentPreparation() {
+    final pendingOperation = _inlinePendingAttachmentOperation;
+    _inlinePendingAttachmentOperation = null;
+    if (pendingOperation != null) {
+      pendingOperation.cancel();
+    }
+    final cancellation = _inlineAttachmentPreparationCancellation;
+    _inlineAttachmentPreparationCancellation = null;
+    if (cancellation != null) {
+      cancellation.operation.cancel();
+    }
   }
 
   String _nextLocalPendingAttachmentId() {
@@ -3917,7 +3929,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _clearInlineComposerState({required bool clearExpandedComposerDraftId}) {
-    _inlineComposerEpoch += 1;
+    _cancelInlineAttachmentPreparation();
     _composerHasText = false;
     _quotedDraft = null;
     _pendingAttachments = const [];
@@ -4209,7 +4221,12 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleAttachmentPressed(ChatState chatState) async {
-    final operation = _performAttachmentPressed(chatState);
+    final cancellation = CancelableCompleter<void>();
+    final operation = _performAttachmentPressed(
+      chatState,
+      cancellation: cancellation,
+    );
+    _inlineAttachmentPreparationCancellation = cancellation;
     _inlineAttachmentPreparationOperation = operation;
     try {
       await operation;
@@ -4217,12 +4234,21 @@ class _ChatState extends State<Chat> {
       if (_inlineAttachmentPreparationOperation == operation) {
         _inlineAttachmentPreparationOperation = null;
       }
+      if (identical(_inlineAttachmentPreparationCancellation, cancellation)) {
+        _inlineAttachmentPreparationCancellation = null;
+      }
+      if (!cancellation.isCompleted && !cancellation.isCanceled) {
+        cancellation.complete();
+      }
     }
   }
 
-  Future<void> _performAttachmentPressed(ChatState chatState) async {
+  Future<void> _performAttachmentPressed(
+    ChatState chatState, {
+    required CancelableCompleter<void> cancellation,
+  }) async {
     if (_sendingAttachment) return;
-    final operationEpoch = _inlineComposerEpoch;
+    final locate = context.read;
     final l10n = context.l10n;
     setState(() {
       _sendingAttachment = true;
@@ -4232,10 +4258,10 @@ class _ChatState extends State<Chat> {
         allowMultiple: true,
         withReadStream: false,
       );
-      if (result == null || result.files.isEmpty || !mounted) {
-        return;
-      }
-      if (!_isInlineComposerEpochCurrent(operationEpoch)) {
+      if (result == null ||
+          result.files.isEmpty ||
+          !mounted ||
+          cancellation.isCanceled) {
         return;
       }
       final attachments = <Attachment>[];
@@ -4263,13 +4289,16 @@ class _ChatState extends State<Chat> {
         }
         return;
       }
-      if (!_isInlineComposerEpochCurrent(operationEpoch)) return;
+      if (cancellation.isCanceled) return;
       final chat = chatState.chat;
       if (chat == null) {
         return;
       }
       final chatJid = chat.jid;
       for (final attachment in attachments) {
+        if (cancellation.isCanceled) {
+          return;
+        }
         final placeholderId = _nextLocalPendingAttachmentId();
         setState(() {
           _pendingAttachments = [
@@ -4281,8 +4310,10 @@ class _ChatState extends State<Chat> {
             ),
           ];
         });
-        final completer = Completer<PendingAttachment?>();
-        context.read<ChatBloc>().add(
+        final completer = CancelableCompleter<PendingAttachment?>();
+        final operation = completer.operation;
+        _inlinePendingAttachmentOperation = operation;
+        locate<ChatBloc>().add(
           ChatAttachmentPicked(
             attachment: attachment,
             recipients: _recipients,
@@ -4291,14 +4322,18 @@ class _ChatState extends State<Chat> {
             completer: completer,
           ),
         );
-        final pending = await completer.future;
-        if (!_isInlineComposerEpochCurrent(operationEpoch) ||
-            context.read<ChatBloc>().state.chat?.jid != chatJid) {
+        final pending = await operation.valueOrCancellation();
+        if (_inlinePendingAttachmentOperation == operation) {
+          _inlinePendingAttachmentOperation = null;
+        }
+        if (cancellation.isCanceled ||
+            !mounted ||
+            locate<ChatBloc>().state.chat?.jid != chatJid) {
           return;
         }
         _replacePendingAttachment(placeholderId, replacement: pending);
       }
-      if (!_isInlineComposerEpochCurrent(operationEpoch)) {
+      if (cancellation.isCanceled) {
         return;
       }
       if (_quotedDraft != null) {
@@ -5126,6 +5161,7 @@ class _ChatState extends State<Chat> {
 
   @override
   void dispose() {
+    _cancelInlineAttachmentPreparation();
     _persistScrollOffset(key: _lastScrollStorageKey, skipPageStorage: true);
     _scrollController.dispose();
     _focusNode.dispose();
