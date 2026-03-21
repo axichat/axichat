@@ -62,10 +62,10 @@ class BlocklistCubit extends Cubit<BlocklistState>
   @override
   void onChange(Change<BlocklistState> change) {
     super.onChange(change);
-    final current = change.currentState;
-    if (current is BlocklistAvailable) {
-      cache[blocklistItemsCacheKey] = current.items;
-      cache[blocklistVisibleItemsCacheKey] = current.visibleItems;
+    final next = change.nextState;
+    if (next is BlocklistAvailable) {
+      cache[blocklistItemsCacheKey] = next.items;
+      cache[blocklistVisibleItemsCacheKey] = next.visibleItems;
     }
   }
 
