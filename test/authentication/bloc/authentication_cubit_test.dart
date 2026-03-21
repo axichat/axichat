@@ -178,6 +178,7 @@ void main() {
     when(() => mockXmppService.connected).thenReturn(false);
     when(() => mockXmppService.databasesInitialized).thenReturn(false);
     when(() => mockXmppService.myJid).thenReturn(null);
+    when(() => mockXmppService.activeDatabasePrefix).thenReturn(null);
     when(() => mockXmppService.localizations).thenReturn(localizations);
     when(() => mockXmppService.database).thenAnswer((_) async => mockDatabase);
     when(
@@ -434,6 +435,29 @@ void main() {
           ),
         );
         expect(credentialStorage['${validJid}_database_prefix'], isNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Manual login clears pending partial-unregister state for the same account.',
+      setUp: () {
+        credentialStorage['partial_unregister_jid_v1'] = validJid;
+        credentialStorage['partial_unregister_database_prefix_v1'] =
+            'pending-prefix';
+      },
+      build: () => bloc,
+      act: (bloc) =>
+          bloc.login(username: validUsername, password: validPassword),
+      expect: () => [
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
+      ],
+      verify: (_) {
+        expect(credentialStorage['partial_unregister_jid_v1'], isNull);
+        expect(
+          credentialStorage['partial_unregister_database_prefix_v1'],
+          isNull,
+        );
       },
     );
 
@@ -1911,6 +1935,46 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Unregister uses the active XMPP database prefix when no cleanup secrets were persisted.',
+      setUp: () {
+        when(
+          () => mockXmppService.activeDatabasePrefix,
+        ).thenReturn('session-prefix');
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer((_) async => Response('', 200));
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(
+          config: _xmppOnlyEndpointConfig,
+        ),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(config: _xmppOnlyEndpointConfig),
+        AuthenticationNone(config: _xmppOnlyEndpointConfig),
+      ],
+      verify: (_) {
+        verify(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: validJid,
+            databasePrefix: 'session-prefix',
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'If email delete succeeds and XMPP delete fails, only the email side is torn down locally.',
       setUp: () {
         credentialStorage['jid'] = validJid;
@@ -1933,12 +1997,7 @@ void main() {
         ).thenAnswer((_) async {});
         when(
           () => mockHttpClient.post(any(), body: any(named: 'body')),
-        ).thenAnswer(
-          (_) async => Response(
-            "There was an error deleting the account: The account doesn't exist",
-            404,
-          ),
-        );
+        ).thenAnswer((_) async => Response('server error', 500));
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
@@ -2010,6 +2069,74 @@ void main() {
           credentialStorage[bloc.partialUnregisterJidKey.value],
           equals(validJid.toLowerCase()),
         );
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'If email delete succeeds and XMPP already reports 404, unregister completes locally.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'user@axi.im',
+            password: validPassword,
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer(
+          (_) async => Response(
+            "There was an error deleting the account: The account doesn't exist",
+            404,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (bloc) {
+        verify(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).called(1);
+        verify(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: validJid,
+            databasePrefix: 'prefix',
+          ),
+        ).called(1);
+        expect(credentialStorage[bloc.partialUnregisterJidKey.value], isNull);
+        expect(credentialStorage[bloc.jidStorageKey.value], isNull);
+        expect(credentialStorage['${validJid}_database_prefix'], isNull);
+        expect(credentialStorage['prefix_database_passphrase'], isNull);
       },
     );
 
@@ -2126,6 +2253,110 @@ void main() {
           () => mockHttpClient.post(any(), body: any(named: 'body')),
         ).called(1);
         expect(credentialStorage[bloc.partialUnregisterJidKey.value], isNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Partial unregister retry treats an XMPP 404 as completion and clears local state.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['partial_unregister_jid_v1'] = validJid;
+        credentialStorage['partial_unregister_database_prefix_v1'] = 'prefix';
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer(
+          (_) async => Response(
+            "There was an error deleting the account: The account doesn't exist",
+            404,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (bloc) {
+        verifyNever(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        );
+        verify(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: validJid,
+            databasePrefix: 'prefix',
+          ),
+        ).called(1);
+        expect(credentialStorage[bloc.partialUnregisterJidKey.value], isNull);
+        expect(
+          credentialStorage[bloc.partialUnregisterDatabasePrefixKey.value],
+          isNull,
+        );
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Successful unregister keeps another account pending partial-unregister state intact.',
+      setUp: () {
+        credentialStorage['partial_unregister_jid_v1'] = validJid;
+        credentialStorage['partial_unregister_database_prefix_v1'] =
+            'pending-prefix';
+        when(
+          () => mockXmppService.activeDatabasePrefix,
+        ).thenReturn('other-prefix');
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer((_) async => Response('', 200));
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(
+          config: _xmppOnlyEndpointConfig,
+        ),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: 'otherUser',
+        host: EndpointConfig.defaultDomain,
+        password: 'otherPassword',
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(config: _xmppOnlyEndpointConfig),
+        AuthenticationNone(config: _xmppOnlyEndpointConfig),
+      ],
+      verify: (_) {
+        verify(
+          () => mockXmppService.cleanupUnregisterLocalData(
+            jid: 'otherUser@${EndpointConfig.defaultDomain}',
+            databasePrefix: 'other-prefix',
+          ),
+        ).called(1);
+        expect(credentialStorage['partial_unregister_jid_v1'], validJid);
+        expect(
+          credentialStorage['partial_unregister_database_prefix_v1'],
+          'pending-prefix',
+        );
       },
     );
 

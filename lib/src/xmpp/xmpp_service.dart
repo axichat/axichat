@@ -519,6 +519,8 @@ abstract interface class XmppBase {
 
   Future<XmppDatabase> get database;
 
+  String? get activeDatabasePrefix => null;
+
   Future<Avatar?> getOwnAvatar();
 
   Stream<void> get databaseReloadStream;
@@ -735,6 +737,15 @@ class XmppService extends XmppBase
   Completer<void>? _dbOperationsDrained;
   @override
   String? _databasePrefix;
+
+  @override
+  String? get activeDatabasePrefix {
+    final prefix = _databasePrefix?.trim();
+    if (prefix == null || prefix.isEmpty) {
+      return null;
+    }
+    return prefix;
+  }
 
   final FutureOr<XmppConnection> Function() _connectionFactory;
   final FutureOr<XmppStateStore> Function(String, String) _stateStoreFactory;

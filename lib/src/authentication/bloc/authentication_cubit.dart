@@ -281,6 +281,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final partialUnregisterJidKey = CredentialStore.registerKey(
     'partial_unregister_jid_v1',
   );
+  final partialUnregisterDatabasePrefixKey = CredentialStore.registerKey(
+    'partial_unregister_database_prefix_v1',
+  );
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
@@ -963,6 +966,50 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.delete(key: partialUnregisterJidKey);
   }
 
+  Future<String?> _readPartialUnregisterDatabasePrefix(String jid) async {
+    if (!await _hasPartialUnregisterJid(jid)) {
+      return null;
+    }
+    final stored = await _credentialStore.read(
+      key: partialUnregisterDatabasePrefixKey,
+    );
+    return _validatedDatabasePrefix(
+      stored,
+      logContext: 'reading pending unregister cleanup prefix',
+    );
+  }
+
+  Future<void> _writePartialUnregisterState({
+    required String jid,
+    String? databasePrefix,
+  }) async {
+    await _writePartialUnregisterJid(jid);
+    final validatedPrefix = _validatedDatabasePrefix(
+      databasePrefix,
+      logContext: 'storing pending unregister cleanup prefix',
+    );
+    if (validatedPrefix == null) {
+      await _credentialStore.delete(key: partialUnregisterDatabasePrefixKey);
+      return;
+    }
+    await _credentialStore.write(
+      key: partialUnregisterDatabasePrefixKey,
+      value: validatedPrefix,
+    );
+  }
+
+  Future<void> _clearPartialUnregisterState() async {
+    await _clearPartialUnregisterJid();
+    await _credentialStore.delete(key: partialUnregisterDatabasePrefixKey);
+  }
+
+  Future<void> _clearPartialUnregisterJidIfMatches(String jid) async {
+    if (!await _hasPartialUnregisterJid(jid)) {
+      return;
+    }
+    await _clearPartialUnregisterJidIfMatches(jid);
+  }
+
   Future<_StoredLoginCredentials> _readStoredLoginCredentials() async {
     final storedJid = await _credentialStore.read(key: jidStorageKey);
     final storedPassword = await _credentialStore.read(key: passwordStorageKey);
@@ -1334,6 +1381,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       prefix: validatedPrefix,
       passphraseKey: passphraseKey,
       passphrase: storedPassphrase,
+    );
+  }
+
+  Future<String?> _resolveUnregisterCleanupDatabasePrefix(String jid) async {
+    final databaseSecrets = await _readDatabaseSecrets(jid);
+    final storedPrefix = databaseSecrets.prefix;
+    if (storedPrefix != null) {
+      return storedPrefix;
+    }
+    final pendingPrefix = await _readPartialUnregisterDatabasePrefix(jid);
+    if (pendingPrefix != null) {
+      return pendingPrefix;
+    }
+    return _validatedDatabasePrefix(
+      _xmppService.activeDatabasePrefix,
+      logContext: 'preparing unregister cleanup',
     );
   }
 
@@ -2400,6 +2463,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         body: resolvedWelcomeBody,
       );
     }
+    await _clearPartialUnregisterJidIfMatches(jid);
     final AuthenticationState completedState = fromSignup
         ? const AuthenticationCompleteFromSignup()
         : const AuthenticationComplete();
@@ -2896,15 +2960,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String user,
     required String host,
   }) async {
-    final databaseSecrets = await _readDatabaseSecrets(jid);
+    final cleanupDatabasePrefix = await _resolveUnregisterCleanupDatabasePrefix(
+      jid,
+    );
     await _disconnectForDelete(jid: jid, clearEmail: true);
     await _clearStoredSmtpCredentials(jid);
     await _xmppService.cleanupUnregisterLocalData(
       jid: jid,
-      databasePrefix: databaseSecrets.prefix,
+      databasePrefix: cleanupDatabasePrefix,
     );
     await _clearLoginSecrets(jid: jid);
-    await _clearPartialUnregisterJid();
+    await _clearPartialUnregisterJidIfMatches(jid);
     _emailService?.clearSessionCredentials();
     await _removeCompletedAccountRecord(user, host);
     _emit(const AuthenticationNone());
@@ -2912,7 +2978,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _stabilizeAfterEmailDelete(String jid) async {
-    await _writePartialUnregisterJid(jid);
+    final cleanupDatabasePrefix = await _resolveUnregisterCleanupDatabasePrefix(
+      jid,
+    );
+    await _writePartialUnregisterState(
+      jid: jid,
+      databasePrefix: cleanupDatabasePrefix,
+    );
     await _disconnectForDelete(jid: jid, clearEmail: true);
     await _clearStoredSmtpCredentials(jid);
     _emailService?.clearSessionCredentials();
@@ -3292,6 +3364,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
+        if (phase == _UnregisterPhase.emailRemoved) {
+          await _finishUnregister(
+            jid: accountJid,
+            user: normalizedUsername,
+            host: effectiveHost,
+          );
+          return;
+        }
         final detail = _registerErrorDetail(response);
         await _failUnregister(
           message: detail == null
