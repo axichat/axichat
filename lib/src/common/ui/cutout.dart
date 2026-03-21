@@ -240,27 +240,40 @@ class _RenderCutoutSurface extends RenderBox
     }
 
     final cutoutCount = math.min(cutoutChildren.length, _cutouts.length);
+    var maxLeftHalfWidth = 0.0;
     var maxRightHalfWidth = 0.0;
     for (var i = 0; i < cutoutCount; i++) {
       final childBox = cutoutChildren[i];
       final spec = _cutouts[i];
-      if (spec.edge == CutoutEdge.right) {
-        maxRightHalfWidth = math.max(
-          maxRightHalfWidth,
-          childBox.size.width / 2,
-        );
+      switch (spec.edge) {
+        case CutoutEdge.left:
+          maxLeftHalfWidth = math.max(
+            maxLeftHalfWidth,
+            childBox.size.width / 2,
+          );
+        case CutoutEdge.right:
+          maxRightHalfWidth = math.max(
+            maxRightHalfWidth,
+            childBox.size.width / 2,
+          );
+        case CutoutEdge.top:
+        case CutoutEdge.bottom:
+          break;
       }
     }
 
     final bodyConstraints = constraints.deflate(
-      EdgeInsetsDirectional.only(end: maxRightHalfWidth),
+      EdgeInsets.only(left: maxLeftHalfWidth, right: maxRightHalfWidth),
     );
     bodyChild.layout(bodyConstraints, parentUsesSize: true);
     final bodySize = bodyChild.size;
     size = constraints.constrain(
-      Size(bodySize.width + maxRightHalfWidth, bodySize.height),
+      Size(
+        bodySize.width + maxLeftHalfWidth + maxRightHalfWidth,
+        bodySize.height,
+      ),
     );
-    const bodyOffset = Offset.zero;
+    final bodyOffset = Offset(maxLeftHalfWidth, 0);
 
     bodyChildParentData(bodyChild).offset = bodyOffset;
 

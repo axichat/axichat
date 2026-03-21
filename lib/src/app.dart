@@ -1100,22 +1100,10 @@ SingleActivator _calendarActivator(TargetPlatform platform) {
 class AxiDragScrollBehavior extends MaterialScrollBehavior {
   const AxiDragScrollBehavior();
 
-  static const _touchDragDevices = <PointerDeviceKind>{
-    PointerDeviceKind.touch,
-    PointerDeviceKind.stylus,
-    PointerDeviceKind.invertedStylus,
-  };
-
-  static const _mobileDragDevices = <PointerDeviceKind>{
-    ..._touchDragDevices,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-  };
-
   @override
   Set<PointerDeviceKind> get dragDevices => defaultTargetPlatform.isMobile
-      ? _mobileDragDevices
-      : const <PointerDeviceKind>{};
+      ? <PointerDeviceKind>{...super.dragDevices, PointerDeviceKind.mouse}
+      : super.dragDevices;
 }
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {

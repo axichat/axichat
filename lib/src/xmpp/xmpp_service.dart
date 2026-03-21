@@ -767,7 +767,8 @@ class XmppService extends XmppBase
 
   bool get mamSupported => _mamSupportResolved && _mamSupported;
 
-  String? get saltedPassword => _connection.saltedPassword;
+  String? get saltedPassword =>
+      _hasInitializedConnection ? _connection.saltedPassword : null;
 
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
 
@@ -1088,13 +1089,15 @@ class XmppService extends XmppBase
   @override
   String? get resource => _myJid?.resource;
 
-  String? get boundResource => _connection.hasConnectionSettings
+  String? get boundResource =>
+      _hasInitializedConnection && _connection.hasConnectionSettings
       ? _connection.connectionSettings.jid.resource
       : null;
 
   bool get connected => connectionState == mox.XmppConnectionState.connected;
 
-  bool get hasConnectionSettings => _connection.hasConnectionSettings;
+  bool get hasConnectionSettings =>
+      _hasInitializedConnection && _connection.hasConnectionSettings;
 
   bool get databasesInitialized =>
       _stateStore.isCompleted && _database.isCompleted;
@@ -1106,11 +1109,14 @@ class XmppService extends XmppBase
       hasConnectionSettings &&
       databasesInitialized;
 
-  BookmarksManager? get bookmarksManager =>
-      _connection.getManager<BookmarksManager>();
+  BookmarksManager? get bookmarksManager => _hasInitializedConnection
+      ? _connection.getManager<BookmarksManager>()
+      : null;
 
   ConversationIndexManager? get conversationIndexManager =>
-      _connection.getManager<ConversationIndexManager>();
+      _hasInitializedConnection
+      ? _connection.getManager<ConversationIndexManager>()
+      : null;
 
   @override
   bool get needsReset =>
