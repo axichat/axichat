@@ -4380,6 +4380,68 @@ void main() {
   );
 
   test(
+    'closing during room-members join does not fetch affiliations afterward',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      final joinCompleter = Completer<void>();
+      final freshRoomState = RoomState(
+        roomJid: roomJid,
+        myOccupantJid: selfOccupantId,
+        selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+        occupants: <String, Occupant>{
+          selfOccupantId: _occupant(
+            occupantId: selfOccupantId,
+            nick: 'self',
+            realJid: 'self@axi.im',
+            affiliation: OccupantAffiliation.owner,
+            role: OccupantRole.moderator,
+          ),
+        },
+      );
+
+      when(
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: null,
+          allowRejoin: true,
+        ),
+      ).thenAnswer((_) => joinCompleter.future);
+      when(
+        () => mucService.roomStateForOrEmpty(roomJid),
+      ).thenReturn(freshRoomState);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(mucService);
+
+      bloc.add(const ChatRoomMembersOpened());
+      await _pumpBloc();
+
+      await bloc.close();
+      joinCompleter.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyNever(() => mucService.fetchRoomMembers(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomOwners(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomAdmins(roomJid: roomJid));
+    },
+  );
+
+  test(
     'room state updates do not prefetch room affiliations automatically',
     () async {
       final roomStateController = StreamController<RoomState>.broadcast();
