@@ -4456,9 +4456,7 @@ void main() {
       },
     );
 
-    when(
-      () => mucService.roomStateFor(roomJid),
-    ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+    when(() => mucService.roomStateForOrEmpty(roomJid)).thenReturn(roomState);
     when(
       () => mucService.warmRoomFromHistory(roomJid: roomJid),
     ).thenAnswer((_) async => roomState);
@@ -4497,6 +4495,70 @@ void main() {
     await bloc.close();
   });
 
+  test('opening room members uses fresh room state after join', () async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    final staleRoomState = RoomState(roomJid: roomJid, occupants: const {});
+    final freshRoomState = RoomState(
+      roomJid: roomJid,
+      myOccupantJid: selfOccupantId,
+      selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+      occupants: <String, Occupant>{
+        selfOccupantId: _occupant(
+          occupantId: selfOccupantId,
+          nick: 'self',
+          realJid: 'self@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+        ),
+      },
+    );
+    var roomStateReads = 0;
+    when(() => mucService.roomStateForOrEmpty(roomJid)).thenAnswer((_) {
+      roomStateReads += 1;
+      if (roomStateReads == 1) return staleRoomState;
+      return freshRoomState;
+    });
+    when(
+      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+    ).thenAnswer((_) async => staleRoomState);
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: null,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(_groupChat(roomJid));
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+    clearInteractions(mucService);
+
+    bloc.add(const ChatRoomMembersOpened());
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyInOrder([
+      () => mucService.ensureJoined(
+        roomJid: roomJid,
+        nickname: null,
+        allowRejoin: true,
+      ),
+      () => mucService.roomStateForOrEmpty(roomJid),
+      () => mucService.fetchRoomMembers(roomJid: roomJid),
+      () => mucService.fetchRoomOwners(roomJid: roomJid),
+      () => mucService.fetchRoomAdmins(roomJid: roomJid),
+    ]);
+    expect(bloc.state.roomState?.hasSelfPresence, isTrue);
+
+    await bloc.close();
+  });
+
   test('reopening room members fetches room affiliations again', () async {
     const roomJid = 'room@conference.axi.im';
     const selfOccupantId = '$roomJid/self';
@@ -4515,9 +4577,7 @@ void main() {
       },
     );
 
-    when(
-      () => mucService.roomStateFor(roomJid),
-    ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+    when(() => mucService.roomStateForOrEmpty(roomJid)).thenReturn(roomState);
     when(
       () => mucService.warmRoomFromHistory(roomJid: roomJid),
     ).thenAnswer((_) async => roomState);

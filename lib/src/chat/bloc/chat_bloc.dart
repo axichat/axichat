@@ -1286,16 +1286,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
     await _ensureMucMembership(chat);
-    final roomState =
-        state.roomState ?? _mucService.roomStateForOrEmpty(chat.jid);
-    if (state.roomState == null) {
-      emit(
-        state.copyWith(
-          roomState: roomState,
-          roomMemberSections: _buildRoomMemberSections(roomState),
-        ),
-      );
-    }
+    final roomState = _mucService.roomStateForOrEmpty(chat.jid);
+    emit(
+      state.copyWith(
+        roomState: roomState,
+        roomMemberSections: _buildRoomMemberSections(roomState),
+      ),
+    );
     await _refreshRoomAffiliations(chat: chat, roomState: roomState);
   }
 
