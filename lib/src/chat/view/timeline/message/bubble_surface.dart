@@ -4,20 +4,8 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/squircle_border.dart';
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform;
-import 'package:pixel_snap/pixel_snap.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-
-bool _usesPixelSnap(TargetPlatform platform) =>
-    platform == TargetPlatform.linux || platform == TargetPlatform.windows;
-
-double _identityPixelSnap(
-  double value,
-  double devicePixelRatio,
-  PixelSnapMode mode,
-) => value;
 
 /// Slots managed by [ChatBubbleSurface].
 enum _ChatBubbleSlot { body, reaction, recipients, avatar, selection }
@@ -159,10 +147,6 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
         borderColor: borderColor,
         borderRadius: borderRadius,
         shadowOpacity: shadowOpacity,
-        devicePixelRatio:
-            MediaQuery.maybeDevicePixelRatioOf(context) ??
-            View.of(context).devicePixelRatio,
-        pixelSnapEnabled: _usesPixelSnap(defaultTargetPlatform),
         shadows: shadows,
         bubbleWidthFraction: bubbleWidthFraction,
         cornerClearance: cornerClearance,
@@ -186,10 +170,6 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
       ..borderColor = borderColor
       ..borderRadius = borderRadius
       ..shadowOpacity = shadowOpacity
-      ..devicePixelRatio =
-          MediaQuery.maybeDevicePixelRatioOf(context) ??
-          View.of(context).devicePixelRatio
-      ..pixelSnapEnabled = _usesPixelSnap(defaultTargetPlatform)
       ..shadows = shadows
       ..bubbleWidthFraction = bubbleWidthFraction
       ..cornerClearance = cornerClearance
@@ -213,8 +193,6 @@ class RenderChatBubbleSurface extends RenderBox
     required Color borderColor,
     required BorderRadius borderRadius,
     required double shadowOpacity,
-    required double devicePixelRatio,
-    required bool pixelSnapEnabled,
     required List<BoxShadow> shadows,
     required double bubbleWidthFraction,
     required double cornerClearance,
@@ -230,8 +208,6 @@ class RenderChatBubbleSurface extends RenderBox
        _borderColor = borderColor,
        _borderRadius = borderRadius,
        _shadowOpacity = shadowOpacity,
-       _devicePixelRatio = devicePixelRatio,
-       _pixelSnapEnabled = pixelSnapEnabled,
        _shadows = shadows,
        _bubbleWidthFraction = bubbleWidthFraction,
        _cornerClearance = cornerClearance,
@@ -285,22 +261,6 @@ class RenderChatBubbleSurface extends RenderBox
     markNeedsPaint();
   }
 
-  double _devicePixelRatio;
-  double get devicePixelRatio => _devicePixelRatio;
-  set devicePixelRatio(double value) {
-    if (value == _devicePixelRatio) return;
-    _devicePixelRatio = value;
-    markNeedsPaint();
-  }
-
-  bool _pixelSnapEnabled;
-  bool get pixelSnapEnabled => _pixelSnapEnabled;
-  set pixelSnapEnabled(bool value) {
-    if (value == _pixelSnapEnabled) return;
-    _pixelSnapEnabled = value;
-    markNeedsPaint();
-  }
-
   List<BoxShadow> _shadows;
   List<BoxShadow> get shadows => _shadows;
   set shadows(List<BoxShadow> value) {
@@ -308,16 +268,6 @@ class RenderChatBubbleSurface extends RenderBox
     _shadows = value;
     markNeedsPaint();
   }
-
-  PixelSnap get _pixelSnap => _pixelSnapEnabled
-      ? PixelSnap.custom(devicePixelRatio: _devicePixelRatio)
-      : PixelSnap.custom(
-          devicePixelRatio: _devicePixelRatio,
-          pixelSnapFunction: _identityPixelSnap,
-        );
-
-  double _snap(double value, [PixelSnapMode mode = PixelSnapMode.snap]) =>
-      value.pixelSnap(_pixelSnap, mode);
 
   double _bubbleWidthFraction;
   double get bubbleWidthFraction => _bubbleWidthFraction;
@@ -677,7 +627,7 @@ class RenderChatBubbleSurface extends RenderBox
     final canvas = context.canvas;
 
     canvas.save();
-    canvas.translate(_snap(offset.dx), _snap(offset.dy));
+    canvas.translate(offset.dx, offset.dy);
     _paintShadows(canvas, localPath);
 
     final fillPaint = Paint()
@@ -686,7 +636,7 @@ class RenderChatBubbleSurface extends RenderBox
     final strokePaint = Paint()
       ..color = borderColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _snap(1)
+      ..strokeWidth = 1
       ..strokeJoin = StrokeJoin.round;
 
     canvas.drawPath(localPath, fillPaint);

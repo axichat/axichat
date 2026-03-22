@@ -18,15 +18,15 @@ class AxichatAppIconAvatar extends StatelessWidget {
     return SizedBox.square(
       dimension: size,
       child: ClipPath(
-        clipBehavior: Clip.antiAliasWithSaveLayer,
+        clipBehavior: Clip.antiAlias,
         clipper: ShapeBorderClipper(shape: shape),
         child: Image(
           image: imageProvider,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          isAntiAlias: true,
+          filterQuality: FilterQuality.none,
+          isAntiAlias: false,
           gaplessPlayback: true,
         ),
       ),

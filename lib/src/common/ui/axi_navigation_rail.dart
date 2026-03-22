@@ -78,9 +78,7 @@ class AxiNavigationRail extends StatelessWidget {
     // the stock rail when space is tight.
     const double expandedWidth = 216;
     const double collapsedWidth = 72;
-    final double railWidth = context.snap(
-      collapsed ? collapsedWidth : expandedWidth,
-    );
+    final double railWidth = collapsed ? collapsedWidth : expandedWidth;
     assert(
       selectedIndex >= 0 && selectedIndex < destinations.length,
       'selectedIndex must be within destinations bounds',
@@ -102,13 +100,11 @@ class AxiNavigationRail extends StatelessWidget {
       duration: context.watch<SettingsCubit>().animationDuration,
       curve: Curves.easeInOutCubic,
       width: railWidth,
-      padding: EdgeInsets.only(bottom: context.snap(14)),
+      padding: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: surfaceColor,
         border: Border(
-          right: context.snapBorderSide(
-            BorderSide(color: colors.border, width: context.borders.width),
-          ),
+          right: BorderSide(color: colors.border, width: context.borders.width),
         ),
       ),
       child: Column(
@@ -118,31 +114,26 @@ class AxiNavigationRail extends StatelessWidget {
             DecoratedBox(
               decoration: BoxDecoration(
                 border: Border(
-                  bottom: context.snapBorderSide(
-                    BorderSide(
-                      color: colors.border,
-                      width: context.borders.width,
-                    ),
+                  bottom: BorderSide(
+                    color: colors.border,
+                    width: context.borders.width,
                   ),
                 ),
               ),
               child: SizedBox(
-                height: context.snap(kToolbarHeight),
+                height: kToolbarHeight,
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: context.snap(
-                      collapsed
-                          ? _railHeaderHorizontalPaddingCollapsed
-                          : _railHeaderHorizontalPaddingExpanded,
-                    ),
+                    horizontal: collapsed
+                        ? _railHeaderHorizontalPaddingCollapsed
+                        : _railHeaderHorizontalPaddingExpanded,
                   ),
                   child: collapsed
                       ? Center(child: toggleButton ?? const SizedBox.shrink())
                       : Row(
                           children: [
                             ?toggleButton,
-                            if (toggleButton != null)
-                              SizedBox(width: context.snap(12)),
+                            if (toggleButton != null) const SizedBox(width: 12),
                             if (showTitle)
                               Expanded(
                                 child: Text(
@@ -165,9 +156,7 @@ class AxiNavigationRail extends StatelessWidget {
             final destination = destinations[index];
             final selected = showSelection && index == selectedIndex;
             return Padding(
-              padding: context.snapInsets(
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: _AxiNavigationRailItem(
                 destination: destination,
                 selected: selected,
@@ -181,9 +170,7 @@ class AxiNavigationRail extends StatelessWidget {
           if (footer != null) ...[
             const Spacer(),
             Padding(
-              padding: context.snapInsets(
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: footer!,
             ),
           ],

@@ -297,7 +297,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                     padding: headerPadding,
                     decoration: BoxDecoration(
                       border: _headerFocused
-                          ? Border.all(color: colors.primary, width: 1.5)
+                          ? Border.all(color: colors.primary, width: 1)
                           : null,
                     ),
                     child: Row(

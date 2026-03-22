@@ -3499,7 +3499,7 @@ class _CalendarWeekView extends StatelessWidget {
                     : Border(
                         left: BorderSide(
                           color: calendarBorderColor,
-                          width: context.snap(calendarBorderStroke),
+                          width: calendarBorderStroke,
                         ),
                       );
                 final Widget content = Container(
@@ -4312,7 +4312,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
             border: Border(
               right: BorderSide(
                 color: calendarBorderDarkColor,
-                width: context.snap(calendarBorderStroke),
+                width: calendarBorderStroke,
               ),
             ),
           ),
@@ -4366,7 +4366,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
               border: Border(
                 left: BorderSide(
                   color: calendarBorderDarkColor,
-                  width: context.snap(calendarBorderStroke),
+                  width: calendarBorderStroke,
                 ),
               ),
             ),
@@ -4381,7 +4381,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
         border: Border(
           bottom: BorderSide(
             color: calendarBorderColor,
-            width: context.snap(calendarBorderStroke),
+            width: calendarBorderStroke,
           ),
         ),
         borderRadius: BorderRadius.zero,

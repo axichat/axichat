@@ -23,7 +23,7 @@ class AxiAppBar extends StatelessWidget {
     final hasTitle = showTitle;
     final platform = Theme.of(context).platform;
     final spacing = context.spacing;
-    final double titleGap = context.snap(spacing.s);
+    final double titleGap = spacing.s;
     final baseTitleStyle = context.textTheme.h3;
     final titleStyle = platform.isApple
         ? baseTitleStyle.copyWith(fontWeight: appBarTitleFontWeight)
@@ -37,10 +37,8 @@ class AxiAppBar extends StatelessWidget {
       child: trailing ?? const AxiVersion(),
     );
     return Container(
-      height: context.snap(context.sizing.appBarHeight),
-      padding: context.snapInsets(
-        EdgeInsets.symmetric(vertical: spacing.s, horizontal: spacing.m),
-      ),
+      height: context.sizing.appBarHeight,
+      padding: EdgeInsets.symmetric(vertical: spacing.s, horizontal: spacing.m),
       decoration: BoxDecoration(border: Border(bottom: context.borderSide)),
       child: hasTitle
           ? Row(

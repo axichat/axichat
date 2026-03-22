@@ -314,18 +314,14 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             (widget.variant == AxiIconButtonVariant.outline
                 ? context.borderSide.width
                 : 0);
-        final double snappedIconSize = context.snap(resolvedIconSize);
-        final double snappedButtonSize = context.snap(resolvedButtonSize);
-        final double snappedTapTargetSize = context.snap(resolvedTapTargetSize);
+        final double iconSize = resolvedIconSize;
+        final double buttonSize = resolvedButtonSize;
+        final double tapTargetSize = resolvedTapTargetSize;
         final paintShape = SquircleBorder(
           borderRadius: widget.resolvedCornerRadius == null
-              ? BorderRadius.circular(context.snap(context.radii.squircle))
-              : BorderRadius.circular(
-                  context.snap(widget.resolvedCornerRadius!),
-                ),
-          side: context.snapBorderSide(
-            BorderSide(color: resolvedBorder, width: resolvedBorderWidth),
-          ),
+              ? BorderRadius.circular(context.radii.squircle)
+              : BorderRadius.circular(widget.resolvedCornerRadius!),
+          side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),
         );
         final Color resolvedForeground = pressed
             ? (widget.pressedColor ?? widget.hoverColor ?? baseForeground)
@@ -337,11 +333,11 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             : (widget.icon == null
                   ? Icon(
                       widget.iconData,
-                      size: snappedIconSize,
+                      size: iconSize,
                       color: resolvedForeground,
                     )
                   : IconTheme.merge(
-                      data: IconThemeData(size: snappedIconSize),
+                      data: IconThemeData(size: iconSize),
                       child: widget.icon!,
                     ));
         Color background = emphasized && widget.hoverBackgroundColor != null
@@ -359,8 +355,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         }
 
         Widget tappable = SizedBox(
-          width: snappedTapTargetSize,
-          height: snappedTapTargetSize,
+          width: tapTargetSize,
+          height: tapTargetSize,
           child: Center(
             child: Material(
               color: background,
@@ -415,8 +411,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                         }
                       : null,
                   child: SizedBox(
-                    width: snappedButtonSize,
-                    height: snappedButtonSize,
+                    width: buttonSize,
+                    height: buttonSize,
                     child: Center(child: iconWidget),
                   ),
                 ),
@@ -442,7 +438,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
           tappable = AxiTapBounce(
             controller: _bounceController,
             enabled: animationDuration != Duration.zero,
-            scale: snappedButtonSize < compactSizeThreshold
+            scale: buttonSize < compactSizeThreshold
                 ? context.motion.iconButtonCompactBounceScale
                 : context.motion.iconButtonBounceScale,
             hoverScale: context.motion.iconButtonHoverScale,

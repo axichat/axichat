@@ -352,11 +352,9 @@ class _AxiButtonState extends State<AxiButton> {
         );
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-            ? context.snapBorderSide(
-                BorderSide(
-                  color: context.borderSide.color,
-                  width: context.borderSide.width,
-                ),
+            ? BorderSide(
+                color: context.borderSide.color,
+                width: context.borderSide.width,
               )
             : null;
         final shape = RoundedSuperellipseBorder(
@@ -377,7 +375,7 @@ class _AxiButtonState extends State<AxiButton> {
         );
         final bool replacesLeading = widget.leading != null && widget.loading;
 
-        final double gap = context.snap(widget.size.gap(context.spacing));
+        final double gap = widget.size.gap(context.spacing);
         final List<Widget> rowChildren = <Widget>[
           if (widget.leading == null)
             ButtonSpinnerSlot(
@@ -401,10 +399,10 @@ class _AxiButtonState extends State<AxiButton> {
 
         Widget content = ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: context.snap(widget.size.minHeight(context.sizing)),
+            minHeight: widget.size.minHeight(context.sizing),
           ),
           child: Padding(
-            padding: context.snapInsets(widget.size.padding(context.spacing)),
+            padding: widget.size.padding(context.spacing),
             child: Row(
               mainAxisSize:
                   widget.widthBehavior == AxiButtonWidth.expand ||

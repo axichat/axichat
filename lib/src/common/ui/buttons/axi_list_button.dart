@@ -241,11 +241,9 @@ class _AxiListButtonState extends State<AxiListButton> {
         }
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-            ? context.snapBorderSide(
-                BorderSide(
-                  color: context.borderSide.color,
-                  width: context.borderSide.width,
-                ),
+            ? BorderSide(
+                color: context.borderSide.color,
+                width: context.borderSide.width,
               )
             : null;
         final shape = RoundedSuperellipseBorder(
@@ -261,17 +259,15 @@ class _AxiListButtonState extends State<AxiListButton> {
         );
         final bool replacesLeading = widget.leading != null && widget.loading;
 
-        final double gap = context.snap(context.spacing.s);
+        final double gap = context.spacing.s;
         Widget content = ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: context.snap(context.sizing.listButtonHeight),
+            minHeight: context.sizing.listButtonHeight,
           ),
           child: Padding(
-            padding: context.snapInsets(
-              EdgeInsets.symmetric(
-                horizontal: context.spacing.m,
-                vertical: context.spacing.s,
-              ),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.start,

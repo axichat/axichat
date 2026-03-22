@@ -66,17 +66,18 @@ class _CalendarTileState extends State<CalendarTile> {
       onTap: widget.onTap,
       paintSurface: false,
       leadingConstraints: BoxConstraints(
-        maxHeight: context.snap(sizing.iconButtonTapTarget),
-        maxWidth: context.snap(sizing.iconButtonTapTarget),
+        maxHeight: sizing.iconButtonTapTarget,
+        maxWidth: sizing.iconButtonTapTarget,
       ),
       leading: _CalendarAvatar(highlight: showBadge),
       title: l10n.homeRailCalendar,
       subtitle: subtitleText,
       subtitlePlaceholder: l10n.calendarTileNone,
-      contentPadding: context.snapInsets(
-        EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.xs),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.xs,
       ),
-      minTileHeight: context.snap(sizing.listButtonHeight + spacing.s),
+      minTileHeight: sizing.listButtonHeight + spacing.s,
       actions: trailingActions,
     );
 
@@ -119,20 +120,18 @@ class _CalendarAvatar extends StatelessWidget {
       decoration: ShapeDecoration(
         color: background,
         shape: SquircleBorder(
-          cornerRadius: context.snap(context.radii.squircle),
-          side: context.snapBorderSide(
-            BorderSide(color: borderColor, width: context.borderSide.width),
-          ),
+          cornerRadius: context.radii.squircle,
+          side: BorderSide(color: borderColor, width: context.borderSide.width),
         ),
       ),
       child: SizedBox(
-        width: context.snap(sizing.iconButtonTapTarget),
-        height: context.snap(sizing.iconButtonTapTarget),
+        width: sizing.iconButtonTapTarget,
+        height: sizing.iconButtonTapTarget,
         child: Center(
           child: Icon(
             LucideIcons.calendarClock,
             color: highlight ? colors.primary : colors.secondaryForeground,
-            size: context.snap(sizing.iconButtonIconSize),
+            size: sizing.iconButtonIconSize,
           ),
         ),
       ),
@@ -173,13 +172,12 @@ class _TaskTimestamp extends StatelessWidget {
         color: colors.secondary.withValues(
           alpha: context.motion.tapSplashAlpha,
         ),
-        shape: SquircleBorder(
-          cornerRadius: context.snap(context.radii.container),
-        ),
+        shape: SquircleBorder(cornerRadius: context.radii.container),
       ),
       child: Padding(
-        padding: context.snapInsets(
-          EdgeInsets.symmetric(horizontal: spacing.s, vertical: spacing.xs),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
         ),
         child: Text(
           label,

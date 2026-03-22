@@ -109,7 +109,6 @@ dependencies:
   charset_converter: ^2.3.0
   google_nav_bar: ^5.0.7
   upgrader: ^12.5.0
-  pixel_snap: ^0.1.5
 
 dependency_overrides:
   pinenacl: ^0.6.0
@@ -174,34 +173,34 @@ flutter:
   fonts:
     - family: Inter
       fonts:
-        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-Regular.ttf
           weight: 400
-        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
           weight: 500
-        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-Bold.ttf
           weight: 700
-        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-ExtraBold.ttf
           weight: 800
-        - asset: assets/fonts/Inter-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-Black.ttf
           weight: 900
-        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-Italic.ttf
           weight: 400
           style: italic
-        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-MediumItalic.ttf
           weight: 500
           style: italic
-        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-SemiBoldItalic.ttf
           weight: 600
           style: italic
-        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-BoldItalic.ttf
           weight: 700
           style: italic
-        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-ExtraBoldItalic.ttf
           weight: 800
           style: italic
-        - asset: assets/fonts/Inter-Italic-VariableFont_slnt,wght.ttf
+        - asset: assets/fonts/Inter-BlackItalic.ttf
           weight: 900
           style: italic
     - family: DMSans

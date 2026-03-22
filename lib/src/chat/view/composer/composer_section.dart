@@ -627,7 +627,7 @@ class _ComposerTaskDropRegion extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border.all(
               color: hovering ? colors.primary : Colors.transparent,
-              width: 1.5,
+              width: 1,
             ),
             borderRadius: BorderRadius.circular(18),
           ),
