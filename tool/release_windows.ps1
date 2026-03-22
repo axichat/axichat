@@ -22,6 +22,7 @@ param(
   [string]$FlutterVersion = "3.41.4",
   [string]$OutputDir = "dist",
   [string]$Version = "",
+  [string]$EmailPublicToken = "",
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$FlutterArgs
 )
@@ -31,9 +32,21 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 
+if ([string]::IsNullOrWhiteSpace($EmailPublicToken)) {
+  if (-not [string]::IsNullOrWhiteSpace($env:AXICHAT_EMAIL_PUBLIC_TOKEN)) {
+    $EmailPublicToken = $env:AXICHAT_EMAIL_PUBLIC_TOKEN
+  } elseif (-not [string]::IsNullOrWhiteSpace($env:EMAIL_PUBLIC_TOKEN)) {
+    $EmailPublicToken = $env:EMAIL_PUBLIC_TOKEN
+  } else {
+    $EmailPublicToken = "axichatpublictoken"
+  }
+}
+
 & flutter pub get
 & dart run build_runner build --delete-conflicting-outputs
 & flutter config --enable-windows-desktop
+
+$buildArgs = @("--dart-define=EMAIL_PUBLIC_TOKEN=$EmailPublicToken") + $FlutterArgs
 
 if ($Builder -eq "shorebird") {
   $shorebirdArgs = @(
@@ -43,7 +56,7 @@ if ($Builder -eq "shorebird") {
     $Flavor,
     "--flutter-version=$FlutterVersion",
     "--"
-  ) + $FlutterArgs
+  ) + $buildArgs
   & shorebird @shorebirdArgs
 } else {
   $flutterBuildArgs = @(
@@ -52,7 +65,7 @@ if ($Builder -eq "shorebird") {
     "--release",
     "--flavor",
     $Flavor
-  ) + $FlutterArgs
+  ) + $buildArgs
   & flutter @flutterBuildArgs
 }
 
@@ -83,14 +96,32 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
   $Version = $Version.TrimStart('v')
 }
 
-if (Get-Command iscc -ErrorAction SilentlyContinue) {
-  & iscc `
+$isccPath = $null
+$isccCommand = Get-Command iscc -ErrorAction SilentlyContinue
+if ($isccCommand) {
+  $isccPath = $isccCommand.Source
+}
+
+if (-not $isccPath) {
+  foreach ($candidate in @(
+    (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+    (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+  )) {
+    if ($candidate -and (Test-Path $candidate)) {
+      $isccPath = $candidate
+      break
+    }
+  }
+}
+
+if ($isccPath) {
+  & $isccPath `
     "/DAppVersion=$Version" `
     "/DAppSourceDir=$releaseDir" `
     "/DAppOutputDir=$absoluteOutputDir" `
     "packaging/windows/axichat.iss"
 } else {
-  Write-Host "Skipping installer build because Inno Setup (iscc) is not installed. Install Inno Setup to emit axichat-windows-setup.exe."
+  Write-Host "Skipping installer build because Inno Setup (iscc) is not installed. Install Inno Setup or use the default path C:\Program Files (x86)\Inno Setup 6\ISCC.exe to emit axichat-windows-setup.exe."
 }
 
 $checksumTargets = @($zipPath)
