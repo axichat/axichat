@@ -46,14 +46,16 @@ if ([string]::IsNullOrWhiteSpace($EmailPublicToken)) {
 & dart run build_runner build --delete-conflicting-outputs
 & flutter config --enable-windows-desktop
 
+if ($PSBoundParameters.ContainsKey('Flavor')) {
+  Write-Host "Ignoring -Flavor $Flavor for Windows desktop; Flutter and Shorebird desktop releases do not support flavors."
+}
+
 $buildArgs = @("--dart-define=EMAIL_PUBLIC_TOKEN=$EmailPublicToken") + $FlutterArgs
 
 if ($Builder -eq "shorebird") {
   $shorebirdArgs = @(
     "release",
     "windows",
-    "--flavor",
-    $Flavor,
     "--flutter-version=$FlutterVersion",
     "--"
   ) + $buildArgs
@@ -62,9 +64,7 @@ if ($Builder -eq "shorebird") {
   $flutterBuildArgs = @(
     "build",
     "windows",
-    "--release",
-    "--flavor",
-    $Flavor
+    "--release"
   ) + $buildArgs
   & flutter @flutterBuildArgs
 }

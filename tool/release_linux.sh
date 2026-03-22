@@ -11,6 +11,7 @@ package_version="${AXICHAT_RELEASE_VERSION:-}"
 deb_architecture="${AXICHAT_DEB_ARCH:-amd64}"
 appimage_arch="${AXICHAT_APPIMAGE_ARCH:-x86_64}"
 email_public_token="${AXICHAT_EMAIL_PUBLIC_TOKEN:-${EMAIL_PUBLIC_TOKEN:-axichatpublictoken}}"
+flavor_requested=0
 declare -a flutter_args=()
 
 usage() {
@@ -31,7 +32,8 @@ Requirements:
 
 Options:
   --builder <shorebird|flutter>  Build with Shorebird (default) or plain Flutter.
-  --flavor <name>                Flutter flavor to build. Default: production.
+  --flavor <name>                Ignored on Linux desktop. Kept for backward
+                                 compatibility with older invocations.
   --flutter-version <version>    Flutter version passed to Shorebird release.
   --output-dir <dir>             Release output directory. Default: dist.
   --version <tag-or-version>     Version passed to the Debian package script.
@@ -54,6 +56,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --flavor)
       flavor="$2"
+      flavor_requested=1
       shift 2
       ;;
     --flutter-version)
@@ -117,6 +120,10 @@ if [[ "${#flutter_args[@]}" -gt 0 ]]; then
   build_args+=("${flutter_args[@]}")
 fi
 
+if [[ "${flavor_requested}" -eq 1 ]]; then
+  echo "Ignoring --flavor=${flavor} for Linux desktop; Flutter and Shorebird desktop releases do not support flavors." >&2
+fi
+
 case "${builder}" in
   shorebird)
     if ! command -v shorebird >/dev/null 2>&1; then
@@ -124,7 +131,6 @@ case "${builder}" in
       exit 1
     fi
     shorebird release linux \
-      --flavor "${flavor}" \
       --flutter-version="${flutter_version}" \
       -- \
       "${build_args[@]}"
@@ -132,7 +138,6 @@ case "${builder}" in
   flutter)
     flutter build linux \
       --release \
-      --flavor "${flavor}" \
       "${build_args[@]}"
     ;;
   *)
