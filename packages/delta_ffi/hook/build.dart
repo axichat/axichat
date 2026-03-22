@@ -205,6 +205,8 @@ Map<String, String> _cargoEnvForTarget({
   String? archiverPath = cCompiler?.archiver.toFilePath();
   String? linkerPath = cCompiler?.linker.toFilePath();
   String? cxxPath;
+  final useWindowsMsvcToolNames =
+      codeConfig.targetOS == OS.windows && triple.endsWith('-windows-msvc');
   var toolchainDir =
       compilerPath == null ? null : File(compilerPath).parent.path;
 
@@ -239,16 +241,32 @@ Map<String, String> _cargoEnvForTarget({
   }
 
   if (compilerPath != null && archiverPath != null && linkerPath != null) {
-    env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = linkerPath;
-    env['CARGO_TARGET_${tripleKeyCargo}_AR'] = archiverPath;
-    env['CC_$tripleKeyCc'] = compilerPath;
+    final compilerCommand = useWindowsMsvcToolNames
+        ? _executableName(compilerPath)
+        : compilerPath;
+    final archiverCommand = useWindowsMsvcToolNames
+        ? _executableName(archiverPath)
+        : archiverPath;
+    final linkerCommand = useWindowsMsvcToolNames
+        ? _executableName(linkerPath)
+        : linkerPath;
+    final cxxCommand = cxxPath == null
+        ? null
+        : useWindowsMsvcToolNames
+            ? _executableName(cxxPath)
+            : cxxPath;
+
+    env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = linkerCommand;
+    env['CARGO_TARGET_${tripleKeyCargo}_AR'] = archiverCommand;
+    env['CC_$tripleKeyCc'] = compilerCommand;
     if (cxxPath != null) {
-      env['CXX_$tripleKeyCc'] = cxxPath;
+      env['CXX_$tripleKeyCc'] = cxxCommand!;
     }
-    env['AR_$tripleKeyCc'] = archiverPath;
+    env['AR_$tripleKeyCc'] = archiverCommand;
     env['PATH'] = [
       File(linkerPath).parent.path,
       File(compilerPath).parent.path,
+      File(archiverPath).parent.path,
       _getEnvironmentValue(currentEnvironment ?? Platform.environment, 'PATH') ??
           '',
     ].where((element) => element.isNotEmpty).join(_environmentPathSeparator);
@@ -345,17 +363,23 @@ Future<Map<String, String>> _cargoEnvironment({
     final archiverPath = cCompiler.archiver.toFilePath();
     final linkerPath = cCompiler.linker.toFilePath();
     final tripleKeyCargo = triple.toUpperCase().replaceAll('-', '_');
-    final genericCxx = compilerPath;
+    final useToolNames = triple.endsWith('-windows-msvc');
+    final compilerCommand =
+        useToolNames ? _executableName(compilerPath) : compilerPath;
+    final archiverCommand =
+        useToolNames ? _executableName(archiverPath) : archiverPath;
+    final linkerCommand =
+        useToolNames ? _executableName(linkerPath) : linkerPath;
 
-    _setEnvironmentValue(environment, 'CC', compilerPath);
-    _setEnvironmentValue(environment, 'CXX', genericCxx);
-    _setEnvironmentValue(environment, 'AR', archiverPath);
-    _setEnvironmentValue(environment, 'HOST_CC', compilerPath);
-    _setEnvironmentValue(environment, 'TARGET_CC', compilerPath);
+    _setEnvironmentValue(environment, 'CC', compilerCommand);
+    _setEnvironmentValue(environment, 'CXX', compilerCommand);
+    _setEnvironmentValue(environment, 'AR', archiverCommand);
+    _setEnvironmentValue(environment, 'HOST_CC', compilerCommand);
+    _setEnvironmentValue(environment, 'TARGET_CC', compilerCommand);
     _setEnvironmentValue(
       environment,
       'CARGO_TARGET_${tripleKeyCargo}_LINKER',
-      linkerPath,
+      linkerCommand,
     );
   }
 
@@ -573,6 +597,12 @@ bool _looksLikePath(String value) {
       value.contains('/') ||
       value.contains('\\') ||
       (Platform.isWindows && value.contains(':'));
+}
+
+String _executableName(String path) {
+  final separators = RegExp(r'[\\/]');
+  final parts = path.split(separators);
+  return parts.isEmpty ? path : parts.last;
 }
 
 Future<Map<String, String>> _environmentFromBatchFile(
