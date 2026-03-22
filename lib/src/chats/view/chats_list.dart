@@ -1460,11 +1460,15 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SelectableText(
-          addressLabel,
-          maxLines: 1,
-          textAlign: TextAlign.center,
-          style: context.textTheme.muted,
+        SizedBox(
+          width: double.infinity,
+          child: SelectableText(
+            addressLabel,
+            maxLines: 1,
+            textAlign: TextAlign.center,
+            textWidthBasis: TextWidthBasis.parent,
+            style: context.textTheme.muted,
+          ),
         ),
         SizedBox(height: spacing),
         paddedActionWrap,
