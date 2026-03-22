@@ -10,6 +10,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 String _prepareEmailHtmlData(Map<String, Object> arguments) {
@@ -149,6 +150,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   double? _contentHeight;
   int _heightMeasurementEpoch = 0;
   bool _linuxHeightObserverInstalled = false;
+  final GlobalKey _platformViewSizeKey = GlobalKey();
+  bool _linuxPlatformViewResizeScheduled = false;
+  int? _lastLinuxPlatformViewId;
+  Size? _lastLinuxPlatformViewSize;
+  Offset? _lastLinuxPlatformViewOffset;
+  double? _linuxFitLockedHeight;
 
   double get _resolvedHeight {
     final measuredHeight = _contentHeight;
@@ -187,6 +194,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _preparedHtmlInputKey = null;
       _contentHeight = null;
       _linuxHeightObserverInstalled = false;
+      _linuxFitLockedHeight = null;
       _refreshPreparedHtml(reload: _controller != null);
     }
   }
@@ -224,6 +232,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           _preparedHtmlData = null;
         }
         _contentHeight = null;
+        _linuxFitLockedHeight = null;
       });
     }
     _linuxHeightObserverInstalled = false;
@@ -274,22 +283,27 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     if (controller == null) {
       return;
     }
-    final measuredHeight = defaultTargetPlatform == TargetPlatform.linux
-        ? math.max(
-            await _measureLinuxDomContentHeight(controller) ?? 0,
-            await _measurePlatformContentHeight(controller) ?? 0,
-          )
-        : (await _measurePlatformContentHeight(controller) ?? 0);
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      final linuxMetrics = await _measureLinuxDomContentHeight(controller);
+      final measuredHeight =
+          linuxMetrics.measuredHeight ??
+          await _measurePlatformContentHeight(controller) ??
+          0;
+      if (!mounted || measuredHeight <= 0) {
+        return;
+      }
+      _updateLinuxContentHeightMetrics(
+        measuredHeight: measuredHeight,
+        scrollHeight: linuxMetrics.scrollHeight,
+        viewportHeight: linuxMetrics.viewportHeight,
+      );
+      return;
+    }
+    final measuredHeight = await _measurePlatformContentHeight(controller) ?? 0;
     if (!mounted || measuredHeight <= 0) {
       return;
     }
-    final normalizedHeight = measuredHeight.ceilToDouble();
-    if (_contentHeight == normalizedHeight) {
-      return;
-    }
-    setState(() {
-      _contentHeight = normalizedHeight;
-    });
+    _updateContentHeight(measuredHeight);
   }
 
   void _scheduleContentHeightMeasurements() {
@@ -324,6 +338,61 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     setState(() {
       _contentHeight = normalizedHeight;
     });
+    _scheduleLinuxPlatformViewResize();
+  }
+
+  void _updateLinuxContentHeightMetrics({
+    required double measuredHeight,
+    double? scrollHeight,
+    double? viewportHeight,
+  }) {
+    if (!mounted || measuredHeight <= 0) {
+      return;
+    }
+    final normalizedHeight = measuredHeight.ceilToDouble();
+    final currentHeight = _contentHeight;
+    final normalizedScrollHeight = scrollHeight?.ceilToDouble();
+    final normalizedViewportHeight = viewportHeight?.ceilToDouble();
+    final documentFitsViewport =
+        normalizedScrollHeight != null &&
+        normalizedViewportHeight != null &&
+        normalizedScrollHeight <= normalizedViewportHeight + 1;
+    final documentOverflowsViewport =
+        normalizedScrollHeight != null &&
+        normalizedViewportHeight != null &&
+        normalizedScrollHeight > normalizedViewportHeight + 1;
+
+    if (documentOverflowsViewport) {
+      _linuxFitLockedHeight = null;
+    }
+
+    final fitLockedHeight = _linuxFitLockedHeight;
+    if (documentFitsViewport &&
+        fitLockedHeight != null &&
+        normalizedHeight > fitLockedHeight) {
+      return;
+    }
+    if (currentHeight == normalizedHeight) {
+      if (documentFitsViewport) {
+        _linuxFitLockedHeight = normalizedHeight;
+      }
+      return;
+    }
+    setState(() {
+      _contentHeight = normalizedHeight;
+    });
+    if (documentFitsViewport) {
+      _linuxFitLockedHeight = normalizedHeight;
+    }
+    _scheduleLinuxPlatformViewResize();
+  }
+
+  double? _parsePositiveDouble(dynamic value) {
+    return switch (value) {
+      num number when number > 0 => number.toDouble(),
+      String text => double.tryParse(text.trim()),
+      _ => null,
+    };
   }
 
   Future<double?> _measurePlatformContentHeight(
@@ -340,72 +409,101 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     return measuredHeight > 0 ? measuredHeight : null;
   }
 
-  Future<double?> _measureLinuxDomContentHeight(
-    InAppWebViewController controller,
-  ) async {
+  Future<
+    ({double? measuredHeight, double? scrollHeight, double? viewportHeight})
+  >
+  _measureLinuxDomContentHeight(InAppWebViewController controller) async {
     try {
       final result = await controller.evaluateJavascript(
         source: '''
 (() => {
   const body = document.body;
-  const doc = document.documentElement;
-  const scrolling = document.scrollingElement;
-  const candidates = [
-    body ? body.scrollHeight : 0,
-    body ? body.offsetHeight : 0,
-    body ? body.clientHeight : 0,
-    doc ? doc.scrollHeight : 0,
-    doc ? doc.offsetHeight : 0,
-    doc ? doc.clientHeight : 0,
-    scrolling ? scrolling.scrollHeight : 0,
-    scrolling ? scrolling.offsetHeight : 0,
-    scrolling ? scrolling.clientHeight : 0,
-  ];
-  if (body) {
-    const range = document.createRange();
-    range.selectNodeContents(body);
-    const rangeRect = range.getBoundingClientRect();
-    candidates.push(rangeRect.height);
-    let maxBottom = 0;
-    for (const element of body.querySelectorAll('*')) {
-      const style = window.getComputedStyle(element);
-      if (style.display === 'none' ||
-          style.visibility === 'hidden' ||
-          style.position === 'fixed') {
-        continue;
-      }
-      const rect = element.getBoundingClientRect();
-      if (Number.isFinite(rect.bottom)) {
-        maxBottom = Math.max(maxBottom, rect.bottom + window.scrollY);
-      }
-    }
-    candidates.push(maxBottom);
+  if (!body) {
+    return {
+      measuredHeight: 0,
+      scrollHeight: 0,
+      viewportHeight: 0,
+    };
   }
-  return Math.ceil(
-    candidates.reduce(
-      (maxHeight, candidate) => Math.max(
-        maxHeight,
-        Number.isFinite(candidate) ? candidate : 0,
+  const doc = document.documentElement;
+
+  const bodyTop = body.getBoundingClientRect().top + window.scrollY;
+  let maxBottom = 0;
+  const range = document.createRange();
+  range.selectNodeContents(body);
+  const rangeRect = range.getBoundingClientRect();
+
+  for (const element of body.querySelectorAll('*')) {
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.position === 'fixed') {
+      continue;
+    }
+    const rect = element.getBoundingClientRect();
+    if (Number.isFinite(rect.bottom)) {
+      maxBottom = Math.max(
+        maxBottom,
+        rect.bottom + window.scrollY - bodyTop,
+      );
+    }
+  }
+
+  return {
+    measuredHeight: Math.ceil(
+      Math.max(
+        Number.isFinite(rangeRect.height) ? rangeRect.height : 0,
+        maxBottom,
       ),
-      0,
     ),
-  );
+    scrollHeight: Math.ceil(
+      Math.max(
+        body ? body.scrollHeight : 0,
+        doc ? doc.scrollHeight : 0,
+      ),
+    ),
+    viewportHeight: Math.ceil(
+      Math.max(
+        window.innerHeight || 0,
+        doc ? doc.clientHeight : 0,
+      ),
+    ),
+  };
 })()
 ''',
       );
+      if (result is Map) {
+        final measuredHeight = _parsePositiveDouble(result['measuredHeight']);
+        final scrollHeight = _parsePositiveDouble(result['scrollHeight']);
+        final viewportHeight = _parsePositiveDouble(result['viewportHeight']);
+        return (
+          measuredHeight: measuredHeight,
+          scrollHeight: scrollHeight,
+          viewportHeight: viewportHeight,
+        );
+      }
       if (result is num) {
-        return result > 0 ? result.toDouble() : null;
+        final parsed = result > 0 ? result.toDouble() : null;
+        return (
+          measuredHeight: parsed,
+          scrollHeight: null,
+          viewportHeight: null,
+        );
       }
       if (result is String) {
         final parsed = double.tryParse(result.trim());
         if (parsed != null && parsed > 0) {
-          return parsed;
+          return (
+            measuredHeight: parsed,
+            scrollHeight: null,
+            viewportHeight: null,
+          );
         }
       }
     } on Exception {
-      return null;
+      return (measuredHeight: null, scrollHeight: null, viewportHeight: null);
     }
-    return null;
+    return (measuredHeight: null, scrollHeight: null, viewportHeight: null);
   }
 
   Future<void> _installLinuxHeightObserver(
@@ -426,55 +524,66 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     return true;
   }
 
-  const body = document.body;
-  const doc = document.documentElement;
-  const scrolling = document.scrollingElement;
+  const measureHeight = () => {
+    const body = document.body;
+    if (!body) {
+      return {
+        measuredHeight: 0,
+        scrollHeight: 0,
+        viewportHeight: 0,
+      };
+    }
+    const doc = document.documentElement;
+    const bodyTop = body.getBoundingClientRect().top + window.scrollY;
+    let maxBottom = 0;
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    const rangeRect = range.getBoundingClientRect();
+
+    for (const element of body.querySelectorAll('*')) {
+      const style = window.getComputedStyle(element);
+      if (style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          style.position === 'fixed') {
+        continue;
+      }
+      const rect = element.getBoundingClientRect();
+      if (Number.isFinite(rect.bottom)) {
+        maxBottom = Math.max(
+          maxBottom,
+          rect.bottom + window.scrollY - bodyTop,
+        );
+      }
+    }
+
+    return {
+      measuredHeight: Math.ceil(
+        Math.max(
+          Number.isFinite(rangeRect.height) ? rangeRect.height : 0,
+          maxBottom,
+        ),
+      ),
+      scrollHeight: Math.ceil(
+        Math.max(
+          body ? body.scrollHeight : 0,
+          doc ? doc.scrollHeight : 0,
+        ),
+      ),
+      viewportHeight: Math.ceil(
+        Math.max(
+          window.innerHeight || 0,
+          doc ? doc.clientHeight : 0,
+        ),
+      ),
+    };
+  };
 
   const reportHeight = () => {
-    const candidates = [
-      body ? body.scrollHeight : 0,
-      body ? body.offsetHeight : 0,
-      body ? body.clientHeight : 0,
-      doc ? doc.scrollHeight : 0,
-      doc ? doc.offsetHeight : 0,
-      doc ? doc.clientHeight : 0,
-      scrolling ? scrolling.scrollHeight : 0,
-      scrolling ? scrolling.offsetHeight : 0,
-      scrolling ? scrolling.clientHeight : 0,
-    ];
-    if (body) {
-      const range = document.createRange();
-      range.selectNodeContents(body);
-      const rangeRect = range.getBoundingClientRect();
-      candidates.push(rangeRect.height);
-      let maxBottom = 0;
-      for (const element of body.querySelectorAll('*')) {
-        const style = window.getComputedStyle(element);
-        if (style.display === 'none' ||
-            style.visibility === 'hidden' ||
-            style.position === 'fixed') {
-          continue;
-        }
-        const rect = element.getBoundingClientRect();
-        if (Number.isFinite(rect.bottom)) {
-          maxBottom = Math.max(maxBottom, rect.bottom + window.scrollY);
-        }
-      }
-      candidates.push(maxBottom);
+    const metrics = measureHeight();
+    if (metrics.measuredHeight > 0 && window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('axichatEmailHeight', metrics);
     }
-    const height = Math.ceil(
-      candidates.reduce(
-        (maxHeight, candidate) => Math.max(
-          maxHeight,
-          Number.isFinite(candidate) ? candidate : 0,
-        ),
-        0,
-      ),
-    );
-    if (height > 0 && window.flutter_inappwebview) {
-      window.flutter_inappwebview.callHandler('axichatEmailHeight', height);
-    }
-    return height;
+    return metrics;
   };
 
   let frame = 0;
@@ -493,7 +602,6 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   window.__axichatEmailScheduleHeight = schedule;
 
   window.addEventListener('load', schedule, { passive: true });
-  window.addEventListener('resize', schedule, { passive: true });
 
   const mutationObserver = new MutationObserver(schedule);
   mutationObserver.observe(document.documentElement, {
@@ -502,16 +610,6 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     characterData: true,
     attributes: true,
   });
-
-  if (window.ResizeObserver) {
-    const resizeObserver = new ResizeObserver(schedule);
-    if (doc) {
-      resizeObserver.observe(doc);
-    }
-    if (body) {
-      resizeObserver.observe(body);
-    }
-  }
 
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(schedule).catch(() => {});
@@ -538,6 +636,81 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     }
   }
 
+  void _scheduleLinuxPlatformViewResize() {
+    if (defaultTargetPlatform != TargetPlatform.linux ||
+        _linuxPlatformViewResizeScheduled) {
+      return;
+    }
+    _linuxPlatformViewResizeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _linuxPlatformViewResizeScheduled = false;
+      await _syncLinuxPlatformViewBounds();
+    });
+  }
+
+  Future<void> _syncLinuxPlatformViewBounds() async {
+    if (!mounted || defaultTargetPlatform != TargetPlatform.linux) {
+      return;
+    }
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    final renderObject =
+        _platformViewSizeKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderObject == null || !renderObject.hasSize) {
+      return;
+    }
+    final size = renderObject.size;
+    if (size.width <= 0 || size.height <= 0) {
+      return;
+    }
+    dynamic viewId;
+    try {
+      viewId = controller.platform.getViewId();
+    } on UnimplementedError {
+      return;
+    }
+    if (viewId is! int) {
+      return;
+    }
+    final offset = renderObject.localToGlobal(Offset.zero);
+    final sizeChanged =
+        _lastLinuxPlatformViewId != viewId ||
+        _lastLinuxPlatformViewSize != size;
+    final offsetChanged =
+        _lastLinuxPlatformViewId != viewId ||
+        _lastLinuxPlatformViewOffset != offset;
+    if (!sizeChanged && !offsetChanged) {
+      return;
+    }
+    final channel = MethodChannel(
+      'com.pichillilorenzo/custom_platform_view_$viewId',
+    );
+    try {
+      if (sizeChanged) {
+        await channel.invokeMethod<void>('setSize', [
+          size.width,
+          size.height,
+          View.of(context).devicePixelRatio,
+        ]);
+      }
+      if (sizeChanged || offsetChanged) {
+        await channel.invokeMethod<void>('setTextureOffset', [
+          offset.dx,
+          offset.dy,
+        ]);
+      }
+      _lastLinuxPlatformViewId = viewId;
+      _lastLinuxPlatformViewSize = size;
+      _lastLinuxPlatformViewOffset = offset;
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      return;
+    }
+  }
+
   String _buildThemeStyle({required Brightness brightness}) {
     return _buildEmailWebViewThemeStyle(
       brightness: brightness,
@@ -548,8 +721,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    if (defaultTargetPlatform == TargetPlatform.linux && _controller != null) {
+      _scheduleLinuxPlatformViewResize();
+    }
 
     return SizedBox(
+      key: _platformViewSizeKey,
       width: double.infinity,
       height: _resolvedHeight,
       child: Stack(
@@ -597,6 +774,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
               ),
               onWebViewCreated: (controller) {
                 _controller = controller;
+                _scheduleLinuxPlatformViewResize();
                 if (defaultTargetPlatform == TargetPlatform.linux) {
                   controller.addJavaScriptHandler(
                     handlerName: _linuxHeightHandlerName,
@@ -605,10 +783,23 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                         return null;
                       }
                       final value = arguments.first;
-                      if (value is num) {
-                        _updateContentHeight(value.toDouble());
-                      } else if (value is String) {
-                        final parsed = double.tryParse(value.trim());
+                      if (value is Map) {
+                        final measuredHeight = _parsePositiveDouble(
+                          value['measuredHeight'],
+                        );
+                        if (measuredHeight != null) {
+                          _updateLinuxContentHeightMetrics(
+                            measuredHeight: measuredHeight,
+                            scrollHeight: _parsePositiveDouble(
+                              value['scrollHeight'],
+                            ),
+                            viewportHeight: _parsePositiveDouble(
+                              value['viewportHeight'],
+                            ),
+                          );
+                        }
+                      } else {
+                        final parsed = _parsePositiveDouble(value);
                         if (parsed != null) {
                           _updateContentHeight(parsed);
                         }
@@ -620,7 +811,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
               },
               onContentSizeChanged:
                   (controller, oldContentSize, newContentSize) {
-                    _updateContentHeight(newContentSize.height);
+                    if (defaultTargetPlatform != TargetPlatform.linux) {
+                      _updateContentHeight(newContentSize.height);
+                    }
                     _scheduleContentHeightMeasurements();
                   },
               shouldOverrideUrlLoading: (controller, navigationAction) async {
@@ -638,6 +831,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                 await _installLinuxHeightObserver(controller);
                 await _measureContentHeight();
                 _scheduleContentHeightMeasurements();
+                _scheduleLinuxPlatformViewResize();
                 if (!mounted) return;
                 setState(() {
                   _isLoading = false;
