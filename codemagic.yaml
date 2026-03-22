@@ -390,6 +390,15 @@ workflows:
       - *shorebird_install
       - *fetch_dependencies
       - *build_runner
+      - name: Install linuxdeploy
+        script: |
+          mkdir -p "$HOME/.local/bin"
+          curl -L \
+            -o "$HOME/.local/bin/linuxdeploy-x86_64.AppImage" \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x "$HOME/.local/bin/linuxdeploy-x86_64.AppImage"
+          ln -sf "$HOME/.local/bin/linuxdeploy-x86_64.AppImage" "$HOME/.local/bin/linuxdeploy"
+          echo 'PATH="$HOME/.local/bin:$PATH"' >> "$CM_ENV"
       - name: Configure for Linux
         script: |
           flutter config --enable-linux-desktop
@@ -404,9 +413,12 @@ workflows:
       - name: Package Debian Bundle
         script: |
           ./tool/package_deb.sh build/linux/x64/release/bundle "$CM_TAG" dist
+      - name: Package AppImage
+        script: |
+          ./tool/package_appimage.sh build/linux/x64/release/bundle "$CM_TAG" dist
       - name: Generate Linux Checksums
         script: |
-          ./tool/write_sha256_files.sh dist/axichat-linux.tar.gz dist/axichat-linux-amd64.deb
+          ./tool/write_sha256_files.sh dist/axichat-linux.tar.gz dist/axichat-linux-amd64.deb dist/axichat-x86_64.AppImage
       - *github_release_create_android
       - *github_release_upload_linux
     artifacts:
@@ -414,3 +426,5 @@ workflows:
       - dist/axichat-linux.tar.gz.sha256
       - dist/axichat-linux-amd64.deb
       - dist/axichat-linux-amd64.deb.sha256
+      - dist/axichat-x86_64.AppImage
+      - dist/axichat-x86_64.AppImage.sha256

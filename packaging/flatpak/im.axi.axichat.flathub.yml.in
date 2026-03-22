@@ -1,0 +1,45 @@
+app-id: im.axi.axichat
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: axichat
+finish-args:
+  - --device=dri
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --talk-name=org.freedesktop.secrets
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+modules:
+  - name: axichat-source
+    buildsystem: simple
+    build-commands:
+      - bash axichat/packaging/flatpak/build-source.sh
+    sources:
+      - type: git
+        url: __AXICHAT_APP_GIT_URL__
+        tag: __AXICHAT_APP_GIT_TAG__
+        commit: __AXICHAT_APP_GIT_COMMIT__
+        dest: axichat
+      - type: archive
+        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.41.4-stable.tar.xz
+        sha256: c9c4e741ebcf83ee88303404176f7e22c3b6abfc8e9d60781098b6d4104327a9
+        dest: flutter-sdk
+      - type: file
+        url: https://fsn1.your-objectstorage.com/simon-public/assets/sqlcipher/v4_10_0.c
+        sha256: de78ef087cbc26e8fe584de05f1790f3e34897db8731e8154dc674d3f2df28cb
+        dest: downloads
+        dest-filename: sqlcipher-v4_10_0.c
+      - type: file
+        url: https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F7520/pdfium-linux-x64.tgz
+        sha256: e737634cca16ba28b760077b915b469bea076b71f208769c56fb96ee138e876f
+        dest: downloads
+        dest-filename: pdfium-linux-x64.tgz
+      - type: archive
+        url: __AXICHAT_FLATPAK_INPUTS_URL__
+        sha256: __AXICHAT_FLATPAK_INPUTS_SHA256__
+        dest: flatpak-inputs

@@ -6,7 +6,12 @@ bundle-based manifest, and a newer source-build manifest for Flathub work.
 Files:
 
 - `im.axi.axichat.desktop`: desktop file named the way Flathub expects.
+- `flathub.json`: Flathub submission config; currently limits the app to
+  `x86_64`.
 - `im.axi.axichat.metainfo.xml`: AppStream metadata.
+- `im.axi.axichat.flathub.yml.in`: template used to render a submission-ready
+  Flathub manifest with the pinned Axichat GitHub tag/commit plus the uploaded
+  `flatpak-inputs` archive URL and SHA256.
 - `im.axi.axichat.yml`: Flatpak manifest that packages the locally built Linux
   bundle from `build/linux/x64/release/bundle`.
 - `im.axi.axichat.source.yml`: source-build manifest that uses locally prepared,
@@ -17,6 +22,9 @@ Files:
 - `../../tool/archive_flatpak_inputs.sh`: packages the remaining local
   `build/flatpak` inputs into one archive and prints the manifest snippet needed
   to replace the local `flatpak-inputs` `dir` source.
+- `../../tool/prepare_flathub_submission.sh`: archives the selected git ref,
+  archives the staged `flatpak-inputs`, and renders
+  `build/flathub-submission/im.axi.axichat.yml`.
 
 Local maintainer flows:
 
@@ -28,7 +36,9 @@ Local maintainer flows:
    `flatpak-builder --run build-dir packaging/flatpak/im.axi.axichat.yml axichat`
 4. To exercise the source-build path, run:
    `./tool/build_flatpak_source.sh`
-5. To package the remaining local staged inputs for hosting, run:
+5. To render Flathub submission files, run:
+   `./tool/prepare_flathub_submission.sh --git-ref v0.6.1 [--inputs-url ...]`
+6. To package only the remaining local staged inputs for hosting, run:
    `./tool/archive_flatpak_inputs.sh`
 
 What `tool/prepare_flatpak_inputs.sh` does:
@@ -44,11 +54,9 @@ What `tool/prepare_flatpak_inputs.sh` does:
 
 Current Flathub status:
 
-1. `im.axi.axichat.source.yml` is much closer to a Flathub submission manifest,
-   because Flutter, SQLCipher, and PDFium are now explicit pinned sources in
-   the manifest. It still depends on the local Axichat source tree and locally
-   staged pub/git/Rust inputs under `build/flatpak`, which Flathub cannot fetch
-   by itself yet.
+1. `im.axi.axichat.source.yml` stays useful for local source-build testing, but
+   it still depends on local `type: dir` sources and therefore is not directly
+   suitable for submission to Flathub.
 2. The source-build helper disables Shorebird with
    `--dart-define=ENABLE_SHOREBIRD=false`, because the Flathub build path uses
    `flutter build linux` rather than an authenticated `shorebird release linux`.
@@ -56,11 +64,14 @@ Current Flathub status:
    the source-build helper rewrites the plugin CMake files to consume the
    manifest-fetched SQLCipher/PDFium blobs locally instead of downloading them
    during the build.
-4. Before submitting to Flathub, confirm that the app ID `im.axi.axichat`
-   matches a domain you control and decide how the required Dart defines should
-   be provided in a reviewer-visible source manifest.
-5. After running `./tool/archive_flatpak_inputs.sh`, upload the generated
-   archive somewhere stable and replace the local `type: dir`
-   `flatpak-inputs` source with the printed `type: archive` snippet. Then
-   replace the local Axichat source `dir` with a reviewer-visible git or
-   archive source.
+4. `./tool/prepare_flathub_submission.sh` now renders
+   `build/flathub-submission/im.axi.axichat.yml` plus `flathub.json` using
+   the pinned Axichat GitHub tag/commit plus the uploaded `flatpak-inputs`
+   archive URL and SHA256 value. Upload the generated `flatpak-inputs` archive
+   somewhere stable, then rerun the script with the final public URL.
+5. Before submitting to Flathub, confirm that the app ID `im.axi.axichat`
+   matches a domain you control and that the public archive URLs are
+   reviewer-visible and stable.
+6. The `flatpak-inputs` archive is not a prebuilt app. It is the offline
+   dependency snapshot consumed by `packaging/flatpak/build-source.sh` so
+   Flathub can rebuild Axichat from source without live pub/git/cargo fetches.
