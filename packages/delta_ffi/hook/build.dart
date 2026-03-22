@@ -126,6 +126,9 @@ String _rustTargetTriple(OS os, Architecture architecture) {
   return switch ((os, architecture)) {
     (OS.macOS, Architecture.x64) => 'x86_64-apple-darwin',
     (OS.macOS, Architecture.arm64) => 'aarch64-apple-darwin',
+    (OS.windows, Architecture.arm64) => 'aarch64-pc-windows-msvc',
+    (OS.windows, Architecture.ia32) => 'i686-pc-windows-msvc',
+    (OS.windows, Architecture.x64) => 'x86_64-pc-windows-msvc',
     (OS.linux, Architecture.x64) => 'x86_64-unknown-linux-gnu',
     (OS.linux, Architecture.arm64) => 'aarch64-unknown-linux-gnu',
     (OS.android, Architecture.arm64) => 'aarch64-linux-android',
@@ -212,7 +215,7 @@ Map<String, String> _cargoEnvForTarget({
       File(linkerPath).parent.path,
       File(compilerPath).parent.path,
       Platform.environment['PATH'] ?? '',
-    ].where((element) => element.isNotEmpty).join(':');
+    ].where((element) => element.isNotEmpty).join(_environmentPathSeparator);
   }
 
   if (codeConfig.targetOS == OS.linux) {
@@ -286,8 +289,7 @@ Future<String> _pipeProcessOutput(
 }
 
 Future<void> _ensureDeltachatCrateTypePatched() async {
-  final cargoHome = Platform.environment['CARGO_HOME'] ??
-      _joinPaths(Platform.environment['HOME'], '.cargo');
+  final cargoHome = _cargoHomeDirectory();
   if (cargoHome == null) {
     return;
   }
@@ -336,6 +338,34 @@ Future<void> _ensureDeltachatCrateTypePatched() async {
       }
     }
   }
+}
+
+String? _cargoHomeDirectory() {
+  final cargoHome = Platform.environment['CARGO_HOME'];
+  if (cargoHome != null && cargoHome.isNotEmpty) {
+    return cargoHome;
+  }
+
+  final home = Platform.environment['HOME'];
+  if (home != null && home.isNotEmpty) {
+    return _joinPaths(home, '.cargo');
+  }
+
+  final userProfile = Platform.environment['USERPROFILE'];
+  if (userProfile != null && userProfile.isNotEmpty) {
+    return _joinPaths(userProfile, '.cargo');
+  }
+
+  final homeDrive = Platform.environment['HOMEDRIVE'];
+  final homePath = Platform.environment['HOMEPATH'];
+  if (homeDrive != null &&
+      homeDrive.isNotEmpty &&
+      homePath != null &&
+      homePath.isNotEmpty) {
+    return _joinPaths('$homeDrive$homePath', '.cargo');
+  }
+
+  return null;
 }
 
 String? _joinPaths(String? first, [String? second, String? third]) {
@@ -400,6 +430,8 @@ String? _androidNdkToolchainBinDirectory() {
 
   return null;
 }
+
+String get _environmentPathSeparator => Platform.isWindows ? ';' : ':';
 
 _BuildModeSelection _resolveBuildMode(
     hooks.BuildInput input, List<String> args) {
