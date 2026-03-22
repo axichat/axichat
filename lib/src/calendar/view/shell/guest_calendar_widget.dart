@@ -33,7 +33,9 @@ import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
-  const GuestCalendarWidget({super.key});
+  const GuestCalendarWidget({super.key, this.showBackButton = true});
+
+  final bool showBackButton;
 
   @override
   State<GuestCalendarWidget> createState() => _GuestCalendarWidgetState();
@@ -152,6 +154,7 @@ class _GuestCalendarWidgetState
             children: [
               _GuestBanner(
                 onNavigateBack: _handleBannerBackNavigation,
+                showBackButton: widget.showBackButton,
                 transferMenu: _GuestTransferMenu(state: state),
               ),
               Expanded(child: layout),
@@ -285,10 +288,12 @@ class _GuestCalendarWidgetState
 class _GuestBanner extends StatelessWidget {
   const _GuestBanner({
     required this.onNavigateBack,
+    required this.showBackButton,
     required this.transferMenu,
   });
 
   final Future<void> Function() onNavigateBack;
+  final bool showBackButton;
   final Widget transferMenu;
 
   @override
@@ -316,14 +321,16 @@ class _GuestBanner extends StatelessWidget {
       padding: bannerPadding,
       child: Row(
         children: [
-          AxiIconButton(
-            iconData: Icons.arrow_back,
-            tooltip: context.l10n.calendarBackToLogin,
-            onPressed: () {
-              onNavigateBack();
-            },
-          ),
-          SizedBox(width: spacing.s),
+          if (showBackButton) ...[
+            AxiIconButton(
+              iconData: Icons.arrow_back,
+              tooltip: context.l10n.calendarBackToLogin,
+              onPressed: () {
+                onNavigateBack();
+              },
+            ),
+            SizedBox(width: spacing.s),
+          ],
           Icon(
             Icons.info_outline_rounded,
             size: context.sizing.menuItemIconSize,

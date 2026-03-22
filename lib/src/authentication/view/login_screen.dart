@@ -572,7 +572,7 @@ class _LoginScreenState extends State<LoginScreen>
                         secondaryChild: Stack(
                           fit: StackFit.expand,
                           children: [
-                            const GuestCalendarWidget(),
+                            const GuestCalendarWidget(showBackButton: false),
                             IgnorePointer(
                               child: Align(
                                 alignment: Alignment.centerLeft,
