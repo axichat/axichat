@@ -290,7 +290,7 @@ class _ResolvedSelfAxiAvatarState extends State<_ResolvedSelfAxiAvatar> {
   @override
   void initState() {
     super.initState();
-    _resolveAvatarBytes(clearStaleBytes: true);
+    _resolveAvatarBytes();
   }
 
   @override
