@@ -584,24 +584,22 @@ Future<Map<String, String>> _environmentFromBatchFile(
   }
 
   const separator = '=======delta-ffi-env=======';
-  final scriptPath = batchFile.toFilePath();
-  final command = [
-    'set',
-    'echo $separator',
-    'call ${_cmdQuote(scriptPath)} ${arguments.map(_cmdQuote).join(' ')} > nul',
-    'set',
-  ].join(' && ');
+  final fileName = batchFile.pathSegments.last;
+  final dir = batchFile.resolve('.');
+  final command =
+      'set && echo $separator && $fileName ${arguments.join(' ')} > nul && set';
 
   final processResult = await Process.run(
-    'cmd.exe',
-    ['/d', '/c', command],
-    runInShell: false,
+    command,
+    [],
+    runInShell: true,
+    workingDirectory: dir.toFilePath(),
   );
 
   if (processResult.exitCode != 0) {
     throw ProcessException(
-      'cmd.exe',
-      ['/d', '/c', command],
+      command,
+      const [],
       processResult.stderr?.toString() ?? 'Failed to run developer prompt.',
       processResult.exitCode,
     );
@@ -611,8 +609,8 @@ Future<Map<String, String>> _environmentFromBatchFile(
   final resultSplit = output.split(separator);
   if (resultSplit.length != 2) {
     throw ProcessException(
-      'cmd.exe',
-      ['/d', '/c', command],
+      command,
+      const [],
       'Unexpected output while capturing Windows developer prompt environment.',
       processResult.exitCode,
     );
@@ -705,11 +703,6 @@ String? _matchingEnvironmentKey(
     }
   }
   return null;
-}
-
-String _cmdQuote(String value) {
-  final escaped = value.replaceAll('"', r'\"');
-  return '"$escaped"';
 }
 
 String? _androidNdkToolchainBinDirectory() {
