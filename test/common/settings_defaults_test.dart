@@ -23,8 +23,8 @@ void main() {
       expect(state.autoDownloadArchives, expectAutoDownloadArchives);
     });
 
-    test('keeps send on enter disabled by default', () {
-      expect(state.chatSendOnEnter, isFalse);
+    test('enables send on enter for XMPP by default only', () {
+      expect(state.chatSendOnEnter, isTrue);
       expect(state.emailSendOnEnter, isFalse);
     });
 

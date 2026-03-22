@@ -70,7 +70,7 @@ abstract class SettingsState with _$SettingsState {
     @Default(false) bool notificationPreviewsEnabled,
     @Default(true) bool chatReadReceipts,
     @Default(false) bool emailReadReceipts,
-    @Default(false) bool chatSendOnEnter,
+    @Default(true) bool chatSendOnEnter,
     @Default(false) bool emailSendOnEnter,
     @Default(true) bool emailSendConfirmationEnabled,
     @Default(true) bool indicateTyping,
