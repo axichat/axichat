@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Axichat
-Comment=Free chat+email client
+Comment=Open-source XMPP and email client with calendar
 Exec=axichat
 Icon=im.axi.axichat
 Categories=Network;Chat;InstantMessaging;Email;

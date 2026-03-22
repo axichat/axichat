@@ -1,5 +1,8 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Copyright (C) 2025-present Eliot Lew, Axichat Developers
+// Copyright 2014 The Flutter Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the assets/licenses/flutter_bsd.txt file.
+//
+// Modifications Copyright (C) 2025-present Eliot Lew, Axichat Developers.
 
 import 'dart:math' as math;
 

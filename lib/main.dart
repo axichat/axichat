@@ -164,6 +164,7 @@ void _registerThirdPartyLicenses() {
   const interLicenseAsset = 'assets/licenses/inter_ofl.txt';
   const dmSansLicenseAsset = 'assets/licenses/dmsans_ofl.txt';
   const gabaritoLicenseAsset = 'assets/licenses/gabarito_ofl.txt';
+  const flutterLicenseAsset = 'assets/licenses/flutter_bsd.txt';
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(deltaLicenseAsset);
     yield LicenseEntryWithLineBreaks(['Delta Chat Core (MPL-2.0)'], text);
@@ -183,6 +184,12 @@ void _registerThirdPartyLicenses() {
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(gabaritoLicenseAsset);
     yield LicenseEntryWithLineBreaks(['Gabarito (OFL-1.1)'], text);
+  });
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString(flutterLicenseAsset);
+    yield LicenseEntryWithLineBreaks([
+      'Flutter BSD-3-Clause (local source adaptations)',
+    ], text);
   });
 }
 

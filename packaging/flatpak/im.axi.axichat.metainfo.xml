@@ -2,24 +2,27 @@
 <component type="desktop-application">
   <id>im.axi.axichat</id>
   <name>Axichat</name>
-  <summary>Open-source XMPP and email client with calendar, no FCM or trackers.</summary>
+  <summary>Open-source XMPP and email client with calendar</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-or-later</project_license>
-  <developer_name>Axichat</developer_name>
+  <developer id="chat.axi">
+    <name>Axichat</name>
+  </developer>
   <launchable type="desktop-id">im.axi.axichat.desktop</launchable>
   <url type="homepage">https://axi.chat</url>
   <url type="bugtracker">https://gitlab.com/axichat/axichat/-/issues</url>
   <url type="vcs-browser">https://gitlab.com/axichat/axichat</url>
+  <update_contact>support_AT_axi.chat</update_contact>
   <description>
-    <p>Axichat is an open-source XMPP and email client with a unified inbox, integrated calendar tools, first-party push notifications, and no Firebase, trackers, or vendor lock-in.</p>
-    <p>It combines chat, email, reminders, tasks, and availability sharing in one app so communication and planning stay in the same workflow.</p>
+    <p>Axichat is a free open source SMTP (email) and XMPP (chat) client with cutting-edge UI.</p>
+    <p>You can self-host your own email and XMPP server for Axichat if you want extra privacy and control.</p>
+    <p>Feature highlights:</p>
     <ul>
-      <li>Unified chat and email conversations</li>
-      <li>Group chats, reactions, and delivery/read receipts</li>
-      <li>Integrated calendar, reminders, and tasks</li>
-      <li>Natural-language scheduling and availability sharing</li>
-      <li>No Google, Firebase, or tracker dependencies</li>
+      <li>Unified inbox for chat + email</li>
+      <li>Sync across all your devices (mobile and desktop)</li>
+      <li>Easy drag-and-drop calendar</li>
     </ul>
+    <p>Axichat is still under active development, so things may break. It was not vibe-coded.</p>
   </description>
   <screenshots>
     <screenshot type="default">
