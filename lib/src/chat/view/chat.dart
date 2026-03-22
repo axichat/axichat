@@ -1771,6 +1771,8 @@ class _ChatState extends State<Chat> {
             ? _MessageHtmlWebViewBody(
                 key: ValueKey<String>('${bubbleContentKey}_webview'),
                 html: normalizedHtmlBody,
+                loadingHtml: preparedHtmlBody,
+                textStyle: baseTextStyle,
                 backgroundColor: bubbleColor,
                 textColor: textColor,
                 linkColor: linkColor,

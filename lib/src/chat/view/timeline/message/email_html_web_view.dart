@@ -97,6 +97,7 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.textColor,
     required this.linkColor,
     required this.onLinkTap,
+    this.loadingFallback,
     this.simplifyLayout = false,
     this.useHybridComposition = true,
   }) : _mode = _EmailHtmlWebViewMode.embedded,
@@ -112,6 +113,7 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.textColor,
     required this.linkColor,
     required this.onLinkTap,
+    this.loadingFallback,
     this.simplifyLayout = false,
     this.useHybridComposition = true,
   }) : _mode = _EmailHtmlWebViewMode.scrollable;
@@ -124,6 +126,7 @@ class EmailHtmlWebView extends StatefulWidget {
   final Color textColor;
   final Color linkColor;
   final ValueChanged<String> onLinkTap;
+  final Widget? loadingFallback;
   final bool simplifyLayout;
   final bool useHybridComposition;
   final _EmailHtmlWebViewMode _mode;
@@ -725,143 +728,174 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _scheduleLinuxPlatformViewResize();
     }
 
+    final loadingOverlay = Positioned.fill(
+      child: AbsorbPointer(
+        child: ColoredBox(
+          color: widget.backgroundColor.withValues(alpha: 0.76),
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(spacing.m),
+              child: const AxiProgressIndicator(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final webView = _preparedHtmlData == null
+        ? null
+        : InAppWebView(
+            gestureRecognizers: !widget._usesInternalScroll
+                ? _tapOnlyGestureRecognizers
+                : null,
+            initialData: InAppWebViewInitialData(
+              data: _preparedHtmlData!,
+              baseUrl: _emailWebViewUri,
+              historyUrl: _emailWebViewUri,
+            ),
+            initialSettings: InAppWebViewSettings(
+              // Linux height measurement is driven from the page DOM.
+              javaScriptEnabled: defaultTargetPlatform == TargetPlatform.linux,
+              javaScriptCanOpenWindowsAutomatically: false,
+              supportMultipleWindows: false,
+              allowContentAccess: false,
+              allowFileAccess: false,
+              allowFileAccessFromFileURLs: false,
+              allowUniversalAccessFromFileURLs: false,
+              mediaPlaybackRequiresUserGesture: true,
+              safeBrowsingEnabled: true,
+              transparentBackground: true,
+              useShouldOverrideUrlLoading: true,
+              useHybridComposition: widget.useHybridComposition,
+              supportZoom: true,
+              useWideViewPort: false,
+              loadWithOverviewMode: false,
+              layoutAlgorithm: widget.simplifyLayout
+                  ? LayoutAlgorithm.TEXT_AUTOSIZING
+                  : LayoutAlgorithm.NORMAL,
+              initialScale: 100,
+              textZoom: widget.simplifyLayout ? 125 : 100,
+              minimumFontSize: widget.simplifyLayout ? 17 : 14,
+              minimumLogicalFontSize: widget.simplifyLayout ? 17 : 14,
+              preferredContentMode: UserPreferredContentMode.MOBILE,
+              disableVerticalScroll: !widget._usesInternalScroll,
+              disableHorizontalScroll: !widget._usesInternalScroll,
+              verticalScrollBarEnabled: widget._usesInternalScroll,
+              horizontalScrollBarEnabled: widget._usesInternalScroll,
+            ),
+            onWebViewCreated: (controller) {
+              _controller = controller;
+              _scheduleLinuxPlatformViewResize();
+              if (defaultTargetPlatform == TargetPlatform.linux) {
+                controller.addJavaScriptHandler(
+                  handlerName: _linuxHeightHandlerName,
+                  callback: (arguments) {
+                    if (arguments.isEmpty) {
+                      return null;
+                    }
+                    final value = arguments.first;
+                    if (value is Map) {
+                      final measuredHeight = _parsePositiveDouble(
+                        value['measuredHeight'],
+                      );
+                      if (measuredHeight != null) {
+                        _updateLinuxContentHeightMetrics(
+                          measuredHeight: measuredHeight,
+                          scrollHeight: _parsePositiveDouble(
+                            value['scrollHeight'],
+                          ),
+                          viewportHeight: _parsePositiveDouble(
+                            value['viewportHeight'],
+                          ),
+                        );
+                      }
+                    } else {
+                      final parsed = _parsePositiveDouble(value);
+                      if (parsed != null) {
+                        _updateContentHeight(parsed);
+                      }
+                    }
+                    return null;
+                  },
+                );
+              }
+            },
+            onContentSizeChanged: (controller, oldContentSize, newContentSize) {
+              if (defaultTargetPlatform != TargetPlatform.linux) {
+                _updateContentHeight(newContentSize.height);
+              }
+              _scheduleContentHeightMeasurements();
+            },
+            shouldOverrideUrlLoading: (controller, navigationAction) async {
+              final url = navigationAction.request.url?.toString().trim() ?? '';
+              if (url.isEmpty ||
+                  url == 'about:blank' ||
+                  url.startsWith(_emailWebViewBaseUrl)) {
+                return NavigationActionPolicy.ALLOW;
+              }
+              widget.onLinkTap(url);
+              return NavigationActionPolicy.CANCEL;
+            },
+            onLoadStop: (controller, url) async {
+              await _installLinuxHeightObserver(controller);
+              await _measureContentHeight();
+              _scheduleContentHeightMeasurements();
+              _scheduleLinuxPlatformViewResize();
+              if (!mounted) return;
+              setState(() {
+                _isLoading = false;
+              });
+            },
+            onReceivedError: (controller, request, error) {
+              if (!mounted) return;
+              setState(() {
+                _isLoading = false;
+              });
+            },
+            onReceivedHttpError: (controller, request, errorResponse) {
+              if (!mounted) return;
+              setState(() {
+                _isLoading = false;
+              });
+            },
+          );
+
+    final shouldShowLoadingFallback =
+        widget.loadingFallback != null &&
+        (_isLoading || _preparedHtmlData == null);
+    if (shouldShowLoadingFallback) {
+      return SizedBox(
+        key: _platformViewSizeKey,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            widget.loadingFallback!,
+            if (webView != null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Visibility(
+                    visible: false,
+                    maintainState: true,
+                    maintainAnimation: true,
+                    maintainSize: true,
+                    child: webView,
+                  ),
+                ),
+              ),
+            loadingOverlay,
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
       key: _platformViewSizeKey,
       width: double.infinity,
       height: _resolvedHeight,
       child: Stack(
         children: [
-          if (_preparedHtmlData != null)
-            InAppWebView(
-              gestureRecognizers: !widget._usesInternalScroll
-                  ? _tapOnlyGestureRecognizers
-                  : null,
-              initialData: InAppWebViewInitialData(
-                data: _preparedHtmlData!,
-                baseUrl: _emailWebViewUri,
-                historyUrl: _emailWebViewUri,
-              ),
-              initialSettings: InAppWebViewSettings(
-                // Linux height measurement is driven from the page DOM.
-                javaScriptEnabled:
-                    defaultTargetPlatform == TargetPlatform.linux,
-                javaScriptCanOpenWindowsAutomatically: false,
-                supportMultipleWindows: false,
-                allowContentAccess: false,
-                allowFileAccess: false,
-                allowFileAccessFromFileURLs: false,
-                allowUniversalAccessFromFileURLs: false,
-                mediaPlaybackRequiresUserGesture: true,
-                safeBrowsingEnabled: true,
-                transparentBackground: true,
-                useShouldOverrideUrlLoading: true,
-                useHybridComposition: widget.useHybridComposition,
-                supportZoom: true,
-                useWideViewPort: false,
-                loadWithOverviewMode: false,
-                layoutAlgorithm: widget.simplifyLayout
-                    ? LayoutAlgorithm.TEXT_AUTOSIZING
-                    : LayoutAlgorithm.NORMAL,
-                initialScale: 100,
-                textZoom: widget.simplifyLayout ? 125 : 100,
-                minimumFontSize: widget.simplifyLayout ? 17 : 14,
-                minimumLogicalFontSize: widget.simplifyLayout ? 17 : 14,
-                preferredContentMode: UserPreferredContentMode.MOBILE,
-                disableVerticalScroll: !widget._usesInternalScroll,
-                disableHorizontalScroll: !widget._usesInternalScroll,
-                verticalScrollBarEnabled: widget._usesInternalScroll,
-                horizontalScrollBarEnabled: widget._usesInternalScroll,
-              ),
-              onWebViewCreated: (controller) {
-                _controller = controller;
-                _scheduleLinuxPlatformViewResize();
-                if (defaultTargetPlatform == TargetPlatform.linux) {
-                  controller.addJavaScriptHandler(
-                    handlerName: _linuxHeightHandlerName,
-                    callback: (arguments) {
-                      if (arguments.isEmpty) {
-                        return null;
-                      }
-                      final value = arguments.first;
-                      if (value is Map) {
-                        final measuredHeight = _parsePositiveDouble(
-                          value['measuredHeight'],
-                        );
-                        if (measuredHeight != null) {
-                          _updateLinuxContentHeightMetrics(
-                            measuredHeight: measuredHeight,
-                            scrollHeight: _parsePositiveDouble(
-                              value['scrollHeight'],
-                            ),
-                            viewportHeight: _parsePositiveDouble(
-                              value['viewportHeight'],
-                            ),
-                          );
-                        }
-                      } else {
-                        final parsed = _parsePositiveDouble(value);
-                        if (parsed != null) {
-                          _updateContentHeight(parsed);
-                        }
-                      }
-                      return null;
-                    },
-                  );
-                }
-              },
-              onContentSizeChanged:
-                  (controller, oldContentSize, newContentSize) {
-                    if (defaultTargetPlatform != TargetPlatform.linux) {
-                      _updateContentHeight(newContentSize.height);
-                    }
-                    _scheduleContentHeightMeasurements();
-                  },
-              shouldOverrideUrlLoading: (controller, navigationAction) async {
-                final url =
-                    navigationAction.request.url?.toString().trim() ?? '';
-                if (url.isEmpty ||
-                    url == 'about:blank' ||
-                    url.startsWith(_emailWebViewBaseUrl)) {
-                  return NavigationActionPolicy.ALLOW;
-                }
-                widget.onLinkTap(url);
-                return NavigationActionPolicy.CANCEL;
-              },
-              onLoadStop: (controller, url) async {
-                await _installLinuxHeightObserver(controller);
-                await _measureContentHeight();
-                _scheduleContentHeightMeasurements();
-                _scheduleLinuxPlatformViewResize();
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-              onReceivedError: (controller, request, error) {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-              onReceivedHttpError: (controller, request, errorResponse) {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-            ),
-          if (_isLoading || _preparedHtmlData == null)
-            Positioned.fill(
-              child: ColoredBox(
-                color: context.colorScheme.card,
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(spacing.m),
-                    child: const AxiProgressIndicator(),
-                  ),
-                ),
-              ),
-            ),
+          ?webView,
+          if (_isLoading || _preparedHtmlData == null) loadingOverlay,
         ],
       ),
     );

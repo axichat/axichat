@@ -153,6 +153,8 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   const _MessageHtmlWebViewBody({
     super.key,
     required this.html,
+    required this.loadingHtml,
+    required this.textStyle,
     required this.backgroundColor,
     required this.textColor,
     required this.linkColor,
@@ -161,6 +163,8 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   });
 
   final String html;
+  final String loadingHtml;
+  final TextStyle textStyle;
   final Color backgroundColor;
   final Color textColor;
   final Color linkColor;
@@ -179,6 +183,14 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
         backgroundColor: backgroundColor,
         textColor: textColor,
         linkColor: linkColor,
+        loadingFallback: _MessageHtmlBody(
+          html: loadingHtml,
+          textStyle: textStyle,
+          textColor: textColor,
+          linkColor: linkColor,
+          shouldLoadImages: false,
+          onLinkTap: onLinkTap,
+        ),
         simplifyLayout: true,
         onLinkTap: onLinkTap,
       ),

@@ -130,6 +130,12 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 HtmlContentCodec.containsBlockedWebViewContent(
                   normalizedHtmlBody,
                 );
+            final String preparedHtmlBody = hasHtmlBody
+                ? HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+                    normalizedHtmlBody,
+                    allowRemoteImages: false,
+                  )
+                : '';
             final String? fallbackBodyText = switch (message.body?.trim()) {
               final String text when text.isNotEmpty => text,
               _ => null,
@@ -264,6 +270,17 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                               backgroundColor: context.colorScheme.card,
                               textColor: context.colorScheme.foreground,
                               linkColor: context.colorScheme.primary,
+                              loadingFallback: preparedHtmlBody.trim().isEmpty
+                                  ? null
+                                  : _MessageHtmlBody(
+                                      html: preparedHtmlBody,
+                                      textStyle: textTheme.lead,
+                                      textColor: context.colorScheme.foreground,
+                                      linkColor: context.colorScheme.primary,
+                                      shouldLoadImages: false,
+                                      onLinkTap: (url) =>
+                                          _handleLinkTap(context, url),
+                                    ),
                               simplifyLayout: true,
                               minHeight: context.sizing.attachmentPreviewExtent,
                               onLinkTap: (url) => _handleLinkTap(context, url),
