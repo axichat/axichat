@@ -39,6 +39,13 @@ const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
 
 enum MessageNotificationChannel { chat, email }
 
+enum ReminderSchedulingPermissionRequestResult {
+  granted,
+  denied,
+  unavailable,
+  failed,
+}
+
 class NotificationStrings {
   const NotificationStrings({
     required this.channelMessages,
@@ -139,6 +146,11 @@ class NotificationService {
       Platform.isIOS ||
       Platform.isMacOS ||
       Platform.isWindows;
+  AndroidFlutterLocalNotificationsPlugin? get _androidNotificationsPlugin =>
+      _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
@@ -280,6 +292,70 @@ class NotificationService {
       );
       mute = true;
       return false;
+    }
+  }
+
+  Future<bool> hasReminderSchedulingPermission() async {
+    if (!Platform.isAndroid) {
+      return true;
+    }
+    try {
+      return await Permission.scheduleExactAlarm.isGranted;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Exact alarm permission plugin unavailable; reminder scheduling may be degraded.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  Future<ReminderSchedulingPermissionRequestResult>
+  requestReminderSchedulingPermission({
+    bool openSettingsFallback = false,
+  }) async {
+    if (!Platform.isAndroid) {
+      return ReminderSchedulingPermissionRequestResult.granted;
+    }
+    try {
+      if (await Permission.scheduleExactAlarm.isGranted) {
+        return ReminderSchedulingPermissionRequestResult.granted;
+      }
+
+      final granted = await _androidNotificationsPlugin
+          ?.requestExactAlarmsPermission();
+      if (granted == true || await Permission.scheduleExactAlarm.isGranted) {
+        return ReminderSchedulingPermissionRequestResult.granted;
+      }
+
+      if (!openSettingsFallback) {
+        return ReminderSchedulingPermissionRequestResult.denied;
+      }
+
+      await AppSettings.openAppSettings(
+        type: AppSettingsType.alarm,
+        asAnotherTask: true,
+      );
+      return await Permission.scheduleExactAlarm.isGranted
+          ? ReminderSchedulingPermissionRequestResult.granted
+          : ReminderSchedulingPermissionRequestResult.denied;
+    } on PlatformException catch (error, stackTrace) {
+      _log.warning(
+        'Exact alarm permission request failed; reminder scheduling may be degraded.',
+        error,
+        stackTrace,
+      );
+      return await Permission.scheduleExactAlarm.isGranted
+          ? ReminderSchedulingPermissionRequestResult.granted
+          : ReminderSchedulingPermissionRequestResult.failed;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Exact alarm permission plugin unavailable while requesting reminder scheduling permission.',
+        error,
+        stackTrace,
+      );
+      return ReminderSchedulingPermissionRequestResult.unavailable;
     }
   }
 
@@ -459,6 +535,19 @@ class NotificationService {
     final scheduledLocal = scheduledAt.toLocal();
     if (_schedulingUnsupported || !_supportsPlatformScheduling) {
       _markSchedulingUnsupported();
+      await _scheduleInAppTimer(
+        id: id,
+        scheduledAt: scheduledLocal,
+        title: title,
+        body: body,
+        payload: payload,
+      );
+      return;
+    }
+    if (Platform.isAndroid && !await hasReminderSchedulingPermission()) {
+      _log.warning(
+        'Exact alarm permission denied; using in-app reminder fallback until alarms & reminders access is granted.',
+      );
       await _scheduleInAppTimer(
         id: id,
         scheduledAt: scheduledLocal,

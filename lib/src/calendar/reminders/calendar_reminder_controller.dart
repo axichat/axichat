@@ -23,6 +23,7 @@ class CalendarReminderController {
   final NotificationService _notificationService;
   final DateTime Function() _now;
   final Map<String, Set<int>> _scheduledIdsByEntry = {};
+  bool _reminderSchedulingPermissionRequestedThisSession = false;
   AppLocalizations? _localizations;
 
   AppLocalizations get _l10n =>
@@ -55,13 +56,28 @@ class CalendarReminderController {
       await _cancelEntry(key);
     }
 
+    await _ensureReminderSchedulingPermission(subjects.values);
+
+    final AppLocalizations l10n = _l10n;
+    final DateTime now = _now();
+
     for (final MapEntry<String, _ReminderSubject> entry in subjects.entries) {
       final _ReminderSubject subject = entry.value;
       if (subject.task?.isCompleted == true) {
         await _cancelEntry(entry.key);
         continue;
       }
-      await _scheduleRemindersFor(entry.key, entry.value);
+      final List<_ScheduledReminder> reminders = _reminderScheduleForSubject(
+        subject,
+        now,
+        l10n,
+      );
+      await _scheduleRemindersFor(
+        entry.key,
+        subject,
+        reminders: reminders,
+        now: now,
+      );
     }
   }
 
@@ -77,17 +93,11 @@ class CalendarReminderController {
 
   Future<void> _scheduleRemindersFor(
     String entryKey,
-    _ReminderSubject subject,
-  ) async {
+    _ReminderSubject subject, {
+    required List<_ScheduledReminder> reminders,
+    required DateTime now,
+  }) async {
     await _cancelEntry(entryKey);
-
-    final AppLocalizations l10n = _l10n;
-    final DateTime now = _now();
-    final List<_ScheduledReminder> reminders = subject.when(
-      task: (CalendarTask task) => _reminderScheduleForTask(task, now, l10n),
-      dayEvent: (DayEvent event) =>
-          _reminderScheduleForDayEvent(event, now, l10n),
-    );
     if (reminders.isEmpty) {
       return;
     }
@@ -114,6 +124,40 @@ class CalendarReminderController {
     } else {
       _scheduledIdsByEntry[entryKey] = scheduledIds;
     }
+  }
+
+  Future<void> _ensureReminderSchedulingPermission(
+    Iterable<_ReminderSubject> subjects,
+  ) async {
+    final AppLocalizations l10n = _l10n;
+    final DateTime now = _now();
+    final bool hasFutureReminders = subjects.any((_ReminderSubject subject) {
+      if (subject.task?.isCompleted == true) {
+        return false;
+      }
+      return _reminderScheduleForSubject(subject, now, l10n).isNotEmpty;
+    });
+    if (!hasFutureReminders) {
+      return;
+    }
+
+    if (await _notificationService.hasReminderSchedulingPermission()) {
+      _reminderSchedulingPermissionRequestedThisSession = false;
+      return;
+    }
+    if (_reminderSchedulingPermissionRequestedThisSession) {
+      return;
+    }
+
+    _reminderSchedulingPermissionRequestedThisSession = true;
+    final ReminderSchedulingPermissionRequestResult result =
+        await _notificationService.requestReminderSchedulingPermission();
+    _reminderSchedulingPermissionRequestedThisSession = switch (result) {
+      ReminderSchedulingPermissionRequestResult.granted => false,
+      ReminderSchedulingPermissionRequestResult.denied => true,
+      ReminderSchedulingPermissionRequestResult.unavailable => true,
+      ReminderSchedulingPermissionRequestResult.failed => false,
+    };
   }
 
   Future<void> _cancelEntry(String entryKey) async {
@@ -179,6 +223,18 @@ class CalendarReminderController {
 
     reminders.sort((a, b) => a.time.compareTo(b.time));
     return reminders;
+  }
+
+  List<_ScheduledReminder> _reminderScheduleForSubject(
+    _ReminderSubject subject,
+    DateTime now,
+    AppLocalizations l10n,
+  ) {
+    return subject.when(
+      task: (CalendarTask task) => _reminderScheduleForTask(task, now, l10n),
+      dayEvent: (DayEvent event) =>
+          _reminderScheduleForDayEvent(event, now, l10n),
+    );
   }
 
   List<_ScheduledReminder> _reminderScheduleForDayEvent(

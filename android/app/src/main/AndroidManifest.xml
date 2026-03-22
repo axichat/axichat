@@ -13,6 +13,9 @@
     <!-- Required for Android 13+ user-visible message notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Calendar reminders use exact alarms so Android 14+ can require the user
+         to grant alarms & reminders access. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:label="@string/app_name"
@@ -67,6 +70,19 @@
             android:foregroundServiceType="dataSync|remoteMessaging"
             android:exported="false"
             android:stopWithTask="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
         <meta-data
             android:name="im.axi.axichat.APP_ICON"
             android:resource="@mipmap/ic_launcher" />

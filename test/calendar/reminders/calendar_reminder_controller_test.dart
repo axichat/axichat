@@ -87,6 +87,14 @@ void main() {
       when(
         () => notificationService.cancelNotification(any()),
       ).thenAnswer((_) async {});
+      when(
+        () => notificationService.hasReminderSchedulingPermission(),
+      ).thenAnswer((_) async => true);
+      when(
+        () => notificationService.requestReminderSchedulingPermission(),
+      ).thenAnswer(
+        (_) async => ReminderSchedulingPermissionRequestResult.granted,
+      );
     });
 
     test('schedules start and deadline reminders for tasks', () async {
@@ -203,5 +211,113 @@ void main() {
 
       verify(() => notificationService.refreshTimeZone()).called(2);
     });
+
+    test(
+      'requests exact alarm access once when future reminders exist and permission is missing',
+      () async {
+        final CalendarReminderController controller =
+            CalendarReminderController(
+              notificationService: notificationService,
+              now: () => DateTime(2024, 1, 10, 8),
+            );
+        final CalendarTask task = CalendarTask.create(
+          title: 'Planning session',
+          scheduledTime: DateTime(2024, 1, 10, 12),
+          reminders: _taskReminderPreferences,
+        );
+
+        when(
+          () => notificationService.hasReminderSchedulingPermission(),
+        ).thenAnswer((_) async => false);
+        when(
+          () => notificationService.requestReminderSchedulingPermission(),
+        ).thenAnswer(
+          (_) async => ReminderSchedulingPermissionRequestResult.denied,
+        );
+
+        await controller.syncWithTasks(<CalendarTask>[task]);
+        await controller.syncWithTasks(<CalendarTask>[task]);
+
+        verify(
+          () => notificationService.requestReminderSchedulingPermission(),
+        ).called(1);
+      },
+    );
+
+    test(
+      'retries exact alarm access after a transient request failure',
+      () async {
+        final CalendarReminderController controller =
+            CalendarReminderController(
+              notificationService: notificationService,
+              now: () => DateTime(2024, 1, 10, 8),
+            );
+        final CalendarTask task = CalendarTask.create(
+          title: 'Planning session',
+          scheduledTime: DateTime(2024, 1, 10, 12),
+          reminders: _taskReminderPreferences,
+        );
+        var requestCount = 0;
+
+        when(
+          () => notificationService.hasReminderSchedulingPermission(),
+        ).thenAnswer((_) async => false);
+        when(
+          () => notificationService.requestReminderSchedulingPermission(),
+        ).thenAnswer((_) async {
+          requestCount += 1;
+          return requestCount == 1
+              ? ReminderSchedulingPermissionRequestResult.failed
+              : ReminderSchedulingPermissionRequestResult.denied;
+        });
+
+        await controller.syncWithTasks(<CalendarTask>[task]);
+        await controller.syncWithTasks(<CalendarTask>[task]);
+
+        verify(
+          () => notificationService.requestReminderSchedulingPermission(),
+        ).called(2);
+      },
+    );
+
+    test(
+      'recomputes reminder times after exact alarm permission flow returns',
+      () async {
+        DateTime currentNow = DateTime(2024, 1, 10, 8);
+        final CalendarReminderController controller =
+            CalendarReminderController(
+              notificationService: notificationService,
+              now: () => currentNow,
+            );
+        final CalendarTask task = CalendarTask.create(
+          title: 'Planning session',
+          scheduledTime: DateTime(2024, 1, 10, 12),
+          reminders: _taskReminderPreferences,
+        );
+
+        when(
+          () => notificationService.hasReminderSchedulingPermission(),
+        ).thenAnswer((_) async => false);
+        when(
+          () => notificationService.requestReminderSchedulingPermission(),
+        ).thenAnswer((_) async {
+          currentNow = DateTime(2024, 1, 10, 11, 31);
+          return ReminderSchedulingPermissionRequestResult.granted;
+        });
+
+        await controller.syncWithTasks(<CalendarTask>[task]);
+
+        expect(
+          scheduledTimes,
+          containsAll(<DateTime>[
+            DateTime(2024, 1, 10, 11, 45),
+            DateTime(2024, 1, 10, 12),
+          ]),
+        );
+        expect(scheduledTimes, isNot(contains(DateTime(2024, 1, 10, 10))));
+        expect(scheduledTimes, isNot(contains(DateTime(2024, 1, 10, 11))));
+        expect(scheduledTimes, isNot(contains(DateTime(2024, 1, 10, 11, 30))));
+      },
+    );
   });
 }
