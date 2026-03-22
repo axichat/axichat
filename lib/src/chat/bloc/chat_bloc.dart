@@ -439,6 +439,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Set<String> _trackedFileMetadataIds = const <String>{};
   var _fileMetadataRetryAttempts = _emptyMessageCount;
   var _fileMetadataSubscriptionCancelling = false;
+  var _isClosing = false;
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   ChatMessageKey? _emailSyncComposerMessage;
@@ -1361,26 +1362,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _subscribeToPinnedMessages(Chat chat) async {
+    if (_isClosing || isClosed) {
+      return;
+    }
     final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
     final previousSubscription = _pinnedSubscription;
     _pinnedSubscription = null;
     await _detachAndCancelSubscription(previousSubscription);
-    if (isClosed) return;
+    if (_isClosing || isClosed) return;
     if (trimmedChatJid == null) {
       _pinnedSubscription = null;
       return;
     }
-    final emailService = _emailService;
-    final useEmailService = chat.isEmailBacked;
-    if (useEmailService && emailService != null) {
-      _pinnedSubscription = emailService
-          .pinnedMessagesStream(trimmedChatJid)
-          .listen((items) => add(_PinnedMessagesUpdated(items)));
-    } else {
-      _pinnedSubscription = _messageService
-          .pinnedMessagesStream(trimmedChatJid)
-          .listen((items) => add(_PinnedMessagesUpdated(items)));
-    }
+    _pinnedSubscription = _messageService
+        .pinnedMessagesStream(trimmedChatJid)
+        .listen((items) => add(_PinnedMessagesUpdated(items)));
     await _syncPinnedMessagesForChat(chat);
   }
 
@@ -1408,7 +1404,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chatJid == null) {
       return;
     }
-    if (!_xmppAllowedForChat(chat)) {
+    if (chat.isAxichatWelcomeThread) {
       return;
     }
     try {
@@ -1433,6 +1429,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   @override
   Future<void> close() async {
+    _isClosing = true;
     await _detachAndCancelSubscription(_chatSubscription);
     final messageSubscription = _messageSubscription;
     _messageSubscription = null;
@@ -1488,6 +1485,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatUpdated event,
     Emitter<ChatState> emit,
   ) async {
+    if (_isClosing || isClosed) {
+      return;
+    }
     final previousChat = state.chat;
     final resetContext = previousChat?.jid != event.chat.jid;
     final typingContextChanged =
@@ -3356,9 +3356,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _XmppConnectionStateChanged event,
     Emitter<ChatState> emit,
   ) async {
+    if (_isClosing || isClosed) {
+      return;
+    }
     final stateChanged = state.xmppConnectionState != event.state;
     if (stateChanged) {
       emit(state.copyWith(xmppConnectionState: event.state));
+    }
+    if (_isClosing || isClosed) {
+      return;
     }
     final chat = state.chat;
     if (event.state != ConnectionState.connected || chat == null) {
@@ -3366,11 +3372,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (chat.type == ChatType.groupChat) {
       await _ensureMucMembership(chat);
+      if (_isClosing || isClosed) {
+        return;
+      }
     }
-    if (!_xmppAllowedForChat(chat)) {
-      return;
+    if (_xmppAllowedForChat(chat)) {
+      await _catchUpFromMam();
+      if (_isClosing || isClosed) {
+        return;
+      }
     }
-    await _catchUpFromMam();
     await _syncPinnedMessagesForChat(chat);
   }
 

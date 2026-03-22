@@ -3485,11 +3485,22 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) =>
-      createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
-        watchFunction: (db) async => db.watchPinnedMessages(chatJid),
-        getFunction: (db) => db.getPinnedMessages(chatJid),
+  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) async* {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      yield const <PinnedMessageEntry>[];
+      return;
+    }
+    setPinSyncActiveForChat(normalizedChat, active: true);
+    try {
+      yield* createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
+        watchFunction: (db) async => db.watchPinnedMessages(normalizedChat),
+        getFunction: (db) => db.getPinnedMessages(normalizedChat),
       );
+    } finally {
+      setPinSyncActiveForChat(normalizedChat, active: false);
+    }
+  }
 
   _PinChatSyncSession _pinSyncSession(String chatJid) =>
       _pinChatSyncSessions.putIfAbsent(chatJid, _PinChatSyncSession.new);
@@ -3666,6 +3677,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return _pinSyncSessionOrNull(normalizedChat)?.authorizedPublishers;
   }
 
+  void setPinSyncActiveForChat(String chatJid, {required bool active}) {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    if (active) {
+      _activePinSyncChats.add(normalizedChat);
+      return;
+    }
+    _activePinSyncChats.remove(normalizedChat);
+  }
+
+  bool _isPinSyncActiveForChat(String chatJid) {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return false;
+    }
+    return _activePinSyncChats.contains(normalizedChat);
+  }
+
   bool _isPinPublisherAllowed({
     required Set<String>? allowedPublishers,
     required Set<String> pendingPublishes,
@@ -3788,6 +3819,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<void> syncPinnedMessagesForChat(String chatJid) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
     if (normalizedChat == null) {
+      return;
+    }
+    if (!_isPinSyncActiveForChat(normalizedChat)) {
       return;
     }
     if (isAxichatWelcomeThreadJid(normalizedChat)) {
@@ -3938,6 +3972,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       );
   bool _pendingPinSyncLoaded = false;
   final Map<String, _PinChatSyncSession> _pinChatSyncSessions = {};
+  final Set<String> _activePinSyncChats = <String>{};
   final Map<String, Map<String, Map<String, _PendingInboundReaction>>>
   _pendingInboundReactionsByChatAndReference = {};
   final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
@@ -11032,6 +11067,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   bool _shouldProcessPinSyncEvent(String chatJid) {
+    if (!_isPinSyncActiveForChat(chatJid)) {
+      return false;
+    }
     if (_pinSyncRateLimiter.allowEvent()) {
       return true;
     }
@@ -11048,6 +11086,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final nodeId = event.item.node;
     final chatJid = _chatJidFromPinNode(nodeId);
     if (chatJid == null) return;
+    if (!_isPinSyncActiveForChat(chatJid)) return;
     final syncSession = _pinSyncSession(chatJid);
     final context = await _resolvePinNodeContext(chatJid);
     _cachePinAuthorizedPublishers(chatJid, context);
@@ -11113,6 +11152,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<void> _handlePinRetraction(mox.PubSubItemsRetractedEvent event) async {
     final chatJid = _chatJidFromPinNode(event.node);
     if (chatJid == null) return;
+    if (!_isPinSyncActiveForChat(chatJid)) return;
     final syncSession = _pinSyncSession(chatJid);
     final context = await _resolvePinNodeContext(chatJid);
     if (!_usesPubSubPinSync(context)) {
@@ -11610,6 +11650,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (normalizedChat == null) {
       return;
     }
+    if (!_isPinSyncActiveForChat(normalizedChat)) {
+      return;
+    }
     final syncSession = _pinSyncSession(normalizedChat);
     final context = await _resolvePinNodeContext(normalizedChat);
     if (!_usesPubSubPinSync(context)) {
@@ -11833,6 +11876,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     final accountJid = myJid;
     if (accountJid == null) {
+      return false;
+    }
+    if (!_isPinSyncActiveForChat(chatJid)) {
       return false;
     }
     final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);

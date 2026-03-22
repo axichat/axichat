@@ -3263,6 +3263,7 @@ void main() {
         isPresent: true,
         fromPresence: true,
       );
+      xmppService.setPinSyncActiveForChat(roomJid, active: true);
 
       await xmppService.pinMessage(chatJid: roomJid, message: message);
 
@@ -3341,6 +3342,7 @@ void main() {
           isPresent: true,
           fromPresence: true,
         );
+        xmppService.setPinSyncActiveForChat(roomJid, active: true);
 
         await xmppService.pinMessage(chatJid: roomJid, message: message);
 
@@ -3389,6 +3391,7 @@ void main() {
         chatType: ChatType.groupChat,
         selfJid: xmppService.myJid,
       );
+      xmppService.setPinSyncActiveForChat(roomJid, active: true);
 
       await xmppService.pinMessage(chatJid: roomJid, message: message);
 

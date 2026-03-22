@@ -1279,13 +1279,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       return false;
     }
 
-    final String condition = conditionData?.condition ?? '';
-    final String? errorType = conditionData?.type;
-    if (condition == _errorConditionNotAcceptable &&
-        _matchesStanzaErrorType(errorType, _errorTypeModify)) {
-      return true;
-    }
-
     final bool pendingConfig = _instantRoomPending(key);
     if (pendingConfig) return true;
     if (room.roomCreated) return true;

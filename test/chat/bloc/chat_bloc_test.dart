@@ -1796,6 +1796,53 @@ void main() {
     await bloc.close();
   });
 
+  test('email chat syncs pins while open', () async {
+    final emailService = MockEmailService();
+    final emailMessageStreamController =
+        StreamController<List<Message>>.broadcast();
+    _mockEmailSync(emailService);
+
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 4,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+    );
+
+    when(
+      () => emailService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => emailMessageStreamController.stream);
+    when(
+      () => emailService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(emailChat);
+    emailMessageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verify(
+      () => messageService.syncPinnedMessagesForChat(emailChat.jid),
+    ).called(1);
+
+    await bloc.close();
+    await emailMessageStreamController.close();
+  });
+
   test('welcome chat typing never sends chat-state traffic', () async {
     final bloc = ChatBloc(
       jid: welcomeChat.jid,
@@ -4059,6 +4106,108 @@ void main() {
       ).called(1);
 
       await bloc.close();
+      await connectivityController.close();
+    },
+  );
+
+  test(
+    'closing during reconnect catch-up does not sync pins afterward',
+    () async {
+      final xmppService = MockXmppService();
+      final connectivityController =
+          StreamController<xmpp.ConnectionState>.broadcast();
+      final catchUpCompleter = Completer<void>();
+
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(xmpp.ConnectionState.notConnected);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => connectivityController.stream);
+      when(
+        () => xmppService.httpUploadSupportStream,
+      ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+      when(
+        () => xmppService.httpUploadSupport,
+      ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+      when(
+        () => xmppService.createChatArchiveSession(),
+      ).thenReturn('xmpp-session-1');
+      when(
+        () => xmppService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => messageStreamController.stream);
+      when(
+        () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          filter: any(named: 'filter'),
+          visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.catchUpChatFromMamOnConnectForSession(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          filter: any(named: 'filter'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) => catchUpCompleter.future);
+      when(
+        () => xmppService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      when(
+        () => xmppService.syncPinnedMessagesForChat(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.resolvePeerCapabilities(
+          jid: any(named: 'jid'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+      when(
+        () => xmppService.prefetchAvatarForJid(initialChat.jid),
+      ).thenAnswer((_) async {});
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: xmppService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(xmppService);
+
+      connectivityController.add(xmpp.ConnectionState.connected);
+      await _pumpBloc();
+
+      await bloc.close();
+      catchUpCompleter.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => xmppService.catchUpChatFromMamOnConnectForSession(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          filter: any(named: 'filter'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).called(1);
+      verifyNever(() => xmppService.syncPinnedMessagesForChat(any()));
+
       await connectivityController.close();
     },
   );
