@@ -107,6 +107,7 @@ class NotificationService {
   bool _tzDataLoaded = false;
   String? _lastTimeZoneName;
   bool _schedulingUnsupported = false;
+  bool _launchDetailsUnsupported = false;
   final Map<int, Timer> _inAppTimers = {};
   Completer<void>? _initializationCompleter;
   bool _foregroundCheckUnavailable = false;
@@ -141,6 +142,8 @@ class NotificationService {
 
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
+  static const String _unsupportedLaunchDetailsMessage =
+      'Notification launch details are unavailable on this platform; skipping notification launch handling.';
 
   NotificationStrings get _l10n =>
       _strings ?? const NotificationStrings.empty();
@@ -158,7 +161,7 @@ class NotificationService {
   Future<NotificationAppLaunchDetails?>
   getAppNotificationAppLaunchDetails() async {
     await _ensureInitialized();
-    return _plugin.getNotificationAppLaunchDetails();
+    return _getNotificationAppLaunchDetails();
   }
 
   Future<void> _ensureInitialized() async {
@@ -204,18 +207,10 @@ class NotificationService {
 
       await _ensureTimeZones(force: true);
 
-      try {
-        final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-        if (launchDetails?.didNotificationLaunchApp == true) {
-          final payload = launchDetails?.notificationResponse?.payload;
-          recordNotificationLaunch(payload);
-        }
-      } on UnimplementedError catch (error, stackTrace) {
-        _log.warning(
-          'Notification launch details unsupported on this platform.',
-          error,
-          stackTrace,
-        );
+      final launchDetails = await _getNotificationAppLaunchDetails();
+      if (launchDetails?.didNotificationLaunchApp == true) {
+        final payload = launchDetails?.notificationResponse?.payload;
+        recordNotificationLaunch(payload);
       }
 
       _initialized = true;
@@ -515,6 +510,27 @@ class NotificationService {
     }
     _schedulingUnsupported = true;
     _log.warning(_unsupportedSchedulingMessage, error, stackTrace);
+  }
+
+  Future<NotificationAppLaunchDetails?>
+  _getNotificationAppLaunchDetails() async {
+    if (_launchDetailsUnsupported) {
+      return null;
+    }
+    try {
+      return await _plugin.getNotificationAppLaunchDetails();
+    } on UnimplementedError catch (error, stackTrace) {
+      _markLaunchDetailsUnsupported(error: error, stackTrace: stackTrace);
+      return null;
+    }
+  }
+
+  void _markLaunchDetailsUnsupported({Object? error, StackTrace? stackTrace}) {
+    if (_launchDetailsUnsupported) {
+      return;
+    }
+    _launchDetailsUnsupported = true;
+    _log.warning(_unsupportedLaunchDetailsMessage, error, stackTrace);
   }
 
   Future<void> _scheduleInAppTimer({

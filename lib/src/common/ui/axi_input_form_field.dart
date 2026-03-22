@@ -4,7 +4,8 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart' hide SpellCheckConfiguration;
+import 'package:flutter/material.dart'
+    hide SpellCheckConfiguration;
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
