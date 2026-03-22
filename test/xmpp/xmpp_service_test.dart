@@ -11,6 +11,7 @@ import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -18,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:moxxmpp/src/managers/attributes.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
@@ -195,6 +197,166 @@ class FailingAvatarPubSubManager extends RecordingAvatarPubSubManager {
     publishCount += 1;
     return moxlib.Result(mox.UnknownPubSubError());
   }
+}
+
+class RecordingSettingsPubSubTransport extends PubSubManager {
+  int publishCount = 0;
+  int subscribeCount = 0;
+  final Map<String, mox.XMLNode> publishedItems = <String, mox.XMLNode>{};
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> configureNode(
+    mox.JID jid,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async => const moxlib.Result(true);
+
+  @override
+  Future<String?> createNode(mox.JID jid, {String? nodeId}) async =>
+      nodeId ?? 'created-node';
+
+  @override
+  Future<String?> createNodeWithConfig(
+    mox.JID jid,
+    mox.NodeConfig config, {
+    String? nodeId,
+  }) async => nodeId ?? 'created-node';
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.SubscriptionInfo>> subscribe(
+    mox.JID jid,
+    String node,
+  ) async {
+    subscribeCount += 1;
+    return moxlib.Result(
+      mox.SubscriptionInfo(
+        jid: jid.toBare().toString(),
+        node: node,
+        state: mox.SubscriptionState.subscribed,
+      ),
+    );
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> publish(
+    mox.JID jid,
+    String node,
+    mox.XMLNode payload, {
+    String? id,
+    mox.PubSubPublishOptions? options,
+    bool autoCreate = false,
+    mox.NodeConfig? createNodeConfig,
+  }) async {
+    publishCount += 1;
+    final itemId = id ?? 'item-$publishCount';
+    publishedItems['$node|$itemId'] = payload;
+    return const moxlib.Result(true);
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
+    mox.JID jid,
+    String node,
+    String id, {
+    String? subId,
+  }) async {
+    final payload = publishedItems['$node|$id'];
+    if (payload == null) {
+      return moxlib.Result(mox.ItemNotFoundError());
+    }
+    return moxlib.Result(mox.PubSubItem(id: id, node: node, payload: payload));
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>> getItems(
+    mox.JID jid,
+    String node, {
+    int? maxItems,
+    String? subId,
+  }) async {
+    final items = publishedItems.entries
+        .where((entry) => entry.key.startsWith('$node|'))
+        .map(
+          (entry) => mox.PubSubItem(
+            id: entry.key.split('|').last,
+            node: node,
+            payload: entry.value,
+          ),
+        )
+        .toList(growable: false);
+    if (items.isEmpty) {
+      return moxlib.Result(mox.ItemNotFoundError());
+    }
+    if (maxItems == null || items.length <= maxItems) {
+      return moxlib.Result(items);
+    }
+    return moxlib.Result(items.take(maxItems).toList(growable: false));
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> retract(
+    mox.JID host,
+    String node,
+    String itemId, {
+    bool notify = false,
+    String? reason,
+  }) async {
+    publishedItems.remove('$node|$itemId');
+    return const moxlib.Result(true);
+  }
+}
+
+Future<SettingsPubSubManager> registerSettingsPubSubManager({
+  required XmppConnection connection,
+  required PubSubManager pubSubManager,
+}) async {
+  T? lookupManagerById<T extends mox.XmppManagerBase>(String id) {
+    if (id == mox.pubsubManager) {
+      return pubSubManager as T;
+    }
+    return null;
+  }
+
+  final attributes = XmppManagerAttributes(
+    sendStanza: (details) async => await connection.sendStanza(details),
+    sendNonza: (_) {},
+    getManagerById: lookupManagerById,
+    sendEvent: (_) {},
+    getConnectionSettings: () => connection.connectionSettings,
+    getFullJID: () => connection.connectionSettings.jid,
+    getSocket: () => connection.socketWrapper,
+    getConnection: () => connection,
+    getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(String _) =>
+        null,
+  );
+
+  pubSubManager.register(attributes);
+  if (!pubSubManager.initialized) {
+    await pubSubManager.postRegisterCallback();
+  }
+
+  final settingsManager = SettingsPubSubManager()..register(attributes);
+  await settingsManager.postRegisterCallback();
+  return settingsManager;
+}
+
+void stubSettingsSyncStateStore(Map<String, Object?> storeData) {
+  when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+    invocation,
+  ) {
+    final key = invocation.namedArguments[#key]! as RegisteredStateKey;
+    return storeData[key.value];
+  });
+  when(
+    () => mockStateStore.write(
+      key: any(named: 'key'),
+      value: any(named: 'value'),
+    ),
+  ).thenAnswer((invocation) async {
+    final key = invocation.namedArguments[#key]! as RegisteredStateKey;
+    storeData[key.value] = invocation.namedArguments[#value];
+    return true;
+  });
 }
 
 void main() {
@@ -3039,4 +3201,193 @@ void main() {
       await xmppService.close();
     },
   );
+
+  group('Settings sync', () {
+    late Map<String, Object?> storeData;
+    late RecordingSettingsPubSubTransport pubSubTransport;
+    late SettingsPubSubManager settingsManager;
+
+    setUp(() async {
+      storeData = <String, Object?>{};
+      stubSettingsSyncStateStore(storeData);
+
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(xmppService);
+      stubSettingsSyncStateStore(storeData);
+
+      pubSubTransport = RecordingSettingsPubSubTransport();
+      settingsManager = await registerSettingsPubSubManager(
+        connection: mockConnection,
+        pubSubManager: pubSubTransport,
+      );
+      when(
+        () => mockConnection.getManager<SettingsPubSubManager>(),
+      ).thenReturn(settingsManager);
+    });
+
+    tearDown(() async {
+      await xmppService.close();
+      await pumpEventQueue();
+    });
+
+    test(
+      'syncSettingsSnapshot publishes seeded local settings when remote matches stored snapshot',
+      () async {
+        final storedUpdatedAt = DateTime.utc(2026, 3, 18, 12, 0);
+        final storedPayload = SettingsSyncPayload.encodeSettingsData(
+          const <String, dynamic>{'language': 'english'},
+        )!;
+        storeData['settings_sync_snapshot_payload'] = storedPayload;
+        storeData['settings_sync_snapshot_updated_at'] = storedUpdatedAt
+            .toIso8601String();
+        storeData['settings_sync_snapshot_source_id'] = 'device-a';
+        storeData['settings_sync_source_id'] = 'device-a';
+        pubSubTransport
+                .publishedItems['$settingsPubSubNode|${SettingsSyncPayload.currentItemId}'] =
+            SettingsSyncPayload(
+              settings: const <String, dynamic>{'language': 'english'},
+              updatedAt: storedUpdatedAt,
+              sourceId: 'device-a',
+            ).toXml();
+
+        await xmppService.seedSettingsSyncSnapshot(const <String, dynamic>{
+          'language': 'german',
+        });
+
+        final synced = await xmppService.syncSettingsSnapshot();
+
+        expect(synced, isTrue);
+        expect(pubSubTransport.publishCount, 1);
+
+        final publishedXml = pubSubTransport
+            .publishedItems['$settingsPubSubNode|${SettingsSyncPayload.currentItemId}'];
+        final publishedPayload = SettingsSyncPayload.fromXml(
+          publishedXml!,
+          itemId: SettingsSyncPayload.currentItemId,
+        );
+        expect(publishedPayload, isNotNull);
+        expect(publishedPayload!.settings['language'], 'german');
+      },
+    );
+
+    test(
+      'pre-login local updates keep their sync metadata when state store loads later',
+      () async {
+        await xmppService.close();
+        await pumpEventQueue();
+        database = XmppDrift(
+          file: File(''),
+          passphrase: '',
+          executor: NativeDatabase.memory(),
+        );
+
+        final storedUpdatedAt = DateTime.utc(2026, 3, 18, 12, 0);
+        final localUpdateLowerBound = DateTime.timestamp().toUtc();
+        storeData['settings_sync_snapshot_payload'] =
+            SettingsSyncPayload.encodeSettingsData(const <String, dynamic>{
+              'language': 'english',
+            })!;
+        storeData['settings_sync_snapshot_updated_at'] = storedUpdatedAt
+            .toIso8601String();
+        storeData['settings_sync_snapshot_source_id'] = 'device-a';
+        storeData['settings_sync_source_id'] = 'device-a';
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+        );
+        await xmppService.updateSettingsSyncSnapshot(const <String, dynamic>{
+          'language': 'german',
+        });
+
+        await connectSuccessfully(xmppService);
+        stubSettingsSyncStateStore(storeData);
+
+        pubSubTransport = RecordingSettingsPubSubTransport();
+        settingsManager = await registerSettingsPubSubManager(
+          connection: mockConnection,
+          pubSubManager: pubSubTransport,
+        );
+        when(
+          () => mockConnection.getManager<SettingsPubSubManager>(),
+        ).thenReturn(settingsManager);
+
+        pubSubTransport
+                .publishedItems['$settingsPubSubNode|${SettingsSyncPayload.currentItemId}'] =
+            SettingsSyncPayload(
+              settings: const <String, dynamic>{'language': 'french'},
+              updatedAt: localUpdateLowerBound.subtract(
+                const Duration(minutes: 1),
+              ),
+              sourceId: 'remote-device',
+            ).toXml();
+
+        final updates = <Map<String, dynamic>>[];
+        final subscription = xmppService.settingsSyncUpdateStream.listen(
+          updates.add,
+        );
+        final synced = await xmppService.syncSettingsSnapshot();
+
+        expect(synced, isTrue);
+        expect(updates, isEmpty);
+        expect(pubSubTransport.publishCount, 1);
+
+        final publishedXml = pubSubTransport
+            .publishedItems['$settingsPubSubNode|${SettingsSyncPayload.currentItemId}'];
+        final publishedPayload = SettingsSyncPayload.fromXml(
+          publishedXml!,
+          itemId: SettingsSyncPayload.currentItemId,
+        );
+        expect(publishedPayload, isNotNull);
+        expect(publishedPayload!.settings['language'], 'german');
+
+        await subscription.cancel();
+      },
+    );
+
+    test(
+      'stale settings sync events do not overwrite newer local settings',
+      () async {
+        await xmppService.updateSettingsSyncSnapshot(const <String, dynamic>{
+          'language': 'german',
+        });
+        final localUpdatedAt = DateTime.parse(
+          storeData['settings_sync_snapshot_updated_at']! as String,
+        ).toUtc();
+        final updates = <Map<String, dynamic>>[];
+        final subscription = xmppService.settingsSyncUpdateStream.listen(
+          updates.add,
+        );
+
+        eventStreamController.add(
+          SettingsSyncUpdatedEvent(
+            SettingsSyncPayload(
+              settings: const <String, dynamic>{'language': 'english'},
+              updatedAt: localUpdatedAt.subtract(const Duration(minutes: 1)),
+              sourceId: 'remote-device',
+            ),
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(updates, isEmpty);
+        expect(pubSubTransport.publishCount, 2);
+        expect(
+          SettingsSyncPayload.decodeSettingsData(
+            storeData['settings_sync_snapshot_payload']! as String,
+          )!['language'],
+          'german',
+        );
+
+        await subscription.cancel();
+      },
+    );
+  });
 }

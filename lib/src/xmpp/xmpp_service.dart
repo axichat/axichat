@@ -67,6 +67,7 @@ import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_support.dart';
+import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:crypto/crypto.dart' show sha1, sha256;
@@ -97,6 +98,8 @@ part 'stream/base_stream_service.dart';
 part 'blocking/blocking_service.dart';
 
 part 'pubsub/pubsub_service.dart';
+
+part 'settings/settings_sync_service.dart';
 
 part 'chats/chats_service.dart';
 
@@ -484,6 +487,12 @@ abstract interface class XmppBase {
     required bool archivesEnabled,
   });
 
+  Stream<Map<String, dynamic>> get settingsSyncUpdateStream;
+
+  Future<void> seedSettingsSyncSnapshot(Map<String, dynamic> settings);
+
+  Future<void> updateSettingsSyncSnapshot(Map<String, dynamic> settings);
+
   bool allowsAutoDownloadMetadata(FileMetadataData metadata);
 
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
@@ -683,6 +692,7 @@ class XmppService extends XmppBase
         BaseStreamService,
         AvatarService,
         PubSubService,
+        SettingsSyncService,
         BlockingService,
         MessageService,
         MucService,
@@ -3457,6 +3467,10 @@ class XmppService extends XmppBase
       _addressBlockSyncUpdateController =
           StreamController<anti_abuse.AddressBlockSyncUpdate>.broadcast();
     }
+    if (_settingsSyncUpdateController.isClosed) {
+      _settingsSyncUpdateController =
+          StreamController<Map<String, dynamic>>.broadcast();
+    }
     if (_connectivityStream.isClosed) {
       _connectivityStream = StreamController<ConnectionState>.broadcast();
     }
@@ -3483,6 +3497,9 @@ class XmppService extends XmppBase
     }
     if (!_addressBlockSyncUpdateController.isClosed) {
       await _addressBlockSyncUpdateController.close();
+    }
+    if (!_settingsSyncUpdateController.isClosed) {
+      await _settingsSyncUpdateController.close();
     }
     if (!_connectivityStream.isClosed) {
       await _connectivityStream.close();

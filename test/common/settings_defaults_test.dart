@@ -1,3 +1,5 @@
+import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +30,50 @@ void main() {
 
     test('requires email send confirmation by default', () {
       expect(state.emailSendConfirmationEnabled, isTrue);
+    });
+
+    test('sync payload excludes device-local settings', () {
+      final synced = state.syncedSettingsJson;
+
+      expect(synced.containsKey('chat_notifications_muted'), isFalse);
+      expect(synced.containsKey('email_notifications_muted'), isFalse);
+      expect(synced.containsKey('notification_previews_enabled'), isFalse);
+      expect(synced.containsKey('background_messaging_enabled'), isFalse);
+      expect(synced.containsKey('endpoint_config'), isFalse);
+      expect(synced['chat_read_receipts'], isTrue);
+      expect(synced['auto_download_images'], isTrue);
+    });
+
+    test('mergeSyncedSettingsJson preserves local-only settings', () {
+      final localState = state.copyWith(
+        endpointConfig: const EndpointConfig(
+          domain: 'custom.example',
+          smtpEnabled: false,
+        ),
+        chatNotificationsMuted: true,
+        emailNotificationsMuted: true,
+        notificationPreviewsEnabled: true,
+        language: AppLanguage.english,
+        shadColor: ShadColor.red,
+        autoDownloadVideos: false,
+      );
+
+      final merged = localState.mergeSyncedSettingsJson(<String, dynamic>{
+        'language': 'german',
+        'shad_color': 'green',
+        'auto_download_videos': true,
+        'chat_notifications_muted': false,
+        'endpoint_config': const <String, dynamic>{'domain': 'ignored.example'},
+      });
+
+      expect(merged.language, AppLanguage.german);
+      expect(merged.shadColor, ShadColor.green);
+      expect(merged.autoDownloadVideos, isTrue);
+      expect(merged.chatNotificationsMuted, isTrue);
+      expect(merged.emailNotificationsMuted, isTrue);
+      expect(merged.notificationPreviewsEnabled, isTrue);
+      expect(merged.endpointConfig.domain, 'custom.example');
+      expect(merged.endpointConfig.smtpEnabled, isFalse);
     });
 
     test(

@@ -30,6 +30,33 @@ enum MessageTextSize {
   double get fontSize => pixels.toDouble();
 }
 
+const List<String> _syncedSettingsKeys = <String>[
+  'language',
+  'theme_mode',
+  'shad_color',
+  'chat_read_receipts',
+  'email_read_receipts',
+  'chat_send_on_enter',
+  'email_send_on_enter',
+  'email_send_confirmation_enabled',
+  'indicate_typing',
+  'low_motion',
+  'colorful_avatars',
+  'share_token_signature_enabled',
+  'hide_completed_scheduled',
+  'hide_completed_unscheduled',
+  'hide_completed_reminders',
+  'unscheduled_sidebar_order',
+  'reminder_sidebar_order',
+  'message_text_size',
+  'auto_load_email_images',
+  'email_composer_watermark_enabled',
+  'auto_download_images',
+  'auto_download_videos',
+  'auto_download_documents',
+  'auto_download_archives',
+];
+
 @freezed
 abstract class SettingsState with _$SettingsState {
   const factory SettingsState({
@@ -82,6 +109,30 @@ extension SettingsStateAttachmentDefaults on SettingsState {
           autoDownloadArchives
       ? AttachmentAutoDownload.allowed
       : AttachmentAutoDownload.blocked;
+}
+
+extension SettingsStateSync on SettingsState {
+  Map<String, dynamic> get syncedSettingsJson {
+    final json = toJson();
+    return Map<String, dynamic>.unmodifiable({
+      for (final key in _syncedSettingsKeys)
+        if (json.containsKey(key)) key: json[key],
+    });
+  }
+
+  SettingsState mergeSyncedSettingsJson(Map<String, dynamic> incoming) {
+    final merged = Map<String, dynamic>.from(toJson());
+    for (final key in _syncedSettingsKeys) {
+      if (incoming.containsKey(key)) {
+        merged[key] = incoming[key];
+      }
+    }
+    try {
+      return SettingsState.fromJson(merged);
+    } catch (_) {
+      return this;
+    }
+  }
 }
 
 extension SettingsStateDonationPrompt on SettingsState {
