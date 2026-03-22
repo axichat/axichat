@@ -15,6 +15,16 @@ definitions:
         iwr -UseBasicParsing 'https://raw.githubusercontent.com/shorebirdtech/install/main/install.ps1'|iex
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
         Add-Content -Path $env:CM_ENV -Value "PATH=$env:Path"
+    - &rust_install_windows
+      name: Install Rust Windows
+      script: |
+        $rustupInstaller = Join-Path $env:TEMP 'rustup-init.exe'
+        iwr -UseBasicParsing 'https://win.rustup.rs/x86_64' -OutFile $rustupInstaller
+        & $rustupInstaller -y --default-toolchain stable-x86_64-pc-windows-msvc
+        $cargoBin = Join-Path $env:USERPROFILE '.cargo\bin'
+        $env:Path = "$cargoBin;$env:Path"
+        rustup target add x86_64-pc-windows-msvc
+        Add-Content -Path $env:CM_ENV -Value "PATH=$env:Path"
     - &openssl_install_windows
       name: Install OpenSSL Windows
       script: |
@@ -321,6 +331,7 @@ workflows:
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
     scripts:
       - *shorebird_install_windows
+      - *rust_install_windows
       - *fetch_dependencies
       - *build_runner
       - *openssl_install_windows

@@ -4,7 +4,7 @@ FFI bindings around the [Delta Chat Core](https://delta.chat) cdylib for Axichat
 
 ## Build workflow
 
-1. Install a Rust toolchain with `rustup target add aarch64-linux-android x86_64-apple-darwin` etc.
+1. Install a Rust toolchain with the target you plan to build. For Windows desktop use the MSVC toolchain and target, for example `rustup default stable-x86_64-pc-windows-msvc` and `rustup target add x86_64-pc-windows-msvc`.
 2. From the repo root run `dart run hooks build delta_ffi` or `flutter pub run hooks build delta_ffi` so the hook compiles `rust/` for the active target and registers the `libdeltachat_wrap` code asset.
 3. Flutter/Dart consumers import `package:delta_ffi/delta_safe.dart`; the `@DefaultAsset` annotation handles loading the native library.
 
@@ -19,6 +19,6 @@ The command converts `headers/deltachat.h` into `lib/src/bindings.dart`. Keep th
 
 ## Troubleshooting
 
-- **Missing toolchains**: ensure `cargo` plus the right cross targets exist. The hook uses `native_toolchain_rust` to pick the matching triple.
+- **Missing toolchains**: ensure the Rust stable toolchain plus the right target exist. On Windows, make sure `cargo.exe` is on `PATH` or in `%USERPROFILE%\.cargo\bin`.
 - **Code asset not found**: make sure `dart run hooks build` runs before invoking `flutter run`; the asset is emitted to `.dart_tool/native_assets/`.
 - **ABI mismatch**: wipe `packages/delta_ffi/rust/target` when switching between macOS/Android builds so cargo rebuilds with the proper flags.

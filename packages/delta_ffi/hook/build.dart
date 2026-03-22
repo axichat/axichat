@@ -23,6 +23,7 @@ Future<void> main(List<String> args) async {
     final resolvedMode = _resolveBuildMode(input, args);
     final isRelease = _isReleaseMode(resolvedMode.name);
     final cargoTargetDir = input.outputDirectory.resolve('cargo-target/');
+    final cargoExecutable = _cargoExecutable();
     final isVerboseBuild = _isVerboseBuild();
 
     final buildArgs = [
@@ -36,12 +37,11 @@ Future<void> main(List<String> args) async {
     ];
 
     final tripleKeyCargo = targetTriple.toUpperCase().replaceAll('-', '_');
-    final environment = Map<String, String>.from(Platform.environment)
-      ..addAll(_cargoEnvForTarget(
-        triple: targetTriple,
-        codeConfig: codeConfig,
-      ))
-      ..['CARGO_TARGET_DIR'] = cargoTargetDir.toFilePath();
+    final environment = await _cargoEnvironment(
+      triple: targetTriple,
+      codeConfig: codeConfig,
+      cargoTargetDir: cargoTargetDir,
+    );
 
     final linkerEnvKey = 'CARGO_TARGET_${tripleKeyCargo}_LINKER';
     stdout.writeln(
@@ -51,17 +51,28 @@ Future<void> main(List<String> args) async {
     );
     stdout.writeln(
         '[delta_ffi][warning] Using linker: ${environment[linkerEnvKey] ?? 'default'}');
+    stdout.writeln('[delta_ffi] Using cargo executable: $cargoExecutable');
     stdout.writeln(
         '[delta_ffi] Running cargo from ${crateDir.toFilePath()} with args: ${buildArgs.join(' ')}');
     stdout.writeln(
         '[delta_ffi] Using cargo target dir: ${cargoTargetDir.toFilePath()}');
 
-    final process = await Process.start(
-      'cargo',
-      buildArgs,
-      workingDirectory: crateDir.toFilePath(),
-      environment: environment,
-    );
+    late final Process process;
+    try {
+      process = await Process.start(
+        cargoExecutable,
+        buildArgs,
+        workingDirectory: crateDir.toFilePath(),
+        environment: environment,
+      );
+    } on ProcessException catch (error) {
+      throw ProcessException(
+        cargoExecutable,
+        buildArgs,
+        '${error.message}\n${_missingCargoHelp()}',
+        error.errorCode,
+      );
+    }
     stdout.writeln('[delta_ffi] Cargo started with pid ${process.pid}.');
 
     final stdoutOutput = _pipeProcessOutput(
@@ -122,6 +133,29 @@ Future<void> main(List<String> args) async {
   });
 }
 
+String _cargoExecutable() {
+  final cargoFromEnvironment = Platform.environment['CARGO'];
+  final candidates = <String?>[
+    if (cargoFromEnvironment != null && cargoFromEnvironment.isNotEmpty)
+      _resolveExecutable(cargoFromEnvironment),
+    _cargoHomeExecutable('cargo'),
+    _findExecutableInPath('cargo'),
+  ];
+
+  for (final candidate in candidates) {
+    if (candidate != null && candidate.isNotEmpty) {
+      return candidate;
+    }
+  }
+
+  throw ProcessException(
+    'cargo',
+    const [],
+    _missingCargoHelp(),
+    127,
+  );
+}
+
 String _rustTargetTriple(OS os, Architecture architecture) {
   return switch ((os, architecture)) {
     (OS.macOS, Architecture.x64) => 'x86_64-apple-darwin',
@@ -154,6 +188,7 @@ String _libraryFileName(OS os, String name) {
 Map<String, String> _cargoEnvForTarget({
   required String triple,
   required CodeConfig codeConfig,
+  Map<String, String>? currentEnvironment,
 }) {
   final env = <String, String>{};
 
@@ -214,7 +249,8 @@ Map<String, String> _cargoEnvForTarget({
     env['PATH'] = [
       File(linkerPath).parent.path,
       File(compilerPath).parent.path,
-      Platform.environment['PATH'] ?? '',
+      _getEnvironmentValue(currentEnvironment ?? Platform.environment, 'PATH') ??
+          '',
     ].where((element) => element.isNotEmpty).join(_environmentPathSeparator);
   }
 
@@ -274,6 +310,61 @@ Map<String, String> _cargoEnvForTarget({
   }
 
   return env;
+}
+
+Future<Map<String, String>> _cargoEnvironment({
+  required String triple,
+  required CodeConfig codeConfig,
+  required Uri cargoTargetDir,
+}) async {
+  final environment = Map<String, String>.from(Platform.environment);
+  final cCompiler = codeConfig.cCompiler;
+
+  if (codeConfig.targetOS == OS.windows &&
+      cCompiler != null &&
+      cCompiler.windows.developerCommandPrompt != null) {
+    final prompt = cCompiler.windows.developerCommandPrompt!;
+    final promptEnvironment = await _environmentFromBatchFile(
+      prompt.script,
+      arguments: prompt.arguments,
+    );
+    _mergeEnvironment(environment, promptEnvironment);
+  }
+
+  _mergeEnvironment(
+    environment,
+    _cargoEnvForTarget(
+      triple: triple,
+      codeConfig: codeConfig,
+      currentEnvironment: environment,
+    ),
+  );
+
+  if (codeConfig.targetOS == OS.windows && cCompiler != null) {
+    final compilerPath = cCompiler.compiler.toFilePath();
+    final archiverPath = cCompiler.archiver.toFilePath();
+    final linkerPath = cCompiler.linker.toFilePath();
+    final tripleKeyCargo = triple.toUpperCase().replaceAll('-', '_');
+    final genericCxx = compilerPath;
+
+    _setEnvironmentValue(environment, 'CC', compilerPath);
+    _setEnvironmentValue(environment, 'CXX', genericCxx);
+    _setEnvironmentValue(environment, 'AR', archiverPath);
+    _setEnvironmentValue(environment, 'HOST_CC', compilerPath);
+    _setEnvironmentValue(environment, 'TARGET_CC', compilerPath);
+    _setEnvironmentValue(
+      environment,
+      'CARGO_TARGET_${tripleKeyCargo}_LINKER',
+      linkerPath,
+    );
+  }
+
+  _setEnvironmentValue(
+    environment,
+    'CARGO_TARGET_DIR',
+    cargoTargetDir.toFilePath(),
+  );
+  return environment;
 }
 
 Future<String> _pipeProcessOutput(
@@ -368,6 +459,18 @@ String? _cargoHomeDirectory() {
   return null;
 }
 
+String? _cargoHomeExecutable(String executableName) {
+  final cargoHome = _cargoHomeDirectory();
+  if (cargoHome == null) {
+    return null;
+  }
+  final candidate = _joinPaths(cargoHome, 'bin', executableName);
+  if (candidate == null) {
+    return null;
+  }
+  return _resolveExecutable(candidate);
+}
+
 String? _joinPaths(String? first, [String? second, String? third]) {
   if (first == null || first.isEmpty) {
     return null;
@@ -402,6 +505,213 @@ String? _toolchainBinary(String directory, String binaryName) {
   return file.path;
 }
 
+String? _resolveExecutable(String command) {
+  final normalized = command.trim().replaceAll('"', '');
+  if (normalized.isEmpty) {
+    return null;
+  }
+
+  if (_looksLikePath(normalized)) {
+    for (final candidate in _executableCandidates(normalized)) {
+      if (File(candidate).existsSync()) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  return _findExecutableInPath(normalized);
+}
+
+String? _findExecutableInPath(String executableName) {
+  final path = Platform.environment['PATH'];
+  if (path == null || path.isEmpty) {
+    return null;
+  }
+
+  for (final directory in path.split(_environmentPathSeparator)) {
+    final normalizedDirectory = directory.trim().replaceAll('"', '');
+    if (normalizedDirectory.isEmpty) {
+      continue;
+    }
+    final candidate = _joinPaths(normalizedDirectory, executableName);
+    if (candidate == null) {
+      continue;
+    }
+    for (final executable in _executableCandidates(candidate)) {
+      if (File(executable).existsSync()) {
+        return executable;
+      }
+    }
+  }
+
+  return null;
+}
+
+Iterable<String> _executableCandidates(String basePath) sync* {
+  if (!Platform.isWindows) {
+    yield basePath;
+    return;
+  }
+
+  final lower = basePath.toLowerCase();
+  if (lower.endsWith('.exe') ||
+      lower.endsWith('.cmd') ||
+      lower.endsWith('.bat')) {
+    yield basePath;
+    return;
+  }
+
+  yield '$basePath.exe';
+  yield '$basePath.cmd';
+  yield '$basePath.bat';
+  yield basePath;
+}
+
+bool _looksLikePath(String value) {
+  return value.contains(Platform.pathSeparator) ||
+      value.contains('/') ||
+      value.contains('\\') ||
+      (Platform.isWindows && value.contains(':'));
+}
+
+Future<Map<String, String>> _environmentFromBatchFile(
+  Uri batchFile, {
+  List<String> arguments = const [],
+}) async {
+  if (!Platform.isWindows) {
+    return const <String, String>{};
+  }
+
+  const separator = '=======delta-ffi-env=======';
+  final scriptPath = batchFile.toFilePath();
+  final command = [
+    'set',
+    'echo $separator',
+    'call ${_cmdQuote(scriptPath)} ${arguments.map(_cmdQuote).join(' ')} > nul',
+    'set',
+  ].join(' && ');
+
+  final processResult = await Process.run(
+    'cmd.exe',
+    ['/d', '/c', command],
+    runInShell: false,
+  );
+
+  if (processResult.exitCode != 0) {
+    throw ProcessException(
+      'cmd.exe',
+      ['/d', '/c', command],
+      processResult.stderr?.toString() ?? 'Failed to run developer prompt.',
+      processResult.exitCode,
+    );
+  }
+
+  final output = processResult.stdout?.toString() ?? '';
+  final resultSplit = output.split(separator);
+  if (resultSplit.length != 2) {
+    throw ProcessException(
+      'cmd.exe',
+      ['/d', '/c', command],
+      'Unexpected output while capturing Windows developer prompt environment.',
+      processResult.exitCode,
+    );
+  }
+
+  final original = _parseEnvironmentBlock(resultSplit.first.trim());
+  final updated = _parseEnvironmentBlock(resultSplit[1].trim());
+  final result = <String, String>{};
+  for (final entry in updated.entries) {
+    if (!_containsEnvironmentKey(original, entry.key) ||
+        _getEnvironmentValue(original, entry.key) != entry.value) {
+      result[entry.key] = entry.value;
+    }
+  }
+  return result;
+}
+
+Map<String, String> _parseEnvironmentBlock(String block) {
+  final result = <String, String>{};
+  if (block.isEmpty) {
+    return result;
+  }
+
+  for (final line in block.split('\r\n')) {
+    if (line.isEmpty) {
+      continue;
+    }
+    final separatorIndex = line.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    result[line.substring(0, separatorIndex)] = line.substring(
+      separatorIndex + 1,
+    );
+  }
+  return result;
+}
+
+void _mergeEnvironment(
+  Map<String, String> target,
+  Map<String, String> updates,
+) {
+  for (final entry in updates.entries) {
+    _setEnvironmentValue(target, entry.key, entry.value);
+  }
+}
+
+void _setEnvironmentValue(
+  Map<String, String> environment,
+  String key,
+  String value,
+) {
+  final existingKey = _matchingEnvironmentKey(environment, key);
+  if (existingKey != null && existingKey != key) {
+    environment.remove(existingKey);
+  }
+  environment[key] = value;
+}
+
+String? _getEnvironmentValue(
+  Map<String, String> environment,
+  String key,
+) {
+  final matchingKey = _matchingEnvironmentKey(environment, key);
+  if (matchingKey == null) {
+    return null;
+  }
+  return environment[matchingKey];
+}
+
+bool _containsEnvironmentKey(
+  Map<String, String> environment,
+  String key,
+) {
+  return _matchingEnvironmentKey(environment, key) != null;
+}
+
+String? _matchingEnvironmentKey(
+  Map<String, String> environment,
+  String key,
+) {
+  if (!Platform.isWindows) {
+    return environment.containsKey(key) ? key : null;
+  }
+
+  final lowercaseKey = key.toLowerCase();
+  for (final existingKey in environment.keys) {
+    if (existingKey.toLowerCase() == lowercaseKey) {
+      return existingKey;
+    }
+  }
+  return null;
+}
+
+String _cmdQuote(String value) {
+  final escaped = value.replaceAll('"', r'\"');
+  return '"$escaped"';
+}
+
 String? _androidNdkToolchainBinDirectory() {
   final ndkRoot = Platform.environment['ANDROID_NDK_ROOT'] ??
       Platform.environment['ANDROID_NDK_HOME'] ??
@@ -429,6 +739,13 @@ String? _androidNdkToolchainBinDirectory() {
   }
 
   return null;
+}
+
+String _missingCargoHelp() {
+  if (Platform.isWindows) {
+    return 'Cargo executable not found. Install the Rust stable MSVC toolchain and ensure cargo is on PATH or in %USERPROFILE%\\.cargo\\bin.';
+  }
+  return r'Cargo executable not found. Install the Rust stable toolchain and ensure cargo is on PATH or in $HOME/.cargo/bin.';
 }
 
 String get _environmentPathSeparator => Platform.isWindows ? ';' : ':';
