@@ -2446,7 +2446,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupSkipPassword.
   ///
   /// In en, this message translates to:
-  /// **'Skip password'**
+  /// **'Skip'**
   String get signupSkipPassword;
 
   /// No description provided for @signupSkipPasswordConfirmTitle.

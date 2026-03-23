@@ -1348,7 +1348,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get signupContinue => 'Continuar';
 
   @override
-  String get signupSkipPassword => 'Skip password';
+  String get signupSkipPassword => 'Skip';
 
   @override
   String get signupSkipPasswordConfirmTitle => 'Skip password setup?';

@@ -541,7 +541,7 @@
   "signupCaptchaPlaceholder": "Enter the above text",
   "signupCaptchaValidation": "Enter the text from the image",
   "signupContinue": "Continue",
-  "signupSkipPassword": "Skip password",
+  "signupSkipPassword": "Skip",
   "signupSkipPasswordConfirmTitle": "Skip password setup?",
   "signupSkipPasswordConfirmMessage": "Axichat will create a secure password and keep it only on this device. You will not be able to sign in or sync this account on any other device unless you later set a password you know in Settings. If you lose this device or delete the app, you will lose this account and all data permanently.",
   "signupSkipPasswordConfirmAction": "Skip and continue",
