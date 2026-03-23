@@ -300,6 +300,6 @@ TypingCaretPainter _typingCaretPainter(WidgetTester tester) {
   final editableState = tester.state<axi.EditableTextState>(
     find.byType(axi.EditableText),
   );
-  final RenderEditable renderEditable = editableState.renderEditable!;
+  final RenderEditable renderEditable = editableState.renderEditable;
   return renderEditable.foregroundPainter! as TypingCaretPainter;
 }

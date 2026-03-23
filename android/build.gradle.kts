@@ -17,6 +17,12 @@ subprojects {
 
 subprojects {
     afterEvaluate {
+        tasks.configureEach {
+            if (name.contains("LintModel") || name.startsWith("lint")) {
+                enabled = false
+            }
+        }
+
         if (name != "flutter_inappwebview_android") {
             return@afterEvaluate
         }

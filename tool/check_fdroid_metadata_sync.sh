@@ -125,7 +125,7 @@ check_count 1 'rustup@1.27.1' 'rustup srclib'
 check_count 1 'apt-get update' 'apt-get update'
 check_count 1 'apt-get install -y build-essential pkg-config perl' 'host toolchain install'
 check_count 1 'export GRADLE_USER_HOME=$(pwd)/.gradle-user-home' 'GRADLE_USER_HOME export'
-check_count 1 'export GRADLE_OPTS="-Dorg.gradle.caching=false -Dorg.gradle.workers.max=1"' 'GRADLE_OPTS export'
+check_count 1 'export GRADLE_OPTS="-Dorg.gradle.caching=false -Dorg.gradle.workers.max=1 -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.vfs.watch=false -Dorg.gradle.configuration-cache=false -Dkotlin.incremental=false"' 'GRADLE_OPTS export'
 check_count 1 'printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties' 'android/local.properties write'
 check_count 1 '--build-number=$(($$VERCODE$$ % 1000))' 'Flutter build-number override'
 check_count 1 '--dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken' 'EMAIL_PUBLIC_TOKEN define'
@@ -138,6 +138,7 @@ check_count 8 '^\s+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\$\$(SDK|N
 check_count 1 'find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2' 'pub-cache pruning command'
 check_count 1 '-name extension' 'pub-cache pruning extension target'
 check_count 1 '-exec rm -rf {} +' 'pub-cache pruning delete action'
+check_count 1 'rm -rf .dart_tool/build android/.gradle .gradle-user-home' 'pre-Flutter cleanup before release build'
 check_count 1 '^\s+- \.pub-cache$' '.pub-cache scandelete entry' regex
 check_count 1 '^\s+- 2000 \+ %c$' 'VercodeOperation arm64 entry' regex
 
