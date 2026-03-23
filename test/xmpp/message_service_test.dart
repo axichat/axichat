@@ -383,7 +383,7 @@ void main() {
     );
 
     test(
-      'Given a valid direct message, does not publish a conversation index update.',
+      'Given an existing direct chat, sending a message does not publish a conversation index update.',
       () async {
         await connectSuccessfully(xmppService);
 
@@ -391,6 +391,7 @@ void main() {
         when(
           () => mockConnection.sendMessage(any()),
         ).thenAnswer((_) async => true);
+        await database.createChat(Chat.fromJid(jid));
 
         clearInteractions(mockConnection);
 
@@ -399,6 +400,119 @@ void main() {
         verifyNever(
           () => mockConnection.getManager<ConversationIndexManager>(),
         );
+      },
+    );
+
+    test(
+      'Given a first direct outbound message, publishes a conversation index seed.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: 'result'));
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+        await xmppService.applyConversationIndexSnapshot(const (
+          items: <ConvItem>[],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        clearInteractions(mockConnection);
+
+        await xmppService.sendMessage(jid: jid, text: text);
+        await pumpEventQueue();
+
+        final capturedStanzas = verify(
+          () => mockConnection.sendStanza(captureAny()),
+        ).captured.cast<mox.StanzaDetails>();
+        final publishStanza = capturedStanzas
+            .map((details) => details.stanza)
+            .singleWhere(
+              (stanza) =>
+                  stanza
+                      .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+                      ?.firstTag('publish')
+                      ?.attributes['node'] ==
+                  conversationIndexNode,
+            );
+        final payload = publishStanza
+            .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+            ?.firstTag('publish')
+            ?.firstTag('item')
+            ?.firstTag('conv', xmlns: conversationIndexNode);
+        expect(
+          payload?.attributes['peer'],
+          mox.JID.fromString(jid).toBare().toString(),
+        );
+        expect(payload?.attributes['last_id'], isNull);
+      },
+    );
+
+    test(
+      'Given a first direct inbound message, publishes a conversation index seed.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: 'result'));
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+        await xmppService.applyConversationIndexSnapshot(const (
+          items: <ConvItem>[],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        clearInteractions(mockConnection);
+
+        const peerJid = 'friend@axi.im';
+        const stanzaId = 'first-direct-inbound';
+        final event = mox.MessageEvent(
+          mox.JID.fromString(peerJid),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('hello'),
+            mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+          type: 'chat',
+        );
+
+        controller.add(event);
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final capturedStanzas = verify(
+          () => mockConnection.sendStanza(captureAny()),
+        ).captured.cast<mox.StanzaDetails>();
+        final publishStanza = capturedStanzas
+            .map((details) => details.stanza)
+            .singleWhere(
+              (stanza) =>
+                  stanza
+                      .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+                      ?.firstTag('publish')
+                      ?.attributes['node'] ==
+                  conversationIndexNode,
+            );
+        final payload = publishStanza
+            .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+            ?.firstTag('publish')
+            ?.firstTag('item')
+            ?.firstTag('conv', xmlns: conversationIndexNode);
+        expect(payload?.attributes['peer'], peerJid);
+        expect(payload?.attributes['last_id'], isNull);
+
+        await controller.close();
       },
     );
 

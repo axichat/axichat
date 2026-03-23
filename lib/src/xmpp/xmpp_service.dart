@@ -502,6 +502,10 @@ abstract interface class XmppBase {
     required String featureLabel,
   });
 
+  ConversationIndexManager? get conversationIndexManager;
+
+  Future<void> _seedConversationIndexForDirectChatCreation(String jid);
+
   Future<CapabilityDecision> decideFeatureSupport({
     required String jid,
     required String feature,
@@ -1123,6 +1127,7 @@ class XmppService extends XmppBase
       ? _connection.getManager<BookmarksManager>()
       : null;
 
+  @override
   ConversationIndexManager? get conversationIndexManager =>
       _hasInitializedConnection
       ? _connection.getManager<ConversationIndexManager>()

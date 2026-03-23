@@ -125,9 +125,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   static const List<Chat> _emptyChatList = <Chat>[];
   final Map<String, _TypingParticipantsSession> _typingParticipantSessions = {};
   final Map<String, int> _openChatUnreadBoundarySeedByJid = {};
+  final Set<String> _pendingConversationIndexSeeds = <String>{};
   Future<List<ConvItem>>? _conversationIndexLoginSync;
   List<Chat>? _cachedChatList;
   bool? _lastMarkerResponsive;
+  bool _conversationIndexSnapshotResolved = false;
 
   List<Chat>? get cachedChatList => _cachedChatList;
 
@@ -257,10 +259,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _conversationIndexBootstrapOperationName,
-        priority: 0,
+        priority: 1,
         lane: 'conversationIndex',
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
           XmppBootstrapTrigger.manualRefresh,
         },
         operationName: _conversationIndexBootstrapOperationName,
@@ -318,10 +321,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         featureLabel: 'conversation index',
       );
       if (!decision.isAllowed) {
+        _conversationIndexSnapshotResolved = true;
+        _pendingConversationIndexSeeds.clear();
         return _emptyConversationIndexSnapshot;
       }
 
-      final manager = _connection.getManager<ConversationIndexManager>();
+      final manager = conversationIndexManager;
       if (manager == null) {
         return _emptyConversationIndexSnapshot;
       }
@@ -512,9 +517,15 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
   Stream<List<String>> recipientAddressSuggestionsStream() =>
       createSingleItemStream<List<String>, XmppDatabase>(
-        watchFunction: (db) async => db.watchRecipientAddressSuggestions(
-          limit: _recipientAddressSuggestionLimit,
-        ),
+        watchFunction: (db) async => db
+            .watchRecipientAddressSuggestions(
+              limit: _recipientAddressSuggestionLimit,
+            )
+            .map(
+              (addresses) => addresses
+                  .where((address) => !_isLocalOnlyChatJid(address))
+                  .toList(growable: false),
+            ),
       );
 
   Stream<Chat?> chatStream(String jid) =>
@@ -534,6 +545,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       session.dispose();
     }
     _typingParticipantSessions.clear();
+    _pendingConversationIndexSeeds.clear();
+    _conversationIndexSnapshotResolved = false;
     await super._reset();
   }
 
@@ -616,21 +629,21 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<void> openChat(String jid) async {
-    final unreadBeforeOpen = await _dbOpReturning<XmppDatabase, int?>((
-      db,
-    ) async {
-      final existing = await db.getChat(jid);
-      return existing?.unreadCount;
-    });
+    final existingBeforeOpen = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(jid),
+    );
     stageOpenChatUnreadBoundarySeed(
       jid: jid,
-      unreadCount: unreadBeforeOpen ?? 0,
+      unreadCount: existingBeforeOpen?.unreadCount ?? 0,
     );
     final closed = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.openChat(jid),
     );
     if (closed != null) {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
+    }
+    if (existingBeforeOpen == null) {
+      await _seedConversationIndexForDirectChatCreation(jid);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
   }
@@ -954,16 +967,64 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   ) async {
     if (!snapshot.isSuccess) return;
     final items = snapshot.items;
+    _connection.getManager<ConversationIndexManager>()?.cacheSnapshot(
+      items,
+      isComplete: snapshot.isComplete,
+    );
     await applyConversationIndexItems(items);
     if (snapshot.isComplete) {
+      await _queueMissingLocalConversationIndexSeeds(items);
       await _reconcileConversationIndexRemovals(items);
+      _conversationIndexSnapshotResolved = true;
+      await _flushPendingConversationIndexSeeds();
     }
   }
 
-  Future<void> _reconcileConversationIndexRemovals(List<ConvItem> items) async {
+  Future<void> _queueMissingLocalConversationIndexSeeds(
+    List<ConvItem> items,
+  ) async {
     final knownPeers = items
         .map((item) => item.peerBare.toBare().toString())
         .toSet();
+    final selfJid = myJid;
+    final localMissingPeers = await _dbOpReturning<XmppDatabase, Set<String>>((
+      db,
+    ) async {
+      final chats = await db.getChats(
+        start: _conversationIndexSnapshotStart,
+        end: _conversationIndexSnapshotEnd,
+      );
+      final peers = <String>{};
+      for (final chat in chats) {
+        if (chat.archived) continue;
+        final normalized = _conversationIndexPeerForLocalChat(
+          chat,
+          selfJid: selfJid,
+        );
+        if (normalized == null) continue;
+        if (knownPeers.contains(normalized)) continue;
+        peers.add(normalized);
+      }
+      return peers;
+    });
+    _pendingConversationIndexSeeds.addAll(localMissingPeers);
+  }
+
+  Future<void> _reconcileConversationIndexRemovals(List<ConvItem> items) async {
+    if (items.isEmpty) {
+      _chatsLog.fine(
+        'Skipping conversation index removal reconciliation for an empty snapshot.',
+      );
+      return;
+    }
+    final knownPeers = items
+        .map((item) => item.peerBare.toBare().toString())
+        .toSet();
+    knownPeers.addAll(
+      _pendingConversationIndexSeeds
+          .map(_normalizeBareChatJid)
+          .whereType<String>(),
+    );
     final selfJid = myJid;
     await _dbOp<XmppDatabase>((db) async {
       final chats = await db.getChats(
@@ -971,12 +1032,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         end: _conversationIndexSnapshotEnd,
       );
       for (final chat in chats) {
-        if (chat.type != ChatType.chat) continue;
-        if (!chat.defaultTransport.isXmpp) continue;
-        final normalized = _normalizeBareChatJid(chat.jid);
-        if (normalized == null || normalized.isEmpty) continue;
-        if (normalized == selfJid) continue;
-        if (_isConversationIndexLocalOnlyChatJid(normalized)) continue;
+        final normalized = _conversationIndexPeerForLocalChat(
+          chat,
+          selfJid: selfJid,
+        );
+        if (normalized == null) continue;
         if (knownPeers.contains(normalized)) continue;
         if (chat.archived) continue;
         await db.updateConversationIndexArchived(jid: chat.jid, archived: true);
@@ -1000,19 +1060,20 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<void> _syncConversationIndexMeta({required String jid}) async {
-    if (jid.isEmpty) return;
-    if (_isConversationIndexLocalOnlyChatJid(jid)) return;
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty) return;
+    if (_isConversationIndexLocalOnlyChatJid(normalizedJid)) return;
 
-    final manager = _connection.getManager<ConversationIndexManager>();
+    final manager = await _conversationIndexManagerForSync();
     if (manager == null) return;
 
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.getChat(jid),
+      (db) => db.getChat(normalizedJid),
     );
     if (chat == null || chat.type != ChatType.chat) return;
     if (!chat.transport.isXmpp) return;
 
-    final peer = mox.JID.fromString(jid).toBare();
+    final peer = mox.JID.fromString(normalizedJid).toBare();
     final cached = manager.cachedForPeer(peer);
     final lastTimestamp =
         cached?.lastTimestamp ?? chat.lastChangeTimestamp.toUtc();
@@ -1030,6 +1091,102 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         mutedUntil: mutedUntil,
       ),
     );
+  }
+
+  @override
+  Future<void> _seedConversationIndexForDirectChatCreation(String jid) async {
+    await _enqueueConversationIndexSeed(jid);
+  }
+
+  Future<void> _enqueueConversationIndexSeed(String jid) async {
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty) return;
+    if (_isConversationIndexLocalOnlyChatJid(normalizedJid)) return;
+    _pendingConversationIndexSeeds.add(normalizedJid);
+    if (!_conversationIndexSnapshotResolved) {
+      return;
+    }
+    if (await _publishConversationIndexSeedIfMissing(normalizedJid)) {
+      _pendingConversationIndexSeeds.remove(normalizedJid);
+    }
+  }
+
+  Future<void> _flushPendingConversationIndexSeeds() async {
+    if (_pendingConversationIndexSeeds.isEmpty) return;
+    final pending = _pendingConversationIndexSeeds.toList(growable: false);
+    for (final jid in pending) {
+      if (await _publishConversationIndexSeedIfMissing(jid)) {
+        _pendingConversationIndexSeeds.remove(jid);
+      }
+    }
+  }
+
+  Future<bool> _publishConversationIndexSeedIfMissing(String jid) async {
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty) return true;
+    if (_isConversationIndexLocalOnlyChatJid(normalizedJid)) return true;
+    if (!_conversationIndexSnapshotResolved) return false;
+
+    final decision = await _conversationIndexSyncDecision();
+    if (!decision.isAllowed) return true;
+
+    final manager = conversationIndexManager;
+    if (manager == null) return false;
+
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(normalizedJid),
+    );
+    if (chat == null || chat.type != ChatType.chat) return true;
+    if (!chat.transport.isXmpp) return true;
+
+    late final mox.JID peer;
+    try {
+      peer = mox.JID.fromString(normalizedJid).toBare();
+    } on Exception {
+      return true;
+    }
+    if (manager.cachedForPeer(peer) != null) return true;
+
+    final mutedUntil = chat.muted
+        ? DateTime.timestamp().add(_mutedForeverDuration).toUtc()
+        : null;
+    return manager.upsert(
+      ConvItem(
+        peerBare: peer,
+        lastTimestamp: chat.lastChangeTimestamp.toUtc(),
+        lastId: null,
+        pinned: chat.favorited,
+        archived: chat.archived,
+        mutedUntil: mutedUntil,
+      ),
+    );
+  }
+
+  Future<ConversationIndexManager?> _conversationIndexManagerForSync() async {
+    final decision = await _conversationIndexSyncDecision();
+    if (!decision.isAllowed) return null;
+    return conversationIndexManager;
+  }
+
+  Future<CapabilityDecision> _conversationIndexSyncDecision() async {
+    final support = await refreshPubSubSupport();
+    return decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'conversation index',
+    );
+  }
+
+  String? _conversationIndexPeerForLocalChat(
+    Chat chat, {
+    required String? selfJid,
+  }) {
+    if (chat.type != ChatType.chat) return null;
+    if (!chat.defaultTransport.isXmpp) return null;
+    final normalized = _normalizeBareChatJid(chat.jid);
+    if (normalized == null || normalized.isEmpty) return null;
+    if (normalized == selfJid) return null;
+    if (_isConversationIndexLocalOnlyChatJid(normalized)) return null;
+    return normalized;
   }
 
   String? _normalizeBareChatJid(String jid) {

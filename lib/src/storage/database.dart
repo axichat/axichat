@@ -5450,6 +5450,9 @@ WHERE jid = ?
       final closed = await closeChat();
       final existing = await getChat(normalizedJid);
       if (existing == null) {
+        final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(
+          _emptyTimestampMillis,
+        );
         await into(chats).insert(
           ChatsCompanion.insert(
             jid: normalizedJid,
@@ -5459,7 +5462,7 @@ WHERE jid = ?
             unreadCount: const Value(0),
             chatState: const Value(mox.ChatState.active),
             lastMessage: Value(lastMessagePreview),
-            lastChangeTimestamp: lastMessage?.timestamp ?? DateTime.timestamp(),
+            lastChangeTimestamp: lastMessage?.timestamp ?? emptyTimestamp,
             contactJid: Value(normalizedJid),
           ),
         );

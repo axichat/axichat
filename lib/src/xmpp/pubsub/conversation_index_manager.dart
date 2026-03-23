@@ -225,9 +225,20 @@ final class ConversationIndexManager extends PepItemPubSubNodeManager<ConvItem>
   ConvItem? cachedForPeer(mox.JID peerBare) =>
       cache[peerBare.toBare().toString()];
 
-  Future<void> upsert(ConvItem item) async {
+  void cacheSnapshot(Iterable<ConvItem> items, {required bool isComplete}) {
+    final previousCache = Map<String, ConvItem>.from(cache);
+    if (isComplete) {
+      cache.clear();
+    }
+    for (final item in items) {
+      final itemId = itemIdOf(item);
+      cache[itemId] = mergeRefreshedItem(item, cached: previousCache[itemId]);
+    }
+  }
+
+  Future<bool> upsert(ConvItem item) async {
     final normalized = item.copyWith(peerBare: item.peerBare.toBare());
-    await publishItem(normalized);
+    return publishItem(normalized);
   }
 
   Future<void> archive(mox.JID peer, bool archived) async {

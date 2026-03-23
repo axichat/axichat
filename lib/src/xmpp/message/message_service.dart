@@ -2607,12 +2607,25 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       jid: message.chatJid,
       requestedChatType: chatType,
     );
+    final shouldSeedConversationIndex =
+        resolvedChatType == ChatType.chat &&
+        !_isInternalSyncEnvelope(message.body) &&
+        !isMultiDeviceSyncMessage(
+          subject: message.subject,
+          body: message.body,
+        ) &&
+        await _dbOpReturning<XmppDatabase, bool>(
+          (db) async => (await db.getChat(message.chatJid)) == null,
+        );
     if (_isInternalSyncEnvelope(message.body)) {
       _internalEnvelopeChats.add(message.chatJid);
     }
     await _dbOp<XmppDatabase>((db) async {
       await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
+    if (shouldSeedConversationIndex) {
+      await _seedConversationIndexForDirectChatCreation(message.chatJid);
+    }
     await _applyPendingSelfDisplayedMarkersForChat(message.chatJid);
     await _applyPendingOutboundMessageStatusesForChat(message.chatJid);
     await _applyPendingInboundReactionsForMessage(message);
@@ -3559,9 +3572,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   bool _usesPubSubPins(Chat? chat) =>
       _pinSyncBackendForChat(chat) == _PinSyncBackend.pubSub;
 
-  bool _supportsConversationIndexSync(Chat? chat) =>
-      chat?.transport.isXmpp ?? true;
-
   Future<
     ({
       Map<String, mox.PubSubAffiliation>? affiliations,
@@ -3918,9 +3928,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
-  static const Duration _conversationIndexMutedForeverDuration = Duration(
-    days: 3650,
-  );
   bool _mamGlobalSyncInFlight = false;
   bool _hasMamNegotiatedStream = false;
   bool _mamNegotiationResumed = false;
@@ -5619,60 +5626,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       throw XmppMessageException();
     }
-  }
-
-  Future<void> _upsertConversationIndexForPeer({
-    required String peerJid,
-    required DateTime lastTimestamp,
-    required String? lastId,
-  }) async {
-    final normalizedPeer = peerJid.trim();
-    if (normalizedPeer.isEmpty) return;
-
-    final manager = _connection.getManager<ConversationIndexManager>();
-    if (manager == null) return;
-
-    late final mox.JID peerBare;
-    try {
-      peerBare = mox.JID.fromString(normalizedPeer).toBare();
-    } on Exception {
-      return;
-    }
-
-    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.getChat(peerBare.toString()),
-    );
-    if (!_supportsConversationIndexSync(chat)) return;
-    if (_resolvedChatTypeForPeer(chatJid: normalizedPeer, chat: chat) ==
-        ChatType.groupChat) {
-      return;
-    }
-
-    final cached = manager.cachedForPeer(peerBare);
-    final cachedTimestamp = cached?.lastTimestamp;
-    final lastTimestampUtc = lastTimestamp.toUtc();
-    final nextTimestamp =
-        cachedTimestamp != null && cachedTimestamp.isAfter(lastTimestampUtc)
-        ? cachedTimestamp
-        : lastTimestampUtc;
-
-    final mutedUntil = (chat?.muted ?? false)
-        ? DateTime.timestamp()
-              .add(_conversationIndexMutedForeverDuration)
-              .toUtc()
-        : null;
-
-    final trimmedLastId = lastId?.trim();
-    await manager.upsert(
-      ConvItem(
-        peerBare: peerBare,
-        lastTimestamp: nextTimestamp,
-        lastId: trimmedLastId?.isNotEmpty == true ? trimmedLastId : null,
-        pinned: chat?.favorited ?? false,
-        archived: chat?.archived ?? false,
-        mutedUntil: mutedUntil,
-      ),
-    );
   }
 
   PseudoMessageType? _calendarAvailabilityPseudoType(

@@ -298,6 +298,24 @@ void main() {
   );
 
   test(
+    'recipientAddressSuggestionsStream excludes the local welcome chat.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      const welcomeJid = 'axichat@welcome.axichat.invalid';
+      const peerJid = 'friend@example.com';
+      await database.createChat(Chat.fromJid(welcomeJid));
+      await database.createChat(Chat.fromJid(peerJid));
+
+      final suggestions = await xmppService
+          .recipientAddressSuggestionsStream()
+          .first;
+
+      expect(suggestions, [peerJid]);
+    },
+  );
+
+  test(
     'Conversation index reconciliation preserves the local welcome chat.',
     () async {
       await connectSuccessfully(xmppService);
@@ -316,6 +334,28 @@ void main() {
       ));
 
       final chat = await database.getChat(welcomeChatJid);
+      expect(chat, isNotNull);
+      expect(chat?.archived, isFalse);
+    },
+  );
+
+  test(
+    'Conversation index reconciliation preserves direct chats when the snapshot is empty.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      final peerJid = chatJids.first;
+      await database.createChat(
+        Chat.fromJid(peerJid).copyWith(archived: false, type: ChatType.chat),
+      );
+
+      await xmppService.applyConversationIndexSnapshot(const (
+        items: <ConvItem>[],
+        isSuccess: true,
+        isComplete: true,
+      ));
+
+      final chat = await database.getChat(peerJid);
       expect(chat, isNotNull);
       expect(chat?.archived, isFalse);
     },
@@ -419,8 +459,238 @@ void main() {
         () =>
             mockConnection.sendChatState(jid: jid, state: mox.ChatState.active),
       ).called(1);
-      verifyNever(() => mockConnection.getManager<ConversationIndexManager>());
     });
+
+    test(
+      'Creating a direct XMPP chat waits for snapshot resolution before publishing.',
+      () async {
+        final peerJid = mox.JID.fromString(jid).toBare().toString();
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendChatState(
+            jid: any(named: 'jid'),
+            state: any(named: 'state'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: 'result'));
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+        clearInteractions(mockConnection);
+
+        await xmppService.openChat(peerJid);
+        await pumpEventQueue();
+
+        verifyNever(() => mockConnection.sendStanza(any()));
+
+        await xmppService.applyConversationIndexSnapshot(const (
+          items: <ConvItem>[],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        await pumpEventQueue();
+
+        final capturedStanzas = verify(
+          () => mockConnection.sendStanza(captureAny()),
+        ).captured.cast<mox.StanzaDetails>();
+        final publishStanza = capturedStanzas
+            .map((details) => details.stanza)
+            .singleWhere(
+              (stanza) =>
+                  stanza
+                      .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+                      ?.firstTag('publish')
+                      ?.attributes['node'] ==
+                  conversationIndexNode,
+            );
+        final payload = publishStanza
+            .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+            ?.firstTag('publish')
+            ?.firstTag('item')
+            ?.firstTag('conv', xmlns: conversationIndexNode);
+        expect(payload?.attributes['peer'], peerJid);
+        expect(payload?.attributes['last_id'], isNull);
+      },
+    );
+
+    test(
+      'Creating a blank direct XMPP chat uses the empty timestamp baseline.',
+      () async {
+        final peerJid = mox.JID.fromString(jid).toBare().toString();
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendChatState(
+            jid: any(named: 'jid'),
+            state: any(named: 'state'),
+          ),
+        ).thenAnswer((_) async {});
+
+        await xmppService.openChat(peerJid);
+        await pumpEventQueue();
+
+        final chat = await database.getChat(peerJid);
+        expect(chat, isNotNull);
+        expect(
+          chat?.lastChangeTimestamp,
+          DateTime.fromMillisecondsSinceEpoch(0),
+        );
+      },
+    );
+
+    test(
+      'A snapshot-backed direct XMPP chat seed is not republished.',
+      () async {
+        final peerJid = mox.JID.fromString(jid).toBare().toString();
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendChatState(
+            jid: any(named: 'jid'),
+            state: any(named: 'state'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: 'result'));
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+
+        await xmppService.openChat(peerJid);
+        await pumpEventQueue();
+        clearInteractions(mockConnection);
+
+        await xmppService.applyConversationIndexSnapshot((
+          items: <ConvItem>[
+            ConvItem(
+              peerBare: mox.JID.fromString(peerJid).toBare(),
+              lastTimestamp: DateTime.utc(2024, 1, 1, 10),
+            ),
+          ],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        await pumpEventQueue();
+
+        verifyNever(() => mockConnection.sendStanza(any()));
+      },
+    );
+
+    test(
+      'A complete snapshot backfills an existing local direct XMPP chat that is missing remotely.',
+      () async {
+        final peerJid = mox.JID.fromString(jid).toBare().toString();
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: 'result'));
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+        await database.createChat(
+          Chat.fromJid(peerJid).copyWith(archived: false),
+        );
+        clearInteractions(mockConnection);
+
+        await xmppService.applyConversationIndexSnapshot(const (
+          items: <ConvItem>[],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        await pumpEventQueue();
+
+        final capturedStanzas = verify(
+          () => mockConnection.sendStanza(captureAny()),
+        ).captured.cast<mox.StanzaDetails>();
+        final publishStanza = capturedStanzas
+            .map((details) => details.stanza)
+            .singleWhere(
+              (stanza) =>
+                  stanza
+                      .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+                      ?.firstTag('publish')
+                      ?.attributes['node'] ==
+                  conversationIndexNode,
+            );
+        final payload = publishStanza
+            .firstTag('pubsub', xmlns: mox.pubsubXmlns)
+            ?.firstTag('publish')
+            ?.firstTag('item')
+            ?.firstTag('conv', xmlns: conversationIndexNode);
+        expect(payload?.attributes['peer'], peerJid);
+
+        final chat = await database.getChat(peerJid);
+        expect(chat?.archived, isFalse);
+      },
+    );
+
+    test(
+      'A failed direct XMPP chat seed remains pending for the next snapshot flush.',
+      () async {
+        final peerJid = mox.JID.fromString(jid).toBare().toString();
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendChatState(
+            jid: any(named: 'jid'),
+            state: any(named: 'state'),
+          ),
+        ).thenAnswer((_) async {});
+        var publishAttempts = 0;
+        when(() => mockConnection.sendStanza(any())).thenAnswer((_) async {
+          publishAttempts++;
+          return publishAttempts == 1
+              ? mox.Stanza.iq(type: 'error')
+              : mox.Stanza.iq(type: 'result');
+        });
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+        clearInteractions(mockConnection);
+
+        await xmppService.openChat(peerJid);
+        await pumpEventQueue();
+
+        await xmppService.applyConversationIndexSnapshot(const (
+          items: <ConvItem>[],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        await pumpEventQueue();
+        expect(publishAttempts, 1);
+
+        await xmppService.applyConversationIndexSnapshot(const (
+          items: <ConvItem>[],
+          isSuccess: true,
+          isComplete: true,
+        ));
+        await pumpEventQueue();
+        expect(publishAttempts, 2);
+      },
+    );
+
+    test(
+      'Opening an existing direct XMPP chat does not publish a conversation index entry.',
+      () async {
+        final peerJid = mox.JID.fromString(jid).toBare().toString();
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendChatState(
+            jid: any(named: 'jid'),
+            state: any(named: 'state'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: 'result'));
+        await mockConnection.registerManagers([ConversationIndexManager()]);
+        await database.createChat(Chat.fromJid(peerJid));
+        clearInteractions(mockConnection);
+
+        await xmppService.openChat(peerJid);
+        await pumpEventQueue();
+
+        verifyNever(() => mockConnection.sendStanza(any()));
+      },
+    );
 
     test('If a different chat is already open, closes it.', () async {
       await connectSuccessfully(xmppService);

@@ -4,7 +4,12 @@
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
 mixin RosterService
-    on XmppBase, BaseStreamService, MessageService, AvatarService {
+    on
+        XmppBase,
+        BaseStreamService,
+        MessageService,
+        AvatarService,
+        ChatsService {
   Future<List<RosterItem>> loadRosterSnapshot() async {
     return _dbOpReturning<XmppDatabase, List<RosterItem>>(
       (db) => db.getRoster(),
@@ -174,11 +179,7 @@ mixin RosterService
         ),
       );
     }
-    await _upsertConversationIndexForPeer(
-      peerJid: normalized,
-      lastTimestamp: existing?.lastChangeTimestamp ?? emptyTimestamp,
-      lastId: null,
-    );
+    await _seedConversationIndexForDirectChatCreation(normalized);
   }
 
   Future<void> removeFromRoster({required String jid}) async {

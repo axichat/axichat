@@ -16,6 +16,7 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -277,6 +278,11 @@ void prepareMockConnection() {
   when(
     () => mockConnection.getManager<mox.VCardManager>(),
   ).thenAnswer((_) => lookupManagerById<mox.VCardManager>(mox.vcardManager));
+  when(() => mockConnection.getManager<ConversationIndexManager>()).thenAnswer(
+    (_) => lookupManagerById<ConversationIndexManager>(
+      ConversationIndexManager.managerId,
+    ),
+  );
   when(() => mockConnection.getManager<mox.BlockingManager>()).thenAnswer(
     (_) => lookupManagerById<mox.BlockingManager>(mox.blockingManager),
   );
