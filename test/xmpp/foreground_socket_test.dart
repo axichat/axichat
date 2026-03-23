@@ -326,6 +326,20 @@ void main() {
       expect(connected, isFalse);
       expect(bridge.releaseCalls, equals(1));
     });
+
+    test('reset cancels an in-flight foreground connect', () async {
+      final bridge = _NoReplyForegroundTaskBridge();
+      final socket = ForegroundSocketWrapper(bridge: bridge);
+
+      final connect = socket.connect('axi.im', host: '127.0.0.1', port: 5222);
+      await pumpEventQueue();
+
+      await socket.reset();
+      final connected = await connect.timeout(const Duration(milliseconds: 50));
+
+      expect(connected, isFalse);
+      expect(bridge.releaseCalls, equals(1));
+    });
   });
 }
 

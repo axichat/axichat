@@ -871,9 +871,19 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Resetting foreground socket wrapper. '
       'serviceAcquired=$_serviceAcquired listenerRegistered=$_listenerRegistered',
     );
+    _cancelPendingTaskResponses();
     _secureResult = false;
     _detachListener();
     await _releaseService();
+  }
+
+  void _cancelPendingTaskResponses() {
+    if (!_connect.isCompleted) {
+      _connect.complete(false);
+    }
+    if (!_secure.isCompleted) {
+      _secure.complete(false);
+    }
   }
 
   Future<void> _releaseService() async {
