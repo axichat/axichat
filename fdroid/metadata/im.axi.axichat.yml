@@ -58,7 +58,7 @@ Builds:
       - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi
         --target-platform=android-arm64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken
         --dart-define=ENABLE_SHOREBIRD=false
-    ndk: 28.2.13676358
+    ndk: 27.0.12077973
 
 AllowedAPKSigningKeys: 92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e
 

@@ -140,7 +140,7 @@ check_count 1 '--dart-define=ENABLE_SHOREBIRD=false' 'ENABLE_SHOREBIRD define'
 check_count 1 'rustup-init.sh -y --default-toolchain 1.90.0' 'rustup bootstrap'
 check_count 1 'source $HOME/.cargo/env' 'cargo env source'
 check_count 1 'rustup target add aarch64-linux-android' 'arm64 rust target'
-check_count 1 '^\s+ndk: 28\.2\.13676358$' 'NDK pin' regex
+check_count 1 '^\s+ndk: 27\.0\.12077973$' 'NDK pin' regex
 check_count 8 '^\s+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\$\$(SDK|NDK)\$\$$' 'Android SDK/NDK env exports' regex
 check_count 1 'find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2' 'pub-cache pruning command'
 check_count 1 '-name extension' 'pub-cache pruning extension target'

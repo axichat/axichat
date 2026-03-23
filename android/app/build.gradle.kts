@@ -43,7 +43,7 @@ val hasReleaseSigningConfig = hasCiReleaseSigning || hasLocalReleaseSigning
 android {
     namespace = "im.axi.axichat"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "28.2.13676358"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
