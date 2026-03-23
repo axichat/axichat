@@ -37,6 +37,8 @@ Builds:
       - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - export GRADLE_USER_HOME=$(pwd)/.gradle-user-home
+      - export GRADLE_OPTS="-Dorg.gradle.caching=false -Dorg.gradle.workers.max=1"
       - export ANDROID_HOME=$$SDK$$
       - export ANDROID_SDK_ROOT=$$SDK$$
       - export ANDROID_NDK_HOME=$$NDK$$
@@ -45,6 +47,7 @@ Builds:
       - source $HOME/.cargo/env
       - rustup target add aarch64-linux-android
       - $$flutter$$/bin/flutter pub get
+      - find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2 \( -name example -o -name test -o -name tests -o -name benchmark -o -name benchmarks -o -name windows -o -name linux -o -name macos -o -name ios -o -name web -o -name extension \) -prune -exec rm -rf {} +
       - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
       - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi
         --target-platform=android-arm64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken
