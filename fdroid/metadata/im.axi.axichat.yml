@@ -23,7 +23,6 @@ Builds:
   - versionName: 0.7.0
     versionCode: 1002  # 1000 + pubspec build code (armv7)
     commit: v0.7.0  # Replace with the exact release tag/commit submitted to F-Droid.
-    subdir: .
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-production-release.apk
     ndk: 28.2.13676358
     srclibs:
@@ -54,7 +53,6 @@ Builds:
   - versionName: 0.7.0
     versionCode: 2002  # 2000 + pubspec build code (arm64)
     commit: v0.7.0  # Replace with the exact release tag/commit submitted to F-Droid.
-    subdir: .
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
     ndk: 28.2.13676358
     srclibs:
@@ -85,7 +83,6 @@ Builds:
   - versionName: 0.7.0
     versionCode: 4002  # 4000 + pubspec build code (x86_64)
     commit: v0.7.0  # Replace with the exact release tag/commit submitted to F-Droid.
-    subdir: .
     output: build/app/outputs/flutter-apk/app-x86_64-production-release.apk
     ndk: 28.2.13676358
     srclibs:

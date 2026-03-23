@@ -241,15 +241,12 @@ Map<String, String> _cargoEnvForTarget({
   }
 
   if (compilerPath != null && archiverPath != null && linkerPath != null) {
-    final compilerCommand = useWindowsMsvcToolNames
-        ? _executableName(compilerPath)
-        : compilerPath;
-    final archiverCommand = useWindowsMsvcToolNames
-        ? _executableName(archiverPath)
-        : archiverPath;
-    final linkerCommand = useWindowsMsvcToolNames
-        ? _executableName(linkerPath)
-        : linkerPath;
+    final compilerCommand =
+        useWindowsMsvcToolNames ? _executableName(compilerPath) : compilerPath;
+    final archiverCommand =
+        useWindowsMsvcToolNames ? _executableName(archiverPath) : archiverPath;
+    final linkerCommand =
+        useWindowsMsvcToolNames ? _executableName(linkerPath) : linkerPath;
     final cxxCommand = cxxPath == null
         ? null
         : useWindowsMsvcToolNames
@@ -267,30 +264,23 @@ Map<String, String> _cargoEnvForTarget({
       File(linkerPath).parent.path,
       File(compilerPath).parent.path,
       File(archiverPath).parent.path,
-      _getEnvironmentValue(currentEnvironment ?? Platform.environment, 'PATH') ??
+      _getEnvironmentValue(
+              currentEnvironment ?? Platform.environment, 'PATH') ??
           '',
     ].where((element) => element.isNotEmpty).join(_environmentPathSeparator);
   }
 
   if (codeConfig.targetOS == OS.linux) {
-    const fallbackCc = '/usr/bin/gcc';
-    const fallbackCxx = '/usr/bin/g++';
-    const fallbackLinker = '/usr/bin/gcc';
-    const fallbackArchiver = '/usr/bin/ar';
+    const fallbackCc = 'cc';
+    const fallbackCxx = 'c++';
+    const fallbackLinker = 'cc';
+    const fallbackArchiver = 'ar';
 
-    if (File(fallbackLinker).existsSync()) {
-      env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = fallbackLinker;
-    }
-    if (File(fallbackArchiver).existsSync()) {
-      env['CARGO_TARGET_${tripleKeyCargo}_AR'] = fallbackArchiver;
-      env['AR_$tripleKeyCc'] = fallbackArchiver;
-    }
-    if (File(fallbackCc).existsSync()) {
-      env['CC_$tripleKeyCc'] = fallbackCc;
-    }
-    if (File(fallbackCxx).existsSync()) {
-      env['CXX_$tripleKeyCc'] = fallbackCxx;
-    }
+    env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = fallbackLinker;
+    env['CARGO_TARGET_${tripleKeyCargo}_AR'] = fallbackArchiver;
+    env['AR_$tripleKeyCc'] = fallbackArchiver;
+    env['CC_$tripleKeyCc'] = fallbackCc;
+    env['CXX_$tripleKeyCc'] = fallbackCxx;
   }
 
   // For macOS targets (e.g. aarch64-apple-darwin), ensure the SDK is visible
