@@ -36,8 +36,18 @@ Artifacts land in `dist/`:
 Useful overrides:
 
 - `--builder flutter` if you explicitly need a non-Shorebird build
+- `--package-only` to regenerate `.tar.gz`, `.deb`, and `.AppImage` from an
+  existing `build/linux/x64/release/bundle` without creating a new Shorebird
+  release
+- `--bundle-dir <dir>` if the bundle you want to package lives somewhere else
 - `--email-public-token <token>` or `EMAIL_PUBLIC_TOKEN=...`
 - `--output-dir <dir>`
+
+Repackaging example:
+
+```bash
+./tool/release_linux.sh --package-only --version v0.7.0
+```
 
 AppImage notes:
 

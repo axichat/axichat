@@ -11,7 +11,9 @@ package_version="${AXICHAT_RELEASE_VERSION:-}"
 deb_architecture="${AXICHAT_DEB_ARCH:-amd64}"
 appimage_arch="${AXICHAT_APPIMAGE_ARCH:-x86_64}"
 email_public_token="${AXICHAT_EMAIL_PUBLIC_TOKEN:-${EMAIL_PUBLIC_TOKEN:-axichatpublictoken}}"
+bundle_dir="${AXICHAT_LINUX_BUNDLE_DIR:-${repo_root}/build/linux/x64/release/bundle}"
 flavor_requested=0
+package_only=0
 declare -a flutter_args=()
 
 usage() {
@@ -37,6 +39,10 @@ Options:
   --flutter-version <version>    Flutter version passed to Shorebird release.
   --output-dir <dir>             Release output directory. Default: dist.
   --version <tag-or-version>     Version passed to the Debian package script.
+  --package-only                 Skip Flutter/Shorebird and package the existing
+                                 Linux bundle directory.
+  --bundle-dir <dir>             Linux bundle directory to package. Default:
+                                 build/linux/x64/release/bundle.
   --email-public-token <token>   EMAIL_PUBLIC_TOKEN dart define. Default:
                                  $AXICHAT_EMAIL_PUBLIC_TOKEN, $EMAIL_PUBLIC_TOKEN,
                                  or axichatpublictoken.
@@ -44,6 +50,7 @@ Options:
 
 Examples:
   ./tool/release_linux.sh --version v0.6.1
+  ./tool/release_linux.sh --package-only --version v0.6.1
   ./tool/release_linux.sh --builder flutter --version v0.6.1 -- --dart-define=FOO=bar
 EOF
 }
@@ -69,6 +76,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --version)
       package_version="$2"
+      shift 2
+      ;;
+    --package-only)
+      package_only=1
+      shift
+      ;;
+    --bundle-dir)
+      bundle_dir="$2"
       shift 2
       ;;
     --email-public-token)
@@ -109,46 +124,53 @@ fi
 
 cd "${repo_root}"
 
-flutter config --enable-linux-desktop
-flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+if [[ "${package_only}" -eq 0 ]]; then
+  flutter config --enable-linux-desktop
+  flutter pub get
+  dart run build_runner build --delete-conflicting-outputs
 
-build_args=(
-  --dart-define=EMAIL_PUBLIC_TOKEN="${email_public_token}"
-)
-if [[ "${#flutter_args[@]}" -gt 0 ]]; then
-  build_args+=("${flutter_args[@]}")
-fi
+  build_args=(
+    --dart-define=EMAIL_PUBLIC_TOKEN="${email_public_token}"
+  )
+  if [[ "${#flutter_args[@]}" -gt 0 ]]; then
+    build_args+=("${flutter_args[@]}")
+  fi
 
-if [[ "${flavor_requested}" -eq 1 ]]; then
-  echo "Ignoring --flavor=${flavor} for Linux desktop; Flutter and Shorebird desktop releases do not support flavors." >&2
-fi
+  if [[ "${flavor_requested}" -eq 1 ]]; then
+    echo "Ignoring --flavor=${flavor} for Linux desktop; Flutter and Shorebird desktop releases do not support flavors." >&2
+  fi
 
-case "${builder}" in
-  shorebird)
-    if ! command -v shorebird >/dev/null 2>&1; then
-      echo "Missing required tool: shorebird." >&2
+  case "${builder}" in
+    shorebird)
+      if ! command -v shorebird >/dev/null 2>&1; then
+        echo "Missing required tool: shorebird." >&2
+        exit 1
+      fi
+      shorebird release linux \
+        --flutter-version="${flutter_version}" \
+        -- \
+        "${build_args[@]}"
+      ;;
+    flutter)
+      flutter build linux \
+        --release \
+        "${build_args[@]}"
+      ;;
+    *)
+      echo "Unsupported builder: ${builder}" >&2
       exit 1
-    fi
-    shorebird release linux \
-      --flutter-version="${flutter_version}" \
-      -- \
-      "${build_args[@]}"
-    ;;
-  flutter)
-    flutter build linux \
-      --release \
-      "${build_args[@]}"
-    ;;
-  *)
-    echo "Unsupported builder: ${builder}" >&2
-    exit 1
-    ;;
-esac
+      ;;
+  esac
+fi
+
+if [[ ! -d "${bundle_dir}" ]]; then
+  echo "Linux bundle directory not found: ${bundle_dir}" >&2
+  exit 1
+fi
 
 mkdir -p "${output_dir}"
-tar -czf "${output_dir}/axichat-linux.tar.gz" -C "${repo_root}/build/linux/x64/release/bundle" .
-"${repo_root}/tool/package_deb.sh" "${repo_root}/build/linux/x64/release/bundle" "${package_version}" "${output_dir}"
+tar -czf "${output_dir}/axichat-linux.tar.gz" -C "${bundle_dir}" .
+"${repo_root}/tool/package_deb.sh" "${bundle_dir}" "${package_version}" "${output_dir}"
 
 checksum_targets=(
   "${output_dir}/axichat-linux.tar.gz"
@@ -156,7 +178,7 @@ checksum_targets=(
 )
 
 "${repo_root}/tool/package_appimage.sh" \
-  "${repo_root}/build/linux/x64/release/bundle" \
+  "${bundle_dir}" \
   "${package_version}" \
   "${output_dir}"
 checksum_targets+=("${output_dir}/axichat-${appimage_arch}.AppImage")
