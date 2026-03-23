@@ -76,6 +76,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     startForegroundService,
     Future<void> Function()? stopForegroundService,
     Duration? stopServiceTimeout,
+    Future<void> Function()? waitForResume,
     void Function()? initCommunicationPort,
     void Function(Future<void> Function(dynamic))? addTaskDataCallback,
     void Function(Future<void> Function(dynamic))? removeTaskDataCallback,
@@ -86,6 +87,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
        _stopForegroundService =
            stopForegroundService ?? _defaultStopForegroundService,
        _stopServiceTimeout = stopServiceTimeout ?? _defaultStopServiceTimeout,
+       _waitUntilResumed = waitForResume ?? _waitForResume,
        _initCommunicationPort =
            initCommunicationPort ?? _defaultInitCommunicationPort,
        _addTaskDataCallback =
@@ -101,6 +103,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   _startForegroundService;
   final Future<void> Function() _stopForegroundService;
   final Duration _stopServiceTimeout;
+  final Future<void> Function() _waitUntilResumed;
   final void Function() _initCommunicationPort;
   final void Function(Future<void> Function(dynamic)) _addTaskDataCallback;
   final void Function(Future<void> Function(dynamic)) _removeTaskDataCallback;
@@ -157,19 +160,27 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     }
     if (totalBefore > 0) {
       final pendingStart = _startCompleter;
-      if (pendingStart == null) {
+      if (pendingStart != null) {
+        try {
+          await pendingStart.future;
+        } on Exception {
+          if (addedClient) {
+            _decrementUsage(clientId);
+          }
+          _detachCallbackIfUnused();
+          rethrow;
+        }
         return;
       }
-      try {
-        await pendingStart.future;
-      } on Exception {
-        if (addedClient) {
-          _decrementUsage(clientId);
-        }
-        _detachCallbackIfUnused();
-        rethrow;
+
+      if (await _isRunningService()) {
+        return;
       }
-      return;
+
+      _log.warning(
+        'Foreground service lease state was stale after the service stopped unexpectedly. Restarting while preserving active client leases.',
+      );
+      _resetTaskReady();
     }
     try {
       await _startService(config ?? _defaultConfig());
@@ -231,7 +242,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
         completer.complete();
         return completer.future;
       }
-      await _waitForResume();
+      await _waitUntilResumed();
       await _startForegroundService(config);
       await _awaitTaskReady();
       completer.complete();
@@ -341,6 +352,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     ForegroundServiceConfig config,
   ) async {
     final result = await FlutterForegroundTask.startService(
+      serviceTypes: const [ForegroundServiceTypes.specialUse],
       serviceId: _foregroundServiceId,
       notificationTitle: config.notificationTitle,
       notificationText: config.notificationText,
@@ -621,11 +633,19 @@ class ForegroundSocket extends TaskHandler {
 }
 
 class ForegroundSocketWrapper implements XmppSocketWrapper {
-  ForegroundSocketWrapper({ForegroundTaskBridge? bridge})
-    : _bridge = bridge ?? foregroundTaskBridge;
+  ForegroundSocketWrapper({
+    ForegroundTaskBridge? bridge,
+    Duration? connectTimeout,
+    Duration? secureTimeout,
+  }) : _bridge = bridge ?? foregroundTaskBridge,
+       _connectTimeout = connectTimeout ?? _defaultTaskResponseTimeout,
+       _secureTimeout = secureTimeout ?? _defaultTaskResponseTimeout;
 
   static final _log = Logger('ForegroundSocketWrapper');
+  static const Duration _defaultTaskResponseTimeout = Duration(seconds: 20);
   final ForegroundTaskBridge _bridge;
+  final Duration _connectTimeout;
+  final Duration _secureTimeout;
   final StreamController<String> _dataStream = StreamController.broadcast();
   final StreamController<mox.XmppSocketEvent> _eventStream =
       StreamController.broadcast();
@@ -729,7 +749,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   Future<bool> secure(String domain) {
     _secure = Completer<bool>();
     _sendToTask([securePrefix, domain]);
-    return _secure.future;
+    return _awaitSecureResponse(domain);
   }
 
   @override
@@ -788,7 +808,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     }
 
     _sendToTask([connectPrefix, domain, target.host, target.port]);
-    return _connect.future;
+    return _awaitConnectResponse();
   }
 
   _SocketTarget? _resolveTarget(String domain, {String? host, int? port}) {
@@ -870,6 +890,30 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     }
     _bridge.unregisterListener(foregroundClientXmpp);
     _listenerRegistered = false;
+  }
+
+  Future<bool> _awaitConnectResponse() async {
+    try {
+      return await _connect.future.timeout(_connectTimeout);
+    } on TimeoutException {
+      const error = SocketException('Foreground task connect timed out.');
+      _log.warning('Timed out waiting for the foreground task connect result.');
+      _onConnectError?.call(error);
+      await reset();
+      return false;
+    }
+  }
+
+  Future<bool> _awaitSecureResponse(String domain) async {
+    try {
+      return await _secure.future.timeout(_secureTimeout);
+    } on TimeoutException {
+      _log.warning(
+        'Timed out waiting for the foreground task secure result for $domain.',
+      );
+      await reset();
+      return false;
+    }
   }
 }
 

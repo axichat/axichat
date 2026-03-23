@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -207,6 +208,7 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final capability = context.watch<Capability>();
     final l10n = context.l10n;
     final spacing = context.spacing;
     return Column(
@@ -223,15 +225,15 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
           l10n.emailForwardingWelcomeOtherProviderHint,
           style: context.textTheme.muted,
         ),
-        SizedBox(height: spacing.xl),
-        Text(
-          l10n.emailForwardingGuideNotificationsTitle,
-          style: context.textTheme.large,
-        ),
-        SizedBox(height: spacing.s),
-        const NotificationRequest(
-          displayMode: NotificationRequestDisplayMode.always,
-        ),
+        if (capability.canForegroundService) ...[
+          SizedBox(height: spacing.xl),
+          Text(
+            l10n.emailForwardingGuideNotificationsTitle,
+            style: context.textTheme.large,
+          ),
+          SizedBox(height: spacing.s),
+          const NotificationRequest(),
+        ],
       ],
     );
   }
@@ -249,6 +251,7 @@ class EmailForwardingGuideContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final capability = context.watch<Capability>();
     final l10n = context.l10n;
     final spacing = context.spacing;
     final paragraphStyle = context.textTheme.muted;
@@ -271,20 +274,20 @@ class EmailForwardingGuideContent extends StatelessWidget {
         const EmailForwardingLinkRow(),
       ],
     );
-    final notificationSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(height: spacing.m),
-        Text(
-          l10n.emailForwardingGuideNotificationsTitle,
-          style: subheaderStyle,
-        ),
-        SizedBox(height: spacing.s),
-        const NotificationRequest(
-          displayMode: NotificationRequestDisplayMode.always,
-        ),
-      ],
-    );
+    final Widget? notificationSection = capability.canForegroundService
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: spacing.m),
+              Text(
+                l10n.emailForwardingGuideNotificationsTitle,
+                style: subheaderStyle,
+              ),
+              SizedBox(height: spacing.s),
+              const NotificationRequest(),
+            ],
+          )
+        : null;
     if (edgeToEdgeDivider) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -294,11 +297,13 @@ class EmailForwardingGuideContent extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: spacing.l),
             child: topSection,
           ),
-          SizedBox(height: spacing.xl),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: spacing.l),
-            child: notificationSection,
-          ),
+          if (notificationSection != null) ...[
+            SizedBox(height: spacing.xl),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: spacing.l),
+              child: notificationSection,
+            ),
+          ],
         ],
       );
     }
@@ -307,8 +312,10 @@ class EmailForwardingGuideContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         topSection,
-        SizedBox(height: spacing.xl),
-        notificationSection,
+        if (notificationSection != null) ...[
+          SizedBox(height: spacing.xl),
+          notificationSection,
+        ],
       ],
     );
   }

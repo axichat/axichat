@@ -21,6 +21,7 @@ void main() {
           }());
         },
         stopForegroundService: () async {},
+        waitForResume: () async {},
         initCommunicationPort: () {},
         addTaskDataCallback: (callback) {
           taskDataCallback = callback;
@@ -55,6 +56,7 @@ void main() {
           }());
         },
         stopForegroundService: () async {},
+        waitForResume: () async {},
         initCommunicationPort: () {},
         addTaskDataCallback: (callback) {
           taskDataCallback = callback;
@@ -90,6 +92,7 @@ void main() {
           stopForegroundService: () async {
             stopCalls++;
           },
+          waitForResume: () async {},
           initCommunicationPort: () {},
           addTaskDataCallback: (_) {},
           removeTaskDataCallback: (_) {},
@@ -100,6 +103,84 @@ void main() {
         await bridge.acquire(clientId: foregroundClientEmailKeepalive);
         await bridge.release(foregroundClientEmailKeepalive);
 
+        expect(stopCalls, equals(1));
+      },
+    );
+
+    test(
+      'acquire restarts the foreground service when lease state is stale',
+      () async {
+        late Future<void> Function(dynamic) taskDataCallback;
+        var running = false;
+        var startCalls = 0;
+
+        final bridge = FlutterForegroundTaskBridge(
+          isRunningService: () async => running,
+          startForegroundService: (_) async {
+            startCalls++;
+            running = true;
+            await taskDataCallback(taskReadyPrefix);
+          },
+          stopForegroundService: () async {},
+          waitForResume: () async {},
+          initCommunicationPort: () {},
+          addTaskDataCallback: (callback) {
+            taskDataCallback = callback;
+          },
+          removeTaskDataCallback: (_) {},
+          sendDataToTask: (_) {},
+        );
+
+        await bridge.acquire(clientId: foregroundClientXmpp);
+        expect(startCalls, equals(1));
+
+        running = false;
+        await bridge.acquire(clientId: foregroundClientXmpp);
+
+        expect(startCalls, equals(2));
+      },
+    );
+
+    test(
+      'stale service recovery preserves other active client leases',
+      () async {
+        late Future<void> Function(dynamic) taskDataCallback;
+        var running = false;
+        var startCalls = 0;
+        var stopCalls = 0;
+
+        final bridge = FlutterForegroundTaskBridge(
+          isRunningService: () async => running,
+          startForegroundService: (_) async {
+            startCalls++;
+            running = true;
+            await taskDataCallback(taskReadyPrefix);
+          },
+          stopForegroundService: () async {
+            stopCalls++;
+            running = false;
+          },
+          waitForResume: () async {},
+          initCommunicationPort: () {},
+          addTaskDataCallback: (callback) {
+            taskDataCallback = callback;
+          },
+          removeTaskDataCallback: (_) {},
+          sendDataToTask: (_) {},
+        );
+
+        await bridge.acquire(clientId: foregroundClientEmailKeepalive);
+        await bridge.acquire(clientId: foregroundClientXmpp);
+        expect(startCalls, equals(1));
+
+        running = false;
+        await bridge.acquire(clientId: foregroundClientXmpp);
+        expect(startCalls, equals(2));
+
+        await bridge.release(foregroundClientXmpp);
+        expect(stopCalls, isZero);
+
+        await bridge.release(foregroundClientEmailKeepalive);
         expect(stopCalls, equals(1));
       },
     );
@@ -120,6 +201,7 @@ void main() {
         stopForegroundService: () async {
           stopCalls++;
         },
+        waitForResume: () async {},
         initCommunicationPort: () {},
         addTaskDataCallback: (callback) {
           taskDataCallback = callback;
@@ -155,6 +237,7 @@ void main() {
           stopForegroundService: () async {
             stopCalls++;
           },
+          waitForResume: () async {},
           initCommunicationPort: () {},
           addTaskDataCallback: (_) {},
           removeTaskDataCallback: (_) {},
@@ -178,6 +261,7 @@ void main() {
           await Completer<void>().future;
         },
         stopServiceTimeout: const Duration(milliseconds: 1),
+        waitForResume: () async {},
         initCommunicationPort: () {},
         addTaskDataCallback: (_) {},
         removeTaskDataCallback: (_) {},
@@ -224,4 +308,50 @@ void main() {
       expect(stopCalls, isZero);
     });
   });
+
+  group('ForegroundSocketWrapper', () {
+    test('connect times out instead of hanging forever', () async {
+      final bridge = _NoReplyForegroundTaskBridge();
+      final socket = ForegroundSocketWrapper(
+        bridge: bridge,
+        connectTimeout: const Duration(milliseconds: 1),
+      );
+
+      final connected = await socket.connect(
+        'axi.im',
+        host: '127.0.0.1',
+        port: 5222,
+      );
+
+      expect(connected, isFalse);
+      expect(bridge.releaseCalls, equals(1));
+    });
+  });
+}
+
+class _NoReplyForegroundTaskBridge implements ForegroundTaskBridge {
+  var releaseCalls = 0;
+
+  @override
+  Future<void> acquire({
+    required String clientId,
+    ForegroundServiceConfig? config,
+  }) async {}
+
+  @override
+  void registerListener(
+    String clientId,
+    ForegroundTaskMessageHandler handler,
+  ) {}
+
+  @override
+  Future<void> release(String clientId) async {
+    releaseCalls++;
+  }
+
+  @override
+  Future<void> send(List<Object> parts) async {}
+
+  @override
+  void unregisterListener(String clientId) {}
 }
