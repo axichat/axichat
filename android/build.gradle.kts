@@ -1,3 +1,5 @@
+import com.android.build.api.dsl.LibraryExtension
+
 allprojects {
     repositories {
         google()
@@ -12,6 +14,19 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
+subprojects {
+    afterEvaluate {
+        if (name != "flutter_inappwebview_android") {
+            return@afterEvaluate
+        }
+
+        extensions.findByType(LibraryExtension::class.java)?.buildTypes?.getByName("release")?.apply {
+            isMinifyEnabled = false
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

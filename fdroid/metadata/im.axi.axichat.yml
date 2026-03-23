@@ -1,13 +1,8 @@
-# F-Droid metadata template for Axichat.
-# Copy this file into fdroiddata/metadata/im.axi.axichat.yml when submitting to F-Droid.
-# Keep fields in sync with pubspec.yaml before submission.
-
 Categories:
-  - Email
-  - Messaging
   - Calendar & Agenda
+  - Email
   - Internet
-
+  - Messaging
 License: AGPL-3.0-or-later
 AuthorName: Axichat Developers
 WebSite: https://axi.chat
@@ -21,40 +16,12 @@ Repo: https://gitlab.com/axichat/axichat.git
 
 Builds:
   - versionName: 0.7.0
-    versionCode: 1002  # 1000 + pubspec build code (armv7)
-    commit: v0.7.0  # Replace with the exact release tag/commit submitted to F-Droid.
-    output: build/app/outputs/flutter-apk/app-armeabi-v7a-production-release.apk
-    ndk: 28.2.13676358
-    srclibs:
-      - flutter@3.41.4
-      - rustup@1.27.1
-    prebuild:
-      - export PUB_CACHE=$(pwd)/.pub-cache
-      - export ANDROID_HOME=$$SDK$$
-      - export ANDROID_SDK_ROOT=$$SDK$$
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export ANDROID_NDK_ROOT=$$NDK$$
-      - printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties
-      - $$flutter$$/bin/flutter config --no-analytics
-    scandelete:
-      - .pub-cache
-    build:
-      - export PUB_CACHE=$(pwd)/.pub-cache
-      - export ANDROID_HOME=$$SDK$$
-      - export ANDROID_SDK_ROOT=$$SDK$$
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export ANDROID_NDK_ROOT=$$NDK$$
-      - $$rustup$$/rustup-init.sh -y --default-toolchain 1.90.0
-      - source $HOME/.cargo/env
-      - rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
-      - $$flutter$$/bin/flutter pub get
-      - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi --target-platform=android-arm --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken --dart-define=ENABLE_SHOREBIRD=false
-  - versionName: 0.7.0
-    versionCode: 2002  # 2000 + pubspec build code (arm64)
-    commit: v0.7.0  # Replace with the exact release tag/commit submitted to F-Droid.
+    versionCode: 2002
+    commit: v0.7.0
+    sudo:
+      - apt-get update
+      - apt-get install -y build-essential pkg-config perl
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
-    ndk: 28.2.13676358
     srclibs:
       - flutter@3.41.4
       - rustup@1.27.1
@@ -76,61 +43,20 @@ Builds:
       - export ANDROID_NDK_ROOT=$$NDK$$
       - $$rustup$$/rustup-init.sh -y --default-toolchain 1.90.0
       - source $HOME/.cargo/env
-      - rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
+      - rustup target add aarch64-linux-android
       - $$flutter$$/bin/flutter pub get
       - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi --target-platform=android-arm64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken --dart-define=ENABLE_SHOREBIRD=false
-  - versionName: 0.7.0
-    versionCode: 4002  # 4000 + pubspec build code (x86_64)
-    commit: v0.7.0  # Replace with the exact release tag/commit submitted to F-Droid.
-    output: build/app/outputs/flutter-apk/app-x86_64-production-release.apk
+      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi
+        --target-platform=android-arm64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken
+        --dart-define=ENABLE_SHOREBIRD=false
     ndk: 28.2.13676358
-    srclibs:
-      - flutter@3.41.4
-      - rustup@1.27.1
-    prebuild:
-      - export PUB_CACHE=$(pwd)/.pub-cache
-      - export ANDROID_HOME=$$SDK$$
-      - export ANDROID_SDK_ROOT=$$SDK$$
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export ANDROID_NDK_ROOT=$$NDK$$
-      - printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties
-      - $$flutter$$/bin/flutter config --no-analytics
-    scandelete:
-      - .pub-cache
-    build:
-      - export PUB_CACHE=$(pwd)/.pub-cache
-      - export ANDROID_HOME=$$SDK$$
-      - export ANDROID_SDK_ROOT=$$SDK$$
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export ANDROID_NDK_ROOT=$$NDK$$
-      - $$rustup$$/rustup-init.sh -y --default-toolchain 1.90.0
-      - source $HOME/.cargo/env
-      - rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
-      - $$flutter$$/bin/flutter pub get
-      - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi --target-platform=android-x64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken --dart-define=ENABLE_SHOREBIRD=false
 
 AllowedAPKSigningKeys: 92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e
-VercodeOperation:
-  - 1000 + %c
-  - 2000 + %c
-  - 4000 + %c
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-UpdateCheckData: 'pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+'
+VercodeOperation:
+  - 2000 + %c
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 CurrentVersion: 0.7.0
-CurrentVersionCode: 4002
-
-# When bumping versions, update versionName/commit fields and set versionCode
-# per ABI using 1000/2000/4000 + the pubspec build code.
-# Keep CurrentVersionCode equal to the highest ABI-specific version code.
-# Keep VercodeOperation aligned with the ABI offsets above.
-# keep --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken and
-# --dart-define=ENABLE_SHOREBIRD=false so the F-Droid build ships with the
-# public provisioning token and without OTA updates.
-# Flutter adds ABI offsets when using --split-per-abi, so build-number must
-# stay at the base pubspec build code via $(($$VERCODE$$ % 1000)).
-# Rust is required for the DeltaChat FFI build hook, so each build installs a
-# pinned rustup toolchain and the Android Rust targets it needs.
+CurrentVersionCode: 2002

@@ -26,8 +26,7 @@ pubspec_version_name="${BASH_REMATCH[1]}"
 pubspec_version_code="${BASH_REMATCH[2]}"
 expected_armv7_version_code="$((1000 + pubspec_version_code))"
 expected_arm64_version_code="$((2000 + pubspec_version_code))"
-expected_x64_version_code="$((4000 + pubspec_version_code))"
-expected_current_version_code="${expected_x64_version_code}"
+expected_current_version_code="${expected_arm64_version_code}"
 
 metadata_build_version_names=()
 while IFS= read -r line; do
@@ -72,9 +71,7 @@ for build_version_name in "${metadata_build_version_names[@]}"; do
 done
 
 expected_codes=(
-  "${expected_armv7_version_code}"
   "${expected_arm64_version_code}"
-  "${expected_x64_version_code}"
 )
 
 if [[ "${#metadata_build_version_codes[@]}" -ne "${#expected_codes[@]}" ]]; then
@@ -121,11 +118,9 @@ if [[ "${metadata_current_version_code}" != "${expected_current_version_code}" ]
 fi
 
 expected_vercode_operations=(
-  "1000 + %c"
   "2000 + %c"
-  "4000 + %c"
 )
-expected_update_check_data="'pubspec.yaml|version:\\s.+\\+(\\d+)|.|version:\\s(.+)\\+'"
+expected_update_check_data="pubspec.yaml|version:\\s.+\\+(\\d+)|.|version:\\s(.+)\\+"
 
 if [[ "${#metadata_vercode_operations[@]}" -ne "${#expected_vercode_operations[@]}" ]]; then
   echo "Mismatch: expected ${#expected_vercode_operations[@]} VercodeOperation entries, found ${#metadata_vercode_operations[@]}" >&2
@@ -163,37 +158,41 @@ if command -v rg >/dev/null 2>&1; then
   missing_android_sdk_env=0
   missing_rustup_srclib=0
   missing_rustup_setup=0
+  missing_host_toolchain_sudo=0
   if ! rg -q -- "--dart-define=ENABLE_SHOREBIRD=false" "${fdroid_metadata_path}"; then
     missing_shorebird_define=1
   fi
   if ! rg -q -- "--dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken" "${fdroid_metadata_path}"; then
     missing_email_token_define=1
   fi
-  if [[ "$(rg -F -c -- '--build-number=$(($$VERCODE$$ % 1000))' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -F -c -- '--build-number=$(($$VERCODE$$ % 1000))' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_vercode_build_number=1
   fi
-  if [[ "$(rg -c -- 'flutter@3\.41\.4' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -c -- 'flutter@3\.41\.4' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_flutter_srclib=1
   fi
-  if [[ "$(rg -c -- 'rustup@1\.27\.1' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -c -- 'rustup@1\.27\.1' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_rustup_srclib=1
   fi
-  if [[ "$(rg -c -- 'printf "sdk\.dir=%s\\nflutter\.sdk=%s\\n" "\$\$SDK\$\$" "\$\$flutter\$\$" > android/local\.properties' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -c -- 'printf "sdk\.dir=%s\\nflutter\.sdk=%s\\n" "\$\$SDK\$\$" "\$\$flutter\$\$" > android/local\.properties' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_flutter_local_properties=1
   fi
-  if [[ "$(rg -c -- '^[[:space:]]+- \.pub-cache$' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -c -- '^[[:space:]]+- \.pub-cache$' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_pub_cache_scandelete=1
   fi
   if rg -q -- 'flutter build apk \\' "${fdroid_metadata_path}"; then
     multiline_flutter_build_commands=1
   fi
-  if [[ "$(rg -c -- '^[[:space:]]+ndk: 28\.2\.13676358$' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -c -- '^[[:space:]]+ndk: 28\.2\.13676358$' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_ndk_pin=1
   fi
-  if [[ "$(rg -c -- '^[[:space:]]+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\$\$(SDK|NDK)\$\$$' "${fdroid_metadata_path}")" != "24" ]]; then
+  if [[ "$(rg -c -- '^[[:space:]]+sudo:$' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(rg -F -c -- 'apt-get update' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(rg -F -c -- 'apt-get install -y build-essential pkg-config perl' "${fdroid_metadata_path}")" != "1" ]]; then
+    missing_host_toolchain_sudo=1
+  fi
+  if [[ "$(rg -c -- '^[[:space:]]+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\$\$(SDK|NDK)\$\$$' "${fdroid_metadata_path}")" != "8" ]]; then
     missing_android_sdk_env=1
   fi
-  if [[ "$(rg -F -c -- 'rustup-init.sh -y --default-toolchain 1.90.0' "${fdroid_metadata_path}")" != "3" ]] || [[ "$(rg -F -c -- 'source $HOME/.cargo/env' "${fdroid_metadata_path}")" != "3" ]] || [[ "$(rg -F -c -- 'rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(rg -F -c -- 'rustup-init.sh -y --default-toolchain 1.90.0' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(rg -F -c -- 'source $HOME/.cargo/env' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(rg -F -c -- 'rustup target add aarch64-linux-android' "${fdroid_metadata_path}")" != "1" ]] || rg -q -- 'rustup target add .*armv7-linux-androideabi' "${fdroid_metadata_path}" || rg -q -- 'rustup target add .*x86_64-linux-android' "${fdroid_metadata_path}"; then
     missing_rustup_setup=1
   fi
 else
@@ -208,37 +207,41 @@ else
   missing_android_sdk_env=0
   missing_rustup_srclib=0
   missing_rustup_setup=0
+  missing_host_toolchain_sudo=0
   if ! grep -F -q -- "--dart-define=ENABLE_SHOREBIRD=false" "${fdroid_metadata_path}"; then
     missing_shorebird_define=1
   fi
   if ! grep -F -q -- "--dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken" "${fdroid_metadata_path}"; then
     missing_email_token_define=1
   fi
-  if [[ "$(grep -F -c -- '--build-number=$(($$VERCODE$$ % 1000))' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -F -c -- '--build-number=$(($$VERCODE$$ % 1000))' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_vercode_build_number=1
   fi
-  if [[ "$(grep -F -c -- 'flutter@3.41.4' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -F -c -- 'flutter@3.41.4' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_flutter_srclib=1
   fi
-  if [[ "$(grep -F -c -- 'rustup@1.27.1' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -F -c -- 'rustup@1.27.1' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_rustup_srclib=1
   fi
-  if [[ "$(grep -F -c -- 'printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -F -c -- 'printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_flutter_local_properties=1
   fi
-  if [[ "$(grep -E -c '^[[:space:]]+- \.pub-cache$' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -E -c '^[[:space:]]+- \.pub-cache$' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_pub_cache_scandelete=1
   fi
   if grep -F -q -- 'flutter build apk \' "${fdroid_metadata_path}"; then
     multiline_flutter_build_commands=1
   fi
-  if [[ "$(grep -E -c '^[[:space:]]+ndk: 28\.2\.13676358$' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -E -c '^[[:space:]]+ndk: 28\.2\.13676358$' "${fdroid_metadata_path}")" != "1" ]]; then
     missing_ndk_pin=1
   fi
-  if [[ "$(grep -E -c '^[[:space:]]+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\\$\\$(SDK|NDK)\\$\\$$' "${fdroid_metadata_path}")" != "24" ]]; then
+  if [[ "$(grep -E -c '^[[:space:]]+sudo:$' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(grep -F -c -- 'apt-get update' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(grep -F -c -- 'apt-get install -y build-essential pkg-config perl' "${fdroid_metadata_path}")" != "1" ]]; then
+    missing_host_toolchain_sudo=1
+  fi
+  if [[ "$(grep -E -c '^[[:space:]]+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\\$\\$(SDK|NDK)\\$\\$$' "${fdroid_metadata_path}")" != "8" ]]; then
     missing_android_sdk_env=1
   fi
-  if [[ "$(grep -F -c -- 'rustup-init.sh -y --default-toolchain 1.90.0' "${fdroid_metadata_path}")" != "3" ]] || [[ "$(grep -E -c '^[[:space:]]+- source \\$HOME/\\.cargo/env$' "${fdroid_metadata_path}")" != "3" ]] || [[ "$(grep -E -c '^[[:space:]]+- rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android$' "${fdroid_metadata_path}")" != "3" ]]; then
+  if [[ "$(grep -F -c -- 'rustup-init.sh -y --default-toolchain 1.90.0' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(grep -E -c '^[[:space:]]+- source \\$HOME/\\.cargo/env$' "${fdroid_metadata_path}")" != "1" ]] || [[ "$(grep -E -c '^[[:space:]]+- rustup target add aarch64-linux-android$' "${fdroid_metadata_path}")" != "1" ]] || grep -E -q 'rustup target add .*armv7-linux-androideabi' "${fdroid_metadata_path}" || grep -E -q 'rustup target add .*x86_64-linux-android' "${fdroid_metadata_path}"; then
     missing_rustup_setup=1
   fi
 fi
@@ -285,6 +288,11 @@ fi
 
 if [[ "${missing_ndk_pin}" -ne 0 ]]; then
   echo 'Expected each split build to pin ndk: 28.2.13676358' >&2
+  failed=1
+fi
+
+if [[ "${missing_host_toolchain_sudo}" -ne 0 ]]; then
+  echo 'Expected each split build to install the host C toolchain via sudo: apt-get update && apt-get install -y gcc libc-dev' >&2
   failed=1
 fi
 
