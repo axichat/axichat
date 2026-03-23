@@ -23,7 +23,7 @@ Feature highlights:
 - First-party push notifications and offline sync
 - Works without Google, Firebase, and FCM
 
-<strong>Note:</strong> Axichat is still under active development, so things may break. It was not vibe-coded.
+<strong>Note:</strong> Axichat is still under active development, so things may break.
 
 If you find any bugs please report them at https://github.com/axichat/axichat/issues so I can fix them! GitLab also works for bug reports.
 

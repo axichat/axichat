@@ -1,4 +1,4 @@
-<strong>Nota:</strong> Axichat sigue en desarrollo activo, por lo que algunas funciones pueden fallar. No fue vibe-coded.
+<strong>Nota:</strong> Axichat sigue en desarrollo activo, por lo que algunas funciones pueden fallar.
 
 Si encuentras errores, repórtalos en https://github.com/axichat/axichat/issues para que pueda corregirlos. GitLab también sirve para reportar fallos.
 

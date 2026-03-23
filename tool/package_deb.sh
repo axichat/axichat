@@ -21,7 +21,7 @@ append_linux_long_description() {
  - Sync across all your devices (mobile and desktop)
  - Easy drag-and-drop calendar
  .
- Axichat is still under active development, so things may break. It was not vibe-coded.
+ Axichat is still under active development, so things may break.
 EOF
 }
 

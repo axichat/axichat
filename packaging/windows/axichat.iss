@@ -2,12 +2,14 @@
   #define AppVersion "0.0.0"
 #endif
 
+#define RepoRoot AddBackslash(SourcePath) + "..\..\"
+
 #ifndef AppSourceDir
-  #define AppSourceDir "build\windows\x64\runner\Release"
+  #define AppSourceDir AddBackslash(RepoRoot) + "build\windows\x64\runner\Release"
 #endif
 
 #ifndef AppOutputDir
-  #define AppOutputDir "dist"
+  #define AppOutputDir AddBackslash(RepoRoot) + "dist"
 #endif
 
 #define AppId "{{B7F0D98A-6D0C-4EAA-A63C-9A5E4A9C0F7D}"
@@ -35,7 +37,7 @@ SolidCompression=yes
 WizardStyle=modern
 OutputDir={#AppOutputDir}
 OutputBaseFilename=axichat-windows-setup
-SetupIconFile=windows\runner\resources\app_icon.ico
+SetupIconFile={#AddBackslash(RepoRoot) + "windows\runner\resources\app_icon.ico"}
 UninstallDisplayIcon={app}\{#AppExeName}
 
 [Languages]
