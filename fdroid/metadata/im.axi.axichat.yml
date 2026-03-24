@@ -51,10 +51,10 @@ Builds:
       - $$flutter$$/bin/flutter pub get
       - python3 -c 'import json; from pathlib import Path; p=Path(".flutter-plugins-dependencies");
         o=json.loads(p.read_text()); d={q["name"] for ps in o.get("plugins", {}).values()
-        if isinstance(ps, list) for q in ps if q.get("dev_dependency")}; o["plugins"]={k:[q
-        for q in ps if q.get("name") not in d] for k, ps in o.get("plugins", {}).items()};
-        o["dependencyGraph"]=[q for q in o.get("dependencyGraph", []) if q.get("name")
-        not in d]; p.write_text(json.dumps(o, separators=(",", ":")))'
+        if isinstance(ps, list) for q in ps if q.get("dev_dependency")} | {"in_app_update"};
+        o["plugins"]={k:[q for q in ps if q.get("name") not in d] for k, ps in o.get("plugins",
+        {}).items()}; o["dependencyGraph"]=[q for q in o.get("dependencyGraph", [])
+        if q.get("name") not in d]; p.write_text(json.dumps(o, separators=(",", ":")))'
       - find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2 \( -name example
         -o -name test -o -name tests -o -name benchmark -o -name benchmarks -o -name
         windows -o -name linux -o -name macos -o -name ios -o -name web -o -name extension
