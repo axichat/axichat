@@ -46,15 +46,15 @@ Future<void> main(List<String> args) async {
     final linkerEnvKey = 'CARGO_TARGET_${tripleKeyCargo}_LINKER';
     stdout.writeln(
         '[delta_ffi] Target: $targetTriple (${codeConfig.targetOS.name}/${codeConfig.targetArchitecture.name})');
-    stdout.writeln(
+    stderr.writeln(
       '[delta_ffi] Resolved build mode: ${resolvedMode.name} (source: ${resolvedMode.source})',
     );
-    stdout.writeln(
+    stderr.writeln(
         '[delta_ffi][warning] Using linker: ${environment[linkerEnvKey] ?? 'default'}');
-    stdout.writeln('[delta_ffi] Using cargo executable: $cargoExecutable');
-    stdout.writeln(
+    stderr.writeln('[delta_ffi] Using cargo executable: $cargoExecutable');
+    stderr.writeln(
         '[delta_ffi] Running cargo from ${crateDir.toFilePath()} with args: ${buildArgs.join(' ')}');
-    stdout.writeln(
+    stderr.writeln(
         '[delta_ffi] Using cargo target dir: ${cargoTargetDir.toFilePath()}');
 
     late final Process process;
@@ -118,7 +118,15 @@ Future<void> main(List<String> args) async {
     final outputUri = input.outputDirectory.resolve(libraryName);
     final outputFile = File.fromUri(outputUri);
     await outputFile.parent.create(recursive: true);
+    stderr.writeln(
+      '[delta_ffi] Copying native artifact from ${artifact.toFilePath()} to ${outputFile.path}',
+    );
     await File.fromUri(artifact).copy(outputFile.path);
+    await _stripBundledLinuxReleaseArtifactIfNeeded(
+      outputFile: outputFile,
+      targetOS: codeConfig.targetOS,
+      isRelease: isRelease,
+    );
 
     output.dependencies.add(crateDir.resolve('Cargo.toml'));
 
@@ -131,6 +139,48 @@ Future<void> main(List<String> args) async {
       ),
     );
   });
+}
+
+Future<void> _stripBundledLinuxReleaseArtifactIfNeeded({
+  required File outputFile,
+  required OS targetOS,
+  required bool isRelease,
+}) async {
+  if (!isRelease || targetOS != OS.linux) {
+    return;
+  }
+
+  final stripExecutable =
+      _findExecutableInPath('llvm-strip') ?? _findExecutableInPath('strip');
+  if (stripExecutable == null || stripExecutable.isEmpty) {
+    stderr.writeln(
+      '[delta_ffi][warning] No strip executable found; leaving ${outputFile.path} unstripped.',
+    );
+    return;
+  }
+
+  final stripArgs = ['--strip-unneeded', outputFile.path];
+  stderr.writeln(
+    '[delta_ffi] Stripping Linux release artifact with $stripExecutable ${stripArgs.join(' ')}',
+  );
+
+  final result = await Process.run(stripExecutable, stripArgs);
+  if (result.exitCode != 0) {
+    final details = [
+      if (result.stdout.toString().trim().isNotEmpty)
+        result.stdout.toString().trim(),
+      if (result.stderr.toString().trim().isNotEmpty)
+        result.stderr.toString().trim(),
+    ].join('\n');
+    throw ProcessException(
+      stripExecutable,
+      stripArgs,
+      details.isEmpty
+          ? 'Failed to strip Linux release artifact ${outputFile.path}.'
+          : details,
+      result.exitCode,
+    );
+  }
 }
 
 String _cargoExecutable() {
@@ -791,6 +841,14 @@ _BuildModeSelection _resolveBuildMode(
     return _BuildModeSelection(name: configMode, source: 'hooks build input');
   }
 
+  final linkingEnabledMode = _buildModeFromLinkingEnabled(input);
+  if (linkingEnabledMode != null) {
+    return _BuildModeSelection(
+      name: linkingEnabledMode,
+      source: 'hook linking_enabled',
+    );
+  }
+
   return const _BuildModeSelection(name: 'debug', source: 'default');
 }
 
@@ -907,6 +965,21 @@ String? _buildModeFromConfigJson(Map<String, Object?> value) {
     if (_isKnownMode(normalized)) {
       return normalized;
     }
+  }
+
+  return null;
+}
+
+String? _buildModeFromLinkingEnabled(hooks.BuildInput input) {
+  try {
+    final dynamic dynamicInput = input;
+    final dynamic config = dynamicInput.config;
+    final dynamic linkingEnabled = config.linkingEnabled;
+    if (linkingEnabled is bool) {
+      return linkingEnabled ? 'release' : 'debug';
+    }
+  } catch (_) {
+    // Ignore absence/incompatibility of linkingEnabled.
   }
 
   return null;

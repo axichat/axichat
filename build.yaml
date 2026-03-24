@@ -9,6 +9,18 @@ targets:
           - lib/src/storage/**
         options:
           store_date_time_values_as_text: true
+      hive_ce_generator:hive_type_adapter_generator:
+        generate_for:
+          - lib/**
+      hive_ce_generator:hive_adapters_generator:
+        generate_for:
+          - lib/**
+      hive_ce_generator:hive_registrar_intermediate_generator:
+        generate_for:
+          - lib/**
+      hive_ce_generator:hive_registrar_generator:
+        generate_for:
+          - lib/**
       source_gen|combining_builder:
         options:
           ignore_for_file:

@@ -55,6 +55,30 @@ Examples:
 EOF
 }
 
+strip_linux_bundle_deltachat() {
+  local library_path="$1"
+
+  if [[ ! -f "${library_path}" ]]; then
+    return
+  fi
+
+  local strip_bin=""
+  for candidate in llvm-strip strip; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      strip_bin="$(command -v "${candidate}")"
+      break
+    fi
+  done
+
+  if [[ -z "${strip_bin}" ]]; then
+    echo "Warning: no strip executable found; leaving ${library_path} unstripped." >&2
+    return
+  fi
+
+  echo "Stripping Linux release library ${library_path}" >&2
+  "${strip_bin}" --strip-unneeded "${library_path}"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --builder)
@@ -167,6 +191,8 @@ if [[ ! -d "${bundle_dir}" ]]; then
   echo "Linux bundle directory not found: ${bundle_dir}" >&2
   exit 1
 fi
+
+strip_linux_bundle_deltachat "${bundle_dir}/lib/libdeltachat_wrap.so"
 
 mkdir -p "${output_dir}"
 tar -czf "${output_dir}/axichat-linux.tar.gz" -C "${bundle_dir}" .
