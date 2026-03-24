@@ -49,6 +49,12 @@ Builds:
       - source $HOME/.cargo/env
       - rustup target add aarch64-linux-android
       - $$flutter$$/bin/flutter pub get
+      - python3 -c 'import json; from pathlib import Path; p=Path(".flutter-plugins-dependencies");
+        o=json.loads(p.read_text()); d={q["name"] for ps in o.get("plugins", {}).values()
+        if isinstance(ps, list) for q in ps if q.get("dev_dependency")}; o["plugins"]={k:[q
+        for q in ps if q.get("name") not in d] for k, ps in o.get("plugins", {}).items()};
+        o["dependencyGraph"]=[q for q in o.get("dependencyGraph", []) if q.get("name")
+        not in d]; p.write_text(json.dumps(o, separators=(",", ":")))'
       - find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2 \( -name example
         -o -name test -o -name tests -o -name benchmark -o -name benchmarks -o -name
         windows -o -name linux -o -name macos -o -name ios -o -name web -o -name extension
@@ -58,7 +64,7 @@ Builds:
       - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi
         --target-platform=android-arm64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken
         --dart-define=ENABLE_SHOREBIRD=false
-    ndk: 27.0.12077973
+    ndk: 28.2.13676358
 
 AllowedAPKSigningKeys: 92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e
 
