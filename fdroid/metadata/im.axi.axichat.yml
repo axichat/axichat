@@ -49,35 +49,12 @@ Builds:
       - source $HOME/.cargo/env
       - rustup target add aarch64-linux-android
       - $$flutter$$/bin/flutter pub get
-      - |
-        python3 - <<'PY'
-        import json
-        from pathlib import Path
-
-        plugin_graph_path = Path(".flutter-plugins-dependencies")
-        plugin_graph = json.loads(plugin_graph_path.read_text())
-        dev_only_plugins = {
-            plugin["name"]
-            for plugins in plugin_graph.get("plugins", {}).values()
-            if isinstance(plugins, list)
-            for plugin in plugins
-            if plugin.get("dev_dependency")
-        }
-        plugin_graph["plugins"] = {
-            platform: [
-                plugin
-                for plugin in plugins
-                if plugin.get("name") not in dev_only_plugins
-            ]
-            for platform, plugins in plugin_graph.get("plugins", {}).items()
-        }
-        plugin_graph["dependencyGraph"] = [
-            plugin
-            for plugin in plugin_graph.get("dependencyGraph", [])
-            if plugin.get("name") not in dev_only_plugins
-        ]
-        plugin_graph_path.write_text(json.dumps(plugin_graph, separators=(",", ":")))
-        PY
+      - python3 -c 'import json; from pathlib import Path; p=Path(".flutter-plugins-dependencies");
+        o=json.loads(p.read_text()); d={q["name"] for ps in o.get("plugins", {}).values()
+        if isinstance(ps, list) for q in ps if q.get("dev_dependency")}; o["plugins"]={k:[q
+        for q in ps if q.get("name") not in d] for k, ps in o.get("plugins", {}).items()};
+        o["dependencyGraph"]=[q for q in o.get("dependencyGraph", []) if q.get("name")
+        not in d]; p.write_text(json.dumps(o, separators=(",", ":")))'
       - find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2 \( -name example
         -o -name test -o -name tests -o -name benchmark -o -name benchmarks -o -name
         windows -o -name linux -o -name macos -o -name ios -o -name web -o -name extension

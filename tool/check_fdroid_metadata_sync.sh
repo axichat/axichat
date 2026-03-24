@@ -142,10 +142,10 @@ check_count 1 'source $HOME/.cargo/env' 'cargo env source'
 check_count 1 'rustup target add aarch64-linux-android' 'arm64 rust target'
 check_count 1 '^\s+ndk: 28\.2\.13676358$' 'NDK pin' regex
 check_count 8 '^\s+- export ANDROID_(HOME|SDK_ROOT|NDK_HOME|NDK_ROOT)=\$\$(SDK|NDK)\$\$$' 'Android SDK/NDK env exports' regex
-check_count 1 "python3 - <<'PY'" 'dev-only Flutter plugin strip script'
+check_count 1 "python3 -c 'import json; from pathlib import Path;" 'dev-only Flutter plugin strip script'
 check_count 1 '.flutter-plugins-dependencies' 'Flutter plugin graph edit target'
 check_count 1 'dev_dependency' 'dev-only Flutter plugin filter'
-check_count 1 'plugin_graph["dependencyGraph"] = [' 'Flutter plugin dependency graph cleanup'
+check_count 1 'dependencyGraph' 'Flutter plugin dependency graph cleanup'
 check_count 1 'find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2' 'pub-cache pruning command'
 check_count 1 '-name extension' 'pub-cache pruning extension target'
 check_count 1 '-exec rm -rf {} +' 'pub-cache pruning delete action'
