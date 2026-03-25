@@ -289,44 +289,8 @@ fi
 
 "${FLUTTER_ROOT}/bin/flutter" pub get
 
-python3 - "${metadata_path}" <<'PY'
-import base64
-import re
-import sys
-from pathlib import Path
-
-text = Path(sys.argv[1]).read_text(encoding="utf-8")
-match = re.search(r'write_bytes\(base64\.b64decode\("([A-Za-z0-9+/=\s]+)"\)\)', text, re.S)
-if match is None:
-    raise SystemExit("Could not extract in_app_update patch helper from metadata.")
-Path(".fdroid_patch_in_app_update.py").write_bytes(base64.b64decode(match.group(1)))
-PY
-python3 .fdroid_patch_in_app_update.py "${PUB_CACHE}"
-rm -f .fdroid_patch_in_app_update.py
-
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-p = Path(".flutter-plugins-dependencies")
-o = json.loads(p.read_text())
-d = {
-    plugin["name"]
-    for plugins in o.get("plugins", {}).values()
-    if isinstance(plugins, list)
-    for plugin in plugins
-    if plugin.get("dev_dependency")
-}
-o["plugins"] = {
-    platform: [plugin for plugin in plugins if plugin.get("name") not in d]
-    for platform, plugins in o.get("plugins", {}).items()
-}
-o["dependencyGraph"] = [
-    plugin for plugin in o.get("dependencyGraph", [])
-    if plugin.get("name") not in d
-]
-p.write_text(json.dumps(o, separators=(",", ":")))
-PY
+python3 tool/patch_fdroid_in_app_update.py "${PUB_CACHE}"
+python3 tool/strip_dev_flutter_plugins.py
 
 find "${PUB_CACHE}/hosted/pub.dev" -mindepth 2 -maxdepth 2 \
   \( -name example -o -name test -o -name tests -o -name benchmark -o -name benchmarks \
