@@ -1,7 +1,4 @@
 Categories:
-  - Calendar & Agenda
-  - Email
-  - Internet
   - Messaging
 License: AGPL-3.0-or-later
 AuthorName: Axichat Developers
@@ -13,48 +10,40 @@ Donate: https://axi.chat/donate
 
 RepoType: git
 Repo: https://gitlab.com/axichat/axichat.git
+Binaries: https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
 
 Builds:
   - versionName: 0.7.1
     versionCode: 2003
-    commit: v0.7.1
+    commit: 22e581cd31ffac7af219d36092c19187d76110bd
     sudo:
       - apt-get update
-      - apt-get install -y build-essential pkg-config perl
+      - apt-get install -y gcc make libc-dev pkg-config perl rustup
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
     srclibs:
       - flutter@3.41.4
-      - rustup@1.27.1
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - export ANDROID_HOME=$$SDK$$
-      - export ANDROID_SDK_ROOT=$$SDK$$
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export ANDROID_NDK_ROOT=$$NDK$$
-      - printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
     scandelete:
       - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - export GRADLE_USER_HOME=$(pwd)/.gradle-user-home
-      - export GRADLE_OPTS="-Dorg.gradle.caching=false -Dorg.gradle.workers.max=1
-        -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.vfs.watch=false
-        -Dorg.gradle.configuration-cache=false -Dkotlin.incremental=false"
-      - export ANDROID_HOME=$$SDK$$
-      - export ANDROID_SDK_ROOT=$$SDK$$
-      - export ANDROID_NDK_HOME=$$NDK$$
-      - export ANDROID_NDK_ROOT=$$NDK$$
-      - $$rustup$$/rustup-init.sh -y --default-toolchain 1.90.0
-      - source $HOME/.cargo/env
+      - rustup default 1.90.0
       - rustup target add aarch64-linux-android
       - $$flutter$$/bin/flutter pub get
+      # Generate a temporary patch script that strips Play Core from in_app_update for F-Droid.
+      - python3 -c 'import base64; from pathlib import Path;
+        Path(".fdroid_patch_in_app_update.py").write_bytes(base64.b64decode("IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoKZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwoKaW1wb3J0IHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKCgpfUExVR0lOX1NUVUIgPSAiIiJwYWNrYWdlIGRlLmZmdWYuaW5fYXBwX3VwZGF0ZQoKaW1wb3J0IGFuZHJvaWQuYXBwLkFjdGl2aXR5CmltcG9ydCBpby5mbHV0dGVyLmVtYmVkZGluZy5lbmdpbmUucGx1Z2lucy5GbHV0dGVyUGx1Z2luCmltcG9ydCBpby5mbHV0dGVyLmVtYmVkZGluZy5lbmdpbmUucGx1Z2lucy5hY3Rpdml0eS5BY3Rpdml0eUF3YXJlCmltcG9ydCBpby5mbHV0dGVyLmVtYmVkZGluZy5lbmdpbmUucGx1Z2lucy5hY3Rpdml0eS5BY3Rpdml0eVBsdWdpbkJpbmRpbmcKaW1wb3J0IGlvLmZsdXR0ZXIucGx1Z2luLmNvbW1vbi5FdmVudENoYW5uZWwKaW1wb3J0IGlvLmZsdXR0ZXIucGx1Z2luLmNvbW1vbi5NZXRob2RDYWxsCmltcG9ydCBpby5mbHV0dGVyLnBsdWdpbi5jb21tb24uTWV0aG9kQ2hhbm5lbAppbXBvcnQgaW8uZmx1dHRlci5wbHVnaW4uY29tbW9uLk1ldGh
+        vZENoYW5uZWwuTWV0aG9kQ2FsbEhhbmRsZXIKaW1wb3J0IGlvLmZsdXR0ZXIucGx1Z2luLmNvbW1vbi5NZXRob2RDaGFubmVsLlJlc3VsdAoKY2xhc3MgSW5BcHBVcGRhdGVQbHVnaW4gOiBGbHV0dGVyUGx1Z2luLCBNZXRob2RDYWxsSGFuZGxlciwgRXZlbnRDaGFubmVsLlN0cmVhbUhhbmRsZXIsIEFjdGl2aXR5QXdhcmUgewogICAgcHJpdmF0ZSBsYXRlaW5pdCB2YXIgY2hhbm5lbDogTWV0aG9kQ2hhbm5lbAogICAgcHJpdmF0ZSBsYXRlaW5pdCB2YXIgZXZlbnRDaGFubmVsOiBFdmVudENoYW5uZWwKICAgIHByaXZhdGUgdmFyIGFjdGl2aXR5OiBBY3Rpdml0eT8gPSBudWxsCgogICAgb3ZlcnJpZGUgZnVuIG9uQXR0YWNoZWRUb0VuZ2luZShiaW5kaW5nOiBGbHV0dGVyUGx1Z2luLkZsdXR0ZXJQbHVnaW5CaW5kaW5nKSB7CiAgICAgICAgY2hhbm5lbCA9IE1ldGhvZENoYW5uZWwoYmluZGluZy5iaW5hcnlNZXNzZW5nZXIsICJkZS5mZnVmLmluX2FwcF91cGRhdGUvbWV0aG9kcyIpCiAgICAgICAgY2hhbm5lbC5zZXRNZXRob2RDYWxsSGFuZGxlcih0aGlzKQogICAgICAgIGV2ZW50Q2hhbm5lbCA9IEV2ZW50Q2hhbm5lbChiaW5kaW5nLmJpbmFyeU1lc3NlbmdlciwgImRlLmZmdWYuaW5fYXBwX3VwZGF0ZS9zdGF0ZUV2ZW50cyIpCiAgICAgICAgZXZlbnRDaGFubmVsLnNldFN0cmVhbUhhbmRsZXIodGhpcykKICAgIH0KCiAgICBvdmVycmlkZSBmdW4gb25EZXRhY2hlZEZyb21FbmdpbmUoYmluZGluZzogRmx1dHRlclBsdWdpbi5GbHV0dGVyUGx1Z2luQmluZGluZykgewogICAgICAgIGNoYW5uZWwuc2V0TWV0aG9kQ2FsbEhhbmRsZXIobnVsbCkKICAgICAgICBldmVudENoYW5uZWwuc2V0U3RyZWFtSGFuZGxlcihudWxsKQogICAgfQoKICAgIG92ZXJyaWRlIGZ1biBvbk1ldGhvZENhbGwoY2FsbDogTWV0aG9kQ2FsbCwgcmVzdWx0OiBSZXN1bHQpIHsKICAgICAgICB3aGVuIChjYWxsLm1ldGhvZCkgewogICAgICAgICAgICAiY2hlY2tGb3JVcGRhdGUiIC0+IHJlc3VsdC5zdWNjZXNzKG1hcE9mKAogICAgICAgICAgICAgICAgInVwZGF0ZUF2YWlsYWJpbGl0eSIgdG8gMSwKICAgICAgICAgICAgICAgICJpbW1lZGlhdGVBbGxvd2VkIiB0byBmYWxzZSwKICAgICAgICAgICAgICAgICJpbW1lZGlhdGVBbGxvd2VkUHJlY29uZGl0aW9ucyIgdG8gZW1wdHlMaXN0PEludD4oKSwKICAgICAgICAgICAgICAgICJmbGV4aWJsZUFsbG93ZWQiIHRvIGZhbHNlLAogICAgICAgICAgICAgICAgImZsZXhpYmxlQWxsb3dlZFByZWNvbmRpdGlvbnMiIHRvIGVtcHR5TGlzdDxJbnQ+KCksCiAgICAgICAgICAgICAgICAiYXZhaWxhYmxlVmVyc2lvbkNvZGUiIHRvIG51bGwsCiAgICAgICAgICAgICAgICAiaW5zdGFsbFN0YXR1cyIgdG8gMCwKICAgICAgICAgICAgICAgICJwYWNrYWdlTmFtZSIgdG8gKGFjdGl2aXR5Py5wYWNrYWdlTmFtZSA/OiAiIiksCiAgICAgICAgICAgICAgICAiY2xpZW50VmVyc2lvblN0YWxlbmVzc0RheXMiIHRvIG51bGwsCiAgICAgICAgICAgICAgICAidXBkYXRlUHJpb3JpdHkiIHRvIDAKICAgICAgICAgICAgKSkKICAgICAgICAgICAgInBlcmZvcm1JbW1lZGlhdGVVcGRhdGUiLCAic3RhcnRGbGV4aWJsZVVwZGF0ZSIsICJjb21wbGV0ZUZsZXhpYmxlVXBkYXRlIiAtPiByZXN1bHQuZXJyb3IoCiAgICAgICAgICAgICAgICAiSU5fQVBQX1VQREFURV9GQUlMRUQiLAogICAgICAgICAgICAgICAgIlBsYXkgaW4tYXBwIHVwZGF0ZXMgYXJlIHVuYXZhaWxhYmxlIGluIHRoaXMgYnVpbGQuIiwKICAgICAgICAgICAgICAgIG51bGwKICAgICAgICAgICAgKQogICAgICAgICAgICBlbHNlIC0+IHJlc3VsdC5ub3RJbXBsZW1lbnRlZCgpCiAgICAgICAgfQogICAgfQoKICAgIG92ZXJyaWRlIGZ1biBvbkxpc3Rlbihhcmd1bWVudHM6IEFueT8sIGV2ZW50czogRXZlbnRDaGFubmVsLkV2ZW50U2luaz8pIHt9CgogICAgb3ZlcnJpZGUgZnVuIG9uQ2FuY2VsKGFyZ3VtZW50czogQW55Pykge30KCiAgICBvdmVycmlkZSBmdW4gb25BdHRhY2hlZFRvQWN0aXZpdHkoYmluZGluZzogQWN0aXZpdHlQbHVnaW5CaW5kaW5nKSB7CiAgICAgICAgYWN0aXZpdHkgPSBiaW5kaW5nLmFjdGl2aXR5CiAgICB9CgogICAgb3ZlcnJpZGUgZnVuIG9uRGV0YWNoZWRGcm9tQWN0aXZpdHlGb3JDb25maWdDaGFuZ2VzKCkgewogICAgICAgIGFjdGl2aXR5ID0gbnVsbAogICAgfQoKICAgIG92ZXJyaWRlIGZ1biBvblJlYXR0YWNoZWRUb0FjdGl2aXR5Rm9yQ29uZmlnQ2hhbmdlcyhiaW5kaW5nOiBBY3Rpdml0eVBsdWdpbkJpbmRpbmcpIHsKICAgICAgICBhY3Rpdml0eSA9IGJpbmRpbmcuYWN0aXZpdHkKICAgIH0KCiAgICBvdmVycmlkZSBmdW4gb25EZXRhY2hlZEZyb21BY3Rpdml0eSgpIHsKICAgICAgICBhY3Rpdml0eSA9IG51bGwKICAgIH0KfQoiIiIKCl9SRU1PVkVEX0dSQURMRV9TTklQUEVUUyA9ICgKICAgICJjb20uZ29vZ2xlLmFuZHJvaWQucGxheTphcHAtdXBkYXRlIiwKICAgICJjb20uZ29vZ2xlLmFuZHJvaWQucGxheTphcHAtdXBkYXRlLWt0eCIsCikKCgpkZWYgX3BhdGNoX3BsdWdpbihwbHVnaW5fcm9vdDogUGF0aCkgLT4gTm9uZToKICAgIGJ1aWxkX2dyYWRsZSA9IHBsdWdpbl9yb290IC8gImFuZHJvaWQiIC8gImJ1aWxkLmdyYWRsZSIKICAgIGlmIGJ1aWxkX2dyYWRsZS5leGlzdHMoKToKICAgICAgICBvcmlnaW5hbF9saW5lcyA9IGJ1aWxkX2dyYWRsZS5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04Iikuc3BsaXRsaW5lcygpCiAgICAgICAgZmlsdGVyZWRfbGluZXMgPSBbCiAgICAgICAgICAgIGxpbmUKICAgICAgICAgICAgZm9yIGxpbmUgaW4gb3JpZ2luYWxfbGluZXMKICAgICAgICAgICAgaWYgbm90IGFueShzbmlwcGV0IGluIGxpbmUgZm9yIHNuaXBwZXQgaW4gX1JFTU9WRURfR1JBRExFX1NOSVBQRVRTKQogICAgICAgIF0KICAgICAgICBidWlsZF9ncmFkbGUud3JpdGVfdGV4dCgiXG4iLmpvaW4oZmlsdGVyZWRfbGluZXMpICsgIlxuIiwgZW5jb2Rpbmc9InV0Zi04IikKCiAgICBrb3RsaW5fZGlyID0gcGx1Z2luX3Jvb3QgLyAiYW5kcm9pZCIgLyAic3JjIiAvICJtYWluIiAvICJrb3RsaW4iIC8gImRlIiAvICJmZnVmIiAvICJpbl9hcHBfdXBkYXRlIgogICAga290bGluX2Rpci5ta2RpcihwYXJlbnRzPVRydWUsIGV4aXN0X29rPVRydWUpCiAgICBwbHVnaW5fZmlsZSA9IGtvdGxpbl9kaXIgLyAiSW5BcHBVcGRhdGVQbHVnaW4ua3QiCiAgICBwbHVnaW5fZmlsZS53cml0ZV90ZXh0KF9QTFVHSU5fU1RVQiwgZW5jb2Rpbmc9InV0Zi04IikKCiAgICBwcmludChmIlBhdGNoZWQge3BsdWdpbl9yb290fSIpCgoKZGVmIG1haW4oYXJndjogbGlzdFtzdHJdKSAtPiBpbnQ6CiAgICBwdWJfY2FjaGUgPSBQYXRoKGFyZ3ZbMV0pIGlmIGxlbihhcmd2KSA+IDEgZWxzZSBQYXRoLmN3ZCgpIC8gIi5wdWItY2FjaGUiCiAgICBob3N0ZWRfcHViID0gcHViX2NhY2hlIC8gImhvc3RlZCIgLyAicHViLmRldiIKICAgIGlmIG5vdCBob3N0ZWRfcHViLmV4aXN0cygpOgogICAgICAgIHByaW50KGYiTm8gaG9zdGVkIHB1YiBjYWNoZSBhdCB7aG9zdGVkX3B1Yn07IHNraXBwaW5nLiIpCiAgICAgICAgcmV0dXJuIDAKCiAgICBwbHVnaW5fcm9vdHMgPSBzb3J0ZWQoCiAgICAgICAgcGF0aAogICAgICAgIGZvciBwYXRoIGluIGhvc3RlZF9wdWIuaXRlcmRpcigpCiAgICAgICAgaWYgcGF0aC5pc19kaXIoKSBhbmQgcGF0aC5uYW1lLnN0YXJ0c3dpdGgoImluX2FwcF91cGRhdGUtIikKICAgICkKICAgIGlmIG5vdCBwbHVnaW5fcm9vdHM6CiAgICAgICAgcHJpbnQoZiJObyBpbl9hcHBfdXBkYXRlIHBhY2thZ2UgZm91bmQgdW5kZXIge2hvc3RlZF9wdWJ9OyBza2lwcGluZy4iKQogICAgICAgIHJldHVybiAwCgogICAgZm9yIHBsdWdpbl9yb290IGluIHBsdWdpbl9yb290czoKICAgICAgICBfcGF0Y2hfcGx1Z2luKHBsdWdpbl9yb290KQoKICAgIHJldHVybiAwCgoKaWYgX19uYW1lX18gPT0gIl9fbWFpbl9fIjoKICAgIHJhaXNlIFN5c3RlbUV4aXQobWFpbihzeXMuYXJndikpCg=="))'
+      - python3 .fdroid_patch_in_app_update.py "$PUB_CACHE"
+      - rm -f .fdroid_patch_in_app_update.py
       - python3 -c 'import json; from pathlib import Path; p=Path(".flutter-plugins-dependencies");
         o=json.loads(p.read_text()); d={q["name"] for ps in o.get("plugins", {}).values()
-        if isinstance(ps, list) for q in ps if q.get("dev_dependency")} | {"in_app_update"};
-        o["plugins"]={k:[q for q in ps if q.get("name") not in d] for k, ps in o.get("plugins",
-        {}).items()}; o["dependencyGraph"]=[q for q in o.get("dependencyGraph", [])
-        if q.get("name") not in d]; p.write_text(json.dumps(o, separators=(",", ":")))'
+        if isinstance(ps, list) for q in ps if q.get("dev_dependency")}; o["plugins"]={k:[q
+        for q in ps if q.get("name") not in d] for k, ps in o.get("plugins", {}).items()};
+        o["dependencyGraph"]=[q for q in o.get("dependencyGraph", []) if q.get("name")
+        not in d]; p.write_text(json.dumps(o, separators=(",", ":")))'
       - find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2 \( -name example
         -o -name test -o -name tests -o -name benchmark -o -name benchmarks -o -name
         windows -o -name linux -o -name macos -o -name ios -o -name web -o -name extension
