@@ -1,4 +1,6 @@
 Categories:
+  - Calendar & Agenda
+  - Email
   - Messaging
 License: AGPL-3.0-or-later
 AuthorName: Axichat Developers
@@ -10,7 +12,8 @@ Donate: https://axi.chat/donate
 
 RepoType: git
 Repo: https://gitlab.com/axichat/axichat.git
-Binaries: https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
+Binaries:
+  https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
 
 Builds:
   - versionName: 0.7.1
@@ -21,8 +24,11 @@ Builds:
       - apt-get install -y gcc make libc-dev pkg-config perl rustup
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
     srclibs:
-      - flutter@3.41.4
+      - flutter@stable
     prebuild:
+      - flutterVersion=$(tr -d '\r\n' < .flutter-version)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -f $flutterVersion
       - export PUB_CACHE=$(pwd)/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
     scandelete:

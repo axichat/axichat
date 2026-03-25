@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pubspec_path="${repo_root}/pubspec.yaml"
 fdroid_metadata_path="${repo_root}/fdroid/metadata/im.axi.axichat.yml"
+flutter_version_path="${repo_root}/.flutter-version"
 
 if [[ ! -f "${pubspec_path}" ]]; then
   echo "Missing pubspec.yaml at ${pubspec_path}" >&2
@@ -13,6 +14,11 @@ fi
 
 if [[ ! -f "${fdroid_metadata_path}" ]]; then
   echo "Missing F-Droid metadata at ${fdroid_metadata_path}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${flutter_version_path}" ]]; then
+  echo "Missing Flutter version pin at ${flutter_version_path}" >&2
   exit 1
 fi
 
@@ -28,13 +34,28 @@ expected_version_code="$((2000 + pubspec_version_code))"
 expected_release_tag="v${pubspec_version_name}"
 expected_binaries_url="https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk"
 expected_apk_signing_key="92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e"
+expected_flutter_version="$(tr -d '\r\n' < "${flutter_version_path}")"
 
 failed=0
 
 metadata_build_version_name="$(awk '/^[[:space:]]+- versionName:/ {print $3; exit}' "${fdroid_metadata_path}")"
 metadata_build_version_code="$(awk '/^[[:space:]]+versionCode:/ {print $2; exit}' "${fdroid_metadata_path}")"
 metadata_build_commit="$(awk '/^[[:space:]]+commit:/ {print $2; exit}' "${fdroid_metadata_path}")"
-metadata_binaries_url="$(awk -F': ' '/^Binaries:/ {print $2; exit}' "${fdroid_metadata_path}")"
+metadata_binaries_url="$(
+  awk '
+    /^Binaries:/ {
+      sub(/^Binaries:[[:space:]]*/, "")
+      if (length($0) > 0) {
+        print
+        exit
+      }
+      getline
+      sub(/^[[:space:]]+/, "")
+      print
+      exit
+    }
+  ' "${fdroid_metadata_path}"
+)"
 metadata_allowed_signing_keys="$(awk -F': ' '/^AllowedAPKSigningKeys:/ {print $2; exit}' "${fdroid_metadata_path}")"
 metadata_current_version="$(awk '/^CurrentVersion:/ {print $2; exit}' "${fdroid_metadata_path}")"
 metadata_current_version_code="$(awk '/^CurrentVersionCode:/ {print $2; exit}' "${fdroid_metadata_path}")"
@@ -146,7 +167,9 @@ check_absent() {
   fi
 }
 
-check_count 1 'flutter@3.41.4' 'flutter srclib'
+check_count 1 '^\s+- flutter@stable$' 'flutter srclib' regex
+check_count 1 "flutterVersion=\\\$\\(tr -d '\\\\r\\\\n' < \\.flutter-version\\)" 'flutter version extraction command' regex
+check_count 1 'git -C $$flutter$$ checkout -f $flutterVersion' 'flutter checkout command'
 check_count 1 'apt-get update' 'apt-get update'
 check_count 1 'apt-get install -y gcc make libc-dev pkg-config perl rustup' 'host toolchain install'
 check_count 1 '$$flutter$$/bin/flutter config --no-analytics' 'Flutter analytics disable'
@@ -190,9 +213,15 @@ check_absent 'flutter build apk \\' 'shell-style line continuations in flutter b
 check_absent 'base64.b64decode(' 'inline base64-generated helper'
 check_absent '.fdroid_patch_in_app_update.py' 'temporary generated helper path'
 check_absent "python3 -c 'import json; from pathlib import Path;" 'inline plugin strip python'
+check_absent 'flutter@3\.41\.4' 'hardcoded flutter srclib pin' regex
+
+if [[ ! "${expected_flutter_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid .flutter-version '${expected_flutter_version}'" >&2
+  exit 1
+fi
 
 if [[ "${failed}" -ne 0 ]]; then
   exit 1
 fi
 
-echo "F-Droid metadata is in sync with pubspec (${pubspec_version_name}+${pubspec_version_code}) and arm64 F-Droid version-code mapping."
+echo "F-Droid metadata is in sync with pubspec (${pubspec_version_name}+${pubspec_version_code}), Flutter ${expected_flutter_version}, and arm64 F-Droid version-code mapping."

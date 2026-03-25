@@ -30,7 +30,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$flutterVersionFile = Join-Path $repoRoot ".flutter-version"
 Set-Location $repoRoot
+
+if (-not (Test-Path $flutterVersionFile)) {
+  throw "Missing Flutter version pin at $flutterVersionFile"
+}
+
+if (-not $PSBoundParameters.ContainsKey('FlutterVersion')) {
+  $FlutterVersion = (Get-Content -Raw -Path $flutterVersionFile).Trim()
+}
 
 if ([string]::IsNullOrWhiteSpace($EmailPublicToken)) {
   if (-not [string]::IsNullOrWhiteSpace($env:AXICHAT_EMAIL_PUBLIC_TOKEN)) {

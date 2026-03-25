@@ -3,10 +3,12 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+flutter_version_file="${repo_root}/.flutter-version"
 builder="${AXICHAT_ANDROID_BUILDER:-shorebird}"
 flavor="${AXICHAT_ANDROID_FLAVOR:-production}"
 artifact="${AXICHAT_ANDROID_ARTIFACT:-apk}"
-flutter_version="${AXICHAT_FLUTTER_VERSION:-3.41.4}"
+default_flutter_version="$(tr -d '\r\n' < "${flutter_version_file}")"
+flutter_version="${AXICHAT_FLUTTER_VERSION:-${default_flutter_version}}"
 output_dir="${AXICHAT_RELEASE_OUTPUT_DIR:-${repo_root}/dist}"
 declare -a flutter_args=()
 

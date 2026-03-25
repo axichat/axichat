@@ -23,16 +23,22 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 metadata_path="${repo_root}/fdroid/metadata/im.axi.axichat.yml"
+flutter_version_path="${repo_root}/.flutter-version"
 
 if [[ ! -f "${metadata_path}" ]]; then
   echo "Missing metadata file: ${metadata_path}" >&2
   exit 1
 fi
 
+if [[ ! -f "${flutter_version_path}" ]]; then
+  echo "Missing Flutter version pin: ${flutter_version_path}" >&2
+  exit 1
+fi
+
 cd "${repo_root}"
 
 expected_commit="$(awk '/^[[:space:]]+commit:/ {print $2; exit}' "${metadata_path}")"
-expected_flutter_version="$(awk '/^[[:space:]]+- flutter@/ {sub(/.*flutter@/, ""); print; exit}' "${metadata_path}")"
+expected_flutter_version="$(tr -d '\r\n' < "${flutter_version_path}")"
 expected_rust_toolchain="$(awk '/^[[:space:]]+- rustup default / {print $4; exit}' "${metadata_path}")"
 
 ensure_java() {
