@@ -18,7 +18,7 @@ Binaries:
 Builds:
   - versionName: 0.7.1
     versionCode: 2004
-    commit: 1289acc8462101ef891d0eca434841e91d5b4d4d
+    commit: 9f3358e63421a7d272b8773167c63c973937403e
     sudo:
       - apt-get update
       - apt-get install -y gcc make libc-dev pkg-config perl rustup
