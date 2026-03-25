@@ -11,7 +11,6 @@ host_packages=(
   rustup
   git
   python3
-  openjdk-17-jdk
   curl
   unzip
   xz-utils
@@ -36,6 +35,28 @@ expected_commit="$(awk '/^[[:space:]]+commit:/ {print $2; exit}' "${metadata_pat
 expected_flutter_version="$(awk '/^[[:space:]]+- flutter@/ {sub(/.*flutter@/, ""); print; exit}' "${metadata_path}")"
 expected_rust_toolchain="$(awk '/^[[:space:]]+- rustup default / {print $4; exit}' "${metadata_path}")"
 
+ensure_java() {
+  local java_home_candidate
+
+  if command -v javac >/dev/null 2>&1 && command -v java >/dev/null 2>&1; then
+    return
+  fi
+
+  for java_home_candidate in \
+    "${JAVA_HOME:-}" \
+    /opt/android-studio/jbr \
+    /usr/lib/jvm/default-java \
+    /usr/lib/jvm/java-17-openjdk-amd64 \
+    /usr/lib/jvm/java-17-openjdk
+  do
+    if [[ -n "${java_home_candidate}" && -x "${java_home_candidate}/bin/javac" && -x "${java_home_candidate}/bin/java" ]]; then
+      export JAVA_HOME="${java_home_candidate}"
+      export PATH="${JAVA_HOME}/bin:${PATH}"
+      return
+    fi
+  done
+}
+
 ensure_host_packages() {
   local need_install=0
   local required_commands=(
@@ -45,7 +66,6 @@ ensure_host_packages() {
     curl
     unzip
     xz
-    javac
   )
 
   for cmd in "${required_commands[@]}"; do
@@ -179,7 +199,10 @@ ensure_android_components() {
     exit 1
   fi
 
-  yes | "${sdkmanager}" --licenses >/dev/null
+  if ! ( set +o pipefail; yes | "${sdkmanager}" --licenses >/dev/null ); then
+    echo "Failed to accept Android SDK licenses." >&2
+    exit 1
+  fi
   "${sdkmanager}" \
     "ndk;${ndk_version}" \
     "platforms;android-34" \
@@ -190,6 +213,12 @@ ensure_android_components() {
 }
 
 ensure_host_packages
+ensure_java
+
+if ! command -v javac >/dev/null 2>&1 || ! command -v java >/dev/null 2>&1; then
+  echo "A JDK is required. Set JAVA_HOME to a valid JDK or install one." >&2
+  exit 1
+fi
 
 current_commit="$(git rev-parse HEAD)"
 
