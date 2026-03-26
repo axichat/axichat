@@ -280,7 +280,10 @@ default_email_public_token="$(grep -o 'EMAIL_PUBLIC_TOKEN=[^[:space:]]*' "${meta
 email_public_token="${EMAIL_PUBLIC_TOKEN:-${default_email_public_token}}"
 
 export PUB_CACHE="${repo_root}/.pub-cache"
-export PATH="${HOME}/.cargo/bin:${PATH}"
+export CARGO_HOME="${CARGO_HOME:-/tmp/axichat-cargo-home}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/tmp/axichat-cargo-target}"
+mkdir -p "${CARGO_HOME}" "${CARGO_TARGET_DIR}"
+export PATH="${CARGO_HOME}/bin:${HOME}/.cargo/bin:${PATH}"
 
 printf 'sdk.dir=%s\nflutter.sdk=%s\n' "${ANDROID_HOME}" "${FLUTTER_ROOT}" > android/local.properties
 

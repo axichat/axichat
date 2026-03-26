@@ -22,7 +22,9 @@ Future<void> main(List<String> args) async {
         _rustTargetTriple(codeConfig.targetOS, codeConfig.targetArchitecture);
     final resolvedMode = _resolveBuildMode(input, args);
     final isRelease = _isReleaseMode(resolvedMode.name);
-    final cargoTargetDir = input.outputDirectory.resolve('cargo-target/');
+    final cargoTargetDir = _resolvedCargoTargetDirectory(
+      input.outputDirectory.resolve('cargo-target/'),
+    );
     final cargoExecutable = _cargoExecutable();
     final isVerboseBuild = _isVerboseBuild();
 
@@ -41,6 +43,7 @@ Future<void> main(List<String> args) async {
       triple: targetTriple,
       codeConfig: codeConfig,
       cargoTargetDir: cargoTargetDir,
+      packageRoot: packageRoot,
     );
 
     final linkerEnvKey = 'CARGO_TARGET_${tripleKeyCargo}_LINKER';
@@ -56,6 +59,8 @@ Future<void> main(List<String> args) async {
         '[delta_ffi] Running cargo from ${crateDir.toFilePath()} with args: ${buildArgs.join(' ')}');
     stderr.writeln(
         '[delta_ffi] Using cargo target dir: ${cargoTargetDir.toFilePath()}');
+    stderr.writeln(
+        '[delta_ffi] Using SOURCE_DATE_EPOCH: ${environment['SOURCE_DATE_EPOCH'] ?? 'unset'}');
 
     late final Process process;
     try {
@@ -374,6 +379,7 @@ Future<Map<String, String>> _cargoEnvironment({
   required String triple,
   required CodeConfig codeConfig,
   required Uri cargoTargetDir,
+  required Uri packageRoot,
 }) async {
   final environment = Map<String, String>.from(Platform.environment);
   final cCompiler = codeConfig.cCompiler;
@@ -428,7 +434,44 @@ Future<Map<String, String>> _cargoEnvironment({
     'CARGO_TARGET_DIR',
     cargoTargetDir.toFilePath(),
   );
+  final sourceDateEpoch = await _resolveSourceDateEpoch(packageRoot);
+  if (sourceDateEpoch != null) {
+    _setEnvironmentValue(environment, 'SOURCE_DATE_EPOCH', sourceDateEpoch);
+  }
   return environment;
+}
+
+Uri _resolvedCargoTargetDirectory(Uri defaultDirectory) {
+  final configuredPath = Platform.environment['CARGO_TARGET_DIR'];
+  if (configuredPath == null || configuredPath.isEmpty) {
+    return defaultDirectory;
+  }
+  return Directory(configuredPath).absolute.uri;
+}
+
+Future<String?> _resolveSourceDateEpoch(Uri packageRoot) async {
+  final configuredValue = Platform.environment['SOURCE_DATE_EPOCH']?.trim();
+  if (configuredValue != null && RegExp(r'^\d+$').hasMatch(configuredValue)) {
+    return configuredValue;
+  }
+
+  try {
+    final result = await Process.run(
+      'git',
+      ['log', '-1', '--format=%ct'],
+      workingDirectory: packageRoot.toFilePath(),
+    );
+    if (result.exitCode != 0) {
+      return null;
+    }
+    final output = result.stdout.toString().trim();
+    if (!RegExp(r'^\d+$').hasMatch(output)) {
+      return null;
+    }
+    return output;
+  } on ProcessException {
+    return null;
+  }
 }
 
 Future<String> _pipeProcessOutput(

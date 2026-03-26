@@ -12,7 +12,7 @@ Donate: https://axi.chat/donate
 
 RepoType: git
 Repo: https://gitlab.com/axichat/axichat.git
-Binaries:
+Binaries: 
   https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
 
 Builds:
@@ -35,6 +35,8 @@ Builds:
       - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - export CARGO_HOME=/tmp/axichat-cargo-home
+      - export CARGO_TARGET_DIR=/tmp/axichat-cargo-target
       - rustup default 1.90.0
       - rustup target add aarch64-linux-android
       - $$flutter$$/bin/flutter pub get
