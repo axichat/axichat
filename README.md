@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/metadata/en-US/images/featureGraphic.png" width="800" alt="Axichat" />
+  <img src="https://axichat.github.io/axichat/readme-media/featureGraphic.png" width="800" alt="Axichat" />
 </div>
 
 <div align="center">
@@ -73,14 +73,14 @@
 <br />
 
 <div align="center">
-  <a href="assets/readme/Axichat_demo_24fps.mp4">
+  <a href="https://axichat.github.io/axichat/readme-media/Axichat_demo_24fps.mp4">
     <img
-      src="assets/readme/Axichat_demo_24fps.mp4.png"
+      src="https://axichat.github.io/axichat/readme-media/Axichat_demo_24fps.mp4.png"
       alt="Axichat demo video preview"
       style="display: block; width: 100%; max-width: 960px; margin: 0 auto; border-radius: 16px;"
     />
   </a>
-  <p><em>Click the preview to play/download the MP4, or click <a href="assets/readme/Axichat_demo_24fps.mp4">here</a>.</em></p>
+  <p><em>Click the preview to play/download the MP4, or click <a href="https://axichat.github.io/axichat/readme-media/Axichat_demo_24fps.mp4">here</a>.</em></p>
 </div>
 
 ## Screenshots
@@ -92,13 +92,13 @@
 <table width="100%">
   <tr>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/02.png">
-        <img src="metadata/en-US/images/mockups/02.png" width="100%" alt="Group chat conversation flow" />
+      <a href="https://axichat.github.io/axichat/readme-media/02.png">
+        <img src="https://axichat.github.io/axichat/readme-media/02.png" width="100%" alt="Group chat conversation flow" />
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/03.png">
-        <img src="metadata/en-US/images/mockups/03.png" width="100%" alt="Recipient address dropdown" />
+      <a href="https://axichat.github.io/axichat/readme-media/03.png">
+        <img src="https://axichat.github.io/axichat/readme-media/03.png" width="100%" alt="Recipient address dropdown" />
       </a>
     </td>
   </tr>
@@ -111,13 +111,13 @@
 <table width="100%">
   <tr>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/05.png">
-        <img src="metadata/en-US/images/mockups/05.png" width="100%" alt="Reminders checklist" />
+      <a href="https://axichat.github.io/axichat/readme-media/05.png">
+        <img src="https://axichat.github.io/axichat/readme-media/05.png" width="100%" alt="Reminders checklist" />
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/06.png">
-        <img src="metadata/en-US/images/mockups/06.png" width="100%" alt="Home screen conversation list" />
+      <a href="https://axichat.github.io/axichat/readme-media/06.png">
+        <img src="https://axichat.github.io/axichat/readme-media/06.png" width="100%" alt="Home screen conversation list" />
       </a>
     </td>
   </tr>
@@ -130,13 +130,13 @@
 <table width="100%">
   <tr>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/04.png">
-        <img src="metadata/en-US/images/mockups/04.png" width="100%" alt="Drag and drop calendar grid" />
+      <a href="https://axichat.github.io/axichat/readme-media/04.png">
+        <img src="https://axichat.github.io/axichat/readme-media/04.png" width="100%" alt="Drag and drop calendar grid" />
       </a>
     </td>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/01.png">
-        <img src="metadata/en-US/images/mockups/01.png" width="100%" alt="Email conversation flow" />
+      <a href="https://axichat.github.io/axichat/readme-media/01.png">
+        <img src="https://axichat.github.io/axichat/readme-media/01.png" width="100%" alt="Email conversation flow" />
       </a>
     </td>
   </tr>
