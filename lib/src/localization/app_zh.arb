@@ -429,7 +429,7 @@
   "authSignupPending": "正在注册",
   "authLoginPending": "正在登录",
   "authSignupWelcomeTitle": "Axichat",
-  "authSignupWelcomeMessage": "欢迎使用 Axichat！\n\n它仍在积极开发中，而且每位用户的存储限制目前非常低，所以暂时不要将它用于重要事务。\n\n点按消息气泡可以使用很多功能；试着点一下这一条！\n\n如果你发现 bug，请到 https://github.com/axichat/axichat/issues 提交，这样我就能修复它们！",
+  "authSignupWelcomeMessage": "欢迎使用 Axichat！\n\n它仍在积极开发中，而且每位用户的存储限制目前非常低，所以暂时不要将它用于重要事务。\n\n点按消息气泡可以使用很多功能；试着点一下这一条！\n\n强烈建议你通过个人资料页面启用后台通知。\n\n如果你发现 bug，请到 https://github.com/axichat/axichat/issues 提交，这样我就能修复它们！",
   "signupTitle": "注册",
   "signupStepUsername": "选择用户名",
   "signupStepPassword": "创建密码",

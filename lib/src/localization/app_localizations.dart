@@ -2344,7 +2344,7 @@ abstract class AppLocalizations {
   /// No description provided for @authSignupWelcomeMessage.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to Axichat!\n\nIt is still under active development and per-user storage limits are very low, so avoid relying on it for important business at the moment.\n\nMany features are available by tapping on message bubbles; try tapping this one!\n\nIf you find any bugs, please report them at https://github.com/axichat/axichat/issues so I can fix them!'**
+  /// **'Welcome to Axichat!\n\nIt is still under active development and per-user storage limits are very low, so avoid relying on it for important business at the moment.\n\nMany features are available by tapping on message bubbles; try tapping this one!\n\nIt is strongly recommended to enable Background notifications via the Profile screen.\n\nIf you find any bugs, please report them at https://github.com/axichat/axichat/issues so I can fix them!'**
   String get authSignupWelcomeMessage;
 
   /// No description provided for @signupTitle.

@@ -46,7 +46,6 @@ export 'axi_text_form_field.dart';
 export 'axi_text_input.dart';
 export 'axi_tooltip.dart';
 export 'axi_transport_chip.dart';
-export 'axi_version.dart';
 export 'axi_motion.dart';
 export 'axi_spacing.dart';
 export 'axi_sizing.dart';

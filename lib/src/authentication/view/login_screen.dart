@@ -386,8 +386,6 @@ class _LoginScreenState extends State<LoginScreen>
                           compact: true,
                           labelStyle: LanguageLabelStyle.compact,
                         ),
-                        SizedBox(width: spacing.s),
-                        const AxiVersion(),
                         if (kDebugMode) ...[
                           SizedBox(width: spacing.s),
                           DeleteCredentialsButton(),
