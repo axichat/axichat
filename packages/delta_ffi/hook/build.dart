@@ -27,6 +27,10 @@ Future<void> main(List<String> args) async {
     );
     final cargoExecutable = _cargoExecutable();
     final isVerboseBuild = _isVerboseBuild();
+    await _ensureRustTargetAvailable(
+      cargoExecutable: cargoExecutable,
+      targetTriple: targetTriple,
+    );
 
     final buildArgs = [
       'build',
@@ -209,6 +213,70 @@ String _cargoExecutable() {
     _missingCargoHelp(),
     127,
   );
+}
+
+Future<void> _ensureRustTargetAvailable({
+  required String cargoExecutable,
+  required String targetTriple,
+}) async {
+  final rustcExecutable = _rustcExecutable();
+  if (rustcExecutable == null) {
+    return;
+  }
+
+  final targetLibraryDirectory = await _rustTargetLibraryDirectory(
+    rustcExecutable: rustcExecutable,
+    targetTriple: targetTriple,
+  );
+  if (targetLibraryDirectory == null ||
+      Directory(targetLibraryDirectory).existsSync()) {
+    return;
+  }
+
+  throw ProcessException(
+    cargoExecutable,
+    ['build', '--target', targetTriple],
+    _missingRustTargetHelp(targetTriple),
+    1,
+  );
+}
+
+Future<String?> _rustTargetLibraryDirectory({
+  required String rustcExecutable,
+  required String targetTriple,
+}) async {
+  try {
+    final result = await Process.run(
+      rustcExecutable,
+      ['--print', 'target-libdir', '--target', targetTriple],
+    );
+    if (result.exitCode != 0) {
+      return null;
+    }
+
+    final targetLibraryDirectory = result.stdout.toString().trim();
+    return targetLibraryDirectory.isEmpty ? null : targetLibraryDirectory;
+  } on ProcessException {
+    return null;
+  }
+}
+
+String? _rustcExecutable() {
+  final rustcFromEnvironment = Platform.environment['RUSTC'];
+  final candidates = <String?>[
+    if (rustcFromEnvironment != null && rustcFromEnvironment.isNotEmpty)
+      _resolveExecutable(rustcFromEnvironment),
+    _cargoHomeExecutable('rustc'),
+    _findExecutableInPath('rustc'),
+  ];
+
+  for (final candidate in candidates) {
+    if (candidate != null && candidate.isNotEmpty) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 String _rustTargetTriple(OS os, Architecture architecture) {
@@ -852,6 +920,28 @@ String _missingCargoHelp() {
     return 'Cargo executable not found. Install the Rust stable MSVC toolchain and ensure cargo is on PATH or in %USERPROFILE%\\.cargo\\bin.';
   }
   return r'Cargo executable not found. Install the Rust stable toolchain and ensure cargo is on PATH or in $HOME/.cargo/bin.';
+}
+
+String _missingRustTargetHelp(String targetTriple) {
+  final buffer = StringBuffer()
+    ..writeln(
+      'Rust target $targetTriple is not installed for the active toolchain.',
+    );
+
+  if (Platform.isMacOS &&
+      (targetTriple == 'aarch64-apple-darwin' ||
+          targetTriple == 'x86_64-apple-darwin')) {
+    buffer
+      ..writeln('Flutter macOS desktop builds may request both Apple targets.')
+      ..writeln(
+        'Install them with: rustup target add aarch64-apple-darwin x86_64-apple-darwin',
+      );
+  } else {
+    buffer.writeln('Install it with: rustup target add $targetTriple');
+  }
+
+  buffer.write('Check installed targets with: rustup target list --installed');
+  return buffer.toString();
 }
 
 String get _environmentPathSeparator => Platform.isWindows ? ';' : ':';

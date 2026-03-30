@@ -111,7 +111,7 @@ SPEC CHECKSUMS:
   connectivity_plus: 0a976dfd033b59192912fa3c6c7b54aab5093802
   emoji_picker_flutter: 846d4afb3368bc864a3884f02654961198bd72da
   file_picker: e716a70a9fe5fd9e09ebc922d7541464289443af
-  flutter_inappwebview_macos: bdf207b8f4ebd58e86ae06cd96b147de99a67c9b
+  flutter_inappwebview_macos: ea7f93a5dea1d30dc372fdce1f46926cbaa97138
   flutter_local_notifications: 4ccab5b7a22835214a6672e3f9c5e8ae207dab36
   flutter_secure_storage_darwin: 557817588b80e60213cbecb573c45c76b788018d
   flutter_timezone: 6b906d1740654acb16e50b639835628fea851037
