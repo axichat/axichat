@@ -698,9 +698,8 @@ class _SignupFormState extends State<SignupForm>
                                       children: [
                                         usernameDescriptionHeight == null
                                             ? SignupAvatarSelector(
-                                                bytes: _showAvatarEditor
-                                                    ? avatarState.displayedBytes
-                                                    : avatarState.avatar?.bytes,
+                                                bytes:
+                                                    avatarState.displayedBytes,
                                                 username:
                                                     _jidTextController.text,
                                                 processing:
@@ -715,12 +714,8 @@ class _SignupFormState extends State<SignupForm>
                                                   -usernameDescriptionHeight,
                                                 ),
                                                 child: SignupAvatarSelector(
-                                                  bytes: _showAvatarEditor
-                                                      ? avatarState
-                                                            .displayedBytes
-                                                      : avatarState
-                                                            .avatar
-                                                            ?.bytes,
+                                                  bytes: avatarState
+                                                      .displayedBytes,
                                                   username:
                                                       _jidTextController.text,
                                                   processing:
