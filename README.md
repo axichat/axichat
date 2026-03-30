@@ -8,7 +8,7 @@
 
 <br />
 
-<p>Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.</p>
+<p>Axichat is a free and open-source SMTP (email) and XMPP (chat) client with first-party push notifications (no FCM ever) and cutting-edge UI.</p>
 <p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
 <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
 
@@ -34,6 +34,18 @@
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
     <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
   </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-windows-setup.exe">
+    <img alt="Download the Windows installer" src="https://img.shields.io/badge/Windows%20Installer%20.exe-2563EB?style=for-the-badge&logo=windows11&logoColor=white" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux-amd64.deb">
+    <img alt="Download the Linux Debian package" src="https://img.shields.io/badge/Linux%20.deb-15803D?style=for-the-badge&logo=debian&logoColor=white" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-x86_64.AppImage">
+    <img alt="Download the Linux AppImage" src="https://img.shields.io/badge/Linux%20AppImage-F97316?style=for-the-badge&logo=linux&logoColor=white" />
+  </a>
+</div>
+
+<div align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-windows.zip">
     <img alt="Download the portable Windows zip" src="https://img.shields.io/badge/Portable%20Windows%20.zip-4178D4?style=for-the-badge&logo=windows&logoColor=white" />
   </a>
@@ -81,7 +93,7 @@
   <tr>
     <td width="50%" align="center">
       <a href="metadata/en-US/images/mockups/02.png">
-        <img src="metadata/en-US/images/mockups/02.png" width="100%" alt="Groupchat conversation flow" />
+        <img src="metadata/en-US/images/mockups/02.png" width="100%" alt="Group chat conversation flow" />
       </a>
     </td>
     <td width="50%" align="center">
@@ -112,7 +124,7 @@
 </table>
 
 <div align="center">
-  <p><strong>Reach anyone, even if they don't use Axichat</strong></p>
+  <p><strong>Reach anyone, even before they switch to Axichat</strong></p>
 </div>
 
 <table width="100%">
@@ -132,8 +144,8 @@
 
 ### Feature highlights:
 
-- 1st-party push notifications
-- Chat + email unified inbox
+- First-party push notifications
+- Unified chat + email inbox
 - Sync across all your devices (mobile and desktop)
 - Group chats with roles and moderation
 - File attachments
@@ -143,7 +155,7 @@
 - Delivery and read receipts
 - Typing indicators
 - Pinned messages
-- Stream management with automatic reconnect to stop messages dropping
+- Stream management with automatic reconnect to keep messages from dropping
 - Import and export contacts and calendars
 - Easy drag-and-drop calendar
 - Natural-language scheduling without AI
@@ -176,7 +188,7 @@
 
 - [ ] 2026: Voice and video calling
 - [ ] 2026: End-to-end encryption
-- [ ] 2026: 3rd-party email OAuth
+- [ ] 2026: Third-party email OAuth
 
 ---
 
@@ -197,7 +209,7 @@
         <li>Share mutual availability to book meetings without back-and-forth</li>
         <li>Unique, state-of-the-art UI</li>
         <li>Native performance on every platform</li>
-        <li>1st party push notifications</li>
+        <li>First-party push notifications</li>
         <li>Offline functionality</li>
       </ul>
     </td>
@@ -208,7 +220,7 @@
         <li>Vendor lock-in</li>
         <li>Sharing/selling ANY data</li>
         <li>Centralized servers</li>
-        <li>3rd party push notifications</li>
+        <li>Third-party push notifications</li>
       </ul>
     </td>
   </tr>
@@ -226,7 +238,7 @@
 - **Time matters** - You can always make more money, but not more time. Axichat's calendar is
   designed to help you seize the day, and our chat-like email formatting helps you avoid spending it
   reading what you don't want to, retyping information, opening the wrong emails, and spamming
-  alt+tab.
+  Alt+Tab.
 - **Collaboration matters** - Share availability, co-edit events, and resolve scheduling overlaps
   together so everyone stays aligned.
 
@@ -237,10 +249,10 @@
 ### Best chat interface:
 
 - Get Axichat's cutting-edge UI, even if your recipients are not on Axichat yet.
-- Read and send emails+attachments using our stunning chat interface no matter where your recipients
-  are: Gmail, Outlook, Tuta, etc.
-- When talking to someone also on Axichat, get extra features: Groupchats, Reactions, Delivery
-  Receipts, and more.
+- Read and send email, including attachments, using our stunning chat interface no matter where your
+  recipients are: Gmail, Outlook, Tuta, etc.
+- When talking to someone else on Axichat, get extra features: group chats, reactions, delivery
+  receipts, and more.
 
 ### Best calendar in the world:
 
@@ -249,7 +261,7 @@
   for you. Don't worry about tweaking 30 different inputs to plan a basic task.
 - If you don't know when it needs to get done, that's fine; we just put it in the unscheduled list
   so you can quickly and easily dump your stream-of-consciousness.
-- If it has a deadline then we will notify you when it is getting close.
+- If it has a deadline, we will notify you when it is getting close.
 - Excellent for planning your entire personal routine, featuring a built-in Eisenhower Matrix so you
   can put first things first.
 - Intuitive UI/UX that works seamlessly on every screen with drag+drop to reschedule, drag to
@@ -265,26 +277,30 @@
 ## How?
 
 - Built using Flutter
-- With Moxxmpp, DeltaChat Core Rust, Drift
+- Using Moxxmpp, DeltaChat Core Rust, and Drift
 
 ---
 
 ## Downloading & Installing
 
-Use the buttons above for the APK and the portable desktop builds. Some GitHub releases also
-include installer/package assets and `.sha256` checksum files. Open the matching GitHub release
-and pick the asset that fits your platform:
+Use the buttons above for the Android APK plus the installer, package, and portable desktop
+builds. GitHub Releases currently publish the end-user assets below, along with matching `.sha256`
+checksum files. Open the matching GitHub release and pick the asset that fits your platform:
 
 - **Android** – `app-production-release.apk`
 - **Windows installer** – `axichat-windows-setup.exe`
 - **Windows portable** – `axichat-windows.zip`
 - **Linux Debian/Ubuntu package** – `axichat-linux-amd64.deb`
+- **Linux AppImage** – `axichat-x86_64.AppImage`
 - **Linux portable** – `axichat-linux.tar.gz`
-- **Linux Flatpak** – Flathub once the listing is live
 
-Prefer the installer/package when your release includes one. Use the portable `.zip` or `.tar.gz`
-only when you specifically want a portable build, because portable builds do **not** create Start
-menu or applications-menu entries automatically.
+Flatpak distribution is planned via Flathub once the listing is live.
+
+Prefer the installer/package when your release includes one. On Windows, prefer
+`axichat-windows-setup.exe`. On Linux, prefer `axichat-linux-amd64.deb` on Debian/Ubuntu and
+`axichat-x86_64.AppImage` elsewhere. Use the portable `.zip` or `.tar.gz` only when you
+specifically want a raw portable build, because portable builds do **not** create Start menu or
+applications-menu entries automatically.
 
 Direct desktop downloads from GitHub Releases are currently unsigned convenience artifacts. Verify
 the matching `.sha256` file from the same release before opening the installer or archive. Once the
@@ -296,7 +312,7 @@ Flathub listing is live, prefer Flathub on Linux for the strongest platform-nati
 
 ### Android
 
-- Install from F-Droid or sideload the APK.
+- Sideload `app-production-release.apk` from the matching GitHub Release.
 
 ### Linux
 
@@ -306,18 +322,19 @@ Flathub listing is live, prefer Flathub on Linux for the strongest platform-nati
   `sudo apt install ./axichat-linux-amd64.deb`. The package should add Axichat to your
   applications menu automatically. This direct-download `.deb` is unsigned, so verify the release
   checksum first.
-- **Portable `.tar.gz`** – Extract the archive into a stable folder such as
-  `~/.local/opt/axichat`, then launch `~/.local/opt/axichat/axichat`.
-
-  To promote the portable build into a normal desktop application, register the bundle under your
-  local desktop entry and icon directories:
+- **AppImage** – If your release includes `axichat-x86_64.AppImage`, make it executable and run it:
 
   ```bash
-  ./tool/install_linux_desktop_entry.sh "$HOME/.local/opt/axichat"
+  chmod +x ./axichat-x86_64.AppImage
+  ./axichat-x86_64.AppImage
   ```
 
-  That installs `im.axi.axichat.desktop` and the matching icon into
-  `~/.local/share`, which is what Wayland docks look up when matching the running app ID.
+  AppImage does not install a system-wide desktop entry automatically. If you want native package
+  integration, use the `.deb` package on Debian/Ubuntu.
+- **Portable `.tar.gz`** – Extract the archive into a stable folder such as
+  `~/.local/opt/axichat`, then launch `~/.local/opt/axichat/axichat`.
+  This portable build does not register an applications-menu entry automatically. If you want
+  desktop integration, use the `.deb` package once it is available for your release.
 
 ### Windows
 

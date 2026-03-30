@@ -130,7 +130,9 @@ definitions:
           dist/axichat-linux.tar.gz \
           dist/axichat-linux.tar.gz.sha256 \
           dist/axichat-linux-amd64.deb \
-          dist/axichat-linux-amd64.deb.sha256
+          dist/axichat-linux-amd64.deb.sha256 \
+          dist/axichat-x86_64.AppImage \
+          dist/axichat-x86_64.AppImage.sha256
 
 workflows:
   test-workflow:
