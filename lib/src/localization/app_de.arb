@@ -429,7 +429,7 @@
   "authSignupPending": "Registrierung läuft",
   "authLoginPending": "Anmeldung läuft",
   "authSignupWelcomeTitle": "Axichat",
-  "authSignupWelcomeMessage": "Willkommen bei Axichat!\n\nEs befindet sich noch in aktiver Entwicklung und die Speicherlimits pro Benutzer sind sehr niedrig. Verlasse dich daher im Moment nicht für wichtige geschäftliche Nutzung darauf.\n\nViele Funktionen sind verfügbar, wenn du auf Nachrichtenblasen tippst; tippe auf diese hier!\n\nEs wird dringend empfohlen, Hintergrundbenachrichtigungen über den Profilbildschirm zu aktivieren.\n\nWenn du Fehler findest, melde sie bitte unter https://github.com/axichat/axichat/issues, damit ich sie beheben kann!",
+  "authSignupWelcomeMessage": "Willkommen bei Axichat!\n\nDie Speicherlimits sind derzeit niedrig und werden im Laufe der Zeit erweitert.\n\nViele Funktionen sind verfügbar, wenn du auf Nachrichtenblasen tippst; tippe auf diese hier!\n\nFür eine zuverlässige Nachrichtenzustellung wird dringend empfohlen, Hintergrundbenachrichtigungen im Profilbildschirm zu aktivieren.\n\nWenn du Fehler findest, melde sie bitte unter https://github.com/axichat/axichat/issues, damit ich sie beheben kann!",
   "signupTitle": "Registrieren",
   "signupStepUsername": "Benutzername wählen",
   "signupStepPassword": "Passwort erstellen",

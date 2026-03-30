@@ -1292,7 +1292,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authSignupWelcomeMessage =>
-      '¡Bienvenido a Axichat!\n\nTodavía está en desarrollo activo y los límites de almacenamiento por usuario son muy bajos, así que por ahora no confíes en él para asuntos importantes.\n\nHay muchas funciones disponibles al tocar las burbujas de mensaje; ¡toca esta!\n\nSe recomienda encarecidamente activar las Notificaciones en segundo plano desde la pantalla de Perfil.\n\nSi encuentras errores, repórtalos en https://github.com/axichat/axichat/issues para que pueda arreglarlos.';
+      '¡Bienvenido a Axichat!\n\nLos límites de almacenamiento son actualmente bajos y se ampliarán con el tiempo.\n\nHay muchas funciones disponibles al tocar las burbujas de mensaje; ¡toca esta!\n\nPara una entrega fiable de mensajes, se recomienda encarecidamente activar las notificaciones en segundo plano desde la pantalla de Perfil.\n\nSi encuentras errores, repórtalos en https://github.com/axichat/axichat/issues para que pueda arreglarlos.';
 
   @override
   String get signupTitle => 'Registrarse';
