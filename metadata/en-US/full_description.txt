@@ -1,4 +1,4 @@
-Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.
+Axichat is an open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and a conversation-focused interface.
 
 Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at https://github.com/axichat/selfhost.
 

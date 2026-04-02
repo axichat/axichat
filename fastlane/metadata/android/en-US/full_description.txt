@@ -2,9 +2,9 @@ Axichat puts instant messaging, email, and calendar into one Flutter-built exper
 
 What Axichat offers:
 - Chat and email unified in one workflow.
-- Intuitive calendar, for free.
+- Intuitive calendar.
 - Encryption on device and in transit.
-- Unique, state-of-the-art UI.
+- Conversation-focused interface.
 - Native performance on every platform.
 - 1st party push notifications.
 - Offline functionality.
@@ -18,14 +18,14 @@ What we avoid:
 - 3rd party push notifications.
 
 Why?
-- Tools matter - Would you rather write a letter while sitting at your desk or while standing up outside? Using the right software makes the same difference. Axichat is a desk for your digital letters.
+- Tools matter - communication should feel organized instead of fragmented across separate apps.
 - Time matters - You can always make more money, but not more time. Axichat's calendar is designed to help you seize the day, and our chat-like email formatting helps you avoid spending it reading what you don't want to, retyping information, opening the wrong emails, and spamming alt+tab.
-- Privacy matters - "Arguing that you don't care about the right to privacy because you have nothing to hide is no different than saying you don't care about free speech because you have nothing to say." -- Edward Snowden
+- Privacy matters - Axichat avoids trackers, third-party push notifications, and vendor lock-in.
 
 What?
 
 Beautiful chat interface:
-- Get Axichat's cutting-edge UI, even if your recipients are not on Axichat yet.
+- Use the same conversation interface for chat and email, even when your recipients are not on Axichat.
 - Read and send emails using our chat interface no matter where your recipients are: Gmail, Outlook, Tuta, and more.
 - When talking to someone also on Axichat, get extra features: Groupchats, Reactions, Delivery Receipts, and more.
 
@@ -33,17 +33,13 @@ Intuitive calendar:
 - Natural language parsing (without any AI) so you can just type in what, when, how long, how often, due by, and more any way you want and the calendar will automatically schedule it for you.
 - If you don't know when it needs to get done, that's fine; we just put it in the unscheduled list so you can quickly and easily dump your stream-of-consciousness.
 - If it has a deadline then we will notify you when it is getting close.
-- Excellent for planning your entire personal routine, featuring a built-in Eisenhower Matrix so you can put first things first.
+- Includes planning tools such as a built-in Eisenhower Matrix for organizing tasks.
 - Intuitive UI/UX that works seamlessly on every screen with drag+drop to reschedule, drag to resize, copy+paste, batch edit, and much more.
 - Available in Guest Mode so you don't even need an account or internet to use it.
 - Scheduling, task management, and reminders all in one place with natural language processing (no AI) for frictionless use.
-
-Built in 2025 in New Zealand for people with a lot to get done and for anyone ready to take control of their communications and time.
 
 How?
 - Written in Dart + Flutter
 - With Moxxmpp
 - With DeltaChat Core Rust
 - With Drift
-
-Grab the latest builds at https://github.com/axichat/axichat to experience Axichat across Android, Windows, and Linux today.
