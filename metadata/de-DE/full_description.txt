@@ -34,12 +34,12 @@ Warum Axichat?
 
 Was Axichat bietet:
 
-Beste Chat-Oberfläche:
+Schöne Chat-Oberfläche:
 - Nachrichten und E-Mails in einer gesprächszentrierten UI lesen und senden.
 - Personen auf normalen E-Mail-Diensten erreichen (z. B. Gmail, Outlook, Tuta), während dein Workflow in Axichat bleibt.
 - Erweiterte XMPP-Funktionen nutzen, wenn beide Seiten sie unterstützen.
 
-Bester Kalender der Welt:
+Intuitiver Kalender:
 - Aufgaben und Termine in natürlicher Sprache eingeben und schnell einplanen.
 - Ungeplante Elemente in einer Inbox behalten, bis sie eingeplant werden.
 - Planung mit Drag-and-drop, Größenanpassung, Copy/Paste und Batch-Bearbeitung.

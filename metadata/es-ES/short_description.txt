@@ -1,1 +1,1 @@
-Cliente libre de XMPP y correo con calendario, sin FCM ni rastreadores.
+Sustituye tu correo, mensajería y calendario con una sola app.

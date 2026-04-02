@@ -34,12 +34,12 @@ Pourquoi Axichat ?
 
 Ce que fait Axichat :
 
-Meilleure interface de chat:
+Belle interface de chat:
 - Lire et envoyer messages et e-mails dans une interface centrée conversation.
 - Contacter des personnes sur des services e-mail classiques (par ex. Gmail, Outlook, Tuta) tout en gardant votre flux dans Axichat.
 - Utiliser des fonctions XMPP avancées quand les deux côtés les prennent en charge.
 
-Le meilleur calendrier du monde:
+Calendrier intuitif:
 - Saisir tâches et événements en langage naturel et planifier vite.
 - Garder les éléments non planifiés en inbox jusqu'à leur placement.
 - Planifier par glisser-déposer, redimensionnement, copier/coller, édition par lot.

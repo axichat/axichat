@@ -1,1 +1,1 @@
-Client XMPP et e-mail libre avec calendrier, sans FCM ni traqueurs.
+Remplacez votre e-mail, votre messagerie et votre calendrier par une seule application.

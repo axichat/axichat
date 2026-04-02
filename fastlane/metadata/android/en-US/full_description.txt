@@ -1,8 +1,8 @@
-Axichat puts the best of instant messaging, email, and calendar into one Flutter-built experience. It unifies chat and email, includes the world's best calendar, and avoids every big-tech dependency so you stay in control of your time and conversations.
+Axichat puts instant messaging, email, and calendar into one Flutter-built experience. It unifies chat and email, includes an intuitive calendar, and avoids every big-tech dependency so you stay in control of your time and conversations.
 
 What Axichat offers:
-- Chat and email unified, providing the best of both worlds.
-- World's best calendar, for free.
+- Chat and email unified in one workflow.
+- Intuitive calendar, for free.
 - Encryption on device and in transit.
 - Unique, state-of-the-art UI.
 - Native performance on every platform.
@@ -24,12 +24,12 @@ Why?
 
 What?
 
-Best chat interface:
+Beautiful chat interface:
 - Get Axichat's cutting-edge UI, even if your recipients are not on Axichat yet.
 - Read and send emails using our chat interface no matter where your recipients are: Gmail, Outlook, Tuta, and more.
 - When talking to someone also on Axichat, get extra features: Groupchats, Reactions, Delivery Receipts, and more.
 
-Best calendar in the world:
+Intuitive calendar:
 - Natural language parsing (without any AI) so you can just type in what, when, how long, how often, due by, and more any way you want and the calendar will automatically schedule it for you.
 - If you don't know when it needs to get done, that's fine; we just put it in the unscheduled list so you can quickly and easily dump your stream-of-consciousness.
 - If it has a deadline then we will notify you when it is getting close.

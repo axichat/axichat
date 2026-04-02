@@ -38,12 +38,12 @@ Why Axichat?
 
 What Axichat does:
 
-Best chat interface:
+Beautiful chat interface:
 - Read and send chat and email in one conversation-centric UI.
 - Reach people on regular email providers (for example Gmail, Outlook, Tuta) while keeping your workflow in Axichat.
 - Use advanced XMPP features when both sides support them.
 
-Best calendar in the world:
+Intuitive calendar:
 - Type tasks and events in natural language and schedule quickly.
 - Keep unscheduled items on the side until you place them.
 - Plan with drag-and-drop, drag-to-resize, copy/paste, and batch editing.

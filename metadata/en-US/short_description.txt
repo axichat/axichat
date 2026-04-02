@@ -1,1 +1,1 @@
-Open-source XMPP and email client with calendar, no FCM or trackers.
+Replace your email, messenger, and calendar with one app.

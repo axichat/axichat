@@ -34,12 +34,12 @@ Características destacadas:
 
 Qué hace Axichat:
 
-Mejor interfaz de chat:
+Hermosa interfaz de chat:
 - Lee y envía mensajes y correos en una interfaz centrada en conversaciones.
 - Llega a personas en proveedores de correo comunes (por ejemplo Gmail, Outlook, Tuta) manteniendo tu flujo en Axichat.
 - Usa funciones XMPP avanzadas cuando ambos lados las soportan.
 
-El mejor calendario del mundo:
+Calendario intuitivo:
 - Escribe tareas y eventos en lenguaje natural y prográmalos rápido.
 - Mantén elementos sin programar en una bandeja hasta ubicarlos.
 - Planifica con arrastrar y soltar, redimensionar, copiar/pegar y edición por lotes.
