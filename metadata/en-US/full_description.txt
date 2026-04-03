@@ -1,9 +1,9 @@
 Axichat is an open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and a conversation-focused interface.
 
-Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at https://github.com/axichat/selfhost.
+Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + chat server for Axichat by following the steps at https://github.com/axichat/selfhost.
 
 Feature highlights:
-- 1st-party push notifications and offline sync
+- First-party push notifications and offline sync
 - Unified inbox for chat + email
 - Sync across all your devices (mobile and desktop)
 - Group chats
@@ -20,7 +20,6 @@ Feature highlights:
 - Availability sharing that shows overlaps before you schedule
 - One-tap add-to-calendar from simple text messages
 - Guest mode for offline planning
-- First-party push notifications and offline sync
 - Works without Google, Firebase, and FCM
 
 <strong>Note:</strong> Axichat is still under active development, so things may break.
@@ -51,11 +50,11 @@ Intuitive calendar:
 - Use guest mode for local planning without account setup.
 
 Privacy and independence:
+- Open protocols and open-source code.
 - No trackers.
 - No ads.
 - No data selling.
 - No vendor lock-in.
-- Open protocols and open-source code.
 
 Android permissions explained:
 - INTERNET: send and receive chat/email data.

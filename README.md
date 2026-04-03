@@ -232,9 +232,8 @@
 
 **Email sucks and XMPP clients neglect UX**
 
-- **Tools matter** - Would you rather write a letter while standing outside or sitting at your
-  desk? Using the right software makes the same difference. Axichat is like a digital desk for your
-  online communication.
+- **Tools matter** - Communication should feel organized instead of fragmented across separate
+  apps.
 - **Time matters** - You can always make more money, but not more time. Axichat's calendar is
   designed to help you seize the day, and our chat-like email formatting helps you avoid spending it
   reading what you don't want to, retyping information, opening the wrong emails, and spamming
@@ -246,7 +245,7 @@
 
 **Built on XMPP and SMTP**
 
-### Best chat interface:
+### Beautiful chat interface:
 
 - Get Axichat's cutting-edge UI, even if your recipients are not on Axichat yet.
 - Read and send email, including attachments, using our stunning chat interface no matter where your
@@ -254,7 +253,7 @@
 - When talking to someone else on Axichat, get extra features: group chats, reactions, delivery
   receipts, and more.
 
-### Best calendar in the world:
+### Intuitive calendar:
 
 - Natural language parsing (without any AI) so you can just type in what, when, how long, how often,
   due by, and more in any way you want and the calendar will automatically schedule it into the grid
