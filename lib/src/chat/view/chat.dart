@@ -502,6 +502,16 @@ class _ChatState extends State<Chat> {
       _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
       return;
     }
+    if (_recipients.length >= composeRecipientLimit) {
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.warning(
+          message: context.l10n.fanOutErrorTooManyRecipients(
+            composeRecipientLimit,
+          ),
+        ),
+      );
+      return;
+    }
     setState(() {
       _recipients = [
         ..._recipients,

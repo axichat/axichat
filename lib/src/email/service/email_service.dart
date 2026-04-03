@@ -13,6 +13,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -247,7 +248,6 @@ final class FanOutInvalidShareTokenException extends FanOutValidationException {
 
 class EmailService {
   static const int _defaultPageSize = 50;
-  static const int _maxFanOutRecipients = 20;
   static const int _fanOutConcurrentOps = 4;
   static const int _contactHydrationConcurrentOps = 6;
   static const int _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
@@ -1625,8 +1625,8 @@ class EmailService {
     if (targetChatsByJid.isEmpty) {
       throw const FanOutResolveFailedException();
     }
-    if (targetChatsByJid.length > _maxFanOutRecipients) {
-      throw const FanOutTooManyRecipientsException(_maxFanOutRecipients);
+    if (targetChatsByJid.length > composeRecipientLimit) {
+      throw const FanOutTooManyRecipientsException(composeRecipientLimit);
     }
     final trimmedBody = body?.trim() ?? '';
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -1844,6 +1844,10 @@ class EmailService {
   }) async {
     if (targets.isEmpty) {
       throw const FanOutNoRecipientsException();
+    }
+    if (targets.map((target) => target.key).toSet().length >
+        composeRecipientLimit) {
+      throw const FanOutTooManyRecipientsException(composeRecipientLimit);
     }
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
     final statuses = <FanOutRecipientStatus>[];

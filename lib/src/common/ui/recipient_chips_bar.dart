@@ -11,6 +11,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -782,6 +783,17 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       widget.recipients.where((recipient) => !recipient.pinned).toList();
 
   void _handleRecipientAdded(Contact target) {
+    if (!widget.recipients.any((recipient) => recipient.key == target.key) &&
+        widget.recipients.length >= composeRecipientLimit) {
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.warning(
+          message: context.l10n.fanOutErrorTooManyRecipients(
+            composeRecipientLimit,
+          ),
+        ),
+      );
+      return;
+    }
     _clearPendingRemoval();
     widget.onRecipientAdded(target);
   }

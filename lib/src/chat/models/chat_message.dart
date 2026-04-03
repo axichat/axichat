@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
 enum ChatMessageKey {
@@ -189,7 +190,7 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.fanOutErrorNoRecipients => l10n.fanOutErrorNoRecipients,
     ChatMessageKey.fanOutErrorResolveFailed => l10n.fanOutErrorResolveFailed,
     ChatMessageKey.fanOutErrorTooManyRecipients =>
-      l10n.fanOutErrorTooManyRecipients(20),
+      l10n.fanOutErrorTooManyRecipients(composeRecipientLimit),
     ChatMessageKey.fanOutErrorEmptyMessage => l10n.fanOutErrorEmptyMessage,
     ChatMessageKey.fanOutErrorInvalidShareToken =>
       l10n.fanOutErrorInvalidShareToken,

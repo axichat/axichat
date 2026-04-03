@@ -788,18 +788,24 @@ class DraftFormState extends State<DraftForm> {
   }
 
   void _applyRecipient(Contact target) {
+    final existingIndex = _recipients.indexWhere(
+      (recipient) => recipient.key == target.key,
+    );
+    if (existingIndex < 0 && _recipients.length >= composeRecipientLimit) {
+      _showToast(
+        context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit),
+      );
+      return;
+    }
     setState(() {
       _sendErrorMessage = null;
-      final existingIndex = _recipients.indexWhere(
-        (recipient) => recipient.key == target.key,
-      );
       if (existingIndex >= 0) {
         _recipients[existingIndex] = _recipients[existingIndex]
             .withTarget(target)
             .withIncluded(true);
-      } else {
-        _recipients.add(ComposerRecipient(target: target));
+        return;
       }
+      _recipients.add(ComposerRecipient(target: target));
     });
     _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();

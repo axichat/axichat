@@ -4,6 +4,8 @@
 import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 
+const int composeRecipientLimit = 12;
+
 class ComposerRecipient extends Equatable {
   const ComposerRecipient({
     required this.target,
