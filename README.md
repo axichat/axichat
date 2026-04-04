@@ -3,7 +3,7 @@
 </div>
 
 <div align="center">
-  <h2>The best of instant messaging, email, and calendar all in one.</h2>
+  <h2>Replace your email, messenger, and calendar apps all with Axichat</h2>
 </div>
 
 <br />
