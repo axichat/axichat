@@ -20,29 +20,108 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
-static gchar* build_icon_path() {
+static gchar* build_executable_dir() {
   g_autofree gchar* executable_path = g_file_read_link("/proc/self/exe", nullptr);
   if (executable_path == nullptr) {
     return nullptr;
   }
 
-  g_autofree gchar* executable_dir = g_path_get_dirname(executable_path);
+  return g_path_get_dirname(executable_path);
+}
+
+static gchar* build_first_existing_path(const gchar* base_dir,
+                                        const gchar* const* relative_candidates,
+                                        guint candidate_count,
+                                        GFileTest file_test) {
+  for (guint i = 0; i < candidate_count; ++i) {
+    g_autofree gchar* candidate =
+        g_build_filename(base_dir, relative_candidates[i], nullptr);
+    if (g_file_test(candidate, file_test)) {
+      return g_strdup(candidate);
+    }
+  }
+
+  return nullptr;
+}
+
+static void prepend_env_directory(const gchar* variable_name,
+                                  const gchar* directory,
+                                  const gchar* fallback_suffix = nullptr) {
+  const gchar* current_value = g_getenv(variable_name);
+  if (current_value == nullptr || *current_value == '\0') {
+    if (fallback_suffix == nullptr) {
+      g_setenv(variable_name, directory, TRUE);
+    } else {
+      g_autofree gchar* new_value =
+          g_strdup_printf("%s:%s", directory, fallback_suffix);
+      g_setenv(variable_name, new_value, TRUE);
+    }
+    return;
+  }
+
+  g_autofree gchar* new_value = g_strdup_printf("%s:%s", directory, current_value);
+  g_setenv(variable_name, new_value, TRUE);
+}
+
+// The WebKit plugin spawns helper processes, so these paths must be configured
+// before plugin registration on every packaging format.
+static void configure_wpe_environment() {
+  g_autofree gchar* executable_dir = build_executable_dir();
+  if (executable_dir == nullptr) {
+    return;
+  }
+
+  const gchar* runtime_candidates[] = {
+      "lib/wpe-webkit-2.0",
+      "lib/wpe-webkit-1.1",
+      "lib/wpe-webkit-1.0",
+  };
+  g_autofree gchar* runtime_dir = build_first_existing_path(
+      executable_dir, runtime_candidates, G_N_ELEMENTS(runtime_candidates),
+      G_FILE_TEST_IS_DIR);
+  if (runtime_dir != nullptr) {
+    prepend_env_directory("PATH", runtime_dir);
+
+    g_autofree gchar* injected_bundle_dir =
+        g_build_filename(runtime_dir, "injected-bundle", nullptr);
+    if (g_file_test(injected_bundle_dir, G_FILE_TEST_IS_DIR)) {
+      g_setenv("WEBKIT_INJECTED_BUNDLE_PATH", injected_bundle_dir, TRUE);
+    }
+  }
+
+  g_autofree gchar* share_dir = g_build_filename(executable_dir, "share", nullptr);
+  if (g_file_test(share_dir, G_FILE_TEST_IS_DIR)) {
+    prepend_env_directory("XDG_DATA_DIRS", share_dir, "/usr/local/share:/usr/share");
+  }
+
+  const gchar* data_candidates[] = {
+      "share/wpe-webkit-2.0",
+      "share/wpe-webkit-1.1",
+      "share/wpe-webkit-1.0",
+  };
+  g_autofree gchar* inspector_resources_dir = build_first_existing_path(
+      executable_dir, data_candidates, G_N_ELEMENTS(data_candidates),
+      G_FILE_TEST_IS_DIR);
+  if (inspector_resources_dir != nullptr) {
+    g_setenv("WEBKIT_INSPECTOR_RESOURCES_PATH", inspector_resources_dir, TRUE);
+  }
+}
+
+static gchar* build_icon_path() {
+  g_autofree gchar* executable_dir = build_executable_dir();
+  if (executable_dir == nullptr) {
+    return nullptr;
+  }
+
   const gchar* relative_candidates[] = {
       "data/app_icon.png",
       "data/flutter_assets/assets/icons/generated/app_icon_linux.png",
       "share/icons/hicolor/256x256/apps/im.axi.axichat.png",
       "share/icons/hicolor/512x512/apps/im.axi.axichat.png",
   };
-
-  for (guint i = 0; i < G_N_ELEMENTS(relative_candidates); ++i) {
-    g_autofree gchar* candidate =
-        g_build_filename(executable_dir, relative_candidates[i], nullptr);
-    if (g_file_test(candidate, G_FILE_TEST_IS_REGULAR)) {
-      return g_strdup(candidate);
-    }
-  }
-
-  return nullptr;
+  return build_first_existing_path(executable_dir, relative_candidates,
+                                   G_N_ELEMENTS(relative_candidates),
+                                   G_FILE_TEST_IS_REGULAR);
 }
 
 // Implements GApplication::activate.
@@ -91,6 +170,7 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1360, 760);
+  configure_wpe_environment();
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);

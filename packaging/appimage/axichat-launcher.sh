@@ -4,8 +4,9 @@ set -eu
 
 appdir="${APPDIR:-$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)}"
 bundle_root="${appdir}/usr/lib/axichat"
+bundle_lib_dir="${bundle_root}/lib"
 
-ld_library_path="${appdir}/usr/lib:${bundle_root}/lib"
+ld_library_path="${appdir}/usr/lib:${bundle_lib_dir}"
 if [ -n "${LD_LIBRARY_PATH:-}" ]; then
   ld_library_path="${ld_library_path}:${LD_LIBRARY_PATH}"
 fi
