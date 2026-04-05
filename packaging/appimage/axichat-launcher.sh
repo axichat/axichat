@@ -2,14 +2,15 @@
 
 set -eu
 
-appdir="${APPDIR:-$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)}"
+appdir="${APPDIR:-$(CDPATH= cd -- "$(dirname "$0")" && pwd)}"
 bundle_root="${appdir}/usr/lib/axichat"
 bundle_lib_dir="${bundle_root}/lib"
 
-ld_library_path="${appdir}/usr/lib:${bundle_lib_dir}"
+ld_library_path="${bundle_lib_dir}:${appdir}/usr/lib"
 if [ -n "${LD_LIBRARY_PATH:-}" ]; then
   ld_library_path="${ld_library_path}:${LD_LIBRARY_PATH}"
 fi
 export LD_LIBRARY_PATH="${ld_library_path}"
 
-exec "${bundle_root}/axichat" "$@"
+cd "${bundle_root}"
+exec ./axichat "$@"

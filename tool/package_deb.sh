@@ -58,7 +58,13 @@ mkdir -p "${install_root}" "${package_root}/DEBIAN" "${package_root}/debian" "${
 
 cp -R "${bundle_dir}/." "${install_root}/"
 mkdir -p "${package_root}/usr/bin"
-ln -s ../../opt/axichat/axichat "${package_root}/usr/bin/axichat"
+cat > "${package_root}/usr/bin/axichat" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+cd /opt/axichat
+exec /opt/axichat/axichat "$@"
+EOF
+chmod 755 "${package_root}/usr/bin/axichat"
 install -Dm644 "${desktop_file}" "${package_root}/usr/share/applications/im.axi.axichat.desktop"
 install -Dm644 "${icon_file}" "${package_root}/usr/share/icons/hicolor/256x256/apps/im.axi.axichat.png"
 
@@ -90,6 +96,18 @@ if command -v dpkg-shlibdeps >/dev/null 2>&1 && command -v file >/dev/null 2>&1;
       "-l${install_root}"
       "-l${install_root}/lib"
     )
+
+    # The Linux bundle carries its own WPE stack. Keep the .deb dependent on
+    # the system libraries those bundled binaries still need, but do not force
+    # installation of the same WPE packages again.
+    if [[ -e "${install_root}/lib/libWPEWebKit-2.0.so.1" ]]; then
+      dpkg_shlibdeps_args+=(
+        "-xlibwpewebkit-2.0-1"
+        "-xlibwpe-1.0-1"
+        "-xlibwpebackend-fdo-1.0-1"
+      )
+    fi
+
     for target in "${elf_targets[@]}"; do
       dpkg_shlibdeps_args+=("-e${target}")
     done
