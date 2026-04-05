@@ -1793,6 +1793,7 @@
   "calendarZoomLabelExpanded": "Erweitert",
   "calendarZoomLabelMinutes": "{minutes}m",
   "calendarGuestModeNotice": "Gastmodus – Aufgaben werden nur lokal auf diesem Gerät gespeichert",
+  "calendarGuestTryAction": "Gastkalender ausprobieren",
   "calendarGuestSignUpToSync": "Zum Synchronisieren registrieren",
   "calendarGuestExportNoData": "Keine Kalenderdaten zum Export verfügbar.",
   "calendarGuestExportTitle": "Gastkalender exportieren",

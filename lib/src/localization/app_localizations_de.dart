@@ -4563,6 +4563,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Gastmodus – Aufgaben werden nur lokal auf diesem Gerät gespeichert';
 
   @override
+  String get calendarGuestTryAction => 'Gastkalender ausprobieren';
+
+  @override
   String get calendarGuestSignUpToSync => 'Zum Synchronisieren registrieren';
 
   @override

@@ -8,6 +8,8 @@ abstract class AvatarEditorState with _$AvatarEditorState {
   const factory AvatarEditorState({
     EditableAvatar? draftAvatar,
     EditableAvatar? carouselAvatar,
+    @Default(false) bool carouselRunning,
+    DateTime? carouselStartedAt,
     @Default(false) bool shuffling,
     @Default(false) bool processing,
     @Default(false) bool publishing,
@@ -20,6 +22,8 @@ abstract class AvatarEditorState with _$AvatarEditorState {
 
 extension AvatarEditorStateView on AvatarEditorState {
   Uint8List? get displayedBytes => draftAvatar?.bytes ?? carouselAvatar?.bytes;
+
+  Uint8List? get previewBytes => carouselAvatar?.bytes ?? draftAvatar?.bytes;
 
   bool get hasCarouselPreview => carouselAvatar != null;
 
@@ -38,7 +42,7 @@ extension AvatarEditorStateView on AvatarEditorState {
   }
 
   bool get canShuffleBackground {
-    final templateValue = draftAvatar?.template ?? carouselAvatar?.template;
+    final templateValue = carouselAvatar?.template ?? draftAvatar?.template;
     if (templateValue == null) return false;
     if (templateValue.category == AvatarTemplateCategory.abstract) return false;
     return templateValue.hasAlphaBackground;
@@ -48,6 +52,5 @@ extension AvatarEditorStateView on AvatarEditorState {
 
   bool get hasUserSelectedAvatar => draftAvatar != null;
 
-  bool get canUseCarouselAvatar =>
-      hasCarouselPreview && !hasUserSelectedAvatar && !isBusy;
+  bool get canUseCarouselAvatar => hasCarouselPreview && !isBusy;
 }

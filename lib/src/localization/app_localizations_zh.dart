@@ -4344,6 +4344,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarGuestModeNotice => '访客模式 - 任务仅保存在此设备本地';
 
   @override
+  String get calendarGuestTryAction => '试用访客日历';
+
+  @override
   String get calendarGuestSignUpToSync => '注册以同步';
 
   @override
@@ -10234,6 +10237,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarGuestModeNotice => '訪客模式 - 任務只會儲存在此裝置上';
+
+  @override
+  String get calendarGuestTryAction => '試用訪客行事曆';
 
   @override
   String get calendarGuestSignUpToSync => '註冊以同步';

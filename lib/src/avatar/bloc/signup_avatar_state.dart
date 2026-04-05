@@ -8,6 +8,8 @@ class SignupAvatarState extends Equatable {
     required this.backgroundColor,
     this.avatar,
     this.carouselAvatar,
+    this.carouselRunning = false,
+    this.carouselStartedAt,
     this.processing = false,
     this.errorType,
     this.errorMaxKilobytes,
@@ -19,6 +21,8 @@ class SignupAvatarState extends Equatable {
 
   final EditableAvatar? avatar;
   final EditableAvatar? carouselAvatar;
+  final bool carouselRunning;
+  final DateTime? carouselStartedAt;
   final bool processing;
   final SignupAvatarErrorType? errorType;
   final int? errorMaxKilobytes;
@@ -28,15 +32,16 @@ class SignupAvatarState extends Equatable {
 
   Uint8List? get displayedBytes => avatar?.bytes ?? carouselAvatar?.bytes;
 
+  Uint8List? get previewBytes => carouselAvatar?.bytes ?? avatar?.bytes;
+
   bool get hasCarouselPreview => carouselAvatar != null;
 
   bool get hasUserSelectedAvatar => avatar != null;
 
-  bool get canUseCarouselAvatar =>
-      !processing && avatar == null && carouselAvatar != null;
+  bool get canUseCarouselAvatar => !processing && carouselAvatar != null;
 
   bool get canShuffleBackground {
-    final template = avatar?.template ?? carouselAvatar?.template;
+    final template = carouselAvatar?.template ?? avatar?.template;
     if (template == null) return false;
     if (template.category == AvatarTemplateCategory.abstract) return false;
     return template.hasAlphaBackground;
@@ -59,6 +64,8 @@ class SignupAvatarState extends Equatable {
   SignupAvatarState copyWith({
     Object? avatar = _unset,
     Object? carouselAvatar = _unset,
+    bool? carouselRunning,
+    Object? carouselStartedAt = _unset,
     bool? processing,
     SignupAvatarErrorType? errorType,
     int? errorMaxKilobytes,
@@ -75,6 +82,10 @@ class SignupAvatarState extends Equatable {
       carouselAvatar: identical(carouselAvatar, _unset)
           ? this.carouselAvatar
           : carouselAvatar as EditableAvatar?,
+      carouselRunning: carouselRunning ?? this.carouselRunning,
+      carouselStartedAt: identical(carouselStartedAt, _unset)
+          ? this.carouselStartedAt
+          : carouselStartedAt as DateTime?,
       processing: processing ?? this.processing,
       errorType: clearError ? null : errorType ?? this.errorType,
       errorMaxKilobytes: clearError
@@ -91,6 +102,8 @@ class SignupAvatarState extends Equatable {
   List<Object?> get props => [
     avatar,
     carouselAvatar,
+    carouselRunning,
+    carouselStartedAt,
     processing,
     errorType,
     errorMaxKilobytes,

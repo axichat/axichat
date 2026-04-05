@@ -1793,6 +1793,7 @@
   "calendarZoomLabelExpanded": "扩展",
   "calendarZoomLabelMinutes": "{minutes} 分钟",
   "calendarGuestModeNotice": "访客模式 - 任务仅保存在此设备本地",
+  "calendarGuestTryAction": "试用访客日历",
   "calendarGuestSignUpToSync": "注册以同步",
   "calendarGuestExportNoData": "没有可导出的日历数据。",
   "calendarGuestExportTitle": "导出访客日历",

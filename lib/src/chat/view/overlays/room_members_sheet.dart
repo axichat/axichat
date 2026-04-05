@@ -1127,8 +1127,12 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                           children: [
                             SignupAvatarEditorPanel(
                               mode: avatarState.editorMode,
-                              avatarBytes: avatarState.displayedBytes,
+                              avatarBytes: avatarState.previewBytes,
                               animationDuration: animationDuration,
+                              showRotationTimer: avatarState.carouselRunning,
+                              rotationStartedAt: avatarState.carouselStartedAt,
+                              rotationDuration:
+                                  AvatarEditorCubit.avatarCarouselInterval,
                               cropBytes: avatarState.draftAvatar?.sourceBytes,
                               cropRect: avatarState.draftAvatar?.cropRect,
                               imageWidth: avatarState.draftAvatar?.sourceWidth
@@ -1152,8 +1156,6 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                   .read<AvatarEditorCubit>()
                                   .selectCarouselAvatar(),
                               useActionEnabled: useActionEnabled,
-                              hasUserSelectedAvatar:
-                                  avatarState.hasUserSelectedAvatar,
                               canShuffleBackground:
                                   avatarState.canShuffleBackground,
                               onShuffleBackground:
@@ -1162,7 +1164,6 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                         .read<AvatarEditorCubit>()
                                         .shuffleBackground(context.colorScheme)
                                   : null,
-                              descriptionText: l10n.mucAvatarMenuDescription,
                             ),
                             if (errorText != null) ...[
                               SizedBox(height: spacing.s),

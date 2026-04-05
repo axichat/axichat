@@ -1786,6 +1786,7 @@
   "calendarZoomLabelExpanded": "擴展",
   "calendarZoomLabelMinutes": "{minutes} 分鐘",
   "calendarGuestModeNotice": "訪客模式 - 任務只會儲存在此裝置上",
+  "calendarGuestTryAction": "試用訪客行事曆",
   "calendarGuestSignUpToSync": "註冊以同步",
   "calendarGuestExportNoData": "沒有可匯出的日曆資料。",
   "calendarGuestExportTitle": "匯出訪客日曆",

@@ -2625,7 +2625,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupAvatarShuffle.
   ///
   /// In en, this message translates to:
-  /// **'Shuffle default'**
+  /// **'Shuffle'**
   String get signupAvatarShuffle;
 
   /// No description provided for @signupAvatarMenuDescription.
@@ -2649,7 +2649,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupAvatarBackgroundColor.
   ///
   /// In en, this message translates to:
-  /// **'Background color'**
+  /// **'Change background'**
   String get signupAvatarBackgroundColor;
 
   /// No description provided for @signupAvatarDefaultsTitle.
@@ -7942,6 +7942,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guest mode saves on this device only'**
   String get calendarGuestModeNotice;
+
+  /// No description provided for @calendarGuestTryAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Try guest calendar'**
+  String get calendarGuestTryAction;
 
   /// No description provided for @calendarGuestSignUpToSync.
   ///

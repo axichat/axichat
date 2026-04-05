@@ -704,8 +704,15 @@ class _SignupFormState extends State<SignupForm>
                                                     _jidTextController.text,
                                                 processing:
                                                     avatarState.processing,
+                                                showRotationTimer:
+                                                    avatarState.carouselRunning,
+                                                rotationStartedAt: avatarState
+                                                    .carouselStartedAt,
                                                 animationDuration:
                                                     animationDuration,
+                                                rotationDuration:
+                                                    SignupAvatarCubit
+                                                        .avatarCarouselInterval,
                                                 onTap: _openAvatarEditor,
                                               )
                                             : Transform.translate(
@@ -720,8 +727,15 @@ class _SignupFormState extends State<SignupForm>
                                                       _jidTextController.text,
                                                   processing:
                                                       avatarState.processing,
+                                                  showRotationTimer: avatarState
+                                                      .carouselRunning,
+                                                  rotationStartedAt: avatarState
+                                                      .carouselStartedAt,
                                                   animationDuration:
                                                       animationDuration,
+                                                  rotationDuration:
+                                                      SignupAvatarCubit
+                                                          .avatarCarouselInterval,
                                                   onTap: _openAvatarEditor,
                                                 ),
                                               ),
@@ -796,10 +810,17 @@ class _SignupFormState extends State<SignupForm>
                                               children: [
                                                 SignupAvatarEditorPanel(
                                                   mode: avatarState.editorMode,
-                                                  avatarBytes: avatarState
-                                                      .displayedBytes,
+                                                  avatarBytes:
+                                                      avatarState.previewBytes,
                                                   animationDuration:
                                                       animationDuration,
+                                                  showRotationTimer: avatarState
+                                                      .carouselRunning,
+                                                  rotationStartedAt: avatarState
+                                                      .carouselStartedAt,
+                                                  rotationDuration:
+                                                      SignupAvatarCubit
+                                                          .avatarCarouselInterval,
                                                   cropBytes: avatarState
                                                       .avatar
                                                       ?.sourceBytes,
@@ -842,9 +863,6 @@ class _SignupFormState extends State<SignupForm>
                                                       .selectCarouselAvatar(),
                                                   useActionEnabled: avatarState
                                                       .canUseCarouselAvatar,
-                                                  hasUserSelectedAvatar:
-                                                      avatarState
-                                                          .hasUserSelectedAvatar,
                                                   canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,

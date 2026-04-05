@@ -3,16 +3,11 @@
 
 import 'dart:typed_data';
 
-import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/avatar/view/signup_avatar_preview.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-const String _fallbackSignupAvatarAssetPath =
-    'assets/images/avatars/abstract/abstract1.png';
 
 class SignupAvatarSelector extends StatefulWidget {
   const SignupAvatarSelector({
@@ -20,14 +15,20 @@ class SignupAvatarSelector extends StatefulWidget {
     required this.bytes,
     required this.username,
     required this.processing,
+    required this.showRotationTimer,
+    this.rotationStartedAt,
     required this.animationDuration,
+    required this.rotationDuration,
     required this.onTap,
   });
 
   final Uint8List? bytes;
   final String username;
   final bool processing;
+  final bool showRotationTimer;
+  final DateTime? rotationStartedAt;
   final Duration animationDuration;
+  final Duration rotationDuration;
   final VoidCallback onTap;
 
   @override
@@ -38,7 +39,6 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
   _HoverState _hoverState = _HoverState.idle;
   int _previewVersion = 0;
   Uint8List? _lastBytes;
-  bool _fallbackAvatarPrecached = false;
 
   @override
   void didUpdateWidget(covariant SignupAvatarSelector oldWidget) {
@@ -50,14 +50,6 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
       _previewVersion++;
       _lastBytes = nextBytes;
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_fallbackAvatarPrecached) return;
-    _fallbackAvatarPrecached = true;
-    precacheImage(const AssetImage(_fallbackSignupAvatarAssetPath), context);
   }
 
   @override
@@ -79,7 +71,6 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
     final resolvedBytes = widget.bytes?.isNotEmpty == true
         ? widget.bytes
         : (_lastBytes?.isNotEmpty == true ? _lastBytes : null);
-    final hasBytes = resolvedBytes != null;
     return AxiTapBounce(
       enabled: true,
       child: Material(
@@ -112,53 +103,16 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                SizedBox.square(
-                  dimension: avatarSize,
-                  child: PageTransitionSwitcher(
-                    duration: animationDuration,
-                    transitionBuilder:
-                        (child, primaryAnimation, secondaryAnimation) =>
-                            FadeTransition(
-                              opacity: primaryAnimation,
-                              child: FadeTransition(
-                                opacity: ReverseAnimation(secondaryAnimation),
-                                child: child,
-                              ),
-                            ),
-                    child: hasBytes
-                        ? AxiAvatar(
-                            key: ValueKey(_previewVersion),
-                            avatar: AvatarPresentation.avatar(
-                              label: displayJid,
-                              colorSeed: displayJid,
-                              loading: false,
-                            ),
-                            size: avatarSize,
-                            shape: AxiAvatarShape.squircle,
-                            subscription: Subscription.none,
-                            presence: null,
-                            avatarBytes: resolvedBytes,
-                          )
-                        : SizedBox.square(
-                            key: ValueKey(_previewVersion),
-                            dimension: avatarSize,
-                            child: DecoratedBox(
-                              decoration: ShapeDecoration(
-                                color: colors.card,
-                                shape: overlayShape,
-                              ),
-                              child: ClipPath(
-                                clipper: ShapeBorderClipper(
-                                  shape: overlayShape,
-                                ),
-                                child: Image.asset(
-                                  _fallbackSignupAvatarAssetPath,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                          ),
-                  ),
+                SignupAvatarPreview(
+                  bytes: resolvedBytes,
+                  displayLabel: displayJid,
+                  size: avatarSize,
+                  animationDuration: animationDuration,
+                  rotationDuration: widget.rotationDuration,
+                  rotationStartedAt: widget.rotationStartedAt,
+                  showRotationTimer:
+                      widget.showRotationTimer && !widget.processing,
+                  transitionKey: _previewVersion,
                 ),
                 AnimatedOpacity(
                   opacity: overlayVisible ? motion.tapFocusAlpha : 0.0,

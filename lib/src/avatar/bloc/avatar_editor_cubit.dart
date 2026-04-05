@@ -82,7 +82,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   static const minCropSide = 48.0;
   static const avatarInsetFraction = 0.10;
   static const _maxUploadBytes = 20 * 1024 * 1024;
-  static const _avatarCarouselInterval = Duration(seconds: 1);
+  static const avatarCarouselInterval = Duration(seconds: 2);
   static const _avatarCarouselHistoryLimit = 12;
   static const _avatarCarouselCropSide = 100000.0;
 
@@ -137,6 +137,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       state.copyWith(
         draftAvatar: selected,
         carouselAvatar: null,
+        carouselRunning: false,
+        carouselStartedAt: null,
         backgroundColor: selected.backgroundColor ?? state.backgroundColor,
         errorType: null,
       ),
@@ -161,24 +163,24 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       return;
     }
 
-    _carouselEnabled = true;
-    if (state.draftAvatar != null) {
-      _stopAvatarCarousel();
-      _pendingCropRect = null;
-      emit(
-        state.copyWith(
-          draftAvatar: null,
-          carouselAvatar: null,
-          errorType: null,
-        ),
-      );
+    _stopAvatarCarousel();
+    _carouselEnabled = false;
+
+    final previewAvatar =
+        _nextCarouselAvatar ?? await _buildManualPreviewAvatar(colors);
+    _nextCarouselAvatar = null;
+    if (previewAvatar == null) {
+      return;
     }
-    if (_nextCarouselAvatar == null) {
-      await _warmNextCarouselAvatar();
-    }
-    if (_isCarouselBlocked()) return;
-    await _advanceCarousel();
-    pauseCarousel();
+    _pendingCropRect = null;
+    emit(
+      state.copyWith(
+        carouselAvatar: previewAvatar,
+        carouselRunning: false,
+        carouselStartedAt: null,
+        errorType: null,
+      ),
+    );
   }
 
   Future<void> seedFromBytes(Uint8List bytes) async {
@@ -365,14 +367,16 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (state.processing || state.publishing || state.shuffling) {
       return;
     }
-    final activeAvatar = state.draftAvatar ?? state.carouselAvatar;
+    final activeAvatar = state.carouselAvatar ?? state.draftAvatar;
     final template = activeAvatar?.template;
     if (template == null) return;
     if (template.category == AvatarTemplateCategory.abstract) return;
     if (!template.hasAlphaBackground) return;
     final background = _randomAvatarBackgroundColor();
-    if (state.draftAvatar == null) {
-      pauseCarousel();
+    final previewingCandidate =
+        state.carouselAvatar != null || state.draftAvatar == null;
+    if (previewingCandidate) {
+      _stopAvatarCarousel();
       try {
         final updated = await _buildAvatarFromTemplate(
           template: template,
@@ -398,6 +402,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _avatarCarouselTimer?.cancel();
     _avatarCarouselTimer = null;
     _carouselGeneration++;
+    _setCarouselRunning(false);
   }
 
   Future<void> _resumeAvatarCarouselIfNeeded() async {
@@ -417,6 +422,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
     }
+    _setCarouselRunning(true);
     final generation = _carouselGeneration;
     await _warmNextCarouselAvatar(generation);
     if (generation != _carouselGeneration) {
@@ -435,7 +441,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   void _scheduleCarouselTick() {
     if (_avatarCarouselTimer != null || _isCarouselBlocked()) return;
     final generation = _carouselGeneration;
-    _avatarCarouselTimer = Timer(_avatarCarouselInterval, () async {
+    _avatarCarouselTimer = Timer(avatarCarouselInterval, () async {
       await _handleCarouselTick(generation);
     });
   }
@@ -479,6 +485,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     emit(
       state.copyWith(
         carouselAvatar: next,
+        carouselStartedAt: state.carouselRunning ? DateTime.timestamp() : null,
         backgroundColor: next.backgroundColor ?? state.backgroundColor,
         errorType: null,
       ),
@@ -508,6 +515,33 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       return;
     }
     _nextCarouselAvatar = nextAvatar;
+  }
+
+  Future<EditableAvatar?> _buildManualPreviewAvatar(
+    ShadColorScheme colors,
+  ) async {
+    final context = AvatarCarouselBuildContext(
+      colors: colors,
+      currentBackground: state.backgroundColor,
+    );
+    return _carouselEngine.buildNext(
+      context: context,
+      renderSpec: _resolveCarouselRenderSpec,
+      preferAbstract: false,
+    );
+  }
+
+  void _setCarouselRunning(bool running) {
+    if (state.carouselRunning == running &&
+        (running || state.carouselStartedAt == null)) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        carouselRunning: running,
+        carouselStartedAt: running ? state.carouselStartedAt : null,
+      ),
+    );
   }
 
   void updateCropRect(Rect rect) {

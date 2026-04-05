@@ -3,19 +3,14 @@
 
 import 'dart:typed_data';
 
-import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
-import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/avatar/view/signup_avatar_preview.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-const String _fallbackSignupAvatarAssetPath =
-    'assets/images/avatars/abstract/abstract1.png';
 
 class SignupAvatarEditorPanel extends StatefulWidget {
   const SignupAvatarEditorPanel({
@@ -26,7 +21,9 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     required this.onUpload,
     required this.canShuffleBackground,
     required this.animationDuration,
-    required this.hasUserSelectedAvatar,
+    required this.showRotationTimer,
+    this.rotationStartedAt,
+    required this.rotationDuration,
     this.onUseCurrent,
     this.useActionEnabled = false,
     this.onShuffleBackground,
@@ -37,7 +34,6 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     this.onCropChanged,
     this.onCropReset,
     this.onCropCommitted,
-    this.descriptionText,
   });
 
   final AvatarEditorMode mode;
@@ -46,7 +42,9 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final Future<void> Function() onUpload;
   final bool canShuffleBackground;
   final Duration animationDuration;
-  final bool hasUserSelectedAvatar;
+  final bool showRotationTimer;
+  final DateTime? rotationStartedAt;
+  final Duration rotationDuration;
   final Future<void> Function()? onShuffleBackground;
   final VoidCallback? onUseCurrent;
   final bool useActionEnabled;
@@ -57,7 +55,6 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final ValueChanged<Rect>? onCropChanged;
   final VoidCallback? onCropReset;
   final ValueChanged<Rect>? onCropCommitted;
-  final String? descriptionText;
 
   @override
   State<SignupAvatarEditorPanel> createState() =>
@@ -70,7 +67,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
   int _previewVersion = 0;
   Uint8List? _lastPreviewBytes;
   Rect? _localCropRect;
-  bool _fallbackAvatarPrecached = false;
 
   @override
   void didUpdateWidget(covariant SignupAvatarEditorPanel oldWidget) {
@@ -86,14 +82,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         oldWidget.imageHeight != widget.imageHeight) {
       _localCropRect = null;
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_fallbackAvatarPrecached) return;
-    _fallbackAvatarPrecached = true;
-    precacheImage(const AssetImage(_fallbackSignupAvatarAssetPath), context);
   }
 
   Future<void> _handleShuffle() async {
@@ -185,12 +173,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
             l10n.signupAvatarCropTitle,
             style: context.textTheme.small.copyWith(color: colors.foreground),
           ),
-          Text(
-            l10n.avatarCropDescription,
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
-            ),
-          ),
           Padding(
             padding: EdgeInsets.all(spacing.s),
             child: Center(
@@ -219,124 +201,94 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               child: Text(l10n.commonDone),
             ),
           ),
-          Text(
-            l10n.signupAvatarCropHint,
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
-            ),
-          ),
         ],
       );
     }
 
     final allowBackgroundShuffle =
         widget.canShuffleBackground && widget.onShuffleBackground != null;
-    final showBackgroundShuffle = allowBackgroundShuffle;
     final allowUseAction =
         widget.useActionEnabled && !busy && widget.onUseCurrent != null;
-    final useLabel = l10n.avatarUseThis;
-    const IconData useIcon = LucideIcons.check;
-
-    final previewKey = ValueKey(_previewVersion);
     final resolvedPreviewBytes = widget.avatarBytes?.isNotEmpty == true
         ? widget.avatarBytes
         : (_lastPreviewBytes?.isNotEmpty == true ? _lastPreviewBytes : null);
-    final hasPreviewBytes = resolvedPreviewBytes != null;
+    final previewSize = sizing.iconButtonTapTarget * 1.5;
+    final buttonWidthBehavior = AxiButtonWidth.expand;
     Widget preview = Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: spacing.s,
       children: [
-        PageTransitionSwitcher(
-          duration: animationDuration,
-          transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
-              FadeTransition(
-                opacity: primaryAnimation,
-                child: FadeTransition(
-                  opacity: ReverseAnimation(secondaryAnimation),
-                  child: child,
-                ),
-              ),
-          child: hasPreviewBytes
-              ? AxiAvatar(
-                  key: previewKey,
-                  avatar: const AvatarPresentation.avatar(
-                    label: 'avatar@axichat',
-                    colorSeed: 'avatar@axichat',
-                    loading: false,
-                  ),
-                  size: 96,
-                  subscription: Subscription.none,
-                  presence: null,
-                  avatarBytes: resolvedPreviewBytes,
-                )
-              : SizedBox.square(
-                  key: previewKey,
-                  dimension: 96,
-                  child: DecoratedBox(
-                    decoration: ShapeDecoration(
-                      color: colors.card,
-                      shape: SquircleBorder(
-                        cornerRadius: context.radii.squircle,
-                        side: context.borderSide,
-                      ),
-                    ),
-                    child: ClipPath(
-                      clipper: ShapeBorderClipper(
-                        shape: SquircleBorder(
-                          cornerRadius: context.radii.squircle,
-                        ),
-                      ),
-                      child: Image.asset(
-                        _fallbackSignupAvatarAssetPath,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ),
-        ),
-        Text(
-          widget.descriptionText ?? l10n.signupAvatarMenuDescription,
-          style: context.textTheme.small.copyWith(
-            color: colors.mutedForeground,
+        Align(
+          alignment: Alignment.center,
+          child: SignupAvatarPreview(
+            bytes: resolvedPreviewBytes,
+            displayLabel: 'avatar@axichat',
+            size: previewSize,
+            animationDuration: animationDuration,
+            rotationDuration: widget.rotationDuration,
+            rotationStartedAt: widget.rotationStartedAt,
+            showRotationTimer: widget.showRotationTimer,
+            transitionKey: _previewVersion,
           ),
-          textAlign: TextAlign.center,
         ),
-        Wrap(
-          alignment: WrapAlignment.center,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: avatarActionSpacing,
-          runSpacing: avatarActionSpacing,
           children: [
-            AxiButton.secondary(
-              onPressed: allowUseAction ? widget.onUseCurrent : null,
-              leading: Icon(useIcon, size: avatarActionIconSize),
-              child: Text(useLabel),
-            ),
             AxiButton.primary(
+              size: AxiButtonSize.sm,
+              widthBehavior: buttonWidthBehavior,
+              onPressed: allowUseAction ? widget.onUseCurrent : null,
+              leading: Icon(LucideIcons.check, size: avatarActionIconSize),
+              child: Text(
+                l10n.commonSelect,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            AxiButton.secondary(
+              size: AxiButtonSize.sm,
+              widthBehavior: buttonWidthBehavior,
               loading: _shuffling,
               onPressed: busy ? null : _handleShuffle,
               leading: Icon(LucideIcons.refreshCw, size: avatarActionIconSize),
-              child: Text(l10n.signupAvatarShuffle),
-            ),
-            if (showBackgroundShuffle)
-              AxiButton.secondary(
-                loading: _shufflingBackground,
-                onPressed: busy
-                    ? null
-                    : () async {
-                        await _handleShuffleBackground();
-                      },
-                leading: Icon(LucideIcons.palette, size: avatarActionIconSize),
-                child: Text(l10n.signupAvatarBackgroundColor),
+              child: Text(
+                l10n.signupAvatarShuffle,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
+            ),
+            AxiButton.secondary(
+              size: AxiButtonSize.sm,
+              widthBehavior: buttonWidthBehavior,
+              loading: _shufflingBackground,
+              onPressed: busy || !allowBackgroundShuffle
+                  ? null
+                  : () async {
+                      await _handleShuffleBackground();
+                    },
+              leading: Icon(LucideIcons.palette, size: avatarActionIconSize),
+              child: Text(
+                l10n.signupAvatarBackgroundColor,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
             AxiButton.outline(
+              size: AxiButtonSize.sm,
+              widthBehavior: buttonWidthBehavior,
               onPressed: busy
                   ? null
                   : () async {
                       await widget.onUpload();
                     },
               leading: Icon(LucideIcons.upload, size: avatarActionIconSize),
-              child: Text(l10n.signupAvatarUploadImage),
+              child: Text(
+                l10n.signupAvatarUploadImage,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             ),
           ],
         ),

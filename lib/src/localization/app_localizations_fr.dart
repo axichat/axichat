@@ -4577,6 +4577,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Mode invité - les tâches sont enregistrées uniquement sur cet appareil';
 
   @override
+  String get calendarGuestTryAction => 'Essayer le calendrier invité';
+
+  @override
   String get calendarGuestSignUpToSync => 'S\'inscrire pour synchroniser';
 
   @override

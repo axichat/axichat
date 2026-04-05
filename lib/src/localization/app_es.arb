@@ -1789,6 +1789,7 @@
   "calendarZoomLabelExpanded": "Expandido",
   "calendarZoomLabelMinutes": "{minutes}m",
   "calendarGuestModeNotice": "Modo invitado: las tareas se guardan solo en este dispositivo",
+  "calendarGuestTryAction": "Probar calendario de invitado",
   "calendarGuestSignUpToSync": "Regístrate para sincronizar",
   "calendarGuestExportNoData": "No hay datos del calendario para exportar.",
   "calendarGuestExportTitle": "Exportar calendario de invitado",

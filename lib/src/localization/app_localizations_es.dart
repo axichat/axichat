@@ -4560,6 +4560,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'Modo invitado: las tareas se guardan solo en este dispositivo';
 
   @override
+  String get calendarGuestTryAction => 'Probar calendario de invitado';
+
+  @override
   String get calendarGuestSignUpToSync => 'Regístrate para sincronizar';
 
   @override

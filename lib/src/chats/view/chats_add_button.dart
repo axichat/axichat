@@ -200,7 +200,12 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                 bytes: selectorBytes,
                                 username: _title,
                                 processing: avatarState.isBusy,
+                                showRotationTimer: avatarState.carouselRunning,
+                                rotationStartedAt:
+                                    avatarState.carouselStartedAt,
                                 animationDuration: animationDuration,
+                                rotationDuration:
+                                    AvatarEditorCubit.avatarCarouselInterval,
                                 onTap: _openAvatarEditor,
                               ),
                             ),
@@ -274,8 +279,14 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                     absorbing: loading,
                                     child: SignupAvatarEditorPanel(
                                       mode: avatarState.editorMode,
-                                      avatarBytes: avatarState.displayedBytes,
+                                      avatarBytes: avatarState.previewBytes,
                                       animationDuration: animationDuration,
+                                      showRotationTimer:
+                                          avatarState.carouselRunning,
+                                      rotationStartedAt:
+                                          avatarState.carouselStartedAt,
+                                      rotationDuration: AvatarEditorCubit
+                                          .avatarCarouselInterval,
                                       cropBytes:
                                           avatarState.draftAvatar?.sourceBytes,
                                       cropRect:
@@ -309,8 +320,6 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                           .read<AvatarEditorCubit>()
                                           .selectCarouselAvatar(),
                                       useActionEnabled: useActionEnabled,
-                                      hasUserSelectedAvatar:
-                                          avatarState.hasUserSelectedAvatar,
                                       canShuffleBackground:
                                           avatarState.canShuffleBackground,
                                       onShuffleBackground:
@@ -320,8 +329,6 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                                   context.colorScheme,
                                                 )
                                           : null,
-                                      descriptionText:
-                                          l10n.mucAvatarMenuDescription,
                                     ),
                                   ),
                                   Positioned(

@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -50,6 +51,7 @@ class _GuestCalendarWidgetState
   );
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
       GlobalKey<NavigatorState>();
+  bool _desktopOverlayDismissed = false;
 
   @override
   BuildContext get calendarModalContext {
@@ -142,7 +144,7 @@ class _GuestCalendarWidgetState
     bool usesDesktopLayout,
     Widget layout,
   ) {
-    return CalendarSurfaceNavigator(
+    final Widget content = CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
       modalAnchorKey: _calendarModalAnchorKey,
       child: CalendarHoverTitleScope(
@@ -162,6 +164,21 @@ class _GuestCalendarWidgetState
           ),
         ),
       ),
+    );
+    if (!usesDesktopLayout || _desktopOverlayDismissed) {
+      return content;
+    }
+    return Stack(
+      children: [
+        content,
+        Positioned.fill(
+          child: _GuestDesktopOverlay(
+            onPressed: () {
+              setState(() => _desktopOverlayDismissed = true);
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -350,6 +367,44 @@ class _GuestBanner extends StatelessWidget {
           SizedBox(width: spacing.s),
           transferMenu,
         ],
+      ),
+    );
+  }
+}
+
+class _GuestDesktopOverlay extends StatelessWidget {
+  const _GuestDesktopOverlay({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final blurSigma = spacing.s / 2;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+        child: ColoredBox(
+          color: colorScheme.background.withValues(alpha: 0.82),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.all(spacing.l),
+              child: Center(
+                child: IntrinsicWidth(
+                  child: SizedBox(
+                    height: sizing.buttonHeightRegular,
+                    child: AxiButton.primary(
+                      onPressed: onPressed,
+                      child: Text(context.l10n.calendarGuestTryAction),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -1427,7 +1427,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signupAvatarUpload => 'Upload';
 
   @override
-  String get signupAvatarShuffle => 'Shuffle default';
+  String get signupAvatarShuffle => 'Shuffle';
 
   @override
   String get signupAvatarMenuDescription =>
@@ -1440,7 +1440,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get avatarUseThis => 'Set avatar';
 
   @override
-  String get signupAvatarBackgroundColor => 'Background color';
+  String get signupAvatarBackgroundColor => 'Change background';
 
   @override
   String get signupAvatarDefaultsTitle => 'Default avatars';
@@ -4489,6 +4489,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calendarGuestModeNotice => 'Guest mode saves on this device only';
+
+  @override
+  String get calendarGuestTryAction => 'Try guest calendar';
 
   @override
   String get calendarGuestSignUpToSync => 'Sign Up to Sync';
