@@ -53,6 +53,62 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
+pkg_search_module(AXICHAT_WPE_WEBKIT QUIET
+  wpe-webkit-2.0
+  wpe-webkit-1.1
+  wpe-webkit-1.0
+)
+
+set(AXICHAT_WPE_RUNTIME_SOURCE_DIR "")
+set(AXICHAT_WPE_DATA_SOURCE_DIR "")
+if(AXICHAT_WPE_WEBKIT_FOUND)
+  pkg_get_variable(AXICHAT_WPE_WEBKIT_LIBDIR "${AXICHAT_WPE_WEBKIT_MODULE_NAME}" libdir)
+  pkg_get_variable(AXICHAT_WPE_WEBKIT_PREFIX "${AXICHAT_WPE_WEBKIT_MODULE_NAME}" prefix)
+
+  set(_axichat_wpe_runtime_candidates
+    "${AXICHAT_WPE_WEBKIT_LIBDIR}/${AXICHAT_WPE_WEBKIT_MODULE_NAME}"
+    "${AXICHAT_WPE_WEBKIT_LIBDIR}/wpe-webkit-2.0"
+    "${AXICHAT_WPE_WEBKIT_LIBDIR}/wpe-webkit-1.1"
+    "${AXICHAT_WPE_WEBKIT_LIBDIR}/wpe-webkit-1.0"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/libexec/${AXICHAT_WPE_WEBKIT_MODULE_NAME}"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/libexec/wpe-webkit-2.0"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/libexec/wpe-webkit-1.1"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/libexec/wpe-webkit-1.0"
+  )
+  list(REMOVE_DUPLICATES _axichat_wpe_runtime_candidates)
+  foreach(candidate ${_axichat_wpe_runtime_candidates})
+    if(EXISTS "${candidate}/WPEWebProcess")
+      set(AXICHAT_WPE_RUNTIME_SOURCE_DIR "${candidate}")
+      break()
+    endif()
+  endforeach()
+
+  set(_axichat_wpe_data_candidates
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/share/${AXICHAT_WPE_WEBKIT_MODULE_NAME}"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/share/wpe-webkit-2.0"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/share/wpe-webkit-1.1"
+    "${AXICHAT_WPE_WEBKIT_PREFIX}/share/wpe-webkit-1.0"
+  )
+  list(REMOVE_DUPLICATES _axichat_wpe_data_candidates)
+  foreach(candidate ${_axichat_wpe_data_candidates})
+    if(EXISTS "${candidate}/inspector.gresource")
+      set(AXICHAT_WPE_DATA_SOURCE_DIR "${candidate}")
+      break()
+    endif()
+  endforeach()
+
+  if(NOT AXICHAT_WPE_RUNTIME_SOURCE_DIR)
+    message(WARNING
+      "Axichat could not find a WPE helper directory for ${AXICHAT_WPE_WEBKIT_MODULE_NAME}; "
+      "the bundle may fail on machines without a matching host install.")
+  endif()
+
+  if(NOT AXICHAT_WPE_DATA_SOURCE_DIR)
+    message(WARNING
+      "Axichat could not find WPE shared data for ${AXICHAT_WPE_WEBKIT_MODULE_NAME}; "
+      "WebKit inspector resources may be missing from the bundle.")
+  endif()
+endif()
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
@@ -90,6 +146,7 @@ install(CODE "
 
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib")
+set(INSTALL_BUNDLE_SHARE_DIR "${CMAKE_INSTALL_PREFIX}/share")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
@@ -105,6 +162,61 @@ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endforeach(bundled_library)
+
+if(AXICHAT_WPE_RUNTIME_SOURCE_DIR)
+  get_filename_component(AXICHAT_WPE_RUNTIME_DIR_NAME "${AXICHAT_WPE_RUNTIME_SOURCE_DIR}" NAME)
+  install(DIRECTORY "${AXICHAT_WPE_RUNTIME_SOURCE_DIR}/"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/${AXICHAT_WPE_RUNTIME_DIR_NAME}"
+    USE_SOURCE_PERMISSIONS
+    COMPONENT Runtime)
+endif()
+
+if(AXICHAT_WPE_DATA_SOURCE_DIR)
+  get_filename_component(AXICHAT_WPE_DATA_DIR_NAME "${AXICHAT_WPE_DATA_SOURCE_DIR}" NAME)
+  install(DIRECTORY "${AXICHAT_WPE_DATA_SOURCE_DIR}/"
+    DESTINATION "${INSTALL_BUNDLE_SHARE_DIR}/${AXICHAT_WPE_DATA_DIR_NAME}"
+    USE_SOURCE_PERMISSIONS
+    COMPONENT Runtime)
+endif()
+
+# Mirror the WPE runtime symlink layout used by the plugin's example app so the
+# bundle can resolve the bundled WebKit libraries on machines without matching
+# system packages.
+install(CODE "
+  set(LIB_DIR \"${INSTALL_BUNDLE_LIB_DIR}\")
+
+  macro(create_wpe_symlinks LIB_PATTERN SONAME_BASE)
+    file(GLOB LIB_FILES \"\${LIB_DIR}/\${LIB_PATTERN}\")
+    if(LIB_FILES)
+      list(GET LIB_FILES 0 REAL_LIB)
+      get_filename_component(REAL_LIB_NAME \"\${REAL_LIB}\" NAME)
+
+      set(SONAME_LINK \"\${LIB_DIR}/\${SONAME_BASE}.so.1\")
+      if(NOT EXISTS \"\${SONAME_LINK}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+          \"\${REAL_LIB_NAME}\" \"\${SONAME_LINK}\")
+      endif()
+
+      set(SO_LINK \"\${LIB_DIR}/\${SONAME_BASE}.so\")
+      if(NOT EXISTS \"\${SO_LINK}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+          \"\${SONAME_BASE}.so.1\" \"\${SO_LINK}\")
+      endif()
+    endif()
+  endmacro()
+
+  create_wpe_symlinks(\"libWPEWebKit-2.0.so.*.*.*\" \"libWPEWebKit-2.0\")
+  create_wpe_symlinks(\"libwpe-1.0.so.*.*.*\" \"libwpe-1.0\")
+  create_wpe_symlinks(\"libWPEBackend-fdo-1.0.so.*.*.*\" \"libWPEBackend-fdo-1.0\")
+
+  if(EXISTS \"\${LIB_DIR}/libWPEBackend-fdo-1.0.so.1\")
+    set(DEFAULT_BACKEND_LINK \"\${LIB_DIR}/libWPEBackend-default.so\")
+    if(NOT EXISTS \"\${DEFAULT_BACKEND_LINK}\")
+      execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
+        \"libWPEBackend-fdo-1.0.so.1\" \"\${DEFAULT_BACKEND_LINK}\")
+    endif()
+  endif()
+  " COMPONENT Runtime)
 
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
