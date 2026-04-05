@@ -1,10 +1,12 @@
-Axichat is an open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and a conversation-focused interface.
+Axichat is an open source email (SMTP) and chat (XMPP) client with first-party push notifications (without FCM) and a conversation-focused interface.
 
-Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + chat server for Axichat by following the steps at https://github.com/axichat/selfhost.
+Get your.name@axi.im now.
+
+For additional privacy and security, run your own server by following the self-hosting guide at https://github.com/axichat/selfhost.
 
 Feature highlights:
 - First-party push notifications and offline sync
-- Unified inbox for chat + email
+- Transform traditional email into instant messenger style
 - Sync across all your devices (mobile and desktop)
 - Group chats
 - Avatars
@@ -24,47 +26,4 @@ Feature highlights:
 
 <strong>Note:</strong> Axichat is still under active development, so things may break.
 
-If you find any bugs please report them at https://github.com/axichat/axichat/issues so I can fix them! GitLab also works for bug reports.
-
-Website: https://axi.chat
-Source code: https://gitlab.com/axichat/axichat
-License: AGPL-3.0-or-later
-
-Why Axichat?
-- Tools matter: communication should feel like a clean desk, not a cluttered inbox.
-- Time matters: Axichat reduces context-switching with chat-style email and integrated planning.
-- Collaboration matters: calendar, availability, and messaging stay in one place.
-
-What Axichat does:
-
-Beautiful chat interface:
-- Read and send chat and email in one conversation-centric UI.
-- Reach people on regular email providers (for example Gmail, Outlook, Tuta) while keeping your workflow in Axichat.
-- Use advanced XMPP features when both sides support them.
-
-Intuitive calendar:
-- Type tasks and events in natural language and schedule quickly.
-- Keep unscheduled items on the side until you place them.
-- Plan with drag-and-drop, drag-to-resize, copy/paste, and batch editing.
-- Track reminders, deadlines, priorities, and recurring plans.
-- Use guest mode for local planning without account setup.
-
-Privacy and independence:
-- Open protocols and open-source code.
-- No trackers.
-- No ads.
-- No data selling.
-- No vendor lock-in.
-
-Android permissions explained:
-- INTERNET: send and receive chat/email data.
-- POST_NOTIFICATIONS: show message and reminder notifications.
-- FOREGROUND_SERVICE and related data-sync permissions: keep reliable background messaging.
-- RECEIVE_BOOT_COMPLETED: restore background messaging after reboot.
-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: optional prompt to improve delivery reliability.
-- VIBRATE: notification haptics.
-
-Support and updates:
-- Website: https://axi.chat
-- Release notes: https://gitlab.com/axichat/axichat/-/releases
-- Donations: https://axi.chat/donate
+Please report bugs at https://github.com/axichat/axichat/issues or GitLab.
