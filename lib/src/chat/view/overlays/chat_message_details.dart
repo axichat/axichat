@@ -8,7 +8,7 @@ class ChatMessageDetails extends StatefulWidget {
     required this.onEmailImagesApproved,
   });
 
-  final ValueChanged<storage_models.Chat>? onAddRecipient;
+  final bool Function(storage_models.Chat recipient)? onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
 
@@ -549,7 +549,10 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                       onPressed: () {
                         final recipientName =
                             recipient.contactDisplayName ?? recipient.title;
-                        onAddRecipient(recipient);
+                        final added = onAddRecipient(recipient);
+                        if (!added) {
+                          return;
+                        }
                         Navigator.of(dialogContext).pop();
                         messenger.showSnackBar(
                           SnackBar(

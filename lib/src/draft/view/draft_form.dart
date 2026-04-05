@@ -390,20 +390,20 @@ class DraftFormState extends State<DraftForm> {
                                             .recipientAddressSuggestions,
                                         selfJid: locate<ChatsCubit>().selfJid,
                                         selfIdentity: selfIdentity,
-                                        onRecipientAdded: (target) {
-                                          _handleRecipientAdded(target).then((
-                                            added,
-                                          ) {
-                                            if (!mounted || !added) return;
-                                            field.didChange(null);
-                                          });
+                                        recipientAddError: _recipientAddError,
+                                        onRecipientAdded: (target) async {
+                                          final added =
+                                              await _handleRecipientAdded(
+                                                target,
+                                              );
+                                          if (!mounted || !added) {
+                                            return false;
+                                          }
+                                          field.didChange(null);
+                                          return true;
                                         },
                                         onRecipientRemoved: (key) {
                                           _handleRecipientRemoved(key);
-                                          field.didChange(null);
-                                        },
-                                        onRecipientToggled: (key) {
-                                          _handleRecipientToggled(key);
                                           field.didChange(null);
                                         },
                                         latestStatuses: const {},
@@ -756,11 +756,9 @@ class DraftFormState extends State<DraftForm> {
         address.isNotEmpty) {
       final transport = await _resolveAddressTransport(address);
       if (!mounted || transport == null) return false;
-      _applyRecipient(target.withTransport(transport));
-      return true;
+      return _applyRecipient(target.withTransport(transport));
     }
-    _applyRecipient(target);
-    return true;
+    return _applyRecipient(target);
   }
 
   Future<bool> _ensureRecipientTransports() async {
@@ -768,7 +766,7 @@ class DraftFormState extends State<DraftForm> {
     var updated = false;
     for (var index = 0; index < nextRecipients.length; index++) {
       final recipient = nextRecipients[index];
-      if (!recipient.isIncluded || !recipient.needsTransportSelection) {
+      if (!recipient.included || !recipient.needsTransportSelection) {
         continue;
       }
       final address = recipient.target.resolvedAddress;
@@ -787,16 +785,25 @@ class DraftFormState extends State<DraftForm> {
     return true;
   }
 
-  void _applyRecipient(Contact target) {
+  String? _recipientAddError(Contact target) {
+    if (!exceedsComposeRecipientLimit(
+      recipients: _recipients,
+      target: target,
+    )) {
+      return null;
+    }
+    return context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit);
+  }
+
+  bool _applyRecipient(Contact target) {
+    final addError = _recipientAddError(target);
+    if (addError != null) {
+      _showToast(addError);
+      return false;
+    }
     final existingIndex = _recipients.indexWhere(
       (recipient) => recipient.key == target.key,
     );
-    if (existingIndex < 0 && _recipients.length >= composeRecipientLimit) {
-      _showToast(
-        context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit),
-      );
-      return;
-    }
     setState(() {
       _sendErrorMessage = null;
       if (existingIndex >= 0) {
@@ -810,6 +817,7 @@ class DraftFormState extends State<DraftForm> {
     _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();
     _scheduleAutosave();
+    return true;
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
@@ -840,19 +848,6 @@ class DraftFormState extends State<DraftForm> {
     setState(() {
       _sendErrorMessage = null;
       _recipients.removeWhere((recipient) => recipient.key == key);
-    });
-    _notifyRecipientAddressesChanged();
-    _revalidateFormIfNeeded();
-    _scheduleAutosave();
-  }
-
-  void _handleRecipientToggled(String key) {
-    setState(() {
-      _sendErrorMessage = null;
-      final index = _recipients.indexWhere((recipient) => recipient.key == key);
-      if (index == -1) return;
-      final recipient = _recipients[index];
-      _recipients[index] = recipient.toggledIncluded();
     });
     _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();
@@ -1681,6 +1676,12 @@ class DraftFormState extends State<DraftForm> {
     required bool hasContent,
     required bool emailRecipientsUnavailable,
   }) {
+    final emailRecipientCount = _recipients
+        .where((recipient) => recipient.usesEmailTransport(allowHint: true))
+        .length;
+    if (emailRecipientCount > composeRecipientLimit) {
+      return context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit);
+    }
     if (emailRecipientsUnavailable) {
       return context.l10n.chatComposerEmailRecipientUnavailable;
     }

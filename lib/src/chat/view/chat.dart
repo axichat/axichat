@@ -474,21 +474,38 @@ class _ChatState extends State<Chat> {
     _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
-  void _handleRecipientAdded(Contact target) {
+  Future<bool> _handleRecipientAdded(Contact target) async {
     final address = target.resolvedAddress;
     if (target.needsTransportSelection &&
         address != null &&
         address.isNotEmpty) {
-      _resolveAddressTransport(address).then((transport) {
-        if (!mounted || transport == null) return;
-        _applyRecipient(target.withTransport(transport));
-      });
-      return;
+      final transport = await _resolveAddressTransport(address);
+      if (!mounted || transport == null) {
+        return false;
+      }
+      return _applyRecipient(target.withTransport(transport));
     }
-    _applyRecipient(target);
+    return _applyRecipient(target);
   }
 
-  void _applyRecipient(Contact target) {
+  String? _recipientAddError(Contact target) {
+    if (!exceedsComposeRecipientLimit(
+      recipients: _recipients,
+      target: target,
+    )) {
+      return null;
+    }
+    return context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit);
+  }
+
+  bool _applyRecipient(Contact target) {
+    final addError = _recipientAddError(target);
+    if (addError != null) {
+      ShadToaster.maybeOf(
+        context,
+      )?.show(FeedbackToast.warning(message: addError));
+      return false;
+    }
     final index = _recipients.indexWhere((recipient) {
       return recipient.key == target.key;
     });
@@ -500,17 +517,7 @@ class _ChatState extends State<Chat> {
         _recipients = updated;
       });
       _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
-      return;
-    }
-    if (_recipients.length >= composeRecipientLimit) {
-      ShadToaster.maybeOf(context)?.show(
-        FeedbackToast.warning(
-          message: context.l10n.fanOutErrorTooManyRecipients(
-            composeRecipientLimit,
-          ),
-        ),
-      );
-      return;
+      return true;
     }
     setState(() {
       _recipients = [
@@ -519,6 +526,7 @@ class _ChatState extends State<Chat> {
       ];
     });
     _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
+    return true;
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
@@ -558,23 +566,8 @@ class _ChatState extends State<Chat> {
     _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
-  void _handleRecipientToggled(String key) {
-    final index = _recipients.indexWhere((recipient) {
-      return recipient.key == key;
-    });
-    if (index == -1) return;
-    final current = _recipients[index];
-    if (current.isPinned) return;
-    final updated = List<ComposerRecipient>.from(_recipients)
-      ..[index] = current.toggledIncluded();
-    setState(() {
-      _recipients = updated;
-    });
-    _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
-  }
-
-  void _handleRecipientAddedFromChat(chat_models.Chat chat) {
-    _handleRecipientAdded(
+  bool _handleRecipientAddedFromChat(chat_models.Chat chat) {
+    return _applyRecipient(
       Contact.chat(
         chat: chat,
         shareSignatureEnabled:

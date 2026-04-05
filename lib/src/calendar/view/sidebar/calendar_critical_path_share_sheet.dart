@@ -183,7 +183,6 @@ class _CalendarCriticalPathShareSheetState
             horizontalPadding: 0,
             onRecipientAdded: _handleRecipientAdded,
             onRecipientRemoved: _handleRecipientRemoved,
-            onRecipientToggled: _handleRecipientToggled,
           ),
         ),
         SizedBox(height: spacing.m),
@@ -222,19 +221,22 @@ class _CalendarCriticalPathShareSheetState
     return null;
   }
 
-  void _handleRecipientAdded(Contact target) {
+  bool _handleRecipientAdded(Contact target) {
     final Chat? chat = target.chat;
     if (chat == null) {
       FeedbackSystem.showInfo(
         context,
         context.l10n.calendarCriticalPathShareMissingRecipient,
       );
-      return;
+      return false;
     }
-    if (!mounted) return;
+    if (!mounted) {
+      return false;
+    }
     setState(() {
       _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
     });
+    return true;
   }
 
   void _handleRecipientRemoved(String key) {
@@ -242,19 +244,6 @@ class _CalendarCriticalPathShareSheetState
     setState(() {
       _recipients = _recipients
           .where((recipient) => recipient.key != key)
-          .toList(growable: false);
-    });
-  }
-
-  void _handleRecipientToggled(String key) {
-    if (!mounted) return;
-    setState(() {
-      _recipients = _recipients
-          .map(
-            (recipient) => recipient.key == key
-                ? recipient.copyWith(included: !recipient.included)
-                : recipient,
-          )
           .toList(growable: false);
     });
   }

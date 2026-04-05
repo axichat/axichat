@@ -1300,7 +1300,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       ),
       hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
-    final includedRecipients = _recipients.includedRecipients;
     final actionsPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,
@@ -1317,11 +1316,11 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         ),
         SizedBox(width: spacing.s),
         AxiButton.primary(
-          onPressed: includedRecipients.isEmpty
+          onPressed: _recipients.isEmpty
               ? null
               : () {
                   final invitees = <String>[];
-                  for (final recipient in includedRecipients) {
+                  for (final recipient in _recipients) {
                     final target = recipient.target;
                     if (!_isMucInviteEligibleTarget(
                       target,
@@ -1389,12 +1388,12 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                     context,
                     context.l10n.mucInviteEligibleRecipientsOnly,
                   );
-                  return;
+                  return false;
                 }
                 _addRecipient(target);
+                return true;
               },
               onRecipientRemoved: _removeRecipient,
-              onRecipientToggled: _toggleRecipient,
               collapsedByDefault: false,
               horizontalPadding: 0,
             );
@@ -1426,15 +1425,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   void _removeRecipient(String key) {
     setState(() {
       _recipients.removeWhere((recipient) => recipient.key == key);
-    });
-  }
-
-  void _toggleRecipient(String key) {
-    setState(() {
-      final index = _recipients.indexWhere((recipient) => recipient.key == key);
-      if (index == -1) return;
-      final recipient = _recipients[index];
-      _recipients[index] = recipient.copyWith(included: !recipient.included);
     });
   }
 }

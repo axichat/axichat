@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/avatar/avatar_presentation.dart';
@@ -32,7 +33,6 @@ class RecipientChipsBar extends StatefulWidget {
     this.databaseSuggestionAddresses = const <String>[],
     this.selfJid,
     required this.onRecipientAdded,
-    required this.onRecipientToggled,
     required this.onRecipientRemoved,
     required this.latestStatuses,
     required this.selfIdentity,
@@ -44,6 +44,7 @@ class RecipientChipsBar extends StatefulWidget {
     this.tapRegionGroup,
     this.allowAddressTargets = true,
     this.showSuggestionsWhenEmpty = true,
+    this.recipientAddError,
   });
 
   final List<ComposerRecipient> recipients;
@@ -51,8 +52,7 @@ class RecipientChipsBar extends StatefulWidget {
   final List<RosterItem> rosterItems;
   final List<String> databaseSuggestionAddresses;
   final String? selfJid;
-  final ValueChanged<Contact> onRecipientAdded;
-  final ValueChanged<String> onRecipientToggled;
+  final FutureOr<bool> Function(Contact target) onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final Map<String, FanOutRecipientState> latestStatuses;
   final SelfAvatar selfIdentity;
@@ -64,6 +64,7 @@ class RecipientChipsBar extends StatefulWidget {
   final Object? tapRegionGroup;
   final bool allowAddressTargets;
   final bool showSuggestionsWhenEmpty;
+  final String? Function(Contact target)? recipientAddError;
 
   @override
   State<RecipientChipsBar> createState() => _RecipientChipsBarState();
@@ -88,6 +89,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final ValueNotifier<int?> _highlightedSuggestionIndex = ValueNotifier<int?>(
     null,
   );
+  Future<bool>? _pendingRecipientSubmission;
   String? _pendingRemovalKey;
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
@@ -414,7 +416,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                           ),
                           highlightedIndexListenable:
                               _highlightedSuggestionIndex,
-                          onManualEntry: _handleManualEntry,
                           onOptionsChanged: _updateSuggestions,
                           onSubmitted: _handleAutocompleteSubmit,
                           onRecipientAdded: _handleRecipientAdded,
@@ -616,7 +617,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
     if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-      _handleAutocompleteSubmit();
+      unawaited(_handleAutocompleteSubmit());
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.backspace &&
@@ -627,32 +628,32 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return KeyEventResult.ignored;
   }
 
-  bool _handleManualEntry(String value) {
+  Future<bool> _handleManualEntry(String value) async {
+    final trimmed = value.trim();
     if (!widget.allowAddressTargets) {
       return false;
     }
-    if (!isValidAddress(value)) {
+    if (!isValidAddress(trimmed)) {
       return false;
     }
-    if (_isRoomNick(value)) {
+    if (_isRoomNick(trimmed)) {
       return false;
     }
-    if (_isOwnAddress(value)) {
+    if (_isOwnAddress(trimmed)) {
       return false;
     }
-    if (_isWelcomeThreadAddress(value)) {
+    if (_isWelcomeThreadAddress(trimmed)) {
       return false;
     }
-    _handleRecipientAdded(
+    return _handleRecipientAdded(
       Contact.address(
-        address: value,
+        address: trimmed,
         shareSignatureEnabled: context
             .read<SettingsCubit>()
             .state
             .shareTokenSignatureEnabled,
       ),
     );
-    return true;
   }
 
   void _updateSuggestions(List<Contact> suggestions) {
@@ -673,7 +674,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (_controller.text.trim().isEmpty) {
       return;
     }
-    _handleAutocompleteSubmit();
+    unawaited(_handleAutocompleteSubmit());
   }
 
   KeyEventResult _moveAutocompleteHighlight(int delta) {
@@ -704,26 +705,29 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return KeyEventResult.handled;
   }
 
-  bool _handleAutocompleteSubmit() {
+  Future<bool> _handleAutocompleteSubmit() async {
     final text = _controller.text.trim();
     final highlighted = _highlightedSuggestionIndex.value;
     if (highlighted != null &&
         highlighted >= 0 &&
         highlighted < _suggestions.length) {
-      _handleRecipientAdded(_suggestions[highlighted]);
-      _controller.clear();
-      _updateSuggestions(const <Contact>[]);
-      return true;
+      final submittedText = text;
+      final added = await _handleRecipientAdded(_suggestions[highlighted]);
+      if (added && mounted && _controller.text.trim() == submittedText) {
+        _controller.clear();
+        _updateSuggestions(const <Contact>[]);
+      }
+      return added;
     }
     if (text.isEmpty) {
       return false;
     }
-    if (_handleManualEntry(text)) {
+    final added = await _handleManualEntry(text);
+    if (added && mounted && _controller.text.trim() == text) {
       _controller.clear();
       _updateSuggestions(const <Contact>[]);
-      return true;
     }
-    return false;
+    return added;
   }
 
   void _handleBackspacePress() {
@@ -782,20 +786,29 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   List<ComposerRecipient> _removableRecipients() =>
       widget.recipients.where((recipient) => !recipient.pinned).toList();
 
-  void _handleRecipientAdded(Contact target) {
-    if (!widget.recipients.any((recipient) => recipient.key == target.key) &&
-        widget.recipients.length >= composeRecipientLimit) {
-      ShadToaster.maybeOf(context)?.show(
-        FeedbackToast.warning(
-          message: context.l10n.fanOutErrorTooManyRecipients(
-            composeRecipientLimit,
-          ),
-        ),
-      );
-      return;
+  Future<bool> _handleRecipientAdded(Contact target) {
+    final pendingSubmission = _pendingRecipientSubmission;
+    if (pendingSubmission != null) {
+      return pendingSubmission;
     }
-    _clearPendingRemoval();
-    widget.onRecipientAdded(target);
+    final submission = Future<bool>.sync(() async {
+      final addError = widget.recipientAddError?.call(target);
+      if (addError != null) {
+        ShadToaster.maybeOf(
+          context,
+        )?.show(FeedbackToast.warning(message: addError));
+        return false;
+      }
+      _clearPendingRemoval();
+      return await widget.onRecipientAdded(target);
+    });
+    _pendingRecipientSubmission = submission;
+    submission.whenComplete(() {
+      if (identical(_pendingRecipientSubmission, submission)) {
+        _pendingRecipientSubmission = null;
+      }
+    });
+    return submission;
   }
 
   List<ComposerRecipient> _visibleRecipientsForState() {
@@ -1607,7 +1620,6 @@ class _RecipientAutocompleteField extends StatelessWidget {
     required this.showSuggestionsWhenEmpty,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
-    required this.onManualEntry,
     required this.onOptionsChanged,
     required this.onSubmitted,
     required this.onRecipientAdded,
@@ -1624,10 +1636,9 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final bool showSuggestionsWhenEmpty;
   final Iterable<Contact> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
-  final bool Function(String value) onManualEntry;
   final ValueChanged<List<Contact>> onOptionsChanged;
-  final bool Function() onSubmitted;
-  final ValueChanged<Contact> onRecipientAdded;
+  final Future<bool> Function() onSubmitted;
+  final Future<bool> Function(Contact) onRecipientAdded;
 
   @override
   Widget build(BuildContext context) {
@@ -1646,7 +1657,6 @@ class _RecipientAutocompleteField extends StatelessWidget {
           showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
           optionsBuilder: optionsBuilder,
           highlightedIndexListenable: highlightedIndexListenable,
-          onManualEntry: onManualEntry,
           onOptionsChanged: onOptionsChanged,
           onSubmitted: onSubmitted,
           onRecipientAdded: onRecipientAdded,
@@ -1669,7 +1679,6 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
     required this.showSuggestionsWhenEmpty,
     required this.optionsBuilder,
     required this.highlightedIndexListenable,
-    required this.onManualEntry,
     required this.onOptionsChanged,
     required this.onSubmitted,
     required this.onRecipientAdded,
@@ -1686,10 +1695,9 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
   final bool showSuggestionsWhenEmpty;
   final Iterable<Contact> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
-  final bool Function(String value) onManualEntry;
   final ValueChanged<List<Contact>> onOptionsChanged;
-  final bool Function() onSubmitted;
-  final ValueChanged<Contact> onRecipientAdded;
+  final Future<bool> Function() onSubmitted;
+  final Future<bool> Function(Contact) onRecipientAdded;
 
   @override
   State<_RecipientAutocompleteOverlay> createState() =>
@@ -1962,7 +1970,7 @@ final class _RecipientAutocompleteOverlayState
 
   void _handleOutsideTap() {
     if (widget.controller.text.trim().isNotEmpty) {
-      widget.onSubmitted();
+      unawaited(widget.onSubmitted());
     }
     widget.focusNode.unfocus();
     _dismissOverlay();
@@ -2072,9 +2080,21 @@ final class _RecipientAutocompleteOverlayState
                                     options: _options,
                                     avatarPathsByJid: widget.avatarPathsByJid,
                                     selfIdentity: widget.selfIdentity,
-                                    onSelected: (option) {
-                                      widget.onRecipientAdded(option);
-                                      widget.controller.clear();
+                                    onSelected: (option) async {
+                                      final query = widget.controller.text
+                                          .trim();
+                                      final added = await widget
+                                          .onRecipientAdded(option);
+                                      if (!added) {
+                                        return;
+                                      }
+                                      if (!mounted) {
+                                        return;
+                                      }
+                                      if (widget.controller.text.trim() ==
+                                          query) {
+                                        widget.controller.clear();
+                                      }
                                       _recomputeOptions();
                                       widget.focusNode.requestFocus();
                                     },
@@ -2154,15 +2174,10 @@ final class _RecipientAutocompleteOverlayState
                       textInputAction: TextInputAction.go,
                       onEditingComplete: () => widget.focusNode.requestFocus(),
                       textAlignVertical: TextAlignVertical.center,
-                      onSubmitted: (_) {
-                        final handled = widget.onSubmitted();
-                        if (!handled) {
-                          final trimmed = widget.controller.text.trim();
-                          if (trimmed.isNotEmpty &&
-                              widget.onManualEntry(trimmed)) {
-                            widget.controller.clear();
-                            _recomputeOptions();
-                          }
+                      onSubmitted: (_) async {
+                        await widget.onSubmitted();
+                        if (!context.mounted) {
+                          return;
                         }
                         widget.focusNode.requestFocus();
                       },

@@ -237,7 +237,6 @@ class _ChatComposerSection extends StatefulWidget {
     required this.onExpandDraftPressed,
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
-    required this.onRecipientToggled,
     required this.onAttachmentRetry,
     required this.onAttachmentRemove,
     required this.onPendingAttachmentPressed,
@@ -275,9 +274,8 @@ class _ChatComposerSection extends StatefulWidget {
   final bool showExpandDraftAction;
   final bool expandDraftEnabled;
   final VoidCallback onExpandDraftPressed;
-  final ValueChanged<Contact> onRecipientAdded;
+  final FutureOr<bool> Function(Contact target) onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
-  final ValueChanged<String> onRecipientToggled;
   final ValueChanged<PendingAttachment> onAttachmentRetry;
   final ValueChanged<String> onAttachmentRemove;
   final ValueChanged<PendingAttachment> onPendingAttachmentPressed;
@@ -569,9 +567,17 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
             collapsedByDefault: true,
             suggestionAddresses: suggestionAddresses,
             suggestionDomains: suggestionDomains,
+            recipientAddError: (target) =>
+                exceedsComposeRecipientLimit(
+                  recipients: widget.recipients,
+                  target: target,
+                )
+                ? context.l10n.fanOutErrorTooManyRecipients(
+                    composeRecipientLimit,
+                  )
+                : null,
             onRecipientAdded: widget.onRecipientAdded,
             onRecipientRemoved: widget.onRecipientRemoved,
-            onRecipientToggled: widget.onRecipientToggled,
             visibilityLabel: widget.visibilityLabel,
             tapRegionGroup: widget.tapRegionGroup,
           );

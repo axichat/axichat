@@ -96,7 +96,7 @@ class _ChatDetailsOverlay extends StatelessWidget {
     required this.onEmailImagesApproved,
   });
 
-  final ValueChanged<chat_models.Chat> onAddRecipient;
+  final bool Function(chat_models.Chat chat) onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
 
@@ -470,7 +470,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
   final String? blockAddress;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
-  final void Function(chat_models.Chat chat) onAddRecipientFromChat;
+  final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;
@@ -566,7 +566,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
   final String? blockAddress;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
-  final void Function(chat_models.Chat chat) onAddRecipientFromChat;
+  final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;
@@ -636,7 +636,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
   final String? blockAddress;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
-  final void Function(chat_models.Chat chat) onAddRecipientFromChat;
+  final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;

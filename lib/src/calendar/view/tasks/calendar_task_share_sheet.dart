@@ -156,7 +156,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
                   horizontalPadding: 0,
                   onRecipientAdded: _handleRecipientAdded,
                   onRecipientRemoved: _handleRecipientRemoved,
-                  onRecipientToggled: _handleRecipientToggled,
                 ),
           ),
           SizedBox(height: spacing.m),
@@ -194,15 +193,18 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
   }
 
-  void _handleRecipientAdded(Contact target) {
+  bool _handleRecipientAdded(Contact target) {
     if (_recipients.any((recipient) => recipient.key == target.key)) {
-      return;
+      return true;
     }
-    if (!mounted) return;
+    if (!mounted) {
+      return false;
+    }
     setState(() {
       _recipients = List<ComposerRecipient>.from(_recipients)
         ..add(ComposerRecipient(target: target));
     });
+    return true;
   }
 
   void _handleRecipientRemoved(String key) {
@@ -210,19 +212,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     setState(() {
       _recipients = _recipients
           .where((recipient) => recipient.key != key)
-          .toList(growable: false);
-    });
-  }
-
-  void _handleRecipientToggled(String key) {
-    if (!mounted) return;
-    setState(() {
-      _recipients = _recipients
-          .map(
-            (recipient) => recipient.key == key
-                ? recipient.copyWith(included: !recipient.included)
-                : recipient,
-          )
           .toList(growable: false);
     });
   }

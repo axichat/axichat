@@ -245,7 +245,6 @@ class _CalendarAvailabilityShareScreenState
             locate: widget.locate,
             onRecipientAdded: _handleRecipientAdded,
             onRecipientRemoved: _handleRecipientRemoved,
-            onRecipientToggled: _handleRecipientToggled,
             onBack: _handleBackToEditor,
             onSend: _handleSendPressed,
           );
@@ -445,10 +444,10 @@ class _CalendarAvailabilityShareScreenState
     }
   }
 
-  void _handleRecipientAdded(Contact target) {
+  bool _handleRecipientAdded(Contact target) {
     final Chat? chat = target.chat;
     if (chat == null) {
-      return;
+      return false;
     }
     setState(() {
       final existingIndex = _recipients.indexWhere(
@@ -467,6 +466,7 @@ class _CalendarAvailabilityShareScreenState
       }
       _selectedChat ??= chat;
     });
+    return true;
   }
 
   void _handleRecipientRemoved(String key) {
@@ -474,15 +474,6 @@ class _CalendarAvailabilityShareScreenState
       _recipients = _recipients
           .where((recipient) => recipient.key != key)
           .toList();
-    });
-  }
-
-  void _handleRecipientToggled(String key) {
-    setState(() {
-      final index = _recipients.indexWhere((recipient) => recipient.key == key);
-      if (index == -1) return;
-      final recipient = _recipients[index];
-      _recipients[index] = recipient.copyWith(included: !recipient.included);
     });
   }
 
@@ -982,7 +973,6 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
     required this.locate,
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
-    required this.onRecipientToggled,
     required this.onBack,
     required this.onSend,
   });
@@ -992,9 +982,8 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   final List<Chat> availableChats;
   final bool isBusy;
   final T Function<T>() locate;
-  final ValueChanged<Contact> onRecipientAdded;
+  final bool Function(Contact target) onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
-  final ValueChanged<String> onRecipientToggled;
   final VoidCallback onBack;
   final VoidCallback onSend;
 
@@ -1062,7 +1051,6 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
                   showSuggestionsWhenEmpty: true,
                   onRecipientAdded: onRecipientAdded,
                   onRecipientRemoved: onRecipientRemoved,
-                  onRecipientToggled: onRecipientToggled,
                 ),
               ),
             ),

@@ -767,7 +767,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                               owner._expandEmailComposerToDraft(state),
                           onRecipientAdded: owner._handleRecipientAdded,
                           onRecipientRemoved: owner._handleRecipientRemoved,
-                          onRecipientToggled: owner._handleRecipientToggled,
                           onAttachmentRetry: (pending) {
                             final chat = chatEntity;
                             if (chat == null) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/ui/axi_text_field.dart';
@@ -23,9 +25,11 @@ void main() {
           availableChats: const [],
           latestStatuses: const {},
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (target) => added = target,
+          onRecipientAdded: (target) {
+            added = target;
+            return true;
+          },
           onRecipientRemoved: (_) {},
-          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -33,10 +37,33 @@ void main() {
     expect(added?.address, 'new@example.com');
   });
 
+  testWidgets('failed async add keeps typed address', (tester) async {
+    final completer = Completer<bool>();
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: const [],
+          latestStatuses: const {},
+          selfIdentity: const SelfAvatar(),
+          onRecipientAdded: (_) => completer.future,
+          onRecipientRemoved: (_) {},
+        ),
+      ),
+    );
+
+    await _submitRecipientText(tester, 'new@example.com');
+    expect(_inputField(tester).controller!.text, 'new@example.com');
+
+    completer.complete(false);
+    await tester.pump();
+
+    expect(_inputField(tester).controller!.text, 'new@example.com');
+  });
+
   testWidgets('tapping chip toggles between display name and address', (
     tester,
   ) async {
-    String? toggledKey;
     final chat = Chat(
       jid: 'dc-1@delta.chat',
       title: 'Bob',
@@ -55,9 +82,8 @@ void main() {
           availableChats: const [],
           latestStatuses: const {},
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
+          onRecipientAdded: (_) => true,
           onRecipientRemoved: (_) {},
-          onRecipientToggled: (key) => toggledKey = key,
         ),
       ),
     );
@@ -66,7 +92,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('bob@example.com'), findsOneWidget);
-    expect(toggledKey, isNull);
 
     await tester.tap(find.text('bob@example.com'));
     await tester.pumpAndSettle();
@@ -109,9 +134,8 @@ void main() {
           availableChats: const [],
           latestStatuses: const {},
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
+          onRecipientAdded: (_) => true,
           onRecipientRemoved: (key) => removedKey = key,
-          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -152,9 +176,8 @@ void main() {
             'casesensitive@example.com': FanOutRecipientState.failed,
           },
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
+          onRecipientAdded: (_) => true,
           onRecipientRemoved: (_) {},
-          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -180,9 +203,8 @@ void main() {
             'casesensitive@example.com': FanOutRecipientState.sent,
           },
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
+          onRecipientAdded: (_) => true,
           onRecipientRemoved: (_) {},
-          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -213,9 +235,8 @@ void main() {
           ],
           latestStatuses: const {},
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
+          onRecipientAdded: (_) => true,
           onRecipientRemoved: (_) {},
-          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -247,9 +268,8 @@ void main() {
           ],
           latestStatuses: const {},
           selfIdentity: const SelfAvatar(),
-          onRecipientAdded: (_) {},
+          onRecipientAdded: (_) => true,
           onRecipientRemoved: (_) {},
-          onRecipientToggled: (_) {},
         ),
       ),
     );
@@ -373,7 +393,7 @@ class _RecipientChipsBarRemovalHarnessState
       availableChats: const [],
       latestStatuses: const {},
       selfIdentity: const SelfAvatar(),
-      onRecipientAdded: (_) {},
+      onRecipientAdded: (_) => true,
       onRecipientRemoved: (key) {
         setState(() {
           _recipients = _recipients
@@ -381,7 +401,6 @@ class _RecipientChipsBarRemovalHarnessState
               .toList(growable: false);
         });
       },
-      onRecipientToggled: (_) {},
     );
   }
 }

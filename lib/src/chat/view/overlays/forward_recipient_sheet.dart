@@ -15,7 +15,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   Contact? get _selectedTarget {
     for (final recipient in _recipients) {
       final target = recipient.target;
-      if (recipient.isIncluded) {
+      if (recipient.included) {
         return target;
       }
     }
@@ -24,18 +24,20 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
 
   bool get _canSend => _selectedTarget != null;
 
-  void _handleRecipientAdded(Contact target) {
+  Future<bool> _handleRecipientAdded(Contact target) async {
     final address = target.resolvedAddress;
     if (target.needsTransportSelection &&
         address != null &&
         address.isNotEmpty) {
-      _resolveAddressTransport(address).then((transport) {
-        if (!mounted || transport == null) return;
-        _applyRecipient(target.withTransport(transport));
-      });
-      return;
+      final transport = await _resolveAddressTransport(address);
+      if (!mounted || transport == null) {
+        return false;
+      }
+      _applyRecipient(target.withTransport(transport));
+      return true;
     }
     _applyRecipient(target);
+    return true;
   }
 
   void _applyRecipient(Contact target) {
@@ -49,18 +51,6 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     setState(() {
       _recipients = _recipients
           .where((recipient) => recipient.key != key)
-          .toList(growable: false);
-    });
-  }
-
-  void _handleRecipientToggled(String key) {
-    if (!mounted) return;
-    setState(() {
-      _recipients = _recipients
-          .map(
-            (recipient) =>
-                recipient.key == key ? recipient.toggledIncluded() : recipient,
-          )
           .toList(growable: false);
     });
   }
@@ -147,7 +137,6 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
               horizontalPadding: 0,
               onRecipientAdded: _handleRecipientAdded,
               onRecipientRemoved: _handleRecipientRemoved,
-              onRecipientToggled: _handleRecipientToggled,
             );
           },
         ),

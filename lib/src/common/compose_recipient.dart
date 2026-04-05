@@ -6,6 +6,27 @@ import 'package:equatable/equatable.dart';
 
 const int composeRecipientLimit = 12;
 
+bool exceedsComposeRecipientLimit({
+  required Iterable<ComposerRecipient> recipients,
+  required Contact target,
+  int maxRecipients = composeRecipientLimit,
+  bool allowHint = true,
+}) {
+  if (recipients.any((recipient) => recipient.key == target.key)) {
+    return false;
+  }
+  if (!target.usesEmailTransport(allowHint: allowHint)) {
+    return false;
+  }
+  var emailRecipients = 0;
+  for (final recipient in recipients) {
+    if (recipient.usesEmailTransport(allowHint: allowHint)) {
+      emailRecipients += 1;
+    }
+  }
+  return emailRecipients >= maxRecipients;
+}
+
 class ComposerRecipient extends Equatable {
   const ComposerRecipient({
     required this.target,
@@ -18,8 +39,6 @@ class ComposerRecipient extends Equatable {
   final bool pinned;
 
   String get key => target.key;
-
-  bool get isIncluded => included;
 
   bool get isPinned => pinned;
 
@@ -34,8 +53,6 @@ class ComposerRecipient extends Equatable {
       target.xmppJid(allowHint: allowHint);
 
   ComposerRecipient withIncluded(bool included) => copyWith(included: included);
-
-  ComposerRecipient toggledIncluded() => copyWith(included: !included);
 
   ComposerRecipient withTarget(Contact target) => copyWith(target: target);
 
@@ -52,7 +69,7 @@ class ComposerRecipient extends Equatable {
 
 extension ComposerRecipients on Iterable<ComposerRecipient> {
   List<ComposerRecipient> get includedRecipients =>
-      where((recipient) => recipient.isIncluded).toList(growable: false);
+      where((recipient) => recipient.included).toList(growable: false);
 
   bool hasEmailRecipients({bool allowHint = false}) {
     for (final recipient in this) {
