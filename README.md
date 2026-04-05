@@ -8,8 +8,8 @@
 
 <br />
 
-<p>Axichat is a free and open-source SMTP (email) and XMPP (chat) client with first-party push notifications (no FCM ever) and cutting-edge UI.</p>
-<p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
+<p>Axichat fixes email by turning it into chat with closely integrated calendar. It's a free open-source email (SMTP) and chat (XMPP) client with first-party push notifications (no FCM).</p>
+<p>Get your.name@axi.im now or, for extra privacy and security, self-host your own server by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
 <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
 
 [//]: # (<div align="center">)
@@ -145,7 +145,7 @@
 ### Feature highlights:
 
 - First-party push notifications
-- Unified chat + email inbox
+- Transform traditional email into instant messenger-style
 - Sync across all your devices (mobile and desktop)
 - Group chats with roles and moderation
 - File attachments
