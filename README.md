@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="https://axichat.github.io/axichat/readme-media/featureGraphic.png" width="800" alt="Axichat" />
+  <img src="https://axichat.github.io/axichat/readme-media/axichat_banner.png" width="800" alt="Axichat" />
 </div>
 
 <div align="center">
-  <h2>Replace your email, messenger, and calendar apps all with Axichat</h2>
+  <h2>Replace your email, messenger, and calendar apps with Axichat</h2>
 </div>
 
 <br />
@@ -32,7 +32,7 @@
 
 <div align="center">
   <a href="https://play.google.com/store/apps/details?id=im.axi.axichat">
-    <img alt="Get it on Google Play" src="https://img.shields.io/badge/Get%20it%20on-Google%20Play-34A853?style=for-the-badge&logo=google-play&logoColor=white" />
+    <img alt="Get it on Google Play" src="https://axichat.github.io/axichat/readme-media/google-play-badge.svg" height="80" />
   </a>
 </div>
 
