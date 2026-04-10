@@ -22,7 +22,7 @@ modules:
     sources:
       - type: git
         url: __AXICHAT_APP_GIT_URL__
-        tag: __AXICHAT_APP_GIT_TAG__
+        __AXICHAT_APP_GIT_REF_FIELD__: __AXICHAT_APP_GIT_REF_VALUE__
         commit: __AXICHAT_APP_GIT_COMMIT__
         dest: axichat
       - type: archive

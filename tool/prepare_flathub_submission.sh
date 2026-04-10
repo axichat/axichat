@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 git_ref="${AXICHAT_FLATHUB_GIT_REF:-HEAD}"
+git_branch="${AXICHAT_FLATHUB_GIT_BRANCH:-}"
 app_git_url="${AXICHAT_FLATHUB_APP_GIT_URL:-https://github.com/axichat/axichat.git}"
 inputs_dir="${AXICHAT_FLATPAK_INPUTS_DIR:-${repo_root}/build/flatpak}"
 sources_dir="${AXICHAT_FLATHUB_SOURCES_DIR:-${repo_root}/build/flathub-sources}"
@@ -25,6 +26,9 @@ This script prepares the files needed for a Flathub submission:
 
 Options:
   --git-ref <ref>             Git tag/ref for the app source. Default: HEAD.
+  --git-branch <branch>       Render the app source as branch+commit instead of
+                              tag+commit. Useful for Linux-only Flathub fixes
+                              that should not reuse or mint a cross-platform tag.
   --app-git-url <url>         Public git URL for the Axichat repo.
   --inputs-url <url>          Final public URL for the uploaded flatpak-inputs archive.
   --inputs-dir <dir>          Flatpak staging dir. Default: build/flatpak.
@@ -34,8 +38,10 @@ Options:
   -h, --help                  Show this help text.
 
 Notes:
-  - The app source is rendered as a pinned `type: git` source using the
-    provided tag/ref plus its resolved commit.
+  - By default the app source is rendered as a pinned `type: git` source using
+    the provided tag/ref plus its resolved commit.
+  - If --git-branch is set, the app source is rendered using that branch plus
+    the resolved commit for --git-ref.
   - If --inputs-url is omitted, a placeholder example.invalid URL is written
     into the manifest. Upload the archive, then rerun with the real URL.
 EOF
@@ -49,6 +55,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --git-ref)
       git_ref="$2"
+      shift 2
+      ;;
+    --git-branch)
+      git_branch="$2"
       shift 2
       ;;
     --app-git-url)
@@ -107,6 +117,16 @@ if [[ ! -f "${flathub_config_template}" ]]; then
   exit 1
 fi
 
+app_git_ref_field="tag"
+app_git_ref_value="${git_ref}"
+app_git_ref_label="tag/ref"
+
+if [[ -n "${git_branch}" ]]; then
+  app_git_ref_field="branch"
+  app_git_ref_value="${git_branch}"
+  app_git_ref_label="branch"
+fi
+
 app_git_commit="$(git -C "${repo_root}" rev-list -n 1 "${git_ref}")"
 
 if [[ -z "${app_git_commit}" ]]; then
@@ -134,7 +154,8 @@ inputs_sha256="$(shasum -a 256 "${inputs_archive_path}" | awk '{print $1}')"
 manifest_path="${submission_dir}/im.axi.axichat.yml"
 sed \
   -e "s/__AXICHAT_APP_GIT_URL__/$(escape_sed_replacement "${app_git_url}")/g" \
-  -e "s/__AXICHAT_APP_GIT_TAG__/$(escape_sed_replacement "${git_ref}")/g" \
+  -e "s/__AXICHAT_APP_GIT_REF_FIELD__/$(escape_sed_replacement "${app_git_ref_field}")/g" \
+  -e "s/__AXICHAT_APP_GIT_REF_VALUE__/$(escape_sed_replacement "${app_git_ref_value}")/g" \
   -e "s/__AXICHAT_APP_GIT_COMMIT__/$(escape_sed_replacement "${app_git_commit}")/g" \
   -e "s/__AXICHAT_FLATPAK_INPUTS_URL__/$(escape_sed_replacement "${inputs_url}")/g" \
   -e "s/__AXICHAT_FLATPAK_INPUTS_SHA256__/$(escape_sed_replacement "${inputs_sha256}")/g" \
@@ -145,7 +166,8 @@ install -Dm644 "${flathub_config_template}" "${submission_dir}/flathub.json"
 cat <<EOF
 Prepared Flathub submission files
 - App git URL: ${app_git_url}
-- App git tag/ref: ${git_ref}
+- App git ${app_git_ref_label}: ${app_git_ref_value}
+- App git resolved from ref: ${git_ref}
 - App git commit: ${app_git_commit}
 - Flatpak inputs archive: ${inputs_archive_path}
   SHA256: ${inputs_sha256}

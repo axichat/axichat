@@ -69,6 +69,16 @@ Run on Linux after committing the release state you want Flathub to build:
   --inputs-url https://github.com/axichat/axichat/releases/download/v0.7.0/axichat-flatpak-inputs.tar.gz
 ```
 
+For Linux-only fixes that should not reuse or mint a cross-platform tag, render
+the app source as branch+commit instead:
+
+```bash
+./tool/prepare_flathub_submission.sh \
+  --git-ref 0123456789abcdef0123456789abcdef01234567 \
+  --git-branch master \
+  --inputs-url https://example.com/axichat-flatpak-inputs.tar.gz
+```
+
 What the script does:
 
 - renders the app source as a pinned GitHub git source for the chosen tag/ref
@@ -84,6 +94,9 @@ Submission notes:
 
 - The manifest pins the app source to `https://github.com/axichat/axichat.git`
   with `tag: v0.7.0` plus the resolved commit hash.
+- If `--git-branch` is provided, the manifest uses `branch: <branch>` plus the
+  resolved commit from `--git-ref`. This is useful when Flathub needs a Linux-
+  only fix that should not trigger the cross-platform tag release workflows.
 - Upload the generated `flatpak-inputs` archive to a stable public URL, then
   rerun the script with the final `--inputs-url`.
 - A practical pattern is:

@@ -66,9 +66,10 @@ Current Flathub status:
    during the build.
 4. `./tool/prepare_flathub_submission.sh` now renders
    `build/flathub-submission/im.axi.axichat.yml` plus `flathub.json` using
-   the pinned Axichat GitHub tag/commit plus the uploaded `flatpak-inputs`
-   archive URL and SHA256 value. Upload the generated `flatpak-inputs` archive
-   somewhere stable, then rerun the script with the final public URL.
+   either the pinned Axichat GitHub tag/commit or a branch/commit pair, plus
+   the uploaded `flatpak-inputs` archive URL and SHA256 value. Upload the
+   generated `flatpak-inputs` archive somewhere stable, then rerun the script
+   with the final public URL.
 5. Before submitting to Flathub, confirm that the app ID `im.axi.axichat`
    matches a domain you control and that the public archive URLs are
    reviewer-visible and stable.

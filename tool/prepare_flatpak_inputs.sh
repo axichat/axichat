@@ -9,10 +9,6 @@ pub_cache_dir="${output_dir}/pub-cache"
 third_party_dir="${output_dir}/third_party"
 cargo_vendor_dir="${output_dir}/vendor/cargo"
 
-moxlib_rev="83be3c882631a6a434d64f3e5887f9304bfefe30"
-moxxmpp_rev="e0675e8106fff9ab992d24f40131139f0f7eb7bb"
-omemo_dart_rev="af96331658b726367fefc7bdbffa9da2906c6c23"
-
 usage() {
   cat <<'EOF'
 Usage: ./tool/prepare_flatpak_inputs.sh [output-dir]
@@ -25,6 +21,30 @@ desktop packaging work:
 - Vendored Rust crates for packages/delta_ffi/rust
 - The Flatpak source manifest fetches Flutter, SQLCipher, and PDFium directly
 EOF
+}
+
+git_dependency_resolved_ref() {
+  local package_name="$1"
+
+  ruby -ryaml -e '
+    lockfile_path = ARGV.fetch(0)
+    package_name = ARGV.fetch(1)
+    lockfile = YAML.load_file(lockfile_path)
+    package = lockfile.fetch("packages").fetch(package_name) do
+      abort "Missing package #{package_name} in #{lockfile_path}"
+    end
+    unless package["source"] == "git"
+      abort "Package #{package_name} is not a git dependency in #{lockfile_path}"
+    end
+
+    description = package.fetch("description")
+    resolved_ref = description["resolved-ref"] || description["ref"]
+    if resolved_ref.nil? || resolved_ref.empty?
+      abort "Missing resolved-ref for #{package_name} in #{lockfile_path}"
+    end
+
+    puts resolved_ref
+  ' "${repo_root}/pubspec.lock" "${package_name}"
 }
 
 copy_hosted_package() {
@@ -115,6 +135,18 @@ done < <(
     end
   ' "${repo_root}/pubspec.lock"
 )
+
+moxlib_rev="$(git_dependency_resolved_ref "moxlib")"
+moxxmpp_rev="$(git_dependency_resolved_ref "moxxmpp")"
+moxxmpp_socket_tcp_rev="$(git_dependency_resolved_ref "moxxmpp_socket_tcp")"
+omemo_dart_rev="$(git_dependency_resolved_ref "omemo_dart")"
+
+if [[ "${moxxmpp_rev}" != "${moxxmpp_socket_tcp_rev}" ]]; then
+  echo "moxxmpp and moxxmpp_socket_tcp resolved refs differ in pubspec.lock." >&2
+  echo "moxxmpp: ${moxxmpp_rev}" >&2
+  echo "moxxmpp_socket_tcp: ${moxxmpp_socket_tcp_rev}" >&2
+  exit 1
+fi
 
 copy_git_checkout "moxlib" "${moxlib_rev}" "${third_party_dir}/moxlib"
 copy_git_checkout "moxxmpp" "${moxxmpp_rev}" "${third_party_dir}/moxxmpp"
