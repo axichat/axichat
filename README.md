@@ -32,9 +32,11 @@
 
 <div align="center">
   <a href="https://play.google.com/store/apps/details?id=im.axi.axichat">
-    <img alt="Get it on Google Play" src="https://axichat.github.io/axichat/readme-media/google-play-badge.svg" height="80" />
+    <img alt="Get it on Google Play" src="https://axichat.github.io/axichat/readme-media/google-play-badge.svg" height="64" />
   </a>
 </div>
+
+<br />
 
 <div align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
@@ -60,7 +62,6 @@
   </a>
 </div>
 
-<br />
 <br />
 
 <div align="center">
