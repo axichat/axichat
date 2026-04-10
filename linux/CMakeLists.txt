@@ -53,6 +53,7 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
+find_program(AXICHAT_PYTHON3_EXECUTABLE NAMES python3 python REQUIRED)
 pkg_search_module(AXICHAT_WPE_WEBKIT QUIET
   wpe-webkit-2.0
   wpe-webkit-1.1
@@ -129,6 +130,25 @@ set_target_properties(${BINARY_NAME}
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# Some generated Linux plugins inherit the absolute path to Flutter's ephemeral
+# engine directory as their RUNPATH. Override that here so packaged artifacts
+# only use the bundled lib/ directory at runtime.
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  if(TARGET ${plugin}_plugin)
+    set_target_properties(${plugin}_plugin PROPERTIES
+      BUILD_WITH_INSTALL_RPATH TRUE
+      BUILD_RPATH "$ORIGIN"
+      INSTALL_RPATH "$ORIGIN")
+  endif()
+endforeach()
+
+set(AXICHAT_PLUGIN_BUNDLE_LIBRARIES "")
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  if(TARGET ${plugin}_plugin)
+    list(APPEND AXICHAT_PLUGIN_BUNDLE_LIBRARIES "lib${plugin}_plugin.so")
+  endif()
+endforeach()
 
 
 # === Installation ===
@@ -216,6 +236,33 @@ install(CODE "
         \"libWPEBackend-fdo-1.0.so.1\" \"\${DEFAULT_BACKEND_LINK}\")
     endif()
   endif()
+  " COMPONENT Runtime)
+
+install(CODE "
+  set(PLUGIN_RPATH \"${FLUTTER_MANAGED_DIR}/ephemeral\")
+  foreach(PLUGIN_LIB ${AXICHAT_PLUGIN_BUNDLE_LIBRARIES})
+    set(PLUGIN_FILE \"${INSTALL_BUNDLE_LIB_DIR}/\${PLUGIN_LIB}\")
+    if(EXISTS \"\${PLUGIN_FILE}\")
+      file(RPATH_CHANGE
+        FILE \"\${PLUGIN_FILE}\"
+        OLD_RPATH \"\${PLUGIN_RPATH}\"
+        NEW_RPATH \"\$ORIGIN\")
+    endif()
+  endforeach()
+  " COMPONENT Runtime)
+
+install(CODE "
+  file(GLOB WPE_WEBKIT_LIBS \"${INSTALL_BUNDLE_LIB_DIR}/libWPEWebKit-*.so.*.*.*\")
+  foreach(WPE_WEBKIT_LIB \${WPE_WEBKIT_LIBS})
+    execute_process(
+      COMMAND \"${AXICHAT_PYTHON3_EXECUTABLE}\"
+              \"${CMAKE_CURRENT_SOURCE_DIR}/../tool/patch_linux_wpe_runtime_paths.py\"
+              \"\${WPE_WEBKIT_LIB}\"
+      RESULT_VARIABLE PATCH_RESULT)
+    if(NOT PATCH_RESULT EQUAL 0)
+      message(FATAL_ERROR \"Failed to patch bundled WPE runtime paths in \${WPE_WEBKIT_LIB}\")
+    endif()
+  endforeach()
   " COMPONENT Runtime)
 
 # Copy the native assets provided by the build.dart from all packages.

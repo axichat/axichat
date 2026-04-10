@@ -5,6 +5,7 @@
 #include <gdk/gdkx.h>
 #endif
 #include <glib.h>
+#include <glib/gstdio.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -63,12 +64,19 @@ static void prepend_env_directory(const gchar* variable_name,
   g_setenv(variable_name, new_value, TRUE);
 }
 
-// The WebKit plugin spawns helper processes, so these paths must be configured
-// before plugin registration on every packaging format.
+// The bundled WPE runtime uses bundle-relative helper/resource paths, so the
+// process must start from the bundle root before plugin registration.
 static void configure_wpe_environment() {
   g_autofree gchar* executable_dir = build_executable_dir();
   if (executable_dir == nullptr) {
     return;
+  }
+
+  g_chdir(executable_dir);
+
+  g_autofree gchar* bundle_lib_dir = g_build_filename(executable_dir, "lib", nullptr);
+  if (g_file_test(bundle_lib_dir, G_FILE_TEST_IS_DIR)) {
+    prepend_env_directory("LD_LIBRARY_PATH", bundle_lib_dir);
   }
 
   const gchar* runtime_candidates[] = {
