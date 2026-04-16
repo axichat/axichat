@@ -19,13 +19,15 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 typedef _SpamSearchInputs = ({bool active, TabSearchState tabState});
 
 class SpamList extends StatelessWidget {
-  const SpamList({super.key});
+  const SpamList({super.key, required this.searchSlot});
+
+  final HomeSearchSlot searchSlot;
 
   @override
   Widget build(BuildContext context) {
     return BlocSelector<HomeBloc, HomeState, _SpamSearchInputs>(
       selector: (state) =>
-          (active: state.active, tabState: state.stateFor(HomeTab.spam)),
+          (active: state.active, tabState: state.stateForSlot(searchSlot)),
       builder: (context, searchInputs) => _SpamSearchSync(
         searchInputs: searchInputs,
         child: BlocBuilder<ChatsCubit, ChatsState>(

@@ -8,6 +8,7 @@ enum _HomeDemoPhase { idle, triggered }
 class Nexus extends StatefulWidget {
   const Nexus({
     super.key,
+    required this.badgeCounts,
     required this.tabs,
     required this.navPlacement,
     this.showNavigationRail = true,
@@ -15,6 +16,7 @@ class Nexus extends StatefulWidget {
     this.onToggleNavRail,
   });
 
+  final Map<HomeTab, int> badgeCounts;
   final List<HomeTabEntry> tabs;
   final NavPlacement navPlacement;
   final bool showNavigationRail;
@@ -58,7 +60,7 @@ class _NexusState extends State<Nexus> {
     if (index < 0 || index >= widget.tabs.length) return;
     final locate = context.read;
     locate<HomeBloc>().add(HomeActiveTabChanged(widget.tabs[index].id));
-    HomeShellScope.maybeOf(context)?.homeTabIndex.value = index;
+    _HomeShellScope.maybeOf(context)?.setHomeTabIndex(index);
   }
 
   @override
@@ -83,6 +85,7 @@ class _NexusState extends State<Nexus> {
           return BlocBuilder<ChatsCubit, ChatsState>(
             builder: (context, chatsState) {
               return _NexusScaffold(
+                badgeCounts: widget.badgeCounts,
                 tabs: widget.tabs,
                 navPlacement: widget.navPlacement,
                 showNavigationRail: widget.showNavigationRail,
@@ -112,6 +115,7 @@ class _NexusState extends State<Nexus> {
 
 class _NexusScaffold extends StatelessWidget {
   const _NexusScaffold({
+    required this.badgeCounts,
     required this.tabs,
     required this.navPlacement,
     required this.showNavigationRail,
@@ -125,6 +129,7 @@ class _NexusScaffold extends StatelessWidget {
     required this.onTriggerDemoInteractivePhase,
   });
 
+  final Map<HomeTab, int> badgeCounts;
   final List<HomeTabEntry> tabs;
   final NavPlacement navPlacement;
   final bool showNavigationRail;
@@ -139,63 +144,20 @@ class _NexusScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final locate = context.read;
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final shortcut = findActionShortcut(EnvScope.of(context).platform);
-    final shortcutText = shortcutLabel(context, shortcut);
-    final homeRefreshLoading = searchState.refreshStatus.isLoading;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final selectedChats = chatsState.selectedJids.isEmpty
         ? const <m.Chat>[]
         : chatItems
               .where((chat) => chatsState.selectedJids.contains(chat.jid))
               .toList();
-    final badgeCounts = <HomeTab, int>{
-      HomeTab.chats: chatItems
-          .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
-          .fold<int>(
-            0,
-            (sum, chat) => sum + (chat.unreadCount > 0 ? chat.unreadCount : 0),
-          ),
-      HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
-      HomeTab.spam: chatItems
-          .where((chat) => chat.spam && !chat.archived)
-          .length,
-    };
-    final headerActions = <AppBarActionItem>[
-      if (kEnableDemoChats && demoPhase == _HomeDemoPhase.idle)
-        AppBarActionItem(
-          label: l10n.commonStart,
-          iconData: LucideIcons.play,
-          onPressed: onTriggerDemoInteractivePhase,
-        ),
-      if (navPlacement != NavPlacement.rail)
-        AppBarActionItem(
-          label: l10n.accessibilityActionsLabel,
-          iconData: LucideIcons.lifeBuoy,
-          tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-          onPressed: () => locate<AccessibilityActionBloc>().add(
-            const AccessibilityMenuOpened(),
-          ),
-        ),
-      if (EnvScope.of(context).isDesktopPlatform)
-        AppBarActionItem(
-          label: l10n.homeSyncTooltip,
-          iconData: LucideIcons.refreshCw,
-          loading: homeRefreshLoading,
-          enabled: !homeRefreshLoading,
-          onPressed: homeRefreshLoading
-              ? null
-              : () => locate<HomeBloc>().add(const HomeRefreshRequested()),
-        ),
-      AppBarActionItem(
-        label: searchState.active ? l10n.chatSearchClose : l10n.commonSearch,
-        iconData: LucideIcons.search,
-        onPressed: () => locate<HomeBloc>().add(const HomeSearchToggled()),
-      ),
-    ];
-    final header = _NexusHeader(tabs: tabs, headerActions: headerActions);
+    final header = _NexusHeader(
+      tabs: tabs,
+      searchState: searchState,
+      navPlacement: navPlacement,
+      demoPhase: demoPhase,
+      onTriggerDemoInteractivePhase: onTriggerDemoInteractivePhase,
+    );
     final tabViews = _NexusTabViews(
       tabs: tabs,
       tabViewPhysics: navPlacement == NavPlacement.bottom
@@ -266,7 +228,110 @@ class _NexusScaffold extends StatelessWidget {
 }
 
 class _NexusHeader extends StatelessWidget {
-  const _NexusHeader({required this.tabs, required this.headerActions});
+  const _NexusHeader({
+    required this.tabs,
+    required this.searchState,
+    required this.navPlacement,
+    required this.demoPhase,
+    required this.onTriggerDemoInteractivePhase,
+  });
+
+  final List<HomeTabEntry> tabs;
+  final HomeState searchState;
+  final NavPlacement navPlacement;
+  final _HomeDemoPhase demoPhase;
+  final VoidCallback onTriggerDemoInteractivePhase;
+
+  @override
+  Widget build(BuildContext context) {
+    final foldersSection = _HomeShellScope.maybeOf(context)?.foldersSection;
+    if (foldersSection == null) {
+      return _NexusHeaderBody(
+        tabs: tabs,
+        headerActions: _createNexusHeaderActions(
+          context,
+          tabs: tabs,
+          searchState: searchState,
+          navPlacement: navPlacement,
+          demoPhase: demoPhase,
+          onTriggerDemoInteractivePhase: onTriggerDemoInteractivePhase,
+        ),
+      );
+    }
+    return ValueListenableBuilder<FolderHomeSection?>(
+      valueListenable: foldersSection,
+      builder: (context, _, _) {
+        return _NexusHeaderBody(
+          tabs: tabs,
+          headerActions: _createNexusHeaderActions(
+            context,
+            tabs: tabs,
+            searchState: searchState,
+            navPlacement: navPlacement,
+            demoPhase: demoPhase,
+            onTriggerDemoInteractivePhase: onTriggerDemoInteractivePhase,
+          ),
+        );
+      },
+    );
+  }
+}
+
+List<AppBarActionItem> _createNexusHeaderActions(
+  BuildContext context, {
+  required List<HomeTabEntry> tabs,
+  required HomeState searchState,
+  required NavPlacement navPlacement,
+  required _HomeDemoPhase demoPhase,
+  required VoidCallback onTriggerDemoInteractivePhase,
+}) {
+  final l10n = context.l10n;
+  final locate = context.read;
+  final shortcut = findActionShortcut(EnvScope.of(context).platform);
+  final shortcutText = shortcutLabel(context, shortcut);
+  final homeRefreshLoading = searchState.refreshStatus.isLoading;
+  final searchPresentation = _resolveHomeSearchPresentation(
+    context,
+    tabs: tabs,
+    activeTab: searchState.activeTab,
+  );
+  return <AppBarActionItem>[
+    if (kEnableDemoChats && demoPhase == _HomeDemoPhase.idle)
+      AppBarActionItem(
+        label: l10n.commonStart,
+        iconData: LucideIcons.play,
+        onPressed: onTriggerDemoInteractivePhase,
+      ),
+    if (navPlacement != NavPlacement.rail)
+      AppBarActionItem(
+        label: l10n.accessibilityActionsLabel,
+        iconData: LucideIcons.lifeBuoy,
+        tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
+        onPressed: () => locate<AccessibilityActionBloc>().add(
+          const AccessibilityMenuOpened(),
+        ),
+      ),
+    if (EnvScope.of(context).isDesktopPlatform)
+      AppBarActionItem(
+        label: l10n.homeSyncTooltip,
+        iconData: LucideIcons.refreshCw,
+        loading: homeRefreshLoading,
+        enabled: !homeRefreshLoading,
+        onPressed: homeRefreshLoading
+            ? null
+            : () => locate<HomeBloc>().add(const HomeRefreshRequested()),
+      ),
+    if (searchPresentation.available || searchState.active)
+      AppBarActionItem(
+        label: searchState.active ? l10n.chatSearchClose : l10n.commonSearch,
+        iconData: LucideIcons.search,
+        onPressed: () => locate<HomeBloc>().add(const HomeSearchToggled()),
+      ),
+  ];
+}
+
+class _NexusHeaderBody extends StatelessWidget {
+  const _NexusHeaderBody({required this.tabs, required this.headerActions});
 
   final List<HomeTabEntry> tabs;
   final List<AppBarActionItem> headerActions;

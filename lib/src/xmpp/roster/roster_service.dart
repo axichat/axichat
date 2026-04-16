@@ -88,13 +88,7 @@ mixin RosterService
   @override
   List<mox.XmppManagerBase> get featureManagers => <mox.XmppManagerBase>[
     ...super.featureManagers,
-    mox.RosterManager(
-      XmppRosterStateManager(
-        owner: this,
-        avatarService: this,
-        rosterService: this,
-      ),
-    ),
+    mox.RosterManager(XmppRosterStateManager(owner: this)),
   ];
 
   Future<void> requestRoster() async {
@@ -107,10 +101,9 @@ mixin RosterService
     final items = rosterResult.items.map(RosterItem.fromMox).toList();
 
     await _dbOp<XmppDatabase>(
-      (db) => db.saveRosterItems(items),
+      (db) => db.saveRosterItemsOnly(items),
       awaitDatabase: true,
     );
-    await _publishConversationIndexForRoster(items);
 
     final version = rosterResult.ver;
     if (version != null && version.isNotEmpty) {
@@ -121,18 +114,6 @@ mixin RosterService
         ),
         awaitDatabase: true,
       );
-    }
-  }
-
-  Future<void> _publishConversationIndexForRoster(
-    Iterable<RosterItem> items,
-  ) async {
-    final uniqueJids = <String>{};
-    for (final item in items) {
-      final jid = item.jid.trim();
-      if (jid.isEmpty) continue;
-      if (!uniqueJids.add(jid)) continue;
-      await _ensureConversationIndexEntryForContact(jid);
     }
   }
 
@@ -148,6 +129,7 @@ mixin RosterService
     }
 
     _rosterLog.info('Requesting roster subscription...');
+    Ask? ask;
     final preApproved = await _connection.preApproveSubscription(normalized);
     if (!preApproved) {
       final requested = await _connection.requestSubscription(normalized);
@@ -155,31 +137,74 @@ mixin RosterService
         _rosterLog.severe('Failed to request roster subscription.');
         throw XmppRosterException();
       }
+      ask = Ask.subscribe;
     }
-    await _ensureConversationIndexEntryForContact(normalized);
+    fireAndForget(
+      () => _refreshRosterAfterAdd(jid: normalized, ask: ask),
+      operationName: 'RosterService.requestRosterAfterAdd',
+      loggerName: 'RosterService',
+    );
   }
 
-  Future<void> _ensureConversationIndexEntryForContact(String jid) async {
-    final normalized = jid.trim();
-    if (normalized.isEmpty) return;
-    final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
-    final existing = await _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.getChat(normalized),
-    );
-    if (_resolvedChatTypeForPeer(chatJid: normalized, chat: existing) ==
-        ChatType.groupChat) {
+  Future<void> _refreshRosterAfterAdd({
+    required String jid,
+    required Ask? ask,
+  }) async {
+    final retryDelays = _rosterRefreshRetryDelays();
+
+    for (final delay in retryDelays) {
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
+
+      final existingBeforeRefresh =
+          await _dbOpReturning<XmppDatabase, RosterItem?>(
+            (db) => db.getRosterItem(jid),
+          );
+      if (existingBeforeRefresh != null) {
+        await _updateRosterAskIfNeeded(item: existingBeforeRefresh, ask: ask);
+        return;
+      }
+
+      await requestRoster();
+
+      final refreshedItem = await _dbOpReturning<XmppDatabase, RosterItem?>(
+        (db) => db.getRosterItem(jid),
+      );
+      if (refreshedItem != null) {
+        await _updateRosterAskIfNeeded(item: refreshedItem, ask: ask);
+        return;
+      }
+    }
+  }
+
+  List<Duration> _rosterRefreshRetryDelays() {
+    final zoneDelays = Zone.current['roster_refresh_retry_delays'];
+    if (zoneDelays is List<Duration>) {
+      return zoneDelays;
+    }
+
+    return <Duration>[
+      Duration.zero,
+      const Duration(milliseconds: 250),
+      const Duration(seconds: 1),
+      const Duration(seconds: 2),
+      const Duration(seconds: 5),
+      const Duration(seconds: 10),
+    ];
+  }
+
+  Future<void> _updateRosterAskIfNeeded({
+    required RosterItem item,
+    required Ask? ask,
+  }) async {
+    if (ask == null || item.ask == ask) {
       return;
     }
-    if (existing == null) {
-      await _dbOp<XmppDatabase>(
-        (db) => db.createChat(
-          Chat.fromJid(
-            normalized,
-          ).copyWith(lastChangeTimestamp: emptyTimestamp),
-        ),
-      );
-    }
-    await _seedConversationIndexForDirectChatCreation(normalized);
+
+    await _dbOp<XmppDatabase>(
+      (db) => db.updateRosterAsk(jid: item.jid, ask: ask),
+    );
   }
 
   Future<void> removeFromRoster({required String jid}) async {
@@ -259,17 +284,11 @@ mixin RosterService
 }
 
 class XmppRosterStateManager extends mox.BaseRosterStateManager {
-  XmppRosterStateManager({
-    required this.owner,
-    required this.avatarService,
-    required this.rosterService,
-  }) : super();
+  XmppRosterStateManager({required this.owner}) : super();
 
   final _log = Logger('XmppRosterStateManager');
 
   final XmppBase owner;
-  final AvatarService avatarService;
-  final RosterService rosterService;
 
   static const keyPrefix = 'roster_state';
   static final versionStateKey = XmppStateStore.registerKey(
@@ -283,32 +302,19 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> modified,
     List<mox.XmppRosterItem> added,
   ) async {
-    final updatedJids = <String>{};
-    final createdChatJids = <String>{};
     await owner._dbOp<XmppDatabase>((db) async {
       for (final jid in removed) {
         await db.removeRosterItem(jid);
       }
 
       for (final item in added) {
-        final existingChat = await db.getChat(item.jid);
-        if (existingChat == null) {
-          createdChatJids.add(item.jid);
-        }
-        await db.saveRosterItem(RosterItem.fromMox(item));
-        updatedJids.add(item.jid);
+        await db.saveRosterItemOnly(RosterItem.fromMox(item));
       }
 
       for (final item in modified) {
         await db.updateRosterItem(RosterItem.fromMox(item));
-        updatedJids.add(item.jid);
       }
     }, awaitDatabase: true);
-    if (createdChatJids.isNotEmpty) {
-      for (final jid in createdChatJids) {
-        await rosterService._ensureConversationIndexEntryForContact(jid);
-      }
-    }
 
     if (version != null) {
       _log.info('Saving roster version: $version...');

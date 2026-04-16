@@ -7,7 +7,7 @@ import 'package:axichat/src/chat/view/timeline/message/bubble_surface.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
+import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
@@ -22,11 +22,11 @@ class ImportantMessagesList extends StatelessWidget {
   });
 
   final bool showChatLabel;
-  final ValueChanged<ImportantMessageItem>? onPressed;
+  final ValueChanged<FolderMessageItem>? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ImportantMessagesCubit, ImportantMessagesState>(
+    return BlocBuilder<FoldersCubit, FoldersState>(
       builder: (context, state) {
         final items = state.visibleItems;
         if (items == null) {
@@ -68,7 +68,7 @@ class ImportantMessagesList extends StatelessWidget {
 
 String _importantMessagePreviewText(
   BuildContext context,
-  ImportantMessageItem item,
+  FolderMessageItem item,
 ) {
   final message = item.message;
   if (message == null) {
@@ -105,7 +105,7 @@ class _ImportantMessageTile extends StatefulWidget {
     this.onPressed,
   });
 
-  final ImportantMessageItem item;
+  final FolderMessageItem item;
   final bool showChatLabel;
   final String timestampLabel;
   final VoidCallback? onPressed;

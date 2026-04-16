@@ -117,6 +117,12 @@ abstract class AppLocalizations {
   /// **'Chats'**
   String get homeTabChats;
 
+  /// No description provided for @homeTabContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'Contacts'**
+  String get homeTabContacts;
+
   /// No description provided for @homeBottomNavHome.
   ///
   /// In en, this message translates to:
@@ -128,6 +134,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drafts'**
   String get homeTabDrafts;
+
+  /// No description provided for @homeTabFolders.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders'**
+  String get homeTabFolders;
 
   /// No description provided for @homeTabImportant.
   ///
@@ -146,6 +158,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Blocked'**
   String get homeTabBlocked;
+
+  /// No description provided for @homeFoldersCustomComingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom folders coming soon'**
+  String get homeFoldersCustomComingSoon;
 
   /// No description provided for @homeNoModules.
   ///
@@ -878,6 +896,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This address could be chat or email. How should Axichat send to {address}?'**
   String chatTransportChoiceMessage(Object address);
+
+  /// No description provided for @chatTransportChoiceAxichatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat'**
+  String get chatTransportChoiceAxichatLabel;
 
   /// No description provided for @chatComposerMessageHint.
   ///
@@ -5615,6 +5639,210 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add contact'**
   String get rosterAddContactTooltip;
+
+  /// No description provided for @contactsDisplayNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Display name'**
+  String get contactsDisplayNameLabel;
+
+  /// No description provided for @contactsLocalOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'On this device'**
+  String get contactsLocalOnlyLabel;
+
+  /// No description provided for @contactsDetailsSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get contactsDetailsSectionTitle;
+
+  /// No description provided for @contactsAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get contactsAddressLabel;
+
+  /// No description provided for @contactsStoredLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored'**
+  String get contactsStoredLabel;
+
+  /// No description provided for @contactsMessagesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get contactsMessagesLabel;
+
+  /// No description provided for @contactsEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get contactsEmailLabel;
+
+  /// No description provided for @contactsMessagesNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages name'**
+  String get contactsMessagesNameLabel;
+
+  /// No description provided for @contactsEmailNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email name'**
+  String get contactsEmailNameLabel;
+
+  /// No description provided for @contactsGivenNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'First name'**
+  String get contactsGivenNameLabel;
+
+  /// No description provided for @contactsAdditionalNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Middle name'**
+  String get contactsAdditionalNameLabel;
+
+  /// No description provided for @contactsFamilyNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Last name'**
+  String get contactsFamilyNameLabel;
+
+  /// No description provided for @contactsPrefixLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Prefix'**
+  String get contactsPrefixLabel;
+
+  /// No description provided for @contactsSuffixLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Suffix'**
+  String get contactsSuffixLabel;
+
+  /// No description provided for @contactsNicknameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname'**
+  String get contactsNicknameLabel;
+
+  /// No description provided for @contactsOrganizationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get contactsOrganizationLabel;
+
+  /// No description provided for @contactsBirthdayLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Birthday'**
+  String get contactsBirthdayLabel;
+
+  /// No description provided for @contactsAnniversaryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Anniversary'**
+  String get contactsAnniversaryLabel;
+
+  /// No description provided for @contactsEmailsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email addresses'**
+  String get contactsEmailsLabel;
+
+  /// No description provided for @contactsXmppAddressesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat addresses'**
+  String get contactsXmppAddressesLabel;
+
+  /// No description provided for @contactsPhonesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone numbers'**
+  String get contactsPhonesLabel;
+
+  /// No description provided for @contactsUrlsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Websites'**
+  String get contactsUrlsLabel;
+
+  /// No description provided for @contactsPostalAddressesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Postal addresses'**
+  String get contactsPostalAddressesLabel;
+
+  /// No description provided for @contactsNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get contactsNoteLabel;
+
+  /// No description provided for @contactsOnePerLineHint.
+  ///
+  /// In en, this message translates to:
+  /// **'One per line'**
+  String get contactsOnePerLineHint;
+
+  /// No description provided for @contactsDateValueHint.
+  ///
+  /// In en, this message translates to:
+  /// **'YYYY-MM-DD'**
+  String get contactsDateValueHint;
+
+  /// No description provided for @contactsOpenChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open chat'**
+  String get contactsOpenChat;
+
+  /// No description provided for @contactsComposeEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose email'**
+  String get contactsComposeEmail;
+
+  /// No description provided for @contactsEmailUnavailableLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email is unavailable right now.'**
+  String get contactsEmailUnavailableLabel;
+
+  /// No description provided for @contactsRemoveContactLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove contact'**
+  String get contactsRemoveContactLabel;
+
+  /// No description provided for @contactsRemoveContactConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {jid} from contacts?'**
+  String contactsRemoveContactConfirm(Object jid);
+
+  /// No description provided for @contactsRemoveXmppLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove chat contact'**
+  String get contactsRemoveXmppLabel;
+
+  /// No description provided for @contactsRemoveEmailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove email contact'**
+  String get contactsRemoveEmailLabel;
+
+  /// No description provided for @contactsRemoveEmailConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove {jid} from email contacts?'**
+  String contactsRemoveEmailConfirm(Object jid);
 
   /// No description provided for @jidInputPlaceholder.
   ///

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:async/async.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:drift/native.dart';
@@ -253,4 +254,165 @@ void main() {
       expect(results.single.stanzaID, importantStanzaId);
     },
   );
+
+  test(
+    'folder items hydrate the matching message for each chat when reference ids collide',
+    () async {
+      const firstChatJid = 'first@axi.im';
+      const secondChatJid = 'second@axi.im';
+      const sharedReferenceId = 'shared-origin-id';
+
+      await database.createChat(Chat.fromJid(firstChatJid));
+      await database.createChat(Chat.fromJid(secondChatJid));
+
+      await database.saveMessage(
+        Message(
+          stanzaID: 'first-stanza',
+          originID: sharedReferenceId,
+          senderJid: firstChatJid,
+          chatJid: firstChatJid,
+          body: 'First important body',
+          timestamp: DateTime.utc(2026, 3, 11, 16, 0, 0),
+        ),
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: 'second-stanza',
+          originID: sharedReferenceId,
+          senderJid: secondChatJid,
+          chatJid: secondChatJid,
+          body: 'Second important body',
+          timestamp: DateTime.utc(2026, 3, 11, 16, 5, 0),
+        ),
+      );
+
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: SystemMessageCollection.important.id,
+        chatJid: firstChatJid,
+        messageReferenceId: sharedReferenceId,
+        messageStanzaId: 'first-stanza',
+        messageOriginId: sharedReferenceId,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026, 3, 11, 16, 10, 0),
+        active: true,
+      );
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: SystemMessageCollection.important.id,
+        chatJid: secondChatJid,
+        messageReferenceId: sharedReferenceId,
+        messageStanzaId: 'second-stanza',
+        messageOriginId: sharedReferenceId,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026, 3, 11, 16, 15, 0),
+        active: true,
+      );
+
+      final items = await database.getFolderMessageItems(
+        SystemMessageCollection.important.id,
+      );
+      final byChat = <String, FolderMessageItem>{
+        for (final item in items) item.chatJid: item,
+      };
+
+      expect(items, hasLength(2));
+      expect(byChat[firstChatJid]?.message?.body, 'First important body');
+      expect(byChat[secondChatJid]?.message?.body, 'Second important body');
+      expect(byChat[firstChatJid]?.chat?.jid, firstChatJid);
+      expect(byChat[secondChatJid]?.chat?.jid, secondChatJid);
+    },
+  );
+
+  test(
+    'folder items stream updates when the backing message changes',
+    () async {
+      const stanzaId = 'important-message';
+      await database.createChat(Chat.fromJid(_chatJid));
+      await database.saveMessage(
+        Message(
+          stanzaID: stanzaId,
+          senderJid: _chatJid,
+          chatJid: _chatJid,
+          body: 'Original important body',
+          timestamp: DateTime.utc(2026, 3, 11, 17, 0, 0),
+        ),
+      );
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: SystemMessageCollection.important.id,
+        chatJid: _chatJid,
+        messageReferenceId: stanzaId,
+        messageStanzaId: stanzaId,
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026, 3, 11, 17, 5, 0),
+        active: true,
+      );
+
+      final queue = StreamQueue(
+        database.watchFolderMessageItems(SystemMessageCollection.important.id),
+      );
+      addTearDown(queue.cancel);
+
+      final initialItems = await queue.next;
+      expect(initialItems.single.message?.body, 'Original important body');
+
+      final storedMessage = await database.getMessageByStanzaID(stanzaId);
+      expect(storedMessage, isNotNull);
+
+      await database.updateMessage(
+        storedMessage!.copyWith(
+          body: 'Updated important body',
+          timestamp: DateTime.utc(2026, 3, 11, 17, 10, 0),
+        ),
+      );
+
+      final updatedItems = await queue.next;
+      expect(updatedItems.single.message?.body, 'Updated important body');
+    },
+  );
+
+  test('folder items stream updates when the backing chat changes', () async {
+    const stanzaId = 'important-chat-title-message';
+    final originalChat = Chat.fromJid(_chatJid);
+    await database.createChat(originalChat);
+    await database.saveMessage(
+      Message(
+        stanzaID: stanzaId,
+        senderJid: _chatJid,
+        chatJid: _chatJid,
+        body: 'Important body',
+        timestamp: DateTime.utc(2026, 3, 11, 18, 0, 0),
+      ),
+    );
+    await database.applyMessageCollectionMembershipMutation(
+      collectionId: SystemMessageCollection.important.id,
+      chatJid: _chatJid,
+      messageReferenceId: stanzaId,
+      messageStanzaId: stanzaId,
+      messageOriginId: null,
+      messageMucStanzaId: null,
+      deltaAccountId: null,
+      deltaMsgId: null,
+      addedAt: DateTime.utc(2026, 3, 11, 18, 5, 0),
+      active: true,
+    );
+
+    final queue = StreamQueue(
+      database.watchFolderMessageItems(SystemMessageCollection.important.id),
+    );
+    addTearDown(queue.cancel);
+
+    final initialItems = await queue.next;
+    expect(initialItems.single.chat?.title, originalChat.title);
+
+    await database.updateChat(originalChat.copyWith(title: 'Renamed Chat'));
+
+    final updatedItems = await queue.next;
+    expect(updatedItems.single.chat?.title, 'Renamed Chat');
+  });
 }

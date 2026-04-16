@@ -98,36 +98,40 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     HomeSearchQueryChanged event,
     Emitter<HomeState> emit,
   ) {
-    final targetTab = event.tab ?? state.activeTab;
-    if (targetTab == null) {
+    final targetSlot = _resolveSearchSlot(tab: event.tab, slot: event.slot);
+    if (targetSlot == null) {
       return;
     }
-    final current = state.stateFor(targetTab);
-    _emitTabState(emit, targetTab, current.copyWith(query: event.value));
+    final current = state.stateForSlot(targetSlot);
+    _emitSearchState(emit, targetSlot, current.copyWith(query: event.value));
   }
 
   void _onSearchSortChanged(
     HomeSearchSortChanged event,
     Emitter<HomeState> emit,
   ) {
-    final targetTab = event.tab ?? state.activeTab;
-    if (targetTab == null) {
+    final targetSlot = _resolveSearchSlot(tab: event.tab, slot: event.slot);
+    if (targetSlot == null) {
       return;
     }
-    final current = state.stateFor(targetTab);
-    _emitTabState(emit, targetTab, current.copyWith(sort: event.sort));
+    final current = state.stateForSlot(targetSlot);
+    _emitSearchState(emit, targetSlot, current.copyWith(sort: event.sort));
   }
 
   void _onSearchFilterChanged(
     HomeSearchFilterChanged event,
     Emitter<HomeState> emit,
   ) {
-    final targetTab = event.tab ?? state.activeTab;
-    if (targetTab == null) {
+    final targetSlot = _resolveSearchSlot(tab: event.tab, slot: event.slot);
+    if (targetSlot == null) {
       return;
     }
-    final current = state.stateFor(targetTab);
-    _emitTabState(emit, targetTab, current.copyWith(filterId: event.filterId));
+    final current = state.stateForSlot(targetSlot);
+    _emitSearchState(
+      emit,
+      targetSlot,
+      current.copyWith(filterId: event.filterId),
+    );
   }
 
   Future<void> _onRefreshRequested(
@@ -202,16 +206,24 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     await _attachEmailSyncSubscription(event.emailService);
   }
 
-  void _emitTabState(
+  HomeSearchSlot? _resolveSearchSlot({HomeTab? tab, HomeSearchSlot? slot}) {
+    if (slot != null) {
+      return slot;
+    }
+    final targetTab = tab ?? state.activeTab;
+    return HomeSearchSlot.forTab(targetTab);
+  }
+
+  void _emitSearchState(
     Emitter<HomeState> emit,
-    HomeTab tab,
-    TabSearchState tabState,
+    HomeSearchSlot slot,
+    TabSearchState searchState,
   ) {
-    final mutable = Map<HomeTab, TabSearchState>.from(state.tabStates)
-      ..[tab] = tabState;
+    final mutable = Map<HomeSearchSlot, TabSearchState>.from(state.searchStates)
+      ..[slot] = searchState;
     emit(
       state.copyWith(
-        tabStates: Map<HomeTab, TabSearchState>.unmodifiable(mutable),
+        searchStates: Map<HomeSearchSlot, TabSearchState>.unmodifiable(mutable),
       ),
     );
   }

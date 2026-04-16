@@ -43,7 +43,7 @@ class ChatsAddButton extends StatelessWidget {
     final l10n = context.l10n;
     return AxiDialogFab(
       tooltip: l10n.chatsCreateGroupChatTooltip,
-      iconData: LucideIcons.userPlus,
+      iconData: LucideIcons.users,
       label: l10n.chatsRoomLabel,
       barrierDismissible: false,
       dialogBuilder: (context) {

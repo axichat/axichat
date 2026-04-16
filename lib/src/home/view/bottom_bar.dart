@@ -136,6 +136,7 @@ class _HomeBottomTabBar extends StatelessWidget {
                           foregroundColor: colors.foreground,
                           selectedForegroundColor: colors.foreground,
                           child: _HomeBottomTabItem(
+                            tab: tab.id,
                             label: tab.label,
                             badgeCount: badgeCounts[tab.id] ?? 0,
                             selected: index == safeSelectedIndex,
@@ -156,11 +157,13 @@ class _HomeBottomTabBar extends StatelessWidget {
 
 class _HomeBottomTabItem extends StatelessWidget {
   const _HomeBottomTabItem({
+    required this.tab,
     required this.label,
     required this.badgeCount,
     required this.selected,
   });
 
+  final HomeTab tab;
   final String label;
   final int badgeCount;
   final bool selected;
@@ -203,7 +206,11 @@ class _HomeBottomTabItem extends StatelessWidget {
             PositionedDirectional(
               top: -spacing.xs,
               end: -spacing.xs,
-              child: AxiCountBadge(count: badgeCount, diameter: badgeDiameter),
+              child: AxiCountBadge(
+                key: ValueKey<String>('home-tab-badge-${tab.name}'),
+                count: badgeCount,
+                diameter: badgeDiameter,
+              ),
             ),
         ],
       ),
@@ -214,12 +221,14 @@ class _HomeBottomTabItem extends StatelessWidget {
 class _HomeShellBottomBar extends StatelessWidget {
   const _HomeShellBottomBar({
     required this.calendarBottomDragSession,
+    required this.homeBadgeCount,
     required this.selectedBottomIndex,
     required this.onBottomNavSelected,
     required this.calendarAvailable,
   });
 
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
+  final int homeBadgeCount;
   final int selectedBottomIndex;
   final ValueChanged<int> onBottomNavSelected;
   final bool calendarAvailable;
@@ -229,6 +238,7 @@ class _HomeShellBottomBar extends StatelessWidget {
     return _HomeShellDefaultBar(
       calendarAvailable: calendarAvailable,
       calendarBottomDragSession: calendarBottomDragSession,
+      homeBadgeCount: homeBadgeCount,
       selectedBottomIndex: selectedBottomIndex,
       onBottomNavSelected: onBottomNavSelected,
     );
@@ -239,12 +249,14 @@ class _HomeShellDefaultBar extends StatefulWidget {
   const _HomeShellDefaultBar({
     required this.calendarAvailable,
     required this.calendarBottomDragSession,
+    required this.homeBadgeCount,
     required this.selectedBottomIndex,
     required this.onBottomNavSelected,
   });
 
   final bool calendarAvailable;
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
+  final int homeBadgeCount;
   final int selectedBottomIndex;
   final ValueChanged<int> onBottomNavSelected;
 
@@ -337,10 +349,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     if (index != 0) {
       return;
     }
-    final scope = HomeShellScope.maybeOf(context);
-    if (scope?.bottomNavIndex.value == 0) {
-      scope?.homeTabIndex.value = 0;
-    }
+    _HomeShellScope.maybeOf(context)?.setHomeTabIndex(0);
   }
 
   int? _normalizeCalendarTabIndex(int? value) {
@@ -556,15 +565,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final chatsState = context.watch<ChatsCubit>().state;
-    final chatItems = chatsState.items ?? const <m.Chat>[];
-    final unreadChatsCount = chatItems
-        .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
-        .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
-    final draftsCount = context.watch<DraftCubit>().state.items?.length ?? 0;
-    final spamCount = chatItems
-        .where((chat) => chat.spam && !chat.archived)
-        .length;
-    final chatsBadgeCount = unreadChatsCount + draftsCount + spamCount;
+    final homeBadgeCount = widget.homeBadgeCount;
     int scheduledAlertsCount = 0;
     int unscheduledAlertsCount = 0;
     if (widget.calendarAvailable) {
@@ -684,9 +685,12 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                     text: context.l10n.homeBottomNavHome,
                     leading: _HomeBottomNavBadgeIcon(
                       iconData: LucideIcons.house,
-                      badgeCount: chatsBadgeCount,
+                      badgeCount: homeBadgeCount,
                       color: homeColor,
                       iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                      badgeKey: const ValueKey<String>(
+                        'home-bottom-nav-badge-home',
+                      ),
                     ),
                     iconColor: colors.mutedForeground,
                     iconActiveColor: colors.foreground,
@@ -810,12 +814,14 @@ class _HomeBottomNavBadgeIcon extends StatelessWidget {
     required this.badgeCount,
     required this.color,
     required this.iconSize,
+    this.badgeKey,
   });
 
   final IconData iconData;
   final int badgeCount;
   final Color color;
   final double iconSize;
+  final Key? badgeKey;
 
   @override
   Widget build(BuildContext context) {
@@ -829,7 +835,11 @@ class _HomeBottomNavBadgeIcon extends StatelessWidget {
           PositionedDirectional(
             top: -spacing.s,
             end: -spacing.s,
-            child: AxiCountBadge(count: badgeCount, diameter: badgeDiameter),
+            child: AxiCountBadge(
+              key: badgeKey,
+              count: badgeCount,
+              diameter: badgeDiameter,
+            ),
           ),
       ],
     );

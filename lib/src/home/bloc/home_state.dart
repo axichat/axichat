@@ -1,6 +1,25 @@
 part of 'home_bloc.dart';
 
-enum HomeTab { chats, contacts, invites, important, blocked, spam, drafts }
+enum HomeTab { chats, contacts, invites, blocked, drafts, folders }
+
+enum HomeSearchSlot {
+  chats,
+  contacts,
+  invites,
+  blocked,
+  drafts,
+  foldersImportant,
+  foldersSpam;
+
+  static HomeSearchSlot? forTab(HomeTab? tab) => switch (tab) {
+    HomeTab.chats => HomeSearchSlot.chats,
+    HomeTab.contacts => HomeSearchSlot.contacts,
+    HomeTab.invites => HomeSearchSlot.invites,
+    HomeTab.blocked => HomeSearchSlot.blocked,
+    HomeTab.drafts => HomeSearchSlot.drafts,
+    HomeTab.folders || null => null,
+  };
+}
 
 class HomeSearchFilter extends Equatable {
   const HomeSearchFilter({required this.id, required this.label});
@@ -67,7 +86,7 @@ class HomeState extends Equatable {
     required this.tabs,
     required this.active,
     required this.activeTab,
-    required this.tabStates,
+    required this.searchStates,
     required this.refreshStatus,
     this.lastSyncedAt,
   });
@@ -76,14 +95,27 @@ class HomeState extends Equatable {
     required List<HomeTab> tabs,
     required Map<HomeTab, SearchFilterId?> initialFilters,
   }) {
+    final searchStates = <HomeSearchSlot, TabSearchState>{};
+    for (final tab in tabs) {
+      final slot = HomeSearchSlot.forTab(tab);
+      if (slot != null) {
+        searchStates[slot] = TabSearchState(filterId: initialFilters[tab]);
+        continue;
+      }
+      if (tab == HomeTab.folders) {
+        searchStates[HomeSearchSlot.foldersImportant] = const TabSearchState();
+        searchStates[HomeSearchSlot.foldersSpam] = const TabSearchState(
+          filterId: SearchFilterId.all,
+        );
+      }
+    }
     return HomeState(
       tabs: List<HomeTab>.unmodifiable(tabs),
       active: false,
       activeTab: tabs.isEmpty ? null : tabs.first,
-      tabStates: Map<HomeTab, TabSearchState>.unmodifiable({
-        for (final tab in tabs)
-          tab: TabSearchState(filterId: initialFilters[tab]),
-      }),
+      searchStates: Map<HomeSearchSlot, TabSearchState>.unmodifiable(
+        searchStates,
+      ),
       refreshStatus: RequestStatus.none,
     );
   }
@@ -91,21 +123,25 @@ class HomeState extends Equatable {
   final List<HomeTab> tabs;
   final bool active;
   final HomeTab? activeTab;
-  final Map<HomeTab, TabSearchState> tabStates;
+  final Map<HomeSearchSlot, TabSearchState> searchStates;
   final RequestStatus refreshStatus;
   final DateTime? lastSyncedAt;
 
   TabSearchState? get currentTabState =>
-      activeTab == null ? null : tabStates[activeTab];
+      activeTab == null ? null : stateFor(activeTab!);
 
   TabSearchState stateFor(HomeTab tab) =>
-      tabStates[tab] ?? const TabSearchState();
+      stateForSlot(HomeSearchSlot.forTab(tab));
+
+  TabSearchState stateForSlot(HomeSearchSlot? slot) => slot == null
+      ? const TabSearchState()
+      : searchStates[slot] ?? const TabSearchState();
 
   HomeState copyWith({
     List<HomeTab>? tabs,
     bool? active,
     Object? activeTab = _homeStateUnset,
-    Map<HomeTab, TabSearchState>? tabStates,
+    Map<HomeSearchSlot, TabSearchState>? searchStates,
     RequestStatus? refreshStatus,
     Object? lastSyncedAt = _homeStateUnset,
   }) {
@@ -115,7 +151,7 @@ class HomeState extends Equatable {
       activeTab: activeTab == _homeStateUnset
           ? this.activeTab
           : activeTab as HomeTab?,
-      tabStates: tabStates ?? this.tabStates,
+      searchStates: searchStates ?? this.searchStates,
       refreshStatus: refreshStatus ?? this.refreshStatus,
       lastSyncedAt: lastSyncedAt == _homeStateUnset
           ? this.lastSyncedAt
@@ -128,7 +164,7 @@ class HomeState extends Equatable {
     tabs,
     active,
     activeTab,
-    tabStates,
+    searchStates,
     refreshStatus,
     lastSyncedAt,
   ];

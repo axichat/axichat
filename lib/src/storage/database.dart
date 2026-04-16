@@ -245,12 +245,24 @@ abstract interface class XmppDatabase implements Database {
   Stream<List<MessageCollectionMembershipEntry>>
   watchMessageCollectionMemberships(String collectionId, {String? chatJid});
 
+  Stream<List<FolderMessageItem>> watchFolderMessageItems(
+    String collectionId, {
+    String? chatJid,
+  });
+
   Future<List<MessageCollectionMembershipEntry>>
   getMessageCollectionMemberships(
     String collectionId, {
     String? chatJid,
     bool includeInactive = false,
   });
+
+  Future<List<FolderMessageItem>> getFolderMessageItems(
+    String collectionId, {
+    String? chatJid,
+    bool includeInactive = false,
+  });
+
   Future<List<MessageCollectionMembershipEntry>>
   getAllMessageCollectionMemberships({bool includeInactive = false});
 
@@ -647,6 +659,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> saveRosterItem(RosterItem item);
 
+  Future<void> saveRosterItemOnly(RosterItem item);
+
+  Future<void> saveRosterItemsOnly(List<RosterItem> items);
+
   Future<void> saveRosterItems(List<RosterItem> items);
 
   Future<void> updateRosterItem(RosterItem item);
@@ -710,7 +726,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> deleteBlocklist();
 
-  Future<void> replaceContacts(Map<String, String> contactsByNativeId);
+  Stream<List<Contact>> watchSavedEmailContacts();
+
+  Future<List<Contact>> getSavedEmailContacts();
+
+  Future<void> replaceContacts(Iterable<Contact> contacts);
 
   Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
 
@@ -1481,6 +1501,24 @@ class InvitesAccessor extends BaseAccessor<Invite, $InvitesTable>
       (delete(table)..where((item) => item.jid.equals(value))).go();
 }
 
+@DriftAccessor(tables: [Contacts])
+class ContactsAccessor extends BaseAccessor<Contact, $ContactsTable>
+    with _$ContactsAccessorMixin {
+  ContactsAccessor(super.attachedDatabase);
+
+  @override
+  $ContactsTable get table => contacts;
+
+  @override
+  Future<Contact?> selectOne(String value) => (select(
+    table,
+  )..where((table) => table.nativeID.equals(value))).getSingleOrNull();
+
+  @override
+  Future<void> deleteOne(String value) =>
+      (delete(table)..where((item) => item.nativeID.equals(value))).go();
+}
+
 @DriftAccessor(tables: [Blocklist])
 class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
     with _$BlocklistAccessorMixin {
@@ -1597,6 +1635,7 @@ class EmailSpamlistAccessor
     ChatsAccessor,
     RosterAccessor,
     InvitesAccessor,
+    ContactsAccessor,
     BlocklistAccessor,
     EmailBlocklistAccessor,
     EmailSpamlistAccessor,
@@ -1661,7 +1700,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 37;
+  int get schemaVersion => 39;
 
   @override
   MigrationStrategy get migration {
@@ -1938,6 +1977,12 @@ WHERE transport IS NULL
         }
         if (from < 37) {
           await m.addColumn(chats, chats.primaryView);
+        }
+        if (from < 38) {
+          await m.addColumn(contacts, contacts.displayName);
+        }
+        if (from < 39) {
+          await customStatement('DROP TABLE IF EXISTS contact_cards');
         }
       },
       beforeOpen: (_) async {
@@ -4659,6 +4704,17 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
+  Stream<List<FolderMessageItem>> watchFolderMessageItems(
+    String collectionId, {
+    String? chatJid,
+  }) {
+    return _folderMessageItemsQuery(
+      collectionId,
+      chatJid: chatJid,
+    ).watch().map(_folderMessageItemsFromRows).distinct(listEquals);
+  }
+
+  @override
   Future<List<MessageCollectionMembershipEntry>>
   getMessageCollectionMemberships(
     String collectionId, {
@@ -4685,6 +4741,19 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
+  Future<List<FolderMessageItem>> getFolderMessageItems(
+    String collectionId, {
+    String? chatJid,
+    bool includeInactive = false,
+  }) async => _folderMessageItemsFromRows(
+    await _folderMessageItemsQuery(
+      collectionId,
+      chatJid: chatJid,
+      includeInactive: includeInactive,
+    ).get(),
+  );
+
+  @override
   Future<List<MessageCollectionMembershipEntry>>
   getAllMessageCollectionMemberships({bool includeInactive = false}) {
     final query = select(messageCollectionMemberships)
@@ -4699,6 +4768,80 @@ WHERE email_from_address IN ($placeholderClause)
       query.where((tbl) => tbl.active.equals(true));
     }
     return query.get();
+  }
+
+  JoinedSelectStatement<HasResultSet, dynamic> _folderMessageItemsQuery(
+    String collectionId, {
+    String? chatJid,
+    bool includeInactive = false,
+  }) {
+    final memberships = messageCollectionMemberships;
+    final query = select(memberships).join([
+      leftOuterJoin(
+        messages,
+        _folderMessageJoinPredicate(memberships, messages),
+      ),
+      leftOuterJoin(chats, chats.jid.equalsExp(memberships.chatJid)),
+    ]);
+    query.where(memberships.collectionId.equals(collectionId));
+    if (!includeInactive) {
+      query.where(memberships.active.equals(true));
+    }
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      query.where(memberships.chatJid.equals(normalizedChatJid));
+    }
+    query.orderBy([
+      OrderingTerm.desc(memberships.addedAt),
+      OrderingTerm.desc(memberships.messageReferenceId),
+    ]);
+    return query;
+  }
+
+  Expression<bool> _folderMessageJoinPredicate(
+    $MessageCollectionMembershipsTable memberships,
+    $MessagesTable messages,
+  ) {
+    final normalizedDeltaAccountId = coalesce<int>([
+      memberships.deltaAccountId,
+      const Constant(DeltaAccountDefaults.legacyId),
+    ]);
+    return messages.chatJid.equalsExp(memberships.chatJid) &
+        ((messages.stanzaID.equalsExp(memberships.messageReferenceId) |
+                messages.originID.equalsExp(memberships.messageReferenceId) |
+                messages.mucStanzaId.equalsExp(
+                  memberships.messageReferenceId,
+                )) |
+            (memberships.deltaMsgId.isNotNull() &
+                messages.deltaMsgId.equalsExp(memberships.deltaMsgId) &
+                messages.deltaAccountId.equalsExp(normalizedDeltaAccountId)));
+  }
+
+  List<FolderMessageItem> _folderMessageItemsFromRows(List<TypedResult> rows) {
+    final itemsByKey = <String, FolderMessageItem>{};
+    for (final row in rows) {
+      final entry = row.readTable(messageCollectionMemberships);
+      final key =
+          '${entry.collectionId}\n${entry.chatJid.trim()}\n${entry.messageReferenceId.trim()}';
+      itemsByKey.putIfAbsent(
+        key,
+        () => FolderMessageItem(
+          collectionId: entry.collectionId,
+          chatJid: entry.chatJid,
+          messageReferenceId: entry.messageReferenceId,
+          messageStanzaId: entry.messageStanzaId,
+          messageOriginId: entry.messageOriginId,
+          messageMucStanzaId: entry.messageMucStanzaId,
+          deltaAccountId: entry.deltaAccountId,
+          deltaMsgId: entry.deltaMsgId,
+          addedAt: entry.addedAt,
+          active: entry.active,
+          message: row.readTableOrNull(messages),
+          chat: row.readTableOrNull(chats),
+        ),
+      );
+    }
+    return itemsByKey.values.toList(growable: false);
   }
 
   @override
@@ -5811,6 +5954,29 @@ WHERE jid = ?
   }
 
   @override
+  Future<void> saveRosterItemOnly(RosterItem item) async {
+    _log.info('Saving roster item without creating chat');
+    await transaction(() async {
+      await rosterAccessor.insertOrUpdateOne(item);
+      await invitesAccessor.deleteOne(item.jid);
+    });
+  }
+
+  @override
+  Future<void> saveRosterItemsOnly(List<RosterItem> items) async {
+    if (items.isEmpty) return;
+    await transaction(() async {
+      await batch((batch) {
+        batch.insertAll(roster, items, mode: InsertMode.insertOrReplace);
+      });
+      final jids = items.map((item) => item.jid).toList(growable: false);
+      for (final batch in _chunked(jids, batchSize: 900)) {
+        await (delete(invites)..where((tbl) => tbl.jid.isIn(batch))).go();
+      }
+    });
+  }
+
+  @override
   Future<void> saveRosterItems(List<RosterItem> items) async {
     if (items.isEmpty) return;
     final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(
@@ -6111,13 +6277,30 @@ WHERE jid = ?
   }
 
   @override
-  Future<void> replaceContacts(Map<String, String> contactsByNativeId) async {
+  Stream<List<Contact>> watchSavedEmailContacts() =>
+      contactsAccessor.watchAll();
+
+  @override
+  Future<List<Contact>> getSavedEmailContacts() => contactsAccessor.selectAll();
+
+  @override
+  Future<void> replaceContacts(Iterable<Contact> contacts) async {
     await transaction(() async {
-      final existing = await select(contacts).get();
+      final existing = await select(this.contacts).get();
       final existingById = <String, String>{
         for (final entry in existing)
           if (entry.nativeID != null && entry.nativeID!.isNotEmpty)
             entry.nativeID!: entry.jid,
+      };
+      final existingDisplayNamesById = <String, String?>{
+        for (final entry in existing)
+          if (entry.nativeID != null && entry.nativeID!.isNotEmpty)
+            entry.nativeID!: entry.providedDisplayName?.trim(),
+      };
+      final contactsByNativeId = <String, Contact>{
+        for (final entry in contacts)
+          if (entry.nativeID?.trim().isNotEmpty == true)
+            entry.nativeID!.trim(): entry,
       };
       final toDelete = existingById.keys
           .where((id) => !contactsByNativeId.containsKey(id))
@@ -6125,23 +6308,38 @@ WHERE jid = ?
       if (toDelete.isNotEmpty) {
         for (final batch in _chunked(toDelete, batchSize: 900)) {
           await (delete(
-            contacts,
+            this.contacts,
           )..where((tbl) => tbl.nativeID.isIn(batch))).go();
         }
       }
       final upserts = <ContactsCompanion>[];
       for (final entry in contactsByNativeId.entries) {
+        final value = entry.value;
         final existingJid = existingById[entry.key];
-        if (existingJid == entry.value) {
+        final nextAddress = value.resolvedAddress;
+        if (nextAddress == null || nextAddress.isEmpty) {
+          continue;
+        }
+        final nextDisplayName = value.providedDisplayName?.trim();
+        if (existingJid == nextAddress &&
+            existingDisplayNamesById[entry.key] == nextDisplayName) {
           continue;
         }
         upserts.add(
-          ContactsCompanion.insert(nativeID: entry.key, jid: entry.value),
+          ContactsCompanion.insert(
+            nativeID: entry.key,
+            jid: nextAddress,
+            displayName: Value(nextDisplayName),
+          ),
         );
       }
       if (upserts.isNotEmpty) {
         await batch((batch) {
-          batch.insertAll(contacts, upserts, mode: InsertMode.insertOrReplace);
+          batch.insertAll(
+            this.contacts,
+            upserts,
+            mode: InsertMode.insertOrReplace,
+          );
         });
       }
     });

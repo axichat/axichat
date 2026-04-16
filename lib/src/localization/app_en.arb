@@ -4,11 +4,14 @@
     "description": "The title of the application"
   },
   "homeTabChats": "Chats",
+  "homeTabContacts": "Contacts",
   "homeBottomNavHome": "Home",
   "homeTabDrafts": "Drafts",
+  "homeTabFolders": "Folders",
   "homeTabImportant": "Important",
   "homeTabSpam": "Spam",
   "homeTabBlocked": "Blocked",
+  "homeFoldersCustomComingSoon": "Custom folders coming soon",
   "homeNoModules": "No modules available",
   "homeRailShowMenu": "Show menu",
   "homeRailHideMenu": "Hide menu",
@@ -199,6 +202,7 @@
       "address": {}
     }
   },
+  "chatTransportChoiceAxichatLabel": "Axichat",
   "chatComposerMessageHint": "Send message",
   "chatComposerFromHint": "Sending from {address}",
   "chatComposerEmptyMessage": "Message cannot be empty.",
@@ -1357,6 +1361,50 @@
     }
   },
   "rosterAddContactTooltip": "Add contact",
+  "contactsDisplayNameLabel": "Display name",
+  "contactsLocalOnlyLabel": "On this device",
+  "contactsDetailsSectionTitle": "Details",
+  "contactsAddressLabel": "Address",
+  "contactsStoredLabel": "Stored",
+  "contactsMessagesLabel": "Messages",
+  "contactsEmailLabel": "Email",
+  "contactsMessagesNameLabel": "Messages name",
+  "contactsEmailNameLabel": "Email name",
+  "contactsGivenNameLabel": "First name",
+  "contactsAdditionalNameLabel": "Middle name",
+  "contactsFamilyNameLabel": "Last name",
+  "contactsPrefixLabel": "Prefix",
+  "contactsSuffixLabel": "Suffix",
+  "contactsNicknameLabel": "Nickname",
+  "contactsOrganizationLabel": "Organization",
+  "contactsBirthdayLabel": "Birthday",
+  "contactsAnniversaryLabel": "Anniversary",
+  "contactsEmailsLabel": "Email addresses",
+  "contactsXmppAddressesLabel": "Chat addresses",
+  "contactsPhonesLabel": "Phone numbers",
+  "contactsUrlsLabel": "Websites",
+  "contactsPostalAddressesLabel": "Postal addresses",
+  "contactsNoteLabel": "Notes",
+  "contactsOnePerLineHint": "One per line",
+  "contactsDateValueHint": "YYYY-MM-DD",
+  "contactsOpenChat": "Open chat",
+  "contactsComposeEmail": "Compose email",
+  "contactsEmailUnavailableLabel": "Email is unavailable right now.",
+  "contactsRemoveContactLabel": "Remove contact",
+  "contactsRemoveContactConfirm": "Remove {jid} from contacts?",
+  "@contactsRemoveContactConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
+  "contactsRemoveXmppLabel": "Remove chat contact",
+  "contactsRemoveEmailLabel": "Remove email contact",
+  "contactsRemoveEmailConfirm": "Remove {jid} from email contacts?",
+  "@contactsRemoveEmailConfirm": {
+    "placeholders": {
+      "jid": {}
+    }
+  },
   "jidInputPlaceholder": "john@axi.im",
   "jidInputInvalid": "Enter a valid JID",
   "sessionCapabilityChat": "Chat",

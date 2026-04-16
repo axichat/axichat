@@ -16,6 +16,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   var _programmaticChange = false;
+  ValueListenable<FolderHomeSection?>? _foldersSectionNotifier;
 
   @override
   void initState() {
@@ -28,15 +29,35 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
   @override
   void dispose() {
     _controller.removeListener(_handleTextChanged);
+    _foldersSectionNotifier?.removeListener(_handleFoldersSectionChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextFoldersSection = _HomeShellScope.maybeOf(context)?.foldersSection;
+    if (_foldersSectionNotifier != nextFoldersSection) {
+      _foldersSectionNotifier?.removeListener(_handleFoldersSectionChanged);
+      _foldersSectionNotifier = nextFoldersSection;
+      _foldersSectionNotifier?.addListener(_handleFoldersSectionChanged);
+    }
+    _syncSearchAvailability();
+  }
+
   void _handleTextChanged() {
     if (_programmaticChange) return;
     final locate = context.read;
-    locate<HomeBloc>().add(HomeSearchQueryChanged(_controller.text));
+    final state = locate<HomeBloc>().state;
+    final searchSlot = _resolveHomeSearchSlot(
+      activeTab: state.activeTab,
+      foldersSection: _HomeShellScope.maybeOf(context)?.foldersSection.value,
+    );
+    locate<HomeBloc>().add(
+      HomeSearchQueryChanged(_controller.text, slot: searchSlot),
+    );
     setState(() {});
   }
 
@@ -51,6 +72,26 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
     setState(() {});
   }
 
+  void _handleFoldersSectionChanged() {
+    if (!mounted) {
+      return;
+    }
+    _syncSearchAvailability();
+    setState(() {});
+  }
+
+  void _syncSearchAvailability() {
+    final state = context.read<HomeBloc>().state;
+    final searchPresentation = _resolveHomeSearchPresentation(
+      context,
+      tabs: widget.tabs,
+      activeTab: state.activeTab,
+    );
+    if (!searchPresentation.available && state.active) {
+      context.read<HomeBloc>().add(const HomeSearchVisibilityChanged(false));
+    }
+  }
+
   String _filterLabel(List<HomeSearchFilter> filters, SearchFilterId? id) {
     for (final filter in filters) {
       if (filter.id == id) return filter.label;
@@ -62,8 +103,30 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
   Widget build(BuildContext context) {
     return BlocConsumer<HomeBloc, HomeState>(
       listener: (context, state) {
-        final query = state.currentTabState?.query ?? '';
+        final searchSlot = _resolveHomeSearchSlot(
+          activeTab: state.activeTab,
+          foldersSection: _HomeShellScope.maybeOf(
+            context,
+          )?.foldersSection.value,
+        );
+        final query = state.stateForSlot(searchSlot).query;
+        final searchPresentation = _resolveHomeSearchPresentation(
+          context,
+          tabs: widget.tabs,
+          activeTab: state.activeTab,
+        );
         _syncController(query);
+        if (!searchPresentation.available) {
+          if (_focusNode.hasFocus) {
+            _focusNode.unfocus();
+          }
+          if (state.active) {
+            context.read<HomeBloc>().add(
+              const HomeSearchVisibilityChanged(false),
+            );
+          }
+          return;
+        }
         if (state.active) {
           if (!mounted || _focusNode.hasFocus) return;
           _focusNode.requestFocus();
@@ -75,24 +138,30 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         final locate = context.read;
         final l10n = context.l10n;
         final spacing = context.spacing;
-        final active = state.active;
         final tab = state.activeTab;
-        final entry = tab == null
-            ? (widget.tabs.isEmpty ? null : widget.tabs.first)
-            : widget.tabs.firstWhere(
-                (candidate) => candidate.id == tab,
-                orElse: () => widget.tabs.first,
-              );
-        final filters = entry?.searchFilters ?? const <HomeSearchFilter>[];
-        final currentTabState = tab == null ? null : state.stateFor(tab);
-        final sortValue = currentTabState?.sort ?? SearchSortOrder.newestFirst;
-        final selectedFilterId = currentTabState?.filterId;
+        final searchSlot = _resolveHomeSearchSlot(
+          activeTab: tab,
+          foldersSection: _HomeShellScope.maybeOf(
+            context,
+          )?.foldersSection.value,
+        );
+        final searchPresentation = _resolveHomeSearchPresentation(
+          context,
+          tabs: widget.tabs,
+          activeTab: tab,
+        );
+        final active = state.active && searchPresentation.available;
+        final filters = searchPresentation.filters;
+        final currentTabState = state.stateForSlot(searchSlot);
+        final sortValue = currentTabState.sort;
+        final sortLabel = searchPresentation.sortLabels.label(sortValue, l10n);
+        final selectedFilterId = currentTabState.filterId;
         final effectiveFilterId = filters.isEmpty
             ? null
             : (selectedFilterId ?? filters.first.id);
-        final placeholder = entry == null
+        final placeholder = searchPresentation.label == null
             ? l10n.homeSearchPlaceholderTabs
-            : l10n.homeSearchPlaceholderForTab(entry.label);
+            : l10n.homeSearchPlaceholderForTab(searchPresentation.label!);
         final filterLabel = filters.isEmpty
             ? null
             : _filterLabel(filters, effectiveFilterId);
@@ -126,7 +195,11 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         placeholder: Text(placeholder),
                         clearTooltip: l10n.commonClear,
                         onClear: () => locate<HomeBloc>().add(
-                          HomeSearchQueryChanged('', tab: tab),
+                          HomeSearchQueryChanged(
+                            '',
+                            tab: tab,
+                            slot: searchSlot,
+                          ),
                         ),
                       ),
                     ),
@@ -148,19 +221,27 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         onChanged: (value) {
                           if (value == null) return;
                           locate<HomeBloc>().add(
-                            HomeSearchSortChanged(value, tab: tab),
+                            HomeSearchSortChanged(
+                              value,
+                              tab: tab,
+                              slot: searchSlot,
+                            ),
                           );
                         },
                         options: SearchSortOrder.values
                             .map(
                               (order) => ShadOption<SearchSortOrder>(
                                 value: order,
-                                child: Text(order.label(l10n)),
+                                child: Text(
+                                  searchPresentation.sortLabels.label(
+                                    order,
+                                    l10n,
+                                  ),
+                                ),
                               ),
                             )
                             .toList(),
-                        selectedOptionBuilder: (_, value) =>
-                            Text(value.label(l10n)),
+                        selectedOptionBuilder: (_, _) => Text(sortLabel),
                       ),
                     ),
                     if (filters.length > 1 && effectiveFilterId != null) ...[
@@ -170,7 +251,11 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
                             locate<HomeBloc>().add(
-                              HomeSearchFilterChanged(value, tab: tab),
+                              HomeSearchFilterChanged(
+                                value,
+                                tab: tab,
+                                slot: searchSlot,
+                              ),
                             );
                           },
                           options: filters

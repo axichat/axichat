@@ -15,10 +15,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeTabChats => 'Chats';
 
   @override
+  String get homeTabContacts => 'Contacts';
+
+  @override
   String get homeBottomNavHome => 'Home';
 
   @override
   String get homeTabDrafts => 'Drafts';
+
+  @override
+  String get homeTabFolders => 'Folders';
 
   @override
   String get homeTabImportant => 'Important';
@@ -28,6 +34,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeTabBlocked => 'Blocked';
+
+  @override
+  String get homeFoldersCustomComingSoon => 'Custom folders coming soon';
 
   @override
   String get homeNoModules => 'No modules available';
@@ -441,6 +450,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String chatTransportChoiceMessage(Object address) {
     return 'This address could be chat or email. How should Axichat send to $address?';
   }
+
+  @override
+  String get chatTransportChoiceAxichatLabel => 'Axichat';
 
   @override
   String get chatComposerMessageHint => 'Send message';
@@ -3122,6 +3134,112 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rosterAddContactTooltip => 'Add contact';
+
+  @override
+  String get contactsDisplayNameLabel => 'Display name';
+
+  @override
+  String get contactsLocalOnlyLabel => 'On this device';
+
+  @override
+  String get contactsDetailsSectionTitle => 'Details';
+
+  @override
+  String get contactsAddressLabel => 'Address';
+
+  @override
+  String get contactsStoredLabel => 'Stored';
+
+  @override
+  String get contactsMessagesLabel => 'Messages';
+
+  @override
+  String get contactsEmailLabel => 'Email';
+
+  @override
+  String get contactsMessagesNameLabel => 'Messages name';
+
+  @override
+  String get contactsEmailNameLabel => 'Email name';
+
+  @override
+  String get contactsGivenNameLabel => 'First name';
+
+  @override
+  String get contactsAdditionalNameLabel => 'Middle name';
+
+  @override
+  String get contactsFamilyNameLabel => 'Last name';
+
+  @override
+  String get contactsPrefixLabel => 'Prefix';
+
+  @override
+  String get contactsSuffixLabel => 'Suffix';
+
+  @override
+  String get contactsNicknameLabel => 'Nickname';
+
+  @override
+  String get contactsOrganizationLabel => 'Organization';
+
+  @override
+  String get contactsBirthdayLabel => 'Birthday';
+
+  @override
+  String get contactsAnniversaryLabel => 'Anniversary';
+
+  @override
+  String get contactsEmailsLabel => 'Email addresses';
+
+  @override
+  String get contactsXmppAddressesLabel => 'Chat addresses';
+
+  @override
+  String get contactsPhonesLabel => 'Phone numbers';
+
+  @override
+  String get contactsUrlsLabel => 'Websites';
+
+  @override
+  String get contactsPostalAddressesLabel => 'Postal addresses';
+
+  @override
+  String get contactsNoteLabel => 'Notes';
+
+  @override
+  String get contactsOnePerLineHint => 'One per line';
+
+  @override
+  String get contactsDateValueHint => 'YYYY-MM-DD';
+
+  @override
+  String get contactsOpenChat => 'Open chat';
+
+  @override
+  String get contactsComposeEmail => 'Compose email';
+
+  @override
+  String get contactsEmailUnavailableLabel => 'Email is unavailable right now.';
+
+  @override
+  String get contactsRemoveContactLabel => 'Remove contact';
+
+  @override
+  String contactsRemoveContactConfirm(Object jid) {
+    return 'Remove $jid from contacts?';
+  }
+
+  @override
+  String get contactsRemoveXmppLabel => 'Remove chat contact';
+
+  @override
+  String get contactsRemoveEmailLabel => 'Remove email contact';
+
+  @override
+  String contactsRemoveEmailConfirm(Object jid) {
+    return 'Remove $jid from email contacts?';
+  }
 
   @override
   String get jidInputPlaceholder => 'john@axi.im';

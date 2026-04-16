@@ -362,8 +362,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     final normalizedQuery = searchActive
         ? searchQuery.trim().toLowerCase()
         : '';
+    final effectiveFilter = searchActive
+        ? (searchFilter ?? SearchFilterId.all)
+        : SearchFilterId.all;
     bool matchesFilter(Chat chat) {
-      return switch (searchFilter ?? SearchFilterId.all) {
+      return switch (effectiveFilter) {
         SearchFilterId.email => chat.transport.isEmail,
         SearchFilterId.xmpp => chat.transport.isXmpp,
         _ => true,

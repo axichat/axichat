@@ -3385,6 +3385,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             db.getMessageCollectionMemberships(collectionId, chatJid: chatJid),
       );
 
+  Stream<List<FolderMessageItem>> messageCollectionItemsStream(
+    String collectionId, {
+    String? chatJid,
+  }) => createSingleItemStream<List<FolderMessageItem>, XmppDatabase>(
+    watchFunction: (db) async =>
+        db.watchFolderMessageItems(collectionId, chatJid: chatJid),
+  );
+
+  Stream<List<FolderMessageItem>> importantFolderItemsStream({
+    String? chatJid,
+  }) => messageCollectionItemsStream(
+    SystemMessageCollection.important.id,
+    chatJid: chatJid,
+  );
+
   Stream<List<MessageCollectionMembershipEntry>> importantMessagesStream({
     String? chatJid,
   }) => messageCollectionMembershipsStream(

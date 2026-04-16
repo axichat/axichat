@@ -15,19 +15,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeTabChats => '聊天';
 
   @override
+  String get homeTabContacts => '联系人';
+
+  @override
   String get homeBottomNavHome => '主页';
 
   @override
   String get homeTabDrafts => '草稿';
 
   @override
-  String get homeTabImportant => 'Important';
+  String get homeTabFolders => '文件夹';
+
+  @override
+  String get homeTabImportant => '重要';
 
   @override
   String get homeTabSpam => '垃圾邮件';
 
   @override
   String get homeTabBlocked => '已屏蔽';
+
+  @override
+  String get homeFoldersCustomComingSoon => '自定义文件夹即将推出';
 
   @override
   String get homeNoModules => '没有可用模块';
@@ -428,6 +437,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String chatTransportChoiceMessage(Object address) {
     return '这个地址既可能是聊天地址也可能是邮箱地址。Axichat 应该如何发送到 $address？';
   }
+
+  @override
+  String get chatTransportChoiceAxichatLabel => 'Axichat';
 
   @override
   String get chatComposerMessageHint => '发送消息';
@@ -3025,6 +3037,112 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rosterAddContactTooltip => '添加联系人';
+
+  @override
+  String get contactsDisplayNameLabel => '显示名称';
+
+  @override
+  String get contactsLocalOnlyLabel => '仅在此设备上';
+
+  @override
+  String get contactsDetailsSectionTitle => 'Details';
+
+  @override
+  String get contactsAddressLabel => 'Address';
+
+  @override
+  String get contactsStoredLabel => '已保存';
+
+  @override
+  String get contactsMessagesLabel => 'Messages';
+
+  @override
+  String get contactsEmailLabel => '电子邮件';
+
+  @override
+  String get contactsMessagesNameLabel => 'Messages name';
+
+  @override
+  String get contactsEmailNameLabel => 'Email name';
+
+  @override
+  String get contactsGivenNameLabel => '名字';
+
+  @override
+  String get contactsAdditionalNameLabel => '中间名';
+
+  @override
+  String get contactsFamilyNameLabel => '姓氏';
+
+  @override
+  String get contactsPrefixLabel => '前缀';
+
+  @override
+  String get contactsSuffixLabel => '后缀';
+
+  @override
+  String get contactsNicknameLabel => '昵称';
+
+  @override
+  String get contactsOrganizationLabel => '组织';
+
+  @override
+  String get contactsBirthdayLabel => '生日';
+
+  @override
+  String get contactsAnniversaryLabel => '纪念日';
+
+  @override
+  String get contactsEmailsLabel => '邮箱地址';
+
+  @override
+  String get contactsXmppAddressesLabel => '聊天地址';
+
+  @override
+  String get contactsPhonesLabel => '电话号码';
+
+  @override
+  String get contactsUrlsLabel => '网站';
+
+  @override
+  String get contactsPostalAddressesLabel => '邮寄地址';
+
+  @override
+  String get contactsNoteLabel => '备注';
+
+  @override
+  String get contactsOnePerLineHint => '每行一个';
+
+  @override
+  String get contactsDateValueHint => 'YYYY-MM-DD';
+
+  @override
+  String get contactsOpenChat => '打开聊天';
+
+  @override
+  String get contactsComposeEmail => '写邮件';
+
+  @override
+  String get contactsEmailUnavailableLabel => '电子邮件当前不可用。';
+
+  @override
+  String get contactsRemoveContactLabel => '移除联系人';
+
+  @override
+  String contactsRemoveContactConfirm(Object jid) {
+    return 'Remove $jid from contacts?';
+  }
+
+  @override
+  String get contactsRemoveXmppLabel => '移除聊天联系人';
+
+  @override
+  String get contactsRemoveEmailLabel => '移除邮箱联系人';
+
+  @override
+  String contactsRemoveEmailConfirm(Object jid) {
+    return '将 $jid 从邮箱联系人中移除？';
+  }
 
   @override
   String get jidInputPlaceholder => 'john@axi.im';
@@ -6077,16 +6195,28 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get homeTabChats => '聊天';
 
   @override
+  String get homeTabContacts => '聯絡人';
+
+  @override
   String get homeBottomNavHome => '主頁';
 
   @override
   String get homeTabDrafts => '草稿';
 
   @override
+  String get homeTabFolders => '資料夾';
+
+  @override
+  String get homeTabImportant => '重要';
+
+  @override
   String get homeTabSpam => '垃圾郵件';
 
   @override
   String get homeTabBlocked => '已封鎖';
+
+  @override
+  String get homeFoldersCustomComingSoon => '自訂資料夾即將推出';
 
   @override
   String get homeNoModules => '沒有可用模組';
@@ -6475,6 +6605,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String chatTransportChoiceMessage(Object address) {
     return '這個地址可能是聊天地址或電郵地址。Axichat 應該如何傳送到 $address？';
   }
+
+  @override
+  String get chatTransportChoiceAxichatLabel => 'Axichat';
 
   @override
   String get chatComposerMessageHint => '傳送訊息';
@@ -8927,6 +9060,92 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get rosterAddContactTooltip => '新增聯絡人';
+
+  @override
+  String get contactsDisplayNameLabel => '顯示名稱';
+
+  @override
+  String get contactsLocalOnlyLabel => '僅在此裝置上';
+
+  @override
+  String get contactsStoredLabel => '已儲存';
+
+  @override
+  String get contactsEmailLabel => '電子郵件';
+
+  @override
+  String get contactsGivenNameLabel => '名字';
+
+  @override
+  String get contactsAdditionalNameLabel => '中間名';
+
+  @override
+  String get contactsFamilyNameLabel => '姓氏';
+
+  @override
+  String get contactsPrefixLabel => '前綴';
+
+  @override
+  String get contactsSuffixLabel => '後綴';
+
+  @override
+  String get contactsNicknameLabel => '暱稱';
+
+  @override
+  String get contactsOrganizationLabel => '機構';
+
+  @override
+  String get contactsBirthdayLabel => '生日';
+
+  @override
+  String get contactsAnniversaryLabel => '紀念日';
+
+  @override
+  String get contactsEmailsLabel => '電郵地址';
+
+  @override
+  String get contactsXmppAddressesLabel => '聊天地址';
+
+  @override
+  String get contactsPhonesLabel => '電話號碼';
+
+  @override
+  String get contactsUrlsLabel => '網站';
+
+  @override
+  String get contactsPostalAddressesLabel => '郵寄地址';
+
+  @override
+  String get contactsNoteLabel => '備註';
+
+  @override
+  String get contactsOnePerLineHint => '每行一個';
+
+  @override
+  String get contactsDateValueHint => 'YYYY-MM-DD';
+
+  @override
+  String get contactsOpenChat => '打開聊天';
+
+  @override
+  String get contactsComposeEmail => '撰寫電郵';
+
+  @override
+  String get contactsEmailUnavailableLabel => '電子郵件目前無法使用。';
+
+  @override
+  String get contactsRemoveContactLabel => '移除聯絡人';
+
+  @override
+  String get contactsRemoveXmppLabel => '移除聊天聯絡人';
+
+  @override
+  String get contactsRemoveEmailLabel => '移除電郵聯絡人';
+
+  @override
+  String contactsRemoveEmailConfirm(Object jid) {
+    return '將 $jid 從電郵聯絡人中移除？';
+  }
 
   @override
   String get jidInputPlaceholder => 'john@axi.im';

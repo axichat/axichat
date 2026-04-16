@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/storage/models/chat_models.dart';
+import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart';
+import 'package:equatable/equatable.dart';
 
 enum SystemMessageCollection {
   important;
@@ -85,5 +88,55 @@ class MessageCollectionMemberships extends Table {
       'idx_message_collection_memberships_delta',
       'collection_id, chat_jid, delta_account_id, delta_msg_id',
     ),
+  ];
+}
+
+class FolderMessageItem extends Equatable {
+  const FolderMessageItem({
+    required this.collectionId,
+    required this.chatJid,
+    required this.messageReferenceId,
+    required this.addedAt,
+    required this.active,
+    required this.message,
+    required this.chat,
+    this.messageStanzaId,
+    this.messageOriginId,
+    this.messageMucStanzaId,
+    this.deltaAccountId,
+    this.deltaMsgId,
+  });
+
+  final String collectionId;
+  final String chatJid;
+  final String messageReferenceId;
+  final String? messageStanzaId;
+  final String? messageOriginId;
+  final String? messageMucStanzaId;
+  final int? deltaAccountId;
+  final int? deltaMsgId;
+  final DateTime addedAt;
+  final bool active;
+  final Message? message;
+  final Chat? chat;
+
+  DateTime get markedAt => addedAt;
+
+  bool get hasMessage => message != null;
+
+  @override
+  List<Object?> get props => [
+    collectionId,
+    chatJid,
+    messageReferenceId,
+    messageStanzaId,
+    messageOriginId,
+    messageMucStanzaId,
+    deltaAccountId,
+    deltaMsgId,
+    addedAt,
+    active,
+    message,
+    chat,
   ];
 }

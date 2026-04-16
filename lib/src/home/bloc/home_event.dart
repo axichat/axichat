@@ -30,33 +30,36 @@ final class HomeSearchToggled extends HomeEvent {
 }
 
 final class HomeSearchQueryChanged extends HomeEvent {
-  const HomeSearchQueryChanged(this.value, {this.tab});
+  const HomeSearchQueryChanged(this.value, {this.tab, this.slot});
 
   final String value;
   final HomeTab? tab;
+  final HomeSearchSlot? slot;
 
   @override
-  List<Object?> get props => [value, tab];
+  List<Object?> get props => [value, tab, slot];
 }
 
 final class HomeSearchSortChanged extends HomeEvent {
-  const HomeSearchSortChanged(this.sort, {this.tab});
+  const HomeSearchSortChanged(this.sort, {this.tab, this.slot});
 
   final SearchSortOrder sort;
   final HomeTab? tab;
+  final HomeSearchSlot? slot;
 
   @override
-  List<Object?> get props => [sort, tab];
+  List<Object?> get props => [sort, tab, slot];
 }
 
 final class HomeSearchFilterChanged extends HomeEvent {
-  const HomeSearchFilterChanged(this.filterId, {this.tab});
+  const HomeSearchFilterChanged(this.filterId, {this.tab, this.slot});
 
   final SearchFilterId? filterId;
   final HomeTab? tab;
+  final HomeSearchSlot? slot;
 
   @override
-  List<Object?> get props => [filterId, tab];
+  List<Object?> get props => [filterId, tab, slot];
 }
 
 final class HomeRefreshRequested extends HomeEvent {

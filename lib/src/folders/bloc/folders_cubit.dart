@@ -4,67 +4,50 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/search/search_models.dart';
-import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 
-part 'important_messages_state.dart';
+part 'folders_state.dart';
 
-class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
-  ImportantMessagesCubit({required XmppService xmppService, this.chatJid})
-    : _xmppService = xmppService,
-      super(
-        ImportantMessagesState(
-          chatJid: chatJid,
-          items: null,
-          visibleItems: null,
-        ),
-      ) {
+enum FolderCollection {
+  important;
+
+  String get collectionId => switch (this) {
+    FolderCollection.important => SystemMessageCollection.important.id,
+  };
+}
+
+class FoldersCubit extends Cubit<FoldersState> {
+  FoldersCubit({
+    required XmppService xmppService,
+    this.folder = FolderCollection.important,
+    this.chatJid,
+  }) : _xmppService = xmppService,
+       super(
+         FoldersState(
+           folder: folder,
+           chatJid: chatJid,
+           items: null,
+           visibleItems: null,
+         ),
+       ) {
     _subscription = _xmppService
-        .importantMessagesStream(chatJid: chatJid)
-        .listen(_handleEntries);
+        .messageCollectionItemsStream(folder.collectionId, chatJid: chatJid)
+        .listen(_handleItems);
   }
 
   final XmppService _xmppService;
+  final FolderCollection folder;
   final String? chatJid;
-  late final StreamSubscription<List<MessageCollectionMembershipEntry>>
-  _subscription;
+  late final StreamSubscription<List<FolderMessageItem>> _subscription;
 
-  Future<void> _handleEntries(
-    List<MessageCollectionMembershipEntry> entries,
-  ) async {
-    final messageIds = entries
-        .map((entry) => entry.messageReferenceId.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-    final messages = await _xmppService.loadMessagesByReferenceIds(
-      messageIds,
-      chatJid: chatJid,
-    );
-    final messageByReference = <String, Message>{};
-    for (final message in messages) {
-      for (final referenceId in message.referenceIds) {
-        messageByReference[referenceId] = message;
-      }
-    }
-    final chatIds = entries.map((entry) => entry.chatJid).toSet();
-    final chats = await _xmppService.loadChatsByJids(chatIds);
-    final chatByJid = <String, Chat>{for (final chat in chats) chat.jid: chat};
-    final items = entries
-        .map(
-          (entry) => ImportantMessageItem(
-            entry: entry,
-            message: messageByReference[entry.messageReferenceId],
-            chat: chatByJid[entry.chatJid],
-          ),
-        )
-        .toList(growable: false);
+  void _handleItems(List<FolderMessageItem> items) {
     emit(
       state.copyWith(
         items: items,
-        visibleItems: _applyFilters(
+        visibleItems: _applyCriteria(
           items,
           query: state.query,
           sortOrder: state.sortOrder,
@@ -73,7 +56,7 @@ class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
     );
   }
 
-  void updateFilter({
+  void updateCriteria({
     required String query,
     required SearchSortOrder sortOrder,
   }) {
@@ -88,7 +71,7 @@ class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
         sortOrder: sortOrder,
         visibleItems: items == null
             ? null
-            : _applyFilters(
+            : _applyCriteria(
                 items,
                 query: normalizedQuery,
                 sortOrder: sortOrder,
@@ -97,8 +80,8 @@ class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
     );
   }
 
-  List<ImportantMessageItem> _applyFilters(
-    List<ImportantMessageItem> items, {
+  List<FolderMessageItem> _applyCriteria(
+    List<FolderMessageItem> items, {
     required String query,
     required SearchSortOrder sortOrder,
   }) {
@@ -121,7 +104,7 @@ class ImportantMessagesCubit extends Cubit<ImportantMessagesState> {
               referenceId.contains(query);
         })
         .toList(growable: false);
-    final ordered = List<ImportantMessageItem>.of(filtered)
+    final ordered = List<FolderMessageItem>.of(filtered)
       ..sort((a, b) => a.markedAt.compareTo(b.markedAt));
     if (sortOrder.isNewestFirst) {
       return ordered.reversed.toList(growable: false);

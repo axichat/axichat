@@ -96,6 +96,46 @@ void main() {
     expect(cubit.state.spamVisibleItems.single.jid, 'email@example.com');
   });
 
+  test('spam filter does not stay applied when search is hidden', () async {
+    final now = DateTime(2024, 1, 1);
+    final items = <Chat>[
+      _chat(
+        jid: 'email@example.com',
+        title: 'Spam Email',
+        timestamp: now,
+        spam: true,
+        transport: MessageTransport.email,
+      ),
+      _chat(jid: 'xmpp@axi.im', title: 'Spam Xmpp', timestamp: now, spam: true),
+    ];
+    when(() => xmppService.cachedChatList).thenReturn(items);
+
+    final cubit = ChatsCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    cubit.updateSpamSearchSnapshot(
+      active: true,
+      query: '',
+      filterId: SearchFilterId.email,
+      sortOrder: SearchSortOrder.newestFirst,
+    );
+    expect(cubit.state.spamVisibleItems.map((chat) => chat.jid), [
+      'email@example.com',
+    ]);
+
+    cubit.updateSpamSearchSnapshot(
+      active: false,
+      query: '',
+      filterId: SearchFilterId.email,
+      sortOrder: SearchSortOrder.newestFirst,
+    );
+
+    expect(
+      cubit.state.spamVisibleItems.map((chat) => chat.jid),
+      containsAll(<String>['email@example.com', 'xmpp@axi.im']),
+    );
+  });
+
   test('spam list uses spamUpdatedAt for sorting', () async {
     final now = DateTime(2024, 1, 1, 12, 0);
     final older = DateTime(2024, 1, 1, 10, 0);

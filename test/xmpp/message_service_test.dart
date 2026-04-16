@@ -10,6 +10,9 @@ import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -23,6 +26,92 @@ final messageEvents = List.generate(3, (_) => generateRandomMessageEvent());
 class MockMucManager extends Mock implements MUCManager {}
 
 class FakeJid extends Fake implements mox.JID {}
+
+class RecordingMessageCollectionsPubSubTransport extends PubSubManager {
+  int publishCount = 0;
+  int subscribeCount = 0;
+  final Map<String, mox.XMLNode> publishedItems = <String, mox.XMLNode>{};
+
+  @override
+  Future<String?> resolveSendLastPublishedItemForNode({
+    required mox.JID host,
+    required String node,
+  }) async => null;
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> configureNode(
+    mox.JID jid,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async => const moxlib.Result(true);
+
+  @override
+  Future<String?> createNode(mox.JID jid, {String? nodeId}) async =>
+      nodeId ?? 'created-node';
+
+  @override
+  Future<String?> createNodeWithConfig(
+    mox.JID jid,
+    mox.NodeConfig config, {
+    String? nodeId,
+  }) async => nodeId ?? 'created-node';
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.SubscriptionInfo>> subscribe(
+    mox.JID jid,
+    String node,
+  ) async {
+    subscribeCount += 1;
+    return moxlib.Result(
+      mox.SubscriptionInfo(
+        jid: jid.toBare().toString(),
+        node: node,
+        state: mox.SubscriptionState.subscribed,
+      ),
+    );
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> publish(
+    mox.JID jid,
+    String node,
+    mox.XMLNode payload, {
+    String? id,
+    mox.PubSubPublishOptions? options,
+    bool autoCreate = false,
+    mox.NodeConfig? createNodeConfig,
+  }) async {
+    publishCount += 1;
+    final itemId = id ?? 'item-$publishCount';
+    publishedItems['$node|$itemId'] = payload;
+    return const moxlib.Result(true);
+  }
+}
+
+mox.XmppManagerAttributes _messageCollectionsTestAttributes({
+  required PubSubManager pubSubManager,
+  required String accountJid,
+}) {
+  final fullJid = mox.JID.fromString(accountJid);
+  return mox.XmppManagerAttributes(
+    sendStanza: (_) async => null,
+    sendNonza: (_) {},
+    getManagerById: <T extends mox.XmppManagerBase>(String id) {
+      if (id == mox.pubsubManager) {
+        return pubSubManager as T;
+      }
+      return null;
+    },
+    sendEvent: (_) {},
+    getConnectionSettings: () =>
+        mox.ConnectionSettings(jid: fullJid, password: password),
+    getFullJID: () => fullJid,
+    getSocket: () => throw UnimplementedError(),
+    getConnection: () => throw UnimplementedError(),
+    getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(String _) =>
+        null,
+  );
+}
 
 bool compareMessages(Message a, Message b) =>
     a.stanzaID == b.stanzaID &&
@@ -4105,6 +4194,112 @@ void main() {
         expect(stored, isNull);
 
         await controller.close();
+      },
+    );
+  });
+
+  group('important folder sync', () {
+    test(
+      'setImportantMessage publishes the important membership payload',
+      () async {
+        final transport = RecordingMessageCollectionsPubSubTransport();
+        final manager = MessageCollectionsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: transport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+
+        when(
+          () => mockConnection.getManager<MessageCollectionsPubSubManager>(),
+        ).thenReturn(manager);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        final chat = Chat.fromJid('friend@example.com');
+        final message =
+            Message.fromMox(
+              generateRandomMessageEvent(senderJid: chat.jid),
+            ).copyWith(
+              chatJid: chat.jid,
+              senderJid: chat.jid,
+              timestamp: DateTime.timestamp().toUtc(),
+            );
+
+        await xmppService.setImportantMessage(
+          chat: chat,
+          message: message,
+          important: true,
+        );
+
+        expect(transport.publishCount, 1);
+        expect(transport.subscribeCount, 1);
+        expect(transport.publishedItems, hasLength(1));
+
+        final payload = MessageCollectionSyncPayload.fromXml(
+          transport.publishedItems.values.single,
+        );
+        expect(payload, isNotNull);
+        expect(payload!.collectionId, SystemMessageCollection.important.id);
+        expect(payload.chatJid, chat.jid);
+        expect(payload.active, isTrue);
+
+        final entry = await database.getMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chatJid: chat.jid,
+          messageReferenceId: payload.messageReferenceId,
+        );
+        expect(entry, isNotNull);
+        expect(entry!.active, isTrue);
+      },
+    );
+
+    test(
+      'MessageCollectionSyncUpdatedEvent applies remote important changes',
+      () async {
+        final events = StreamController<mox.XmppEvent>.broadcast();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => events.stream);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        const chatJid = 'friend@example.com';
+        const messageReferenceId = 'remote-reference';
+        final updatedAt = DateTime.utc(2026, 4, 15, 10, 30);
+
+        events.add(
+          MessageCollectionSyncUpdatedEvent(
+            MessageCollectionSyncPayload(
+              collectionId: SystemMessageCollection.important.id,
+              chatJid: chatJid,
+              messageReferenceId: messageReferenceId,
+              updatedAt: updatedAt,
+              active: true,
+              sourceId: 'remote-device',
+            ),
+          ),
+        );
+
+        await pumpEventQueue(times: 10);
+
+        final entry = await database.getMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chatJid: chatJid,
+          messageReferenceId: messageReferenceId,
+        );
+        expect(entry, isNotNull);
+        expect(entry!.active, isTrue);
+        expect(entry.addedAt.toUtc(), updatedAt);
+
+        await events.close();
       },
     );
   });

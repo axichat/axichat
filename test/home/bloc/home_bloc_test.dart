@@ -77,7 +77,7 @@ void main() {
       final bloc = HomeBloc(
         xmppService: xmppService,
         emailService: emailService,
-        tabs: const [HomeTab.chats, HomeTab.spam],
+        tabs: const [HomeTab.chats, HomeTab.folders],
       );
       final emittedStates = <HomeState>[];
       final subscription = bloc.stream.listen(emittedStates.add);
@@ -136,6 +136,39 @@ void main() {
       verifyNever(() => xmppService.syncSessionState());
     },
   );
+
+  test('folders important and spam search state stay independent', () async {
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.folders],
+    );
+    addTearDown(bloc.close);
+
+    bloc.add(
+      const HomeSearchQueryChanged(
+        'spam query',
+        slot: HomeSearchSlot.foldersSpam,
+      ),
+    );
+    await pumpEventQueue();
+    bloc.add(
+      const HomeSearchQueryChanged(
+        'important query',
+        slot: HomeSearchSlot.foldersImportant,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(
+      bloc.state.stateForSlot(HomeSearchSlot.foldersSpam).query,
+      'spam query',
+    );
+    expect(
+      bloc.state.stateForSlot(HomeSearchSlot.foldersImportant).query,
+      'important query',
+    );
+  });
 
   test('refresh delegates to the two session sync owners only', () async {
     final bloc = HomeBloc(

@@ -8,6 +8,7 @@ class _HomeShellRailLayout extends StatelessWidget {
     required this.tabs,
     required this.homeTabIndex,
     required this.bottomNavIndex,
+    required this.onHomeTabSelected,
     required this.selectedBottomIndex,
     required this.calendarAvailable,
     required this.collapsed,
@@ -18,8 +19,9 @@ class _HomeShellRailLayout extends StatelessWidget {
   });
 
   final List<HomeTabEntry> tabs;
-  final ValueNotifier<int> homeTabIndex;
-  final ValueNotifier<int> bottomNavIndex;
+  final ValueListenable<int> homeTabIndex;
+  final ValueListenable<int> bottomNavIndex;
+  final ValueChanged<int> onHomeTabSelected;
   final int selectedBottomIndex;
   final bool calendarAvailable;
   final bool collapsed;
@@ -51,6 +53,7 @@ class _HomeShellRailLayout extends StatelessWidget {
               selectedIndex: selectedIndex,
               homeTabIndex: homeTabIndex,
               bottomNavIndex: bottomNavIndex,
+              onHomeTabSelected: onHomeTabSelected,
               collapsed: collapsed,
               calendarAvailable: calendarAvailable,
               calendarActive: calendarActive,
@@ -73,6 +76,7 @@ class _HomeShellNavigationRail extends StatelessWidget {
     required this.selectedIndex,
     required this.homeTabIndex,
     required this.bottomNavIndex,
+    required this.onHomeTabSelected,
     required this.collapsed,
     required this.calendarAvailable,
     required this.calendarActive,
@@ -84,8 +88,9 @@ class _HomeShellNavigationRail extends StatelessWidget {
 
   final List<HomeTabEntry> tabs;
   final int selectedIndex;
-  final ValueNotifier<int> homeTabIndex;
-  final ValueNotifier<int> bottomNavIndex;
+  final ValueListenable<int> homeTabIndex;
+  final ValueListenable<int> bottomNavIndex;
+  final ValueChanged<int> onHomeTabSelected;
   final bool collapsed;
   final bool calendarAvailable;
   final bool calendarActive;
@@ -105,7 +110,7 @@ class _HomeShellNavigationRail extends StatelessWidget {
 
   void _selectHomeTab(BuildContext context, int index) {
     onBottomNavSelected(0);
-    homeTabIndex.value = index;
+    onHomeTabSelected(index);
   }
 
   @override
@@ -442,13 +447,11 @@ IconData _tabIcon(HomeTab tab) {
       return LucideIcons.users;
     case HomeTab.invites:
       return LucideIcons.userPlus;
-    case HomeTab.important:
-      return Icons.star_outline_rounded;
     case HomeTab.blocked:
       return LucideIcons.userX;
-    case HomeTab.spam:
-      return LucideIcons.shieldAlert;
     case HomeTab.drafts:
       return LucideIcons.fileText;
+    case HomeTab.folders:
+      return LucideIcons.folder;
   }
 }

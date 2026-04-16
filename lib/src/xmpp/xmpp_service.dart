@@ -123,6 +123,8 @@ part 'presence/presence_service.dart';
 
 part 'roster/roster_service.dart';
 
+part 'contacts/contacts_service.dart';
+
 part 'connection/xmpp_connection.dart';
 
 sealed class XmppException implements Exception {
@@ -704,6 +706,7 @@ class XmppService extends XmppBase
         DemoScriptService,
         // OmemoService,
         RosterService,
+        ContactsService,
         PresenceService {
   XmppService._(
     this._connectionFactory,
