@@ -10,7 +10,7 @@ const String _messageTransportEmailWireValue = 'email';
 
 extension MessageTransportDisplay on MessageTransport {
   String get label => switch (this) {
-    MessageTransport.xmpp => 'Chat',
+    MessageTransport.xmpp => 'XMPP',
     MessageTransport.email => 'Email',
   };
 }
@@ -53,7 +53,6 @@ const Set<String> _emailDomainHints = <String>{
 };
 
 const Set<String> _xmppDomainHints = <String>{
-  'axi.im',
   'conversations.im',
   'disroot.org',
   'jabber.org',

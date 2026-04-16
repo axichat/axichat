@@ -452,16 +452,16 @@ final class ChatSpamStatusRequested extends ChatEvent {
 final class ChatContactAddRequested extends ChatEvent {
   const ChatContactAddRequested({
     required this.chat,
-    required this.successMessage,
     required this.failureMessage,
+    this.acceptedCompleter,
   });
 
   final Chat chat;
-  final String successMessage;
   final String failureMessage;
+  final Completer<bool>? acceptedCompleter;
 
   @override
-  List<Object?> get props => [chat, successMessage, failureMessage];
+  List<Object?> get props => [chat, failureMessage];
 }
 
 final class ChatRecipientEmailChatRequested extends ChatEvent {

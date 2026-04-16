@@ -585,15 +585,18 @@ class Contact extends Equatable implements Insertable<Contact> {
     required this.transport,
   });
 
-  factory Contact.fromDb({required String nativeID, required String jid}) =>
-      Contact._(
-        nativeID: nativeID,
-        chat: null,
-        address: jid,
-        providedDisplayName: null,
-        shareSignatureEnabled: false,
-        transport: null,
-      );
+  factory Contact.fromDb({
+    required String nativeID,
+    required String jid,
+    String? displayName,
+  }) => Contact._(
+    nativeID: nativeID,
+    chat: null,
+    address: jid,
+    providedDisplayName: displayName,
+    shareSignatureEnabled: false,
+    transport: null,
+  );
 
   factory Contact.chat({
     required Chat chat,
@@ -887,6 +890,7 @@ class Contact extends Equatable implements Insertable<Contact> {
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) {
     final storedNativeID = nativeID?.trim();
     final storedJid = resolvedAddress;
+    final storedDisplayName = providedDisplayName?.trim();
     if (storedNativeID == null ||
         storedNativeID.isEmpty ||
         storedJid == null ||
@@ -898,6 +902,8 @@ class Contact extends Equatable implements Insertable<Contact> {
     return <String, Expression<Object>>{
       'native_i_d': Variable<String>(storedNativeID),
       'jid': Variable<String>(storedJid),
+      if (storedDisplayName != null && storedDisplayName.isNotEmpty)
+        'display_name': Variable<String>(storedDisplayName),
     };
   }
 
@@ -917,6 +923,8 @@ class Contacts extends Table {
   TextColumn get nativeID => text()();
 
   TextColumn get jid => text()();
+
+  TextColumn get displayName => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {nativeID};

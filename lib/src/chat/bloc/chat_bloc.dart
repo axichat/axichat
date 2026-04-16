@@ -4570,19 +4570,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatContactAddRequested event,
     Emitter<ChatState> emit,
   ) async {
+    final acceptedCompleter = event.acceptedCompleter;
     final chat = event.chat;
     final remoteJid = chat.remoteJid.trim();
     if (remoteJid.isEmpty) {
+      acceptedCompleter?.complete(false);
       return;
     }
     final rosterTitle = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
         : chat.title;
-    var nextState = state;
     try {
       if (chat.isEmailBacked) {
         final emailService = _emailService;
         if (emailService == null) {
+          acceptedCompleter?.complete(false);
           return;
         }
         await emailService.ensureChatForAddress(
@@ -4592,6 +4594,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       } else {
         final xmppService = _xmppService;
         if (xmppService == null) {
+          acceptedCompleter?.complete(false);
           return;
         }
         await xmppService.addToRoster(
@@ -4610,6 +4613,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ),
         ),
       );
+      acceptedCompleter?.complete(false);
       return;
     } on Exception catch (error, stackTrace) {
       _log.safeWarning('Failed to add contact', error, stackTrace);
@@ -4622,9 +4626,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ),
         ),
       );
+      acceptedCompleter?.complete(false);
       return;
     }
-    emit(_attachToast(nextState, ChatToast(messageText: event.successMessage)));
+
+    acceptedCompleter?.complete(true);
   }
 
   Future<void> _onChatRecipientEmailChatRequested(

@@ -10,7 +10,6 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 
@@ -151,17 +150,10 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   Future<ProfileExportResult> exportEmailContacts(
     ContactExportFormat format,
     ContactExportLabels labels,
-  ) async {
-    if (_emailService == null) {
-      return const ProfileExportResult.failure(
-        kind: ProfileExportKind.emailContacts,
-      );
-    }
-    return _runExport(
-      kind: ProfileExportKind.emailContacts,
-      operation: () => _exportEmailContacts(format, labels),
-    );
-  }
+  ) => _runExport(
+    kind: ProfileExportKind.emailContacts,
+    operation: () => _exportEmailContacts(format, labels),
+  );
 
   Future<ProfileExportResult> _runExport({
     required ProfileExportKind kind,
@@ -223,75 +215,60 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   Future<ProfileExportResult> _exportXmppContacts(
     ContactExportFormat format,
     ContactExportLabels labels,
-  ) async {
-    final roster = await _xmppService.loadRosterSnapshot();
-    final contacts = _sortedContacts(
-      roster
-          .map(
-            (item) => ContactExportEntry(
-              address: item.jid.trim(),
-              displayName: (item.contactDisplayName ?? item.title).trim(),
-              transport: MessageTransport.xmpp,
-            ),
-          )
-          .where((entry) => entry.address.isNotEmpty)
-          .toList(growable: false),
-    );
-    if (contacts.isEmpty) {
-      return const ProfileExportResult.empty(
-        kind: ProfileExportKind.xmppContacts,
-      );
-    }
-    final file = await ContactExporter.exportContacts(
-      contacts: contacts,
-      format: format,
-      fileLabel: 'xmpp-contacts',
-      labels: labels,
-    );
-    return ProfileExportResult.success(
-      kind: ProfileExportKind.xmppContacts,
-      file: file,
-      itemCount: contacts.length,
-    );
-  }
+  ) => _exportContacts(
+    kind: ProfileExportKind.xmppContacts,
+    transport: MessageTransport.xmpp,
+    format: format,
+    labels: labels,
+    fileLabel: 'xmpp-contacts',
+  );
 
   Future<ProfileExportResult> _exportEmailContacts(
     ContactExportFormat format,
     ContactExportLabels labels,
-  ) async {
-    final emailService = _emailService;
-    if (emailService == null) {
-      return const ProfileExportResult.failure(
-        kind: ProfileExportKind.emailContacts,
-      );
-    }
-    const flags = DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
-    final emailContacts = await emailService.getContacts(flags: flags);
+  ) => _exportContacts(
+    kind: ProfileExportKind.emailContacts,
+    transport: MessageTransport.email,
+    format: format,
+    labels: labels,
+    fileLabel: 'email-contacts',
+  );
+
+  Future<ProfileExportResult> _exportContacts({
+    required ProfileExportKind kind,
+    required MessageTransport transport,
+    required ContactExportFormat format,
+    required ContactExportLabels labels,
+    required String fileLabel,
+  }) async {
+    final directory = await _xmppService.loadContactsSnapshot();
     final contacts = _sortedContacts(
-      emailContacts
+      directory
+          .where(
+            (entry) =>
+                transport.isXmpp ? entry.hasXmppRoster : entry.hasEmailContact,
+          )
           .map(
-            (contact) => ContactExportEntry(
-              address: contact.address?.trim() ?? '',
-              displayName: contact.name?.trim(),
-              transport: MessageTransport.email,
+            (entry) => ContactExportEntry(
+              address: entry.address.trim(),
+              displayName: entry.preferredDisplayName(transport),
+              transport: transport,
             ),
           )
           .where((entry) => entry.address.isNotEmpty)
           .toList(growable: false),
     );
     if (contacts.isEmpty) {
-      return const ProfileExportResult.empty(
-        kind: ProfileExportKind.emailContacts,
-      );
+      return ProfileExportResult.empty(kind: kind);
     }
     final file = await ContactExporter.exportContacts(
       contacts: contacts,
       format: format,
-      fileLabel: 'email-contacts',
+      fileLabel: fileLabel,
       labels: labels,
     );
     return ProfileExportResult.success(
-      kind: ProfileExportKind.emailContacts,
+      kind: kind,
       file: file,
       itemCount: contacts.length,
     );

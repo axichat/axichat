@@ -408,7 +408,7 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
   @override
   void initState() {
     super.initState();
-    _resolveAvatarBytes(clearStaleBytes: true);
+    _resolveAvatarBytes();
   }
 
   @override
@@ -449,9 +449,7 @@ class _HydratedAxiAvatarState extends State<HydratedAxiAvatar> {
     }
 
     final xmpp = context.read<XmppService>();
-    final safeCached = clearStaleBytes
-        ? null
-        : xmpp.cachedSafeAvatarBytes(path);
+    final safeCached = xmpp.cachedSafeAvatarBytes(path);
     if (safeCached != null && safeCached.isNotEmpty) {
       setState(() {
         _resolvedAvatarBytes = safeCached;

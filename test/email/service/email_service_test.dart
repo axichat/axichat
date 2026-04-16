@@ -84,6 +84,7 @@ void main() {
     registerFallbackValue(MessageTransport.xmpp);
     registerFallbackValue(MessageNotificationChannel.chat);
     registerFallbackValue(<FutureOr<bool>>[]);
+    registerFallbackValue(<Contact>[]);
     registerFallbackValue(<String>[]);
     registerFallbackValue(MessageTimelineFilter.directOnly);
     registerFallbackValue(<String, String>{});
@@ -1288,6 +1289,145 @@ void main() {
     expect(deletedKeys.length, greaterThanOrEqualTo(2));
     expect(deletedKeys.every((key) => key.contains('bob@axi.im')), isTrue);
   });
+
+  test(
+    'addContactAddress saves an email contact without creating a chat',
+    () async {
+      Iterable<Contact>? savedContacts;
+      when(
+        () => transport.createContact(
+          address: 'friend@example.com',
+          displayName: 'Friend',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 7);
+      when(
+        () => transport.getContactIds(flags: any(named: 'flags')),
+      ).thenAnswer((_) async => [7]);
+      when(
+        () => transport.getBlockedContactIds(),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => transport.getContact(7)).thenAnswer(
+        (_) async => const DeltaContact(
+          id: 7,
+          address: 'friend@example.com',
+          name: 'Friend',
+        ),
+      );
+      when(() => database.replaceContacts(any())).thenAnswer((
+        invocation,
+      ) async {
+        savedContacts =
+            invocation.positionalArguments.first as Iterable<Contact>;
+      });
+      when(
+        () => database.getEmailSpamlist(),
+      ).thenAnswer((_) async => <EmailSpamEntry>[]);
+      when(
+        () => database.getEmailBlocklist(),
+      ).thenAnswer((_) async => <EmailBlocklistEntry>[]);
+      when(
+        () => database.getChatsByJids(any()),
+      ).thenAnswer((_) async => <Chat>[]);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      await service.addContactAddress(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+      );
+
+      verify(
+        () => transport.createContact(
+          address: 'friend@example.com',
+          displayName: 'Friend',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verifyNever(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      expect(savedContacts, isNotNull);
+      expect(savedContacts!.single.resolvedAddress, 'friend@example.com');
+      expect(savedContacts!.single.providedDisplayName, 'Friend');
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'deleteContactsByNativeIds reconciles contacts even when Delta deletes are stale',
+    () async {
+      Iterable<Contact>? savedContacts;
+      when(() => transport.deleteContact(7)).thenAnswer((_) async => false);
+      when(
+        () => transport.getContactIds(flags: any(named: 'flags')),
+      ).thenAnswer((_) async => const <int>[]);
+      when(
+        () => transport.getBlockedContactIds(),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => database.replaceContacts(any())).thenAnswer((
+        invocation,
+      ) async {
+        savedContacts =
+            invocation.positionalArguments.first as Iterable<Contact>;
+      });
+      when(
+        () => database.getEmailSpamlist(),
+      ).thenAnswer((_) async => <EmailSpamEntry>[]);
+      when(
+        () => database.getEmailBlocklist(),
+      ).thenAnswer((_) async => <EmailBlocklistEntry>[]);
+      when(
+        () => database.getChatsByJids(any()),
+      ).thenAnswer((_) async => <Chat>[]);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      await service.deleteContactsByNativeIds(const ['delta_contact_7']);
+
+      verify(() => transport.deleteContact(7)).called(1);
+      verify(
+        () => transport.getContactIds(flags: any(named: 'flags')),
+      ).called(1);
+      verify(() => database.replaceContacts(any())).called(1);
+      expect(savedContacts, isEmpty);
+
+      addTearDown(service.shutdown);
+    },
+  );
 
   test(
     'shutdown detaches the Delta listener before stopping transport',

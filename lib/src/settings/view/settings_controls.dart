@@ -868,6 +868,10 @@ class SettingsControls extends StatelessWidget {
       );
       return;
     }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) {
+      return;
+    }
     String? savePath;
     try {
       savePath = await FilePicker.platform.saveFile(fileName: exportFileName);

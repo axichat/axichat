@@ -55,6 +55,15 @@ abstract class ChatTransport {
   Future<int> ensureChatForAddress({
     required String address,
     String? displayName,
+    int? accountId,
+  });
+
+  /// Saves an address in the underlying transport contacts store without
+  /// creating a chat thread.
+  Future<int> createContact({
+    required String address,
+    String? displayName,
+    int? accountId,
   });
 
   /// Returns the coarse connectivity state defined by Delta Chat core.

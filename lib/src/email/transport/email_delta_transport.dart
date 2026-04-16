@@ -1441,6 +1441,31 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   @override
+  Future<int> createContact({
+    required String address,
+    String? displayName,
+    int? accountId,
+  }) async {
+    final session = await _ensureSession(accountId: accountId);
+    if (session == null) {
+      throw StateError('Transport not initialized');
+    }
+    final context = session.context;
+    final trimmedAddress = address.trim();
+    final trimmedDisplayName = displayName?.trim();
+    final existing = await context.lookupContactIdByAddress(trimmedAddress);
+    if (existing != null) {
+      return existing;
+    }
+    return context.createContact(
+      address: trimmedAddress,
+      displayName: trimmedDisplayName?.isNotEmpty == true
+          ? trimmedDisplayName!
+          : trimmedAddress,
+    );
+  }
+
+  @override
   Future<int> ensureChatForAddress({
     required String address,
     String? displayName,
@@ -1453,14 +1478,11 @@ class EmailDeltaTransport implements ChatTransport {
     final context = session.context;
     final trimmedAddress = address.trim();
     final trimmedDisplayName = displayName?.trim();
-    final contactId =
-        await context.lookupContactIdByAddress(trimmedAddress) ??
-        await context.createContact(
-          address: trimmedAddress,
-          displayName: trimmedDisplayName?.isNotEmpty == true
-              ? trimmedDisplayName!
-              : trimmedAddress,
-        );
+    final contactId = await createContact(
+      address: trimmedAddress,
+      displayName: trimmedDisplayName,
+      accountId: session.accountId,
+    );
     final chatId = await context.createChatByContactId(contactId);
     await _ensureChat(chatId, accountId: session.accountId, context: context);
     return chatId;

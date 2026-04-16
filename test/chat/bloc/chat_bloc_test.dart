@@ -4011,6 +4011,101 @@ void main() {
     await connectivityController.close();
   });
 
+  test('adding a contact from chat does not emit a success toast', () async {
+    final xmppService = MockXmppService();
+    final connectivityController =
+        StreamController<xmpp.ConnectionState>.broadcast();
+    final acceptedCompleter = Completer<bool>();
+
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(xmpp.ConnectionState.notConnected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => connectivityController.stream);
+    when(
+      () => xmppService.httpUploadSupportStream,
+    ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+    when(
+      () => xmppService.httpUploadSupport,
+    ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(
+      () => xmppService.createChatArchiveSession(),
+    ).thenReturn('xmpp-session-1');
+    when(
+      () => xmppService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => messageStreamController.stream);
+    when(
+      () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => xmppService.syncPinnedMessagesForChat(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.resolvePeerCapabilities(
+        jid: any(named: 'jid'),
+        forceRefresh: any(named: 'forceRefresh'),
+      ),
+    ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+    when(
+      () => xmppService.prefetchAvatarForJid(initialChat.jid),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.addToRoster(
+        jid: any(named: 'jid'),
+        title: any(named: 'title'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: xmppService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(
+      ChatContactAddRequested(
+        chat: initialChat,
+        failureMessage: 'failed',
+        acceptedCompleter: acceptedCompleter,
+      ),
+    );
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verify(
+      () => xmppService.addToRoster(jid: initialChat.jid, title: 'peer'),
+    ).called(1);
+    expect(await acceptedCompleter.future, isTrue);
+    expect(bloc.state.toast, isNull);
+
+    await bloc.close();
+    await connectivityController.close();
+  });
+
   test(
     'reconnecting a direct chat does not prefetch that peer avatar again',
     () async {

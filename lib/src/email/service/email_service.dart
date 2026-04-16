@@ -1344,6 +1344,41 @@ class EmailService {
     return _waitForChat(chatId, accountId: account.deltaAccountId);
   }
 
+  Future<void> createContactAddress({
+    required String address,
+    String? displayName,
+    String? fromAddress,
+  }) async {
+    await _ensureReady();
+    final String scope = _requireActiveScope();
+    final _EmailAccountBinding account = await _accountBindingForScope(
+      scope: scope,
+      fromAddress: fromAddress,
+    );
+    await _ensureAccountConfigured(scope: scope, account: account);
+    await _guardDeltaOperation(
+      operation: 'add email contact',
+      body: () => _transport.createContact(
+        address: address,
+        displayName: displayName,
+        accountId: account.deltaAccountId,
+      ),
+    );
+  }
+
+  Future<void> addContactAddress({
+    required String address,
+    String? displayName,
+    String? fromAddress,
+  }) async {
+    await createContactAddress(
+      address: address,
+      displayName: displayName,
+      fromAddress: fromAddress,
+    );
+    await syncContactsFromCore();
+  }
+
   Future<Chat> ensureChatForEmailChat(Chat chat) async {
     final binding = await _bindEmailChat(chat);
     final db = await _databaseBuilder();
@@ -2285,7 +2320,7 @@ class EmailService {
       return;
     }
     final db = await _databaseBuilder();
-    final contactsByNativeId = <String, String>{};
+    final savedContacts = <Contact>[];
     final contactsByAddress = <String, DeltaContact>{};
 
     for (final contact in contacts) {
@@ -2298,11 +2333,18 @@ class EmailService {
         continue;
       }
       final nativeId = '$_deltaContactIdPrefix${contact.id}';
-      contactsByNativeId[nativeId] = normalized;
+      savedContacts.add(
+        Contact.address(
+          nativeID: nativeId,
+          address: normalized,
+          displayName: contact.name?.trim(),
+          transport: MessageTransport.email,
+        ),
+      );
       contactsByAddress.putIfAbsent(normalized, () => contact);
     }
 
-    await db.replaceContacts(contactsByNativeId);
+    await db.replaceContacts(savedContacts);
     await _syncEmailBlocklist(db: db, blockedContacts: blocked);
     await _syncEmailChatMetadata(db: db, contactsByAddress: contactsByAddress);
   }
@@ -5731,6 +5773,18 @@ class EmailService {
     return _transport.deleteContact(contactId);
   }
 
+  Future<void> deleteContactsByNativeIds(Iterable<String> nativeIds) async {
+    await _ensureReady();
+    for (final nativeId in nativeIds) {
+      final contactId = _parseDeltaContactId(nativeId);
+      if (contactId == null) {
+        continue;
+      }
+      await _transport.deleteContact(contactId);
+    }
+    await syncContactsFromCore();
+  }
+
   /// Deletes a contact by address from core.
   ///
   /// Returns true if the contact was deleted.
@@ -5781,6 +5835,14 @@ class EmailService {
     final ids = await _transport.getBlockedContactIds();
     return _hydrateContactsByIds(ids);
   }
+}
+
+int? _parseDeltaContactId(String nativeId) {
+  const prefix = 'delta_contact_';
+  if (!nativeId.startsWith(prefix)) {
+    return null;
+  }
+  return int.tryParse(nativeId.substring(prefix.length));
 }
 
 String _stanzaId(int msgId, {required int accountId}) {

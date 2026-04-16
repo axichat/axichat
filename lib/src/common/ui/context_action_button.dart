@@ -11,12 +11,14 @@ class ContextActionButton extends StatelessWidget {
     required this.icon,
     required this.label,
     this.onPressed,
+    this.loading = false,
     this.destructive = false,
   });
 
   final Widget icon;
   final String label;
   final VoidCallback? onPressed;
+  final bool loading;
   final bool destructive;
 
   @override
@@ -31,10 +33,11 @@ class ContextActionButton extends StatelessWidget {
     double scaled(double value) => textScaler.scale(value);
     return Semantics(
       button: true,
-      enabled: onPressed != null,
+      enabled: onPressed != null && !loading,
       label: label,
       child: AxiButton.outline(
         onPressed: onPressed,
+        loading: loading,
         child: IconTheme.merge(
           data: IconThemeData(color: destructiveColor),
           child: DefaultTextStyle.merge(

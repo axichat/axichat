@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -48,6 +49,8 @@ void main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
+    registerFallbackValue(FakeStanzaDetails());
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
     resetForegroundNotifier(value: false);
   });
@@ -312,6 +315,11 @@ void main() {
       when(
         () => mockConnection.addToRoster(any(), title: any(named: 'title')),
       ).thenAnswer((_) async => true);
+      when(() => mockConnection.requestRoster()).thenAnswer(
+        (_) async => moxlib.Result(
+          mox.RosterRequestResult([RosterItem.fromJid(jid).toMox()], ''),
+        ),
+      );
     });
 
     test('Requests connection to add contact.', () async {
@@ -331,6 +339,172 @@ void main() {
       verify(
         () => mockConnection.addToRoster(jid, title: any(named: 'title')),
       ).called(1);
+    });
+
+    test('Refreshes roster after a successful add.', () async {
+      await connectSuccessfully(xmppService);
+      final rosterItem = RosterItem(
+        jid: jid,
+        title: 'Alice',
+        presence: Presence.unavailable,
+        subscription: Subscription.none,
+      );
+
+      when(
+        () => mockConnection.preApproveSubscription(any()),
+      ).thenAnswer((_) async => false);
+      when(
+        () => mockConnection.requestSubscription(any()),
+      ).thenAnswer((_) async => true);
+      when(() => mockConnection.requestRoster()).thenAnswer(
+        (_) async =>
+            moxlib.Result(mox.RosterRequestResult([rosterItem.toMox()], '')),
+      );
+
+      await xmppService.addToRoster(jid: '$jid/test-resource', title: 'Alice');
+
+      await pumpEventQueue();
+
+      final saved = await database.getRosterItem(jid);
+      expect(saved, isNotNull);
+      expect(saved!.jid, jid);
+      expect(saved.title, 'Alice');
+      expect(saved.subscription, Subscription.none);
+      expect(saved.ask, Ask.subscribe);
+      verify(() => mockConnection.requestRoster()).called(1);
+    });
+
+    test('Requests roster in the background after a successful add.', () async {
+      await connectSuccessfully(xmppService);
+      final rosterItem = RosterItem.fromJid(jid).copyWith(title: 'Alice');
+      final rosterRequest =
+          Completer<moxlib.Result<mox.RosterRequestResult, mox.RosterError>>();
+      var completed = false;
+      Object? failure;
+
+      when(
+        () => mockConnection.preApproveSubscription(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => mockConnection.requestRoster(),
+      ).thenAnswer((_) => rosterRequest.future);
+
+      final addFuture = xmppService.addToRoster(jid: jid, title: 'Alice');
+      addFuture.then(
+        (_) => completed = true,
+        onError: (Object error, StackTrace _) => failure = error,
+      );
+
+      await pumpEventQueue();
+
+      expect(failure, isNull);
+      expect(completed, isTrue);
+      expect(await database.getRosterItem(jid), isNull);
+      verify(() => mockConnection.requestRoster()).called(1);
+
+      rosterRequest.complete(
+        moxlib.Result(mox.RosterRequestResult([rosterItem.toMox()], '')),
+      );
+
+      await pumpEventQueue();
+
+      final saved = await database.getRosterItem(jid);
+      expect(saved, isNotNull);
+      expect(saved!.title, 'Alice');
+    });
+
+    test('Retries roster refresh until the added contact appears.', () async {
+      await connectSuccessfully(xmppService);
+      final rosterItem = RosterItem.fromJid(jid).copyWith(title: 'Alice');
+      var rosterRequests = 0;
+
+      when(
+        () => mockConnection.preApproveSubscription(any()),
+      ).thenAnswer((_) async => false);
+      when(
+        () => mockConnection.requestSubscription(any()),
+      ).thenAnswer((_) async => true);
+      when(() => mockConnection.requestRoster()).thenAnswer((_) async {
+        rosterRequests += 1;
+        if (rosterRequests == 1) {
+          return moxlib.Result(mox.RosterRequestResult(const [], ''));
+        }
+        return moxlib.Result(mox.RosterRequestResult([rosterItem.toMox()], ''));
+      });
+
+      await runZoned(
+        () => xmppService.addToRoster(jid: jid, title: 'Alice'),
+        zoneValues: <String, Object>{
+          'roster_refresh_retry_delays': <Duration>[
+            Duration.zero,
+            const Duration(milliseconds: 1),
+            const Duration(milliseconds: 1),
+            const Duration(milliseconds: 1),
+          ],
+        },
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(rosterRequests, 2);
+
+      final saved = await database.getRosterItem(jid);
+      expect(saved, isNotNull);
+      expect(saved!.title, 'Alice');
+      expect(saved.ask, Ask.subscribe);
+    });
+
+    test(
+      'Does not throw when roster refresh does not include the added contact.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.preApproveSubscription(any()),
+        ).thenAnswer((_) async => true);
+        when(() => mockConnection.requestRoster()).thenAnswer(
+          (_) async => moxlib.Result(mox.RosterRequestResult(const [], '')),
+        );
+
+        await runZoned(
+          () => xmppService.addToRoster(jid: jid),
+          zoneValues: <String, Object>{
+            'roster_refresh_retry_delays': <Duration>[
+              Duration.zero,
+              const Duration(milliseconds: 1),
+              const Duration(milliseconds: 1),
+              const Duration(milliseconds: 1),
+            ],
+          },
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(await database.getRosterItem(jid), isNull);
+        verify(() => mockConnection.requestRoster()).called(4);
+      },
+    );
+
+    test('Does not create a direct chat when adding a room JID.', () async {
+      await connectSuccessfully(xmppService);
+      final roomJid = 'room@conference.custom.example';
+      final roomItem = RosterItem.fromJid(roomJid);
+
+      when(
+        () => mockConnection.preApproveSubscription(any()),
+      ).thenAnswer((_) async => true);
+      when(() => mockConnection.requestRoster()).thenAnswer(
+        (_) async =>
+            moxlib.Result(mox.RosterRequestResult([roomItem.toMox()], '')),
+      );
+
+      await xmppService.addToRoster(jid: roomJid, title: 'Room');
+
+      await pumpEventQueue();
+
+      final saved = await database.getRosterItem(roomJid);
+      expect(saved, isNotNull);
+      expect(await database.getChat(roomJid), isNull);
     });
 
     test(

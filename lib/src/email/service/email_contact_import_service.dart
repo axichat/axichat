@@ -766,7 +766,7 @@ class EmailContactImportService {
       final batch = toImport.sublist(index, end);
       for (final contact in batch) {
         try {
-          await _emailService.ensureChatForAddress(
+          await _emailService.createContactAddress(
             address: contact.address,
             displayName: contact.displayName,
           );
@@ -780,7 +780,13 @@ class EmailContactImportService {
     }
 
     if (imported > _startIndex) {
-      await _emailService.syncContactsFromCore();
+      try {
+        await _emailService.syncContactsFromCore();
+      } on EmailServiceException {
+        throw const EmailContactImportFailedException();
+      } on Exception {
+        throw const EmailContactImportFailedException();
+      }
     }
 
     if (imported == _startIndex && failed > _startIndex) {
