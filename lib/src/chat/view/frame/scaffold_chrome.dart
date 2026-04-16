@@ -792,10 +792,9 @@ class _ChatScaffoldAppBar extends StatelessWidget
             builder: (context, searchActive) {
               final l10n = context.l10n;
               final colors = context.colorScheme;
-              final importantCount = context
-                  .select<ImportantMessagesCubit, int>(
-                    (cubit) => cubit.state.items?.length ?? 0,
-                  );
+              final importantCount = context.select<FoldersCubit, int>(
+                (cubit) => cubit.state.items?.length ?? 0,
+              );
               final importantIconColor = owner._chatRoute.isImportant
                   ? colors.primary
                   : colors.foreground;

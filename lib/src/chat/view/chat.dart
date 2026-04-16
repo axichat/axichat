@@ -91,7 +91,7 @@ import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
-import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
+import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -3102,23 +3102,22 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Future<void> _handleAddContact() async {
+  Future<bool> _handleAddContact() async {
     final chat = context.read<ChatBloc>().state.chat;
-    if (chat == null) return;
+    if (chat == null) return false;
     if (chat.remoteJid.trim().isEmpty) {
-      return;
+      return false;
     }
     final l10n = context.l10n;
-    final successLabel = chat.displayName.trim().isNotEmpty
-        ? chat.displayName.trim()
-        : chat.remoteJid.trim();
+    final acceptedCompleter = Completer<bool>();
     context.read<ChatBloc>().add(
       ChatContactAddRequested(
         chat: chat,
-        successMessage: l10n.rosterAddedToContacts(successLabel),
         failureMessage: l10n.attachmentGalleryRosterErrorTitle,
+        acceptedCompleter: acceptedCompleter,
       ),
     );
+    return acceptedCompleter.future;
   }
 
   void _handleSubjectChanged(String text) {

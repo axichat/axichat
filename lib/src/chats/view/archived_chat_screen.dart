@@ -16,7 +16,7 @@ import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
+import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -147,10 +147,8 @@ class ArchivedChatScreen extends StatelessWidget {
               ),
             ),
             BlocProvider(
-              create: (_) => ImportantMessagesCubit(
-                xmppService: xmppService,
-                chatJid: jid,
-              ),
+              create: (_) =>
+                  FoldersCubit(xmppService: xmppService, chatJid: jid),
             ),
           ],
           child: const _ArchivedChatBody(),

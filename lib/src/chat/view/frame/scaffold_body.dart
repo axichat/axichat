@@ -72,7 +72,7 @@ class _ChatTopPanelTransition extends StatelessWidget {
   }
 }
 
-class _UnknownSenderBanner extends StatelessWidget {
+class _UnknownSenderBanner extends StatefulWidget {
   const _UnknownSenderBanner({
     required this.readOnly,
     required this.isSelfChat,
@@ -82,12 +82,38 @@ class _UnknownSenderBanner extends StatelessWidget {
 
   final bool readOnly;
   final bool isSelfChat;
-  final Future<void> Function()? onAddContact;
+  final Future<bool> Function()? onAddContact;
   final Future<void> Function()? onReportSpam;
 
   @override
+  State<_UnknownSenderBanner> createState() => _UnknownSenderBannerState();
+}
+
+class _UnknownSenderBannerState extends State<_UnknownSenderBanner> {
+  var _requestingContact = false;
+  var _addingContact = false;
+
+  Future<void> _handleAddContact() async {
+    final onAddContact = widget.onAddContact;
+    if (onAddContact == null || _requestingContact || _addingContact) {
+      return;
+    }
+    setState(() {
+      _requestingContact = true;
+    });
+    final accepted = await onAddContact();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _requestingContact = false;
+      _addingContact = accepted;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (readOnly || isSelfChat) {
+    if (widget.readOnly || widget.isSelfChat) {
       return const SizedBox.shrink();
     }
     return BlocBuilder<ChatBloc, ChatState>(
@@ -125,20 +151,21 @@ class _UnknownSenderBanner extends StatelessWidget {
             final spacing = context.spacing;
             final iconSize = spacing.m;
             final actions = <Widget>[
-              if (onAddContact != null)
+              if (widget.onAddContact != null)
                 ContextActionButton(
                   icon: Icon(LucideIcons.userPlus, size: iconSize),
                   label: l10n.rosterAddTitle,
-                  onPressed: () async {
-                    await onAddContact!();
-                  },
+                  loading: _requestingContact || _addingContact,
+                  onPressed: _requestingContact || _addingContact
+                      ? null
+                      : _handleAddContact,
                 ),
-              if (onReportSpam != null)
+              if (widget.onReportSpam != null)
                 ContextActionButton(
                   icon: Icon(LucideIcons.shieldAlert, size: iconSize),
                   label: l10n.chatReportSpam,
                   onPressed: () async {
-                    await onReportSpam!();
+                    await widget.onReportSpam!();
                   },
                   destructive: true,
                 ),
@@ -357,7 +384,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                     final messageById = owner._cachedMessageById;
                     const emptyAttachments = <String>[];
                     final importantMessageIds = context
-                        .select<ImportantMessagesCubit, Set<String>>((cubit) {
+                        .select<FoldersCubit, Set<String>>((cubit) {
                           final items = cubit.state.items;
                           if (items == null) {
                             return const <String>{};

@@ -446,17 +446,18 @@ class _PinnedMessageTile extends StatelessWidget {
     final settings = context.watch<SettingsCubit>().state;
     final sourceMessage = item.message;
     final previewTimelineItem = previewTimelineItemForItem(item);
-    final importantMessageIds = context
-        .select<ImportantMessagesCubit, Set<String>>((cubit) {
-          final items = cubit.state.items;
-          if (items == null) {
-            return const <String>{};
-          }
-          return items
-              .map((entry) => entry.messageReferenceId.trim())
-              .where((value) => value.isNotEmpty)
-              .toSet();
-        });
+    final importantMessageIds = context.select<FoldersCubit, Set<String>>((
+      cubit,
+    ) {
+      final items = cubit.state.items;
+      if (items == null) {
+        return const <String>{};
+      }
+      return items
+          .map((entry) => entry.messageReferenceId.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet();
+    });
     final effectiveMessage = previewTimelineItem?.messageModel ?? sourceMessage;
     final previewItemId =
         previewTimelineItem?.id ??
