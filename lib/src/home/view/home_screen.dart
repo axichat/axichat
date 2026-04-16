@@ -170,6 +170,20 @@ _HomeResolvedBadgeCounts _homeResolvedBadgeCounts({
   );
 }
 
+DateTime? _maxHomeBadgeTimestamp(DateTime? current, DateTime? next) {
+  final normalizedCurrent = current?.toUtc();
+  final normalizedNext = next?.toUtc();
+  if (normalizedCurrent == null) {
+    return normalizedNext;
+  }
+  if (normalizedNext == null) {
+    return normalizedCurrent;
+  }
+  return normalizedNext.isAfter(normalizedCurrent)
+      ? normalizedNext
+      : normalizedCurrent;
+}
+
 @visibleForTesting
 ({Set<T> trackedIds, Set<T> pendingIds, int count})
 seedIncrementalBadgeStateForTesting<T>({
@@ -268,39 +282,75 @@ class HomeBadgeSurfaceHarnessController extends ChangeNotifier {
   HomeBadgeSurfaceHarnessController({
     this.chatsUnreadCount = 0,
     Set<String>? contactIds,
-    Set<int>? draftIds,
-    Set<String>? importantIds,
-    Set<String>? spamIds,
+    Map<int, DateTime>? draftItems,
+    Map<String, DateTime>? importantItems,
+    Map<String, DateTime>? spamItems,
+    Map<HomeBadgeBucket, DateTime>? badgeSeenMarkers,
+    this.badgeSeenMarkersLoaded = true,
     this.activeTab = HomeTab.chats,
     FolderHomeSection? foldersSection,
     this.selectedBottomIndex = 0,
   }) : _contactIds = Set<String>.from(contactIds ?? const <String>{}),
-       _draftIds = Set<int>.from(draftIds ?? const <int>{}),
-       _importantIds = Set<String>.from(importantIds ?? const <String>{}),
-       _spamIds = Set<String>.from(spamIds ?? const <String>{}),
+       _draftItems = Map<int, DateTime>.from(
+         draftItems ?? const <int, DateTime>{},
+       ),
+       _importantItems = Map<String, DateTime>.from(
+         importantItems ?? const <String, DateTime>{},
+       ),
+       _spamItems = Map<String, DateTime>.from(
+         spamItems ?? const <String, DateTime>{},
+       ),
+       _badgeSeenMarkers = Map<HomeBadgeBucket, DateTime>.from(
+         badgeSeenMarkers ?? const <HomeBadgeBucket, DateTime>{},
+       ),
        _foldersSection = foldersSection;
 
   int chatsUnreadCount;
   Set<String> _contactIds;
-  Set<int> _draftIds;
-  Set<String> _importantIds;
-  Set<String> _spamIds;
+  Map<int, DateTime> _draftItems;
+  Map<String, DateTime> _importantItems;
+  Map<String, DateTime> _spamItems;
+  Map<HomeBadgeBucket, DateTime> _badgeSeenMarkers;
+  bool badgeSeenMarkersLoaded;
   HomeTab activeTab;
   FolderHomeSection? _foldersSection;
   int selectedBottomIndex;
 
   Set<String> get contactIds => Set<String>.unmodifiable(_contactIds);
-  Set<int> get draftIds => Set<int>.unmodifiable(_draftIds);
-  Set<String> get importantIds => Set<String>.unmodifiable(_importantIds);
-  Set<String> get spamIds => Set<String>.unmodifiable(_spamIds);
+  Map<int, DateTime> get draftItems =>
+      Map<int, DateTime>.unmodifiable(_draftItems);
+  Map<String, DateTime> get importantItems =>
+      Map<String, DateTime>.unmodifiable(_importantItems);
+  Map<String, DateTime> get spamItems =>
+      Map<String, DateTime>.unmodifiable(_spamItems);
+  Map<HomeBadgeBucket, DateTime> get badgeSeenMarkers =>
+      Map<HomeBadgeBucket, DateTime>.unmodifiable(_badgeSeenMarkers);
   FolderHomeSection? get foldersSection => _foldersSection;
+
+  Future<void> advanceHomeBadgeSeenMarker({
+    required HomeBadgeBucket bucket,
+    required DateTime seenAt,
+  }) async {
+    final normalizedSeenAt = seenAt.toUtc();
+    final current = _badgeSeenMarkers[bucket];
+    if (current != null && !normalizedSeenAt.isAfter(current.toUtc())) {
+      return;
+    }
+    await Future<void>.value();
+    _badgeSeenMarkers = <HomeBadgeBucket, DateTime>{
+      ..._badgeSeenMarkers,
+      bucket: normalizedSeenAt,
+    };
+    notifyListeners();
+  }
 
   void update({
     int? chatsUnreadCount,
     Set<String>? contactIds,
-    Set<int>? draftIds,
-    Set<String>? importantIds,
-    Set<String>? spamIds,
+    Map<int, DateTime>? draftItems,
+    Map<String, DateTime>? importantItems,
+    Map<String, DateTime>? spamItems,
+    bool? badgeSeenMarkersLoaded,
     HomeTab? activeTab,
     FolderHomeSection? foldersSection,
     bool updateFoldersSection = false,
@@ -310,11 +360,17 @@ class HomeBadgeSurfaceHarnessController extends ChangeNotifier {
     _contactIds = contactIds == null
         ? _contactIds
         : Set<String>.from(contactIds);
-    _draftIds = draftIds == null ? _draftIds : Set<int>.from(draftIds);
-    _importantIds = importantIds == null
-        ? _importantIds
-        : Set<String>.from(importantIds);
-    _spamIds = spamIds == null ? _spamIds : Set<String>.from(spamIds);
+    _draftItems = draftItems == null
+        ? _draftItems
+        : Map<int, DateTime>.from(draftItems);
+    _importantItems = importantItems == null
+        ? _importantItems
+        : Map<String, DateTime>.from(importantItems);
+    _spamItems = spamItems == null
+        ? _spamItems
+        : Map<String, DateTime>.from(spamItems);
+    this.badgeSeenMarkersLoaded =
+        badgeSeenMarkersLoaded ?? this.badgeSeenMarkersLoaded;
     this.activeTab = activeTab ?? this.activeTab;
     if (updateFoldersSection) {
       _foldersSection = foldersSection;
@@ -419,8 +475,10 @@ class _HomeBadgeSurfaceHarnessState extends State<HomeBadgeSurfaceHarness> {
         m.Chat.fromJid(
           'chat@example.com',
         ).copyWith(unreadCount: widget.controller.chatsUnreadCount),
-      for (final jid in widget.controller.spamIds)
-        m.Chat.fromJid(jid).copyWith(spam: true),
+      for (final entry in widget.controller.spamItems.entries)
+        m.Chat.fromJid(
+          entry.key,
+        ).copyWith(spam: true, spamUpdatedAt: entry.value.toUtc()),
     ];
   }
 
@@ -438,13 +496,13 @@ class _HomeBadgeSurfaceHarnessState extends State<HomeBadgeSurfaceHarness> {
   }
 
   List<m.Draft> _draftItems() {
-    return widget.controller.draftIds
+    return widget.controller.draftItems.entries
         .map(
-          (id) => m.Draft(
-            id: id,
+          (entry) => m.Draft(
+            id: entry.key,
             jids: const <String>[],
-            draftSyncId: 'draft-$id',
-            draftUpdatedAt: DateTime.utc(2026, 1, 1),
+            draftSyncId: 'draft-${entry.key}',
+            draftUpdatedAt: entry.value.toUtc(),
             draftSourceId: 'test',
           ),
         )
@@ -452,9 +510,9 @@ class _HomeBadgeSurfaceHarnessState extends State<HomeBadgeSurfaceHarness> {
   }
 
   List<m.FolderMessageItem> _importantItems() {
-    return widget.controller.importantIds
-        .map((id) {
-          final parts = id.split('\n');
+    return widget.controller.importantItems.entries
+        .map((entry) {
+          final parts = entry.key.split('\n');
           final chatJid = parts.isEmpty ? 'chat@example.com' : parts.first;
           final messageReferenceId = parts.length > 1
               ? parts[1]
@@ -463,7 +521,7 @@ class _HomeBadgeSurfaceHarnessState extends State<HomeBadgeSurfaceHarness> {
             collectionId: m.SystemMessageCollection.important.id,
             chatJid: chatJid,
             messageReferenceId: messageReferenceId,
-            addedAt: DateTime.utc(2026, 1, 1),
+            addedAt: entry.value.toUtc(),
             active: true,
             message: null,
             chat: m.Chat.fromJid(chatJid),
@@ -488,6 +546,10 @@ class _HomeBadgeSurfaceHarnessState extends State<HomeBadgeSurfaceHarness> {
       contactsItems: _contactItems(),
       draftItems: _draftItems(),
       importantItems: _importantItems(),
+      badgeSeenMarkers: widget.controller.badgeSeenMarkers,
+      badgeSeenMarkersLoaded: widget.controller.badgeSeenMarkersLoaded,
+      onAdvanceHomeBadgeSeenMarker: (bucket, seenAt) => widget.controller
+          .advanceHomeBadgeSeenMarker(bucket: bucket, seenAt: seenAt),
       selectedBottomIndex: _selectedBottomIndex,
       foldersSection: _foldersSection,
       builder: (context, badgeCounts) => _HomeShellScope(
@@ -1317,6 +1379,13 @@ class _HomeShellState extends State<HomeShell> {
         .select<FoldersCubit, List<m.FolderMessageItem>>(
           (cubit) => cubit.state.items ?? const <m.FolderMessageItem>[],
         );
+    final badgeSeenMarkers = context
+        .select<HomeBloc, Map<HomeBadgeBucket, DateTime>>(
+          (bloc) => bloc.state.badgeSeenMarkers,
+        );
+    final badgeSeenMarkersLoaded = context.select<HomeBloc, bool>(
+      (bloc) => bloc.state.badgeSeenMarkersLoaded,
+    );
     final isChatOpen = chatsState.openJid != null;
     final isChatCalendarRoute = chatsState.openChatRoute.isCalendar;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
@@ -1359,9 +1428,9 @@ class _HomeShellState extends State<HomeShell> {
     Widget buildShellChild(
       Widget Function(BuildContext, _HomeResolvedBadgeCounts) builder,
     ) {
+      final locate = context.read;
       return BlocProvider(
         create: (context) {
-          final locate = context.read;
           return AccessibilityActionBloc(
             chatsService: locate<XmppService>(),
             messageService: locate<XmppService>(),
@@ -1375,6 +1444,10 @@ class _HomeShellState extends State<HomeShell> {
           contactsItems: contactsItems,
           draftItems: draftItems,
           importantItems: importantItems,
+          badgeSeenMarkers: badgeSeenMarkers,
+          badgeSeenMarkersLoaded: badgeSeenMarkersLoaded,
+          onAdvanceHomeBadgeSeenMarker: (bucket, seenAt) => locate<HomeBloc>()
+              .advanceHomeBadgeSeenMarker(bucket: bucket, seenAt: seenAt),
           selectedBottomIndex: _selectedBottomIndex,
           foldersSection: _foldersSection,
           builder: (context, badgeCounts) => _HomeShellScope(
@@ -2103,6 +2176,9 @@ class _HomeBadgeCoordinator extends StatefulWidget {
     required this.contactsItems,
     required this.draftItems,
     required this.importantItems,
+    required this.badgeSeenMarkers,
+    required this.badgeSeenMarkersLoaded,
+    required this.onAdvanceHomeBadgeSeenMarker,
     required this.selectedBottomIndex,
     required this.foldersSection,
     required this.builder,
@@ -2114,6 +2190,10 @@ class _HomeBadgeCoordinator extends StatefulWidget {
   final List<m.ContactDirectoryEntry> contactsItems;
   final List<m.Draft> draftItems;
   final List<m.FolderMessageItem> importantItems;
+  final Map<HomeBadgeBucket, DateTime> badgeSeenMarkers;
+  final bool badgeSeenMarkersLoaded;
+  final Future<void> Function(HomeBadgeBucket bucket, DateTime seenAt)
+  onAdvanceHomeBadgeSeenMarker;
   final ValueListenable<int>? selectedBottomIndex;
   final ValueListenable<FolderHomeSection?>? foldersSection;
   final Widget Function(BuildContext, _HomeResolvedBadgeCounts) builder;
@@ -2128,12 +2208,6 @@ class _HomeBadgeCoordinatorState extends State<_HomeBadgeCoordinator> {
   _HomeResolvedBadgeCounts _badgeCounts = const _HomeResolvedBadgeCounts();
   Set<String> _trackedContactIds = const <String>{};
   Set<String> _pendingContactIds = const <String>{};
-  Set<int> _trackedDraftIds = const <int>{};
-  Set<int> _pendingDraftIds = const <int>{};
-  Set<String> _trackedImportantIds = const <String>{};
-  Set<String> _pendingImportantIds = const <String>{};
-  Set<String> _trackedSpamIds = const <String>{};
-  Set<String> _pendingSpamIds = const <String>{};
 
   @override
   void initState() {
@@ -2206,31 +2280,143 @@ class _HomeBadgeCoordinatorState extends State<_HomeBadgeCoordinator> {
         .toSet();
   }
 
-  Set<int> _draftIds() {
-    return widget.draftItems.map((item) => item.id).toSet();
-  }
-
-  Set<String> _importantIds() {
-    return widget.importantItems
-        .map(
-          (item) => '${item.chatJid.trim()}\n${item.messageReferenceId.trim()}',
-        )
-        .where((value) => value.trim().isNotEmpty)
-        .toSet();
-  }
-
-  Set<String> _spamIds() {
-    return widget.chatItems
-        .where((chat) => chat.spam && !chat.archived)
-        .map((chat) => chat.jid.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-  }
-
   int _chatsUnreadCount() {
     return widget.chatItems
         .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
         .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
+  }
+
+  DateTime? _latestDraftTimestamp() {
+    DateTime? latest;
+    for (final draft in widget.draftItems) {
+      latest = _maxHomeBadgeTimestamp(latest, draft.draftUpdatedAt);
+    }
+    return latest;
+  }
+
+  DateTime? _latestImportantTimestamp() {
+    DateTime? latest;
+    for (final item in widget.importantItems) {
+      if (!item.active) {
+        continue;
+      }
+      latest = _maxHomeBadgeTimestamp(latest, item.addedAt);
+    }
+    return latest;
+  }
+
+  DateTime _spamTimestamp(m.Chat chat) {
+    return (chat.spamUpdatedAt ?? chat.lastChangeTimestamp).toUtc();
+  }
+
+  DateTime? _latestSpamTimestamp() {
+    DateTime? latest;
+    for (final chat in widget.chatItems) {
+      if (!chat.spam || chat.archived) {
+        continue;
+      }
+      latest = _maxHomeBadgeTimestamp(latest, _spamTimestamp(chat));
+    }
+    return latest;
+  }
+
+  int _draftUnseenCount() {
+    if (!widget.badgeSeenMarkersLoaded) {
+      return 0;
+    }
+    final marker = widget.badgeSeenMarkers[HomeBadgeBucket.drafts]?.toUtc();
+    var count = 0;
+    for (final draft in widget.draftItems) {
+      final updatedAt = draft.draftUpdatedAt.toUtc();
+      if (marker == null || updatedAt.isAfter(marker)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  int _importantUnseenCount() {
+    if (!widget.badgeSeenMarkersLoaded) {
+      return 0;
+    }
+    final marker = widget.badgeSeenMarkers[HomeBadgeBucket.important]?.toUtc();
+    var count = 0;
+    for (final item in widget.importantItems) {
+      if (!item.active) {
+        continue;
+      }
+      final addedAt = item.addedAt.toUtc();
+      if (marker == null || addedAt.isAfter(marker)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  int _spamUnseenCount() {
+    if (!widget.badgeSeenMarkersLoaded) {
+      return 0;
+    }
+    final marker = widget.badgeSeenMarkers[HomeBadgeBucket.spam]?.toUtc();
+    var count = 0;
+    for (final chat in widget.chatItems) {
+      if (!chat.spam || chat.archived) {
+        continue;
+      }
+      final updatedAt = _spamTimestamp(chat);
+      if (marker == null || updatedAt.isAfter(marker)) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  void _syncSeenMarkers(_HomeBadgeSection? visibleSection) {
+    if (visibleSection == _HomeBadgeSection.drafts) {
+      final latest = _latestDraftTimestamp();
+      if (latest != null) {
+        unawaited(
+          widget.onAdvanceHomeBadgeSeenMarker(HomeBadgeBucket.drafts, latest),
+        );
+      }
+    }
+    if (visibleSection == _HomeBadgeSection.important) {
+      final latest = _latestImportantTimestamp();
+      if (latest != null) {
+        unawaited(
+          widget.onAdvanceHomeBadgeSeenMarker(
+            HomeBadgeBucket.important,
+            latest,
+          ),
+        );
+      }
+    }
+    if (visibleSection == _HomeBadgeSection.spam) {
+      final latest = _latestSpamTimestamp();
+      if (latest != null) {
+        unawaited(
+          widget.onAdvanceHomeBadgeSeenMarker(HomeBadgeBucket.spam, latest),
+        );
+      }
+    }
+  }
+
+  _HomeResolvedBadgeCounts _resolveBadgeCounts(
+    _HomeBadgeSection? visibleSection,
+  ) {
+    return _homeResolvedBadgeCounts(
+      chatsUnreadCount: _chatsUnreadCount(),
+      contactsCount: _pendingContactIds.length,
+      draftCount: visibleSection == _HomeBadgeSection.drafts
+          ? 0
+          : _draftUnseenCount(),
+      importantCount: visibleSection == _HomeBadgeSection.important
+          ? 0
+          : _importantUnseenCount(),
+      spamCount: visibleSection == _HomeBadgeSection.spam
+          ? 0
+          : _spamUnseenCount(),
+    );
   }
 
   void _seedBadgeCounts() {
@@ -2239,33 +2425,10 @@ class _HomeBadgeCoordinatorState extends State<_HomeBadgeCoordinator> {
       currentIds: _contactIds(),
       visible: visibleSection == _HomeBadgeSection.contacts,
     );
-    final draftsSeed = seedIncrementalBadgeStateForTesting<int>(
-      currentIds: _draftIds(),
-      visible: visibleSection == _HomeBadgeSection.drafts,
-    );
-    final importantSeed = seedIncrementalBadgeStateForTesting<String>(
-      currentIds: _importantIds(),
-      visible: visibleSection == _HomeBadgeSection.important,
-    );
-    final spamSeed = seedIncrementalBadgeStateForTesting<String>(
-      currentIds: _spamIds(),
-      visible: visibleSection == _HomeBadgeSection.spam,
-    );
     _trackedContactIds = contactsSeed.trackedIds;
     _pendingContactIds = contactsSeed.pendingIds;
-    _trackedDraftIds = draftsSeed.trackedIds;
-    _pendingDraftIds = draftsSeed.pendingIds;
-    _trackedImportantIds = importantSeed.trackedIds;
-    _pendingImportantIds = importantSeed.pendingIds;
-    _trackedSpamIds = spamSeed.trackedIds;
-    _pendingSpamIds = spamSeed.pendingIds;
-    _badgeCounts = _homeResolvedBadgeCounts(
-      chatsUnreadCount: _chatsUnreadCount(),
-      contactsCount: contactsSeed.count,
-      draftCount: draftsSeed.count,
-      importantCount: importantSeed.count,
-      spamCount: spamSeed.count,
-    );
+    _syncSeenMarkers(visibleSection);
+    _badgeCounts = _resolveBadgeCounts(visibleSection);
   }
 
   void _handleVisibilityChange() {
@@ -2277,10 +2440,8 @@ class _HomeBadgeCoordinatorState extends State<_HomeBadgeCoordinator> {
 
   void _syncBadgeCounts() {
     final visibleSection = _visibleSection;
+    _syncSeenMarkers(visibleSection);
     final nextContactIds = _contactIds();
-    final nextDraftIds = _draftIds();
-    final nextImportantIds = _importantIds();
-    final nextSpamIds = _spamIds();
 
     if (!setEquals(_trackedContactIds, nextContactIds)) {
       final next = advanceIncrementalBadgeStateForTesting<String>(
@@ -2292,57 +2453,12 @@ class _HomeBadgeCoordinatorState extends State<_HomeBadgeCoordinator> {
       _trackedContactIds = next.trackedIds;
       _pendingContactIds = next.pendingIds;
     }
-    if (!setEquals(_trackedDraftIds, nextDraftIds)) {
-      final next = advanceIncrementalBadgeStateForTesting<int>(
-        previousIds: _trackedDraftIds,
-        pendingIds: _pendingDraftIds,
-        currentIds: nextDraftIds,
-        visible: visibleSection == _HomeBadgeSection.drafts,
-      );
-      _trackedDraftIds = next.trackedIds;
-      _pendingDraftIds = next.pendingIds;
-    }
-    if (!setEquals(_trackedImportantIds, nextImportantIds)) {
-      final next = advanceIncrementalBadgeStateForTesting<String>(
-        previousIds: _trackedImportantIds,
-        pendingIds: _pendingImportantIds,
-        currentIds: nextImportantIds,
-        visible: visibleSection == _HomeBadgeSection.important,
-      );
-      _trackedImportantIds = next.trackedIds;
-      _pendingImportantIds = next.pendingIds;
-    }
-    if (!setEquals(_trackedSpamIds, nextSpamIds)) {
-      final next = advanceIncrementalBadgeStateForTesting<String>(
-        previousIds: _trackedSpamIds,
-        pendingIds: _pendingSpamIds,
-        currentIds: nextSpamIds,
-        visible: visibleSection == _HomeBadgeSection.spam,
-      );
-      _trackedSpamIds = next.trackedIds;
-      _pendingSpamIds = next.pendingIds;
+
+    if (visibleSection == _HomeBadgeSection.contacts) {
+      _pendingContactIds = const <String>{};
     }
 
-    switch (visibleSection) {
-      case _HomeBadgeSection.contacts:
-        _pendingContactIds = const <String>{};
-      case _HomeBadgeSection.drafts:
-        _pendingDraftIds = const <int>{};
-      case _HomeBadgeSection.important:
-        _pendingImportantIds = const <String>{};
-      case _HomeBadgeSection.spam:
-        _pendingSpamIds = const <String>{};
-      case null:
-        break;
-    }
-
-    final nextBadgeCounts = _homeResolvedBadgeCounts(
-      chatsUnreadCount: _chatsUnreadCount(),
-      contactsCount: _pendingContactIds.length,
-      draftCount: _pendingDraftIds.length,
-      importantCount: _pendingImportantIds.length,
-      spamCount: _pendingSpamIds.length,
-    );
+    final nextBadgeCounts = _resolveBadgeCounts(visibleSection);
     if (_badgeCounts == nextBadgeCounts) {
       return;
     }

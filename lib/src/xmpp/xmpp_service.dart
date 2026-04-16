@@ -67,6 +67,7 @@ import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_support.dart';
+import 'package:axichat/src/xmpp/pubsub/home_badge_markers_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -93,11 +94,16 @@ import 'package:xml/xml_events.dart';
 
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 
+export 'package:axichat/src/xmpp/pubsub/home_badge_markers_pubsub_manager.dart'
+    show HomeBadgeBucket;
+
 part 'stream/base_stream_service.dart';
 
 part 'blocking/blocking_service.dart';
 
 part 'pubsub/pubsub_service.dart';
+
+part 'home/home_badge_marker_sync_service.dart';
 
 part 'settings/settings_sync_service.dart';
 
@@ -489,6 +495,15 @@ abstract interface class XmppBase {
     required bool archivesEnabled,
   });
 
+  Map<HomeBadgeBucket, DateTime> get homeBadgeSeenMarkers;
+
+  Stream<Map<HomeBadgeBucket, DateTime>> get homeBadgeSeenMarkersStream;
+
+  Future<void> markHomeBadgeBucketSeen({
+    required HomeBadgeBucket bucket,
+    required DateTime seenAt,
+  });
+
   Stream<Map<String, dynamic>> get settingsSyncUpdateStream;
 
   Future<void> seedSettingsSyncSnapshot(Map<String, dynamic> settings);
@@ -698,6 +713,7 @@ class XmppService extends XmppBase
         BaseStreamService,
         AvatarService,
         PubSubService,
+        HomeBadgeMarkerSyncService,
         SettingsSyncService,
         BlockingService,
         MessageService,

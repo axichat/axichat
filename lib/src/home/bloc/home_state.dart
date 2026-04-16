@@ -88,6 +88,8 @@ class HomeState extends Equatable {
     required this.activeTab,
     required this.searchStates,
     required this.refreshStatus,
+    required this.badgeSeenMarkers,
+    required this.badgeSeenMarkersLoaded,
     this.lastSyncedAt,
   });
 
@@ -117,6 +119,8 @@ class HomeState extends Equatable {
         searchStates,
       ),
       refreshStatus: RequestStatus.none,
+      badgeSeenMarkers: const <HomeBadgeBucket, DateTime>{},
+      badgeSeenMarkersLoaded: false,
     );
   }
 
@@ -126,6 +130,8 @@ class HomeState extends Equatable {
   final Map<HomeSearchSlot, TabSearchState> searchStates;
   final RequestStatus refreshStatus;
   final DateTime? lastSyncedAt;
+  final Map<HomeBadgeBucket, DateTime> badgeSeenMarkers;
+  final bool badgeSeenMarkersLoaded;
 
   TabSearchState? get currentTabState =>
       activeTab == null ? null : stateFor(activeTab!);
@@ -144,6 +150,8 @@ class HomeState extends Equatable {
     Map<HomeSearchSlot, TabSearchState>? searchStates,
     RequestStatus? refreshStatus,
     Object? lastSyncedAt = _homeStateUnset,
+    Map<HomeBadgeBucket, DateTime>? badgeSeenMarkers,
+    bool? badgeSeenMarkersLoaded,
   }) {
     return HomeState(
       tabs: tabs ?? this.tabs,
@@ -156,6 +164,9 @@ class HomeState extends Equatable {
       lastSyncedAt: lastSyncedAt == _homeStateUnset
           ? this.lastSyncedAt
           : lastSyncedAt as DateTime?,
+      badgeSeenMarkers: badgeSeenMarkers ?? this.badgeSeenMarkers,
+      badgeSeenMarkersLoaded:
+          badgeSeenMarkersLoaded ?? this.badgeSeenMarkersLoaded,
     );
   }
 
@@ -167,6 +178,8 @@ class HomeState extends Equatable {
     searchStates,
     refreshStatus,
     lastSyncedAt,
+    badgeSeenMarkers,
+    badgeSeenMarkersLoaded,
   ];
 }
 

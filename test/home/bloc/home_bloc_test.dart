@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -13,21 +14,52 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(const Duration(seconds: 1));
+    registerFallbackValue(HomeBadgeBucket.drafts);
+    registerFallbackValue(DateTime.utc(2026, 1, 1));
   });
 
   late MockXmppService xmppService;
   late MockEmailService emailService;
   late StreamController<EmailSyncState> emailSyncStateController;
   late StreamController<void> emailReadyTransitionController;
+  late StreamController<Map<HomeBadgeBucket, DateTime>>
+  homeBadgeSeenMarkersController;
+  late Map<HomeBadgeBucket, DateTime> homeBadgeSeenMarkers;
 
   setUp(() {
     xmppService = MockXmppService();
     emailService = MockEmailService();
     emailSyncStateController = StreamController<EmailSyncState>.broadcast();
     emailReadyTransitionController = StreamController<void>.broadcast();
+    homeBadgeSeenMarkersController =
+        StreamController<Map<HomeBadgeBucket, DateTime>>.broadcast();
+    homeBadgeSeenMarkers = <HomeBadgeBucket, DateTime>{};
 
     when(() => xmppService.hasConnectionSettings).thenReturn(true);
     when(() => xmppService.syncSessionState()).thenAnswer((_) async => true);
+    when(
+      () => xmppService.homeBadgeSeenMarkersStream,
+    ).thenAnswer((_) => homeBadgeSeenMarkersController.stream);
+    when(
+      () => xmppService.markHomeBadgeBucketSeen(
+        bucket: any(named: 'bucket'),
+        seenAt: any(named: 'seenAt'),
+      ),
+    ).thenAnswer((invocation) async {
+      final bucket = invocation.namedArguments[#bucket] as HomeBadgeBucket;
+      final seenAt = (invocation.namedArguments[#seenAt] as DateTime).toUtc();
+      final current = homeBadgeSeenMarkers[bucket];
+      if (current != null && !seenAt.isAfter(current)) {
+        return;
+      }
+      homeBadgeSeenMarkers = <HomeBadgeBucket, DateTime>{
+        ...homeBadgeSeenMarkers,
+        bucket: seenAt,
+      };
+      homeBadgeSeenMarkersController.add(
+        Map<HomeBadgeBucket, DateTime>.unmodifiable(homeBadgeSeenMarkers),
+      );
+    });
 
     when(
       () => emailService.syncState,
@@ -69,6 +101,7 @@ void main() {
   tearDown(() async {
     await emailSyncStateController.close();
     await emailReadyTransitionController.close();
+    await homeBadgeSeenMarkersController.close();
   });
 
   test(
@@ -343,4 +376,32 @@ void main() {
       verify(() => emailService.syncSessionState()).called(1);
     },
   );
+
+  test('home badge marker stream drives loaded state and writes', () async {
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      tabs: const [HomeTab.chats, HomeTab.drafts],
+    );
+    addTearDown(bloc.close);
+
+    await pumpEventQueue();
+    expect(bloc.state.badgeSeenMarkersLoaded, isFalse);
+
+    homeBadgeSeenMarkersController.add(const <HomeBadgeBucket, DateTime>{});
+    await pumpEventQueue();
+
+    expect(bloc.state.badgeSeenMarkersLoaded, isTrue);
+    expect(bloc.state.badgeSeenMarkers, isEmpty);
+
+    await bloc.advanceHomeBadgeSeenMarker(
+      bucket: HomeBadgeBucket.drafts,
+      seenAt: DateTime.utc(2026, 1, 2),
+    );
+    await pumpEventQueue();
+
+    expect(
+      bloc.state.badgeSeenMarkers[HomeBadgeBucket.drafts],
+      DateTime.utc(2026, 1, 2),
+    );
+  });
 }

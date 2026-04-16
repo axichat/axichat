@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/env.dart';
@@ -11,6 +13,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +24,30 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../mocks.dart';
 
-class _InMemoryHydratedStorage extends Mock implements Storage {}
+class _InMemoryHydratedStorage implements Storage {
+  final Map<String, dynamic> _values = <String, dynamic>{};
+
+  @override
+  dynamic read(String key) => _values[key];
+
+  @override
+  Future<void> write(String key, dynamic value) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    _values.remove(key);
+  }
+
+  @override
+  Future<void> clear() async {
+    _values.clear();
+  }
+
+  @override
+  Future<void> close() async {}
+}
 
 class _HomeBadgeHarnessApp extends StatelessWidget {
   const _HomeBadgeHarnessApp({
@@ -95,6 +121,14 @@ int? _badgeCount(WidgetTester tester, String key) {
   return tester.widgetList<AxiCountBadge>(finder).first.count;
 }
 
+Future<void> _pumpHomeBadgeSurface(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+}
+
+DateTime _timestamp(int day, {int hour = 0}) =>
+    DateTime.utc(2026, 1, day, hour);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -105,20 +139,24 @@ void main() {
   late HomeBloc homeBloc;
   late ProfileCubit profileCubit;
   late CalendarTaskOffGridDragController dragController;
+  late StreamController<Map<HomeBadgeBucket, DateTime>>
+  homeBadgeSeenMarkersController;
+  late Map<HomeBadgeBucket, DateTime> homeBadgeSeenMarkers;
 
   setUpAll(() {
     registerFallbackValue(FakeMessageEvent());
+    registerFallbackValue(HomeBadgeBucket.drafts);
+    registerFallbackValue(DateTime.utc(2026, 1, 1));
   });
 
   setUp(() {
     final storage = _InMemoryHydratedStorage();
-    when(() => storage.read(any())).thenReturn(null);
-    when(() => storage.write(any(), any<dynamic>())).thenAnswer((_) async {});
-    when(() => storage.delete(any())).thenAnswer((_) async {});
-    when(() => storage.clear()).thenAnswer((_) async {});
     HydratedBloc.storage = storage;
 
     xmppService = MockXmppService();
+    homeBadgeSeenMarkersController =
+        StreamController<Map<HomeBadgeBucket, DateTime>>.broadcast();
+    homeBadgeSeenMarkers = <HomeBadgeBucket, DateTime>{};
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
     when(
       () => xmppService.chatsStream(),
@@ -150,6 +188,46 @@ void main() {
       () => xmppService.storedConversationMessageCountStream(),
     ).thenAnswer((_) => const Stream<int>.empty());
     when(() => xmppService.getOwnAvatar()).thenAnswer((_) async => null);
+    when(
+      () => xmppService.settingsSyncUpdateStream,
+    ).thenAnswer((_) => const Stream<Map<String, dynamic>>.empty());
+    when(
+      () => xmppService.seedSettingsSyncSnapshot(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.updateSettingsSyncSnapshot(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.updateAttachmentAutoDownloadSettings(
+        imagesEnabled: any(named: 'imagesEnabled'),
+        videosEnabled: any(named: 'videosEnabled'),
+        documentsEnabled: any(named: 'documentsEnabled'),
+        archivesEnabled: any(named: 'archivesEnabled'),
+      ),
+    ).thenReturn(null);
+    when(
+      () => xmppService.homeBadgeSeenMarkersStream,
+    ).thenAnswer((_) => homeBadgeSeenMarkersController.stream);
+    when(
+      () => xmppService.markHomeBadgeBucketSeen(
+        bucket: any(named: 'bucket'),
+        seenAt: any(named: 'seenAt'),
+      ),
+    ).thenAnswer((invocation) async {
+      final bucket = invocation.namedArguments[#bucket] as HomeBadgeBucket;
+      final seenAt = (invocation.namedArguments[#seenAt] as DateTime).toUtc();
+      final current = homeBadgeSeenMarkers[bucket];
+      if (current != null && !seenAt.isAfter(current)) {
+        return;
+      }
+      homeBadgeSeenMarkers = <HomeBadgeBucket, DateTime>{
+        ...homeBadgeSeenMarkers,
+        bucket: seenAt,
+      };
+      homeBadgeSeenMarkersController.add(
+        Map<HomeBadgeBucket, DateTime>.unmodifiable(homeBadgeSeenMarkers),
+      );
+    });
 
     settingsCubit = SettingsCubit();
     chatsCubit = ChatsCubit(xmppService: xmppService);
@@ -174,6 +252,7 @@ void main() {
     await chatsCubit.close();
     await settingsCubit.close();
     dragController.dispose();
+    await homeBadgeSeenMarkersController.close();
   });
 
   test(
@@ -218,14 +297,15 @@ void main() {
   });
 
   testWidgets(
-    'folder, tab, and bottom bar badges update for add, remove, and view',
+    'missing markers keep existing non-chat items badged after marker load',
     (tester) async {
       final controller = HomeBadgeSurfaceHarnessController(
-        chatsUnreadCount: 7,
-        contactIds: {'alice@example.com', 'bob@example.com'},
-        draftIds: {1, 2, 3},
-        importantIds: {'chat-a@example.com\nm1', 'chat-b@example.com\nm2'},
-        spamIds: {'spam@example.com'},
+        draftItems: <int, DateTime>{1: _timestamp(1)},
+        importantItems: <String, DateTime>{
+          'chat-a@example.com\nm1': _timestamp(1),
+        },
+        spamItems: <String, DateTime>{'spam@example.com': _timestamp(1)},
+        badgeSeenMarkersLoaded: false,
         activeTab: HomeTab.chats,
       );
 
@@ -240,7 +320,57 @@ void main() {
           dragController: dragController,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
+
+      expect(_badgeCount(tester, 'home-tab-badge-drafts'), isNull);
+      expect(_badgeCount(tester, 'home-tab-badge-folders'), isNull);
+      expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), isNull);
+
+      controller.update(badgeSeenMarkersLoaded: true);
+      await _pumpHomeBadgeSurface(tester);
+
+      expect(_badgeCount(tester, 'home-tab-badge-drafts'), 1);
+      expect(_badgeCount(tester, 'home-tab-badge-folders'), 2);
+      expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 3);
+    },
+  );
+
+  testWidgets(
+    'folder, tab, and bottom bar badges update for add, remove, and view',
+    (tester) async {
+      final controller = HomeBadgeSurfaceHarnessController(
+        chatsUnreadCount: 7,
+        contactIds: {'alice@example.com', 'bob@example.com'},
+        draftItems: <int, DateTime>{
+          1: _timestamp(1),
+          2: _timestamp(2),
+          3: _timestamp(3),
+        },
+        importantItems: <String, DateTime>{
+          'chat-a@example.com\nm1': _timestamp(1),
+          'chat-b@example.com\nm2': _timestamp(2),
+        },
+        spamItems: <String, DateTime>{'spam@example.com': _timestamp(1)},
+        badgeSeenMarkers: <HomeBadgeBucket, DateTime>{
+          HomeBadgeBucket.drafts: _timestamp(0),
+          HomeBadgeBucket.important: _timestamp(0),
+          HomeBadgeBucket.spam: _timestamp(0),
+        },
+        activeTab: HomeTab.chats,
+      );
+
+      await tester.pumpWidget(
+        _HomeBadgeHarnessApp(
+          controller: controller,
+          chatsCubit: chatsCubit,
+          foldersCubit: foldersCubit,
+          homeBloc: homeBloc,
+          profileCubit: profileCubit,
+          settingsCubit: settingsCubit,
+          dragController: dragController,
+        ),
+      );
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-folders-badge-important'), 2);
       expect(_badgeCount(tester, 'home-folders-badge-spam'), 1);
@@ -250,13 +380,13 @@ void main() {
       expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 15);
 
       controller.update(contactIds: {'alice@example.com'});
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-tab-badge-contacts'), 1);
       expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 14);
 
       controller.update(activeTab: HomeTab.contacts);
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-tab-badge-contacts'), isNull);
       expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 13);
@@ -265,7 +395,7 @@ void main() {
         activeTab: HomeTab.contacts,
         contactIds: {'alice@example.com', 'carol@example.com'},
       );
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-tab-badge-contacts'), isNull);
       expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 13);
@@ -275,7 +405,7 @@ void main() {
         foldersSection: FolderHomeSection.important,
         updateFoldersSection: true,
       );
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-folders-badge-important'), isNull);
       expect(_badgeCount(tester, 'home-folders-badge-spam'), 1);
@@ -286,13 +416,13 @@ void main() {
         activeTab: HomeTab.folders,
         foldersSection: FolderHomeSection.important,
         updateFoldersSection: true,
-        importantIds: {
-          'chat-a@example.com\nm1',
-          'chat-b@example.com\nm2',
-          'chat-c@example.com\nm3',
+        importantItems: <String, DateTime>{
+          'chat-a@example.com\nm1': _timestamp(1),
+          'chat-b@example.com\nm2': _timestamp(2),
+          'chat-c@example.com\nm3': _timestamp(3),
         },
       );
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-folders-badge-important'), isNull);
       expect(_badgeCount(tester, 'home-tab-badge-folders'), 1);
@@ -302,15 +432,103 @@ void main() {
         activeTab: HomeTab.folders,
         foldersSection: null,
         updateFoldersSection: true,
-        spamIds: const <String>{},
+        spamItems: const <String, DateTime>{},
       );
-      await tester.pumpAndSettle();
+      await _pumpHomeBadgeSurface(tester);
 
       expect(_badgeCount(tester, 'home-folders-badge-spam'), isNull);
       expect(_badgeCount(tester, 'home-tab-badge-folders'), isNull);
       expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 10);
     },
   );
+
+  testWidgets('draft, important, and spam markers persist across restart', (
+    tester,
+  ) async {
+    final controller = HomeBadgeSurfaceHarnessController(
+      draftItems: <int, DateTime>{1: _timestamp(1)},
+      importantItems: <String, DateTime>{
+        'chat-a@example.com\nm1': _timestamp(1),
+      },
+      spamItems: <String, DateTime>{'spam@example.com': _timestamp(1)},
+      activeTab: HomeTab.drafts,
+    );
+
+    await tester.pumpWidget(
+      _HomeBadgeHarnessApp(
+        controller: controller,
+        chatsCubit: chatsCubit,
+        foldersCubit: foldersCubit,
+        homeBloc: homeBloc,
+        profileCubit: profileCubit,
+        settingsCubit: settingsCubit,
+        dragController: dragController,
+      ),
+    );
+    await _pumpHomeBadgeSurface(tester);
+
+    controller.update(
+      activeTab: HomeTab.drafts,
+      draftItems: <int, DateTime>{1: _timestamp(1), 2: _timestamp(2)},
+    );
+    await _pumpHomeBadgeSurface(tester);
+    expect(_badgeCount(tester, 'home-tab-badge-drafts'), isNull);
+
+    controller.update(
+      activeTab: HomeTab.folders,
+      foldersSection: FolderHomeSection.important,
+      updateFoldersSection: true,
+      importantItems: <String, DateTime>{
+        'chat-a@example.com\nm1': _timestamp(1),
+        'chat-b@example.com\nm2': _timestamp(2),
+      },
+    );
+    await _pumpHomeBadgeSurface(tester);
+    expect(_badgeCount(tester, 'home-folders-badge-important'), isNull);
+
+    controller.update(
+      activeTab: HomeTab.folders,
+      foldersSection: FolderHomeSection.spam,
+      updateFoldersSection: true,
+      spamItems: <String, DateTime>{
+        'spam@example.com': _timestamp(1),
+        'spam-2@example.com': _timestamp(2),
+      },
+    );
+    await _pumpHomeBadgeSurface(tester);
+    expect(_badgeCount(tester, 'home-folders-badge-spam'), isNull);
+
+    controller.update(
+      activeTab: HomeTab.chats,
+      foldersSection: null,
+      updateFoldersSection: true,
+    );
+    await _pumpHomeBadgeSurface(tester);
+
+    expect(_badgeCount(tester, 'home-tab-badge-drafts'), isNull);
+    expect(_badgeCount(tester, 'home-tab-badge-folders'), isNull);
+    expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    await tester.pumpWidget(
+      _HomeBadgeHarnessApp(
+        controller: controller,
+        chatsCubit: chatsCubit,
+        foldersCubit: foldersCubit,
+        homeBloc: homeBloc,
+        profileCubit: profileCubit,
+        settingsCubit: settingsCubit,
+        dragController: dragController,
+      ),
+    );
+    await _pumpHomeBadgeSurface(tester);
+
+    expect(_badgeCount(tester, 'home-tab-badge-drafts'), isNull);
+    expect(_badgeCount(tester, 'home-tab-badge-folders'), isNull);
+    expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), isNull);
+  });
 
   testWidgets('profile selection does not suppress new non-chat badge counts', (
     tester,
@@ -332,13 +550,13 @@ void main() {
         dragController: dragController,
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpHomeBadgeSurface(tester);
 
     expect(_badgeCount(tester, 'home-tab-badge-contacts'), 1);
     expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 1);
 
     controller.update(contactIds: {'alice@example.com', 'bob@example.com'});
-    await tester.pumpAndSettle();
+    await _pumpHomeBadgeSurface(tester);
 
     expect(_badgeCount(tester, 'home-tab-badge-contacts'), 2);
     expect(_badgeCount(tester, 'home-bottom-nav-badge-home'), 2);
