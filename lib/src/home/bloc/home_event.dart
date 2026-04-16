@@ -82,12 +82,3 @@ final class HomeEmailServiceChanged extends HomeEvent {
 final class _HomeEmailUnreadRefreshRequested extends HomeEvent {
   const _HomeEmailUnreadRefreshRequested();
 }
-
-final class _HomeBadgeSeenMarkersUpdated extends HomeEvent {
-  const _HomeBadgeSeenMarkersUpdated(this.markers);
-
-  final Map<HomeBadgeBucket, DateTime> markers;
-
-  @override
-  List<Object?> get props => [markers];
-}
