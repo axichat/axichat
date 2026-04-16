@@ -45,7 +45,6 @@ import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/contacts/view/contacts_list.dart';
 import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
@@ -114,8 +113,8 @@ HomeSearchSlot? _resolveHomeSearchSlot({
 }
 
 @immutable
-class _HomeResolvedBadgeCounts {
-  const _HomeResolvedBadgeCounts({
+class HomeResolvedBadgeCounts {
+  const HomeResolvedBadgeCounts({
     this.chats = 0,
     this.contacts = 0,
     this.drafts = 0,
@@ -142,7 +141,7 @@ class _HomeResolvedBadgeCounts {
 
   @override
   bool operator ==(Object other) {
-    return other is _HomeResolvedBadgeCounts &&
+    return other is HomeResolvedBadgeCounts &&
         chats == other.chats &&
         contacts == other.contacts &&
         drafts == other.drafts &&
@@ -154,87 +153,15 @@ class _HomeResolvedBadgeCounts {
   int get hashCode => Object.hash(chats, contacts, drafts, important, spam);
 }
 
-_HomeResolvedBadgeCounts _homeResolvedBadgeCounts({
+HomeResolvedBadgeCounts _homeResolvedBadgeCounts({
   required int chatsUnreadCount,
-  required int contactsCount,
-  required int draftCount,
-  required int importantCount,
-  required int spamCount,
 }) {
-  return _HomeResolvedBadgeCounts(
-    chats: chatsUnreadCount,
-    contacts: contactsCount,
-    drafts: draftCount,
-    important: importantCount,
-    spam: spamCount,
-  );
-}
-
-DateTime? _maxHomeBadgeTimestamp(DateTime? current, DateTime? next) {
-  final normalizedCurrent = current?.toUtc();
-  final normalizedNext = next?.toUtc();
-  if (normalizedCurrent == null) {
-    return normalizedNext;
-  }
-  if (normalizedNext == null) {
-    return normalizedCurrent;
-  }
-  return normalizedNext.isAfter(normalizedCurrent)
-      ? normalizedNext
-      : normalizedCurrent;
-}
-
-@visibleForTesting
-({Set<T> trackedIds, Set<T> pendingIds, int count})
-seedIncrementalBadgeStateForTesting<T>({
-  required Set<T> currentIds,
-  required bool visible,
-}) {
-  final pendingIds = visible ? <T>{} : Set<T>.from(currentIds);
-  return (
-    trackedIds: Set<T>.unmodifiable(currentIds),
-    pendingIds: Set<T>.unmodifiable(pendingIds),
-    count: pendingIds.length,
-  );
-}
-
-@visibleForTesting
-({Set<T> trackedIds, Set<T> pendingIds, int count})
-advanceIncrementalBadgeStateForTesting<T>({
-  required Set<T> previousIds,
-  required Set<T> pendingIds,
-  required Set<T> currentIds,
-  required bool visible,
-}) {
-  final nextPendingIds = visible
-      ? <T>{}
-      : <T>{
-          for (final pendingId in pendingIds)
-            if (currentIds.contains(pendingId)) pendingId,
-          ...currentIds.difference(previousIds),
-        };
-  return (
-    trackedIds: Set<T>.unmodifiable(currentIds),
-    pendingIds: Set<T>.unmodifiable(nextPendingIds),
-    count: nextPendingIds.length,
-  );
+  return HomeResolvedBadgeCounts(chats: chatsUnreadCount);
 }
 
 ({int home, int contacts, int important, int spam, Map<HomeTab, int> tabs})
-_resolveHomeBadgeCounts({
-  required int chatsUnreadCount,
-  required int contactsCount,
-  required int draftCount,
-  required int importantCount,
-  required int spamCount,
-}) {
-  final counts = _homeResolvedBadgeCounts(
-    chatsUnreadCount: chatsUnreadCount,
-    contactsCount: contactsCount,
-    draftCount: draftCount,
-    importantCount: importantCount,
-    spamCount: spamCount,
-  );
+_resolveHomeBadgeCounts({required int chatsUnreadCount}) {
+  final counts = _homeResolvedBadgeCounts(chatsUnreadCount: chatsUnreadCount);
   return (
     home: counts.home,
     contacts: counts.contacts,
@@ -253,20 +180,8 @@ _resolveHomeBadgeCounts({
   int home,
   Map<HomeTab, int> tabs,
 })
-resolveHomeBadgeCountsForTesting({
-  required int chatsUnreadCount,
-  required int contactsCount,
-  required int draftCount,
-  required int importantCount,
-  required int spamCount,
-}) {
-  final counts = _resolveHomeBadgeCounts(
-    chatsUnreadCount: chatsUnreadCount,
-    contactsCount: contactsCount,
-    draftCount: draftCount,
-    importantCount: importantCount,
-    spamCount: spamCount,
-  );
+resolveHomeBadgeCountsForTesting({required int chatsUnreadCount}) {
+  final counts = _resolveHomeBadgeCounts(chatsUnreadCount: chatsUnreadCount);
   return (
     contacts: counts.contacts,
     important: counts.important,
@@ -275,326 +190,6 @@ resolveHomeBadgeCountsForTesting({
     home: counts.home,
     tabs: counts.tabs,
   );
-}
-
-@visibleForTesting
-class HomeBadgeSurfaceHarnessController extends ChangeNotifier {
-  HomeBadgeSurfaceHarnessController({
-    this.chatsUnreadCount = 0,
-    Set<String>? contactIds,
-    Map<int, DateTime>? draftItems,
-    Map<String, DateTime>? importantItems,
-    Map<String, DateTime>? spamItems,
-    Map<HomeBadgeBucket, DateTime>? badgeSeenMarkers,
-    this.badgeSeenMarkersLoaded = true,
-    this.activeTab = HomeTab.chats,
-    FolderHomeSection? foldersSection,
-    this.selectedBottomIndex = 0,
-  }) : _contactIds = Set<String>.from(contactIds ?? const <String>{}),
-       _draftItems = Map<int, DateTime>.from(
-         draftItems ?? const <int, DateTime>{},
-       ),
-       _importantItems = Map<String, DateTime>.from(
-         importantItems ?? const <String, DateTime>{},
-       ),
-       _spamItems = Map<String, DateTime>.from(
-         spamItems ?? const <String, DateTime>{},
-       ),
-       _badgeSeenMarkers = Map<HomeBadgeBucket, DateTime>.from(
-         badgeSeenMarkers ?? const <HomeBadgeBucket, DateTime>{},
-       ),
-       _foldersSection = foldersSection;
-
-  int chatsUnreadCount;
-  Set<String> _contactIds;
-  Map<int, DateTime> _draftItems;
-  Map<String, DateTime> _importantItems;
-  Map<String, DateTime> _spamItems;
-  Map<HomeBadgeBucket, DateTime> _badgeSeenMarkers;
-  bool badgeSeenMarkersLoaded;
-  HomeTab activeTab;
-  FolderHomeSection? _foldersSection;
-  int selectedBottomIndex;
-
-  Set<String> get contactIds => Set<String>.unmodifiable(_contactIds);
-  Map<int, DateTime> get draftItems =>
-      Map<int, DateTime>.unmodifiable(_draftItems);
-  Map<String, DateTime> get importantItems =>
-      Map<String, DateTime>.unmodifiable(_importantItems);
-  Map<String, DateTime> get spamItems =>
-      Map<String, DateTime>.unmodifiable(_spamItems);
-  Map<HomeBadgeBucket, DateTime> get badgeSeenMarkers =>
-      Map<HomeBadgeBucket, DateTime>.unmodifiable(_badgeSeenMarkers);
-  FolderHomeSection? get foldersSection => _foldersSection;
-
-  Future<void> advanceHomeBadgeSeenMarker({
-    required HomeBadgeBucket bucket,
-    required DateTime seenAt,
-  }) async {
-    final normalizedSeenAt = seenAt.toUtc();
-    final current = _badgeSeenMarkers[bucket];
-    if (current != null && !normalizedSeenAt.isAfter(current.toUtc())) {
-      return;
-    }
-    await Future<void>.value();
-    _badgeSeenMarkers = <HomeBadgeBucket, DateTime>{
-      ..._badgeSeenMarkers,
-      bucket: normalizedSeenAt,
-    };
-    notifyListeners();
-  }
-
-  void update({
-    int? chatsUnreadCount,
-    Set<String>? contactIds,
-    Map<int, DateTime>? draftItems,
-    Map<String, DateTime>? importantItems,
-    Map<String, DateTime>? spamItems,
-    bool? badgeSeenMarkersLoaded,
-    HomeTab? activeTab,
-    FolderHomeSection? foldersSection,
-    bool updateFoldersSection = false,
-    int? selectedBottomIndex,
-  }) {
-    this.chatsUnreadCount = chatsUnreadCount ?? this.chatsUnreadCount;
-    _contactIds = contactIds == null
-        ? _contactIds
-        : Set<String>.from(contactIds);
-    _draftItems = draftItems == null
-        ? _draftItems
-        : Map<int, DateTime>.from(draftItems);
-    _importantItems = importantItems == null
-        ? _importantItems
-        : Map<String, DateTime>.from(importantItems);
-    _spamItems = spamItems == null
-        ? _spamItems
-        : Map<String, DateTime>.from(spamItems);
-    this.badgeSeenMarkersLoaded =
-        badgeSeenMarkersLoaded ?? this.badgeSeenMarkersLoaded;
-    this.activeTab = activeTab ?? this.activeTab;
-    if (updateFoldersSection) {
-      _foldersSection = foldersSection;
-    }
-    this.selectedBottomIndex = selectedBottomIndex ?? this.selectedBottomIndex;
-    notifyListeners();
-  }
-}
-
-@visibleForTesting
-class HomeBadgeSurfaceHarness extends StatefulWidget {
-  const HomeBadgeSurfaceHarness({super.key, required this.controller});
-
-  final HomeBadgeSurfaceHarnessController controller;
-
-  @override
-  State<HomeBadgeSurfaceHarness> createState() =>
-      _HomeBadgeSurfaceHarnessState();
-}
-
-class _HomeBadgeSurfaceHarnessState extends State<HomeBadgeSurfaceHarness> {
-  final ValueNotifier<CalendarBottomDragSession?> _calendarDragSession =
-      ValueNotifier<CalendarBottomDragSession?>(null);
-  final ValueNotifier<int> _bottomNavIndex = ValueNotifier<int>(0);
-  final ValueNotifier<FolderHomeSection?> _foldersSection =
-      ValueNotifier<FolderHomeSection?>(null);
-  final ValueNotifier<int> _homeTabIndex = ValueNotifier<int>(0);
-  final ValueNotifier<int> _selectedBottomIndex = ValueNotifier<int>(0);
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_handleControllerChanged);
-    _handleControllerChanged();
-  }
-
-  @override
-  void didUpdateWidget(covariant HomeBadgeSurfaceHarness oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller == widget.controller) {
-      return;
-    }
-    oldWidget.controller.removeListener(_handleControllerChanged);
-    widget.controller.addListener(_handleControllerChanged);
-    _handleControllerChanged();
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_handleControllerChanged);
-    _calendarDragSession.dispose();
-    _bottomNavIndex.dispose();
-    _foldersSection.dispose();
-    _homeTabIndex.dispose();
-    _selectedBottomIndex.dispose();
-    super.dispose();
-  }
-
-  void _handleControllerChanged() {
-    _foldersSection.value = widget.controller.foldersSection;
-    _homeTabIndex.value = switch (widget.controller.activeTab) {
-      HomeTab.contacts => 1,
-      HomeTab.drafts => 2,
-      HomeTab.folders => 3,
-      _ => 0,
-    };
-    _selectedBottomIndex.value = widget.controller.selectedBottomIndex;
-    if (!mounted) {
-      return;
-    }
-    setState(() {});
-  }
-
-  List<HomeTabEntry> _tabs(AppLocalizations l10n) {
-    return <HomeTabEntry>[
-      HomeTabEntry(
-        id: HomeTab.chats,
-        label: l10n.homeTabChats,
-        body: const SizedBox.shrink(),
-      ),
-      HomeTabEntry(
-        id: HomeTab.contacts,
-        label: l10n.homeTabContacts,
-        body: const SizedBox.shrink(),
-      ),
-      HomeTabEntry(
-        id: HomeTab.drafts,
-        label: l10n.homeTabDrafts,
-        body: const SizedBox.shrink(),
-      ),
-      HomeTabEntry(
-        id: HomeTab.folders,
-        label: l10n.homeTabFolders,
-        body: const SizedBox.shrink(),
-      ),
-    ];
-  }
-
-  List<m.Chat> _chatItems() {
-    return <m.Chat>[
-      if (widget.controller.chatsUnreadCount > 0)
-        m.Chat.fromJid(
-          'chat@example.com',
-        ).copyWith(unreadCount: widget.controller.chatsUnreadCount),
-      for (final entry in widget.controller.spamItems.entries)
-        m.Chat.fromJid(
-          entry.key,
-        ).copyWith(spam: true, spamUpdatedAt: entry.value.toUtc()),
-    ];
-  }
-
-  List<m.ContactDirectoryEntry> _contactItems() {
-    return widget.controller.contactIds
-        .map(
-          (address) => m.ContactDirectoryEntry(
-            address: address,
-            hasXmppRoster: true,
-            hasEmailContact: false,
-            emailNativeIds: const <String>[],
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  List<m.Draft> _draftItems() {
-    return widget.controller.draftItems.entries
-        .map(
-          (entry) => m.Draft(
-            id: entry.key,
-            jids: const <String>[],
-            draftSyncId: 'draft-${entry.key}',
-            draftUpdatedAt: entry.value.toUtc(),
-            draftSourceId: 'test',
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  List<m.FolderMessageItem> _importantItems() {
-    return widget.controller.importantItems.entries
-        .map((entry) {
-          final parts = entry.key.split('\n');
-          final chatJid = parts.isEmpty ? 'chat@example.com' : parts.first;
-          final messageReferenceId = parts.length > 1
-              ? parts[1]
-              : 'message-reference';
-          return m.FolderMessageItem(
-            collectionId: m.SystemMessageCollection.important.id,
-            chatJid: chatJid,
-            messageReferenceId: messageReferenceId,
-            addedAt: entry.value.toUtc(),
-            active: true,
-            message: null,
-            chat: m.Chat.fromJid(chatJid),
-          );
-        })
-        .toList(growable: false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tabs = _tabs(context.l10n);
-    final selectedIndex = switch (widget.controller.activeTab) {
-      HomeTab.contacts => 1,
-      HomeTab.drafts => 2,
-      HomeTab.folders => 3,
-      _ => 0,
-    };
-    return _HomeBadgeCoordinator(
-      tabs: tabs,
-      homeTabIndex: _homeTabIndex,
-      chatItems: _chatItems(),
-      contactsItems: _contactItems(),
-      draftItems: _draftItems(),
-      importantItems: _importantItems(),
-      badgeSeenMarkers: widget.controller.badgeSeenMarkers,
-      badgeSeenMarkersLoaded: widget.controller.badgeSeenMarkersLoaded,
-      onAdvanceHomeBadgeSeenMarker: (bucket, seenAt) => widget.controller
-          .advanceHomeBadgeSeenMarker(bucket: bucket, seenAt: seenAt),
-      selectedBottomIndex: _selectedBottomIndex,
-      foldersSection: _foldersSection,
-      builder: (context, badgeCounts) => _HomeShellScope(
-        badgeCounts: badgeCounts,
-        calendarBottomDragSession: _calendarDragSession,
-        bottomNavIndex: _bottomNavIndex,
-        foldersSection: _foldersSection,
-        homeTabIndex: _homeTabIndex,
-        selectedBottomIndex: _selectedBottomIndex,
-        setBottomNavIndex: (index) => _bottomNavIndex.value = index,
-        setFoldersSection: (section) {
-          _foldersSection.value = section;
-          widget.controller.update(
-            foldersSection: section,
-            updateFoldersSection: true,
-          );
-        },
-        setHomeTabIndex: (index) => _homeTabIndex.value = index,
-        tabs: tabs,
-        child: ColoredBox(
-          color: context.colorScheme.background,
-          child: Column(
-            children: [
-              _HomeBottomTabBar(
-                tabs: tabs,
-                badgeCounts: badgeCounts.tabs,
-                selectedIndex: selectedIndex,
-                onTabSelected: (_) {},
-              ),
-              Expanded(child: const _FoldersOverviewPage()),
-              _HomeShellBottomBar(
-                calendarBottomDragSession: _calendarDragSession,
-                homeBadgeCount: badgeCounts.home,
-                selectedBottomIndex: widget.controller.selectedBottomIndex,
-                onBottomNavSelected: (index) {
-                  widget.controller.update(selectedBottomIndex: index);
-                },
-                calendarAvailable: false,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 typedef _HomeSearchPresentation = ({
@@ -1116,7 +711,7 @@ class _HomeShellScope extends InheritedWidget {
     required super.child,
   });
 
-  final _HomeResolvedBadgeCounts badgeCounts;
+  final HomeResolvedBadgeCounts badgeCounts;
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
   final ValueListenable<int> bottomNavIndex;
   final ValueListenable<FolderHomeSection?> foldersSection;
@@ -1368,24 +963,6 @@ class _HomeShellState extends State<HomeShell> {
     final calendarAvailable = storageManager.isAuthStorageReady;
     final chatsState = context.watch<ChatsCubit>().state;
     final chatItems = chatsState.items ?? const <m.Chat>[];
-    final contactsItems = context
-        .select<ContactsCubit, List<m.ContactDirectoryEntry>>(
-          (cubit) => cubit.state.items ?? const <m.ContactDirectoryEntry>[],
-        );
-    final draftItems = context.select<DraftCubit, List<m.Draft>>(
-      (cubit) => cubit.state.items ?? const <m.Draft>[],
-    );
-    final importantItems = context
-        .select<FoldersCubit, List<m.FolderMessageItem>>(
-          (cubit) => cubit.state.items ?? const <m.FolderMessageItem>[],
-        );
-    final badgeSeenMarkers = context
-        .select<HomeBloc, Map<HomeBadgeBucket, DateTime>>(
-          (bloc) => bloc.state.badgeSeenMarkers,
-        );
-    final badgeSeenMarkersLoaded = context.select<HomeBloc, bool>(
-      (bloc) => bloc.state.badgeSeenMarkersLoaded,
-    );
     final isChatOpen = chatsState.openJid != null;
     final isChatCalendarRoute = chatsState.openChatRoute.isCalendar;
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
@@ -1425,44 +1002,46 @@ class _HomeShellState extends State<HomeShell> {
             : null,
       ),
     ];
+    final initialTabFilters = <HomeTab, SearchFilterId?>{
+      for (final entry in tabs)
+        if (entry.searchFilters.isNotEmpty)
+          entry.id: entry.searchFilters.first.id,
+    };
     Widget buildShellChild(
-      Widget Function(BuildContext, _HomeResolvedBadgeCounts) builder,
+      Widget Function(BuildContext, HomeResolvedBadgeCounts) builder,
     ) {
-      final locate = context.read;
-      return BlocProvider(
-        create: (context) {
-          return AccessibilityActionBloc(
-            chatsService: locate<XmppService>(),
-            messageService: locate<XmppService>(),
-            rosterService: locate<XmppService>() as RosterService,
-          );
-        },
-        child: _HomeBadgeCoordinator(
-          tabs: tabs,
-          homeTabIndex: _homeTabIndex,
-          chatItems: chatItems,
-          contactsItems: contactsItems,
-          draftItems: draftItems,
-          importantItems: importantItems,
-          badgeSeenMarkers: badgeSeenMarkers,
-          badgeSeenMarkersLoaded: badgeSeenMarkersLoaded,
-          onAdvanceHomeBadgeSeenMarker: (bucket, seenAt) => locate<HomeBloc>()
-              .advanceHomeBadgeSeenMarker(bucket: bucket, seenAt: seenAt),
-          selectedBottomIndex: _selectedBottomIndex,
-          foldersSection: _foldersSection,
-          builder: (context, badgeCounts) => _HomeShellScope(
-            badgeCounts: badgeCounts,
-            calendarBottomDragSession: _calendarBottomDragSession,
-            bottomNavIndex: _bottomNavIndex,
-            foldersSection: _foldersSection,
-            homeTabIndex: _homeTabIndex,
-            selectedBottomIndex: _selectedBottomIndex,
-            setBottomNavIndex: _setBottomNavIndexValue,
-            setFoldersSection: _setFoldersSectionValue,
-            setHomeTabIndex: _setHomeTabIndexValue,
-            tabs: tabs,
-            child: builder(context, badgeCounts),
-          ),
+      return _HomeBlocScope(
+        tabs: tabs,
+        initialFilters: initialTabFilters,
+        child: Builder(
+          builder: (context) {
+            final locate = context.read;
+            return BlocProvider(
+              create: (context) {
+                return AccessibilityActionBloc(
+                  chatsService: locate<XmppService>(),
+                  messageService: locate<XmppService>(),
+                  rosterService: locate<XmppService>() as RosterService,
+                );
+              },
+              child: HomeBadgeCoordinator(
+                chatItems: chatItems,
+                builder: (context, badgeCounts) => _HomeShellScope(
+                  badgeCounts: badgeCounts,
+                  calendarBottomDragSession: _calendarBottomDragSession,
+                  bottomNavIndex: _bottomNavIndex,
+                  foldersSection: _foldersSection,
+                  homeTabIndex: _homeTabIndex,
+                  selectedBottomIndex: _selectedBottomIndex,
+                  setBottomNavIndex: _setBottomNavIndexValue,
+                  setFoldersSection: _setFoldersSectionValue,
+                  setHomeTabIndex: _setHomeTabIndexValue,
+                  tabs: tabs,
+                  child: builder(context, badgeCounts),
+                ),
+              ),
+            );
+          },
         ),
       );
     }
@@ -2168,307 +1747,28 @@ class _HomeTabIndexSyncState extends State<_HomeTabIndexSync> {
   Widget build(BuildContext context) => widget.child;
 }
 
-class _HomeBadgeCoordinator extends StatefulWidget {
-  const _HomeBadgeCoordinator({
-    required this.tabs,
-    required this.homeTabIndex,
+class HomeBadgeCoordinator extends StatelessWidget {
+  const HomeBadgeCoordinator({
+    super.key,
     required this.chatItems,
-    required this.contactsItems,
-    required this.draftItems,
-    required this.importantItems,
-    required this.badgeSeenMarkers,
-    required this.badgeSeenMarkersLoaded,
-    required this.onAdvanceHomeBadgeSeenMarker,
-    required this.selectedBottomIndex,
-    required this.foldersSection,
     required this.builder,
   });
 
-  final List<HomeTabEntry> tabs;
-  final ValueListenable<int>? homeTabIndex;
   final List<m.Chat> chatItems;
-  final List<m.ContactDirectoryEntry> contactsItems;
-  final List<m.Draft> draftItems;
-  final List<m.FolderMessageItem> importantItems;
-  final Map<HomeBadgeBucket, DateTime> badgeSeenMarkers;
-  final bool badgeSeenMarkersLoaded;
-  final Future<void> Function(HomeBadgeBucket bucket, DateTime seenAt)
-  onAdvanceHomeBadgeSeenMarker;
-  final ValueListenable<int>? selectedBottomIndex;
-  final ValueListenable<FolderHomeSection?>? foldersSection;
-  final Widget Function(BuildContext, _HomeResolvedBadgeCounts) builder;
-
-  @override
-  State<_HomeBadgeCoordinator> createState() => _HomeBadgeCoordinatorState();
-}
-
-enum _HomeBadgeSection { contacts, drafts, important, spam }
-
-class _HomeBadgeCoordinatorState extends State<_HomeBadgeCoordinator> {
-  _HomeResolvedBadgeCounts _badgeCounts = const _HomeResolvedBadgeCounts();
-  Set<String> _trackedContactIds = const <String>{};
-  Set<String> _pendingContactIds = const <String>{};
-
-  @override
-  void initState() {
-    super.initState();
-    widget.homeTabIndex?.addListener(_handleVisibilityChange);
-    widget.selectedBottomIndex?.addListener(_handleVisibilityChange);
-    widget.foldersSection?.addListener(_handleVisibilityChange);
-    _seedBadgeCounts();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HomeBadgeCoordinator oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.homeTabIndex != widget.homeTabIndex) {
-      oldWidget.homeTabIndex?.removeListener(_handleVisibilityChange);
-      widget.homeTabIndex?.addListener(_handleVisibilityChange);
-    }
-    if (oldWidget.selectedBottomIndex != widget.selectedBottomIndex) {
-      oldWidget.selectedBottomIndex?.removeListener(_handleVisibilityChange);
-      widget.selectedBottomIndex?.addListener(_handleVisibilityChange);
-    }
-    if (oldWidget.foldersSection != widget.foldersSection) {
-      oldWidget.foldersSection?.removeListener(_handleVisibilityChange);
-      widget.foldersSection?.addListener(_handleVisibilityChange);
-    }
-    _syncBadgeCounts();
-  }
-
-  @override
-  void dispose() {
-    widget.homeTabIndex?.removeListener(_handleVisibilityChange);
-    widget.selectedBottomIndex?.removeListener(_handleVisibilityChange);
-    widget.foldersSection?.removeListener(_handleVisibilityChange);
-    super.dispose();
-  }
-
-  bool get _primaryHomeVisible {
-    return (widget.selectedBottomIndex?.value ?? 0).clamp(0, 3) == 0;
-  }
-
-  HomeTab? get _visibleHomeTab {
-    final notifier = widget.homeTabIndex;
-    if (notifier == null || widget.tabs.isEmpty) {
-      return null;
-    }
-    final index = notifier.value.clamp(0, widget.tabs.length - 1);
-    return widget.tabs[index].id;
-  }
-
-  _HomeBadgeSection? get _visibleSection {
-    if (!_primaryHomeVisible) {
-      return null;
-    }
-    return switch (_visibleHomeTab) {
-      HomeTab.contacts => _HomeBadgeSection.contacts,
-      HomeTab.drafts => _HomeBadgeSection.drafts,
-      HomeTab.folders => switch (widget.foldersSection?.value) {
-        FolderHomeSection.important => _HomeBadgeSection.important,
-        FolderHomeSection.spam => _HomeBadgeSection.spam,
-        null => null,
-      },
-      _ => null,
-    };
-  }
-
-  Set<String> _contactIds() {
-    return widget.contactsItems
-        .map((item) => m.contactDirectoryAddressKey(item.address))
-        .where((value) => value.isNotEmpty)
-        .toSet();
-  }
+  final Widget Function(BuildContext, HomeResolvedBadgeCounts) builder;
 
   int _chatsUnreadCount() {
-    return widget.chatItems
+    return chatItems
         .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
         .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
   }
 
-  DateTime? _latestDraftTimestamp() {
-    DateTime? latest;
-    for (final draft in widget.draftItems) {
-      latest = _maxHomeBadgeTimestamp(latest, draft.draftUpdatedAt);
-    }
-    return latest;
-  }
-
-  DateTime? _latestImportantTimestamp() {
-    DateTime? latest;
-    for (final item in widget.importantItems) {
-      if (!item.active) {
-        continue;
-      }
-      latest = _maxHomeBadgeTimestamp(latest, item.addedAt);
-    }
-    return latest;
-  }
-
-  DateTime _spamTimestamp(m.Chat chat) {
-    return (chat.spamUpdatedAt ?? chat.lastChangeTimestamp).toUtc();
-  }
-
-  DateTime? _latestSpamTimestamp() {
-    DateTime? latest;
-    for (final chat in widget.chatItems) {
-      if (!chat.spam || chat.archived) {
-        continue;
-      }
-      latest = _maxHomeBadgeTimestamp(latest, _spamTimestamp(chat));
-    }
-    return latest;
-  }
-
-  int _draftUnseenCount() {
-    if (!widget.badgeSeenMarkersLoaded) {
-      return 0;
-    }
-    final marker = widget.badgeSeenMarkers[HomeBadgeBucket.drafts]?.toUtc();
-    var count = 0;
-    for (final draft in widget.draftItems) {
-      final updatedAt = draft.draftUpdatedAt.toUtc();
-      if (marker == null || updatedAt.isAfter(marker)) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
-  int _importantUnseenCount() {
-    if (!widget.badgeSeenMarkersLoaded) {
-      return 0;
-    }
-    final marker = widget.badgeSeenMarkers[HomeBadgeBucket.important]?.toUtc();
-    var count = 0;
-    for (final item in widget.importantItems) {
-      if (!item.active) {
-        continue;
-      }
-      final addedAt = item.addedAt.toUtc();
-      if (marker == null || addedAt.isAfter(marker)) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
-  int _spamUnseenCount() {
-    if (!widget.badgeSeenMarkersLoaded) {
-      return 0;
-    }
-    final marker = widget.badgeSeenMarkers[HomeBadgeBucket.spam]?.toUtc();
-    var count = 0;
-    for (final chat in widget.chatItems) {
-      if (!chat.spam || chat.archived) {
-        continue;
-      }
-      final updatedAt = _spamTimestamp(chat);
-      if (marker == null || updatedAt.isAfter(marker)) {
-        count += 1;
-      }
-    }
-    return count;
-  }
-
-  void _syncSeenMarkers(_HomeBadgeSection? visibleSection) {
-    if (visibleSection == _HomeBadgeSection.drafts) {
-      final latest = _latestDraftTimestamp();
-      if (latest != null) {
-        unawaited(
-          widget.onAdvanceHomeBadgeSeenMarker(HomeBadgeBucket.drafts, latest),
-        );
-      }
-    }
-    if (visibleSection == _HomeBadgeSection.important) {
-      final latest = _latestImportantTimestamp();
-      if (latest != null) {
-        unawaited(
-          widget.onAdvanceHomeBadgeSeenMarker(
-            HomeBadgeBucket.important,
-            latest,
-          ),
-        );
-      }
-    }
-    if (visibleSection == _HomeBadgeSection.spam) {
-      final latest = _latestSpamTimestamp();
-      if (latest != null) {
-        unawaited(
-          widget.onAdvanceHomeBadgeSeenMarker(HomeBadgeBucket.spam, latest),
-        );
-      }
-    }
-  }
-
-  _HomeResolvedBadgeCounts _resolveBadgeCounts(
-    _HomeBadgeSection? visibleSection,
-  ) {
-    return _homeResolvedBadgeCounts(
-      chatsUnreadCount: _chatsUnreadCount(),
-      contactsCount: _pendingContactIds.length,
-      draftCount: visibleSection == _HomeBadgeSection.drafts
-          ? 0
-          : _draftUnseenCount(),
-      importantCount: visibleSection == _HomeBadgeSection.important
-          ? 0
-          : _importantUnseenCount(),
-      spamCount: visibleSection == _HomeBadgeSection.spam
-          ? 0
-          : _spamUnseenCount(),
-    );
-  }
-
-  void _seedBadgeCounts() {
-    final visibleSection = _visibleSection;
-    final contactsSeed = seedIncrementalBadgeStateForTesting<String>(
-      currentIds: _contactIds(),
-      visible: visibleSection == _HomeBadgeSection.contacts,
-    );
-    _trackedContactIds = contactsSeed.trackedIds;
-    _pendingContactIds = contactsSeed.pendingIds;
-    _syncSeenMarkers(visibleSection);
-    _badgeCounts = _resolveBadgeCounts(visibleSection);
-  }
-
-  void _handleVisibilityChange() {
-    if (!mounted) {
-      return;
-    }
-    _syncBadgeCounts();
-  }
-
-  void _syncBadgeCounts() {
-    final visibleSection = _visibleSection;
-    _syncSeenMarkers(visibleSection);
-    final nextContactIds = _contactIds();
-
-    if (!setEquals(_trackedContactIds, nextContactIds)) {
-      final next = advanceIncrementalBadgeStateForTesting<String>(
-        previousIds: _trackedContactIds,
-        pendingIds: _pendingContactIds,
-        currentIds: nextContactIds,
-        visible: visibleSection == _HomeBadgeSection.contacts,
-      );
-      _trackedContactIds = next.trackedIds;
-      _pendingContactIds = next.pendingIds;
-    }
-
-    if (visibleSection == _HomeBadgeSection.contacts) {
-      _pendingContactIds = const <String>{};
-    }
-
-    final nextBadgeCounts = _resolveBadgeCounts(visibleSection);
-    if (_badgeCounts == nextBadgeCounts) {
-      return;
-    }
-    setState(() {
-      _badgeCounts = nextBadgeCounts;
-    });
+  HomeResolvedBadgeCounts _resolveBadgeCounts() {
+    return _homeResolvedBadgeCounts(chatsUnreadCount: _chatsUnreadCount());
   }
 
   @override
-  Widget build(BuildContext context) => widget.builder(context, _badgeCounts);
+  Widget build(BuildContext context) => builder(context, _resolveBadgeCounts());
 }
 
 class _HomeContent extends StatelessWidget {
@@ -2524,226 +1824,209 @@ class _HomeContent extends StatelessWidget {
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
-    final initialTabFilters = <HomeTab, SearchFilterId?>{
-      for (final entry in tabs)
-        if (entry.searchFilters.isNotEmpty)
-          entry.id: entry.searchFilters.first.id,
-    };
-    return _HomeBlocScope(
-      tabs: tabs,
-      initialFilters: initialTabFilters,
-      child: Builder(
-        builder: (context) {
-          final badgeCounts =
-              _HomeShellScope.maybeOf(context)?.badgeCounts ??
-              const _HomeResolvedBadgeCounts();
+    return Builder(
+      builder: (context) {
+        final badgeCounts =
+            _HomeShellScope.maybeOf(context)?.badgeCounts ??
+            const HomeResolvedBadgeCounts();
 
-          final Widget mainContent = BlocListener<ChatsCubit, ChatsState>(
-            listenWhen: (previous, current) =>
-                previous.openStack != current.openStack,
-            listener: (context, state) => onSyncHomeHistoryEntries(state),
-            child: KeyboardPopScope(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const ConnectivityIndicator(reserveTopInsetWhenHidden: true),
-                  Expanded(
-                    child: MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
-                        builder: (context, state) {
-                          final chatsState = context.watch<ChatsCubit>().state;
-                          final chatRoute = chatsState.openChatRoute;
-                          final Widget chatPane = Align(
-                            alignment: Alignment.topLeft,
-                            child: _HomeSecondaryChatPane(
-                              pane: pane,
-                              settings: settings,
-                              emailEnabled: emailEnabled,
-                            ),
-                          );
+        final Widget mainContent = BlocListener<ChatsCubit, ChatsState>(
+          listenWhen: (previous, current) =>
+              previous.openStack != current.openStack,
+          listener: (context, state) => onSyncHomeHistoryEntries(state),
+          child: KeyboardPopScope(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ConnectivityIndicator(reserveTopInsetWhenHidden: true),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+                      builder: (context, state) {
+                        final chatsState = context.watch<ChatsCubit>().state;
+                        final chatRoute = chatsState.openChatRoute;
+                        final Widget chatPane = Align(
+                          alignment: Alignment.topLeft,
+                          child: _HomeSecondaryChatPane(
+                            pane: pane,
+                            settings: settings,
+                            emailEnabled: emailEnabled,
+                          ),
+                        );
 
-                          Widget chatLayout({required bool showChatCalendar}) {
-                            final Widget content = Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: AxiAdaptiveLayout(
-                                    invertPriority: pane.hasChatPane,
-                                    showPrimary: !showChatCalendar,
-                                    centerSecondary: false,
-                                    centerPrimary: false,
-                                    animatePaneChanges: true,
-                                    primaryAlignment: Alignment.topLeft,
-                                    secondaryAlignment: Alignment.topLeft,
-                                    primaryChild: Nexus(
-                                      badgeCounts: badgeCounts.tabs,
-                                      tabs: tabs,
-                                      navPlacement: navPlacement,
-                                      showNavigationRail:
-                                          navPlacement != NavPlacement.rail,
-                                      navRailCollapsed: railCollapsed,
-                                      onToggleNavRail: onToggleNavRail,
-                                    ),
-                                    secondaryChild: chatPane,
+                        Widget chatLayout({required bool showChatCalendar}) {
+                          final Widget content = Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: AxiAdaptiveLayout(
+                                  invertPriority: pane.hasChatPane,
+                                  showPrimary: !showChatCalendar,
+                                  centerSecondary: false,
+                                  centerPrimary: false,
+                                  animatePaneChanges: true,
+                                  primaryAlignment: Alignment.topLeft,
+                                  secondaryAlignment: Alignment.topLeft,
+                                  primaryChild: Nexus(
+                                    badgeCounts: badgeCounts.tabs,
+                                    tabs: tabs,
+                                    navPlacement: navPlacement,
+                                    showNavigationRail:
+                                        navPlacement != NavPlacement.rail,
+                                    navRailCollapsed: railCollapsed,
+                                    onToggleNavRail: onToggleNavRail,
                                   ),
+                                  secondaryChild: chatPane,
                                 ),
-                              ],
-                            );
-                            return content;
-                          }
+                              ),
+                            ],
+                          );
+                          return content;
+                        }
 
-                          Widget calendarLayout({
-                            required int? calendarTabIndex,
-                            required bool surfacePopEnabled,
-                          }) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child:
-                                      NotificationListener<
-                                        NavigationNotification
-                                      >(
-                                        onNotification: (notification) {
-                                          if (calendarCanHandleBack.value !=
-                                              notification.canHandlePop) {
-                                            calendarCanHandleBack.value =
-                                                notification.canHandlePop;
-                                          }
-                                          return false;
+                        Widget calendarLayout({
+                          required int? calendarTabIndex,
+                          required bool surfacePopEnabled,
+                        }) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child:
+                                    NotificationListener<
+                                      NavigationNotification
+                                    >(
+                                      onNotification: (notification) {
+                                        if (calendarCanHandleBack.value !=
+                                            notification.canHandlePop) {
+                                          calendarCanHandleBack.value =
+                                              notification.canHandlePop;
+                                        }
+                                        return false;
+                                      },
+                                      child: CalendarWidget(
+                                        mobileTabIndex: calendarTabIndex,
+                                        surfacePopEnabled: surfacePopEnabled,
+                                        onMobileTabIndexChanged: (tabIndex) {
+                                          final safeTab = tabIndex
+                                              .clamp(0, 1)
+                                              .toInt();
+                                          _HomeShellScope.maybeOf(
+                                            context,
+                                          )?.setBottomNavIndex(
+                                            safeTab == 0 ? 1 : 2,
+                                          );
                                         },
-                                        child: CalendarWidget(
-                                          mobileTabIndex: calendarTabIndex,
-                                          surfacePopEnabled: surfacePopEnabled,
-                                          onMobileTabIndexChanged: (tabIndex) {
-                                            final safeTab = tabIndex
-                                                .clamp(0, 1)
-                                                .toInt();
-                                            _HomeShellScope.maybeOf(
-                                              context,
-                                            )?.setBottomNavIndex(
-                                              safeTab == 0 ? 1 : 2,
-                                            );
-                                          },
-                                          bottomDragSession:
-                                              calendarBottomDragSession,
-                                        ),
+                                        bottomDragSession:
+                                            calendarBottomDragSession,
                                       ),
+                                    ),
+                              ),
+                            ],
+                          );
+                        }
+
+                        Widget contentForBottomIndex(int selectedBottomIndex) {
+                          final bool openCalendar =
+                              selectedBottomIndex == 1 ||
+                              selectedBottomIndex == 2;
+                          final int? calendarTabIndex = openCalendar
+                              ? (selectedBottomIndex == 2 ? 1 : 0)
+                              : null;
+                          final bool showChatCalendar =
+                              openJid != null && chatRoute.isCalendar;
+                          final Widget body;
+                          if (!hasCalendarBloc) {
+                            body = chatLayout(
+                              showChatCalendar: showChatCalendar,
+                            );
+                          } else {
+                            body = AxiFadeIndexedStack(
+                              index: openCalendar ? 1 : 0,
+                              duration: Duration.zero,
+                              overlapChildren: false,
+                              children: [
+                                chatLayout(showChatCalendar: showChatCalendar),
+                                calendarLayout(
+                                  calendarTabIndex: calendarTabIndex,
+                                  surfacePopEnabled: openCalendar,
                                 ),
                               ],
                             );
                           }
-
-                          Widget contentForBottomIndex(
-                            int selectedBottomIndex,
-                          ) {
-                            final bool openCalendar =
-                                selectedBottomIndex == 1 ||
-                                selectedBottomIndex == 2;
-                            final int? calendarTabIndex = openCalendar
-                                ? (selectedBottomIndex == 2 ? 1 : 0)
-                                : null;
-                            final bool showChatCalendar =
-                                openJid != null && chatRoute.isCalendar;
-                            final Widget body;
-                            if (!hasCalendarBloc) {
-                              body = chatLayout(
-                                showChatCalendar: showChatCalendar,
-                              );
-                            } else {
-                              body = AxiFadeIndexedStack(
-                                index: openCalendar ? 1 : 0,
-                                duration: Duration.zero,
-                                overlapChildren: false,
-                                children: [
-                                  chatLayout(
-                                    showChatCalendar: showChatCalendar,
-                                  ),
-                                  calendarLayout(
-                                    calendarTabIndex: calendarTabIndex,
-                                    surfacePopEnabled: openCalendar,
-                                  ),
-                                ],
-                              );
-                            }
-                            return SafeArea(
-                              top: false,
-                              bottom: navPlacement != NavPlacement.bottom,
-                              child: body,
-                            );
-                          }
-
-                          final bottomIndexNotifier = bottomNavIndex;
-                          if (bottomIndexNotifier == null) {
-                            return contentForBottomIndex(0);
-                          }
-
-                          return ValueListenableBuilder<int>(
-                            valueListenable: bottomIndexNotifier,
-                            builder: (context, selectedBottomIndex, _) {
-                              final int safeSelectedBottomIndex =
-                                  _normalizeBottomNavIndex(selectedBottomIndex);
-                              return contentForBottomIndex(
-                                safeSelectedBottomIndex,
-                              );
-                            },
+                          return SafeArea(
+                            top: false,
+                            bottom: navPlacement != NavPlacement.bottom,
+                            child: body,
                           );
-                        },
-                      ),
+                        }
+
+                        final bottomIndexNotifier = bottomNavIndex;
+                        if (bottomIndexNotifier == null) {
+                          return contentForBottomIndex(0);
+                        }
+
+                        return ValueListenableBuilder<int>(
+                          valueListenable: bottomIndexNotifier,
+                          builder: (context, selectedBottomIndex, _) {
+                            final int safeSelectedBottomIndex =
+                                _normalizeBottomNavIndex(selectedBottomIndex);
+                            return contentForBottomIndex(
+                              safeSelectedBottomIndex,
+                            );
+                          },
+                        );
+                      },
                     ),
                   ),
-                ],
-              ),
-            ),
-          );
-
-          final Widget calendarAwareContent = hasCalendarBloc
-              ? Builder(
-                  builder: (context) {
-                    final locate = context.read;
-                    final initialTasks = context
-                        .select<CalendarBloc, Map<String, CalendarTask>>(
-                          (stateOwner) => stateOwner.state.model.tasks,
-                        );
-                    return CalendarTaskFeedbackObserver<CalendarBloc>(
-                      initialTasks: initialTasks,
-                      onEvent: (event) => locate<CalendarBloc>().add(event),
-                      child: mainContent,
-                    );
-                  },
-                )
-              : mainContent;
-          final shouldResizeForKeyboard =
-              navPlacement != NavPlacement.bottom || pane.hasChatPane;
-
-          final scaffold = Scaffold(
-            resizeToAvoidBottomInset: shouldResizeForKeyboard,
-            body: DefaultTabController(
-              length: tabs.length,
-              animationDuration: context
-                  .watch<SettingsCubit>()
-                  .animationDuration,
-              child: _HomeTabIndexSync(
-                child: _HomeCoordinatorBridge(
-                  storage: calendarStorage,
-                  child: EmailForwardingWelcomeGate(
-                    child: calendarAwareContent,
-                  ),
                 ),
+              ],
+            ),
+          ),
+        );
+
+        final Widget calendarAwareContent = hasCalendarBloc
+            ? Builder(
+                builder: (context) {
+                  final locate = context.read;
+                  final initialTasks = context
+                      .select<CalendarBloc, Map<String, CalendarTask>>(
+                        (stateOwner) => stateOwner.state.model.tasks,
+                      );
+                  return CalendarTaskFeedbackObserver<CalendarBloc>(
+                    initialTasks: initialTasks,
+                    onEvent: (event) => locate<CalendarBloc>().add(event),
+                    child: mainContent,
+                  );
+                },
+              )
+            : mainContent;
+        final shouldResizeForKeyboard =
+            navPlacement != NavPlacement.bottom || pane.hasChatPane;
+
+        final scaffold = Scaffold(
+          resizeToAvoidBottomInset: shouldResizeForKeyboard,
+          body: DefaultTabController(
+            length: tabs.length,
+            animationDuration: context.watch<SettingsCubit>().animationDuration,
+            child: _HomeTabIndexSync(
+              child: _HomeCoordinatorBridge(
+                storage: calendarStorage,
+                child: EmailForwardingWelcomeGate(child: calendarAwareContent),
               ),
             ),
-          );
-          return _HomeActionLayer(
-            hasCalendarBloc: hasCalendarBloc,
-            bottomNavIndex: bottomNavIndex,
-            shortcutFocusNode: shortcutFocusNode,
-            onHomeKeyEvent: onHomeKeyEvent,
-            child: scaffold,
-          );
-        },
-      ),
+          ),
+        );
+        return _HomeActionLayer(
+          hasCalendarBloc: hasCalendarBloc,
+          bottomNavIndex: bottomNavIndex,
+          shortcutFocusNode: shortcutFocusNode,
+          onHomeKeyEvent: onHomeKeyEvent,
+          child: scaffold,
+        );
+      },
     );
   }
 }

@@ -56,10 +56,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeRefreshStatusCleared>(_onRefreshStatusCleared);
     on<HomeEmailServiceChanged>(_onEmailServiceChanged);
     on<_HomeEmailUnreadRefreshRequested>(_onEmailUnreadRefreshRequested);
-    on<_HomeBadgeSeenMarkersUpdated>(_onHomeBadgeSeenMarkersUpdated);
     _attachEmailSyncSubscription(emailService);
-    _homeBadgeSeenMarkersSubscription = _xmppService.homeBadgeSeenMarkersStream
-        .listen((markers) => add(_HomeBadgeSeenMarkersUpdated(markers)));
   }
 
   final XmppService _xmppService;
@@ -69,15 +66,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   EmailService? _emailSyncSubscriptionService;
   Future<void>? _emailSyncSubscriptionTask;
   Future<_HomeRefreshOutcome>? _syncTask;
-  StreamSubscription<Map<HomeBadgeBucket, DateTime>>?
-  _homeBadgeSeenMarkersSubscription;
-
-  Future<void> advanceHomeBadgeSeenMarker({
-    required HomeBadgeBucket bucket,
-    required DateTime seenAt,
-  }) async {
-    await _xmppService.markHomeBadgeBucketSeen(bucket: bucket, seenAt: seenAt);
-  }
 
   void _onActiveTabChanged(
     HomeActiveTabChanged event,
@@ -218,22 +206,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     await _attachEmailSyncSubscription(event.emailService);
   }
 
-  void _onHomeBadgeSeenMarkersUpdated(
-    _HomeBadgeSeenMarkersUpdated event,
-    Emitter<HomeState> emit,
-  ) {
-    if (state.badgeSeenMarkersLoaded &&
-        _mapsEqual(state.badgeSeenMarkers, event.markers)) {
-      return;
-    }
-    emit(
-      state.copyWith(
-        badgeSeenMarkers: event.markers,
-        badgeSeenMarkersLoaded: true,
-      ),
-    );
-  }
-
   HomeSearchSlot? _resolveSearchSlot({HomeTab? tab, HomeSearchSlot? slot}) {
     if (slot != null) {
       return slot;
@@ -258,8 +230,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   @override
   Future<void> close() async {
-    await _homeBadgeSeenMarkersSubscription?.cancel();
-    _homeBadgeSeenMarkersSubscription = null;
     _emailService = null;
     await _reconcileEmailSyncSubscription();
     return super.close();
@@ -294,22 +264,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         return;
       }
     }
-  }
-
-  bool _mapsEqual(
-    Map<HomeBadgeBucket, DateTime> left,
-    Map<HomeBadgeBucket, DateTime> right,
-  ) {
-    if (left.length != right.length) {
-      return false;
-    }
-    for (final entry in left.entries) {
-      final other = right[entry.key];
-      if (other == null || !other.isAtSameMomentAs(entry.value)) {
-        return false;
-      }
-    }
-    return true;
   }
 
   Future<void> _runEmailSyncSubscriptionReconcile() async {

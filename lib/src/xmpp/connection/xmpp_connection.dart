@@ -133,9 +133,6 @@ class XmppConnection extends mox.XmppConnection {
       case == MessageCollectionsPubSubManager:
         return pubSubHubManager?.getDelegate<MessageCollectionsPubSubManager>()
             as T?;
-      case == HomeBadgeMarkersPubSubManager:
-        return pubSubHubManager?.getDelegate<HomeBadgeMarkersPubSubManager>()
-            as T?;
       case == SpamPubSubManager:
         return pubSubHubManager?.getDelegate<SpamPubSubManager>() as T?;
       case == AddressBlockPubSubManager:
