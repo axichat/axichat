@@ -17,6 +17,7 @@ import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/app_storage.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
@@ -27,7 +28,6 @@ import 'package:flutter/services.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
 import 'package:logging/logging.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'src/app.dart';
 
@@ -58,8 +58,7 @@ Future<void> main(List<String> args) async {
   final Future<bool> notificationPermissionsFuture = notificationService
       .hasAllNotificationPermissions();
 
-  final Future<Directory> storageDirectoryFuture =
-      getApplicationDocumentsDirectory();
+  final Future<Directory> storageDirectoryFuture = prepareAppStorageDirectory();
   const bool isWeb = kIsWeb;
 
   final Directory storageDirectory = await storageDirectoryFuture;

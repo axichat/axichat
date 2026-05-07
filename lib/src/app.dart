@@ -36,6 +36,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/app_storage.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
@@ -101,7 +102,8 @@ class _AxichatState extends State<Axichat> {
               : XmppConnection(),
           buildStateStore: (prefix, passphrase) async {
             final Logger logger = Logger('XmppStateStore');
-            await Hive.initFlutter(prefix);
+            final hiveDirectory = await prepareAppStorageSubdirectory(prefix);
+            Hive.init(hiveDirectory.path);
             if (!Hive.isAdapterRegistered(1)) {
               Hive.registerAdapter(PresenceAdapter());
             }
