@@ -346,10 +346,9 @@ Map<String, String> _cargoEnvForTarget({
   if (codeConfig.targetOS == OS.android) {
     final androidConfig = codeConfig.android;
     final ndkApi = androidConfig.targetNdkApi;
-    final targetToolchainTriple =
-        triple == _androidArmRustTargetTriple
-            ? 'armv7a-linux-androideabi'
-            : triple;
+    final targetToolchainTriple = triple == _androidArmRustTargetTriple
+        ? 'armv7a-linux-androideabi'
+        : triple;
     final targetPrefix = '$targetToolchainTriple$ndkApi';
     toolchainDir ??= _androidNdkToolchainBinDirectory();
     if (toolchainDir != null) {
