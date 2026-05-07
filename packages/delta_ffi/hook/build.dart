@@ -18,8 +18,7 @@ Future<void> main(List<String> args) async {
     final codeConfig = config.code;
     final packageRoot = input.packageRoot;
     final crateDir = packageRoot.resolve('rust/');
-    final targetTriple =
-        _rustTargetTriple(codeConfig.targetOS, codeConfig.targetArchitecture);
+    final targetTriple = _rustTargetTriple(codeConfig);
     final resolvedMode = _resolveBuildMode(input, args);
     final isRelease = _isReleaseMode(resolvedMode.name);
     final cargoTargetDir = _resolvedCargoTargetDirectory(
@@ -279,21 +278,30 @@ String? _rustcExecutable() {
   return null;
 }
 
-String _rustTargetTriple(OS os, Architecture architecture) {
-  return switch ((os, architecture)) {
-    (OS.macOS, Architecture.x64) => 'x86_64-apple-darwin',
-    (OS.macOS, Architecture.arm64) => 'aarch64-apple-darwin',
-    (OS.windows, Architecture.arm64) => 'aarch64-pc-windows-msvc',
-    (OS.windows, Architecture.ia32) => 'i686-pc-windows-msvc',
-    (OS.windows, Architecture.x64) => 'x86_64-pc-windows-msvc',
-    (OS.linux, Architecture.x64) => 'x86_64-unknown-linux-gnu',
-    (OS.linux, Architecture.arm64) => 'aarch64-unknown-linux-gnu',
-    (OS.android, Architecture.arm64) => 'aarch64-linux-android',
-    (OS.android, Architecture.x64) => 'x86_64-linux-android',
-    (OS.android, Architecture.arm) => 'armv7-linux-androideabi',
-    (OS.android, Architecture.ia32) => 'i686-linux-android',
+String _rustTargetTriple(CodeConfig codeConfig) {
+  final os = codeConfig.targetOS;
+  final architecture = codeConfig.targetArchitecture;
+  final iosSdk = os == OS.iOS ? codeConfig.iOS.targetSdk : null;
+
+  return switch ((os, architecture, iosSdk)) {
+    (OS.macOS, Architecture.x64, _) => 'x86_64-apple-darwin',
+    (OS.macOS, Architecture.arm64, _) => 'aarch64-apple-darwin',
+    (OS.iOS, Architecture.arm64, IOSSdk.iPhoneOS) => 'aarch64-apple-ios',
+    (OS.iOS, Architecture.arm64, IOSSdk.iPhoneSimulator) =>
+      'aarch64-apple-ios-sim',
+    (OS.iOS, Architecture.x64, IOSSdk.iPhoneSimulator) => 'x86_64-apple-ios',
+    (OS.windows, Architecture.arm64, _) => 'aarch64-pc-windows-msvc',
+    (OS.windows, Architecture.ia32, _) => 'i686-pc-windows-msvc',
+    (OS.windows, Architecture.x64, _) => 'x86_64-pc-windows-msvc',
+    (OS.linux, Architecture.x64, _) => 'x86_64-unknown-linux-gnu',
+    (OS.linux, Architecture.arm64, _) => 'aarch64-unknown-linux-gnu',
+    (OS.android, Architecture.arm64, _) => 'aarch64-linux-android',
+    (OS.android, Architecture.x64, _) => 'x86_64-linux-android',
+    (OS.android, Architecture.arm, _) => 'armv7-linux-androideabi',
+    (OS.android, Architecture.ia32, _) => 'i686-linux-android',
     _ => throw UnsupportedError(
-        'Unsupported target combination: ${os.name}/${architecture.name}',
+        'Unsupported target combination: ${os.name}/${architecture.name}'
+        '${iosSdk == null ? '' : '/${iosSdk.type}'}',
       ),
   };
 }
@@ -314,6 +322,8 @@ Map<String, String> _cargoEnvForTarget({
   Map<String, String>? currentEnvironment,
 }) {
   final env = <String, String>{};
+  final isAppleTarget =
+      codeConfig.targetOS == OS.iOS || codeConfig.targetOS == OS.macOS;
 
   // For CARGO_TARGET_* vars we need an upper-case triple with underscores.
   // Example: aarch64-apple-darwin -> AARCH64_APPLE_DARWIN
@@ -337,7 +347,7 @@ Map<String, String> _cargoEnvForTarget({
     final androidConfig = codeConfig.android;
     final ndkApi = androidConfig.targetNdkApi;
     final targetToolchainTriple =
-        triple == _rustTargetTriple(OS.android, Architecture.arm)
+        triple == _androidArmRustTargetTriple
             ? 'armv7a-linux-androideabi'
             : triple;
     final targetPrefix = '$targetToolchainTriple$ndkApi';
@@ -364,12 +374,14 @@ Map<String, String> _cargoEnvForTarget({
   }
 
   if (compilerPath != null && archiverPath != null && linkerPath != null) {
+    final effectiveLinkerPath = isAppleTarget ? compilerPath : linkerPath;
     final compilerCommand =
         useWindowsMsvcToolNames ? _executableName(compilerPath) : compilerPath;
     final archiverCommand =
         useWindowsMsvcToolNames ? _executableName(archiverPath) : archiverPath;
-    final linkerCommand =
-        useWindowsMsvcToolNames ? _executableName(linkerPath) : linkerPath;
+    final linkerCommand = useWindowsMsvcToolNames
+        ? _executableName(effectiveLinkerPath)
+        : effectiveLinkerPath;
     final cxxCommand = cxxPath == null
         ? null
         : useWindowsMsvcToolNames
@@ -406,32 +418,36 @@ Map<String, String> _cargoEnvForTarget({
     env['CXX_$tripleKeyCc'] = fallbackCxx;
   }
 
-  // For macOS targets (e.g. aarch64-apple-darwin), ensure the SDK is visible
-  // so headers like TargetConditionals.h can be found.
-  if (codeConfig.targetOS == OS.macOS && triple.endsWith('-apple-darwin')) {
+  if (isAppleTarget) {
+    final sdkName = _appleSdkName(codeConfig);
     String? sdkRoot = Platform.environment['SDKROOT'];
-    if (sdkRoot == null || sdkRoot.isEmpty) {
-      try {
-        final result = Process.runSync(
-          'xcrun',
-          ['--sdk', 'macosx', '--show-sdk-path'],
-        );
-        if (result.exitCode == 0 && result.stdout is String) {
-          sdkRoot = (result.stdout as String).trim();
-        }
-      } catch (_) {
-        // Ignore failure; we'll just skip setting SDKROOT.
-      }
+    if ((sdkRoot == null || sdkRoot.isEmpty) && sdkName != null) {
+      sdkRoot = _appleSdkRoot(sdkName);
     }
     if (sdkRoot != null && sdkRoot.isNotEmpty) {
       env['SDKROOT'] = sdkRoot;
-      final cflagsKey = 'CFLAGS_$tripleKeyCc';
-      final existing = env[cflagsKey];
       final sysrootFlag = '-isysroot $sdkRoot';
-      env[cflagsKey] = [
-        if (existing != null && existing.isNotEmpty) existing,
-        sysrootFlag,
-      ].join(' ');
+      env['CFLAGS_$tripleKeyCc'] =
+          _appendCompilerFlag(env['CFLAGS_$tripleKeyCc'], sysrootFlag);
+      env['CXXFLAGS_$tripleKeyCc'] =
+          _appendCompilerFlag(env['CXXFLAGS_$tripleKeyCc'], sysrootFlag);
+    }
+
+    final deploymentTarget = _appleDeploymentTarget(codeConfig);
+    if (deploymentTarget != null) {
+      final deploymentEnvKey = codeConfig.targetOS == OS.iOS
+          ? 'IPHONEOS_DEPLOYMENT_TARGET'
+          : 'MACOSX_DEPLOYMENT_TARGET';
+      env[deploymentEnvKey] = deploymentTarget;
+
+      final minVersionFlag = _appleMinVersionFlag(
+        codeConfig,
+        deploymentTarget,
+      );
+      env['CFLAGS_$tripleKeyCc'] =
+          _appendCompilerFlag(env['CFLAGS_$tripleKeyCc'], minVersionFlag);
+      env['CXXFLAGS_$tripleKeyCc'] =
+          _appendCompilerFlag(env['CXXFLAGS_$tripleKeyCc'], minVersionFlag);
     }
   }
 
@@ -542,6 +558,8 @@ Future<String?> _resolveSourceDateEpoch(Uri packageRoot) async {
   }
 }
 
+const _androidArmRustTargetTriple = 'armv7-linux-androideabi';
+
 Future<String> _pipeProcessOutput(
   Stream<List<int>> stream,
   IOSink sink,
@@ -552,6 +570,76 @@ Future<String> _pipeProcessOutput(
     output.write(chunk);
   }
   return output.toString();
+}
+
+String? _appleSdkRoot(String sdkName) {
+  try {
+    final result = Process.runSync(
+      'xcrun',
+      ['--sdk', sdkName, '--show-sdk-path'],
+    );
+    if (result.exitCode != 0) {
+      return null;
+    }
+    final sdkRoot = result.stdout.toString().trim();
+    return sdkRoot.isEmpty ? null : sdkRoot;
+  } catch (_) {
+    return null;
+  }
+}
+
+String? _appleSdkName(CodeConfig codeConfig) {
+  return switch (codeConfig.targetOS) {
+    OS.iOS => codeConfig.iOS.targetSdk.type,
+    OS.macOS => 'macosx',
+    _ => null,
+  };
+}
+
+String? _appleDeploymentTarget(CodeConfig codeConfig) {
+  final targetOS = codeConfig.targetOS;
+  final envKey = switch (targetOS) {
+    OS.iOS => 'IPHONEOS_DEPLOYMENT_TARGET',
+    OS.macOS => 'MACOSX_DEPLOYMENT_TARGET',
+    _ => null,
+  };
+  if (envKey == null) {
+    return null;
+  }
+
+  final configuredValue = Platform.environment[envKey]?.trim();
+  if (configuredValue != null && configuredValue.isNotEmpty) {
+    return configuredValue;
+  }
+
+  return switch (targetOS) {
+    OS.iOS => codeConfig.iOS.targetVersion.toString(),
+    OS.macOS => codeConfig.macOS.targetVersion.toString(),
+    _ => null,
+  };
+}
+
+String _appleMinVersionFlag(
+  CodeConfig codeConfig,
+  String deploymentTarget,
+) {
+  return switch (codeConfig.targetOS) {
+    OS.iOS => '-mios-version-min=$deploymentTarget',
+    OS.macOS => '-mmacosx-version-min=$deploymentTarget',
+    _ => throw UnsupportedError(
+        'Unsupported Apple target OS: ${codeConfig.targetOS.name}',
+      ),
+  };
+}
+
+String _appendCompilerFlag(String? existing, String flag) {
+  if (existing == null || existing.isEmpty) {
+    return flag;
+  }
+  if (existing.contains(flag)) {
+    return existing;
+  }
+  return '$existing $flag';
 }
 
 Future<void> _ensureDeltachatCrateTypePatched() async {
