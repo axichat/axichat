@@ -4,7 +4,7 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.im.axi.axichat</string>
+		<string>group.im.axi.axichat.shared</string>
 	</array>
 </dict>
 </plist>
