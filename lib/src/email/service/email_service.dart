@@ -50,7 +50,6 @@ import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
@@ -3599,22 +3598,8 @@ class EmailService {
       scope: scope,
       databasePrefix: databasePrefix,
     );
-    var bootstrapped = false;
-    final stateStore = XmppStateStore();
-    if (stateStore.initialized) {
-      final stateKey = XmppStateStore.registerKey(bootstrapKey.value);
-      bootstrapped = stateStore.read(key: stateKey) == true;
-      if (!bootstrapped) {
-        bootstrapped =
-            (await _credentialStore.read(key: bootstrapKey)) == true.toString();
-        if (bootstrapped) {
-          await stateStore.write(key: stateKey, value: true);
-        }
-      }
-    } else {
-      bootstrapped =
-          (await _credentialStore.read(key: bootstrapKey)) == true.toString();
-    }
+    final bootstrapped =
+        (await _credentialStore.read(key: bootstrapKey)) == true.toString();
     if (bootstrapped) {
       return;
     }
@@ -3659,25 +3644,10 @@ class EmailService {
           !_acceptsRuntimeWork) {
         return;
       }
-      final stateStore = XmppStateStore();
-      final persisted = stateStore.initialized
-          ? await stateStore.write(
-              key: XmppStateStore.registerKey(bootstrapKey.value),
-              value: true,
-            )
-          : await _credentialStore.write(
-              key: bootstrapKey,
-              value: true.toString(),
-            );
+      await _credentialStore.write(key: bootstrapKey, value: true.toString());
       if (operationId != _bootstrapOperationIdForScope(scope) ||
           !_acceptsRuntimeWork) {
         return;
-      }
-      if (!persisted) {
-        _log.warning(
-          'Email history bootstrap completed but the bootstrap marker could '
-          'not be persisted.',
-        );
       }
       await _refreshConnectivityState(
         source: _EmailSyncSource.bootstrapComplete,
