@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -17,9 +18,11 @@ import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../mocks.dart';
@@ -1519,6 +1522,71 @@ void main() {
     ]);
     await service.shutdown(jid: 'bob@axi.im');
   });
+
+  test(
+    'bootstrap marker stored in XmppStateStore suppresses repeated bootstrap',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'axichat_email_bootstrap',
+      );
+      Hive.init(tempDir.path);
+      await Hive.openBox(XmppStateStore.boxName);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        expect(
+          XmppStateStore().read(
+            key: XmppStateStore.registerKey(
+              'email_bootstrap_v1_bob_bob@axi.im',
+            ),
+          ),
+          isTrue,
+        );
+
+        clearInteractions(transport);
+
+        listener(
+          DeltaCoreEvent(
+            type: DeltaEventType.connectivityChanged.code,
+            data1: 0,
+            data2: 0,
+          ),
+        );
+        await pumpMicrotasks();
+
+        listener(
+          DeltaCoreEvent(
+            type: DeltaEventType.connectivityChanged.code,
+            data1: 0,
+            data2: 0,
+          ),
+        );
+        await pumpMicrotasks();
+
+        verifyNever(() => transport.bootstrapFromCore());
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+        await XmppStateStore().close();
+        await Hive.deleteFromDisk();
+        await tempDir.delete(recursive: true);
+      }
+    },
+  );
 
   test(
     'working connectivity does not downgrade a ready sync state after grace',
