@@ -9,7 +9,7 @@ class AppLocalizationsFr extends AppLocalizations {
   AppLocalizationsFr([String locale = 'fr']) : super(locale);
 
   @override
-  String get appTitle => 'axichat';
+  String get appTitle => 'Axichat';
 
   @override
   String get homeTabChats => 'Conversations';

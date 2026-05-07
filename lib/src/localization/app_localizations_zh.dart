@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'axichat';
+  String get appTitle => 'Axichat';
 
   @override
   String get homeTabChats => '聊天';
@@ -6189,7 +6189,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   AppLocalizationsZhHk() : super('zh_HK');
 
   @override
-  String get appTitle => 'axichat';
+  String get appTitle => 'Axichat';
 
   @override
   String get homeTabChats => '聊天';

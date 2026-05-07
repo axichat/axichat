@@ -108,7 +108,7 @@ abstract class AppLocalizations {
   /// The title of the application
   ///
   /// In en, this message translates to:
-  /// **'axichat'**
+  /// **'Axichat'**
   String get appTitle;
 
   /// No description provided for @homeTabChats.

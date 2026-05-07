@@ -9,7 +9,7 @@ class AppLocalizationsDe extends AppLocalizations {
   AppLocalizationsDe([String locale = 'de']) : super(locale);
 
   @override
-  String get appTitle => 'axichat';
+  String get appTitle => 'Axichat';
 
   @override
   String get homeTabChats => 'Unterhaltungen';

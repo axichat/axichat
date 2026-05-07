@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -16,6 +17,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -356,10 +358,14 @@ class MaterialAxichat extends StatefulWidget {
 }
 
 class _MaterialAxichatState extends State<MaterialAxichat> {
+  static final Logger _exitLogger = Logger('AppExit');
+  static const Duration _exitCleanupTimeout = Duration(seconds: 8);
+
   bool _shareIntentAwaitingRoute = false;
   bool _notificationIntentHandling = false;
   bool _notificationIntentAwaitingRoute = false;
   Timer? _pendingAuthNavigation;
+  Future<void>? _exitCleanupFuture;
   AuthenticationState? _lastAuthState;
   String? _pendingNotificationChatJid;
   bool _checkedInitialNotificationLaunchDetails = false;
@@ -367,6 +373,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     onResume: _handleLifecycleResume,
     onShow: _handleLifecycleResume,
     onRestart: _handleLifecycleResume,
+    onExitRequested: _handleExitRequested,
   );
 
   late final GoRouter _router = GoRouter(
@@ -829,6 +836,53 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     context.read<UpdateCubit>().refresh();
     _handleNotificationIntent();
     _handleShareIntent();
+  }
+
+  // Desktop exit requests do not wait for normal widget disposal. Use the
+  // platform exit hook to shut down network and storage services explicitly.
+  Future<AppExitResponse> _handleExitRequested() async {
+    _exitCleanupFuture ??= _runExitCleanup();
+    try {
+      await _exitCleanupFuture!.timeout(_exitCleanupTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _exitLogger.warning(
+        'Timed out while preparing app exit; allowing termination.',
+        error,
+        stackTrace,
+      );
+    }
+    return AppExitResponse.exit;
+  }
+
+  Future<void> _runExitCleanup() async {
+    if (!mounted) return;
+
+    await _runExitStep('prepare authentication for exit', () {
+      return context.read<AuthenticationCubit>().prepareForAppExit();
+    });
+    await _runExitStep('stop email runtime', () {
+      return context.read<EmailService>().shutdown();
+    });
+    await _runExitStep('close XMPP runtime', () {
+      return context.read<XmppService>().close();
+    });
+    await _runExitStep('close credential store', () {
+      return context.read<CredentialStore>().close();
+    });
+    await _runExitStep('stop network availability listener', () {
+      return NetworkAvailabilityService.instance.stop();
+    });
+  }
+
+  Future<void> _runExitStep(
+    String label,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } on Object catch (error, stackTrace) {
+      _exitLogger.warning('Failed to $label.', error, stackTrace);
+    }
   }
 
   Future<void> _handleNotificationIntent() async {

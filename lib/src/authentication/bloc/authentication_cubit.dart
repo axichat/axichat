@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/main.dart';
@@ -186,7 +185,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       onShow: () => _handleLifecycleResume('onShow'),
       onRestart: () => _handleLifecycleResume('onRestart'),
       onDetach: _handleLifecycleDetach,
-      onExitRequested: _handleExitRequested,
       onStateChange: (lifeCycleState) async {
         _log.info(
           'Lifecycle state changed: state=$lifeCycleState '
@@ -1007,7 +1005,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!await _hasPartialUnregisterJid(jid)) {
       return;
     }
-    await _clearPartialUnregisterJidIfMatches(jid);
+    await _clearPartialUnregisterState();
   }
 
   Future<_StoredLoginCredentials> _readStoredLoginCredentials() async {
@@ -1066,12 +1064,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await logout();
   }
 
-  Future<AppExitResponse> _handleExitRequested() async {
+  Future<void> prepareForAppExit() async {
     if (_shouldPreserveBackgroundSession()) {
-      return AppExitResponse.exit;
+      return;
     }
     await logout();
-    return AppExitResponse.exit;
   }
 
   bool _shouldPreserveBackgroundSession() {
