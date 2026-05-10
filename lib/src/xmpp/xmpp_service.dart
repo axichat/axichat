@@ -714,6 +714,7 @@ class XmppService extends XmppBase
     this._databaseFactory,
     this._notificationService,
     this._capability,
+    this._connectingWatchdogTimeout,
   ) {
     _pingController = XmppPingController(owner: this);
   }
@@ -723,6 +724,7 @@ class XmppService extends XmppBase
   static const String _capabilityHashBase = 'https://axichat.im/caps';
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
+  static const _defaultConnectingWatchdogTimeout = Duration(seconds: 20);
   final Map<String, String> _notificationPayloadCache = <String, String>{};
   final Map<String, String> _notificationPayloadLowerCache = <String, String>{};
   bool _notificationPayloadCacheReady = false;
@@ -736,12 +738,14 @@ class XmppService extends XmppBase
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
     NotificationService? notificationService,
     Capability capability = const Capability(),
+    Duration connectingWatchdogTimeout = _defaultConnectingWatchdogTimeout,
   }) => _instance ??= XmppService._(
     buildConnection,
     buildStateStore,
     buildDatabase,
     notificationService ?? NotificationService(),
     capability,
+    connectingWatchdogTimeout,
   );
 
   final Logger _xmppLogger = Logger('XmppService');
@@ -769,6 +773,7 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
+  final Duration _connectingWatchdogTimeout;
   AppLocalizations? _localizations;
   var _autoDownloadImages = true;
   var _autoDownloadVideos = false;
@@ -1158,6 +1163,7 @@ class XmppService extends XmppBase
   StreamController<ConnectionState> _connectivityStream =
       StreamController<ConnectionState>.broadcast();
   Completer<void> _streamNegotiationsDone = Completer<void>();
+  Timer? _connectingWatchdogTimer;
   _XmppBootstrapPass? _activeBootstrapPass;
   final LinkedHashMap<Object, XmppBootstrapOperation> _bootstrapOperations =
       LinkedHashMap<Object, XmppBootstrapOperation>();
@@ -1170,6 +1176,12 @@ class XmppService extends XmppBase
       'Failed to enable reconnection before requesting reconnect.';
 
   void _setConnectionState(ConnectionState state) {
+    if (state == ConnectionState.connecting) {
+      _scheduleConnectingWatchdog();
+    } else {
+      _cancelConnectingWatchdog();
+    }
+
     if (_connectionState == state) {
       return;
     }
@@ -1193,6 +1205,45 @@ class XmppService extends XmppBase
     }
     _pingController.handleConnectionState(state);
     _emitSelfAvatarHydrating();
+  }
+
+  void _scheduleConnectingWatchdog() {
+    _connectingWatchdogTimer?.cancel();
+    _connectingWatchdogTimer = Timer(_connectingWatchdogTimeout, () {
+      _connectingWatchdogTimer = null;
+      fireAndForget(
+        _handleConnectingWatchdogTimeout,
+        operationName: 'XmppService.connectingWatchdog',
+      );
+    });
+  }
+
+  void _cancelConnectingWatchdog() {
+    _connectingWatchdogTimer?.cancel();
+    _connectingWatchdogTimer = null;
+  }
+
+  Future<void> _handleConnectingWatchdogTimeout() async {
+    if (connectionState != ConnectionState.connecting) {
+      return;
+    }
+    if (_streamNegotiationsDone.isCompleted) {
+      _setConnectionState(ConnectionState.connected);
+      await _connection.completeReconnect();
+      return;
+    }
+
+    final activity = _connection.reconnectionPolicy.reconnectActivity;
+    if (activity.shouldKeepConnectingWatchdogAlive) {
+      _scheduleConnectingWatchdog();
+      return;
+    }
+    if (activity == XmppReconnectActivity.awaitingNegotiation) {
+      await _connection.reconnectionPolicy.moveAwaitingNegotiationToBackoff();
+    }
+    if (activity.shouldClearStaleConnecting) {
+      _setConnectionState(ConnectionState.notConnected);
+    }
   }
 
   void _scheduleConnectivityNotificationUpdate(ConnectionState state) {
@@ -1230,6 +1281,11 @@ class XmppService extends XmppBase
     _mamNegotiationResumed = event.resumed;
     _mamGlobalSyncCompletedSinceConnect = false;
     _outboundPinMutationsByStanzaId.clear();
+    _setConnectionState(ConnectionState.connected);
+    if (!_streamNegotiationsDone.isCompleted) {
+      _streamNegotiationsDone.complete();
+    }
+    await _connection.completeReconnect();
     try {
       if (_connection.carbonsEnabled != true) {
         _xmppLogger.info('Enabling carbons...');
@@ -1250,10 +1306,6 @@ class XmppService extends XmppBase
       _activeBootstrapPass = pass;
       unawaited(_runBootstrapOperations(trigger, pass: pass));
     }
-    if (!_streamNegotiationsDone.isCompleted) {
-      _streamNegotiationsDone.complete();
-    }
-    await _connection.completeReconnect();
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
 
@@ -1478,16 +1530,21 @@ class XmppService extends XmppBase
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
 
-  Future<void> _dispatchReconnectTrigger(ReconnectTrigger trigger) async {
+  Future<ReconnectRequestOutcome> _dispatchReconnectTrigger(
+    ReconnectTrigger trigger,
+  ) async {
     if (trigger == ReconnectTrigger.autoFailure) {
       final policy = _connection.reconnectionPolicy;
       final startedReconnectCycle = await policy.canTriggerFailure();
       if (startedReconnectCycle || await _connection.isReconnecting()) {
         await policy.onFailure();
+        return startedReconnectCycle
+            ? ReconnectRequestOutcome.dispatched
+            : ReconnectRequestOutcome.joinedActiveCycle;
       }
-      return;
+      return ReconnectRequestOutcome.ignored;
     }
-    await _connection.requestReconnect(trigger);
+    return _connection.requestReconnect(trigger);
   }
 
   Future<String> _reconnectStateSummary() async {
@@ -2792,13 +2849,12 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<bool> _dispatchReconnectRequest(
+  Future<ReconnectRequestOutcome> _dispatchReconnectRequest(
     ReconnectTrigger trigger, {
     required bool resetConnectingStateOnFailure,
   }) async {
     try {
-      await _dispatchReconnectTrigger(trigger);
-      return true;
+      return await _dispatchReconnectTrigger(trigger);
     } on Exception catch (error, stackTrace) {
       if (resetConnectingStateOnFailure &&
           connectionState == ConnectionState.connecting) {
@@ -2809,7 +2865,7 @@ class XmppService extends XmppBase
         error,
         stackTrace,
       );
-      return false;
+      return ReconnectRequestOutcome.ignored;
     }
   }
 
@@ -2844,14 +2900,16 @@ class XmppService extends XmppBase
       _xmppLogger.info('Reconnect request failed while enabling reconnection.');
       return false;
     }
-    if (!await _dispatchReconnectRequest(
+    final outcome = await _dispatchReconnectRequest(
       ReconnectTrigger.autoFailure,
       resetConnectingStateOnFailure: false,
-    )) {
+    );
+    if (!outcome.accepted) {
       return false;
     }
     _xmppLogger.info(
       'Reconnect request dispatched: trigger=${ReconnectTrigger.autoFailure} '
+      'outcome=$outcome '
       '${await _reconnectStateSummary()}',
     );
     return true;
@@ -2917,14 +2975,20 @@ class XmppService extends XmppBase
         connectionState != ConnectionState.connecting) {
       _setConnectionState(ConnectionState.connecting);
     }
-    if (!await _dispatchReconnectRequest(
+    final outcome = await _dispatchReconnectRequest(
       trigger,
       resetConnectingStateOnFailure: trigger.shouldBypassBackoff,
-    )) {
+    );
+    if (!outcome.accepted) {
+      if (trigger.shouldBypassBackoff &&
+          connectionState == ConnectionState.connecting) {
+        _setConnectionState(ConnectionState.notConnected);
+      }
       return false;
     }
     _xmppLogger.info(
       'Reconnect request dispatched: trigger=$trigger '
+      'outcome=$outcome '
       '${await _reconnectStateSummary()}',
     );
     return true;
@@ -3515,6 +3579,7 @@ class XmppService extends XmppBase
   }
 
   Future<void> close() async {
+    _cancelConnectingWatchdog();
     if (_hasInitializedConnection) {
       final connection = _connection;
       await connection.getManager<PubSubManager>()?.disposeSupport();

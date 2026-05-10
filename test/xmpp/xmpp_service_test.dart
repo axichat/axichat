@@ -538,6 +538,38 @@ void main() {
     });
 
     test(
+      'When stream negotiations complete, connecting state becomes connected.',
+      () async {
+        final states = <ConnectionState>[];
+        final subscription = xmppService.connectivityStream.listen(states.add);
+        addTearDown(subscription.cancel);
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connected);
+        expect(
+          states,
+          containsAllInOrder([
+            ConnectionState.connecting,
+            ConnectionState.connected,
+          ]),
+        );
+        verify(() => mockConnection.completeReconnect()).called(1);
+      },
+    );
+
+    test(
       'When stream negotiations complete, does not manually send initial presence.',
       () async {
         final presenceManager = MockPresenceManager();
@@ -2691,6 +2723,7 @@ void main() {
         reconnectTriggers.add(
           invocation.positionalArguments.first as ReconnectTrigger,
         );
+        return ReconnectRequestOutcome.dispatched;
       });
 
       xmppService = XmppService(
@@ -2728,12 +2761,51 @@ void main() {
       () async {
         await reconnectionPolicy.setShouldReconnect(true);
         expect(await reconnectionPolicy.canTriggerFailure(), isTrue);
+        when(
+          () => mockConnection.isReconnecting(),
+        ).thenAnswer((_) => reconnectionPolicy.getIsReconnecting());
 
         expect(
           await xmppService.requestReconnect(ReconnectTrigger.autoFailure),
           isTrue,
         );
         expect(reconnectTriggers, isEmpty);
+      },
+    );
+
+    test(
+      'requestReconnect reflects an accepted lower reconnect as connecting.',
+      () async {
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        when(() => mockConnection.isReconnecting()).thenAnswer((_) async {
+          return true;
+        });
+        when(
+          () => mockConnection.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) async {
+          reconnectTriggers.add(ReconnectTrigger.resume);
+          return ReconnectRequestOutcome.joinedActiveCycle;
+        });
+        final states = <ConnectionState>[];
+        final subscription = xmppService.connectivityStream.listen(states.add);
+        addTearDown(subscription.cancel);
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.resume),
+          isTrue,
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(states, [ConnectionState.connecting]);
+        expect(reconnectTriggers, [ReconnectTrigger.resume]);
       },
     );
 
@@ -2881,6 +2953,7 @@ void main() {
         reconnectTriggers.add(
           invocation.positionalArguments.first as ReconnectTrigger,
         );
+        return ReconnectRequestOutcome.dispatched;
       });
 
       xmppService = XmppService(
@@ -2977,6 +3050,82 @@ void main() {
         await xmppService.ensureForegroundSocketIfActive();
 
         verifyNever(() => mockConnection.disconnect());
+      },
+    );
+
+    test(
+      'Connecting watchdog moves stale awaiting negotiation to backoff.',
+      () async {
+        await xmppService.close();
+        await pumpEventQueue();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+          connectingWatchdogTimeout: const Duration(milliseconds: 50),
+        );
+        await connectSuccessfully(xmppService);
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+        await reconnectionPolicy.onSuccess();
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingNegotiation,
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.scheduledBackoff,
+        );
+      },
+    );
+
+    test(
+      'Connecting watchdog does not clear a completed stream negotiation.',
+      () async {
+        await xmppService.close();
+        await pumpEventQueue();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+          connectingWatchdogTimeout: const Duration(milliseconds: 50),
+        );
+        await connectSuccessfully(xmppService);
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+        await pumpEventQueue();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connected);
       },
     );
   });

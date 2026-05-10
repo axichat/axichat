@@ -211,6 +211,7 @@ void prepareMockConnection() {
   });
 
   when(() => mockConnection.loadStreamState()).thenAnswer((_) async {});
+  when(() => mockConnection.completeReconnect()).thenAnswer((_) async {});
   when(() => mockConnection.reconnectionPolicy).thenReturn(reconnectionPolicy);
   when(
     () => mockConnection.isReconnecting(),
@@ -225,7 +226,7 @@ void prepareMockConnection() {
   for (final trigger in ReconnectTrigger.values) {
     when(
       () => mockConnection.requestReconnect(trigger),
-    ).thenAnswer((_) async {});
+    ).thenAnswer((_) async => ReconnectRequestOutcome.dispatched);
   }
   when(() => mockConnection.setUserAgent(any())).thenAnswer((_) {});
   when(() => mockConnection.setFastToken(any())).thenAnswer((_) {});

@@ -107,12 +107,16 @@ void main() {
       );
       async.flushMicrotasks();
 
-      fireAndForget(
-        () => policy.requestReconnect(ReconnectTrigger.immediateRetry),
-      );
+      final outcomes = <ReconnectRequestOutcome>[];
+      fireAndForget(() async {
+        outcomes.add(
+          await policy.requestReconnect(ReconnectTrigger.immediateRetry),
+        );
+      });
       async.flushMicrotasks();
 
       expect(reconnectCalls, 1);
+      expect(outcomes, [ReconnectRequestOutcome.dispatched]);
     });
   });
 
@@ -160,11 +164,14 @@ void main() {
       });
 
       fireAndForget(() => policy.setShouldReconnect(true));
+      final outcomes = <ReconnectRequestOutcome>[];
       fireAndForget(() async {
-        await Future.wait([
-          policy.requestReconnect(ReconnectTrigger.immediateRetry),
-          policy.requestReconnect(ReconnectTrigger.immediateRetry),
-        ]);
+        outcomes.addAll(
+          await Future.wait([
+            policy.requestReconnect(ReconnectTrigger.immediateRetry),
+            policy.requestReconnect(ReconnectTrigger.immediateRetry),
+          ]),
+        );
       });
 
       async.flushMicrotasks();
@@ -172,6 +179,13 @@ void main() {
 
       reconnectCompleter.complete();
       async.flushMicrotasks();
+      expect(
+        outcomes,
+        containsAll([
+          ReconnectRequestOutcome.dispatched,
+          ReconnectRequestOutcome.joinedActiveCycle,
+        ]),
+      );
     });
   });
 
@@ -186,11 +200,14 @@ void main() {
       });
 
       fireAndForget(() => policy.setShouldReconnect(true));
+      final outcomes = <ReconnectRequestOutcome>[];
       fireAndForget(() async {
-        await Future.wait([
-          policy.requestReconnect(ReconnectTrigger.resume),
-          policy.requestReconnect(ReconnectTrigger.networkAvailable),
-        ]);
+        outcomes.addAll(
+          await Future.wait([
+            policy.requestReconnect(ReconnectTrigger.resume),
+            policy.requestReconnect(ReconnectTrigger.networkAvailable),
+          ]),
+        );
       });
 
       async.flushMicrotasks();
@@ -198,7 +215,30 @@ void main() {
 
       reconnectCompleter.complete();
       async.flushMicrotasks();
+      expect(
+        outcomes,
+        containsAll([
+          ReconnectRequestOutcome.dispatched,
+          ReconnectRequestOutcome.joinedActiveCycle,
+        ]),
+      );
     });
+  });
+
+  test('requestReconnect reports ignored triggers', () async {
+    final policy = XmppReconnectionPolicy.exponential();
+
+    expect(
+      await policy.requestReconnect(ReconnectTrigger.immediateRetry),
+      ReconnectRequestOutcome.ignored,
+    );
+
+    await policy.setShouldReconnect(true);
+
+    expect(
+      await policy.requestReconnect(ReconnectTrigger.autoFailure),
+      ReconnectRequestOutcome.ignored,
+    );
   });
 
   test(
@@ -211,21 +251,70 @@ void main() {
       });
 
       await policy.setShouldReconnect(true);
-      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      expect(
+        await policy.requestReconnect(ReconnectTrigger.immediateRetry),
+        ReconnectRequestOutcome.dispatched,
+      );
       await policy.reset();
-      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      expect(
+        await policy.requestReconnect(ReconnectTrigger.immediateRetry),
+        ReconnectRequestOutcome.joinedActiveCycle,
+      );
 
       expect(reconnectCalls, 1);
 
       await policy.onSuccess();
-      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      expect(
+        await policy.requestReconnect(ReconnectTrigger.immediateRetry),
+        ReconnectRequestOutcome.joinedActiveCycle,
+      );
 
       expect(reconnectCalls, 1);
+      expect(
+        policy.reconnectActivity,
+        XmppReconnectActivity.awaitingNegotiation,
+      );
 
       await policy.completeReconnect();
-      await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+      expect(policy.reconnectActivity, XmppReconnectActivity.inactive);
+      expect(
+        await policy.requestReconnect(ReconnectTrigger.immediateRetry),
+        ReconnectRequestOutcome.dispatched,
+      );
 
       expect(reconnectCalls, 2);
     },
   );
+
+  test('awaiting negotiation cycle can move into backoff and retry', () {
+    fakeAsync((async) {
+      final policy = XmppReconnectionPolicy.exponential();
+      var reconnectCalls = 0;
+      policy.register(() async {
+        reconnectCalls++;
+      });
+
+      var movedToBackoff = false;
+      fireAndForget(() async {
+        await policy.setShouldReconnect(true);
+        await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+        await policy.onSuccess();
+        movedToBackoff = await policy.moveAwaitingNegotiationToBackoff();
+      });
+      async.flushMicrotasks();
+
+      expect(reconnectCalls, 1);
+      expect(movedToBackoff, isTrue);
+      expect(policy.reconnectActivity, XmppReconnectActivity.scheduledBackoff);
+
+      async.elapse(const Duration(minutes: 10));
+      async.flushMicrotasks();
+
+      expect(reconnectCalls, 2);
+      expect(
+        policy.reconnectActivity,
+        XmppReconnectActivity.awaitingNegotiation,
+      );
+    });
+  });
 }

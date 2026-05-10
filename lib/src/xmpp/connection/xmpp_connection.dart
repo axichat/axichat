@@ -53,6 +53,9 @@ class XmppConnection extends mox.XmppConnection {
   final XmppSocketWrapper socketWrapper;
   final XmppReconnectionPolicy _reconnectionPolicy;
 
+  @override
+  XmppReconnectionPolicy get reconnectionPolicy => _reconnectionPolicy;
+
   // Check if we have a connectionSettings as it is marked [late] in mox.
   bool get hasConnectionSettings => _hasConnectionSettings;
   bool _hasConnectionSettings = false;
@@ -332,7 +335,7 @@ class XmppConnection extends mox.XmppConnection {
     }
   }
 
-  Future<void> requestReconnect(ReconnectTrigger trigger) =>
+  Future<ReconnectRequestOutcome> requestReconnect(ReconnectTrigger trigger) =>
       _reconnectionPolicy.requestReconnect(trigger);
 
   Future<void> completeReconnect() => _reconnectionPolicy.completeReconnect();
@@ -365,6 +368,39 @@ extension ReconnectTriggerBehavior on ReconnectTrigger {
     ReconnectTrigger.foregroundMigration => true,
     ReconnectTrigger.networkAvailable => true,
     ReconnectTrigger.autoFailure => false,
+  };
+}
+
+enum ReconnectRequestOutcome {
+  dispatched,
+  joinedActiveCycle,
+  ignored;
+
+  bool get accepted => switch (this) {
+    ReconnectRequestOutcome.dispatched ||
+    ReconnectRequestOutcome.joinedActiveCycle => true,
+    ReconnectRequestOutcome.ignored => false,
+  };
+}
+
+enum XmppReconnectActivity {
+  inactive,
+  scheduledBackoff,
+  dispatching,
+  awaitingNegotiation;
+
+  bool get shouldKeepConnectingWatchdogAlive => switch (this) {
+    XmppReconnectActivity.dispatching => true,
+    XmppReconnectActivity.inactive ||
+    XmppReconnectActivity.scheduledBackoff ||
+    XmppReconnectActivity.awaitingNegotiation => false,
+  };
+
+  bool get shouldClearStaleConnecting => switch (this) {
+    XmppReconnectActivity.inactive ||
+    XmppReconnectActivity.scheduledBackoff ||
+    XmppReconnectActivity.awaitingNegotiation => true,
+    XmppReconnectActivity.dispatching => false,
   };
 }
 
@@ -404,6 +440,19 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   // Have to do Future based API to match mox implementation.
   @override
   Future<bool> getShouldReconnect() async => _shouldReconnect;
+
+  XmppReconnectActivity get reconnectActivity {
+    if (!_reconnectionInProgress) {
+      return XmppReconnectActivity.inactive;
+    }
+    if (_backoffTimer != null) {
+      return XmppReconnectActivity.scheduledBackoff;
+    }
+    if (_reconnectAction != null) {
+      return XmppReconnectActivity.dispatching;
+    }
+    return XmppReconnectActivity.awaitingNegotiation;
+  }
 
   String _stateSummary() =>
       'shouldReconnect=$_shouldReconnect '
@@ -448,6 +497,10 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
       _log.info('onFailure ignored because no reconnect cycle is active.');
       return;
     }
+    _scheduleReconnectBackoff();
+  }
+
+  void _scheduleReconnectBackoff() {
     _cancelBackoff();
     final Duration delay = strategy.delay(_reconnectionAttempts);
     _log.info(
@@ -459,13 +512,15 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     });
   }
 
-  Future<void> requestReconnect(ReconnectTrigger trigger) async {
+  Future<ReconnectRequestOutcome> requestReconnect(
+    ReconnectTrigger trigger,
+  ) async {
     _log.info('requestReconnect(trigger=$trigger) called: ${_stateSummary()}');
     if (!_shouldReconnect) {
       _log.info(
         'requestReconnect(trigger=$trigger) ignored because shouldReconnect is false.',
       );
-      return;
+      return ReconnectRequestOutcome.ignored;
     }
     if (trigger.shouldResetAttemptCounter) {
       _resetAttemptCounter();
@@ -474,7 +529,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
       _log.info(
         'requestReconnect(trigger=$trigger) ignored because trigger does not bypass backoff.',
       );
-      return;
+      return ReconnectRequestOutcome.ignored;
     }
     final hasBackoff = _backoffTimer != null;
     _cancelBackoff();
@@ -483,15 +538,17 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
         'requestReconnect(trigger=$trigger) consuming existing backoff. '
         '${_stateSummary()}',
       );
-      await _fireBackoffReconnect();
-      return;
+      return _fireBackoffReconnect();
     }
 
-    if (!_tryStartReconnectCycle(origin: 'requestReconnect:$trigger')) return;
+    if (!_tryStartReconnectCycle(origin: 'requestReconnect:$trigger')) {
+      return ReconnectRequestOutcome.joinedActiveCycle;
+    }
     var reconnectDispatched = false;
     try {
       await _reconnect();
       reconnectDispatched = true;
+      return ReconnectRequestOutcome.dispatched;
     } finally {
       if (!reconnectDispatched) {
         _reconnectionInProgress = false;
@@ -542,24 +599,25 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     }
   }
 
-  Future<void> _fireBackoffReconnect() async {
+  Future<ReconnectRequestOutcome> _fireBackoffReconnect() async {
     _cancelBackoff();
     if (!_shouldReconnect) {
       _reconnectionInProgress = false;
       _activeCycleId = null;
       _log.info('Backoff reconnect aborted because shouldReconnect is false.');
-      return;
+      return ReconnectRequestOutcome.ignored;
     }
     if (!_reconnectionInProgress) {
       _log.info(
         'Backoff reconnect ignored because no reconnect cycle is active.',
       );
-      return;
+      return ReconnectRequestOutcome.ignored;
     }
     var reconnectDispatched = false;
     try {
       await _reconnect();
       reconnectDispatched = true;
+      return ReconnectRequestOutcome.dispatched;
     } finally {
       if (!reconnectDispatched) {
         _reconnectionInProgress = false;
@@ -622,6 +680,19 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   Future<void> completeReconnect() async {
     _log.info('completeReconnect() called: ${_stateSummary()}');
     _clearReconnectCycle(resetAttempts: true);
+  }
+
+  Future<bool> moveAwaitingNegotiationToBackoff() async {
+    if (reconnectActivity != XmppReconnectActivity.awaitingNegotiation) {
+      _log.info('moveAwaitingNegotiationToBackoff ignored: ${_stateSummary()}');
+      return false;
+    }
+    _log.info(
+      'Moving stale awaiting-negotiation reconnect cycle to backoff: '
+      'cycleId=$_activeCycleId ${_stateSummary()}',
+    );
+    _scheduleReconnectBackoff();
+    return true;
   }
 }
 
