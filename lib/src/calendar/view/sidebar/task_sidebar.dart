@@ -4572,6 +4572,11 @@ class _SidebarAccordionSection extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: context.spacing.xxs),
+                      _SectionCountBadge(
+                        count: itemCount,
+                        isExpanded: isExpanded,
+                      ),
+                      SizedBox(width: context.spacing.xs),
                       Expanded(
                         child: Text(
                           title.toUpperCase(),
@@ -4582,10 +4587,6 @@ class _SidebarAccordionSection extends StatelessWidget {
                         SizedBox(width: context.spacing.xxs),
                         trailing!,
                       ],
-                      _SectionCountBadge(
-                        count: itemCount,
-                        isExpanded: isExpanded,
-                      ),
                     ],
                   ),
                 ),
@@ -5801,10 +5802,11 @@ class _AddTaskButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: TaskPrimaryButton(
-        label: context.l10n.calendarAddTaskAction,
+        label: context.l10n.commonAdd,
         widthBehavior: AxiButtonWidth.expand,
         onPressed: enabled && !loading ? onPressed : null,
         isBusy: loading,
+        showEnterKeyIndicator: true,
       ),
     );
   }

@@ -979,6 +979,7 @@ class TaskPrimaryButton extends StatelessWidget {
     this.icon,
     this.size = AxiButtonSize.regular,
     this.widthBehavior = AxiButtonWidth.fit,
+    this.showEnterKeyIndicator = false,
   });
 
   final String label;
@@ -987,6 +988,7 @@ class TaskPrimaryButton extends StatelessWidget {
   final IconData? icon;
   final AxiButtonSize size;
   final AxiButtonWidth widthBehavior;
+  final bool showEnterKeyIndicator;
 
   @override
   Widget build(BuildContext context) {
@@ -999,7 +1001,66 @@ class TaskPrimaryButton extends StatelessWidget {
       leading: icon == null
           ? null
           : Icon(icon, size: context.sizing.menuItemIconSize),
+      trailing: showEnterKeyIndicator && !isBusy
+          ? const _EnterKeyIndicator()
+          : null,
       child: Text(label),
+    );
+  }
+}
+
+class _EnterKeyIndicator extends StatelessWidget {
+  const _EnterKeyIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final borderRadius = BorderRadius.circular(context.radii.squircleSm);
+    final double lipHeight = context.borderSide.width * 2;
+
+    return Padding(
+      padding: EdgeInsets.only(left: context.spacing.xs),
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: context.sizing.inputSuffixButtonSize,
+          height: context.sizing.iconButtonIconSize,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.border,
+                    borderRadius: borderRadius,
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                bottom: lipHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.card,
+                    border: Border.all(
+                      color: colors.border,
+                      width: context.borderSide.width,
+                    ),
+                    borderRadius: borderRadius,
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                bottom: lipHeight,
+                child: Center(
+                  child: Icon(
+                    Icons.keyboard_return_rounded,
+                    size: context.sizing.menuItemIconSize,
+                    color: colors.foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

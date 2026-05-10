@@ -1553,10 +1553,11 @@ class _QuickAddActions extends StatelessWidget {
         ),
         Expanded(
           child: TaskPrimaryButton(
-            label: l10n.calendarAddTaskAction,
+            label: l10n.commonAdd,
             onPressed: disabled ? null : onSubmit,
             isBusy: isSubmitting,
             widthBehavior: AxiButtonWidth.expand,
+            showEnterKeyIndicator: true,
           ),
         ),
       ],
