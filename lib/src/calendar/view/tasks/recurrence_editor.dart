@@ -1218,37 +1218,20 @@ class _RecurrenceEndControls extends StatelessWidget {
           ],
         ] else if (mode.isCount) ...[
           SizedBox(height: context.spacing.s),
-          AxiTextField(
+          AxiTextInput(
             controller: countController,
             enabled: enabled,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              hintText: l10n.calendarRepeatTimes,
-              hintStyle: context.textTheme.label.copyWith(
-                color: calendarSubtitleColor.withValues(alpha: 0.55),
-              ),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: context.spacing.m,
-                vertical: context.spacing.m,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(calendarBorderRadius),
-                borderSide: BorderSide(color: calendarBorderColor),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(calendarBorderRadius),
-                borderSide: BorderSide(color: calendarBorderColor),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(calendarBorderRadius),
-                borderSide: BorderSide(
-                  color: calendarPrimaryColor,
-                  width: context.borderSide.width * 2,
-                ),
-              ),
-              filled: true,
-              fillColor: calendarContainerColor,
+            variant: AxiInputVariant.underline,
+            placeholder: Text(l10n.calendarRepeatTimes),
+            placeholderStyle: context.textTheme.label.copyWith(
+              color: calendarSubtitleColor.withValues(alpha: 0.55),
             ),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.xs,
+              vertical: context.spacing.s,
+            ),
+            style: context.textTheme.label,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: onCountChanged,
           ),

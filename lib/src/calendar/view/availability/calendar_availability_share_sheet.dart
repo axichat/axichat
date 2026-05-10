@@ -430,13 +430,7 @@ class _CalendarAvailabilityShareScreenState
           title: Text(context.l10n.calendarAvailabilitySharePresetNameTitle),
           callbackText: context.l10n.commonSave,
           callback: () => Navigator.of(dialogContext).pop(controller.text),
-          content: AxiTextField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText: context.l10n.calendarAvailabilitySharePresetNameLabel,
-              hintText: context.l10n.calendarAvailabilitySharePresetNameHint,
-            ),
-          ),
+          content: _AvailabilityPresetNameField(controller: controller),
         ),
       );
     } finally {
@@ -1134,6 +1128,36 @@ class _AvailabilitySheetEmptyMessage extends StatelessWidget {
           color: context.colorScheme.mutedForeground,
         ),
       ),
+    );
+  }
+}
+
+class _AvailabilityPresetNameField extends StatelessWidget {
+  const _AvailabilityPresetNameField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.l10n.calendarAvailabilitySharePresetNameLabel,
+          style: context.textTheme.small.copyWith(
+            color: context.colorScheme.mutedForeground,
+          ),
+        ),
+        SizedBox(height: context.spacing.xs),
+        AxiTextInput(
+          controller: controller,
+          variant: AxiInputVariant.underline,
+          placeholder: Text(
+            context.l10n.calendarAvailabilitySharePresetNameHint,
+          ),
+        ),
+      ],
     );
   }
 }

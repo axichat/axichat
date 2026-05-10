@@ -383,7 +383,7 @@ class _ChecklistAddField extends StatelessWidget {
           tooltip: context.l10n.calendarAddChecklistItem,
           onPressed: onSubmitted,
         ),
-        SizedBox(width: context.spacing.xs),
+        SizedBox(width: context.spacing.s),
         Expanded(
           child: _ChecklistTextInput(
             controller: controller,

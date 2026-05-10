@@ -319,7 +319,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                               color: calendarSubtitleColor,
                             ),
                             contentPadding: EdgeInsets.symmetric(
-                              horizontal: spacing.m,
+                              horizontal: spacing.xs,
                               vertical: spacing.s,
                             ),
                           ),

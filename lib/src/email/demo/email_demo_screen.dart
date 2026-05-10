@@ -149,12 +149,21 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                         ),
                       ),
                       SizedBox(height: spacing.m),
-                      AxiTextField(
-                        controller: _messageController,
-                        enabled: !isBusy,
-                        decoration: InputDecoration(
-                          labelText: context.l10n.emailDemoMessageLabel,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.l10n.emailDemoMessageLabel,
+                            style: context.textTheme.small.copyWith(
+                              color: context.colorScheme.mutedForeground,
+                            ),
+                          ),
+                          SizedBox(height: spacing.xs),
+                          AxiTextInput(
+                            controller: _messageController,
+                            enabled: !isBusy,
+                          ),
+                        ],
                       ),
                       SizedBox(height: spacing.l),
                       Wrap(
