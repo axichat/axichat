@@ -3099,6 +3099,50 @@ void main() {
     );
 
     test(
+      'Connecting watchdog clears pre-socket reconnect without scheduling backoff.',
+      () async {
+        await xmppService.close();
+        await pumpEventQueue();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+          connectingWatchdogTimeout: const Duration(milliseconds: 50),
+        );
+        await connectSuccessfully(xmppService);
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingSocket,
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingSocket,
+        );
+      },
+    );
+
+    test(
       'Connecting watchdog does not clear a completed stream negotiation.',
       () async {
         await xmppService.close();

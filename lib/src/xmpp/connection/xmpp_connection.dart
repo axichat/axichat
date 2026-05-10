@@ -387,18 +387,21 @@ enum XmppReconnectActivity {
   inactive,
   scheduledBackoff,
   dispatching,
+  awaitingSocket,
   awaitingNegotiation;
 
   bool get shouldKeepConnectingWatchdogAlive => switch (this) {
     XmppReconnectActivity.dispatching => true,
     XmppReconnectActivity.inactive ||
     XmppReconnectActivity.scheduledBackoff ||
+    XmppReconnectActivity.awaitingSocket ||
     XmppReconnectActivity.awaitingNegotiation => false,
   };
 
   bool get shouldClearStaleConnecting => switch (this) {
     XmppReconnectActivity.inactive ||
     XmppReconnectActivity.scheduledBackoff ||
+    XmppReconnectActivity.awaitingSocket ||
     XmppReconnectActivity.awaitingNegotiation => true,
     XmppReconnectActivity.dispatching => false,
   };
@@ -421,6 +424,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   int? _activeCycleId;
   Timer? _backoffTimer;
   Future<void>? _reconnectAction;
+  bool _socketConnectSucceeded = false;
 
   @override
   mox.PerformReconnectFunction? performReconnect;
@@ -451,6 +455,9 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     if (_reconnectAction != null) {
       return XmppReconnectActivity.dispatching;
     }
+    if (!_socketConnectSucceeded) {
+      return XmppReconnectActivity.awaitingSocket;
+    }
     return XmppReconnectActivity.awaitingNegotiation;
   }
 
@@ -460,6 +467,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
       'attempts=$_reconnectionAttempts '
       'hasBackoff=${_backoffTimer != null} '
       'reconnectActionActive=${_reconnectAction != null} '
+      'socketConnectSucceeded=$_socketConnectSucceeded '
       'activeCycleId=$_activeCycleId';
 
   bool _tryStartReconnectCycle({required String origin}) {
@@ -468,6 +476,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
       return false;
     }
     _reconnectionInProgress = true;
+    _socketConnectSucceeded = false;
     _activeCycleId = ++_nextCycleId;
     _log.info(
       'Reconnect cycle started: origin=$origin cycleId=$_activeCycleId '
@@ -629,6 +638,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   Future<void> _reconnect() async {
     await _runReconnectAction(() async {
+      _socketConnectSucceeded = false;
       _reconnectionAttempts++;
       _log.info(
         'Dispatching performReconnect: cycleId=$_activeCycleId '
@@ -647,6 +657,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   void _clearReconnectCycle({required bool resetAttempts}) {
     _cancelBackoff();
     _reconnectionInProgress = false;
+    _socketConnectSucceeded = false;
     _activeCycleId = null;
     if (resetAttempts) {
       _reconnectionAttempts = 0;
@@ -663,6 +674,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _log.info(
       'Reconnect socket connect succeeded; waiting for stream negotiations before clearing reconnect state.',
     );
+    _socketConnectSucceeded = true;
   }
 
   @override
@@ -709,31 +721,38 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     required String? Function() domainProvider,
     Duration? pollInterval,
     Duration? waitTimeout,
+    @visibleForTesting
+    Future<bool> Function(List<IOEndpoint>)? connectivityProbe,
     this.shouldContinue,
   }) : _domainProvider = domainProvider,
+       _connectivityProbe = connectivityProbe,
        _pollInterval = pollInterval ?? _defaultPollInterval,
        _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
   final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
+  final Future<bool> Function(List<IOEndpoint>)? _connectivityProbe;
   final Future<bool> Function()? shouldContinue;
 
   final Duration _pollInterval;
   final Duration? _waitTimeout;
 
   static final _log = Logger('XmppConnectivityManager');
-  static const Duration _defaultPollInterval = Duration(seconds: 30);
+  static const Duration _defaultPollInterval = Duration(seconds: 1);
 
   XmppConnectivityManager.forXmppConnection({
     required String? Function() domainProvider,
     required Future<bool> Function() shouldContinue,
     Duration? pollInterval,
     Duration? waitTimeout,
+    @visibleForTesting
+    Future<bool> Function(List<IOEndpoint>)? connectivityProbe,
   }) : this._(
          const [],
          domainProvider: domainProvider,
          pollInterval: pollInterval,
          waitTimeout: waitTimeout,
+         connectivityProbe: connectivityProbe,
          shouldContinue: shouldContinue,
        );
 
@@ -759,6 +778,10 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     final endpoints = _resolveEndpoints();
     if (endpoints.isEmpty) {
       return Future.value(true);
+    }
+    final probe = _connectivityProbe;
+    if (probe != null) {
+      return probe(endpoints);
     }
     return _pingEndpoints(endpoints);
   }
