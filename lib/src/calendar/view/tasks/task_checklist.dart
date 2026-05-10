@@ -8,10 +8,9 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_completion_checkbox.dart';
 import 'package:axichat/src/calendar/view/tasks/task_checklist_controller.dart';
-
-import 'calendar_completion_checkbox.dart';
-import 'task_form_section.dart';
+import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 
 class TaskChecklist extends StatefulWidget {
   const TaskChecklist({
@@ -297,7 +296,6 @@ class _ChecklistItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final textTheme = context.textTheme;
     final double iconSize = context.sizing.menuItemIconSize;
     final double buttonSize = context.sizing.inputSuffixButtonSize;
     final double tapTargetSize = context.sizing.menuItemHeight;
@@ -315,21 +313,10 @@ class _ChecklistItemRow extends StatelessWidget {
           ),
           SizedBox(width: context.spacing.xxs),
           Expanded(
-            child: AxiTextField(
+            child: _ChecklistTextInput(
               controller: controller,
               onChanged: onLabelChanged,
-              style: textTheme.p,
-              decoration: InputDecoration(
-                isDense: true,
-                isCollapsed: true,
-                hintText: context.l10n.calendarChecklistItem,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
-                  vertical: context.spacing.xxs,
-                ),
-              ),
+              placeholder: context.l10n.calendarChecklistItem,
             ),
           ),
           AxiIconButton(
@@ -396,28 +383,52 @@ class _ChecklistAddField extends StatelessWidget {
           tooltip: context.l10n.calendarAddChecklistItem,
           onPressed: onSubmitted,
         ),
-        SizedBox(width: context.spacing.xxs),
+        SizedBox(width: context.spacing.xs),
         Expanded(
-          child: AxiTextField(
+          child: _ChecklistTextInput(
             controller: controller,
             focusNode: focusNode,
             onSubmitted: (_) => onSubmitted(),
             textInputAction: TextInputAction.done,
-            decoration: InputDecoration(
-              isCollapsed: true,
-              hintText: placeholder,
-              hintStyle: context.textTheme.muted,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
-                vertical: context.spacing.xxs,
-              ),
-            ),
-            style: context.textTheme.p,
+            placeholder: placeholder,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChecklistTextInput extends StatelessWidget {
+  const _ChecklistTextInput({
+    required this.controller,
+    required this.placeholder,
+    this.focusNode,
+    this.onChanged,
+    this.onSubmitted,
+    this.textInputAction,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final TextInputAction? textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiTextInput(
+      controller: controller,
+      focusNode: focusNode,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      textInputAction: textInputAction,
+      placeholder: Text(placeholder),
+      variant: AxiInputVariant.underline,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.xs,
+        vertical: context.spacing.s,
+      ),
     );
   }
 }

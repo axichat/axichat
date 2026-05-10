@@ -6,8 +6,61 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/interop/calendar_ics_meta_utils.dart';
+import 'package:axichat/src/calendar/interop/calendar_share.dart';
+import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/models/calendar_alarm.dart';
+import 'package:axichat/src/calendar/models/calendar_collection.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_participant.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/recurrence_utils.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
+import 'package:axichat/src/calendar/reminders/alarm_reminder_bridge.dart';
+import 'package:axichat/src/calendar/task/nl_parser_service.dart';
+import 'package:axichat/src/calendar/task/nl_schedule_adapter.dart';
+import 'package:axichat/src/calendar/task/task_share_formatter.dart';
+import 'package:axichat/src/calendar/task/time_formatter.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_drag_target.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_layout.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
+import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
+import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
+import 'package:axichat/src/calendar/view/sidebar/calendar_critical_path_share_sheet.dart';
+import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_categories_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_link_geo_fields.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_participants_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_task_list_tile.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_task_share_sheet.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_transfer_sheet.dart';
+import 'package:axichat/src/calendar/view/tasks/edit_task_dropdown.dart';
+import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
+import 'package:axichat/src/calendar/view/tasks/location_inline_suggestion.dart';
+import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
+import 'package:axichat/src/calendar/view/tasks/reminder_preferences_field.dart';
+import 'package:axichat/src/calendar/view/tasks/task_checklist.dart';
+import 'package:axichat/src/calendar/view/tasks/task_checklist_controller.dart';
+import 'package:axichat/src/calendar/view/tasks/task_draft_controller.dart';
+import 'package:axichat/src/calendar/view/tasks/task_edit_session_tracker.dart';
+import 'package:axichat/src/calendar/view/tasks/task_field_character_hint.dart';
+import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
+import 'package:axichat/src/calendar/view/tasks/task_popover_controller.dart';
+import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
+import 'package:axichat/src/calendar/view/tasks/task_tile_surface.dart';
+import 'package:axichat/src/calendar/view/tasks/task_title_validation.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -22,61 +75,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state.dart';
-import 'package:axichat/src/calendar/models/calendar_alarm.dart';
-import 'package:axichat/src/calendar/models/calendar_collection.dart';
-import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
-import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/models/calendar_participant.dart';
-import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/models/reminder_preferences.dart';
-import 'package:axichat/src/calendar/reminders/alarm_reminder_bridge.dart';
-import 'package:axichat/src/calendar/interop/calendar_share.dart';
-import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
-import 'package:axichat/src/calendar/interop/calendar_ics_meta_utils.dart';
-import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
-import 'package:axichat/src/calendar/task/nl_parser_service.dart';
-import 'package:axichat/src/calendar/task/nl_schedule_adapter.dart';
-import 'package:axichat/src/calendar/models/recurrence_utils.dart';
-import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
-import 'package:axichat/src/calendar/task/task_share_formatter.dart';
-import 'package:axichat/src/calendar/view/tasks/task_title_validation.dart';
-import 'package:axichat/src/calendar/task/time_formatter.dart';
-import 'package:axichat/src/calendar/view/sidebar/calendar_critical_path_share_sheet.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_task_share_sheet.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_transfer_sheet.dart';
 import 'calendar_sidebar_controller.dart';
-import 'package:axichat/src/calendar/view/tasks/task_checklist_controller.dart';
-import 'package:axichat/src/calendar/view/tasks/task_draft_controller.dart';
-import 'package:axichat/src/calendar/view/tasks/edit_task_dropdown.dart';
-import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
-import 'package:axichat/src/calendar/view/grid/calendar_layout.dart';
-import 'package:axichat/src/calendar/view/grid/calendar_drag_target.dart';
-import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'calendar_sidebar_draggable.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_categories_field.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_link_geo_fields.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_participants_field.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
-import 'package:axichat/src/calendar/view/tasks/location_inline_suggestion.dart';
-import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
-import 'package:axichat/src/calendar/view/tasks/task_field_character_hint.dart';
-import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
-import 'package:axichat/src/calendar/view/tasks/task_checklist.dart';
-import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
-import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
-import 'package:axichat/src/calendar/view/tasks/calendar_task_list_tile.dart';
-import 'package:axichat/src/calendar/view/tasks/task_tile_surface.dart';
-import 'package:axichat/src/calendar/view/tasks/reminder_preferences_field.dart';
-import 'package:axichat/src/calendar/view/tasks/task_edit_session_tracker.dart';
-import 'package:axichat/src/calendar/view/tasks/task_popover_controller.dart';
 
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
@@ -1059,9 +1059,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                       children: [criticalPathsPanel, contentBody],
                     );
 
-                    final bool enableKeyboardDismiss = _supportsDragDismiss(
-                      context,
-                    );
                     return Scrollbar(
                       controller: _scrollController,
                       radius: const Radius.circular(
@@ -1072,9 +1069,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         key: _scrollViewportKey,
                         controller: _scrollController,
                         padding: scrollPadding,
-                        keyboardDismissBehavior: enableKeyboardDismiss
-                            ? ScrollViewKeyboardDismissBehavior.onDrag
-                            : ScrollViewKeyboardDismissBehavior.manual,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.manual,
                         physics: const ClampingScrollPhysics(),
                         child: content,
                       ),
@@ -1095,11 +1091,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         );
       },
     );
-  }
-
-  bool _supportsDragDismiss(BuildContext context) {
-    final TargetPlatform platform = defaultTargetPlatform;
-    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
   }
 
   @override
@@ -3432,7 +3423,7 @@ class _SelectionTextField extends StatelessWidget {
           minLines: minLines,
           maxLines: maxLines ?? minLines,
           contentPadding: EdgeInsets.symmetric(
-            horizontal: context.spacing.m,
+            horizontal: context.spacing.xs,
             vertical: context.spacing.s,
           ),
           onChanged: onChanged,
@@ -3479,7 +3470,7 @@ class _SelectionLocationField extends StatelessWidget {
           enabled: enabled,
           onChanged: onChanged,
           contentPadding: EdgeInsets.symmetric(
-            horizontal: context.spacing.m,
+            horizontal: context.spacing.xs,
             vertical: context.spacing.s,
           ),
           autocomplete: helper,
@@ -5441,8 +5432,8 @@ class _QuickTaskInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final padding = EdgeInsets.symmetric(
-      horizontal: context.spacing.m,
-      vertical: context.spacing.m,
+      horizontal: context.spacing.xs,
+      vertical: context.spacing.s,
     );
     final field = TaskTextFormField(
       controller: controller,
@@ -5603,8 +5594,8 @@ class _AdvancedOptions extends StatelessWidget {
             minLines: 2,
             maxLines: 4,
             contentPadding: EdgeInsets.symmetric(
-              horizontal: context.spacing.m,
-              vertical: context.spacing.m,
+              horizontal: context.spacing.xs,
+              vertical: context.spacing.s,
             ),
           ),
           SizedBox(height: context.spacing.xs),
@@ -5612,8 +5603,8 @@ class _AdvancedOptions extends StatelessWidget {
             controller: locationController,
             hintText: l10n.calendarLocationHint,
             contentPadding: EdgeInsets.symmetric(
-              horizontal: context.spacing.m,
-              vertical: context.spacing.m,
+              horizontal: context.spacing.xs,
+              vertical: context.spacing.s,
             ),
             autocomplete: locationHelper,
           ),

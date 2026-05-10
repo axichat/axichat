@@ -34,6 +34,111 @@ void main() {
     expect(editableText.typingAnimationDuration, typingAnimationDuration);
   });
 
+  testWidgets('AxiTextInput uses the settings typing animation duration', (
+    tester,
+  ) async {
+    const typingAnimationDuration = Duration(milliseconds: 240);
+    final controller = TextEditingController();
+
+    await tester.pumpWidget(
+      _ComposerInputTestApp(
+        settingsCubit: _mockSettingsCubit(
+          animationDuration: typingAnimationDuration,
+        ),
+        child: AxiTextInput(controller: controller),
+      ),
+    );
+
+    final editableText = tester.widget<axi.EditableText>(
+      find.byType(axi.EditableText),
+    );
+
+    expect(editableText.typingAnimationDuration, typingAnimationDuration);
+  });
+
+  testWidgets('AxiTextInput forwards configured cursor height', (tester) async {
+    const cursorHeight = 12.0;
+    final controller = TextEditingController();
+
+    await tester.pumpWidget(
+      _ComposerInputTestApp(
+        settingsCubit: _mockSettingsCubit(),
+        child: AxiTextInput(controller: controller, cursorHeight: cursorHeight),
+      ),
+    );
+
+    final editableText = tester.widget<axi.EditableText>(
+      find.byType(axi.EditableText),
+    );
+
+    expect(editableText.cursorHeight, cursorHeight);
+
+    controller.dispose();
+  });
+
+  testWidgets('AxiTextInput outlined variant keeps an input radius fallback', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+
+    await tester.pumpWidget(
+      _ComposerInputTestApp(
+        settingsCubit: _mockSettingsCubit(),
+        child: AxiTextInput(controller: controller),
+      ),
+    );
+
+    final ShadDecorator decorator = tester.widget<ShadDecorator>(
+      find.byType(ShadDecorator),
+    );
+
+    expect(decorator.decoration?.border?.radius, isNotNull);
+    expect(decorator.decoration?.focusedBorder?.radius, isNotNull);
+
+    controller.dispose();
+  });
+
+  testWidgets(
+    'AxiTextInput underline variant opts out of outline border merge',
+    (tester) async {
+      final controller = TextEditingController();
+
+      await tester.pumpWidget(
+        _ComposerInputTestApp(
+          settingsCubit: _mockSettingsCubit(),
+          child: AxiTextInput(
+            controller: controller,
+            variant: AxiInputVariant.underline,
+          ),
+        ),
+      );
+
+      final ShadDecorator decorator = tester.widget<ShadDecorator>(
+        find.byType(ShadDecorator),
+      );
+      final ShadBorder? border = decorator.decoration?.border;
+      final ShadBorder? focusedBorder = decorator.decoration?.focusedBorder;
+      final ShadDecoration effectiveDecoration = ShadTheme.of(
+        tester.element(find.byType(ShadDecorator)),
+      ).decoration.merge(decorator.decoration);
+      final ShadBorder? effectiveBorder = effectiveDecoration.border;
+
+      expect(border?.canMerge, isFalse);
+      expect(border?.top, isNull);
+      expect(border?.right, isNull);
+      expect(border?.bottom, isNotNull);
+      expect(border?.left, isNull);
+      expect(focusedBorder?.canMerge, isFalse);
+      expect(effectiveBorder?.top, isNull);
+      expect(effectiveBorder?.right, isNull);
+      expect(effectiveBorder?.bottom, isNotNull);
+      expect(effectiveBorder?.left, isNull);
+      expect(effectiveBorder?.radius, isNull);
+
+      controller.dispose();
+    },
+  );
+
   testWidgets('leading cutout children receive taps on their left half', (
     tester,
   ) async {
@@ -92,61 +197,68 @@ void main() {
     expect(tapCount, 1);
   });
 
-  testWidgets(
-    'typing caret advances when inserts retarget before the next frame',
-    (tester) async {
-      final controller = TypingTextEditingController();
-      final focusNode = FocusNode();
+  testWidgets('typing caret retargets without snapping before the next frame', (
+    tester,
+  ) async {
+    final controller = TypingTextEditingController();
+    final focusNode = FocusNode();
 
-      await tester.pumpWidget(
-        _ComposerInputTestApp(
-          settingsCubit: _mockSettingsCubit(),
-          child: Center(
-            child: SizedBox(
-              width: 320,
-              child: axi.EditableText(
-                controller: controller,
-                focusNode: focusNode,
-                style: const TextStyle(fontSize: 18, color: Colors.black),
-                cursorColor: Colors.blue,
-                backgroundCursorColor: Colors.grey,
-                typingAnimationDuration: const Duration(milliseconds: 300),
-              ),
+    await tester.pumpWidget(
+      _ComposerInputTestApp(
+        settingsCubit: _mockSettingsCubit(),
+        child: Center(
+          child: SizedBox(
+            width: 320,
+            child: axi.EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(fontSize: 18, color: Colors.black),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              typingAnimationDuration: const Duration(milliseconds: 300),
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      focusNode.requestFocus();
-      await tester.pump();
+    focusNode.requestFocus();
+    await tester.pump();
 
-      final TypingCaretPainter painter = _typingCaretPainter(tester);
-      final double initialDx = painter.caretOffset.dx;
+    final TypingCaretPainter painter = _typingCaretPainter(tester);
+    final double initialDx = painter.caretOffset.dx;
 
-      controller.value = const TextEditingValue(
-        text: 'a',
-        selection: TextSelection.collapsed(offset: 1),
-      );
-      final double afterFirstInsertDx = painter.caretOffset.dx;
+    controller.value = const TextEditingValue(
+      text: 'a',
+      selection: TextSelection.collapsed(offset: 1),
+    );
+    final double afterFirstInsertDx = painter.caretOffset.dx;
 
-      controller.value = const TextEditingValue(
-        text: 'ab',
-        selection: TextSelection.collapsed(offset: 2),
-      );
-      final double afterRetargetDx = painter.caretOffset.dx;
+    controller.value = const TextEditingValue(
+      text: 'ab',
+      selection: TextSelection.collapsed(offset: 2),
+    );
+    final double afterRetargetDx = painter.caretOffset.dx;
 
-      await tester.pump(const Duration(milliseconds: 120));
-      final double settledDx = painter.caretOffset.dx;
+    await tester.pump();
+    final double beforeAnimationFrameDx = painter.caretOffset.dx;
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+    final double midAnimationDx = painter.caretOffset.dx;
+    await tester.pump(const Duration(milliseconds: 120));
+    final double settledDx = painter.caretOffset.dx;
 
-      expect(afterFirstInsertDx, initialDx);
-      expect(afterRetargetDx, greaterThan(initialDx));
-      expect(afterRetargetDx, lessThanOrEqualTo(settledDx));
+    expect(afterFirstInsertDx, initialDx);
+    expect(afterRetargetDx, initialDx);
+    expect(beforeAnimationFrameDx, initialDx);
+    expect(midAnimationDx, greaterThan(initialDx));
+    expect(midAnimationDx, lessThan(settledDx));
+    expect(settledDx, greaterThan(initialDx));
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      controller.dispose();
-      focusNode.dispose();
-    },
-  );
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    focusNode.dispose();
+  });
 
   testWidgets(
     'typing caret has advanced before the glyph animation completes',
@@ -184,6 +296,8 @@ void main() {
         selection: TextSelection.collapsed(offset: 1),
       );
 
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
       await tester.pump(const Duration(milliseconds: 16));
       final double midAnimationDx = painter.caretOffset.dx;
 
@@ -191,7 +305,7 @@ void main() {
       final double finalDx = painter.caretOffset.dx;
 
       expect(midAnimationDx, greaterThan(initialDx));
-      expect(finalDx, greaterThanOrEqualTo(midAnimationDx));
+      expect(finalDx, greaterThan(midAnimationDx));
 
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
@@ -242,6 +356,51 @@ void main() {
     final double immediateDx = painter.caretOffset.dx;
 
     expect(immediateDx, initialDx);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    focusNode.dispose();
+  });
+
+  testWidgets('predictive typing preserves configured caret height', (
+    tester,
+  ) async {
+    final controller = TypingTextEditingController();
+    final focusNode = FocusNode();
+
+    await tester.pumpWidget(
+      _ComposerInputTestApp(
+        settingsCubit: _mockSettingsCubit(),
+        child: Center(
+          child: SizedBox(
+            width: 320,
+            child: axi.EditableText(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(
+                fontSize: 18,
+                height: 2,
+                color: Colors.black,
+              ),
+              cursorColor: Colors.blue,
+              backgroundCursorColor: Colors.grey,
+              cursorHeight: 18,
+              typingAnimationDuration: const Duration(milliseconds: 300),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    focusNode.requestFocus();
+    await tester.pump();
+
+    controller.value = const TextEditingValue(
+      text: 'a',
+      selection: TextSelection.collapsed(offset: 1),
+    );
+
+    expect(_typingCaretPainter(tester).caretHeight, 18);
 
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();

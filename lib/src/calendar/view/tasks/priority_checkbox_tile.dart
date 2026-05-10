@@ -69,8 +69,8 @@ class PriorityCheckboxTile extends StatelessWidget {
                   duration: calendarSidebarToggleDuration,
                   curve: Curves.easeOut,
                   padding: EdgeInsets.symmetric(
-                    horizontal: context.spacing.m,
-                    vertical: context.spacing.s,
+                    horizontal: context.spacing.s,
+                    vertical: context.spacing.xs,
                   ),
                   decoration: ShapeDecoration(
                     color: backgroundColor,
@@ -80,8 +80,8 @@ class PriorityCheckboxTile extends StatelessWidget {
                   child: Row(
                     children: [
                       SizedBox(
-                        width: calendarCheckboxTapTarget,
-                        height: calendarCheckboxTapTarget,
+                        width: context.sizing.inputSuffixButtonSize,
+                        height: context.sizing.inputSuffixButtonSize,
                         child: Center(
                           child: CalendarCheckbox(
                             value: value,
@@ -89,11 +89,12 @@ class PriorityCheckboxTile extends StatelessWidget {
                             onChanged: onChanged,
                             activeColor: color,
                             borderColor: borderColor,
-                            visualSize: calendarCheckboxTapTarget / 2,
+                            visualSize: context.sizing.inputSuffixIconSize,
+                            tapTargetSize: context.sizing.inputSuffixButtonSize,
                           ),
                         ),
                       ),
-                      SizedBox(width: context.spacing.s),
+                      SizedBox(width: context.spacing.xs),
                       Expanded(
                         child: Text(
                           label,

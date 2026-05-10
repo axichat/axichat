@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -11,30 +12,39 @@ enum FeedbackTone { success, info, warning, error }
 class FeedbackToast extends ShadToast {
   FeedbackToast({
     super.key,
-    required FeedbackTone tone,
+    required this.tone,
     String? title,
     String? message,
     Duration? duration,
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
-    Alignment alignment = Alignment.topRight,
+    Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : super.raw(
          variant: _variantForTone(tone),
-         title: _textOrNull(title ?? _defaultTitleForTone(tone)),
+         title: _textOrNull(_titleForTone(tone, title, message)),
          description: message == null
              ? null
              : GestureDetector(
                  behavior: HitTestBehavior.opaque,
                  onTap: onTap,
-                 child: Text(message),
+                 child: Text(
+                   message,
+                   maxLines: _descriptionMaxLines,
+                   overflow: TextOverflow.ellipsis,
+                 ),
                ),
          action: _actionWidget(actionLabel, onAction),
-         alignment: alignment,
+         alignment: alignment ?? _defaultAlignment,
          duration: duration ?? _defaultDurationForTone(tone),
          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
        );
+
+  static const int _titleMaxLines = 1;
+  static const int _descriptionMaxLines = 2;
+
+  final FeedbackTone tone;
 
   @override
   State<FeedbackToast> createState() => _FeedbackToastState();
@@ -47,7 +57,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
-    Alignment alignment = Alignment.topRight,
+    Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
          key: key,
@@ -70,7 +80,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
-    Alignment alignment = Alignment.topRight,
+    Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
          key: key,
@@ -93,7 +103,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
-    Alignment alignment = Alignment.topRight,
+    Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
          key: key,
@@ -116,7 +126,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
-    Alignment alignment = Alignment.topRight,
+    Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) {
     if (kEnableDemoChats) {
@@ -146,11 +156,43 @@ class FeedbackToast extends ShadToast {
     );
   }
 
-  static Text? _textOrNull(String? value) {
+  static Text? _textOrNull(String? value, {int? maxLines}) {
     if (value == null) {
       return null;
     }
-    return Text(value);
+    final int resolvedMaxLines = maxLines ?? _titleMaxLines;
+    return Text(
+      value,
+      maxLines: resolvedMaxLines,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  static String? _titleForTone(
+    FeedbackTone tone,
+    String? title,
+    String? message,
+  ) {
+    if (title != null || message != null) {
+      return title;
+    }
+    return _defaultTitleForTone(tone);
+  }
+
+  static Alignment get _defaultAlignment {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isEmpty) {
+      return Alignment.topRight;
+    }
+    final view = views.first;
+    final double width = view.physicalSize.width / view.devicePixelRatio;
+    return _isCompactToastWidth(width)
+        ? Alignment.topCenter
+        : Alignment.topRight;
+  }
+
+  static bool _isCompactToastWidth(double width) {
+    return width < smallScreen;
   }
 
   static Widget? _actionWidget(String? label, VoidCallback? onAction) {
@@ -158,7 +200,8 @@ class FeedbackToast extends ShadToast {
       return null;
     }
     return Builder(
-      builder: (context) => AxiButton.link(
+      builder: (context) => AxiButton.outline(
+        size: AxiButtonSize.sm,
         child: Text(label),
         onPressed: () {
           ShadToaster.of(context).hide();
@@ -221,6 +264,12 @@ class _FeedbackToastState extends State<FeedbackToast> {
       ShadToastVariant.primary => theme.primaryToastTheme,
       ShadToastVariant.destructive => theme.destructiveToastTheme,
     };
+    final Color? toneColor = switch (widget.tone) {
+      FeedbackTone.success => theme.colorScheme.green,
+      FeedbackTone.info => null,
+      FeedbackTone.warning => null,
+      FeedbackTone.error => null,
+    };
     final effectiveForegroundColor = switch (widget.variant) {
       ShadToastVariant.primary => theme.colorScheme.foreground,
       ShadToastVariant.destructive => theme.colorScheme.destructiveForeground,
@@ -233,9 +282,9 @@ class _FeedbackToastState extends State<FeedbackToast> {
               widget.closeIconData ??
               effectiveToastTheme.closeIconData ??
               LucideIcons.x,
-          iconSize: 16,
-          buttonSize: 20,
-          tapTargetSize: 20,
+          iconSize: context.sizing.inputSuffixIconSize,
+          buttonSize: context.sizing.inputSuffixButtonSize,
+          tapTargetSize: context.sizing.inputSuffixButtonSize,
           color: effectiveForegroundColor.withValues(alpha: .5),
           hoverColor: effectiveForegroundColor,
           pressedColor: effectiveForegroundColor,
@@ -248,23 +297,24 @@ class _FeedbackToastState extends State<FeedbackToast> {
         );
     final effectiveTitleStyle =
         widget.titleStyle ??
-        effectiveToastTheme.titleStyle ??
-        theme.textTheme.muted.copyWith(
-          fontWeight: FontWeight.w500,
-          color: effectiveForegroundColor,
-        );
+        theme.textTheme.small.strong.copyWith(color: effectiveForegroundColor);
     final effectiveDescriptionStyle =
         widget.descriptionStyle ??
-        effectiveToastTheme.descriptionStyle ??
-        theme.textTheme.muted.copyWith(
+        theme.textTheme.small.copyWith(
           color: effectiveForegroundColor.withValues(alpha: .9),
         );
     final effectiveActionPadding =
-        widget.actionPadding ??
-        effectiveToastTheme.actionPadding ??
-        const EdgeInsets.only(left: 16);
+        widget.actionPadding ?? EdgeInsets.only(left: context.spacing.s);
     final effectiveBorder =
         widget.border ??
+        (toneColor == null
+            ? null
+            : ShadBorder.fromBorderSide(
+                ShadBorderSide(
+                  color: toneColor,
+                  width: context.borderSide.width,
+                ),
+              )) ??
         effectiveToastTheme.border ??
         ShadBorder.fromBorderSide(
           ShadBorderSide(
@@ -278,12 +328,22 @@ class _FeedbackToastState extends State<FeedbackToast> {
         widget.shadows ?? effectiveToastTheme.shadows ?? ShadShadows.lg;
     final effectiveBackgroundColor =
         widget.backgroundColor ??
+        (toneColor == null
+            ? null
+            : Color.alphaBlend(
+                toneColor.withValues(alpha: context.motion.tapHoverAlpha),
+                theme.colorScheme.card,
+              )) ??
         effectiveToastTheme.backgroundColor ??
         theme.colorScheme.background;
     final effectivePadding =
         widget.padding ??
-        effectiveToastTheme.padding ??
-        const EdgeInsets.fromLTRB(24, 24, 32, 24);
+        EdgeInsets.fromLTRB(
+          context.spacing.m,
+          context.spacing.xs,
+          context.spacing.l,
+          context.spacing.xs,
+        );
     final effectiveCrossAxisAlignment =
         widget.crossAxisAlignment ??
         effectiveToastTheme.crossAxisAlignment ??
@@ -291,49 +351,66 @@ class _FeedbackToastState extends State<FeedbackToast> {
     final effectiveCloseIconPosition =
         widget.closeIconPosition ??
         effectiveToastTheme.closeIconPosition ??
-        const ShadPosition(top: 8, right: 8);
+        ShadPosition(top: context.spacing.xs, right: context.spacing.xs);
     final effectiveShowCloseIconOnlyWhenHovered =
         widget.showCloseIconOnlyWhenHovered ??
         effectiveToastTheme.showCloseIconOnlyWhenHovered ??
         true;
+    final bool compactWidth = FeedbackToast._isCompactToastWidth(
+      MediaQuery.sizeOf(context).width,
+    );
 
-    return Dismissible(
-      key: dismissibleKey,
-      direction: DismissDirection.horizontal,
-      resizeDuration: null,
-      background: const SizedBox.expand(),
-      secondaryBackground: const SizedBox.expand(),
-      onDismissed: (_) => ShadToaster.of(context).hide(animate: false),
-      child: MouseRegion(
-        onEnter: (_) => hovered.value = true,
-        onExit: (_) => hovered.value = false,
-        child: ShadResponsiveBuilder(
-          builder: (context, breakpoint) {
-            return UnconstrainedBox(
-              constrainedAxis: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minWidth: breakpoint >= theme.breakpoints.md
-                      ? 0
-                      : double.infinity,
-                  maxWidth: breakpoint >= theme.breakpoints.md
-                      ? 420
-                      : double.infinity,
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: effectiveBorder.toBorder(),
-                    borderRadius: effectiveBorderRadius,
-                    boxShadow: effectiveShadows,
-                    color: effectiveBackgroundColor,
-                  ),
-                  child: Stack(
-                    children: [
-                      Padding(
-                        padding: effectivePadding,
-                        child: Row(
+    return MouseRegion(
+      onEnter: (_) => hovered.value = true,
+      onExit: (_) => hovered.value = false,
+      child: Dismissible(
+        key: dismissibleKey,
+        direction: compactWidth
+            ? DismissDirection.up
+            : DismissDirection.horizontal,
+        resizeDuration: null,
+        background: const SizedBox.expand(),
+        secondaryBackground: const SizedBox.expand(),
+        onDismissed: (_) => ShadToaster.of(context).hide(animate: false),
+        child: UnconstrainedBox(
+          constrainedAxis: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: compactWidth ? double.infinity : 0,
+              maxWidth: compactWidth
+                  ? double.infinity
+                  : context.sizing.dialogMaxWidth,
+              minHeight: context.sizing.menuItemHeight,
+              maxHeight: context.sizing.attachmentPreviewExtent,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: effectiveBorder.toBorder(),
+                borderRadius: effectiveBorderRadius,
+                boxShadow: effectiveShadows,
+                color: effectiveBackgroundColor,
+              ),
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: effectivePadding,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (compactWidth) ...[
+                          Align(
+                            alignment: Alignment.center,
+                            child: _CompactToastDismissHint(
+                              color: effectiveForegroundColor,
+                            ),
+                          ),
+                          SizedBox(height: context.spacing.xxs),
+                        ],
+                        Row(
                           textDirection: widget.textDirection,
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisSize: compactWidth
+                              ? MainAxisSize.max
+                              : MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: effectiveCrossAxisAlignment,
                           children: [
@@ -362,27 +439,49 @@ class _FeedbackToastState extends State<FeedbackToast> {
                               ),
                           ],
                         ),
-                      ),
-                      ValueListenableBuilder(
-                        valueListenable: hovered,
-                        builder: (context, hovered, child) {
-                          if (!effectiveShowCloseIconOnlyWhenHovered) {
-                            return child!;
-                          }
-                          return Visibility.maintain(
-                            visible: hovered,
-                            child: child!,
-                          );
-                        },
-                        child: effectiveCloseIcon,
-                      ).positionedWith(effectiveCloseIconPosition),
-                    ],
+                        if (compactWidth) ...[
+                          SizedBox(height: context.spacing.xxs),
+                          SizedBox(height: context.sizing.inputSuffixIconSize),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
+                  if (!compactWidth)
+                    ValueListenableBuilder(
+                      valueListenable: hovered,
+                      builder: (context, hovered, child) {
+                        if (!effectiveShowCloseIconOnlyWhenHovered) {
+                          return child!;
+                        }
+                        return Visibility.maintain(
+                          visible: hovered,
+                          child: child!,
+                        );
+                      },
+                      child: effectiveCloseIcon,
+                    ).positionedWith(effectiveCloseIconPosition),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompactToastDismissHint extends StatelessWidget {
+  const _CompactToastDismissHint({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: Icon(
+        LucideIcons.chevronUp,
+        size: context.sizing.inputSuffixIconSize,
+        color: color.withValues(alpha: context.motion.tapFocusAlpha),
       ),
     );
   }

@@ -4,6 +4,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:axichat/src/app.dart';
 import 'package:flutter/cupertino.dart' hide SpellCheckConfiguration;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide SpellCheckConfiguration;
@@ -12,7 +13,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-
 import 'axi_editable_text.dart' as axi;
 import 'axi_spell_check.dart';
 import 'axi_system_context_menu.dart';
@@ -23,6 +23,8 @@ const double _transparentCursorAlpha = 0.0;
 const double _enabledOpacity = 1.0;
 const int _singleLineCount = 1;
 
+enum AxiInputVariant { outlined, underline, plain }
+
 class AxiInput extends StatefulWidget {
   const AxiInput({
     super.key,
@@ -31,6 +33,7 @@ class AxiInput extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.decoration,
+    this.variant = AxiInputVariant.outlined,
     this.undoController,
     TextInputType? keyboardType,
     this.textInputAction,
@@ -125,6 +128,8 @@ class AxiInput extends StatefulWidget {
   final FocusNode? focusNode;
 
   final ShadDecoration? decoration;
+
+  final AxiInputVariant variant;
 
   final UndoHistoryController? undoController;
 
@@ -497,15 +502,74 @@ class AxiInputState extends State<AxiInput>
         .merge(theme.inputTheme.style)
         .merge(widget.style);
 
-    final effectiveDecoration =
-        (theme.inputTheme.decoration ?? const ShadDecoration()).merge(
-          widget.decoration,
-        );
+    final double borderWidth = context.borderSide.width;
+    final outlinedDecoration = ShadDecoration(
+      border: ShadBorder.all(
+        color: theme.colorScheme.border,
+        width: borderWidth,
+        radius: context.radius,
+      ),
+      focusedBorder: ShadBorder.all(
+        color: theme.colorScheme.primary,
+        width: borderWidth,
+        radius: context.radius,
+      ),
+      errorBorder: ShadBorder.all(
+        color: theme.colorScheme.destructive,
+        width: borderWidth,
+        radius: context.radius,
+      ),
+    );
+    final effectiveDecoration = switch (widget.variant) {
+      AxiInputVariant.outlined =>
+        outlinedDecoration
+            .merge(theme.inputTheme.decoration)
+            .merge(widget.decoration),
+      AxiInputVariant.underline =>
+        (widget.decoration ?? const ShadDecoration()).copyWith(
+          border: ShadBorder(
+            canMerge: false,
+            bottom: ShadBorderSide(
+              color: theme.colorScheme.border,
+              width: borderWidth,
+            ),
+          ),
+          focusedBorder: ShadBorder(
+            canMerge: false,
+            bottom: ShadBorderSide(
+              color: theme.colorScheme.primary,
+              width: borderWidth,
+            ),
+          ),
+          errorBorder: ShadBorder(
+            canMerge: false,
+            bottom: ShadBorderSide(
+              color: theme.colorScheme.destructive,
+              width: borderWidth,
+            ),
+          ),
+          secondaryBorder: ShadBorder.none,
+          secondaryFocusedBorder: ShadBorder.none,
+          secondaryErrorBorder: ShadBorder.none,
+          disableSecondaryBorder: true,
+        ),
+      AxiInputVariant.plain => ShadDecoration.none,
+    };
 
-    final effectivePadding =
-        widget.padding ??
+    final fallbackPadding = switch (widget.variant) {
+      AxiInputVariant.outlined =>
         theme.inputTheme.padding ??
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+            EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
+            ),
+      AxiInputVariant.underline => EdgeInsets.symmetric(
+        horizontal: context.spacing.xs,
+        vertical: context.spacing.s,
+      ),
+      AxiInputVariant.plain => EdgeInsets.zero,
+    };
+    final effectivePadding = widget.padding ?? fallbackPadding;
 
     final effectiveInputPadding =
         widget.inputPadding ?? theme.inputTheme.inputPadding ?? EdgeInsets.zero;
@@ -531,7 +595,8 @@ class AxiInputState extends State<AxiInput>
     final effectiveMouseCursor =
         widget.mouseCursor ?? WidgetStateMouseCursor.textable;
 
-    final effectiveGap = widget.gap ?? theme.inputTheme.gap ?? 8.0;
+    final effectiveGap =
+        widget.gap ?? theme.inputTheme.gap ?? context.spacing.s;
 
     final defaultSelectionControls = switch (Theme.of(context).platform) {
       TargetPlatform.iOS => cupertinoTextSelectionHandleControls,
@@ -686,7 +751,8 @@ class AxiInputState extends State<AxiInput>
                                         typingAnimationDuration: context
                                             .watch<SettingsCubit>()
                                             .animationDuration,
-                                        backgroundCursorColor: Colors.grey,
+                                        backgroundCursorColor:
+                                            theme.colorScheme.mutedForeground,
                                         keyboardType: widget.keyboardType,
                                         keyboardAppearance:
                                             widget.keyboardAppearance ??

@@ -277,9 +277,6 @@ class TaskTextFormField extends StatefulWidget {
     this.validator,
     this.autovalidateMode,
     this.contentPadding,
-    this.borderRadius,
-    this.focusBorderColor,
-    this.fillColor,
     this.textStyle,
     this.errorText,
     this.errorStyle,
@@ -304,9 +301,6 @@ class TaskTextFormField extends StatefulWidget {
   final FormFieldValidator<String>? validator;
   final AutovalidateMode? autovalidateMode;
   final EdgeInsetsGeometry? contentPadding;
-  final double? borderRadius;
-  final Color? focusBorderColor;
-  final Color? fillColor;
   final TextStyle? textStyle;
   final String? errorText;
   final TextStyle? errorStyle;
@@ -347,10 +341,6 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
 
   @override
   Widget build(BuildContext context) {
-    final double radius = widget.borderRadius ?? 8;
-    final Color focusedColor = widget.focusBorderColor ?? calendarPrimaryColor;
-    final Color effectiveFill = widget.fillColor ?? calendarContainerColor;
-
     return FormField<String>(
       key: _fieldKey,
       initialValue: widget.controller.text,
@@ -360,7 +350,7 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
       enabled: widget.enabled,
       builder: (state) {
         final String? errorText = widget.errorText ?? state.errorText;
-        return AxiTextField(
+        return TaskTextField(
           controller: widget.controller,
           focusNode: widget.focusNode,
           minLines: widget.minLines,
@@ -375,44 +365,14 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
             widget.onChanged?.call(value);
           },
           onSubmitted: widget.onFieldSubmitted,
-          style:
-              widget.textStyle ??
-              context.textTheme.small.copyWith(color: calendarTitleColor),
-          decoration: InputDecoration(
-            labelText: widget.labelText,
-            labelStyle:
-                widget.labelStyle ??
-                context.textTheme.small.copyWith(color: calendarSubtitleColor),
-            hintText: widget.hintText,
-            hintStyle:
-                widget.hintStyle ??
-                context.textTheme.small.copyWith(color: calendarTimeLabelColor),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(radius),
-              borderSide: BorderSide(color: calendarBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(radius),
-              borderSide: BorderSide(color: calendarBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(radius),
-              borderSide: BorderSide(
-                color: focusedColor,
-                width: context.borderSide.width * 2,
-              ),
-            ),
-            contentPadding:
-                widget.contentPadding ??
-                EdgeInsets.symmetric(
-                  horizontal: context.spacing.m,
-                  vertical: context.spacing.m,
-                ),
-            filled: true,
-            fillColor: effectiveFill,
-            errorText: errorText,
-            errorStyle: widget.errorStyle,
-          ),
+          textStyle: widget.textStyle,
+          labelText: widget.labelText,
+          labelStyle: widget.labelStyle,
+          hintText: widget.hintText,
+          hintStyle: widget.hintStyle,
+          contentPadding: widget.contentPadding,
+          errorText: errorText,
+          errorStyle: widget.errorStyle,
         );
       },
     );
@@ -471,10 +431,8 @@ class TaskTitleField extends StatelessWidget {
       enabled: enabled,
       validator: validator,
       autovalidateMode: autovalidateMode,
-      borderRadius: calendarBorderRadius,
-      focusBorderColor: calendarPrimaryColor,
       contentPadding: EdgeInsets.symmetric(
-        horizontal: context.spacing.m,
+        horizontal: context.spacing.xs,
         vertical: context.spacing.s,
       ),
       errorText: errorText,
@@ -1152,8 +1110,6 @@ class TaskDescriptionField extends StatelessWidget {
     this.autofocus = false,
     this.enabled = true,
     this.onChanged,
-    this.borderRadius,
-    this.focusBorderColor,
     this.contentPadding,
   });
 
@@ -1167,8 +1123,6 @@ class TaskDescriptionField extends StatelessWidget {
   final bool autofocus;
   final bool enabled;
   final ValueChanged<String>? onChanged;
-  final double? borderRadius;
-  final Color? focusBorderColor;
   final EdgeInsetsGeometry? contentPadding;
 
   @override
@@ -1187,14 +1141,7 @@ class TaskDescriptionField extends StatelessWidget {
       autofocus: autofocus,
       onChanged: onChanged,
       enabled: enabled,
-      borderRadius: borderRadius,
-      focusBorderColor: focusBorderColor,
-      contentPadding:
-          contentPadding ??
-          EdgeInsets.symmetric(
-            horizontal: context.spacing.m,
-            vertical: context.spacing.m,
-          ),
+      contentPadding: contentPadding,
     );
   }
 }
@@ -1211,8 +1158,6 @@ class TaskLocationField extends StatefulWidget {
     this.textCapitalization = TextCapitalization.words,
     this.autofocus = false,
     this.onChanged,
-    this.borderRadius,
-    this.focusBorderColor,
     this.contentPadding,
     this.autocomplete,
     this.autocompleteLimit = 6,
@@ -1226,8 +1171,6 @@ class TaskLocationField extends StatefulWidget {
   final TextCapitalization textCapitalization;
   final bool autofocus;
   final ValueChanged<String>? onChanged;
-  final double? borderRadius;
-  final Color? focusBorderColor;
   final EdgeInsetsGeometry? contentPadding;
   final LocationAutocompleteHelper? autocomplete;
   final int autocompleteLimit;
@@ -1272,8 +1215,6 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
         autofocus: widget.autofocus,
         onChanged: widget.onChanged,
         enabled: widget.enabled,
-        borderRadius: widget.borderRadius,
-        focusBorderColor: widget.focusBorderColor,
         contentPadding: widget.contentPadding,
       );
     }
@@ -1300,8 +1241,6 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
           onChanged: widget.onChanged,
           onSubmitted: (_) => onFieldSubmitted(),
           enabled: widget.enabled,
-          borderRadius: widget.borderRadius,
-          focusBorderColor: widget.focusBorderColor,
           contentPadding: widget.contentPadding,
         );
       },
@@ -1373,8 +1312,6 @@ class _TaskLocationTextInput extends StatelessWidget {
     required this.autofocus,
     required this.onChanged,
     required this.enabled,
-    required this.borderRadius,
-    required this.focusBorderColor,
     required this.contentPadding,
     this.onSubmitted,
   });
@@ -1387,8 +1324,6 @@ class _TaskLocationTextInput extends StatelessWidget {
   final bool autofocus;
   final ValueChanged<String>? onChanged;
   final bool enabled;
-  final double? borderRadius;
-  final Color? focusBorderColor;
   final EdgeInsetsGeometry? contentPadding;
   final ValueChanged<String>? onSubmitted;
 
@@ -1406,14 +1341,7 @@ class _TaskLocationTextInput extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       enabled: enabled,
-      borderRadius: borderRadius,
-      focusBorderColor: focusBorderColor,
-      contentPadding:
-          contentPadding ??
-          EdgeInsets.symmetric(
-            horizontal: context.spacing.m,
-            vertical: context.spacing.m,
-          ),
+      contentPadding: contentPadding,
     );
   }
 }

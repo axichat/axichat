@@ -3,10 +3,10 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-const _checkboxAnimationDuration = Duration(milliseconds: 220);
 
 class AxiCheckboxFormField extends FormField<bool> {
   AxiCheckboxFormField({
@@ -23,23 +23,30 @@ class AxiCheckboxFormField extends FormField<bool> {
          builder: (state) {
            final context = state.context;
            final colors = context.colorScheme;
-           final textTheme = Theme.of(context).textTheme;
+           final textTheme = context.textTheme;
+           final spacing = context.spacing;
+           final sizing = context.sizing;
+           final animationDuration = context.select<SettingsCubit, Duration>(
+             (cubit) => cubit.animationDuration,
+           );
            final value = state.value ?? false;
            final isEnabled = state.widget.enabled;
-           final labelStyle = textTheme.bodyMedium?.copyWith(
+           final labelStyle = textTheme.small.copyWith(
              color: isEnabled ? colors.foreground : colors.mutedForeground,
              fontWeight: FontWeight.w600,
            );
-           final sublabelStyle = textTheme.bodySmall?.copyWith(
-             color: colors.mutedForeground,
-           );
+           final sublabelStyle = textTheme.muted;
            final borderColor = state.hasError
                ? colors.destructive
                : (value ? colors.primary : colors.border);
            final highlightColor = state.hasError
-               ? colors.destructive.withValues(alpha: 0.08)
+               ? colors.destructive.withValues(
+                   alpha: context.motion.tapHoverAlpha,
+                 )
                : (value
-                     ? colors.primary.withValues(alpha: 0.08)
+                     ? colors.primary.withValues(
+                         alpha: context.motion.tapHoverAlpha,
+                       )
                      : Colors.transparent);
 
            void handleChanged(bool newValue) {
@@ -49,9 +56,12 @@ class AxiCheckboxFormField extends FormField<bool> {
            }
 
            Widget row = AnimatedContainer(
-             duration: _checkboxAnimationDuration,
+             duration: animationDuration,
              curve: Curves.easeInOut,
-             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+             padding: EdgeInsets.symmetric(
+               horizontal: spacing.s,
+               vertical: spacing.xs,
+             ),
              decoration: ShapeDecoration(
                color: highlightColor,
                shape: RoundedSuperellipseBorder(
@@ -62,12 +72,12 @@ class AxiCheckboxFormField extends FormField<bool> {
                crossAxisAlignment: CrossAxisAlignment.center,
                children: [
                  SizedBox(
-                   width: 44,
-                   height: 44,
+                   width: sizing.inputSuffixButtonSize,
+                   height: sizing.inputSuffixButtonSize,
                    child: Center(
                      child: AnimatedScale(
                        scale: value ? 1 : 0.92,
-                       duration: _checkboxAnimationDuration,
+                       duration: animationDuration,
                        curve: Curves.easeOut,
                        child: Checkbox(
                          value: value,
@@ -85,7 +95,8 @@ class AxiCheckboxFormField extends FormField<bool> {
                            }
                            return Colors.transparent;
                          }),
-                         materialTapTargetSize: MaterialTapTargetSize.padded,
+                         materialTapTargetSize:
+                             MaterialTapTargetSize.shrinkWrap,
                          visualDensity: VisualDensity.compact,
                          shape: RoundedRectangleBorder(
                            borderRadius: BorderRadius.circular(
@@ -94,11 +105,7 @@ class AxiCheckboxFormField extends FormField<bool> {
                          ),
                          side: BorderSide(
                            color: borderColor,
-                           width:
-                               ShadTheme.of(
-                                 context,
-                               ).decoration.border?.top?.width ??
-                               0,
+                           width: context.borderSide.width,
                          ),
                          activeColor: colors.primary,
                          checkColor: colors.primaryForeground,
@@ -106,27 +113,17 @@ class AxiCheckboxFormField extends FormField<bool> {
                      ),
                    ),
                  ),
-                 const SizedBox(width: 12),
+                 SizedBox(width: spacing.s),
                  Expanded(
                    child: Column(
                      crossAxisAlignment: CrossAxisAlignment.start,
                      children: [
                        if (inputLabel != null)
-                         DefaultTextStyle(
-                           style:
-                               labelStyle ??
-                               TextStyle(
-                                 color: colors.foreground,
-                                 fontWeight: FontWeight.w600,
-                               ),
-                           child: inputLabel,
-                         ),
+                         DefaultTextStyle(style: labelStyle, child: inputLabel),
                        if (inputSublabel != null) ...[
-                         const SizedBox(height: 4),
+                         SizedBox(height: spacing.xs),
                          DefaultTextStyle(
-                           style:
-                               sublabelStyle ??
-                               TextStyle(color: colors.mutedForeground),
+                           style: sublabelStyle,
                            child: inputSublabel,
                          ),
                        ],
@@ -137,11 +134,15 @@ class AxiCheckboxFormField extends FormField<bool> {
              ),
            );
 
-           row = ShadGestureDetector(
-             cursor: isEnabled ? SystemMouseCursors.click : MouseCursor.defer,
-             hoverStrategies: ShadTheme.of(context).hoverStrategies,
-             onTap: isEnabled ? () => handleChanged(!value) : null,
-             child: row,
+           row = ShadFocusable(
+             canRequestFocus: isEnabled,
+             builder: (context, _, child) => child ?? const SizedBox.shrink(),
+             child: ShadGestureDetector(
+               cursor: isEnabled ? SystemMouseCursors.click : MouseCursor.defer,
+               hoverStrategies: ShadTheme.of(context).hoverStrategies,
+               onTap: isEnabled ? () => handleChanged(!value) : null,
+               child: row,
+             ),
            );
 
            row = AxiTapBounce(enabled: isEnabled, child: row);
@@ -152,14 +153,10 @@ class AxiCheckboxFormField extends FormField<bool> {
                row,
                if (state.hasError && state.errorText != null)
                  Padding(
-                   padding: const EdgeInsets.only(left: 4, top: 6),
+                   padding: EdgeInsets.only(left: spacing.xs, top: spacing.xs),
                    child: Text(
                      state.errorText!,
-                     style: TextStyle(
-                       color: colors.destructive,
-                       fontSize: 12,
-                       fontWeight: FontWeight.w500,
-                     ),
+                     style: textTheme.label.copyWith(color: colors.destructive),
                    ),
                  ),
              ],

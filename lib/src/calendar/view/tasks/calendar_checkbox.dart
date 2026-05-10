@@ -16,6 +16,7 @@ class CalendarCheckbox extends StatelessWidget {
     this.isIndeterminate = false,
     this.onChanged,
     this.visualSize = 18,
+    this.tapTargetSize,
   });
 
   final bool value;
@@ -24,12 +25,15 @@ class CalendarCheckbox extends StatelessWidget {
   final Color activeColor;
   final Color borderColor;
   final double visualSize;
+  final double? tapTargetSize;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final bool? checkboxValue = isIndeterminate ? null : value;
     final bool isEnabled = onChanged != null;
+    final double resolvedTapTargetSize =
+        tapTargetSize ?? calendarCheckboxTapTarget;
     const double baseSize = 20;
     final double clampedVisualSize = visualSize.clamp(16, 22);
     final double visualScale = (clampedVisualSize / baseSize) - 1;
@@ -42,8 +46,8 @@ class CalendarCheckbox extends StatelessWidget {
     );
 
     return SizedBox(
-      width: calendarCheckboxTapTarget,
-      height: calendarCheckboxTapTarget,
+      width: resolvedTapTargetSize,
+      height: resolvedTapTargetSize,
       child: Checkbox(
         value: checkboxValue,
         tristate: isIndeterminate,

@@ -3,14 +3,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 /// Shared calendar text field with consistent styling across the quick add
-/// modal, popover editor, and sidebar forms. The widget keeps the legacy
-/// appearance while exposing knobs for padding, borders, and capitalization so
-/// each surface can tailor behaviour without duplicating decoration code.
+/// modal, popover editor, and sidebar forms. It routes through the shared Axi
+/// input stack so padding, caret geometry, and typing motion stay consistent.
 class TaskTextField extends StatelessWidget {
   const TaskTextField({
     super.key,
@@ -33,9 +33,6 @@ class TaskTextField extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.contentPadding,
-    this.borderRadius,
-    this.focusBorderColor,
-    this.fillColor,
     this.textStyle,
     this.helperText,
     this.helperStyle,
@@ -62,9 +59,6 @@ class TaskTextField extends StatelessWidget {
   final Widget? prefix;
   final Widget? suffix;
   final EdgeInsetsGeometry? contentPadding;
-  final double? borderRadius;
-  final Color? focusBorderColor;
-  final Color? fillColor;
   final TextStyle? textStyle;
   final String? helperText;
   final TextStyle? helperStyle;
@@ -73,11 +67,10 @@ class TaskTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double radius = borderRadius ?? 8;
-    final Color focusedColor = focusBorderColor ?? calendarPrimaryColor;
-    final Color effectiveFill = fillColor ?? calendarContainerColor;
-
-    return AxiTextField(
+    final EdgeInsets? resolvedPadding = contentPadding?.resolve(
+      Directionality.of(context),
+    );
+    final Widget field = AxiTextInput(
       controller: controller,
       focusNode: focusNode,
       minLines: minLines,
@@ -90,48 +83,62 @@ class TaskTextField extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       inputFormatters: inputFormatters,
-      style:
-          textStyle ??
-          context.textTheme.small.copyWith(color: calendarTitleColor),
-      decoration: InputDecoration(
-        labelText: labelText,
-        labelStyle:
-            labelStyle ??
-            context.textTheme.small.copyWith(color: calendarSubtitleColor),
-        hintText: hintText,
-        hintStyle:
-            hintStyle ??
-            context.textTheme.small.copyWith(color: calendarTimeLabelColor),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: calendarBorderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: calendarBorderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(
-            color: focusedColor,
-            width: context.borderSide.width * 2,
+      variant: AxiInputVariant.underline,
+      decoration: errorText == null
+          ? null
+          : const ShadDecoration(hasError: true),
+      style: textStyle,
+      placeholderStyle: hintStyle,
+      placeholder: hintText == null ? null : Text(hintText!),
+      padding: resolvedPadding,
+      leading: prefix,
+      trailing: suffix,
+    );
+
+    if (labelText == null && helperText == null && errorText == null) {
+      return field;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (labelText case final String label) ...[
+          Text(
+            label,
+            style:
+                labelStyle ??
+                context.textTheme.small.copyWith(
+                  color: context.colorScheme.mutedForeground,
+                ),
           ),
-        ),
-        contentPadding:
-            contentPadding ??
-            EdgeInsets.symmetric(
-              horizontal: context.spacing.m,
-              vertical: context.spacing.m,
+          SizedBox(height: context.spacing.xs),
+        ],
+        field,
+        if (errorText case final String error)
+          Padding(
+            padding: inputSubtextInsets,
+            child: Text(
+              error,
+              style:
+                  errorStyle ??
+                  context.textTheme.small.copyWith(
+                    color: context.colorScheme.destructive,
+                  ),
             ),
-        filled: true,
-        fillColor: effectiveFill,
-        prefixIcon: prefix,
-        suffixIcon: suffix,
-        helperText: helperText,
-        helperStyle: helperStyle,
-        errorText: errorText,
-        errorStyle: errorStyle,
-      ),
+          )
+        else if (helperText case final String helper)
+          Padding(
+            padding: inputSubtextInsets,
+            child: Text(
+              helper,
+              style:
+                  helperStyle ??
+                  context.textTheme.small.copyWith(
+                    color: context.colorScheme.mutedForeground,
+                  ),
+            ),
+          ),
+      ],
     );
   }
 }

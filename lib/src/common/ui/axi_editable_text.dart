@@ -5190,10 +5190,7 @@ class EditableTextState extends State<EditableText>
     } else if (elapsed > Duration.zero) {
       effectiveStart = _resolvedTypingCaretAnimationValue();
     } else {
-      // If a new insertion lands before the first animation frame, advance the
-      // visible caret to the prior predicted endpoint before retargeting.
-      effectiveStart = _typingCaretAnimationEnd;
-      _updateTypingCaretOffset(effectiveStart);
+      effectiveStart = _typingCaretAnimationStart;
     }
     if (effectiveStart == end) {
       _jumpTypingCaret(end);
@@ -5295,11 +5292,8 @@ class EditableTextState extends State<EditableText>
     if (predictedDx > renderEditable.size.width) {
       return null;
     }
-    final double currentCaretHeight =
-        _typingCaretPainter?.caretHeight ?? renderEditable.cursorHeight;
-    _typingCaretPainter?.caretHeight = math.max(
-      currentCaretHeight,
-      glyphSize.height,
+    _typingCaretPainter?.caretHeight = _effectiveTypingCaretHeight(
+      renderEditable,
     );
     return _snapTypingOffset(
       Offset(predictedDx, startOffset.dy),
@@ -5380,6 +5374,18 @@ class EditableTextState extends State<EditableText>
     final double cursorHeight = renderEditable.cursorHeight;
     if (cursorHeight > 0) {
       return cursorHeight;
+    }
+    return _typingCaretLineHeightFallback;
+  }
+
+  double _effectiveTypingCaretHeight(AxiRenderEditable renderEditable) {
+    final double cursorHeight = renderEditable.cursorHeight;
+    if (cursorHeight > 0) {
+      return cursorHeight;
+    }
+    final double preferredLineHeight = renderEditable.preferredLineHeight;
+    if (preferredLineHeight > 0) {
+      return preferredLineHeight;
     }
     return _typingCaretLineHeightFallback;
   }

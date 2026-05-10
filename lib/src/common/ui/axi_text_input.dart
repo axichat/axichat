@@ -33,8 +33,16 @@ class AxiTextInput extends StatelessWidget {
     this.onSubmitted,
     this.inputFormatters,
     this.decoration,
+    this.variant = AxiInputVariant.outlined,
     this.style,
     this.strutStyle,
+    this.cursorHeight,
+    this.placeholderStyle,
+    this.padding,
+    this.inputPadding,
+    this.leading,
+    this.trailing,
+    this.constraints,
   });
 
   final TextEditingController? controller;
@@ -58,8 +66,16 @@ class AxiTextInput extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final List<TextInputFormatter>? inputFormatters;
   final ShadDecoration? decoration;
+  final AxiInputVariant variant;
   final TextStyle? style;
   final StrutStyle? strutStyle;
+  final double? cursorHeight;
+  final TextStyle? placeholderStyle;
+  final EdgeInsets? padding;
+  final EdgeInsets? inputPadding;
+  final Widget? leading;
+  final Widget? trailing;
+  final BoxConstraints? constraints;
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +101,16 @@ class AxiTextInput extends StatelessWidget {
       onSubmitted: onSubmitted,
       inputFormatters: inputFormatters,
       decoration: decoration,
+      variant: variant,
       style: style,
       strutStyle: strutStyle,
+      cursorHeight: cursorHeight,
+      placeholderStyle: placeholderStyle,
+      padding: padding,
+      inputPadding: inputPadding,
+      leading: leading,
+      trailing: trailing,
+      constraints: constraints,
     );
   }
 }

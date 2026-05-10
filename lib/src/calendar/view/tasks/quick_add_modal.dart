@@ -1311,10 +1311,8 @@ class _QuickAddDescriptionField extends StatelessWidget {
     return TaskDescriptionField(
       controller: controller,
       hintText: l10n.calendarDescriptionHint,
-      borderRadius: calendarBorderRadius,
-      focusBorderColor: calendarPrimaryColor,
       contentPadding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
+        horizontal: spacing.xs,
         vertical: spacing.s,
       ),
       textCapitalization: TextCapitalization.sentences,
@@ -1340,11 +1338,9 @@ class _QuickAddLocationField extends StatelessWidget {
     return TaskLocationField(
       controller: controller,
       hintText: l10n.calendarLocationHint,
-      borderRadius: calendarBorderRadius,
-      focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
       contentPadding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
+        horizontal: spacing.xs,
         vertical: spacing.s,
       ),
       onChanged: onChanged,

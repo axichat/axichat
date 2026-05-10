@@ -290,10 +290,8 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     TaskDescriptionField(
                       controller: _descriptionController,
                       hintText: context.l10n.calendarOptionalDetails,
-                      borderRadius: calendarBorderRadius,
-                      focusBorderColor: calendarPrimaryColor,
                       contentPadding: EdgeInsets.symmetric(
-                        horizontal: context.spacing.m,
+                        horizontal: context.spacing.xs,
                         vertical: context.spacing.s,
                       ),
                       minLines: 3,
