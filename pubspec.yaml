@@ -279,4 +279,4 @@ flutter_native_splash:
   web: true
   android_12:
     color: "#000000"
-    image: assets/images/axichat_banner.png
+    image: assets/icons/android12_splash_icon.png
