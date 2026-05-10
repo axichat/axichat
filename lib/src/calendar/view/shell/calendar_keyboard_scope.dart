@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:axichat/src/calendar/view/grid/calendar_grid.dart';
-import 'package:axichat/src/common/ui/focus_extensions.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 const String _keyboardScopeFocusLabel = 'CalendarKeyboardScope';
 

@@ -19,7 +19,6 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/policy.dart';
-import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';

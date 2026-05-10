@@ -5,7 +5,6 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/legal_urls.dart';
-import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';

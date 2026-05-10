@@ -62,8 +62,6 @@ import 'package:flutter/src/widgets/widget_span.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
 
-import 'axi_spell_check.dart';
-
 export 'package:flutter/services.dart'
     show
         KeyboardInsertedContent,

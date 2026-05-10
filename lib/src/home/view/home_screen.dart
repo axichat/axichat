@@ -35,9 +35,6 @@ import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
-import 'package:axichat/src/common/ui/axi_attention_shake.dart';
-import 'package:axichat/src/common/ui/feedback_toast.dart';
-import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -63,7 +60,6 @@ import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
-import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
@@ -702,6 +698,7 @@ class _HomeShellScope extends InheritedWidget {
     required this.calendarBottomDragSession,
     required this.bottomNavIndex,
     required this.foldersSection,
+    required this.homeBranchActive,
     required this.homeTabIndex,
     required this.selectedBottomIndex,
     required this.setBottomNavIndex,
@@ -715,6 +712,7 @@ class _HomeShellScope extends InheritedWidget {
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
   final ValueListenable<int> bottomNavIndex;
   final ValueListenable<FolderHomeSection?> foldersSection;
+  final bool homeBranchActive;
   final ValueListenable<int> homeTabIndex;
   final ValueListenable<int> selectedBottomIndex;
   final ValueChanged<int> setBottomNavIndex;
@@ -732,6 +730,7 @@ class _HomeShellScope extends InheritedWidget {
         calendarBottomDragSession != oldWidget.calendarBottomDragSession ||
         bottomNavIndex != oldWidget.bottomNavIndex ||
         foldersSection != oldWidget.foldersSection ||
+        homeBranchActive != oldWidget.homeBranchActive ||
         homeTabIndex != oldWidget.homeTabIndex ||
         selectedBottomIndex != oldWidget.selectedBottomIndex ||
         setBottomNavIndex != oldWidget.setBottomNavIndex ||
@@ -810,6 +809,30 @@ class HomeShellCalendarScope extends StatelessWidget {
         },
         child: shell,
       ),
+    );
+  }
+}
+
+class HomeShellBranchTransitionContainer extends StatelessWidget {
+  const HomeShellBranchTransitionContainer({
+    super.key,
+    required this.navigationShell,
+    required this.children,
+  });
+
+  final StatefulNavigationShell navigationShell;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final navPlacement = EnvScope.of(context).navPlacement;
+    return AxiDirectionalIndexedStack(
+      index: navigationShell.currentIndex,
+      duration: navPlacement == NavPlacement.bottom
+          ? context.watch<SettingsCubit>().animationDuration
+          : Duration.zero,
+      animationEnabled: navPlacement == NavPlacement.bottom,
+      children: children,
     );
   }
 }
@@ -1031,6 +1054,8 @@ class _HomeShellState extends State<HomeShell> {
                   calendarBottomDragSession: _calendarBottomDragSession,
                   bottomNavIndex: _bottomNavIndex,
                   foldersSection: _foldersSection,
+                  homeBranchActive:
+                      widget.navigationShell.currentIndex == _homeBranchIndex,
                   homeTabIndex: _homeTabIndex,
                   selectedBottomIndex: _selectedBottomIndex,
                   setBottomNavIndex: _setBottomNavIndexValue,
@@ -1544,13 +1569,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final storageManager = context.watch<CalendarStorageManager>();
-    final homeTabIndex = _HomeShellScope.maybeOf(context)?.homeTabIndex;
-    final bottomNavIndex = _HomeShellScope.maybeOf(context)?.bottomNavIndex;
-    final calendarBottomDragSession = _HomeShellScope.maybeOf(
-      context,
-    )?.calendarBottomDragSession;
-    final tabs =
-        _HomeShellScope.maybeOf(context)?.tabs ?? const <HomeTabEntry>[];
+    final homeShellScope = _HomeShellScope.maybeOf(context);
+    final homeTabIndex = homeShellScope?.homeTabIndex;
+    final bottomNavIndex = homeShellScope?.bottomNavIndex;
+    final calendarBottomDragSession = homeShellScope?.calendarBottomDragSession;
+    final tabs = homeShellScope?.tabs ?? const <HomeTabEntry>[];
     return BlocListener<ShareIntentCubit, ShareIntentState>(
       listener: (context, _) {
         _queueShareIntentHandling();
@@ -1562,6 +1585,7 @@ class _HomeScreenState extends State<HomeScreen> {
           storageManager: storageManager,
           shortcutFocusNode: _shortcutFocusNode,
           bottomNavIndex: bottomNavIndex,
+          homeBranchActive: homeShellScope?.homeBranchActive ?? false,
           calendarCanHandleBack: _calendarCanHandleBack,
           calendarBottomDragSession: calendarBottomDragSession,
           tabs: tabs,
@@ -1776,6 +1800,7 @@ class _HomeContent extends StatelessWidget {
     required this.storageManager,
     required this.shortcutFocusNode,
     required this.bottomNavIndex,
+    required this.homeBranchActive,
     required this.calendarCanHandleBack,
     required this.calendarBottomDragSession,
     required this.tabs,
@@ -1789,6 +1814,7 @@ class _HomeContent extends StatelessWidget {
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
   final ValueListenable<int>? bottomNavIndex;
+  final bool homeBranchActive;
   final ValueNotifier<bool> calendarCanHandleBack;
   final ValueNotifier<CalendarBottomDragSession?>? calendarBottomDragSession;
   final List<HomeTabEntry> tabs;
@@ -1804,6 +1830,7 @@ class _HomeContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final settings = context.watch<SettingsCubit>().state;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final endpointConfig = settings.endpointConfig;
     final bool emailEnabled = endpointConfig.smtpEnabled;
     final env = EnvScope.of(context);
@@ -1888,6 +1915,7 @@ class _HomeContent extends StatelessWidget {
 
                         Widget calendarLayout({
                           required int? calendarTabIndex,
+                          required bool animateMobileTabChanges,
                           required bool surfacePopEnabled,
                         }) {
                           return Row(
@@ -1908,6 +1936,10 @@ class _HomeContent extends StatelessWidget {
                                       },
                                       child: CalendarWidget(
                                         mobileTabIndex: calendarTabIndex,
+                                        animateMobileTabChanges:
+                                            animateMobileTabChanges,
+                                        mobileTabChangeDuration:
+                                            animationDuration,
                                         surfacePopEnabled: surfacePopEnabled,
                                         onMobileTabIndexChanged: (tabIndex) {
                                           final safeTab = tabIndex
@@ -1928,7 +1960,9 @@ class _HomeContent extends StatelessWidget {
                           );
                         }
 
-                        Widget contentForBottomIndex(int selectedBottomIndex) {
+                        Widget contentForBottomIndex({
+                          required int selectedBottomIndex,
+                        }) {
                           final bool openCalendar =
                               selectedBottomIndex == 1 ||
                               selectedBottomIndex == 2;
@@ -1943,14 +1977,21 @@ class _HomeContent extends StatelessWidget {
                               showChatCalendar: showChatCalendar,
                             );
                           } else {
-                            body = AxiFadeIndexedStack(
+                            body = AxiDirectionalIndexedStack(
                               index: openCalendar ? 1 : 0,
-                              duration: Duration.zero,
-                              overlapChildren: false,
+                              duration: navPlacement == NavPlacement.bottom
+                                  ? animationDuration
+                                  : Duration.zero,
+                              animationEnabled:
+                                  navPlacement == NavPlacement.bottom &&
+                                  homeBranchActive,
                               children: [
                                 chatLayout(showChatCalendar: showChatCalendar),
                                 calendarLayout(
                                   calendarTabIndex: calendarTabIndex,
+                                  animateMobileTabChanges:
+                                      navPlacement == NavPlacement.bottom &&
+                                      homeBranchActive,
                                   surfacePopEnabled: openCalendar,
                                 ),
                               ],
@@ -1965,7 +2006,7 @@ class _HomeContent extends StatelessWidget {
 
                         final bottomIndexNotifier = bottomNavIndex;
                         if (bottomIndexNotifier == null) {
-                          return contentForBottomIndex(0);
+                          return contentForBottomIndex(selectedBottomIndex: 0);
                         }
 
                         return ValueListenableBuilder<int>(
@@ -1974,7 +2015,7 @@ class _HomeContent extends StatelessWidget {
                             final int safeSelectedBottomIndex =
                                 _normalizeBottomNavIndex(selectedBottomIndex);
                             return contentForBottomIndex(
-                              safeSelectedBottomIndex,
+                              selectedBottomIndex: safeSelectedBottomIndex,
                             );
                           },
                         );
@@ -2010,7 +2051,7 @@ class _HomeContent extends StatelessWidget {
           resizeToAvoidBottomInset: shouldResizeForKeyboard,
           body: DefaultTabController(
             length: tabs.length,
-            animationDuration: context.watch<SettingsCubit>().animationDuration,
+            animationDuration: animationDuration,
             child: _HomeTabIndexSync(
               child: _HomeCoordinatorBridge(
                 storage: calendarStorage,

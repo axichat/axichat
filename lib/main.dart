@@ -3,6 +3,7 @@
 
 // ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -15,6 +16,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
+import 'package:axichat/src/common/ui/ui.dart' show compactDeviceBreakpoint;
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/app_storage.dart';
@@ -37,6 +39,7 @@ final ValueNotifier<bool> foregroundServiceActive = ValueNotifier(false);
 Future<void> main(List<String> args) async {
   final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
   firstFrameGate.defer(binding);
+  await _applyPhoneOrientationPolicy(binding.platformDispatcher.views);
   _installKeyboardGuard();
   await NetworkAvailabilityService.instance.start();
 
@@ -113,24 +116,103 @@ Future<void> main(List<String> args) async {
   final AuthBootstrap authBootstrap = AuthBootstrap(
     hasStoredLoginCredentials: hasStoredLoginCredentials,
   );
-  final Widget app = capability.canForegroundService
-      ? WithForegroundTask(
-          child: Material(
-            child: Axichat(
-              notificationService: notificationService,
-              capability: capability,
-              storageManager: storageManager,
+  final Widget app = _PhoneOrientationPolicy(
+    child: capability.canForegroundService
+        ? WithForegroundTask(
+            child: Material(
+              child: Axichat(
+                notificationService: notificationService,
+                capability: capability,
+                storageManager: storageManager,
+              ),
             ),
+          )
+        : Axichat(
+            notificationService: notificationService,
+            capability: capability,
+            storageManager: storageManager,
           ),
-        )
-      : Axichat(
-          notificationService: notificationService,
-          capability: capability,
-          storageManager: storageManager,
-        );
+  );
 
   runApp(RepositoryProvider.value(value: authBootstrap, child: app));
   firstFrameGate.allow();
+}
+
+class _PhoneOrientationPolicy extends StatefulWidget {
+  const _PhoneOrientationPolicy({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PhoneOrientationPolicy> createState() =>
+      _PhoneOrientationPolicyState();
+}
+
+class _PhoneOrientationPolicyState extends State<_PhoneOrientationPolicy>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _apply();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _apply();
+  }
+
+  void _apply() {
+    unawaited(
+      _applyPhoneOrientationPolicy(
+        WidgetsBinding.instance.platformDispatcher.views,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
+}
+
+Future<void> _applyPhoneOrientationPolicy(
+  Iterable<ui.FlutterView> views,
+) async {
+  if (kIsWeb || !_supportsPhoneOrientationLock(defaultTargetPlatform)) {
+    return;
+  }
+  ui.Display? display;
+  for (final view in views) {
+    display = view.display;
+    break;
+  }
+  if (display == null) {
+    return;
+  }
+  await SystemChrome.setPreferredOrientations(
+    _isPhoneDisplay(display)
+        ? const <DeviceOrientation>[DeviceOrientation.portraitUp]
+        : const <DeviceOrientation>[],
+  );
+}
+
+bool _supportsPhoneOrientationLock(TargetPlatform platform) {
+  return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+}
+
+bool _isPhoneDisplay(ui.Display display) {
+  final logicalSize = Size(
+    display.size.width / display.devicePixelRatio,
+    display.size.height / display.devicePixelRatio,
+  );
+  return logicalSize.shortestSide < compactDeviceBreakpoint;
 }
 
 var _loggerConfigured = false;

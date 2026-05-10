@@ -10,7 +10,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
-import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';

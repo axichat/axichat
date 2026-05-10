@@ -1,6 +1,5 @@
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
-import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/app_localizations_en.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart' show ShadColor;

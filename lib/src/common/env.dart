@@ -29,25 +29,38 @@ CommandSurface resolveCommandSurface(BuildContext context) {
 @immutable
 class Env {
   Env({required this.size, required this.platform})
-    : formFactor = _formFactorFor(size.width);
+    : formFactor = _formFactorFor(size, platform);
 
   final Size size;
   final TargetPlatform platform;
   final FormFactor formFactor;
 
-  static FormFactor _formFactorFor(double width) {
-    if (width >= smallScreen) return FormFactor.desktop;
-    if (width >= compactDeviceBreakpoint) return FormFactor.tablet;
+  static FormFactor _formFactorFor(Size size, TargetPlatform platform) {
+    if (_usesDesktopWidthBreakpoints(platform)) {
+      if (size.width >= smallScreen) return FormFactor.desktop;
+      if (size.width >= compactDeviceBreakpoint) return FormFactor.tablet;
+      return FormFactor.handset;
+    }
+    if (size.shortestSide < compactDeviceBreakpoint) {
+      return FormFactor.handset;
+    }
+    if (size.width >= smallScreen) return FormFactor.desktop;
+    if (size.width >= compactDeviceBreakpoint) return FormFactor.tablet;
     return FormFactor.handset;
   }
 
-  bool get isDesktopPlatform {
+  static bool _usesDesktopWidthBreakpoints(TargetPlatform platform) {
     if (kIsWeb) {
-      return formFactor == FormFactor.desktop;
+      return true;
     }
     return platform == TargetPlatform.macOS ||
         platform == TargetPlatform.linux ||
         platform == TargetPlatform.windows;
+  }
+
+  bool get isDesktopPlatform {
+    if (kIsWeb) return formFactor == FormFactor.desktop;
+    return _usesDesktopWidthBreakpoints(platform);
   }
 
   NavPlacement get navPlacement => formFactor == FormFactor.desktop

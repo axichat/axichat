@@ -3,7 +3,7 @@
 
 import 'dart:math' as math;
 
-import 'package:axichat/src/common/ui/squircle_border.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 

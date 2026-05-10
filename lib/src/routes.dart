@@ -147,6 +147,17 @@ class TransitionGoRouteData extends GoRouteData {
 class HomeShellRoute extends StatefulShellRouteData {
   const HomeShellRoute();
 
+  static Widget $navigatorContainerBuilder(
+    BuildContext context,
+    StatefulNavigationShell navigationShell,
+    List<Widget> children,
+  ) {
+    return HomeShellBranchTransitionContainer(
+      navigationShell: navigationShell,
+      children: children,
+    );
+  }
+
   @override
   Widget builder(
     BuildContext context,
@@ -163,6 +174,8 @@ class HomeShellBranchData extends StatefulShellBranchData {
 
 class ProfileShellBranchData extends StatefulShellBranchData {
   const ProfileShellBranchData();
+
+  static const bool $preload = true;
 }
 
 @TypedGoRoute<HomeRoute>(path: HomeRoute.path)

@@ -1,4 +1,4 @@
-import 'package:axichat/src/common/ui/app_bar_actions.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -18,7 +18,6 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
-import 'package:axichat/src/common/ui/connection_status_indicators.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';

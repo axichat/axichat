@@ -5,7 +5,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
-import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';

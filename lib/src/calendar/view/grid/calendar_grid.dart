@@ -24,7 +24,7 @@ import 'package:axichat/src/calendar/task/task_share_formatter.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_task_share_sheet.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
-import 'package:axichat/src/common/ui/axi_surface_scope.dart' as axi_surface;
+import 'package:axichat/src/common/ui/ui.dart' as axi_surface;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/app_localizations.dart';

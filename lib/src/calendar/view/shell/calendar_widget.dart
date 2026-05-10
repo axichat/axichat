@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/ui/axi_surface_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -36,12 +35,16 @@ class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
     this.mobileTabIndex,
+    this.animateMobileTabChanges = true,
+    this.mobileTabChangeDuration = baseAnimationDuration,
     this.surfacePopEnabled = true,
     this.onMobileTabIndexChanged,
     this.bottomDragSession,
   });
 
   final int? mobileTabIndex;
+  final bool animateMobileTabChanges;
+  final Duration mobileTabChangeDuration;
   final bool surfacePopEnabled;
   final ValueChanged<int>? onMobileTabIndexChanged;
   final ValueNotifier<CalendarBottomDragSession?>? bottomDragSession;
@@ -99,7 +102,13 @@ class _CalendarWidgetState
   @override
   void didUpdateWidget(covariant CalendarWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _syncMobileTabController(animate: true);
+    _syncMobileTabController(
+      animate:
+          widget.animateMobileTabChanges &&
+          oldWidget.animateMobileTabChanges &&
+          oldWidget.mobileTabIndex != null &&
+          widget.mobileTabIndex != null,
+    );
   }
 
   @override
@@ -121,6 +130,12 @@ class _CalendarWidgetState
     if (mobileTabController.indexIsChanging) {
       return;
     }
+    final targetIndex = widget.mobileTabIndex;
+    if (targetIndex != null &&
+        mobileTabController.index ==
+            targetIndex.clamp(0, mobileTabController.length - 1)) {
+      return;
+    }
     widget.onMobileTabIndexChanged?.call(mobileTabController.index);
   }
 
@@ -133,8 +148,11 @@ class _CalendarWidgetState
     if (mobileTabController.index == resolved) {
       return;
     }
-    if (animate) {
-      mobileTabController.animateTo(resolved);
+    if (animate && widget.mobileTabChangeDuration != Duration.zero) {
+      mobileTabController.animateTo(
+        resolved,
+        duration: widget.mobileTabChangeDuration,
+      );
       return;
     }
     mobileTabController.index = resolved;

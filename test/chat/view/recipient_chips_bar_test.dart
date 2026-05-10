@@ -2,8 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
-import 'package:axichat/src/common/ui/axi_text_field.dart';
-import 'package:axichat/src/common/ui/recipient_chips_bar.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';

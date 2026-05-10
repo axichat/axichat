@@ -2,7 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
-import 'package:axichat/src/common/ui/axi_fade_indexed_stack.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -9,6 +9,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/ui/ui.dart' as axi_ui;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -19,6 +20,7 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' as widgets;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -1476,7 +1478,8 @@ bool _isTextInputFocused() {
   if (focusContext == null) return false;
   if (!focusContext.mounted) return false;
   final focusedWidget = focusContext.widget;
-  return focusedWidget is EditableText;
+  return focusedWidget is widgets.EditableText ||
+      focusedWidget is axi_ui.EditableText;
 }
 
 class _AccessibilityGroupMarker extends InheritedWidget {
@@ -3162,7 +3165,8 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
     if (focus == null) return false;
     final focusContext = focus.context;
     if (focusContext == null || !focusContext.mounted) return false;
-    return focusContext.widget is EditableText;
+    return focusContext.widget is widgets.EditableText ||
+        focusContext.widget is axi_ui.EditableText;
   }
 
   @override
