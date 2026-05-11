@@ -33,6 +33,7 @@ class TaskTextField extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.contentPadding,
+    this.variant = AxiInputVariant.underline,
     this.textStyle,
     this.helperText,
     this.helperStyle,
@@ -59,6 +60,7 @@ class TaskTextField extends StatelessWidget {
   final Widget? prefix;
   final Widget? suffix;
   final EdgeInsetsGeometry? contentPadding;
+  final AxiInputVariant variant;
   final TextStyle? textStyle;
   final String? helperText;
   final TextStyle? helperStyle;
@@ -83,7 +85,7 @@ class TaskTextField extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       inputFormatters: inputFormatters,
-      variant: AxiInputVariant.underline,
+      variant: variant,
       decoration: errorText == null
           ? null
           : const ShadDecoration(hasError: true),

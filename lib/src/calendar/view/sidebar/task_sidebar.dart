@@ -34,6 +34,8 @@ import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
+import 'package:axichat/src/calendar/view/sidebar/calendar_sidebar_controller.dart';
+import 'package:axichat/src/calendar/view/sidebar/calendar_sidebar_draggable.dart';
 import 'package:axichat/src/calendar/view/sidebar/calendar_critical_path_share_sheet.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_categories_field.dart';
@@ -75,9 +77,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import 'calendar_sidebar_controller.dart';
-import 'calendar_sidebar_draggable.dart';
-
 class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   const TaskSidebar({
     super.key,
@@ -97,6 +96,8 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   @override
   State<TaskSidebar<B>> createState() => TaskSidebarState<B>();
 }
+
+enum _TaskFormResetPhase { idle, closingAdvanced, closingAdvancedForReset }
 
 class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     with
@@ -172,9 +173,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   bool _preserveDraftFieldsOnTitleClear = false;
   bool _awaitingTaskCreation = false;
   bool _awaitingCriticalPathCreate = false;
+  _TaskFormResetPhase _taskFormResetPhase = _TaskFormResetPhase.idle;
   String? _pendingCriticalPathName;
 
   RecurrenceFormValue get _advancedRecurrence => _draftController.recurrence;
+
+  bool get _isTaskFormActionLocked =>
+      _taskFormResetPhase != _TaskFormResetPhase.idle;
 
   RecurrenceFormValue get _selectionRecurrence =>
       _selectionRecurrenceNotifier.value;
@@ -335,7 +340,42 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleAdvancedToggle() {
+    if (_isTaskFormActionLocked) {
+      return;
+    }
+    if (_sidebarController.state.showAdvancedOptions) {
+      setState(() {
+        _taskFormResetPhase = _TaskFormResetPhase.closingAdvanced;
+      });
+    }
     _sidebarController.toggleAdvancedOptions();
+  }
+
+  void _closeAdvancedOptionsForReset() {
+    if (_taskFormResetPhase == _TaskFormResetPhase.closingAdvancedForReset) {
+      return;
+    }
+    setState(() {
+      _taskFormResetPhase = _TaskFormResetPhase.closingAdvancedForReset;
+    });
+    _sidebarController.setAdvancedOptionsVisible(false);
+  }
+
+  void _handleAdvancedOptionsClosed() {
+    if (!mounted) {
+      return;
+    }
+    final bool shouldReset =
+        _taskFormResetPhase == _TaskFormResetPhase.closingAdvancedForReset;
+    if (shouldReset) {
+      _resetForm();
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _taskFormResetPhase = _TaskFormResetPhase.idle;
+    });
   }
 
   Future<void> _runParser(String input) async {
@@ -537,10 +577,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _draftController.setReminders(value);
   }
 
-  void _onAdvancedAlarmsChanged(List<CalendarAlarm> value) {
-    _draftController.setAdvancedAlarms(value);
-  }
-
   void _onCategoriesChanged(List<String> value) {
     _draftController.setCategories(value);
   }
@@ -677,9 +713,15 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                     final locationHelper = LocationAutocompleteHelper.fromState(
                       state,
                     );
-                    final SettingsState settingsState = context
-                        .watch<SettingsCubit>()
-                        .state;
+                    final SettingsCubit settingsCubit = context
+                        .watch<SettingsCubit>();
+                    final SettingsState settingsState = settingsCubit.state;
+                    final Duration advancedOptionsAnimationDuration =
+                        settingsState.lowMotion
+                        ? Duration.zero
+                        : calendarSidebarAdvancedAnimationDuration;
+                    final CalendarTaskListSortMode taskListSortMode =
+                        settingsState.calendarTaskListSortMode;
                     List<CalendarTask> selectionTasks = const [];
                     if (state.isSelectionMode) {
                       selectionTasks = _selectedTasks(state);
@@ -695,28 +737,19 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           return false;
                         }
                         if (task.scheduledTime != null &&
-                            context
-                                .watch<SettingsCubit>()
-                                .state
-                                .hideCompletedScheduled &&
+                            settingsState.hideCompletedScheduled &&
                             task.isCompleted) {
                           return false;
                         }
                         if (task.scheduledTime == null &&
                             task.deadline != null &&
-                            context
-                                .watch<SettingsCubit>()
-                                .state
-                                .hideCompletedReminders &&
+                            settingsState.hideCompletedReminders &&
                             task.isCompleted) {
                           return false;
                         }
                         if (task.scheduledTime == null &&
                             task.deadline == null &&
-                            context
-                                .watch<SettingsCubit>()
-                                .state
-                                .hideCompletedUnscheduled &&
+                            settingsState.hideCompletedUnscheduled &&
                             task.isCompleted) {
                           return false;
                         }
@@ -846,82 +879,109 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onToggleCompletion: _toggleSidebarTaskCompletion,
                       );
                     } else {
-                      unscheduledTasks = _sortTasksByDeadline(
-                        state.unscheduledTasks.where((task) {
-                          if (!state.isTaskInFocusedPath(task)) {
-                            return false;
-                          }
-                          if (settingsState.hideCompletedUnscheduled &&
-                              task.isCompleted) {
-                            return false;
-                          }
-                          return true;
-                        }).toList(),
-                      );
-                      final List<String> settingsUnscheduledOrder =
-                          settingsState.unscheduledSidebarOrder;
-                      if (!listEquals(
-                        settingsUnscheduledOrder,
-                        _unscheduledOrder,
-                      )) {
-                        _unscheduledOrder = List<String>.from(
+                      final List<CalendarTask> allUnscheduledTasks =
+                          _sortTasksByDeadline(
+                            state.unscheduledTasks.where((task) {
+                              if (!state.isTaskInFocusedPath(task)) {
+                                return false;
+                              }
+                              return true;
+                            }).toList(),
+                          );
+                      unscheduledTasks = allUnscheduledTasks.where((task) {
+                        if (settingsState.hideCompletedUnscheduled &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
+                      if (taskListSortMode.allowsManualReorder) {
+                        final List<String> settingsUnscheduledOrder =
+                            settingsState.unscheduledSidebarOrder;
+                        if (!listEquals(
                           settingsUnscheduledOrder,
+                          _unscheduledOrder,
+                        )) {
+                          _unscheduledOrder = List<String>.from(
+                            settingsUnscheduledOrder,
+                          );
+                        }
+                        final List<String> unscheduledOrder = _deriveOrder(
+                          allUnscheduledTasks,
+                          _unscheduledOrder,
+                        );
+                        if (!listEquals(_unscheduledOrder, unscheduledOrder)) {
+                          _unscheduledOrder = List<String>.from(
+                            unscheduledOrder,
+                          );
+                        }
+                        if (!listEquals(
+                          settingsUnscheduledOrder,
+                          unscheduledOrder,
+                        )) {
+                          context
+                              .read<SettingsCubit>()
+                              .saveUnscheduledSidebarOrder(unscheduledOrder);
+                        }
+                        orderedUnscheduled = _orderedTasksFromOrder(
+                          unscheduledTasks,
+                          unscheduledOrder,
+                        );
+                      } else {
+                        orderedUnscheduled = _sortTaskList(
+                          unscheduledTasks,
+                          taskListSortMode,
                         );
                       }
-                      final List<String> unscheduledOrder = _deriveOrder(
-                        unscheduledTasks,
-                        _unscheduledOrder,
-                      );
-                      if (!listEquals(_unscheduledOrder, unscheduledOrder)) {
-                        _unscheduledOrder = List<String>.from(unscheduledOrder);
-                      }
-                      if (!listEquals(
-                        settingsUnscheduledOrder,
-                        unscheduledOrder,
-                      )) {
-                        context
-                            .read<SettingsCubit>()
-                            .saveUnscheduledSidebarOrder(unscheduledOrder);
-                      }
-                      orderedUnscheduled = _orderedTasksFromOrder(
-                        unscheduledTasks,
-                        unscheduledOrder,
-                      );
-                      reminderTasks = _sortTasksByDeadline(
-                        state.reminderTasks.where((task) {
-                          if (!state.isTaskInFocusedPath(task)) {
-                            return false;
-                          }
-                          if (settingsState.hideCompletedReminders &&
-                              task.isCompleted) {
-                            return false;
-                          }
-                          return true;
-                        }).toList(),
-                      );
-                      final List<String> settingsReminderOrder =
-                          settingsState.reminderSidebarOrder;
-                      if (!listEquals(settingsReminderOrder, _reminderOrder)) {
-                        _reminderOrder = List<String>.from(
+                      final List<CalendarTask> allReminderTasks =
+                          _sortTasksByDeadline(
+                            state.reminderTasks.where((task) {
+                              if (!state.isTaskInFocusedPath(task)) {
+                                return false;
+                              }
+                              return true;
+                            }).toList(),
+                          );
+                      reminderTasks = allReminderTasks.where((task) {
+                        if (settingsState.hideCompletedReminders &&
+                            task.isCompleted) {
+                          return false;
+                        }
+                        return true;
+                      }).toList();
+                      if (taskListSortMode.allowsManualReorder) {
+                        final List<String> settingsReminderOrder =
+                            settingsState.reminderSidebarOrder;
+                        if (!listEquals(
                           settingsReminderOrder,
+                          _reminderOrder,
+                        )) {
+                          _reminderOrder = List<String>.from(
+                            settingsReminderOrder,
+                          );
+                        }
+                        final List<String> reminderOrder = _deriveOrder(
+                          allReminderTasks,
+                          _reminderOrder,
                         );
-                      }
-                      final List<String> reminderOrder = _deriveOrder(
-                        reminderTasks,
-                        _reminderOrder,
-                      );
-                      if (!listEquals(_reminderOrder, reminderOrder)) {
-                        _reminderOrder = List<String>.from(reminderOrder);
-                      }
-                      if (!listEquals(settingsReminderOrder, reminderOrder)) {
-                        context.read<SettingsCubit>().saveReminderSidebarOrder(
+                        if (!listEquals(_reminderOrder, reminderOrder)) {
+                          _reminderOrder = List<String>.from(reminderOrder);
+                        }
+                        if (!listEquals(settingsReminderOrder, reminderOrder)) {
+                          context
+                              .read<SettingsCubit>()
+                              .saveReminderSidebarOrder(reminderOrder);
+                        }
+                        orderedReminders = _orderedTasksFromOrder(
+                          reminderTasks,
                           reminderOrder,
                         );
+                      } else {
+                        orderedReminders = _sortTaskList(
+                          reminderTasks,
+                          taskListSortMode,
+                        );
                       }
-                      orderedReminders = _orderedTasksFromOrder(
-                        reminderTasks,
-                        reminderOrder,
-                      );
                       unscheduledTasks = orderedUnscheduled;
                       reminderTasks = orderedReminders;
                       contentBody = _UnscheduledSidebarContent(
@@ -944,6 +1004,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onUrgentChanged: _onUserUrgentChanged,
                         sidebarController: _sidebarController,
                         onAdvancedToggle: _handleAdvancedToggle,
+                        onAdvancedOptionsClosed: _handleAdvancedOptionsClosed,
                         descriptionController: _descriptionController,
                         locationController: _locationController,
                         checklistController: _checklistController,
@@ -953,7 +1014,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onScheduleCleared: _onUserScheduleCleared,
                         onRecurrenceChanged: _onUserRecurrenceChanged,
                         onRemindersChanged: _onRemindersChanged,
-                        onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
                         onCategoriesChanged: _onCategoriesChanged,
                         onUrlChanged: _onUrlChanged,
                         onGeoChanged: _onGeoChanged,
@@ -966,8 +1026,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onAddTask: () {
                           _addTask();
                         },
+                        isTaskFormActionLocked: _isTaskFormActionLocked,
                         isTaskCreationSubmitting:
                             state.isTaskCreationSubmitting,
+                        animationDuration: advancedOptionsAnimationDuration,
                         onAddToCriticalPath: _queueCriticalPathForDraft,
                         onShowAddTaskSection: _showAddTaskSection,
                         onHideAddTaskSection: _hideAddTaskSection,
@@ -978,6 +1040,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             settingsState.hideCompletedUnscheduled,
                         hideCompletedReminders:
                             settingsState.hideCompletedReminders,
+                        taskListSortMode: taskListSortMode,
+                        onTaskListSortModeChanged: (mode) => context
+                            .read<SettingsCubit>()
+                            .updateCalendarTaskListSortMode(mode),
                         onToggleHideCompletedUnscheduled: (value) => context
                             .read<SettingsCubit>()
                             .toggleHideCompletedUnscheduled(value),
@@ -2227,6 +2293,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _hideAddTaskSection() {
+    if (_isTaskFormActionLocked) {
+      return;
+    }
     setState(() {
       _criticalPathsExpanded = true;
       _activeCriticalPathId = null;
@@ -2531,6 +2600,39 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     return tasksCopy;
   }
 
+  List<CalendarTask> _sortTaskList(
+    List<CalendarTask> tasks,
+    CalendarTaskListSortMode mode,
+  ) {
+    if (mode.allowsManualReorder) {
+      return tasks;
+    }
+    final List<CalendarTask> sorted = List<CalendarTask>.from(tasks);
+    sorted.sort(switch (mode) {
+      CalendarTaskListSortMode.manual => _compareByDateAdded,
+      CalendarTaskListSortMode.dateAdded => _compareByDateAdded,
+      CalendarTaskListSortMode.importance => _compareByImportance,
+    });
+    return sorted;
+  }
+
+  int _compareByDateAdded(CalendarTask a, CalendarTask b) {
+    final int createdComparison = b.createdAt.compareTo(a.createdAt);
+    if (createdComparison != 0) {
+      return createdComparison;
+    }
+    return a.title.compareTo(b.title);
+  }
+
+  int _compareByImportance(CalendarTask a, CalendarTask b) {
+    final int priorityComparison = a.effectivePriority.sidebarImportanceRank
+        .compareTo(b.effectivePriority.sidebarImportanceRank);
+    if (priorityComparison != 0) {
+      return priorityComparison;
+    }
+    return _compareByDateAdded(a, b);
+  }
+
   List<String> _deriveOrder(List<CalendarTask> tasks, List<String> cache) {
     final Set<String> presentIds = tasks.map((task) => task.id).toSet();
     final Set<String> seen = <String>{};
@@ -2746,6 +2848,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   Future<void> _addTask() async {
+    if (_isTaskFormActionLocked) {
+      return;
+    }
     _activateQuickTaskValidation();
     _checklistController.commitPendingEntry();
     final bool isValid = _addTaskFormKey.currentState?.validate() ?? false;
@@ -2865,10 +2970,18 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _clearQuickTaskTitle() {
+    if (_sidebarController.state.showAdvancedOptions ||
+        _isTaskFormActionLocked) {
+      _closeAdvancedOptionsForReset();
+      return;
+    }
     _resetForm();
   }
 
   void _handleClearFieldsPressed() {
+    if (_isTaskFormActionLocked) {
+      return;
+    }
     _resetForm();
   }
 
@@ -2994,6 +3107,17 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _handlePopoverClosed(taskId: taskId, anchorToken: anchorToken);
     }
     controller.dispose();
+  }
+}
+
+extension _TaskPrioritySidebarSort on TaskPriority {
+  int get sidebarImportanceRank {
+    return switch (this) {
+      TaskPriority.critical => 0,
+      TaskPriority.important => 1,
+      TaskPriority.urgent => 2,
+      TaskPriority.none => 3,
+    };
   }
 }
 
@@ -3874,6 +3998,7 @@ class _AddTaskSection extends StatelessWidget {
     required this.onUrgentChanged,
     required this.sidebarController,
     required this.onAdvancedToggle,
+    required this.onAdvancedOptionsClosed,
     required this.descriptionController,
     required this.locationController,
     required this.checklistController,
@@ -3883,10 +4008,11 @@ class _AddTaskSection extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.addTask,
+    required this.isTaskFormActionLocked,
     required this.isTaskCreationSubmitting,
+    required this.animationDuration,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
-    required this.onAdvancedAlarmsChanged,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
@@ -3914,6 +4040,7 @@ class _AddTaskSection extends StatelessWidget {
   final ValueChanged<bool> onUrgentChanged;
   final CalendarSidebarController sidebarController;
   final VoidCallback onAdvancedToggle;
+  final VoidCallback onAdvancedOptionsClosed;
   final TextEditingController descriptionController;
   final TextEditingController locationController;
   final TaskChecklistController checklistController;
@@ -3923,10 +4050,11 @@ class _AddTaskSection extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final VoidCallback addTask;
+  final bool isTaskFormActionLocked;
   final bool isTaskCreationSubmitting;
+  final Duration animationDuration;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
-  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
@@ -3945,7 +4073,6 @@ class _AddTaskSection extends StatelessWidget {
       color: colors.mutedForeground,
     );
     return Container(
-      padding: EdgeInsets.all(context.spacing.m),
       decoration: BoxDecoration(
         color: calendarContainerColor,
         border: Border(
@@ -3960,134 +4087,149 @@ class _AddTaskSection extends StatelessWidget {
         autovalidateMode: ShadAutovalidateMode.disabled,
         fieldIdSeparator: null,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: AxiPlainHeaderButton(
-                    onPressed: onCollapse,
-                    backgroundColor: Colors.transparent,
-                    hoverBackgroundColor: Colors.transparent,
-                    pressedBackgroundColor: Colors.transparent,
-                    padding: EdgeInsets.zero,
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: TaskSectionHeader(
-                        title: l10n.calendarAddTaskAction,
-                        size: TaskSectionLabelSize.medium,
-                        leading: AnimatedRotation(
-                          turns: -0.5,
-                          duration: baseAnimationDuration,
-                          child: chevron,
+            Padding(
+              padding: EdgeInsetsDirectional.only(
+                start: context.spacing.m,
+                top: context.spacing.m,
+                end: context.spacing.m,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AxiPlainHeaderButton(
+                          onPressed: isTaskFormActionLocked ? null : onCollapse,
+                          backgroundColor: Colors.transparent,
+                          hoverBackgroundColor: Colors.transparent,
+                          pressedBackgroundColor: Colors.transparent,
+                          padding: EdgeInsets.zero,
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: TaskSectionHeader(
+                              title: l10n.calendarAddTaskAction,
+                              size: TaskSectionLabelSize.medium,
+                              leading: AnimatedRotation(
+                                turns: -0.5,
+                                duration: baseAnimationDuration,
+                                child: chevron,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: context.spacing.xxs),
-                AnimatedBuilder(
-                  animation: formActivityListenable,
-                  builder: (context, _) {
-                    final bool enabled = hasSidebarFormValues();
-                    final button = AxiButton.outline(
-                      onPressed: enabled ? onClearFieldsPressed : null,
-                      child: Text(l10n.commonClear),
-                    );
-                    return AnimatedOpacity(
-                      duration: baseAnimationDuration,
-                      opacity: enabled ? 1 : 0.5,
-                      child: button,
-                    );
-                  },
-                ),
-              ],
-            ),
-            SizedBox(height: context.spacing.m),
-            _QuickTaskInput(
-              controller: titleController,
-              focusNode: titleFocusNode,
-              helper: locationHelper,
-              onChanged: onQuickTaskChanged,
-              onSubmitted: onQuickTaskSubmitted,
-              validator: quickTaskValidator,
-              autovalidateMode: quickTaskAutovalidateMode,
-            ),
-            SizedBox(height: context.spacing.m),
-            _PriorityToggles(
-              draftController: draftController,
-              onImportantChanged: onImportantChanged,
-              onUrgentChanged: onUrgentChanged,
-            ),
-            SizedBox(height: context.spacing.m),
-            _AdvancedToggle(uiState: uiState, onPressed: onAdvancedToggle),
-            AnimatedSwitcher(
-              duration: calendarSidebarAdvancedAnimationDuration,
-              transitionBuilder: (child, animation) {
-                final fade = CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOut,
-                );
-                return FadeTransition(
-                  opacity: fade,
-                  child: SizeTransition(
-                    sizeFactor: fade,
-                    axisAlignment: -1,
-                    child: child,
-                  ),
-                );
-              },
-              child: uiState.showAdvancedOptions
-                  ? _AdvancedOptions(
-                      key: const ValueKey('advanced'),
-                      locationHelper: locationHelper,
-                      descriptionController: descriptionController,
-                      locationController: locationController,
-                      checklistController: checklistController,
-                      draftController: draftController,
-                      onDeadlineChanged: onDeadlineChanged,
-                      onStartChanged: onStartChanged,
-                      onEndChanged: onEndChanged,
-                      onScheduleCleared: onScheduleCleared,
-                      onRecurrenceChanged: onRecurrenceChanged,
-                      titleController: titleController,
-                      onAddToCriticalPath: onAddToCriticalPath,
-                      onRemindersChanged: onRemindersChanged,
-                      onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
-                      onCategoriesChanged: onCategoriesChanged,
-                      onUrlChanged: onUrlChanged,
-                      onGeoChanged: onGeoChanged,
-                      onOrganizerChanged: onOrganizerChanged,
-                      onAttendeesChanged: onAttendeesChanged,
-                      queuedPaths: queuedCriticalPaths,
-                      onRemoveQueuedPath: onRemoveQueuedCriticalPath,
-                    )
-                  : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
-            ),
-            SizedBox(height: context.spacing.m),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: titleController,
-              builder: (context, value, _) {
-                final bool canSubmit = quickTaskValidator(value.text) == null;
-                return TaskFormActionsRow(
-                  padding: EdgeInsets.zero,
-                  gap: context.spacing.s,
-                  children: [
-                    Expanded(
-                      child: _AddTaskButton(
-                        onPressed: addTask,
-                        enabled: canSubmit,
-                        loading: isTaskCreationSubmitting,
+                      SizedBox(width: context.spacing.xxs),
+                      AnimatedBuilder(
+                        animation: formActivityListenable,
+                        builder: (context, _) {
+                          final bool enabled =
+                              hasSidebarFormValues() && !isTaskFormActionLocked;
+                          final button = AxiButton.outline(
+                            onPressed: enabled ? onClearFieldsPressed : null,
+                            child: Text(l10n.commonClear),
+                          );
+                          return AnimatedOpacity(
+                            duration: baseAnimationDuration,
+                            opacity: enabled ? 1 : 0.5,
+                            child: button,
+                          );
+                        },
                       ),
+                    ],
+                  ),
+                  SizedBox(height: context.spacing.m),
+                  _QuickTaskInput(
+                    controller: titleController,
+                    focusNode: titleFocusNode,
+                    helper: locationHelper,
+                    onChanged: onQuickTaskChanged,
+                    onSubmitted: onQuickTaskSubmitted,
+                    validator: quickTaskValidator,
+                    autovalidateMode: quickTaskAutovalidateMode,
+                  ),
+                  SizedBox(height: context.spacing.m),
+                  _PriorityToggles(
+                    draftController: draftController,
+                    onImportantChanged: onImportantChanged,
+                    onUrgentChanged: onUrgentChanged,
+                  ),
+                  SizedBox(height: context.spacing.m),
+                  _AdvancedToggle(
+                    uiState: uiState,
+                    onPressed: isTaskFormActionLocked ? null : onAdvancedToggle,
+                  ),
+                ],
+              ),
+            ),
+            IgnorePointer(
+              ignoring: isTaskFormActionLocked || !uiState.showAdvancedOptions,
+              child: _AdvancedOptionsTransition(
+                visible: uiState.showAdvancedOptions,
+                duration: animationDuration,
+                onClosed: onAdvancedOptionsClosed,
+                child: _AdvancedOptions(
+                  locationHelper: locationHelper,
+                  descriptionController: descriptionController,
+                  locationController: locationController,
+                  checklistController: checklistController,
+                  draftController: draftController,
+                  onDeadlineChanged: onDeadlineChanged,
+                  onStartChanged: onStartChanged,
+                  onEndChanged: onEndChanged,
+                  onScheduleCleared: onScheduleCleared,
+                  onRecurrenceChanged: onRecurrenceChanged,
+                  onAddToCriticalPath: onAddToCriticalPath,
+                  onRemindersChanged: onRemindersChanged,
+                  onCategoriesChanged: onCategoriesChanged,
+                  onUrlChanged: onUrlChanged,
+                  onGeoChanged: onGeoChanged,
+                  onOrganizerChanged: onOrganizerChanged,
+                  onAttendeesChanged: onAttendeesChanged,
+                  queuedPaths: queuedCriticalPaths,
+                  onRemoveQueuedPath: onRemoveQueuedCriticalPath,
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(context.spacing.m),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: titleController,
+                    builder: (context, value, _) {
+                      final bool canSubmit =
+                          quickTaskValidator(value.text) == null;
+                      return TaskFormActionsRow(
+                        padding: EdgeInsets.zero,
+                        gap: context.spacing.s,
+                        children: [
+                          Expanded(
+                            child: _AddTaskButton(
+                              onPressed: addTask,
+                              enabled: canSubmit && !isTaskFormActionLocked,
+                              loading: isTaskCreationSubmitting,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  if (uiState.showAdvancedOptions) ...[
+                    SizedBox(height: context.spacing.m),
+                    _AdvancedToggle(
+                      uiState: uiState,
+                      onPressed: isTaskFormActionLocked
+                          ? null
+                          : onAdvancedToggle,
                     ),
                   ],
-                );
-              },
+                ],
+              ),
             ),
-            if (uiState.showAdvancedOptions) ...[
-              SizedBox(height: context.spacing.m),
-              _AdvancedToggle(uiState: uiState, onPressed: onAdvancedToggle),
-            ],
           ],
         ),
       ),
@@ -4117,6 +4259,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onUrgentChanged,
     required this.sidebarController,
     required this.onAdvancedToggle,
+    required this.onAdvancedOptionsClosed,
     required this.descriptionController,
     required this.locationController,
     required this.checklistController,
@@ -4126,14 +4269,15 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.onRemindersChanged,
-    required this.onAdvancedAlarmsChanged,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
     required this.onOrganizerChanged,
     required this.onAttendeesChanged,
     required this.onAddTask,
+    required this.isTaskFormActionLocked,
     required this.isTaskCreationSubmitting,
+    required this.animationDuration,
     required this.onAddToCriticalPath,
     required this.queuedCriticalPaths,
     required this.onRemoveQueuedCriticalPath,
@@ -4146,6 +4290,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.hideCompletedReminders,
     required this.onToggleHideCompletedUnscheduled,
     required this.onToggleHideCompletedReminders,
+    required this.taskListSortMode,
+    required this.onTaskListSortModeChanged,
     required this.sectionKeys,
     required this.onToggleSection,
     required this.onSectionDragEnter,
@@ -4178,6 +4324,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final ValueChanged<bool> onUrgentChanged;
   final CalendarSidebarController sidebarController;
   final VoidCallback onAdvancedToggle;
+  final VoidCallback onAdvancedOptionsClosed;
   final TextEditingController descriptionController;
   final TextEditingController locationController;
   final TaskChecklistController checklistController;
@@ -4187,14 +4334,15 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
-  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
   final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
   final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final VoidCallback onAddTask;
+  final bool isTaskFormActionLocked;
   final bool isTaskCreationSubmitting;
+  final Duration animationDuration;
   final Future<void> Function() onAddToCriticalPath;
   final List<CalendarCriticalPath> queuedCriticalPaths;
   final ValueChanged<String> onRemoveQueuedCriticalPath;
@@ -4207,6 +4355,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final bool hideCompletedReminders;
   final ValueChanged<bool> onToggleHideCompletedUnscheduled;
   final ValueChanged<bool> onToggleHideCompletedReminders;
+  final CalendarTaskListSortMode taskListSortMode;
+  final ValueChanged<CalendarTaskListSortMode> onTaskListSortModeChanged;
   final Map<CalendarSidebarSection, GlobalKey> sectionKeys;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
   final ValueChanged<CalendarSidebarSection> onSectionDragEnter;
@@ -4256,6 +4406,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             onUrgentChanged: onUrgentChanged,
             sidebarController: sidebarController,
             onAdvancedToggle: onAdvancedToggle,
+            onAdvancedOptionsClosed: onAdvancedOptionsClosed,
             descriptionController: descriptionController,
             locationController: locationController,
             checklistController: checklistController,
@@ -4265,10 +4416,11 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             onScheduleCleared: onScheduleCleared,
             onRecurrenceChanged: onRecurrenceChanged,
             addTask: onAddTask,
+            isTaskFormActionLocked: isTaskFormActionLocked,
             isTaskCreationSubmitting: isTaskCreationSubmitting,
+            animationDuration: animationDuration,
             onAddToCriticalPath: onAddToCriticalPath,
             onRemindersChanged: onRemindersChanged,
-            onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
             onCategoriesChanged: onCategoriesChanged,
             onUrlChanged: onUrlChanged,
             onGeoChanged: onGeoChanged,
@@ -4287,6 +4439,8 @@ class _UnscheduledSidebarContent extends StatelessWidget {
           hideCompletedReminders: hideCompletedReminders,
           onToggleHideCompletedUnscheduled: onToggleHideCompletedUnscheduled,
           onToggleHideCompletedReminders: onToggleHideCompletedReminders,
+          taskListSortMode: taskListSortMode,
+          onTaskListSortModeChanged: onTaskListSortModeChanged,
           uiState: uiState,
           sectionKeys: sectionKeys,
           onToggleSection: onToggleSection,
@@ -4363,6 +4517,8 @@ class _TaskSectionsPanel extends StatelessWidget {
     required this.hideCompletedReminders,
     required this.onToggleHideCompletedUnscheduled,
     required this.onToggleHideCompletedReminders,
+    required this.taskListSortMode,
+    required this.onTaskListSortModeChanged,
     required this.uiState,
     required this.sectionKeys,
     required this.onToggleSection,
@@ -4385,6 +4541,8 @@ class _TaskSectionsPanel extends StatelessWidget {
   final bool hideCompletedReminders;
   final ValueChanged<bool> onToggleHideCompletedUnscheduled;
   final ValueChanged<bool> onToggleHideCompletedReminders;
+  final CalendarTaskListSortMode taskListSortMode;
+  final ValueChanged<CalendarTaskListSortMode> onTaskListSortModeChanged;
   final CalendarSidebarState uiState;
   final Map<CalendarSidebarSection, GlobalKey> sectionKeys;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
@@ -4410,6 +4568,11 @@ class _TaskSectionsPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _TaskListSortToolbar(
+          mode: taskListSortMode,
+          onChanged: onTaskListSortModeChanged,
+        ),
+        SizedBox(height: context.spacing.xs),
         _SidebarAccordionSection(
           title: context.l10n.calendarUnscheduledTitle,
           section: CalendarSidebarSection.unscheduled,
@@ -4420,6 +4583,7 @@ class _TaskSectionsPanel extends StatelessWidget {
           onSectionDragEnter: onSectionDragEnter,
           onSectionDragLeave: onSectionDragLeave,
           trailing: _HideCompletedToggle(
+            key: const ValueKey('calendar-unscheduled-hide-completed'),
             value: hideCompletedUnscheduled,
             onChanged: onToggleHideCompletedUnscheduled,
           ),
@@ -4438,7 +4602,7 @@ class _TaskSectionsPanel extends StatelessWidget {
               onDragHover: onTaskListHover,
               onDragLeave: onTaskListLeave,
               onDrop: onTaskListDrop,
-              reorderable: true,
+              reorderable: taskListSortMode.allowsManualReorder,
               onReorder: onUnscheduledReorder,
               requiresLongPressForReorder: requiresLongPressForReorder,
               taskTileBuilder: taskTileBuilder,
@@ -4456,6 +4620,7 @@ class _TaskSectionsPanel extends StatelessWidget {
           onSectionDragEnter: onSectionDragEnter,
           onSectionDragLeave: onSectionDragLeave,
           trailing: _HideCompletedToggle(
+            key: const ValueKey('calendar-reminders-hide-completed'),
             value: hideCompletedReminders,
             onChanged: onToggleHideCompletedReminders,
           ),
@@ -4474,7 +4639,7 @@ class _TaskSectionsPanel extends StatelessWidget {
               onDragHover: onTaskListHover,
               onDragLeave: onTaskListLeave,
               onDrop: onTaskListDrop,
-              reorderable: true,
+              reorderable: taskListSortMode.allowsManualReorder,
               onReorder: onReminderReorder,
               requiresLongPressForReorder: requiresLongPressForReorder,
               taskTileBuilder: taskTileBuilder,
@@ -4482,6 +4647,86 @@ class _TaskSectionsPanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TaskListSortToolbar extends StatefulWidget {
+  const _TaskListSortToolbar({required this.mode, required this.onChanged});
+
+  final CalendarTaskListSortMode mode;
+  final ValueChanged<CalendarTaskListSortMode> onChanged;
+
+  @override
+  State<_TaskListSortToolbar> createState() => _TaskListSortToolbarState();
+}
+
+class _TaskListSortToolbarState extends State<_TaskListSortToolbar> {
+  late final ShadPopoverController _controller = ShadPopoverController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final List<AxiMenuAction> actions = CalendarTaskListSortMode.values
+        .map(
+          (mode) => AxiMenuAction(
+            label: mode.label(l10n),
+            icon: mode == widget.mode
+                ? Icons.check
+                : Icons.radio_button_unchecked,
+            onPressed: () {
+              _controller.hide();
+              widget.onChanged(mode);
+            },
+          ),
+        )
+        .toList(growable: false);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border(bottom: context.borderSide)),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m,
+          vertical: context.spacing.s,
+        ),
+        child: Row(
+          children: [
+            Text(
+              l10n.calendarTaskSortTooltip.toUpperCase(),
+              style: context.textTheme.sectionLabelM,
+            ),
+            const Spacer(),
+            AxiPopover(
+              controller: _controller,
+              closeOnTapOutside: true,
+              padding: EdgeInsets.zero,
+              decoration: ShadDecoration.none,
+              shadows: const <BoxShadow>[],
+              popover: (context) => AxiMenu(actions: actions),
+              child: AxiButton.outline(
+                size: AxiButtonSize.sm,
+                tooltip: l10n.calendarTaskSortTooltip,
+                onPressed: _controller.toggle,
+                leading: Icon(
+                  Icons.sort,
+                  size: context.sizing.menuItemIconSize,
+                ),
+                trailing: Icon(
+                  Icons.expand_more,
+                  size: context.sizing.menuItemIconSize,
+                ),
+                child: Text(widget.mode.label(l10n)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -4683,7 +4928,11 @@ class _SidebarAccordionSection extends StatelessWidget {
 }
 
 class _HideCompletedToggle extends StatelessWidget {
-  const _HideCompletedToggle({required this.value, required this.onChanged});
+  const _HideCompletedToggle({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
 
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -4695,8 +4944,8 @@ class _HideCompletedToggle extends StatelessWidget {
     final Color foreground = hiding ? colors.primary : colors.mutedForeground;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: context.spacing.xs),
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
+      child: AxiButton.ghost(
+        size: AxiButtonSize.sm,
         onPressed: () => onChanged(!value),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -4818,7 +5067,7 @@ class _SidebarTaskList extends StatelessWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   padding: EdgeInsets.symmetric(
                     horizontal: context.spacing.s,
-                    vertical: axiSpaceXxs,
+                    vertical: context.spacing.xxs,
                   ),
                   itemCount: tasks.length,
                   onReorder: onReorder!,
@@ -4844,7 +5093,7 @@ class _SidebarTaskList extends StatelessWidget {
                   physics: const NeverScrollableScrollPhysics(),
                   padding: EdgeInsets.symmetric(
                     horizontal: context.spacing.s,
-                    vertical: 2,
+                    vertical: context.spacing.xxs,
                   ),
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
@@ -5446,6 +5695,7 @@ class _QuickTaskInput extends StatelessWidget {
       contentPadding: padding,
       validator: validator,
       autovalidateMode: autovalidateMode,
+      variant: AxiInputVariant.ghost,
     );
 
     final suggestionField = LocationInlineSuggestion(
@@ -5496,45 +5746,225 @@ class _AdvancedToggle extends StatelessWidget {
   const _AdvancedToggle({required this.uiState, required this.onPressed});
 
   final CalendarSidebarState uiState;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return Align(
       alignment: Alignment.centerLeft,
-      child: ShadButton.ghost(
-        size: ShadButtonSize.sm,
+      child: AxiButton.ghost(
+        size: AxiButtonSize.sm,
         onPressed: onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              uiState.showAdvancedOptions
-                  ? Icons.expand_less
-                  : Icons.expand_more,
-              size: context.sizing.menuItemIconSize,
-              color: calendarPrimaryColor,
-            ),
-            SizedBox(width: context.spacing.xxs),
-            Text(
-              uiState.showAdvancedOptions
-                  ? l10n.calendarAdvancedHide
-                  : l10n.calendarAdvancedShow,
-              style: context.textTheme.label.copyWith(
-                color: calendarPrimaryColor,
-              ),
-            ),
-          ],
+        leading: Icon(
+          uiState.showAdvancedOptions ? Icons.expand_less : Icons.expand_more,
+          size: context.sizing.menuItemIconSize,
+          color: calendarPrimaryColor,
+        ),
+        child: Text(
+          uiState.showAdvancedOptions
+              ? l10n.calendarAdvancedHide
+              : l10n.calendarAdvancedShow,
+          style: context.textTheme.label.copyWith(color: calendarPrimaryColor),
         ),
       ),
     );
   }
 }
 
+class _AdvancedOptionsTransition extends StatefulWidget {
+  const _AdvancedOptionsTransition({
+    required this.visible,
+    required this.duration,
+    required this.onClosed,
+    required this.child,
+  });
+
+  final bool visible;
+  final Duration duration;
+  final VoidCallback onClosed;
+  final Widget child;
+
+  @override
+  State<_AdvancedOptionsTransition> createState() =>
+      _AdvancedOptionsTransitionState();
+}
+
+class _AdvancedOptionsTransitionState extends State<_AdvancedOptionsTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+  Widget? _retainedChild;
+  bool _hasRetainedChild = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: widget.duration,
+      reverseDuration: widget.duration,
+      vsync: this,
+    )..addStatusListener(_handleAnimationStatus);
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+      reverseCurve: Curves.easeIn,
+    );
+    if (widget.visible) {
+      _retainedChild = widget.child;
+      _hasRetainedChild = true;
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdvancedOptionsTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller
+      ..duration = widget.duration
+      ..reverseDuration = widget.duration;
+
+    if (widget.visible) {
+      _retainedChild = widget.child;
+      if (!_hasRetainedChild) {
+        setState(() {
+          _hasRetainedChild = true;
+        });
+      }
+      _controller.forward();
+      return;
+    }
+
+    if (oldWidget.visible) {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeStatusListener(_handleAnimationStatus)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleAnimationStatus(AnimationStatus status) {
+    if (status != AnimationStatus.dismissed || widget.visible) {
+      return;
+    }
+    if (_hasRetainedChild || _retainedChild != null) {
+      setState(() {
+        _hasRetainedChild = false;
+        _retainedChild = null;
+      });
+    }
+    widget.onClosed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget? child = _retainedChild;
+    if (!_hasRetainedChild || child == null) {
+      return const SizedBox.shrink();
+    }
+    return ClipRect(
+      child: FadeTransition(
+        opacity: _animation,
+        child: SizeTransition(
+          sizeFactor: _animation,
+          axisAlignment: -1,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _AdvancedSettingsSectionHeader extends StatelessWidget {
+  const _AdvancedSettingsSectionHeader({required this.label, this.trailing});
+
+  final String label;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ShadSeparator.horizontal(
+          color: context.borderSide.color,
+          thickness: context.borderSide.width,
+          margin: EdgeInsets.zero,
+        ),
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.s,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label.toUpperCase(),
+                  style: context.textTheme.sectionLabelM,
+                ),
+              ),
+              if (trailing != null) ...[
+                SizedBox(width: context.spacing.s),
+                trailing!,
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdvancedOptionsInset extends StatelessWidget {
+  const _AdvancedOptionsInset({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: context.spacing.m),
+      child: child,
+    );
+  }
+}
+
+class _AdvancedOptionsSection extends StatelessWidget {
+  const _AdvancedOptionsSection({
+    required this.label,
+    required this.child,
+    this.trailing,
+  });
+
+  final String label;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AdvancedSettingsSectionHeader(label: label, trailing: trailing),
+        _AdvancedOptionsInset(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: context.spacing.m),
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _AdvancedOptions extends StatelessWidget {
   const _AdvancedOptions({
-    super.key,
     required this.locationHelper,
     required this.descriptionController,
     required this.locationController,
@@ -5545,10 +5975,8 @@ class _AdvancedOptions extends StatelessWidget {
     required this.onEndChanged,
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
-    required this.titleController,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
-    required this.onAdvancedAlarmsChanged,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
@@ -5568,10 +5996,8 @@ class _AdvancedOptions extends StatelessWidget {
   final ValueChanged<DateTime?> onEndChanged;
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
-  final TextEditingController titleController;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
-  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
@@ -5583,126 +6009,188 @@ class _AdvancedOptions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Padding(
-      padding: EdgeInsets.only(top: context.spacing.m),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TaskDescriptionField(
-            controller: descriptionController,
-            hintText: l10n.calendarDescriptionHint,
-            minLines: 2,
-            maxLines: 4,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: context.spacing.xs,
-              vertical: context.spacing.s,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(height: context.spacing.m),
+        _AdvancedOptionsSection(
+          label: l10n.calendarTaskDetailsSection,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TaskDescriptionField(
+                controller: descriptionController,
+                hintText: l10n.calendarDescriptionHint,
+                minLines: 2,
+                maxLines: 4,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: context.spacing.xs,
+                  vertical: context.spacing.s,
+                ),
+                variant: AxiInputVariant.ghost,
+              ),
+              SizedBox(height: context.spacing.m),
+              TaskLocationField(
+                controller: locationController,
+                hintText: l10n.calendarLocationHint,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: context.spacing.xs,
+                  vertical: context.spacing.s,
+                ),
+                variant: AxiInputVariant.ghost,
+                autocomplete: locationHelper,
+              ),
+            ],
           ),
-          SizedBox(height: context.spacing.xs),
-          TaskLocationField(
-            controller: locationController,
-            hintText: l10n.calendarLocationHint,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: context.spacing.xs,
-              vertical: context.spacing.s,
-            ),
-            autocomplete: locationHelper,
+        ),
+        _AdvancedOptionsSection(
+          label: l10n.calendarFragmentChecklistLabel,
+          child: TaskChecklist(
+            controller: checklistController,
+            label: l10n.calendarFragmentChecklistLabel,
+            addPlaceholder: l10n.calendarAddChecklistItem,
+            showDivider: false,
+            showHeader: false,
+            inputVariant: AxiInputVariant.ghost,
           ),
-          SizedBox(height: context.spacing.xs),
-          TaskChecklist(controller: checklistController),
-          SizedBox(height: context.spacing.s),
-          _AdvancedScheduleSection(
-            draftController: draftController,
-            onStartChanged: onStartChanged,
-            onEndChanged: onEndChanged,
-            onClear: onScheduleCleared,
+        ),
+        AnimatedBuilder(
+          animation: draftController,
+          builder: (context, _) {
+            return _AdvancedOptionsSection(
+              label: l10n.calendarScheduleLabel,
+              trailing:
+                  draftController.startTime != null ||
+                      draftController.endTime != null
+                  ? AxiButton.ghost(
+                      size: AxiButtonSize.sm,
+                      onPressed: onScheduleCleared,
+                      child: Text(l10n.commonClear),
+                    )
+                  : null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _AdvancedScheduleSection(
+                    draftController: draftController,
+                    onStartChanged: onStartChanged,
+                    onEndChanged: onEndChanged,
+                    onClear: onScheduleCleared,
+                  ),
+                  SizedBox(height: context.spacing.m),
+                  TaskSectionHeader(
+                    title: l10n.calendarDeadlineLabel,
+                    size: TaskSectionLabelSize.small,
+                  ),
+                  SizedBox(height: context.spacing.s),
+                  CalendarDateTimeField(
+                    value: draftController.deadline,
+                    onChanged: onDeadlineChanged,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        _AdvancedOptionsSection(
+          label: l10n.calendarRemindersSection,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnimatedBuilder(
+                animation: draftController,
+                builder: (context, _) {
+                  return ReminderPreferencesField(
+                    value: draftController.reminders,
+                    showHeader: false,
+                    onChanged: onRemindersChanged,
+                    referenceStart: draftController.startTime,
+                    anchor: draftController.deadline == null
+                        ? ReminderAnchor.start
+                        : ReminderAnchor.deadline,
+                    showBothAnchors: draftController.deadline != null,
+                    showAdvancedAlarms: false,
+                  );
+                },
+              ),
+              SizedBox(height: context.spacing.m),
+              _AdvancedRecurrenceSection(
+                draftController: draftController,
+                onChanged: onRecurrenceChanged,
+              ),
+            ],
           ),
-          const TaskSectionDivider(),
-          TaskSectionHeader(title: l10n.calendarDeadlineLabel),
-          SizedBox(height: context.spacing.s),
-          AnimatedBuilder(
-            animation: draftController,
-            builder: (context, _) {
-              return CalendarDateTimeField(
-                value: draftController.deadline,
-                onChanged: onDeadlineChanged,
-              );
-            },
+        ),
+        _AdvancedOptionsSection(
+          label: l10n.calendarOptionalDetails,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnimatedBuilder(
+                animation: draftController,
+                builder: (context, _) {
+                  return CalendarCategoriesField(
+                    categories: draftController.categories,
+                    headerSize: TaskSectionLabelSize.small,
+                    onChanged: onCategoriesChanged,
+                    surfaceColor: calendarContainerColor,
+                  );
+                },
+              ),
+              SizedBox(height: context.spacing.m),
+              AnimatedBuilder(
+                animation: draftController,
+                builder: (context, _) {
+                  return CalendarLinkGeoFields(
+                    url: draftController.url,
+                    geo: draftController.geo,
+                    headerSize: TaskSectionLabelSize.small,
+                    inputVariant: AxiInputVariant.ghost,
+                    onUrlChanged: onUrlChanged,
+                    onGeoChanged: onGeoChanged,
+                  );
+                },
+              ),
+              SizedBox(height: context.spacing.m),
+              AnimatedBuilder(
+                animation: draftController,
+                builder: (context, _) {
+                  return CalendarParticipantsField(
+                    organizer: draftController.organizer,
+                    attendees: draftController.attendees,
+                    headerSize: TaskSectionLabelSize.small,
+                    inputVariant: AxiInputVariant.ghost,
+                    onOrganizerChanged: onOrganizerChanged,
+                    onAttendeesChanged: onAttendeesChanged,
+                  );
+                },
+              ),
+            ],
           ),
-          const TaskSectionDivider(),
-          AnimatedBuilder(
-            animation: draftController,
-            builder: (context, _) {
-              return ReminderPreferencesField(
-                value: draftController.reminders,
-                onChanged: onRemindersChanged,
-                advancedAlarms: draftController.advancedAlarms,
-                onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
-                referenceStart: draftController.startTime,
-                anchor: draftController.deadline == null
-                    ? ReminderAnchor.start
-                    : ReminderAnchor.deadline,
-                showBothAnchors: draftController.deadline != null,
-              );
-            },
+        ),
+        _AdvancedOptionsSection(
+          label: l10n.calendarFragmentCriticalPathLabel,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: TaskSecondaryButton(
+                  label: l10n.calendarAddToCriticalPath,
+                  icon: Icons.route,
+                  widthBehavior: AxiButtonWidth.expand,
+                  onPressed: onAddToCriticalPath,
+                ).withTapBounce(),
+              ),
+              SizedBox(height: context.spacing.s),
+              CriticalPathMembershipList(
+                paths: queuedPaths,
+                onRemovePath: onRemoveQueuedPath,
+              ),
+            ],
           ),
-          const TaskSectionDivider(),
-          _AdvancedRecurrenceSection(
-            draftController: draftController,
-            onChanged: onRecurrenceChanged,
-          ),
-          const TaskSectionDivider(),
-          AnimatedBuilder(
-            animation: draftController,
-            builder: (context, _) {
-              return CalendarCategoriesField(
-                categories: draftController.categories,
-                onChanged: onCategoriesChanged,
-                surfaceColor: calendarContainerColor,
-              );
-            },
-          ),
-          const TaskSectionDivider(),
-          AnimatedBuilder(
-            animation: draftController,
-            builder: (context, _) {
-              return CalendarLinkGeoFields(
-                url: draftController.url,
-                geo: draftController.geo,
-                onUrlChanged: onUrlChanged,
-                onGeoChanged: onGeoChanged,
-              );
-            },
-          ),
-          const TaskSectionDivider(),
-          AnimatedBuilder(
-            animation: draftController,
-            builder: (context, _) {
-              return CalendarParticipantsField(
-                organizer: draftController.organizer,
-                attendees: draftController.attendees,
-                onOrganizerChanged: onOrganizerChanged,
-                onAttendeesChanged: onAttendeesChanged,
-              );
-            },
-          ),
-          TaskSectionDivider(verticalPadding: context.spacing.m),
-          SizedBox(
-            width: double.infinity,
-            child: TaskSecondaryButton(
-              label: context.l10n.calendarAddToCriticalPath,
-              icon: Icons.route,
-              widthBehavior: AxiButtonWidth.expand,
-              onPressed: onAddToCriticalPath,
-            ).withTapBounce(),
-          ),
-          SizedBox(height: context.spacing.xxs),
-          CriticalPathMembershipList(
-            paths: queuedPaths,
-            onRemovePath: onRemoveQueuedPath,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -5719,6 +6207,7 @@ class _AdvancedScheduleSection extends StatelessWidget {
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
   final VoidCallback onClear;
+  final TaskSectionLabelSize headerSize = TaskSectionLabelSize.small;
 
   @override
   Widget build(BuildContext context) {
@@ -5727,6 +6216,8 @@ class _AdvancedScheduleSection extends StatelessWidget {
       builder: (context, _) {
         return TaskScheduleSection(
           spacing: context.spacing.s,
+          headerSize: headerSize,
+          showHeader: false,
           start: draftController.startTime,
           end: draftController.endTime,
           onStartChanged: onStartChanged,
@@ -5746,6 +6237,7 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
 
   final TaskDraftController draftController;
   final ValueChanged<RecurrenceFormValue> onChanged;
+  final TaskSectionLabelSize headerSize = TaskSectionLabelSize.small;
 
   @override
   Widget build(BuildContext context) {
@@ -5758,6 +6250,7 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
 
         return TaskRecurrenceSection(
           spacing: context.spacing.s,
+          headerSize: headerSize,
           value: draftController.recurrence,
           fallbackWeekday: fallbackWeekday,
           referenceStart: referenceStart,

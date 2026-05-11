@@ -40,6 +40,8 @@ class CalendarParticipantsField extends StatefulWidget {
     required this.onOrganizerChanged,
     required this.onAttendeesChanged,
     this.title = _participantsSectionTitle,
+    this.headerSize = TaskSectionLabelSize.medium,
+    this.inputVariant = AxiInputVariant.underline,
     this.enabled = true,
   });
 
@@ -48,6 +50,8 @@ class CalendarParticipantsField extends StatefulWidget {
   final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
   final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
   final String title;
+  final TaskSectionLabelSize headerSize;
+  final AxiInputVariant inputVariant;
   final bool enabled;
 
   @override
@@ -90,17 +94,20 @@ class _CalendarParticipantsFieldState extends State<CalendarParticipantsField> {
           organizer: widget.organizer,
           onChanged: widget.onOrganizerChanged,
           enabled: widget.enabled,
+          inputVariant: widget.inputVariant,
         ),
         SizedBox(height: context.spacing.m),
         _AttendeesField(
           attendees: widget.attendees,
           onChanged: widget.onAttendeesChanged,
           enabled: widget.enabled,
+          inputVariant: widget.inputVariant,
         ),
       ],
     );
     return TaskSectionExpander(
       title: widget.title,
+      headerSize: widget.headerSize,
       isExpanded: _expanded,
       onToggle: () => setState(() => _expanded = !_expanded),
       enabled: widget.enabled,
@@ -114,11 +121,13 @@ class _OrganizerField extends StatefulWidget {
     required this.organizer,
     required this.onChanged,
     required this.enabled,
+    required this.inputVariant,
   });
 
   final CalendarOrganizer? organizer;
   final ValueChanged<CalendarOrganizer?> onChanged;
   final bool enabled;
+  final AxiInputVariant inputVariant;
 
   @override
   State<_OrganizerField> createState() => _OrganizerFieldState();
@@ -187,7 +196,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
-    final TextStyle labelStyle = context.textTheme.sectionLabelM;
+    final TextStyle labelStyle = context.textTheme.labelSm;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,6 +215,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 textCapitalization: TextCapitalization.none,
                 onChanged: (_) => _handleChange(),
                 enabled: enabled,
+                variant: widget.inputVariant,
               ),
             ),
             SizedBox(width: context.spacing.s),
@@ -218,6 +228,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) => _handleChange(),
                 enabled: enabled,
+                variant: widget.inputVariant,
               ),
             ),
           ],
@@ -232,11 +243,13 @@ class _AttendeesField extends StatefulWidget {
     required this.attendees,
     required this.onChanged,
     required this.enabled,
+    required this.inputVariant,
   });
 
   final List<CalendarAttendee> attendees;
   final ValueChanged<List<CalendarAttendee>> onChanged;
   final bool enabled;
+  final AxiInputVariant inputVariant;
 
   @override
   State<_AttendeesField> createState() => _AttendeesFieldState();
@@ -320,7 +333,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
-    final TextStyle labelStyle = context.textTheme.sectionLabelM;
+    final TextStyle labelStyle = context.textTheme.labelSm;
     final List<CalendarAttendee> attendees = widget.attendees.isEmpty
         ? _emptyAttendees
         : widget.attendees;
@@ -365,6 +378,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
                 keyboardType: TextInputType.emailAddress,
                 textCapitalization: TextCapitalization.none,
                 enabled: enabled,
+                variant: widget.inputVariant,
               ),
             ),
             SizedBox(width: context.spacing.s),
@@ -375,6 +389,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
                 enabled: enabled,
+                variant: widget.inputVariant,
               ),
             ),
             SizedBox(width: context.spacing.s),
@@ -543,7 +558,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.sectionLabelM;
+    final TextStyle labelStyle = context.textTheme.labelSm;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

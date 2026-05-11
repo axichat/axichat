@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_checkbox.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'calendar_checkbox.dart';
 
 class PriorityCheckboxTile extends StatelessWidget {
   const PriorityCheckboxTile({
@@ -16,6 +16,7 @@ class PriorityCheckboxTile extends StatelessWidget {
     required this.color,
     this.onChanged,
     this.isIndeterminate = false,
+    this.highlightWhenActive = true,
   });
 
   final String label;
@@ -23,20 +24,25 @@ class PriorityCheckboxTile extends StatelessWidget {
   final Color color;
   final ValueChanged<bool>? onChanged;
   final bool isIndeterminate;
+  final bool highlightWhenActive;
 
   @override
   Widget build(BuildContext context) {
     final bool isEnabled = onChanged != null;
     final bool isActive = value || isIndeterminate;
-    final backgroundColor = isActive
-        ? color.withValues(alpha: 0.08)
-        : calendarContainerColor;
-    final borderColor = isActive ? color : calendarBorderColor;
-    final Color textColor = isActive ? color : calendarTitleColor;
-    final bool showShadow = isActive;
+    final bool showActiveChrome = highlightWhenActive && isActive;
+    final Color backgroundColor = highlightWhenActive
+        ? showActiveChrome
+              ? color.withValues(alpha: context.motion.tapHoverAlpha)
+              : calendarContainerColor
+        : Colors.transparent;
+    final Color borderColor = showActiveChrome ? color : calendarBorderColor;
+    final Color checkboxBorderColor = isActive ? color : calendarBorderColor;
+    final Color textColor = showActiveChrome ? color : calendarTitleColor;
+    final bool showShadow = showActiveChrome;
     final double baseBorderWidth = context.borderSide.width;
-    final double borderWidth = isIndeterminate || value
-        ? baseBorderWidth * 2
+    final double borderWidth = showActiveChrome
+        ? baseBorderWidth + baseBorderWidth
         : baseBorderWidth;
     final bool? checkboxValue = isIndeterminate ? null : value;
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
@@ -88,7 +94,7 @@ class PriorityCheckboxTile extends StatelessWidget {
                             isIndeterminate: isIndeterminate,
                             onChanged: onChanged,
                             activeColor: color,
-                            borderColor: borderColor,
+                            borderColor: checkboxBorderColor,
                             visualSize: context.sizing.inputSuffixIconSize,
                             tapTargetSize: context.sizing.inputSuffixButtonSize,
                           ),
@@ -99,7 +105,7 @@ class PriorityCheckboxTile extends StatelessWidget {
                         child: Text(
                           label,
                           style: context.textTheme.small
-                              .strongIf(isActive)
+                              .strongIf(showActiveChrome)
                               .copyWith(color: textColor),
                         ),
                       ),

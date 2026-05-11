@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -195,6 +196,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     );
   }
 
+  void updateCalendarTaskListSortMode(CalendarTaskListSortMode mode) {
+    _emitLocalSettingsState(state.copyWith(calendarTaskListSortMode: mode));
+  }
+
   void updateMessageTextSize(MessageTextSize messageTextSize) {
     _emitLocalSettingsState(state.copyWith(messageTextSize: messageTextSize));
   }
@@ -307,6 +312,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'hideCompletedReminders': 'hide_completed_reminders',
         'unscheduledSidebarOrder': 'unscheduled_sidebar_order',
         'reminderSidebarOrder': 'reminder_sidebar_order',
+        'calendarTaskListSortMode': 'calendar_task_list_sort_mode',
         'messageTextSize': 'message_text_size',
         'autoLoadEmailImages': 'auto_load_email_images',
         'donationPromptNextDisplayMessageCount':

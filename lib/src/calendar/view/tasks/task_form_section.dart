@@ -4,15 +4,15 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/tasks/priority_checkbox_tile.dart';
-import 'recurrence_editor.dart';
-import 'schedule_range_fields.dart';
-import 'task_text_field.dart';
+import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
+import 'package:axichat/src/calendar/view/tasks/schedule_range_fields.dart';
+import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
-enum TaskSectionLabelSize { medium, large }
+enum TaskSectionLabelSize { small, medium, large }
 
 /// Standard section title used across the calendar task forms. Keeps typography
 /// and spacing consistent while allowing trailing actions or custom padding.
@@ -37,7 +37,8 @@ class TaskSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextStyle style = switch (size) {
-      TaskSectionLabelSize.large => context.textTheme.sectionLabelM,
+      TaskSectionLabelSize.small => context.textTheme.labelSm,
+      TaskSectionLabelSize.large => context.textTheme.sectionLabelLg,
       TaskSectionLabelSize.medium => context.textTheme.sectionLabelM,
     };
     final String displayTitle = uppercase ? title.toUpperCase() : title;
@@ -75,6 +76,7 @@ class TaskSectionExpander extends StatelessWidget {
     required this.onToggle,
     required this.child,
     this.badge,
+    this.headerSize = TaskSectionLabelSize.medium,
     this.uppercase = true,
     this.enabled = true,
     this.collapsedHint,
@@ -85,6 +87,7 @@ class TaskSectionExpander extends StatelessWidget {
   final VoidCallback onToggle;
   final Widget child;
   final Widget? badge;
+  final TaskSectionLabelSize headerSize;
   final bool uppercase;
   final bool enabled;
   final Widget? collapsedHint;
@@ -109,6 +112,7 @@ class TaskSectionExpander extends StatelessWidget {
         width: double.infinity,
         child: TaskSectionHeader(
           title: title,
+          size: headerSize,
           uppercase: uppercase,
           leading: leading,
           trailing: trailing,
@@ -247,6 +251,7 @@ class TaskCompletionToggle extends StatelessWidget {
       value: value,
       color: calendarPrimaryColor,
       isIndeterminate: isIndeterminate,
+      highlightWhenActive: false,
       onChanged: effectiveOnChanged,
     );
   }
@@ -277,6 +282,7 @@ class TaskTextFormField extends StatefulWidget {
     this.validator,
     this.autovalidateMode,
     this.contentPadding,
+    this.variant = AxiInputVariant.underline,
     this.textStyle,
     this.errorText,
     this.errorStyle,
@@ -301,6 +307,7 @@ class TaskTextFormField extends StatefulWidget {
   final FormFieldValidator<String>? validator;
   final AutovalidateMode? autovalidateMode;
   final EdgeInsetsGeometry? contentPadding;
+  final AxiInputVariant variant;
   final TextStyle? textStyle;
   final String? errorText;
   final TextStyle? errorStyle;
@@ -371,6 +378,7 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
           hintText: widget.hintText,
           hintStyle: widget.hintStyle,
           contentPadding: widget.contentPadding,
+          variant: widget.variant,
           errorText: errorText,
           errorStyle: widget.errorStyle,
         );
@@ -397,6 +405,7 @@ class TaskTitleField extends StatelessWidget {
     this.onSubmitted,
     this.errorText,
     this.errorStyle,
+    this.variant = AxiInputVariant.ghost,
   });
 
   final TextEditingController controller;
@@ -412,6 +421,7 @@ class TaskTitleField extends StatelessWidget {
   final VoidCallback? onSubmitted;
   final String? errorText;
   final TextStyle? errorStyle;
+  final AxiInputVariant variant;
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +447,7 @@ class TaskTitleField extends StatelessWidget {
       ),
       errorText: errorText,
       errorStyle: errorStyle,
+      variant: variant,
     );
   }
 }
@@ -512,6 +523,7 @@ class TaskScheduleSection extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.headerSize = TaskSectionLabelSize.medium,
     this.headerTrailing,
+    this.showHeader = true,
     this.startLabel,
     this.endLabel,
     this.startPlaceholder,
@@ -532,6 +544,7 @@ class TaskScheduleSection extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final TaskSectionLabelSize headerSize;
   final Widget? headerTrailing;
+  final bool showHeader;
   final String? startLabel;
   final String? endLabel;
   final String? startPlaceholder;
@@ -578,18 +591,20 @@ class TaskScheduleSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TaskSectionHeader(title: title, size: headerSize),
-              ),
-              if (effectiveTrailing != null) ...[
-                SizedBox(width: context.spacing.s),
-                effectiveTrailing,
+          if (showHeader) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TaskSectionHeader(title: title, size: headerSize),
+                ),
+                if (effectiveTrailing != null) ...[
+                  SizedBox(width: context.spacing.s),
+                  effectiveTrailing,
+                ],
               ],
-            ],
-          ),
-          SizedBox(height: resolvedSpacing),
+            ),
+            SizedBox(height: resolvedSpacing),
+          ],
           ScheduleRangeFields(
             start: start,
             end: end,
@@ -1111,6 +1126,7 @@ class TaskDescriptionField extends StatelessWidget {
     this.enabled = true,
     this.onChanged,
     this.contentPadding,
+    this.variant = AxiInputVariant.underline,
   });
 
   final TextEditingController controller;
@@ -1124,6 +1140,7 @@ class TaskDescriptionField extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String>? onChanged;
   final EdgeInsetsGeometry? contentPadding;
+  final AxiInputVariant variant;
 
   @override
   Widget build(BuildContext context) {
@@ -1142,6 +1159,7 @@ class TaskDescriptionField extends StatelessWidget {
       onChanged: onChanged,
       enabled: enabled,
       contentPadding: contentPadding,
+      variant: variant,
     );
   }
 }
@@ -1159,6 +1177,7 @@ class TaskLocationField extends StatefulWidget {
     this.autofocus = false,
     this.onChanged,
     this.contentPadding,
+    this.variant = AxiInputVariant.underline,
     this.autocomplete,
     this.autocompleteLimit = 6,
     this.enabled = true,
@@ -1172,6 +1191,7 @@ class TaskLocationField extends StatefulWidget {
   final bool autofocus;
   final ValueChanged<String>? onChanged;
   final EdgeInsetsGeometry? contentPadding;
+  final AxiInputVariant variant;
   final LocationAutocompleteHelper? autocomplete;
   final int autocompleteLimit;
   final bool enabled;
@@ -1216,6 +1236,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
         onChanged: widget.onChanged,
         enabled: widget.enabled,
         contentPadding: widget.contentPadding,
+        variant: widget.variant,
       );
     }
 
@@ -1242,6 +1263,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
           onSubmitted: (_) => onFieldSubmitted(),
           enabled: widget.enabled,
           contentPadding: widget.contentPadding,
+          variant: widget.variant,
         );
       },
       optionsViewBuilder: (context, onSelected, options) {
@@ -1313,6 +1335,7 @@ class _TaskLocationTextInput extends StatelessWidget {
     required this.onChanged,
     required this.enabled,
     required this.contentPadding,
+    required this.variant,
     this.onSubmitted,
   });
 
@@ -1325,6 +1348,7 @@ class _TaskLocationTextInput extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final bool enabled;
   final EdgeInsetsGeometry? contentPadding;
+  final AxiInputVariant variant;
   final ValueChanged<String>? onSubmitted;
 
   @override
@@ -1342,6 +1366,7 @@ class _TaskLocationTextInput extends StatelessWidget {
       onSubmitted: onSubmitted,
       enabled: enabled,
       contentPadding: contentPadding,
+      variant: variant,
     );
   }
 }

@@ -4,8 +4,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'task_form_section.dart';
 
 const String _categoriesSectionTitle = 'Categories';
 const String _categoriesHintText = 'Add category';
@@ -20,6 +20,7 @@ class CalendarCategoriesField extends StatefulWidget {
     required this.categories,
     required this.onChanged,
     this.title = _categoriesSectionTitle,
+    this.headerSize = TaskSectionLabelSize.medium,
     this.hintText = _categoriesHintText,
     this.enabled = true,
     this.surfaceColor,
@@ -28,6 +29,7 @@ class CalendarCategoriesField extends StatefulWidget {
   final List<String> categories;
   final ValueChanged<List<String>> onChanged;
   final String title;
+  final TaskSectionLabelSize headerSize;
   final String hintText;
   final bool enabled;
   final Color? surfaceColor;
@@ -197,6 +199,7 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
           );
     return TaskSectionExpander(
       title: widget.title,
+      headerSize: widget.headerSize,
       isExpanded: _expanded,
       onToggle: () => setState(() => _expanded = !_expanded),
       badge: badge,

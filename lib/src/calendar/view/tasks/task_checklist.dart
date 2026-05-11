@@ -19,12 +19,20 @@ class TaskChecklist extends StatefulWidget {
     this.label = 'Checklist',
     this.addPlaceholder =
         'Add checklist item', // Note: overridden by callers with l10n
+    this.headerSize = TaskSectionLabelSize.medium,
+    this.showDivider = true,
+    this.showHeader = true,
+    this.inputVariant = AxiInputVariant.underline,
     this.enabled = true,
   });
 
   final TaskChecklistController controller;
   final String label;
   final String addPlaceholder;
+  final TaskSectionLabelSize headerSize;
+  final bool showDivider;
+  final bool showHeader;
+  final AxiInputVariant inputVariant;
   final bool enabled;
 
   @override
@@ -131,13 +139,15 @@ class _TaskChecklistState extends State<TaskChecklist> {
         final Widget content = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const TaskSectionDivider(),
-            TaskSectionHeader(
-              title: widget.label,
-              trailing: total > 0
-                  ? Text('$completed / $total', style: textTheme.muted)
-                  : null,
-            ),
+            if (widget.showDivider) const TaskSectionDivider(),
+            if (widget.showHeader)
+              TaskSectionHeader(
+                title: widget.label,
+                size: widget.headerSize,
+                trailing: total > 0
+                    ? Text('$completed / $total', style: textTheme.muted)
+                    : null,
+              ),
             if (items.isNotEmpty) ...[
               SizedBox(height: context.spacing.xxs),
               TaskChecklistProgressBar(
@@ -183,6 +193,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
                                   widget.controller.updateLabel(item.id, value),
                               onRemove: () =>
                                   widget.controller.removeItem(item.id),
+                              inputVariant: widget.inputVariant,
                             );
                           },
                         ),
@@ -195,6 +206,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
                 controller: _newItemController,
                 placeholder: widget.addPlaceholder,
                 focusNode: _newItemFocusNode,
+                inputVariant: widget.inputVariant,
                 onSubmitted: () {
                   widget.controller.commitPendingEntry();
                   _newItemFocusNode.requestFocus();
@@ -284,6 +296,7 @@ class _ChecklistItemRow extends StatelessWidget {
     required this.onChanged,
     required this.onLabelChanged,
     required this.onRemove,
+    required this.inputVariant,
   });
 
   final TaskChecklistItem item;
@@ -292,6 +305,7 @@ class _ChecklistItemRow extends StatelessWidget {
   final ValueChanged<bool> onChanged;
   final ValueChanged<String> onLabelChanged;
   final VoidCallback onRemove;
+  final AxiInputVariant inputVariant;
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +331,7 @@ class _ChecklistItemRow extends StatelessWidget {
               controller: controller,
               onChanged: onLabelChanged,
               placeholder: context.l10n.calendarChecklistItem,
+              variant: inputVariant,
             ),
           ),
           AxiIconButton(
@@ -358,12 +373,14 @@ class _ChecklistAddField extends StatelessWidget {
     required this.controller,
     required this.placeholder,
     required this.focusNode,
+    required this.inputVariant,
     required this.onSubmitted,
   });
 
   final TextEditingController controller;
   final String placeholder;
   final FocusNode focusNode;
+  final AxiInputVariant inputVariant;
   final VoidCallback onSubmitted;
 
   @override
@@ -391,6 +408,7 @@ class _ChecklistAddField extends StatelessWidget {
             onSubmitted: (_) => onSubmitted(),
             textInputAction: TextInputAction.done,
             placeholder: placeholder,
+            variant: inputVariant,
           ),
         ),
       ],
@@ -406,6 +424,7 @@ class _ChecklistTextInput extends StatelessWidget {
     this.onChanged,
     this.onSubmitted,
     this.textInputAction,
+    this.variant = AxiInputVariant.underline,
   });
 
   final TextEditingController controller;
@@ -414,6 +433,7 @@ class _ChecklistTextInput extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final TextInputAction? textInputAction;
+  final AxiInputVariant variant;
 
   @override
   Widget build(BuildContext context) {
@@ -424,7 +444,7 @@ class _ChecklistTextInput extends StatelessWidget {
       onSubmitted: onSubmitted,
       textInputAction: textInputAction,
       placeholder: Text(placeholder),
-      variant: AxiInputVariant.underline,
+      variant: variant,
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.xs,
         vertical: context.spacing.s,

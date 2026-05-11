@@ -78,9 +78,14 @@ class CalendarSidebarController extends ChangeNotifier {
   }
 
   void toggleAdvancedOptions() {
-    _updateState(
-      _state.copyWith(showAdvancedOptions: !_state.showAdvancedOptions),
-    );
+    setAdvancedOptionsVisible(!_state.showAdvancedOptions);
+  }
+
+  void setAdvancedOptionsVisible(bool visible) {
+    if (_state.showAdvancedOptions == visible) {
+      return;
+    }
+    _updateState(_state.copyWith(showAdvancedOptions: visible));
   }
 
   void toggleSection(CalendarSidebarSection section) {
@@ -127,9 +132,7 @@ class CalendarSidebarController extends ChangeNotifier {
     final bool nextShowAdvanced = preserveAdvancedVisibility
         ? _state.showAdvancedOptions
         : false;
-    if (nextShowAdvanced != _state.showAdvancedOptions) {
-      _updateState(_state.copyWith(showAdvancedOptions: nextShowAdvanced));
-    }
+    setAdvancedOptionsVisible(nextShowAdvanced);
   }
 
   void _updateState(CalendarSidebarState next) {

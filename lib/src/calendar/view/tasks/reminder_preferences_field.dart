@@ -35,6 +35,8 @@ class ReminderPreferencesField extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.title = _reminderSectionTitle,
+    this.headerSize = TaskSectionLabelSize.medium,
+    this.showHeader = true,
     this.anchor = ReminderAnchor.start,
     this.mixed = false,
     this.showBothAnchors = false,
@@ -50,6 +52,8 @@ class ReminderPreferencesField extends StatefulWidget {
   final ReminderPreferences value;
   final ValueChanged<ReminderPreferences> onChanged;
   final String title;
+  final TaskSectionLabelSize headerSize;
+  final bool showHeader;
   final ReminderAnchor anchor;
   final bool mixed;
   final bool showBothAnchors;
@@ -138,8 +142,10 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: widget.title),
-        SizedBox(height: context.spacing.s),
+        if (widget.showHeader) ...[
+          TaskSectionHeader(title: widget.title, size: widget.headerSize),
+          SizedBox(height: context.spacing.s),
+        ],
         if (!widget.showBothAnchors)
           _ReminderSection(
             label: sectionLabel,
@@ -320,7 +326,7 @@ class _ReminderSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
-    final TextStyle labelStyle = context.textTheme.sectionLabelM;
+    final TextStyle labelStyle = context.textTheme.labelSm;
     final spacing = context.spacing;
 
     return Column(

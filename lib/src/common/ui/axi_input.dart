@@ -23,7 +23,7 @@ const double _transparentCursorAlpha = 0.0;
 const double _enabledOpacity = 1.0;
 const int _singleLineCount = 1;
 
-enum AxiInputVariant { outlined, underline, plain }
+enum AxiInputVariant { outlined, underline, ghost, plain }
 
 class AxiInput extends StatefulWidget {
   const AxiInput({
@@ -503,6 +503,10 @@ class AxiInputState extends State<AxiInput>
         .merge(widget.style);
 
     final double borderWidth = context.borderSide.width;
+    final ShadBorder ghostBorder = ShadBorder(
+      canMerge: false,
+      radius: context.radius,
+    );
     final outlinedDecoration = ShadDecoration(
       border: ShadBorder.all(
         color: theme.colorScheme.border,
@@ -553,6 +557,22 @@ class AxiInputState extends State<AxiInput>
           secondaryErrorBorder: ShadBorder.none,
           disableSecondaryBorder: true,
         ),
+      AxiInputVariant.ghost => ShadDecoration(
+        canMerge: false,
+        color: theme.colorScheme.muted,
+        border: ghostBorder,
+        focusedBorder: ghostBorder,
+        errorBorder: ShadBorder.all(
+          color: theme.colorScheme.destructive,
+          width: borderWidth,
+          radius: context.radius,
+        ),
+        secondaryBorder: ShadBorder.none,
+        secondaryFocusedBorder: ShadBorder.none,
+        secondaryErrorBorder: ShadBorder.none,
+        disableSecondaryBorder: true,
+        hasError: widget.decoration?.hasError,
+      ),
       AxiInputVariant.plain => ShadDecoration.none,
     };
 
@@ -565,6 +585,10 @@ class AxiInputState extends State<AxiInput>
             ),
       AxiInputVariant.underline => EdgeInsets.symmetric(
         horizontal: context.spacing.xs,
+        vertical: context.spacing.s,
+      ),
+      AxiInputVariant.ghost => EdgeInsets.symmetric(
+        horizontal: context.spacing.m,
         vertical: context.spacing.s,
       ),
       AxiInputVariant.plain => EdgeInsets.zero,

@@ -4,9 +4,12 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/sidebar/task_sidebar.dart';
+import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +23,17 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../calendar_test_utils.dart';
 
 class _TestApp extends StatelessWidget {
-  const _TestApp({required this.bloc, required this.child, required this.size});
+  const _TestApp({
+    required this.bloc,
+    required this.child,
+    required this.size,
+    required this.settingsCubit,
+  });
 
   final CalendarBloc bloc;
   final Widget child;
   final Size size;
+  final SettingsCubit settingsCubit;
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +75,7 @@ class _TestApp extends StatelessWidget {
               providers: [
                 BlocProvider<CalendarBloc>.value(value: bloc),
                 BlocProvider<BaseCalendarBloc>.value(value: bloc),
-                BlocProvider<SettingsCubit>(create: (_) => SettingsCubit()),
+                BlocProvider<SettingsCubit>.value(value: settingsCubit),
               ],
               child: Material(type: MaterialType.transparency, child: child),
             ),
@@ -82,6 +91,7 @@ Future<MockCalendarBloc> _pumpCalendarHarness(
   required CalendarState state,
   required Widget child,
   Size size = const Size(1280, 860),
+  SettingsCubit? settingsCubit,
 }) async {
   final binding = tester.binding;
   await binding.setSurfaceSize(size);
@@ -98,7 +108,19 @@ Future<MockCalendarBloc> _pumpCalendarHarness(
   when(() => bloc.add(any<CalendarEvent>())).thenReturn(null);
   when(() => bloc.close()).thenAnswer((_) async {});
 
-  await tester.pumpWidget(_TestApp(bloc: bloc, size: size, child: child));
+  final SettingsCubit resolvedSettingsCubit = settingsCubit ?? SettingsCubit();
+  if (settingsCubit == null) {
+    addTearDown(resolvedSettingsCubit.close);
+  }
+
+  await tester.pumpWidget(
+    _TestApp(
+      bloc: bloc,
+      size: size,
+      settingsCubit: resolvedSettingsCubit,
+      child: child,
+    ),
+  );
   await tester.pumpAndSettle();
   addTearDown(bloc.close);
   return bloc;
@@ -287,6 +309,186 @@ void main() {
         greaterThan(shrunkWidth),
         reason: 'Dragging the resize rail right should increase sidebar width.',
       );
+    });
+
+    testWidgets(
+      'TaskSidebar defers populated advanced reset until close ends',
+      (tester) async {
+        await _pumpCalendarHarness(
+          tester,
+          state: CalendarTestData.weekView(),
+          size: const Size(420, 860),
+          child: const TaskSidebar(),
+        );
+
+        await tester.tap(find.text('Show advanced options'));
+        await tester.pumpAndSettle();
+
+        final TaskTextFormField quickTaskField = tester.widget(
+          find.byType(TaskTextFormField).first,
+        );
+        final TaskDescriptionField descriptionField = tester.widget(
+          find.byType(TaskDescriptionField),
+        );
+
+        quickTaskField.controller.text = 'Prepare invoice';
+        descriptionField.controller.text = 'Use the advanced draft state';
+        await tester.pump();
+
+        final Finder addButton = find.widgetWithText(TaskPrimaryButton, 'Add');
+        await tester.ensureVisible(addButton);
+        await tester.pump();
+        await tester.tap(addButton);
+        await tester.pump();
+        await tester.pump(baseAnimationDuration);
+
+        expect(tester.takeException(), isNull);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.text('Show advanced options'), findsOneWidget);
+
+        expect(quickTaskField.controller.text, isEmpty);
+      },
+    );
+
+    testWidgets('TaskSidebar preserves manual order across hide completed', (
+      tester,
+    ) async {
+      final alpha = CalendarTestData.unscheduled('task-alpha', 'Alpha task')
+          .copyWith(
+            deadline: null,
+            createdAt: DateTime(2024, 1, 1),
+            modifiedAt: DateTime(2024, 1, 1),
+          );
+      final bravo = CalendarTestData.unscheduled('task-bravo', 'Bravo task')
+          .copyWith(
+            deadline: null,
+            isCompleted: true,
+            createdAt: DateTime(2024, 1, 2),
+            modifiedAt: DateTime(2024, 1, 2),
+          );
+      final charlie =
+          CalendarTestData.unscheduled('task-charlie', 'Charlie task').copyWith(
+            deadline: null,
+            createdAt: DateTime(2024, 1, 3),
+            modifiedAt: DateTime(2024, 1, 3),
+          );
+      final state = CalendarTestData.weekView().copyWith(
+        model: CalendarTestData.buildModel().copyWith(
+          tasks: {alpha.id: alpha, bravo.id: bravo, charlie.id: charlie},
+        ),
+        dueReminders: const [],
+      );
+
+      await _pumpCalendarHarness(
+        tester,
+        state: state,
+        size: const Size(420, 860),
+        child: const TaskSidebar(),
+      );
+
+      await tester.tap(find.text('UNSCHEDULED TASKS'));
+      await tester.pumpAndSettle();
+
+      final Finder completedToggle = find.byKey(
+        const ValueKey('calendar-unscheduled-hide-completed'),
+      );
+
+      await tester.tap(completedToggle);
+      await tester.pumpAndSettle();
+      expect(find.text('Bravo task'), findsNothing);
+
+      await tester.tap(completedToggle);
+      await tester.pumpAndSettle();
+
+      final double charlieTop = tester.getTopLeft(find.text('Charlie task')).dy;
+      final double bravoTop = tester.getTopLeft(find.text('Bravo task')).dy;
+      final double alphaTop = tester.getTopLeft(find.text('Alpha task')).dy;
+
+      expect(charlieTop, lessThan(bravoTop));
+      expect(bravoTop, lessThan(alphaTop));
+    });
+
+    testWidgets('TaskSidebar applies configured task list sort modes', (
+      tester,
+    ) async {
+      final criticalOld =
+          CalendarTestData.unscheduled(
+            'task-critical-old',
+            'Critical old',
+          ).copyWith(
+            deadline: null,
+            priority: TaskPriority.critical,
+            createdAt: DateTime(2024, 1, 1),
+            modifiedAt: DateTime(2024, 1, 1),
+          );
+      final urgentMiddle =
+          CalendarTestData.unscheduled(
+            'task-urgent-middle',
+            'Urgent middle',
+          ).copyWith(
+            deadline: null,
+            priority: TaskPriority.urgent,
+            createdAt: DateTime(2024, 1, 2),
+            modifiedAt: DateTime(2024, 1, 2),
+          );
+      final noneRecent =
+          CalendarTestData.unscheduled(
+            'task-none-recent',
+            'None recent',
+          ).copyWith(
+            deadline: null,
+            priority: null,
+            createdAt: DateTime(2024, 1, 3),
+            modifiedAt: DateTime(2024, 1, 3),
+          );
+      final Map<String, CalendarTask> tasks = {
+        criticalOld.id: criticalOld,
+        urgentMiddle.id: urgentMiddle,
+        noneRecent.id: noneRecent,
+      };
+      final state = CalendarTestData.weekView().copyWith(
+        model: CalendarTestData.buildModel().copyWith(tasks: tasks),
+        dueReminders: const [],
+      );
+      final settingsCubit = SettingsCubit()
+        ..toggleHideCompletedUnscheduled(false)
+        ..saveUnscheduledSidebarOrder([
+          criticalOld.id,
+          urgentMiddle.id,
+          noneRecent.id,
+        ])
+        ..updateCalendarTaskListSortMode(CalendarTaskListSortMode.dateAdded);
+      addTearDown(() async {
+        settingsCubit
+          ..saveUnscheduledSidebarOrder(const [])
+          ..updateCalendarTaskListSortMode(CalendarTaskListSortMode.manual);
+        await settingsCubit.close();
+      });
+
+      await _pumpCalendarHarness(
+        tester,
+        state: state,
+        settingsCubit: settingsCubit,
+        size: const Size(420, 860),
+        child: const TaskSidebar(),
+      );
+
+      await tester.tap(find.text('UNSCHEDULED TASKS'));
+      await tester.pumpAndSettle();
+
+      double taskTop(String title) => tester.getTopLeft(find.text(title)).dy;
+
+      expect(taskTop('None recent'), lessThan(taskTop('Urgent middle')));
+      expect(taskTop('Urgent middle'), lessThan(taskTop('Critical old')));
+
+      settingsCubit.updateCalendarTaskListSortMode(
+        CalendarTaskListSortMode.importance,
+      );
+      await tester.pumpAndSettle();
+
+      expect(taskTop('Critical old'), lessThan(taskTop('Urgent middle')));
+      expect(taskTop('Urgent middle'), lessThan(taskTop('None recent')));
     });
   });
 }

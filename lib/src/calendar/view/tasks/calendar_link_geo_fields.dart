@@ -27,6 +27,8 @@ class CalendarLinkGeoFields extends StatefulWidget {
     required this.onUrlChanged,
     required this.onGeoChanged,
     this.title = _linkGeoSectionTitle,
+    this.headerSize = TaskSectionLabelSize.medium,
+    this.inputVariant = AxiInputVariant.underline,
     this.enabled = true,
   });
 
@@ -35,6 +37,8 @@ class CalendarLinkGeoFields extends StatefulWidget {
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
   final String title;
+  final TaskSectionLabelSize headerSize;
+  final AxiInputVariant inputVariant;
   final bool enabled;
 
   @override
@@ -188,6 +192,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
           keyboardType: TextInputType.url,
           onChanged: _handleUrlChanged,
           enabled: widget.enabled,
+          variant: widget.inputVariant,
         ),
         SizedBox(height: context.spacing.m),
         Row(
@@ -202,6 +207,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
                 keyboardType: geoKeyboard,
                 onChanged: (_) => _handleGeoChanged(),
                 enabled: widget.enabled,
+                variant: widget.inputVariant,
               ),
             ),
             SizedBox(width: context.spacing.s),
@@ -215,6 +221,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
                 keyboardType: geoKeyboard,
                 onChanged: (_) => _handleGeoChanged(),
                 enabled: widget.enabled,
+                variant: widget.inputVariant,
               ),
             ),
           ],
@@ -223,6 +230,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
     );
     return TaskSectionExpander(
       title: widget.title,
+      headerSize: widget.headerSize,
       isExpanded: _expanded,
       onToggle: () => setState(() => _expanded = !_expanded),
       enabled: widget.enabled,

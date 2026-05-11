@@ -30,6 +30,22 @@ enum MessageTextSize {
   double get fontSize => pixels.toDouble();
 }
 
+enum CalendarTaskListSortMode {
+  manual,
+  dateAdded,
+  importance;
+
+  String label(AppLocalizations l10n) {
+    return switch (this) {
+      CalendarTaskListSortMode.manual => l10n.calendarTaskSortManual,
+      CalendarTaskListSortMode.dateAdded => l10n.calendarTaskSortDateAdded,
+      CalendarTaskListSortMode.importance => l10n.calendarTaskSortImportance,
+    };
+  }
+
+  bool get allowsManualReorder => this == CalendarTaskListSortMode.manual;
+}
+
 const List<String> _syncedSettingsKeys = <String>[
   'language',
   'theme_mode',
@@ -48,6 +64,7 @@ const List<String> _syncedSettingsKeys = <String>[
   'hide_completed_reminders',
   'unscheduled_sidebar_order',
   'reminder_sidebar_order',
+  'calendar_task_list_sort_mode',
   'message_text_size',
   'auto_load_email_images',
   'email_composer_watermark_enabled',
@@ -83,6 +100,8 @@ abstract class SettingsState with _$SettingsState {
     @Default(false) bool hideCompletedReminders,
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
+    @Default(CalendarTaskListSortMode.manual)
+    CalendarTaskListSortMode calendarTaskListSortMode,
     @Default(MessageTextSize.px16) MessageTextSize messageTextSize,
     @Default(false) bool autoLoadEmailImages,
     @Default(true) bool emailComposerWatermarkEnabled,
