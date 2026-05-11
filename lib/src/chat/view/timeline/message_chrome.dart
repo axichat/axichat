@@ -383,7 +383,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required this.onStartMultiSelectRequested,
     required this.onResendRequested,
     required this.onEditRequested,
-    required this.onImportantToggleRequested,
+    required this.onAddToFolderRequested,
     required this.onPinToggleRequested,
     required this.onRevokeInviteRequested,
     required this.onBubbleTapRequested,
@@ -563,12 +563,11 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   final void Function(Message message, {required chat_models.Chat? chat})
   onResendRequested;
   final Future<void> Function(Message message) onEditRequested;
-  final void Function(
+  final Future<void> Function(
     Message message, {
-    required bool important,
     required chat_models.Chat? chat,
   })
-  onImportantToggleRequested;
+  onAddToFolderRequested;
   final void Function(
     Message message, {
     required bool pin,
@@ -764,7 +763,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       onStartMultiSelectRequested: onStartMultiSelectRequested,
       onResendRequested: onResendRequested,
       onEditRequested: onEditRequested,
-      onImportantToggleRequested: onImportantToggleRequested,
+      onAddToFolderRequested: onAddToFolderRequested,
       onPinToggleRequested: onPinToggleRequested,
       onRevokeInviteRequested: onRevokeInviteRequested,
       onBubbleTapRequested: onBubbleTapRequested,
@@ -817,7 +816,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.onStartMultiSelectRequested,
     required this.onResendRequested,
     required this.onEditRequested,
-    required this.onImportantToggleRequested,
+    required this.onAddToFolderRequested,
     required this.onPinToggleRequested,
     required this.onRevokeInviteRequested,
     required this.onBubbleTapRequested,
@@ -911,12 +910,11 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final void Function(Message message, {required chat_models.Chat? chat})
   onResendRequested;
   final Future<void> Function(Message message) onEditRequested;
-  final void Function(
+  final Future<void> Function(
     Message message, {
-    required bool important,
     required chat_models.Chat? chat,
   })
-  onImportantToggleRequested;
+  onAddToFolderRequested;
   final void Function(
     Message message, {
     required bool pin,
@@ -1027,7 +1025,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       onStartMultiSelectRequested: onStartMultiSelectRequested,
       onResendRequested: onResendRequested,
       onEditRequested: onEditRequested,
-      onImportantToggleRequested: onImportantToggleRequested,
+      onAddToFolderRequested: onAddToFolderRequested,
       onPinToggleRequested: onPinToggleRequested,
       onRevokeInviteRequested: onRevokeInviteRequested,
       onBubbleTapRequested: onBubbleTapRequested,
@@ -1752,14 +1750,13 @@ _resolveTimelineMessagePreviews({
   VoidCallback? onResend,
   VoidCallback? onEdit,
   VoidCallback? onPinToggle,
-  VoidCallback? onImportantToggle,
+  VoidCallback? onAddToFolder,
   VoidCallback? onRevokeInvite,
   VoidCallback? onBubbleTap,
   VoidCallback onAddReaction,
   void Function(String emoji) onToggleReaction,
   bool canShowReactionManager,
   bool reactionManagerDisabled,
-  bool importantDisabled,
   bool pinDisabled,
   bool pinLoading,
   bool replyLoading,
@@ -1781,7 +1778,6 @@ _resolveTimelineMessageActionCallbacks({
   required bool isInviteRevocationMessage,
   required bool inviteRevoked,
   required bool isPinned,
-  required bool isImportant,
   required MessageStatus messageStatus,
   required String detailId,
   required void Function(Message message) onReplyRequested,
@@ -1806,12 +1802,11 @@ _resolveTimelineMessageActionCallbacks({
   required void Function(Message message, {required chat_models.Chat? chat})
   onResendRequested,
   required Future<void> Function(Message message) onEditRequested,
-  required void Function(
+  required Future<void> Function(
     Message message, {
-    required bool important,
     required chat_models.Chat? chat,
   })
-  onImportantToggleRequested,
+  onAddToFolderRequested,
   required void Function(
     Message message, {
     required bool pin,
@@ -1880,13 +1875,17 @@ _resolveTimelineMessageActionCallbacks({
     );
   }
 
-  VoidCallback? onImportantToggle;
-  if (!requiresMucReference) {
-    onImportantToggle = () => onImportantToggleRequested(
-      messageModel,
-      important: !isImportant,
-      chat: chatEntity,
-    );
+  VoidCallback? onAddToFolder;
+  final canAddToFolder =
+      chatEntity != null &&
+      !requiresMucReference &&
+      messageModel.collectionReference(
+            isGroupChat: chatEntity.type == ChatType.groupChat,
+          ) !=
+          null;
+  if (canAddToFolder) {
+    onAddToFolder = () =>
+        unawaited(onAddToFolderRequested(messageModel, chat: chatEntity));
   }
 
   VoidCallback? onRevokeInvite;
@@ -1920,14 +1919,13 @@ _resolveTimelineMessageActionCallbacks({
     onResend: onResend,
     onEdit: onEdit,
     onPinToggle: onPinToggle,
-    onImportantToggle: onImportantToggle,
+    onAddToFolder: onAddToFolder,
     onRevokeInvite: onRevokeInvite,
     onBubbleTap: onBubbleTap,
     onAddReaction: onAddReaction,
     onToggleReaction: onToggleReaction,
     canShowReactionManager: canShowReactionManager,
     reactionManagerDisabled: reactionManagerDisabled,
-    importantDisabled: requiresMucReference,
     pinDisabled: pinDisabled,
     pinLoading: pinLoading,
     replyLoading: loadingMucReference,

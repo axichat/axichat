@@ -255,6 +255,89 @@ void main() {
     },
   );
 
+  test('custom folder definitions keep the newest update', () async {
+    const collectionId = 'Projects';
+    final createdAt = DateTime.utc(2026, 3, 11, 16);
+    final removedAt = createdAt.add(const Duration(minutes: 5));
+
+    await database.applyMessageCollectionDefinitionMutation(
+      collectionId: collectionId,
+      updatedAt: createdAt,
+      active: true,
+    );
+    await database.applyMessageCollectionDefinitionMutation(
+      collectionId: collectionId,
+      updatedAt: createdAt,
+      active: false,
+    );
+    await database.applyMessageCollectionDefinitionMutation(
+      collectionId: collectionId,
+      updatedAt: removedAt,
+      active: false,
+    );
+
+    final collection = await database.getMessageCollection(collectionId);
+
+    expect(collection, isNotNull);
+    expect(collection!.title, isNull);
+    expect(collection.active, isFalse);
+    expect(collection.createdAt.toUtc(), createdAt);
+    expect(collection.updatedAt.toUtc(), removedAt);
+  });
+
+  test(
+    'custom folder definitions use collectionId as the visible name',
+    () async {
+      const collectionId = 'Projects';
+      final createdAt = DateTime.utc(2026, 3, 11, 16);
+
+      await database.applyMessageCollectionDefinitionMutation(
+        collectionId: collectionId,
+        updatedAt: createdAt,
+        active: true,
+      );
+      await database.applyMessageCollectionDefinitionMutation(
+        collectionId: 'Old Projects',
+        updatedAt: createdAt.add(const Duration(minutes: 5)),
+        active: false,
+      );
+
+      final collection = await database.getMessageCollection(collectionId);
+      final renamedCollection = await database.getMessageCollection(
+        'Old Projects',
+      );
+
+      expect(collection, isNotNull);
+      expect(collection!.title, isNull);
+      expect(collection.active, isTrue);
+      expect(collection.updatedAt.toUtc(), createdAt);
+      expect(renamedCollection, isNotNull);
+      expect(renamedCollection!.title, isNull);
+      expect(renamedCollection.active, isFalse);
+    },
+  );
+
+  test('custom folder definitions cannot mutate system folders', () async {
+    final original = await database.getMessageCollection(
+      SystemMessageCollection.important.id,
+    );
+
+    await database.applyMessageCollectionDefinitionMutation(
+      collectionId: SystemMessageCollection.important.id,
+      updatedAt: DateTime.utc(2026, 3, 11, 17),
+      active: false,
+    );
+
+    final current = await database.getMessageCollection(
+      SystemMessageCollection.important.id,
+    );
+
+    expect(current, isNotNull);
+    expect(current!.title, original?.title);
+    expect(current.active, isTrue);
+    expect(current.isSystem, isTrue);
+  });
+
   test(
     'folder items hydrate the matching message for each chat when reference ids collide',
     () async {

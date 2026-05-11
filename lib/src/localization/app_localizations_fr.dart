@@ -40,6 +40,96 @@ class AppLocalizationsFr extends AppLocalizations {
       'Les dossiers personnalisés arrivent bientôt';
 
   @override
+  String get folderPickerTitle => 'Add to folder';
+
+  @override
+  String get folderPickerEmpty => 'Create a folder to save this message.';
+
+  @override
+  String get folderPickerAddFailed =>
+      'Could not add this message to the folder.';
+
+  @override
+  String get folderPickerUpdateFailed => 'Could not update this folder.';
+
+  @override
+  String get folderSystemReceipts => 'Receipts';
+
+  @override
+  String get folderSystemMarketing => 'Marketing';
+
+  @override
+  String get folderSystemNewsletters => 'Newsletters';
+
+  @override
+  String get folderCreateTitle => 'New folder';
+
+  @override
+  String get folderCreateAction => 'Create';
+
+  @override
+  String get folderCreateAndAddAction => 'Create and add';
+
+  @override
+  String get folderCreateFailed => 'Could not create this folder.';
+
+  @override
+  String get folderNameLabel => 'Folder name';
+
+  @override
+  String get folderNameEmptyError => 'Enter a folder name.';
+
+  @override
+  String get folderNameReservedError => 'That folder name is reserved.';
+
+  @override
+  String get folderNameDuplicateError =>
+      'A folder with that name already exists.';
+
+  @override
+  String get folderMessagesEmpty => 'No messages in this folder yet';
+
+  @override
+  String get folderRemoveMessage => 'Remove from folder';
+
+  @override
+  String get folderRemoveMessageFailed =>
+      'Could not remove this message from the folder.';
+
+  @override
+  String get contactFolderRuleAction => 'Send all to...';
+
+  @override
+  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+
+  @override
+  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsAction =>
+      'Send all messages and emails to...';
+
+  @override
+  String get contactFolderRuleTitle => 'Send all to folder';
+
+  @override
+  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+
+  @override
+  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsTitle =>
+      'Send messages and emails to folder';
+
+  @override
+  String get contactFolderRuleClear => 'Clear rule';
+
+  @override
+  String get contactFolderRuleFailed =>
+      'Could not update this contact folder rule.';
+
+  @override
   String get homeNoModules => 'Aucun module disponible';
 
   @override
@@ -394,6 +484,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatMessageForwardFailed => 'Impossible de transférer le message.';
+
+  @override
+  String get chatMessageAddedToFolder => 'Message added to folder.';
+
+  @override
+  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -922,10 +1018,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatPinnedMessagesTitle => 'Messages épinglés';
 
   @override
-  String get chatMarkMessageImportant => 'Mark important';
-
-  @override
-  String get chatRemoveMessageImportant => 'Remove important';
+  String get chatAddMessageToFolder => 'Add to folder...';
 
   @override
   String get chatPinMessage => 'Épingler le message';
@@ -1580,6 +1673,21 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get calendarAdvancedShow => 'Afficher les options avancées';
+
+  @override
+  String get calendarTaskDetailsSection => 'Détails';
+
+  @override
+  String get calendarTaskSortTooltip => 'Trier les tâches';
+
+  @override
+  String get calendarTaskSortManual => 'Manuel';
+
+  @override
+  String get calendarTaskSortDateAdded => 'Date d\'ajout';
+
+  @override
+  String get calendarTaskSortImportance => 'Importance';
 
   @override
   String get calendarUnscheduledTitle => 'Tâches non planifiées';
@@ -3195,6 +3303,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get contactsDisplayNameLabel => 'Nom affiché';
 
   @override
+  String get contactsNewLabel => 'Nouveau';
+
+  @override
   String get contactsLocalOnlyLabel => 'Sur cet appareil';
 
   @override
@@ -3205,6 +3316,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get contactsStoredLabel => 'Enregistré';
+
+  @override
+  String get contactsChatContactLabel => 'Chat contact';
+
+  @override
+  String get contactsEmailContactLabel => 'Email contact';
 
   @override
   String get contactsMessagesLabel => 'Messages';

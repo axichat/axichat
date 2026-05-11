@@ -5780,7 +5780,10 @@ class EmailService {
       if (contactId == null) {
         continue;
       }
-      await _transport.deleteContact(contactId);
+      await _guardDeltaOperation(
+        operation: 'delete email contact',
+        body: () => _transport.deleteContact(contactId),
+      );
     }
     await syncContactsFromCore();
   }

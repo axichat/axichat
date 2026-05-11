@@ -321,7 +321,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatContactAddRequested>(_onChatContactAddRequested);
     on<ChatRecipientEmailChatRequested>(_onChatRecipientEmailChatRequested);
     on<ChatMessagePinRequested>(_onChatMessagePinRequested);
-    on<ChatMessageImportantToggled>(_onChatMessageImportantToggled);
+    on<ChatMessageCollectionMembershipChanged>(
+      _onChatMessageCollectionMembershipChanged,
+    );
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
@@ -4753,22 +4755,84 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> _onChatMessageImportantToggled(
-    ChatMessageImportantToggled event,
+  Future<void> _onChatMessageCollectionMembershipChanged(
+    ChatMessageCollectionMembershipChanged event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = event.chat;
+    final collectionId = event.collectionId.trim();
+    final messageReference = event.message.collectionReference(
+      isGroupChat: event.chat.type == ChatType.groupChat,
+    );
+    final messageReferenceId = messageReference?.value.trim() ?? '';
     if (event.message.awaitsMucReference(
-      isGroupChat: chat.type == ChatType.groupChat,
-      isEmailBacked: chat.isEmailBacked,
-    )) {
+          isGroupChat: event.chat.type == ChatType.groupChat,
+          isEmailBacked: event.chat.isEmailBacked,
+        ) ||
+        collectionId.isEmpty ||
+        event.chat.jid.trim().isEmpty ||
+        messageReferenceId.isEmpty) {
+      emit(
+        state.copyWith(
+          collectionActionState: ChatCollectionActionFailure(
+            collectionId: collectionId,
+            messageReferenceId: messageReferenceId,
+            active: event.active,
+            reason: ChatCollectionActionFailureReason.unsupported,
+          ),
+        ),
+      );
       return;
     }
-    await _messageService.setImportantMessage(
-      chat: chat,
-      message: event.message,
-      important: event.important,
+    emit(
+      state.copyWith(
+        collectionActionState: ChatCollectionActionLoading(
+          collectionId: collectionId,
+          messageReferenceId: messageReferenceId,
+          active: event.active,
+        ),
+      ),
     );
+    try {
+      final changed = await _messageService.setMessageCollectionMembership(
+        collectionId: collectionId,
+        chat: event.chat,
+        message: event.message,
+        active: event.active,
+      );
+      if (!changed) {
+        emit(
+          state.copyWith(
+            collectionActionState: ChatCollectionActionFailure(
+              collectionId: collectionId,
+              messageReferenceId: messageReferenceId,
+              active: event.active,
+              reason: ChatCollectionActionFailureReason.updateFailed,
+            ),
+          ),
+        );
+        return;
+      }
+      emit(
+        state.copyWith(
+          collectionActionState: ChatCollectionActionSuccess(
+            collectionId: collectionId,
+            messageReferenceId: messageReferenceId,
+            active: event.active,
+          ),
+        ),
+      );
+    } on XmppMessageException {
+      emit(
+        state.copyWith(
+          collectionActionState: ChatCollectionActionFailure(
+            collectionId: collectionId,
+            messageReferenceId: messageReferenceId,
+            active: event.active,
+            reason: ChatCollectionActionFailureReason.updateFailed,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _onChatMessageReactionToggled(

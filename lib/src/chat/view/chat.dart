@@ -88,6 +88,7 @@ import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
+import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
 import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -285,8 +286,6 @@ class _ChatState extends State<Chat> {
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
-  final _loggedInlineEmailHtmlMessageIds = <String>{};
-  final _loggedPreparedInlineEmailHtmlMessageIds = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   static final Map<String, double> _scrollOffsetCache = {};
@@ -2796,21 +2795,14 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  void _handleImportantToggleRequested(
+  Future<void> _handleAddToFolderRequested(
     Message message, {
-    required bool important,
     required chat_models.Chat? chat,
-  }) {
+  }) async {
     if (chat == null) {
       return;
     }
-    context.read<ChatBloc>().add(
-      ChatMessageImportantToggled(
-        message: message,
-        important: important,
-        chat: chat,
-      ),
-    );
+    await showAddToFolderSheet(context, message: message, chat: chat);
   }
 
   void _handlePinToggleRequested(

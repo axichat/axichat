@@ -3,6 +3,66 @@
 
 part of 'chat_bloc.dart';
 
+enum ChatCollectionActionFailureReason { unsupported, updateFailed }
+
+sealed class ChatCollectionActionState extends Equatable {
+  const ChatCollectionActionState();
+}
+
+final class ChatCollectionActionIdle extends ChatCollectionActionState {
+  const ChatCollectionActionIdle();
+
+  @override
+  List<Object?> get props => const [];
+}
+
+final class ChatCollectionActionLoading extends ChatCollectionActionState {
+  const ChatCollectionActionLoading({
+    required this.collectionId,
+    required this.messageReferenceId,
+    required this.active,
+  });
+
+  final String collectionId;
+  final String messageReferenceId;
+  final bool active;
+
+  @override
+  List<Object?> get props => [collectionId, messageReferenceId, active];
+}
+
+final class ChatCollectionActionSuccess extends ChatCollectionActionState {
+  const ChatCollectionActionSuccess({
+    required this.collectionId,
+    required this.messageReferenceId,
+    required this.active,
+  });
+
+  final String collectionId;
+  final String messageReferenceId;
+  final bool active;
+
+  @override
+  List<Object?> get props => [collectionId, messageReferenceId, active];
+}
+
+final class ChatCollectionActionFailure extends ChatCollectionActionState {
+  const ChatCollectionActionFailure({
+    required this.collectionId,
+    required this.messageReferenceId,
+    required this.active,
+    required this.reason,
+  });
+
+  final String collectionId;
+  final String messageReferenceId;
+  final bool active;
+  final ChatCollectionActionFailureReason reason;
+
+  @override
+  List<Object?> get props => [collectionId, messageReferenceId, active, reason];
+}
+
 @Freezed(toJson: false, fromJson: false)
 abstract class ChatState with _$ChatState {
   const factory ChatState({
@@ -63,5 +123,7 @@ abstract class ChatState with _$ChatState {
     ChatToast? toast,
     @Default(0) int toastId,
     @Default(RequestStatus.none) RequestStatus roomAvatarUpdateStatus,
+    @Default(ChatCollectionActionIdle())
+    ChatCollectionActionState collectionActionState,
   }) = _ChatState;
 }

@@ -103,6 +103,8 @@ part 'settings/settings_sync_service.dart';
 
 part 'chats/chats_service.dart';
 
+part 'contacts/contact_directory_storage.dart';
+
 part 'avatar/avatar_service.dart';
 
 part 'muc/muc_service.dart';
@@ -122,8 +124,6 @@ part 'omemo/omemo_service.dart';
 part 'presence/presence_service.dart';
 
 part 'roster/roster_service.dart';
-
-part 'contacts/contacts_service.dart';
 
 part 'connection/xmpp_connection.dart';
 
@@ -164,6 +164,8 @@ final class XmppMucCreateConflictException extends XmppMessageException {}
 final class XmppForeignDomainException extends XmppMessageException {}
 
 final class XmppRosterException extends XmppException {}
+
+final class XmppContactDirectoryException extends XmppException {}
 
 final class XmppPresenceException extends XmppException {}
 
@@ -706,7 +708,7 @@ class XmppService extends XmppBase
         DemoScriptService,
         // OmemoService,
         RosterService,
-        ContactsService,
+        ContactDirectoryStorage,
         PresenceService {
   XmppService._(
     this._connectionFactory,

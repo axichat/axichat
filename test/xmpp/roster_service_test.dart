@@ -566,6 +566,51 @@ void main() {
     );
   });
 
+  group('renameRosterContact', () {
+    final jid = generateRandomJid();
+
+    test(
+      'updates local roster title after successful server rename.',
+      () async {
+        await connectSuccessfully(xmppService);
+        await database.saveRosterItem(
+          RosterItem.fromJid(jid).copyWith(title: 'Old Alice'),
+        );
+        when(
+          () => mockConnection.addToRoster(any(), title: any(named: 'title')),
+        ).thenAnswer((_) async => true);
+
+        await xmppService.renameRosterContact(
+          jid: '$jid/resource',
+          title: ' Alice ',
+        );
+
+        verify(() => mockConnection.addToRoster(jid, title: 'Alice')).called(1);
+        expect((await database.getRosterItem(jid))?.title, 'Alice');
+      },
+    );
+
+    test(
+      'does not mutate local roster title when server rename fails.',
+      () async {
+        await connectSuccessfully(xmppService);
+        await database.saveRosterItem(
+          RosterItem.fromJid(jid).copyWith(title: 'Old Alice'),
+        );
+        when(
+          () => mockConnection.addToRoster(any(), title: any(named: 'title')),
+        ).thenAnswer((_) async => false);
+
+        await expectLater(
+          () => xmppService.renameRosterContact(jid: jid, title: 'Alice'),
+          throwsA(isA<XmppRosterException>()),
+        );
+
+        expect((await database.getRosterItem(jid))?.title, 'Old Alice');
+      },
+    );
+  });
+
   group('removeFromRoster', () {
     final jid = generateRandomJid();
 

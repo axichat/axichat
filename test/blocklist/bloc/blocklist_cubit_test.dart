@@ -75,4 +75,112 @@ void main() {
       equals(['newer@axi.im', 'older@axi.im']),
     );
   });
+
+  test('blockContact blocks both transports for merged contacts', () async {
+    final cubit = BlocklistCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+    when(
+      () => xmppService.setAddressBlockStatus(
+        address: 'merged@example.com',
+        blocked: true,
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.block(jid: 'merged@example.com'),
+    ).thenAnswer((_) async {});
+
+    await cubit.blockContact(
+      address: 'merged@example.com',
+      includeEmail: true,
+      includeXmpp: true,
+    );
+
+    verify(
+      () => xmppService.setAddressBlockStatus(
+        address: 'merged@example.com',
+        blocked: true,
+      ),
+    ).called(1);
+    verify(() => xmppService.block(jid: 'merged@example.com')).called(1);
+    expect(
+      cubit.state,
+      const BlocklistSuccess(
+        BlocklistNotice(
+          BlocklistNoticeType.blocked,
+          address: 'merged@example.com',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'blockContact blocks email-only contacts through address blocklist',
+    () async {
+      final cubit = BlocklistCubit(xmppService: xmppService);
+      addTearDown(cubit.close);
+      when(
+        () => xmppService.setAddressBlockStatus(
+          address: 'email@example.com',
+          blocked: true,
+        ),
+      ).thenAnswer((_) async {});
+
+      await cubit.blockContact(
+        address: 'email@example.com',
+        includeEmail: true,
+        includeXmpp: false,
+      );
+
+      verify(
+        () => xmppService.setAddressBlockStatus(
+          address: 'email@example.com',
+          blocked: true,
+        ),
+      ).called(1);
+      verifyNever(() => xmppService.block(jid: 'email@example.com'));
+      expect(
+        cubit.state,
+        const BlocklistSuccess(
+          BlocklistNotice(
+            BlocklistNoticeType.blocked,
+            address: 'email@example.com',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'blockContact blocks XMPP-only contacts through XMPP blocklist',
+    () async {
+      final cubit = BlocklistCubit(xmppService: xmppService);
+      addTearDown(cubit.close);
+      when(
+        () => xmppService.block(jid: 'xmpp@example.com'),
+      ).thenAnswer((_) async {});
+
+      await cubit.blockContact(
+        address: 'xmpp@example.com',
+        includeEmail: false,
+        includeXmpp: true,
+      );
+
+      verifyNever(
+        () => xmppService.setAddressBlockStatus(
+          address: 'xmpp@example.com',
+          blocked: true,
+        ),
+      );
+      verify(() => xmppService.block(jid: 'xmpp@example.com')).called(1);
+      expect(
+        cubit.state,
+        const BlocklistSuccess(
+          BlocklistNotice(
+            BlocklistNoticeType.blocked,
+            address: 'xmpp@example.com',
+          ),
+        ),
+      );
+    },
+  );
 }

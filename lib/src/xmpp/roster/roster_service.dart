@@ -146,6 +146,26 @@ mixin RosterService
     );
   }
 
+  Future<void> renameRosterContact({
+    required String jid,
+    required String title,
+  }) async {
+    final normalized = bareAddress(jid) ?? jid.trim();
+    final trimmedTitle = title.trim();
+    if (normalized.isEmpty || trimmedTitle.isEmpty) {
+      throw XmppRosterException();
+    }
+    if (!await _connection.addToRoster(normalized, title: trimmedTitle)) {
+      throw XmppRosterException();
+    }
+    await _dbOp<XmppDatabase>((db) async {
+      final item = await db.getRosterItem(normalized);
+      if (item != null) {
+        await db.updateRosterItem(item.copyWith(title: trimmedTitle));
+      }
+    });
+  }
+
   Future<void> _refreshRosterAfterAdd({
     required String jid,
     required Ask? ask,

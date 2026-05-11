@@ -105,7 +105,7 @@ class _ChatTimelineItemView extends StatelessWidget {
     required this.onStartMultiSelectRequested,
     required this.onResendRequested,
     required this.onEditRequested,
-    required this.onImportantToggleRequested,
+    required this.onAddToFolderRequested,
     required this.onPinToggleRequested,
     required this.onRevokeInviteRequested,
     required this.onBubbleTapRequested,
@@ -289,12 +289,11 @@ class _ChatTimelineItemView extends StatelessWidget {
   final void Function(Message message, {required chat_models.Chat? chat})
   onResendRequested;
   final Future<void> Function(Message message) onEditRequested;
-  final void Function(
+  final Future<void> Function(
     Message message, {
-    required bool important,
     required chat_models.Chat? chat,
   })
-  onImportantToggleRequested;
+  onAddToFolderRequested;
   final void Function(
     Message message, {
     required bool pin,
@@ -384,7 +383,7 @@ class _ChatTimelineItemView extends StatelessWidget {
         onStartMultiSelectRequested: onStartMultiSelectRequested,
         onResendRequested: onResendRequested,
         onEditRequested: onEditRequested,
-        onImportantToggleRequested: onImportantToggleRequested,
+        onAddToFolderRequested: onAddToFolderRequested,
         onPinToggleRequested: onPinToggleRequested,
         onRevokeInviteRequested: onRevokeInviteRequested,
         onBubbleTapRequested: onBubbleTapRequested,

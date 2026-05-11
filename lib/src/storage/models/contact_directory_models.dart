@@ -20,6 +20,9 @@ class ContactDirectoryEntry extends Equatable {
     required this.emailNativeIds,
     this.xmppTitle,
     this.emailDisplayName,
+    this.displayNameOverride,
+    this.folderCollectionId,
+    this.favorited = false,
     this.avatarPath,
     this.subscription,
   });
@@ -30,6 +33,9 @@ class ContactDirectoryEntry extends Equatable {
   final List<String> emailNativeIds;
   final String? xmppTitle;
   final String? emailDisplayName;
+  final String? displayNameOverride;
+  final String? folderCollectionId;
+  final bool favorited;
   final String? avatarPath;
   final Subscription? subscription;
 
@@ -44,6 +50,13 @@ class ContactDirectoryEntry extends Equatable {
   }
 
   String? preferredDisplayName([MessageTransport? transport]) {
+    final override = _trimmedOrNull(displayNameOverride);
+    if (override != null) {
+      return override;
+    }
+    if (transport == null) {
+      return _trimmedOrNull(xmppTitle) ?? _trimmedOrNull(emailDisplayName);
+    }
     final primary = switch (transport) {
       MessageTransport.email => _trimmedOrNull(emailDisplayName),
       _ => _trimmedOrNull(xmppTitle),
@@ -57,6 +70,35 @@ class ContactDirectoryEntry extends Equatable {
     };
   }
 
+  ContactDirectoryEntry withFavorited(bool value) => ContactDirectoryEntry(
+    address: address,
+    hasXmppRoster: hasXmppRoster,
+    hasEmailContact: hasEmailContact,
+    emailNativeIds: emailNativeIds,
+    xmppTitle: xmppTitle,
+    emailDisplayName: emailDisplayName,
+    displayNameOverride: displayNameOverride,
+    folderCollectionId: folderCollectionId,
+    favorited: value,
+    avatarPath: avatarPath,
+    subscription: subscription,
+  );
+
+  ContactDirectoryEntry withFolderCollectionId(String? value) =>
+      ContactDirectoryEntry(
+        address: address,
+        hasXmppRoster: hasXmppRoster,
+        hasEmailContact: hasEmailContact,
+        emailNativeIds: emailNativeIds,
+        xmppTitle: xmppTitle,
+        emailDisplayName: emailDisplayName,
+        displayNameOverride: displayNameOverride,
+        folderCollectionId: value,
+        favorited: favorited,
+        avatarPath: avatarPath,
+        subscription: subscription,
+      );
+
   @override
   List<Object?> get props => [
     address,
@@ -65,6 +107,9 @@ class ContactDirectoryEntry extends Equatable {
     emailNativeIds,
     xmppTitle,
     emailDisplayName,
+    displayNameOverride,
+    folderCollectionId,
+    favorited,
     avatarPath,
     subscription,
   ];

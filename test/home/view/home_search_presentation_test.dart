@@ -2,6 +2,7 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/home/view/home_screen.dart';
 import 'package:axichat/src/localization/app_localizations_en.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,6 +19,7 @@ void main() {
       id: HomeTab.contacts,
       label: l10n.homeTabContacts,
       body: const SizedBox.shrink(),
+      searchFilters: contactsSearchFilters(l10n),
     ),
     HomeTabEntry(
       id: HomeTab.folders,
@@ -64,7 +66,9 @@ void main() {
         l10n: l10n,
         tabs: tabs,
         activeTab: HomeTab.folders,
-        foldersSection: FolderHomeSection.important,
+        foldersSection: FolderHomeSection.system(
+          SystemMessageCollection.important,
+        ),
       );
 
       expect(presentation.available, isTrue);
@@ -82,7 +86,12 @@ void main() {
       );
 
       expect(presentation.available, isTrue);
-      expect(presentation.filterIds, isEmpty);
+      expect(presentation.filterIds, const [
+        SearchFilterId.all,
+        SearchFilterId.favorites,
+        SearchFilterId.xmpp,
+        SearchFilterId.email,
+      ]);
       expect(presentation.label, l10n.homeTabContacts);
       expect(presentation.alphabeticalSort, isTrue);
     });

@@ -3,11 +3,17 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
+import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
+import 'package:axichat/src/email/view/email_contact_import_tile.dart';
+import 'package:axichat/src/folders/bloc/folders_cubit.dart';
+import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -34,10 +40,13 @@ class _ContactsListState extends State<ContactsList> {
   }
 
   void _syncCriteria(HomeState searchState) {
-    final locate = context.read;
     final tabState = searchState.stateFor(HomeTab.contacts);
     final query = searchState.active ? tabState.query : '';
-    locate<ContactsCubit>().updateCriteria(query: query, sort: tabState.sort);
+    context.read<ContactsCubit>().updateCriteria(
+      query: query,
+      sort: tabState.sort,
+      filterId: tabState.filterId,
+    );
   }
 
   @override
@@ -107,6 +116,163 @@ class _ContactsListState extends State<ContactsList> {
   }
 }
 
+class ContactsActionGroup extends StatelessWidget {
+  const ContactsActionGroup({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final locate = context.read;
+    return Wrap(
+      spacing: spacing.s,
+      runSpacing: spacing.s,
+      children: [
+        ContactsFilterButton(locate: locate),
+        const ContactsImportButton(),
+        const ContactsAddButton(),
+      ],
+    );
+  }
+}
+
+class ContactsFilterButton extends StatefulWidget {
+  const ContactsFilterButton({
+    super.key,
+    required this.locate,
+    this.compact = false,
+  });
+
+  final T Function<T>() locate;
+  final bool compact;
+
+  @override
+  State<ContactsFilterButton> createState() => _ContactsFilterButtonState();
+}
+
+class _ContactsFilterButtonState extends State<ContactsFilterButton> {
+  late final ShadPopoverController popoverController;
+
+  @override
+  void initState() {
+    super.initState();
+    popoverController = ShadPopoverController();
+  }
+
+  @override
+  void dispose() {
+    popoverController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<HomeBloc, HomeState>(
+      bloc: widget.locate<HomeBloc>(),
+      builder: (context, searchState) {
+        final l10n = context.l10n;
+        final sizing = context.sizing;
+        final filters = contactsSearchFilters(l10n);
+        final selectedFilterId =
+            searchState.stateFor(HomeTab.contacts).filterId ?? filters.first.id;
+        final selectedFilter = filters.firstWhere(
+          (filter) => filter.id == selectedFilterId,
+          orElse: () => filters.first,
+        );
+        final tooltip = l10n.filterTooltip(selectedFilter.label);
+        final iconSize = sizing.menuItemIconSize;
+        Widget trigger;
+        if (widget.compact) {
+          trigger = AxiIconButton.outline(
+            iconData: LucideIcons.listFilter,
+            iconSize: iconSize,
+            tooltip: tooltip,
+            onPressed: popoverController.toggle,
+          );
+        } else {
+          trigger = AxiButton.secondary(
+            onPressed: popoverController.toggle,
+            tooltip: tooltip,
+            leading: Icon(LucideIcons.listFilter, size: iconSize),
+            child: Text(selectedFilter.label),
+          );
+        }
+        return AxiPopover(
+          controller: popoverController,
+          closeOnTapOutside: true,
+          padding: EdgeInsets.zero,
+          decoration: ShadDecoration.none,
+          shadows: const <BoxShadow>[],
+          popover: (context) {
+            return AxiMenu(
+              actions: [
+                for (final option in filters)
+                  AxiMenuAction(
+                    icon: option.id == selectedFilter.id
+                        ? LucideIcons.check
+                        : null,
+                    label: option.label,
+                    onPressed: () {
+                      widget.locate<HomeBloc>().add(
+                        HomeSearchFilterChanged(
+                          option.id,
+                          tab: HomeTab.contacts,
+                        ),
+                      );
+                      popoverController.hide();
+                    },
+                  ),
+              ],
+            );
+          },
+          child: trigger,
+        );
+      },
+    );
+  }
+}
+
+class ContactsImportButton extends StatelessWidget {
+  const ContactsImportButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final locate = context.read;
+    final l10n = context.l10n;
+    final emailEnabled = context.select<SettingsCubit, bool>(
+      (cubit) => cubit.state.endpointConfig.smtpEnabled,
+    );
+    if (!emailEnabled) {
+      return AxiFab(
+        tooltip: l10n.emailContactsImportAccountRequired,
+        iconData: LucideIcons.userRoundPlus,
+        text: l10n.emailContactsImportAction,
+      );
+    }
+    return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
+      selector: (state) => state is EmailContactImportInProgress,
+      builder: (context, loading) {
+        return AxiFab(
+          tooltip: l10n.emailContactsImportTitle,
+          iconData: LucideIcons.userRoundPlus,
+          text: l10n.emailContactsImportAction,
+          onPressed: loading
+              ? null
+              : () {
+                  locate<EmailContactImportCubit>().reset();
+                  showFadeScaleDialog(
+                    context: context,
+                    builder: (dialogContext) => BlocProvider.value(
+                      value: locate<EmailContactImportCubit>(),
+                      child: const EmailContactImportDialog(),
+                    ),
+                  );
+                },
+        );
+      },
+    );
+  }
+}
+
 class ContactsAddButton extends StatelessWidget {
   const ContactsAddButton({super.key});
 
@@ -117,7 +283,7 @@ class ContactsAddButton extends StatelessWidget {
     return AxiDialogFab(
       tooltip: l10n.rosterAddTooltip,
       iconData: LucideIcons.userPlus,
-      label: l10n.rosterAddLabel,
+      label: l10n.contactsNewLabel,
       dialogBuilder: (dialogContext) {
         return MultiBlocProvider(
           providers: [
@@ -198,6 +364,8 @@ class _ContactListTile extends StatelessWidget {
                 BlocProvider.value(value: locate<ContactsCubit>()),
                 BlocProvider.value(value: locate<RosterCubit>()),
                 BlocProvider.value(value: locate<ChatsCubit>()),
+                BlocProvider.value(value: locate<BlocklistCubit>()),
+                BlocProvider.value(value: locate<FoldersCubit>()),
               ],
               child: _ContactDetailsSheet(contact: contact),
             );
@@ -208,7 +376,8 @@ class _ContactListTile extends StatelessWidget {
             ShadContextMenuItem(
               leading: const Icon(LucideIcons.messagesSquare),
               child: Text(context.l10n.commonOpen),
-              onPressed: () => locate<ChatsCubit>().openChat(jid: address),
+              onPressed: () =>
+                  context.read<ChatsCubit>().openChat(jid: address),
             ),
           if (_emailComposeEnabled(
             contact: contact,
@@ -235,7 +404,9 @@ class _ContactListTile extends StatelessWidget {
                       if (confirmed != true || !context.mounted) {
                         return;
                       }
-                      await locate<RosterCubit>().removeContact(jid: address);
+                      await context.read<RosterCubit>().removeContact(
+                        jid: address,
+                      );
                     },
             ),
           if (contact.hasEmailContact)
@@ -250,7 +421,7 @@ class _ContactListTile extends StatelessWidget {
                       if (confirmed != true || !context.mounted) {
                         return;
                       }
-                      await locate<ContactsCubit>().removeEmailContact(
+                      await context.read<ContactsCubit>().removeEmailContact(
                         address: address,
                         nativeIds: contact.emailNativeIds,
                       );
@@ -274,6 +445,18 @@ class _ContactListTile extends StatelessWidget {
           status: null,
         ),
         titleWidget: _ContactListTileContent(contact: contact),
+        actions: contact.favorited
+            ? [
+                Semantics(
+                  label: context.l10n.commonFavorite,
+                  child: Icon(
+                    LucideIcons.star,
+                    size: context.sizing.menuItemIconSize,
+                    color: context.colorScheme.primary,
+                  ),
+                ),
+              ]
+            : null,
       ),
     );
   }
@@ -292,7 +475,7 @@ class _ContactListTileContent extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          contact.address,
+          contact.displayName,
           overflow: TextOverflow.ellipsis,
           style: context.textTheme.small.copyWith(
             color: context.colorScheme.foreground,
@@ -483,43 +666,54 @@ class _ContactDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final address = contact.address;
-    final emailEnabled = context.select<SettingsCubit, bool>(
-      (cubit) => cubit.state.endpointConfig.smtpEnabled,
-    );
-    final rosterActionState = context.watch<RosterCubit>().state.actionState;
-    final contactsActionState = context
-        .watch<ContactsCubit>()
-        .state
-        .actionState;
-    final isRemovingXmpp =
-        rosterActionState is RosterActionLoading &&
-        rosterActionState.action == RosterActionType.remove &&
-        rosterActionState.jid == address;
-    final isRemovingEmail =
-        contactsActionState is ContactActionLoading &&
-        contactsActionState.action == ContactActionType.removeEmail &&
-        contactsActionState.address == address;
-    return AxiSheetScaffold.scroll(
-      header: AxiSheetHeader(
-        title: Text(contact.displayName),
-        subtitle: contact.displayName == address ? null : Text(address),
-        onClose: () => Navigator.of(context).maybePop(),
-      ),
-      bodyPadding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.s),
-      children: [
-        _ContactSummaryCard(contact: contact, emailEnabled: emailEnabled),
-        SizedBox(height: spacing.m),
-        _ContactDetailsCard(contact: contact, emailEnabled: emailEnabled),
-        SizedBox(height: spacing.m),
-        _ContactDetailsActions(
-          contact: contact,
-          emailEnabled: emailEnabled,
-          isRemovingEmail: isRemovingEmail,
-          isRemovingXmpp: isRemovingXmpp,
-        ),
-      ],
+    return BlocBuilder<ContactsCubit, ContactsState>(
+      buildWhen: (previous, current) =>
+          previous.items != current.items ||
+          previous.actionState != current.actionState,
+      builder: (context, state) {
+        final spacing = context.spacing;
+        final currentContact = _currentContactForSheet(state.items, contact);
+        final address = currentContact.address;
+        final emailEnabled = context.select<SettingsCubit, bool>(
+          (cubit) => cubit.state.endpointConfig.smtpEnabled,
+        );
+        final rosterActionState = context
+            .watch<RosterCubit>()
+            .state
+            .actionState;
+        final contactsActionState = state.actionState;
+        final isRemovingXmpp =
+            rosterActionState is RosterActionLoading &&
+            rosterActionState.action == RosterActionType.remove &&
+            rosterActionState.jid == address;
+        final isRemovingEmail =
+            contactsActionState is ContactActionLoading &&
+            contactsActionState.action == ContactActionType.removeEmail &&
+            contactsActionState.address == address;
+        return AxiSheetScaffold.scroll(
+          header: AxiSheetHeader(
+            title: Text(currentContact.displayName),
+            subtitle: currentContact.displayName == address
+                ? null
+                : Text(address),
+            onClose: () => Navigator.of(context).maybePop(),
+          ),
+          bodyPadding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.s),
+          children: [
+            _ContactSummaryCard(
+              contact: currentContact,
+              emailEnabled: emailEnabled,
+            ),
+            SizedBox(height: spacing.m),
+            _ContactDetailsActions(
+              contact: currentContact,
+              emailEnabled: emailEnabled,
+              isRemovingEmail: isRemovingEmail,
+              isRemovingXmpp: isRemovingXmpp,
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -536,10 +730,9 @@ class _ContactSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final secondaryTextColor = context.colorScheme.mutedForeground;
-    final displayName = contact.displayName;
     final address = contact.address;
-    final storageValue = _contactStorageValue(context.l10n, contact);
+    final l10n = context.l10n;
+    final sourceItems = _contactSourceItems(l10n, contact);
     return AxiModalSurface(
       backgroundColor: context.colorScheme.background,
       borderColor: context.borderSide.color,
@@ -567,32 +760,25 @@ class _ContactSummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (displayName != address)
-                  Text(displayName, style: context.textTheme.h3),
-                Text(
-                  address,
-                  style: displayName == address
-                      ? context.textTheme.h3
-                      : context.textTheme.muted.copyWith(
-                          color: secondaryTextColor,
-                        ),
-                ),
-                if (storageValue != null) ...[
-                  SizedBox(height: spacing.s),
-                  Text(
-                    storageValue,
-                    style: context.textTheme.muted.copyWith(
-                      color: secondaryTextColor,
-                    ),
+                if (contact.favorited) ...[
+                  _ContactStatusRow(
+                    icon: LucideIcons.star,
+                    label: l10n.commonFavorite,
+                  ),
+                  if (sourceItems.isNotEmpty) SizedBox(height: spacing.s),
+                ],
+                for (var index = 0; index < sourceItems.length; index += 1) ...[
+                  if (index > 0) SizedBox(height: spacing.s),
+                  _ContactStatusRow(
+                    icon: sourceItems[index].icon,
+                    label: sourceItems[index].label,
                   ),
                 ],
                 if (contact.hasEmailContact && !emailEnabled) ...[
                   SizedBox(height: spacing.s),
-                  Text(
-                    context.l10n.contactsEmailUnavailableLabel,
-                    style: context.textTheme.muted.copyWith(
-                      color: secondaryTextColor,
-                    ),
+                  _ContactStatusRow(
+                    icon: LucideIcons.mailWarning,
+                    label: l10n.contactsEmailUnavailableLabel,
                   ),
                 ],
               ],
@@ -604,77 +790,51 @@ class _ContactSummaryCard extends StatelessWidget {
   }
 }
 
-class _ContactDetailsCard extends StatelessWidget {
-  const _ContactDetailsCard({
-    required this.contact,
-    required this.emailEnabled,
-  });
+class _ContactStatusRow extends StatelessWidget {
+  const _ContactStatusRow({required this.icon, required this.label});
 
-  final ContactDirectoryEntry contact;
-  final bool emailEnabled;
+  final IconData icon;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final spacing = context.spacing;
-    final storageValue = _contactStorageValue(l10n, contact);
-    final facts = <Widget>[
-      _ContactFactRow(
-        label: l10n.profileExportCsvHeaderAddress,
-        value: contact.address,
-      ),
-      if (storageValue != null)
-        _ContactFactRow(label: l10n.contactsStoredLabel, value: storageValue),
-      if (contact.hasEmailContact && !emailEnabled)
-        _ContactFactRow(
-          label: l10n.contactsEmailLabel,
-          value: l10n.contactsEmailUnavailableLabel,
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: context.sizing.menuItemIconSize,
+          color: context.colorScheme.mutedForeground,
         ),
-    ];
-    return AxiModalSurface(
-      backgroundColor: context.colorScheme.background,
-      borderColor: context.borderSide.color,
-      padding: EdgeInsets.all(spacing.m),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.chatActionDetails,
-            style: context.textTheme.label.strong.copyWith(
+        SizedBox(width: context.spacing.s),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.muted.copyWith(
               color: context.colorScheme.mutedForeground,
             ),
           ),
-          SizedBox(height: spacing.s),
-          for (var index = 0; index < facts.length; index += 1) ...[
-            if (index > 0) SizedBox(height: spacing.m),
-            facts[index],
-          ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _ContactFactRow extends StatelessWidget {
-  const _ContactFactRow({required this.label, required this.value});
+class _ContactRuleButtonLabel extends StatelessWidget {
+  const _ContactRuleButtonLabel({required this.contact});
 
-  final String label;
-  final String value;
+  final ContactDirectoryEntry contact;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: context.textTheme.label.strong.copyWith(
-            color: context.colorScheme.mutedForeground,
-          ),
-        ),
-        SizedBox(height: context.spacing.xxs),
-        Text(value, style: context.textTheme.small.strong),
-      ],
+    return Flexible(
+      child: Text(
+        _contactFolderRuleActionLabel(context.l10n, contact),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }
@@ -693,7 +853,6 @@ class _ContactDetailsActions extends StatelessWidget {
   final bool isRemovingXmpp;
 
   Future<void> _removeContact(BuildContext context) async {
-    final locate = context.read;
     final l10n = context.l10n;
     final confirmed = await confirm(
       context,
@@ -704,20 +863,29 @@ class _ContactDetailsActions extends StatelessWidget {
     }
     var removed = true;
     if (contact.hasEmailContact) {
-      await locate<ContactsCubit>().removeEmailContact(
+      await context.read<ContactsCubit>().removeEmailContact(
         address: contact.address,
         nativeIds: contact.emailNativeIds,
       );
-      final emailActionState = locate<ContactsCubit>().state.actionState;
+      if (!context.mounted) {
+        return;
+      }
+      final emailActionState = context.read<ContactsCubit>().state.actionState;
       removed =
           removed &&
           emailActionState is ContactActionSuccess &&
           emailActionState.action == ContactActionType.removeEmail &&
           emailActionState.address == contact.address;
     }
+    if (!context.mounted) {
+      return;
+    }
     if (contact.hasXmppRoster) {
-      await locate<RosterCubit>().removeContact(jid: contact.address);
-      final rosterActionState = locate<RosterCubit>().state.actionState;
+      await context.read<RosterCubit>().removeContact(jid: contact.address);
+      if (!context.mounted) {
+        return;
+      }
+      final rosterActionState = context.read<RosterCubit>().state.actionState;
       removed =
           removed &&
           rosterActionState is RosterActionSuccess &&
@@ -729,23 +897,127 @@ class _ContactDetailsActions extends StatelessWidget {
     }
   }
 
+  Future<void> _renameContact(BuildContext context) async {
+    final l10n = context.l10n;
+    final result = await showContactRenameDialog(
+      context: context,
+      initialValue: contact.displayName,
+    );
+    if (!context.mounted || result == null) {
+      return;
+    }
+    if (result.isEmpty) {
+      await context.read<ContactsCubit>().resetContactDisplayName(
+        contact: contact,
+      );
+    } else {
+      await context.read<ContactsCubit>().renameContact(
+        contact: contact,
+        displayName: result,
+      );
+    }
+    if (!context.mounted) {
+      return;
+    }
+    final actionState = context.read<ContactsCubit>().state.actionState;
+    final showToast = ShadToaster.maybeOf(context)?.show;
+    if (actionState is ContactActionSuccess &&
+        actionState.address == contact.address &&
+        (actionState.action == ContactActionType.rename ||
+            actionState.action == ContactActionType.resetRename)) {
+      showToast?.call(
+        FeedbackToast.success(message: l10n.chatContactRenameSuccess),
+      );
+      return;
+    }
+    if (actionState is ContactActionFailure &&
+        actionState.address == contact.address &&
+        (actionState.action == ContactActionType.rename ||
+            actionState.action == ContactActionType.resetRename)) {
+      showToast?.call(
+        FeedbackToast.error(message: l10n.chatContactRenameFailure),
+      );
+    }
+  }
+
+  Future<void> _blockContact(BuildContext context) async {
+    await context.read<BlocklistCubit>().blockContact(
+      address: contact.address,
+      includeEmail: contact.hasEmailContact,
+      includeXmpp: contact.hasXmppRoster,
+    );
+  }
+
+  Future<void> _showFolderRule(BuildContext context) async {
+    await showContactFolderRuleSheet(context, contact: contact);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final contactsActionState = context
+        .watch<ContactsCubit>()
+        .state
+        .actionState;
+    final isUpdatingContact =
+        contactsActionState is ContactActionLoading &&
+        contactsActionState.address == contact.address;
+    final blocklistState = context.watch<BlocklistCubit>().state;
+    final isBlocking =
+        blocklistState is BlocklistLoading &&
+        (blocklistState.jid == contact.address || blocklistState.jid == null);
     final isRemoving = isRemovingXmpp || isRemovingEmail;
+    final disabled = isRemoving || isUpdatingContact || isBlocking;
+    final isRenaming =
+        contactsActionState is ContactActionLoading &&
+        contactsActionState.address == contact.address &&
+        (contactsActionState.action == ContactActionType.rename ||
+            contactsActionState.action == ContactActionType.resetRename);
     return Padding(
       padding: EdgeInsets.only(bottom: spacing.xs),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          AxiButton.outline(
+            widthBehavior: AxiButtonWidth.expand,
+            onPressed: disabled
+                ? null
+                : () => context.read<ContactsCubit>().setFavorited(
+                    contact: contact,
+                    favorited: !contact.favorited,
+                  ),
+            leading: Icon(
+              contact.favorited ? LucideIcons.starOff : LucideIcons.star,
+            ),
+            child: Text(
+              contact.favorited ? l10n.commonUnfavorite : l10n.commonFavorite,
+            ),
+          ),
+          SizedBox(height: spacing.s),
+          AxiButton.outline(
+            widthBehavior: AxiButtonWidth.expand,
+            loading: isRenaming,
+            onPressed: disabled ? null : () => _renameContact(context),
+            leading: const Icon(LucideIcons.pencil),
+            child: Text(l10n.commonRename),
+          ),
+          SizedBox(height: spacing.s),
+          AxiButton.outline(
+            widthBehavior: AxiButtonWidth.expand,
+            onPressed: disabled ? null : () => _showFolderRule(context),
+            leading: const Icon(LucideIcons.folder),
+            child: _ContactRuleButtonLabel(contact: contact),
+          ),
+          SizedBox(height: spacing.s),
           if (contact.hasXmppRoster)
             AxiButton.outline(
               widthBehavior: AxiButtonWidth.expand,
-              onPressed: isRemoving
+              onPressed: disabled
                   ? null
-                  : () => locate<ChatsCubit>().openChat(jid: contact.address),
+                  : () => context.read<ChatsCubit>().openChat(
+                      jid: contact.address,
+                    ),
               child: Text(l10n.commonOpen),
             ),
           if (_emailComposeEnabled(
@@ -755,7 +1027,7 @@ class _ContactDetailsActions extends StatelessWidget {
             SizedBox(height: spacing.s),
             AxiButton.outline(
               widthBehavior: AxiButtonWidth.expand,
-              onPressed: isRemoving
+              onPressed: disabled
                   ? null
                   : () => openComposeDraft(
                       context,
@@ -769,8 +1041,16 @@ class _ContactDetailsActions extends StatelessWidget {
             SizedBox(height: spacing.s),
             AxiButton.destructive(
               widthBehavior: AxiButtonWidth.expand,
+              loading: isBlocking,
+              onPressed: disabled ? null : () => _blockContact(context),
+              leading: const Icon(LucideIcons.userX),
+              child: Text(l10n.blocklistBlock),
+            ),
+            SizedBox(height: spacing.s),
+            AxiButton.destructive(
+              widthBehavior: AxiButtonWidth.expand,
               loading: isRemoving,
-              onPressed: isRemoving ? null : () => _removeContact(context),
+              onPressed: disabled ? null : () => _removeContact(context),
               child: Text(l10n.contactsRemoveContactLabel),
             ),
           ],
@@ -789,7 +1069,8 @@ String _contactFailureMessage(
     ContactFailureReason.invalidAddress => l10n.jidInputInvalid,
     ContactFailureReason.unavailable => l10n.contactsEmailUnavailableLabel,
     ContactFailureReason.addFailed ||
-    ContactFailureReason.removeFailed => l10n.authGenericError,
+    ContactFailureReason.removeFailed ||
+    ContactFailureReason.updateFailed => l10n.authGenericError,
   };
 }
 
@@ -808,7 +1089,7 @@ List<String> _contactSecondaryValues(
   AppLocalizations l10n,
 ) {
   return <String>[
-    if (contact.displayName != contact.address) contact.displayName,
+    if (contact.displayName != contact.address) contact.address,
     if (contact.isEmailOnly) l10n.contactsLocalOnlyLabel,
   ];
 }
@@ -818,19 +1099,42 @@ bool _emailComposeEnabled({
   required bool emailEnabled,
 }) => contact.hasEmailContact && emailEnabled;
 
-String? _contactStorageValue(
+ContactDirectoryEntry _currentContactForSheet(
+  List<ContactDirectoryEntry>? items,
+  ContactDirectoryEntry fallback,
+) {
+  final addressKey = contactDirectoryAddressKey(fallback.address);
+  for (final item in items ?? const <ContactDirectoryEntry>[]) {
+    if (contactDirectoryAddressKey(item.address) == addressKey) {
+      return item;
+    }
+  }
+  return fallback;
+}
+
+List<({IconData icon, String label})> _contactSourceItems(
   AppLocalizations l10n,
   ContactDirectoryEntry contact,
 ) {
-  final sources = <String>[
-    if (contact.hasXmppRoster) l10n.authSignupWelcomeTitle,
-    if (contact.hasEmailContact) l10n.profileExportEmailContactsLabel,
+  return <({IconData icon, String label})>[
+    if (contact.hasXmppRoster)
+      (icon: LucideIcons.messagesSquare, label: l10n.contactsChatContactLabel),
+    if (contact.hasEmailContact)
+      (icon: LucideIcons.mail, label: l10n.contactsEmailContactLabel),
+    if (contact.isEmailOnly)
+      (icon: LucideIcons.smartphone, label: l10n.contactsLocalOnlyLabel),
   ];
-  if (sources.isEmpty) {
-    return null;
+}
+
+String _contactFolderRuleActionLabel(
+  AppLocalizations l10n,
+  ContactDirectoryEntry contact,
+) {
+  if (contact.hasXmppRoster && contact.hasEmailContact) {
+    return l10n.contactFolderRuleMessagesAndEmailsAction;
   }
-  if (contact.isEmailOnly) {
-    return '${sources.join(' • ')} • ${l10n.contactsLocalOnlyLabel}';
+  if (contact.hasEmailContact) {
+    return l10n.contactFolderRuleEmailsAction;
   }
-  return sources.join(' • ');
+  return l10n.contactFolderRuleMessagesAction;
 }

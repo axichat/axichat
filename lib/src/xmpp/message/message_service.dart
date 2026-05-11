@@ -987,16 +987,26 @@ const String _messageCollectionSyncSourceKeyName =
     'message_collection_sync_source_id';
 const String _messageCollectionSyncPendingPublishesKeyName =
     'message_collection_sync_pending_publishes';
+const String _messageCollectionDefinitionSyncPendingPublishesKeyName =
+    'message_collection_definition_sync_pending_publishes';
 const String _messageCollectionSyncFlushPendingOperationName =
     'MessageService.flushPendingMessageCollectionSyncOnResume';
 const String _messageCollectionSyncSnapshotBootstrapOperationName =
     'MessageService.bootstrapMessageCollectionSnapshotOnNegotiations';
+const String _messageCollectionDefinitionSyncFlushPendingOperationName =
+    'MessageService.flushPendingMessageCollectionDefinitionSyncOnResume';
+const String _messageCollectionDefinitionSyncSnapshotBootstrapOperationName =
+    'MessageService.bootstrapMessageCollectionDefinitionSnapshotOnNegotiations';
 final _messageCollectionSyncSourceKey = XmppStateStore.registerKey(
   _messageCollectionSyncSourceKeyName,
 );
 final _messageCollectionSyncPendingPublishesKey = XmppStateStore.registerKey(
   _messageCollectionSyncPendingPublishesKeyName,
 );
+final _messageCollectionDefinitionSyncPendingPublishesKey =
+    XmppStateStore.registerKey(
+      _messageCollectionDefinitionSyncPendingPublishesKeyName,
+    );
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
@@ -1213,12 +1223,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   DateTime? _draftLastSnapshotAt;
   final Set<String> _draftLastSnapshotIds = <String>{};
   bool _messageCollectionSnapshotInFlight = false;
+  bool _messageCollectionDefinitionSnapshotInFlight = false;
   String? _messageCollectionSourceId;
   bool _pendingMessageCollectionSyncLoaded = false;
+  bool _pendingMessageCollectionDefinitionSyncLoaded = false;
   final Set<String> _pendingMessageCollectionPublishes = <String>{};
+  final Set<String> _pendingMessageCollectionDefinitionPublishes = <String>{};
 
   DraftsPubSubManager? get _draftsManager =>
       _connection.getManager<DraftsPubSubManager>();
+  MessageCollectionDefinitionsPubSubManager?
+  get _messageCollectionDefinitionsManager =>
+      _connection.getManager<MessageCollectionDefinitionsPubSubManager>();
   MessageCollectionsPubSubManager? get _messageCollectionsManager =>
       _connection.getManager<MessageCollectionsPubSubManager>();
 
@@ -1612,6 +1628,94 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     MessageCollectionMembershipEntry entry,
   ) async {
     await _publishMessageCollectionSyncEntry(entry);
+  }
+
+  Future<void> publishMessageCollectionDefinitionSyncEntry(
+    MessageCollectionEntry entry,
+  ) async {
+    await _publishMessageCollectionDefinitionSyncEntry(entry);
+  }
+
+  Future<void> syncMessageCollectionDefinitionsSnapshot() async {
+    if (_messageCollectionDefinitionSnapshotInFlight) {
+      return;
+    }
+    _messageCollectionDefinitionSnapshotInFlight = true;
+    try {
+      await database;
+      await _ensurePendingMessageCollectionDefinitionSyncLoaded();
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'message collection definition sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _messageCollectionDefinitionsManager;
+      if (manager == null) {
+        return;
+      }
+      await manager.ensureNode();
+      await manager.subscribe();
+      await _flushPendingMessageCollectionDefinitionSync(
+        managerOverride: manager,
+        managerReady: true,
+      );
+      final snapshot = await manager.fetchAllWithStatus();
+      if (!snapshot.isSuccess) {
+        return;
+      }
+
+      final localEntries = await _localMessageCollectionDefinitions(
+        includeInactive: true,
+      );
+      final localById = <String, MessageCollectionEntry>{
+        for (final entry in localEntries) entry.id: entry,
+      };
+
+      for (final remote in snapshot.items) {
+        if (SystemMessageCollection.isSystemId(remote.collectionId)) {
+          continue;
+        }
+        final local = localById.remove(remote.itemId);
+        if (local == null) {
+          await _applyMessageCollectionDefinitionSyncUpdate(remote);
+          continue;
+        }
+        final syncDecision = _resolveMessageCollectionDefinitionSyncDecision(
+          local,
+          remote,
+        );
+        if (syncDecision == _MessageCollectionSyncDecision.applyRemote) {
+          await _applyMessageCollectionDefinitionSyncUpdate(remote);
+          continue;
+        }
+        if (syncDecision == _MessageCollectionSyncDecision.publishLocal) {
+          await _publishMessageCollectionDefinitionSyncEntry(
+            local,
+            managerOverride: manager,
+            managerReady: true,
+          );
+        }
+      }
+
+      for (final local in localById.values) {
+        await _publishMessageCollectionDefinitionSyncEntry(
+          local,
+          managerOverride: manager,
+          managerReady: true,
+        );
+      }
+      await _flushPendingMessageCollectionDefinitionSync(
+        managerOverride: manager,
+        managerReady: true,
+      );
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _messageCollectionDefinitionSnapshotInFlight = false;
+    }
   }
 
   Future<void> syncMessageCollectionsSnapshot() async {
@@ -3385,6 +3489,31 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             db.getMessageCollectionMemberships(collectionId, chatJid: chatJid),
       );
 
+  Stream<List<MessageCollectionMembershipEntry>>
+  allMessageCollectionMembershipsStream({
+    bool includeInactive = false,
+    String? chatJid,
+  }) =>
+      createSingleItemStream<
+        List<MessageCollectionMembershipEntry>,
+        XmppDatabase
+      >(
+        watchFunction: (db) async => db.watchAllMessageCollectionMemberships(
+          includeInactive: includeInactive,
+          chatJid: chatJid,
+        ),
+      );
+
+  Stream<List<MessageCollectionEntry>> messageCollectionsStream({
+    bool includeInactive = false,
+    bool includeSystem = true,
+  }) => createSingleItemStream<List<MessageCollectionEntry>, XmppDatabase>(
+    watchFunction: (db) async => db.watchMessageCollections(
+      includeInactive: includeInactive,
+      includeSystem: includeSystem,
+    ),
+  );
+
   Stream<List<FolderMessageItem>> messageCollectionItemsStream(
     String collectionId, {
     String? chatJid,
@@ -3407,20 +3536,62 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     chatJid: chatJid,
   );
 
-  Future<void> setImportantMessage({
-    required Chat chat,
-    required Message message,
-    required bool important,
+  Future<MessageCollectionEntry> createMessageCollection({
+    required String title,
   }) async {
-    await setMessageCollectionMembership(
-      collectionId: SystemMessageCollection.important.id,
-      chat: chat,
-      message: message,
-      active: important,
+    final normalizedTitle = normalizeCustomMessageCollectionTitle(title);
+    if (normalizedTitle == null) {
+      throw const MessageCollectionNameException(
+        MessageCollectionNameFailure.empty,
+      );
+    }
+    final collectionId = normalizeCustomMessageCollectionId(normalizedTitle);
+    if (collectionId == null) {
+      throw const MessageCollectionNameException(
+        MessageCollectionNameFailure.empty,
+      );
+    }
+    if (SystemMessageCollection.isSystemId(collectionId)) {
+      throw const MessageCollectionNameException(
+        MessageCollectionNameFailure.reserved,
+      );
+    }
+    final existing =
+        await _dbOpReturning<XmppDatabase, List<MessageCollectionEntry>>(
+          (db) => db.getMessageCollections(
+            includeInactive: false,
+            includeSystem: false,
+          ),
+        );
+    final normalizedCollectionIdKey = collectionId.toLowerCase();
+    final duplicate = existing.any((collection) {
+      return collection.id.trim().toLowerCase() == normalizedCollectionIdKey;
+    });
+    if (duplicate) {
+      throw const MessageCollectionNameException(
+        MessageCollectionNameFailure.duplicate,
+      );
+    }
+
+    final updatedAt = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyMessageCollectionDefinitionMutation(
+        collectionId: collectionId,
+        updatedAt: updatedAt,
+        active: true,
+      ),
     );
+    final entry = await _dbOpReturning<XmppDatabase, MessageCollectionEntry?>(
+      (db) => db.getMessageCollection(collectionId),
+    );
+    if (entry == null) {
+      throw XmppMessageException();
+    }
+    await publishMessageCollectionDefinitionSyncEntry(entry);
+    return entry;
   }
 
-  Future<void> setMessageCollectionMembership({
+  Future<bool> setMessageCollectionMembership({
     required String collectionId,
     required Chat chat,
     required Message message,
@@ -3429,14 +3600,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final normalizedCollectionId = collectionId.trim();
     final normalizedChatJid = chat.jid.trim();
     if (normalizedCollectionId.isEmpty || normalizedChatJid.isEmpty) {
-      return;
+      return false;
     }
     final isGroupChat = chat.type == ChatType.groupChat;
     final messageReferenceId = message
         .collectionReference(isGroupChat: isGroupChat)
         ?.value;
     if (messageReferenceId == null) {
-      return;
+      return false;
     }
     await _normalizeMessageCollectionAliasState(
       collectionId: normalizedCollectionId,
@@ -3471,9 +3642,49 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           ),
         );
     if (entry == null) {
-      return;
+      return false;
     }
     await publishMessageCollectionSyncEntry(entry);
+    return true;
+  }
+
+  Future<bool> removeMessageCollectionMembership(FolderMessageItem item) async {
+    final normalizedCollectionId = item.collectionId.trim();
+    final normalizedChatJid = item.chatJid.trim();
+    final normalizedReferenceId = item.messageReferenceId.trim();
+    if (normalizedCollectionId.isEmpty ||
+        normalizedChatJid.isEmpty ||
+        normalizedReferenceId.isEmpty) {
+      return false;
+    }
+    final removedAt = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyMessageCollectionMembershipMutation(
+        collectionId: normalizedCollectionId,
+        chatJid: normalizedChatJid,
+        messageReferenceId: normalizedReferenceId,
+        messageStanzaId: item.messageStanzaId,
+        messageOriginId: item.messageOriginId,
+        messageMucStanzaId: item.messageMucStanzaId,
+        deltaAccountId: item.deltaMsgId == null ? null : item.deltaAccountId,
+        deltaMsgId: item.deltaMsgId,
+        addedAt: removedAt,
+        active: false,
+      ),
+    );
+    final entry =
+        await _dbOpReturning<XmppDatabase, MessageCollectionMembershipEntry?>(
+          (db) => db.getMessageCollectionMembership(
+            collectionId: normalizedCollectionId,
+            chatJid: normalizedChatJid,
+            messageReferenceId: normalizedReferenceId,
+          ),
+        );
+    if (entry == null) {
+      return false;
+    }
+    await publishMessageCollectionSyncEntry(entry);
+    return true;
   }
 
   Future<void> _normalizeMessageCollectionAliasState({
@@ -4116,6 +4327,205 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _queueMessageCollectionPublish(itemId);
   }
 
+  Future<void> _publishMessageCollectionDefinitionSyncEntry(
+    MessageCollectionEntry entry, {
+    MessageCollectionDefinitionsPubSubManager? managerOverride,
+    bool managerReady = false,
+  }) async {
+    final itemId = entry.id.trim();
+    if (itemId.isEmpty ||
+        entry.isSystem ||
+        !_connection.hasConnectionSettings) {
+      return;
+    }
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'message collection definition sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = managerOverride ?? _messageCollectionDefinitionsManager;
+      if (manager == null) {
+        await _queueMessageCollectionDefinitionPublish(itemId);
+        return;
+      }
+      if (!managerReady) {
+        await manager.ensureNode();
+        await manager.subscribe();
+      }
+      final published = await manager.publishEntry(
+        _buildMessageCollectionDefinitionPayload(entry),
+      );
+      if (published) {
+        await _clearPendingMessageCollectionDefinitionPublish(itemId);
+        return;
+      }
+    } on XmppException {
+      await _queueMessageCollectionDefinitionPublish(itemId);
+    }
+    await _queueMessageCollectionDefinitionPublish(itemId);
+  }
+
+  Future<void> _applyMessageCollectionDefinitionSyncUpdate(
+    MessageCollectionDefinitionSyncPayload payload,
+  ) async {
+    if (SystemMessageCollection.isSystemId(payload.collectionId)) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyMessageCollectionDefinitionMutation(
+        collectionId: payload.collectionId,
+        updatedAt: payload.updatedAt.toUtc(),
+        active: payload.active,
+      ),
+    );
+  }
+
+  _MessageCollectionSyncDecision
+  _resolveMessageCollectionDefinitionSyncDecision(
+    MessageCollectionEntry local,
+    MessageCollectionDefinitionSyncPayload remote,
+  ) {
+    final localUpdatedAt = local.updatedAt.toUtc();
+    final remoteUpdatedAt = remote.updatedAt.toUtc();
+    if (remoteUpdatedAt.isAfter(localUpdatedAt)) {
+      return _MessageCollectionSyncDecision.applyRemote;
+    }
+    if (localUpdatedAt.isAfter(remoteUpdatedAt)) {
+      return _MessageCollectionSyncDecision.publishLocal;
+    }
+    return _MessageCollectionSyncDecision.skip;
+  }
+
+  MessageCollectionDefinitionSyncPayload
+  _buildMessageCollectionDefinitionPayload(MessageCollectionEntry entry) {
+    return MessageCollectionDefinitionSyncPayload(
+      collectionId: entry.id,
+      updatedAt: entry.updatedAt.toUtc(),
+      active: entry.active,
+    );
+  }
+
+  Future<List<MessageCollectionEntry>> _localMessageCollectionDefinitions({
+    bool includeInactive = false,
+  }) async {
+    return await _dbOpReturning<XmppDatabase, List<MessageCollectionEntry>>(
+      (db) => db.getMessageCollections(
+        includeInactive: includeInactive,
+        includeSystem: false,
+      ),
+    );
+  }
+
+  Future<void> _ensurePendingMessageCollectionDefinitionSyncLoaded() async {
+    if (_pendingMessageCollectionDefinitionSyncLoaded) {
+      return;
+    }
+    await _dbOp<XmppStateStore>((ss) async {
+      final rawPublishes =
+          (ss.read(key: _messageCollectionDefinitionSyncPendingPublishesKey)
+                  as List?)
+              ?.cast<Object?>();
+      _pendingMessageCollectionDefinitionPublishes
+        ..clear()
+        ..addAll(_normalizePendingMessageCollectionIds(rawPublishes));
+    }, awaitDatabase: true);
+    _pendingMessageCollectionDefinitionSyncLoaded = true;
+  }
+
+  Future<void> _persistPendingMessageCollectionDefinitionSync() async {
+    if (!_pendingMessageCollectionDefinitionSyncLoaded) {
+      return;
+    }
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.write(
+        key: _messageCollectionDefinitionSyncPendingPublishesKey,
+        value: _pendingMessageCollectionDefinitionPublishes.toList(
+          growable: false,
+        ),
+      ),
+      awaitDatabase: true,
+    );
+  }
+
+  Future<void> _queueMessageCollectionDefinitionPublish(String itemId) async {
+    final normalized = itemId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    await _ensurePendingMessageCollectionDefinitionSyncLoaded();
+    _pendingMessageCollectionDefinitionPublishes.add(normalized);
+    await _persistPendingMessageCollectionDefinitionSync();
+  }
+
+  Future<void> _clearPendingMessageCollectionDefinitionPublish(
+    String itemId,
+  ) async {
+    final normalized = itemId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    await _ensurePendingMessageCollectionDefinitionSyncLoaded();
+    final removed = _pendingMessageCollectionDefinitionPublishes.remove(
+      normalized,
+    );
+    if (!removed) {
+      return;
+    }
+    await _persistPendingMessageCollectionDefinitionSync();
+  }
+
+  Future<void> _flushPendingMessageCollectionDefinitionSync({
+    MessageCollectionDefinitionsPubSubManager? managerOverride,
+    bool managerReady = false,
+  }) async {
+    await _ensurePendingMessageCollectionDefinitionSyncLoaded();
+    if (_pendingMessageCollectionDefinitionPublishes.isEmpty) {
+      return;
+    }
+    final support = await refreshPubSubSupport();
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'message collection definition sync',
+    );
+    if (!decision.isAllowed) {
+      return;
+    }
+    final manager = managerOverride ?? _messageCollectionDefinitionsManager;
+    if (manager == null) {
+      return;
+    }
+    if (!managerReady) {
+      await manager.ensureNode();
+      await manager.subscribe();
+    }
+    final localEntries = await _localMessageCollectionDefinitions(
+      includeInactive: true,
+    );
+    final localByItemId = <String, MessageCollectionEntry>{
+      for (final entry in localEntries) entry.id: entry,
+    };
+    final pendingPublishes = _pendingMessageCollectionDefinitionPublishes
+        .toList(growable: false);
+    for (final itemId in pendingPublishes) {
+      final localEntry = localByItemId[itemId];
+      if (localEntry == null) {
+        _pendingMessageCollectionDefinitionPublishes.remove(itemId);
+        continue;
+      }
+      final published = await manager.publishEntry(
+        _buildMessageCollectionDefinitionPayload(localEntry),
+      );
+      if (published) {
+        _pendingMessageCollectionDefinitionPublishes.remove(itemId);
+      }
+    }
+    await _persistPendingMessageCollectionDefinitionSync();
+  }
+
   Future<void> _applyMessageCollectionSyncUpdate(
     MessageCollectionSyncPayload payload,
   ) async {
@@ -4415,6 +4825,35 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
     registerBootstrapOperation(
       XmppBootstrapOperation(
+        key: _messageCollectionDefinitionSyncSnapshotBootstrapOperationName,
+        priority: 0,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName:
+            _messageCollectionDefinitionSyncSnapshotBootstrapOperationName,
+        run: () async {
+          await syncMessageCollectionDefinitionsSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _messageCollectionDefinitionSyncFlushPendingOperationName,
+        priority: 2,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName:
+            _messageCollectionDefinitionSyncFlushPendingOperationName,
+        run: () async {
+          await _flushPendingMessageCollectionDefinitionSync();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
         key: _messageCollectionSyncSnapshotBootstrapOperationName,
         priority: 0,
         triggers: const <XmppBootstrapTrigger>{
@@ -4500,6 +4939,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       })
       ..registerHandler<DraftSyncRetractedEvent>((event) async {
         await _applyDraftSyncRetraction(event.syncId);
+      })
+      ..registerHandler<MessageCollectionDefinitionSyncUpdatedEvent>((
+        event,
+      ) async {
+        await _applyMessageCollectionDefinitionSyncUpdate(event.payload);
       })
       ..registerHandler<MessageCollectionSyncUpdatedEvent>((event) async {
         await _applyMessageCollectionSyncUpdate(event.payload);
@@ -4980,6 +5424,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   List<mox.XmppManagerBase> get pubSubFeatureManagers => <mox.XmppManagerBase>[
     ...super.pubSubFeatureManagers,
     DraftsPubSubManager(),
+    MessageCollectionDefinitionsPubSubManager(),
     MessageCollectionsPubSubManager(),
   ];
 
@@ -4987,6 +5432,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   List<String> get discoFeatures => <String>[
     ...super.discoFeatures,
     draftsNotifyFeature,
+    messageCollectionDefinitionsNotifyFeature,
     messageCollectionsNotifyFeature,
   ];
 

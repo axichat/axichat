@@ -449,6 +449,14 @@ void main() {
       ),
     ).thenAnswer((_) async => true);
     when(
+      () => messageService.setMessageCollectionMembership(
+        collectionId: any(named: 'collectionId'),
+        chat: any(named: 'chat'),
+        message: any(named: 'message'),
+        active: any(named: 'active'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
       () => messageService.countLocalMessages(
         jid: any(named: 'jid'),
         filter: any(named: 'filter'),
@@ -1841,6 +1849,216 @@ void main() {
 
     await bloc.close();
     await emailMessageStreamController.close();
+  });
+
+  test('adding a message to a folder emits success action state', () async {
+    final message = Message(
+      stanzaID: 'folder-message',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: 'Save me',
+      timestamp: DateTime(2026, 5, 10),
+    );
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageCollectionMembershipChanged(
+        message: message,
+        collectionId: 'receipts',
+        chat: initialChat,
+        active: true,
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.setMessageCollectionMembership(
+        collectionId: 'receipts',
+        chat: initialChat,
+        message: message,
+        active: true,
+      ),
+    ).called(1);
+    expect(
+      bloc.state.collectionActionState,
+      const ChatCollectionActionSuccess(
+        collectionId: 'receipts',
+        messageReferenceId: 'folder-message',
+        active: true,
+      ),
+    );
+
+    await bloc.close();
+  });
+
+  test('adding a message to a folder reports membership failures', () async {
+    final message = Message(
+      stanzaID: 'folder-message',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: 'Save me',
+      timestamp: DateTime(2026, 5, 10),
+    );
+    when(
+      () => messageService.setMessageCollectionMembership(
+        collectionId: 'receipts',
+        chat: initialChat,
+        message: message,
+        active: true,
+      ),
+    ).thenThrow(xmpp.XmppMessageException());
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageCollectionMembershipChanged(
+        message: message,
+        collectionId: 'receipts',
+        chat: initialChat,
+        active: true,
+      ),
+    );
+    await _pumpBloc();
+
+    expect(
+      bloc.state.collectionActionState,
+      const ChatCollectionActionFailure(
+        collectionId: 'receipts',
+        messageReferenceId: 'folder-message',
+        active: true,
+        reason: ChatCollectionActionFailureReason.updateFailed,
+      ),
+    );
+
+    await bloc.close();
+  });
+
+  test(
+    'adding a message to a folder reports no-op membership results',
+    () async {
+      final message = Message(
+        stanzaID: 'folder-message',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Save me',
+        timestamp: DateTime(2026, 5, 10),
+      );
+      when(
+        () => messageService.setMessageCollectionMembership(
+          collectionId: 'receipts',
+          chat: initialChat,
+          message: message,
+          active: true,
+        ),
+      ).thenAnswer((_) async => false);
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageCollectionMembershipChanged(
+          message: message,
+          collectionId: 'receipts',
+          chat: initialChat,
+          active: true,
+        ),
+      );
+      await _pumpBloc();
+
+      expect(
+        bloc.state.collectionActionState,
+        const ChatCollectionActionFailure(
+          collectionId: 'receipts',
+          messageReferenceId: 'folder-message',
+          active: true,
+          reason: ChatCollectionActionFailureReason.updateFailed,
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test('adding an unsupported message to a folder reports failure', () async {
+    final message = Message(
+      stanzaID: '',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: 'No stable reference',
+      timestamp: DateTime(2026, 5, 10),
+    );
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageCollectionMembershipChanged(
+        message: message,
+        collectionId: 'receipts',
+        chat: initialChat,
+        active: true,
+      ),
+    );
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.setMessageCollectionMembership(
+        collectionId: any(named: 'collectionId'),
+        chat: any(named: 'chat'),
+        message: any(named: 'message'),
+        active: any(named: 'active'),
+      ),
+    );
+    expect(
+      bloc.state.collectionActionState,
+      const ChatCollectionActionFailure(
+        collectionId: 'receipts',
+        messageReferenceId: '',
+        active: true,
+        reason: ChatCollectionActionFailureReason.unsupported,
+      ),
+    );
+
+    await bloc.close();
   });
 
   test('welcome chat typing never sends chat-state traffic', () async {

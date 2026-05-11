@@ -5,7 +5,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/email_validation.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:path/path.dart' as p;
@@ -45,11 +47,20 @@ const String _vcardEndKey = 'END:VCARD';
 const String _vcardFullNameKey = 'FN';
 const String _vcardNameKey = 'N';
 const String _vcardEmailKey = 'EMAIL';
+const String _vcardImppKey = 'IMPP';
+const String _vcardJabberKey = 'X-JABBER';
+const String _vcardXmppKey = 'X-XMPP';
+const String _vcardJabberIdKey = 'JABBERID';
 const String _vcardValueDelimiter = ':';
 const String _vcardNameSeparator = ';';
 const String _mailtoPrefix = 'mailto:';
+const String _xmppPrefix = 'xmpp:';
 const String _emailHeaderToken = 'email';
 const String _emailHeaderTypeToken = 'type';
+const String _xmppHeaderToken = 'xmpp';
+const String _imppHeaderToken = 'impp';
+const String _jidHeaderToken = 'jid';
+const String _jabberHeaderToken = 'jabber';
 const String _headerNameKey = 'name';
 const String _headerFullNameKey = 'fullname';
 const String _headerDisplayNameKey = 'displayname';
@@ -465,14 +476,10 @@ class EmailContactImportService {
     }
     final String? bracketed = _extractBracketedEmail(trimmed);
     final String candidate = bracketed ?? trimmed;
-    final String normalized = candidate.toLowerCase();
-    final bool hasMailto = normalized.startsWith(_mailtoPrefix);
-    final String sanitized = hasMailto
-        ? candidate.substring(_mailtoPrefix.length)
-        : candidate;
+    final String sanitized = _stripAddressScheme(candidate);
     final Iterable<String> parts = sanitized.split(_vcardEmailSplitExpression);
     return parts
-        .map((part) => part.trim())
+        .map(_normalizeImportedContactAddress)
         .where((part) => part.isNotEmpty)
         .toList();
   }
@@ -489,22 +496,44 @@ class EmailContactImportService {
     return value.substring(start + _nextIndex, end);
   }
 
+  String _stripAddressScheme(String value) {
+    final trimmed = value.trim();
+    final normalized = trimmed.toLowerCase();
+    if (normalized.startsWith(_mailtoPrefix)) {
+      return trimmed.substring(_mailtoPrefix.length);
+    }
+    if (normalized.startsWith(_xmppPrefix)) {
+      return trimmed.substring(_xmppPrefix.length);
+    }
+    return trimmed;
+  }
+
+  String _normalizeImportedContactAddress(String value) {
+    final stripped = _stripAddressScheme(value);
+    final queryIndex = stripped.indexOf('?');
+    final withoutQuery = queryIndex < _startIndex
+        ? stripped
+        : stripped.substring(_startIndex, queryIndex);
+    final bare = bareAddress(withoutQuery) ?? withoutQuery.trim();
+    return normalizeEmailAddress(bare);
+  }
+
   List<String> _filterEmailCandidates(Iterable<String> candidates) {
     final List<String> resolved = <String>[];
     for (final String candidate in candidates) {
-      final String normalized = normalizeEmailAddress(candidate);
+      final String normalized = _normalizeImportedContactAddress(candidate);
       if (normalized.isEmpty) {
         continue;
       }
       if (_looksLikeEmail(normalized)) {
-        resolved.add(candidate.trim());
+        resolved.add(normalized);
       }
     }
     return resolved;
   }
 
   bool _looksLikeEmail(String value) {
-    final String normalized = normalizeEmailAddress(value);
+    final String normalized = _normalizeImportedContactAddress(value);
     if (normalized.isEmpty) {
       return false;
     }
@@ -606,7 +635,7 @@ class EmailContactImportService {
         }
         continue;
       }
-      if (_isVcardField(upper, _vcardEmailKey)) {
+      if (_isVcardAddressField(upper)) {
         final String? value = _vcardValue(trimmed);
         if (value == null || value.trim().isEmpty) {
           continue;
@@ -656,6 +685,15 @@ class EmailContactImportService {
   bool _isVcardField(String upperLine, String key) {
     final String? field = _vcardFieldName(upperLine);
     return field == key;
+  }
+
+  bool _isVcardAddressField(String upperLine) {
+    final String? field = _vcardFieldName(upperLine);
+    return field == _vcardEmailKey ||
+        field == _vcardImppKey ||
+        field == _vcardJabberKey ||
+        field == _vcardXmppKey ||
+        field == _vcardJabberIdKey;
   }
 
   String? _vcardFieldName(String upperLine) {
@@ -720,12 +758,10 @@ class EmailContactImportService {
     if (trimmed.isEmpty) {
       return const <String>[];
     }
-    final String sanitized = trimmed.toLowerCase().startsWith(_mailtoPrefix)
-        ? trimmed.substring(_mailtoPrefix.length)
-        : trimmed;
+    final String sanitized = _stripAddressScheme(trimmed);
     final Iterable<String> parts = sanitized.split(_vcardEmailSplitExpression);
     return parts
-        .map((part) => part.trim())
+        .map(_normalizeImportedContactAddress)
         .where((part) => part.isNotEmpty)
         .toList();
   }
@@ -742,7 +778,9 @@ class EmailContactImportService {
     final List<EmailContactImportContact> toImport =
         <EmailContactImportContact>[];
     for (final EmailContactImportContact contact in contacts) {
-      final String normalized = normalizeEmailAddress(contact.address);
+      final String normalized = _normalizeImportedContactAddress(
+        contact.address,
+      );
       if (normalized.isEmpty || !normalized.isValidEmailAddress) {
         invalid += _nextIndex;
         continue;
@@ -773,7 +811,9 @@ class EmailContactImportService {
           imported += _nextIndex;
         } on EmailServiceException {
           failed += _nextIndex;
-        } on Exception {
+        } on EmailProvisioningException {
+          failed += _nextIndex;
+        } on DeltaChatException {
           failed += _nextIndex;
         }
       }
@@ -784,7 +824,9 @@ class EmailContactImportService {
         await _emailService.syncContactsFromCore();
       } on EmailServiceException {
         throw const EmailContactImportFailedException();
-      } on Exception {
+      } on EmailProvisioningException {
+        throw const EmailContactImportFailedException();
+      } on DeltaChatException {
         throw const EmailContactImportFailedException();
       }
     }
@@ -830,7 +872,7 @@ class _CsvHeaderMap {
       index < normalized.length;
       index += _nextIndex
     ) {
-      if (_isEmailHeader(normalized[index])) {
+      if (_isAddressHeader(normalized[index])) {
         emailIndices.add(index);
       }
     }
@@ -960,14 +1002,18 @@ int? _firstIndexForKeys(List<String> headers, Set<String> keys) {
   return null;
 }
 
-bool _isEmailHeader(String header) {
+bool _isAddressHeader(String header) {
   if (header.isEmpty) {
     return false;
   }
-  if (!header.contains(_emailHeaderToken)) {
+  if (header.contains(_emailHeaderTypeToken)) {
     return false;
   }
-  return !header.contains(_emailHeaderTypeToken);
+  return header.contains(_emailHeaderToken) ||
+      header.contains(_xmppHeaderToken) ||
+      header.contains(_imppHeaderToken) ||
+      header.contains(_jidHeaderToken) ||
+      header.contains(_jabberHeaderToken);
 }
 
 String? _joinNonEmpty(List<String?> parts) {

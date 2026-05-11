@@ -494,19 +494,21 @@ final class ChatMessagePinRequested extends ChatEvent {
   List<Object?> get props => [message, pin, chat, roomState];
 }
 
-final class ChatMessageImportantToggled extends ChatEvent {
-  const ChatMessageImportantToggled({
+final class ChatMessageCollectionMembershipChanged extends ChatEvent {
+  const ChatMessageCollectionMembershipChanged({
     required this.message,
-    required this.important,
+    required this.collectionId,
     required this.chat,
+    required this.active,
   });
 
   final Message message;
-  final bool important;
+  final String collectionId;
   final Chat chat;
+  final bool active;
 
   @override
-  List<Object?> get props => [message, important, chat];
+  List<Object?> get props => [message, collectionId, chat, active];
 }
 
 final class ChatMessageReactionToggled extends ChatEvent {

@@ -1,17 +1,82 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart';
 import 'package:equatable/equatable.dart';
 
 enum SystemMessageCollection {
-  important;
+  important,
+  receipts,
+  marketing,
+  newsletters;
 
   String get id => switch (this) {
     SystemMessageCollection.important => 'important',
+    SystemMessageCollection.receipts => 'receipts',
+    SystemMessageCollection.marketing => 'marketing',
+    SystemMessageCollection.newsletters => 'newsletters',
   };
+
+  int get sortOrder => switch (this) {
+    SystemMessageCollection.important => 0,
+    SystemMessageCollection.receipts => 1,
+    SystemMessageCollection.marketing => 2,
+    SystemMessageCollection.newsletters => 3,
+  };
+
+  String label(AppLocalizations l10n) => switch (this) {
+    SystemMessageCollection.important => l10n.homeTabImportant,
+    SystemMessageCollection.receipts => l10n.folderSystemReceipts,
+    SystemMessageCollection.marketing => l10n.folderSystemMarketing,
+    SystemMessageCollection.newsletters => l10n.folderSystemNewsletters,
+  };
+
+  static SystemMessageCollection? fromId(String id) {
+    final normalized = id.trim().toLowerCase();
+    for (final collection in values) {
+      if (collection.id == normalized) {
+        return collection;
+      }
+    }
+    return null;
+  }
+
+  static bool isSystemId(String id) {
+    return fromId(id) != null;
+  }
+}
+
+enum MessageCollectionNameFailure {
+  empty,
+  reserved,
+  duplicate;
+
+  String label(AppLocalizations l10n) => switch (this) {
+    MessageCollectionNameFailure.empty => l10n.folderNameEmptyError,
+    MessageCollectionNameFailure.reserved => l10n.folderNameReservedError,
+    MessageCollectionNameFailure.duplicate => l10n.folderNameDuplicateError,
+  };
+}
+
+final class MessageCollectionNameException implements Exception {
+  const MessageCollectionNameException(this.failure);
+
+  final MessageCollectionNameFailure failure;
+}
+
+String? normalizeCustomMessageCollectionTitle(String title) {
+  final normalized = title.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
+}
+
+String? normalizeCustomMessageCollectionId(String title) {
+  return normalizeCustomMessageCollectionTitle(title);
 }
 
 @DataClassName('MessageCollectionEntry')

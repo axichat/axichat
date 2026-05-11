@@ -9,6 +9,7 @@ enum HomeSearchSlot {
   blocked,
   drafts,
   foldersImportant,
+  foldersCollection,
   foldersSpam;
 
   static HomeSearchSlot? forTab(HomeTab? tab) => switch (tab) {
@@ -44,6 +45,13 @@ List<HomeSearchFilter> chatsSearchFilters(AppLocalizations l10n) => [
   HomeSearchFilter(id: SearchFilterId.xmpp, label: l10n.chatsFilterXmppOnly),
   HomeSearchFilter(id: SearchFilterId.email, label: l10n.chatsFilterEmailOnly),
   HomeSearchFilter(id: SearchFilterId.hidden, label: l10n.chatsFilterHidden),
+];
+
+List<HomeSearchFilter> contactsSearchFilters(AppLocalizations l10n) => [
+  HomeSearchFilter(id: SearchFilterId.all, label: l10n.chatsFilterAll),
+  HomeSearchFilter(id: SearchFilterId.favorites, label: l10n.commonFavorite),
+  HomeSearchFilter(id: SearchFilterId.xmpp, label: l10n.chatsFilterXmppOnly),
+  HomeSearchFilter(id: SearchFilterId.email, label: l10n.chatsFilterEmailOnly),
 ];
 
 List<HomeSearchFilter> spamSearchFilters(AppLocalizations l10n) => [
@@ -104,6 +112,7 @@ class HomeState extends Equatable {
       }
       if (tab == HomeTab.folders) {
         searchStates[HomeSearchSlot.foldersImportant] = const TabSearchState();
+        searchStates[HomeSearchSlot.foldersCollection] = const TabSearchState();
         searchStates[HomeSearchSlot.foldersSpam] = const TabSearchState(
           filterId: SearchFilterId.all,
         );

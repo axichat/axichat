@@ -24,7 +24,12 @@ const _conferenceJidAttr = 'jid';
 const _nickTag = 'nick';
 
 const _messageCollectionsNode = 'urn:axi:message-collections';
+const _messageCollectionDefinitionsNode =
+    'urn:axi:message-collection-definitions';
+const _contactFolderRulesNode = 'urn:axi:contact-folder-rules';
 const _collectionId = 'important';
+const _customCollectionId = 'Projects';
+const _contactFolderRuleAddress = 'contact@example.com';
 const _messageReferenceId = 'important-message-id';
 const _messageChatJid = 'chat@example.com';
 const _settingsNode = 'urn:axi:settings';
@@ -185,6 +190,78 @@ void main() {
       expect(update.payload.collectionId, _collectionId);
       expect(update.payload.chatJid, _messageChatJid);
       expect(update.payload.messageReferenceId, _messageReferenceId);
+      expect(update.payload.updatedAt.toUtc(), updatedAt);
+      expect(update.payload.active, isTrue);
+    },
+  );
+
+  test(
+    'MessageCollectionDefinitionsPubSubManager emits update from pubsub notification',
+    () async {
+      final sentEvents = <mox.XmppEvent>[];
+      final manager = MessageCollectionDefinitionsPubSubManager()
+        ..register(_testAttributes(sentEvents: sentEvents));
+
+      final updatedAt = DateTime.utc(2026, 3, 12, 9, 45);
+      final payload = MessageCollectionDefinitionSyncPayload(
+        collectionId: _customCollectionId,
+        updatedAt: updatedAt,
+        active: true,
+      );
+      final item = mox.PubSubItem(
+        id: payload.itemId,
+        node: _messageCollectionDefinitionsNode,
+        payload: payload.toXml(),
+      );
+      final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
+
+      await manager.onXmppEvent(event);
+      await pumpEventQueue();
+
+      expect(sentEvents, hasLength(1));
+      expect(
+        sentEvents.single,
+        isA<MessageCollectionDefinitionSyncUpdatedEvent>(),
+      );
+
+      final update =
+          sentEvents.single as MessageCollectionDefinitionSyncUpdatedEvent;
+      expect(update.payload.collectionId, _customCollectionId);
+      expect(update.payload.updatedAt.toUtc(), updatedAt);
+      expect(update.payload.active, isTrue);
+    },
+  );
+
+  test(
+    'ContactFolderRulesPubSubManager emits update from pubsub notification',
+    () async {
+      final sentEvents = <mox.XmppEvent>[];
+      final manager = ContactFolderRulesPubSubManager()
+        ..register(_testAttributes(sentEvents: sentEvents));
+
+      final updatedAt = DateTime.utc(2026, 3, 12, 10, 15);
+      final payload = ContactFolderRuleSyncPayload(
+        addressKey: _contactFolderRuleAddress,
+        collectionId: _customCollectionId,
+        updatedAt: updatedAt,
+        active: true,
+      );
+      final item = mox.PubSubItem(
+        id: payload.itemId,
+        node: _contactFolderRulesNode,
+        payload: payload.toXml(),
+      );
+      final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
+
+      await manager.onXmppEvent(event);
+      await pumpEventQueue();
+
+      expect(sentEvents, hasLength(1));
+      expect(sentEvents.single, isA<ContactFolderRuleSyncUpdatedEvent>());
+
+      final update = sentEvents.single as ContactFolderRuleSyncUpdatedEvent;
+      expect(update.payload.addressKey, _contactFolderRuleAddress);
+      expect(update.payload.collectionId, _customCollectionId);
       expect(update.payload.updatedAt.toUtc(), updatedAt);
       expect(update.payload.active, isTrue);
     },

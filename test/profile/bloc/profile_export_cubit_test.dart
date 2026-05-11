@@ -47,7 +47,7 @@ void main() {
   });
 
   test('exportEmailContacts uses the unified contacts snapshot', () async {
-    when(() => xmppService.loadContactsSnapshot()).thenAnswer(
+    when(() => xmppService.loadContactDirectorySnapshot()).thenAnswer(
       (_) async => [
         const ContactDirectoryEntry(
           address: 'xmpp-only@example.com',
@@ -96,7 +96,7 @@ void main() {
   });
 
   test('exportXmppContacts uses the unified contacts snapshot', () async {
-    when(() => xmppService.loadContactsSnapshot()).thenAnswer(
+    when(() => xmppService.loadContactDirectorySnapshot()).thenAnswer(
       (_) async => [
         const ContactDirectoryEntry(
           address: 'xmpp-only@example.com',

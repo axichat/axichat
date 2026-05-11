@@ -70,6 +70,105 @@ void main() {
     verify(() => emailService.syncContactsFromCore()).called(1);
   });
 
+  test('normalizes common email and XMPP address syntaxes', () async {
+    final file = File('${tempDir.path}/contacts.csv');
+    await file.writeAsString(
+      'Name,Email,XMPP,JID\n'
+      'Alice,Alice <MAILTO:Alice@Example.com>,xmpp:bob@example.com,'
+      'carol@example.com/resource\n',
+    );
+    final service = EmailContactImportService(emailService: emailService);
+
+    final summary = await service.importContacts(
+      file: file,
+      format: EmailContactImportFormat.genericCsv,
+    );
+
+    expect(summary.imported, 3);
+    expect(summary.invalid, 0);
+    verify(
+      () => emailService.createContactAddress(
+        address: 'alice@example.com',
+        displayName: 'Alice',
+        fromAddress: null,
+      ),
+    ).called(1);
+    verify(
+      () => emailService.createContactAddress(
+        address: 'bob@example.com',
+        displayName: 'Alice',
+        fromAddress: null,
+      ),
+    ).called(1);
+    verify(
+      () => emailService.createContactAddress(
+        address: 'carol@example.com',
+        displayName: 'Alice',
+        fromAddress: null,
+      ),
+    ).called(1);
+  });
+
+  test('imports vCard IMPP and XMPP-style address fields', () async {
+    final file = File('${tempDir.path}/contacts.vcf');
+    await file.writeAsString(
+      'BEGIN:VCARD\n'
+      'FN:Alice\n'
+      'IMPP:xmpp:alice@example.com/resource\n'
+      'X-JABBER:bob@example.com\n'
+      'END:VCARD\n',
+    );
+    final service = EmailContactImportService(emailService: emailService);
+
+    final summary = await service.importContacts(
+      file: file,
+      format: EmailContactImportFormat.vcard,
+    );
+
+    expect(summary.imported, 2);
+    verify(
+      () => emailService.createContactAddress(
+        address: 'alice@example.com',
+        displayName: 'Alice',
+        fromAddress: null,
+      ),
+    ).called(1);
+    verify(
+      () => emailService.createContactAddress(
+        address: 'bob@example.com',
+        displayName: 'Alice',
+        fromAddress: null,
+      ),
+    ).called(1);
+  });
+
+  test('deduplicates normalized addresses and counts invalid JIDs', () async {
+    final file = File('${tempDir.path}/contacts.csv');
+    await file.writeAsString(
+      'Name,Email\n'
+      'Alice,alice@example.com/resource\n'
+      'Alias,mailto:ALICE@example.com\n'
+      'Invalid,xmpp:user@example\n',
+    );
+    final service = EmailContactImportService(emailService: emailService);
+
+    final summary = await service.importContacts(
+      file: file,
+      format: EmailContactImportFormat.genericCsv,
+    );
+
+    expect(summary.imported, 1);
+    expect(summary.duplicates, 1);
+    expect(summary.invalid, 1);
+    verify(
+      () => emailService.createContactAddress(
+        address: 'alice@example.com',
+        displayName: 'Alice',
+        fromAddress: null,
+      ),
+    ).called(1);
+  });
+
   test(
     'throws import failure when final sync fails after creating contacts',
     () async {

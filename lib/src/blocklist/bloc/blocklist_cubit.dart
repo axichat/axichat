@@ -128,6 +128,59 @@ class BlocklistCubit extends Cubit<BlocklistState>
     );
   }
 
+  Future<void> blockContact({
+    required String address,
+    required bool includeEmail,
+    required bool includeXmpp,
+    SpamReportReason? reportReason,
+  }) async {
+    final normalized = address.trim();
+    if (normalized.isEmpty || (!includeEmail && !includeXmpp)) {
+      _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
+      return;
+    }
+    _emitLoading(jid: normalized);
+    if (includeEmail) {
+      if (!normalized.isValidEmailAddress) {
+        _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
+        return;
+      }
+      try {
+        await _xmppService.setAddressBlockStatus(
+          address: normalized,
+          blocked: true,
+        );
+      } on XmppException {
+        _emitFailure(
+          BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
+        );
+        return;
+      }
+    }
+    if (includeXmpp) {
+      if (!normalized.isValidJid) {
+        _emitFailure(const BlocklistNotice(BlocklistNoticeType.invalidJid));
+        return;
+      }
+      try {
+        await _blockXmpp(address: normalized, reportReason: reportReason);
+      } on XmppBlockUnsupportedException catch (_) {
+        _emitFailure(
+          const BlocklistNotice(BlocklistNoticeType.blockUnsupported),
+        );
+        return;
+      } on XmppBlocklistException catch (_) {
+        _emitFailure(
+          BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
+        );
+        return;
+      }
+    }
+    _emitSuccess(
+      BlocklistNotice(BlocklistNoticeType.blocked, address: normalized),
+    );
+  }
+
   Future<void> _blockXmpp({
     required String address,
     SpamReportReason? reportReason,
@@ -201,7 +254,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     }
     try {
       await _xmppService.clearAddressBlocks();
-    } on Exception {
+    } on XmppException {
       failed = true;
     }
     if (failed) {

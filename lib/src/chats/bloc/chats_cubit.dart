@@ -311,6 +311,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         SearchFilterId.email => !chat.hidden && chat.transport.isEmail,
         SearchFilterId.hidden => chat.hidden,
         SearchFilterId.all => !chat.hidden,
+        SearchFilterId.favorites => !chat.hidden,
         SearchFilterId.attachments => !chat.hidden,
       };
     }

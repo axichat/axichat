@@ -3,7 +3,26 @@
 
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
+import 'package:axichat/src/storage/models/message_collection_models.dart';
 import 'package:drift/drift.dart';
+
+extension MessageCollectionEntryX on MessageCollectionEntry {
+  bool get isCustom => !isSystem;
+
+  SystemMessageCollection? get systemCollection =>
+      SystemMessageCollection.fromId(id);
+
+  String get displayTitle {
+    if (isCustom) {
+      return id;
+    }
+    final normalized = title?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return systemCollection?.id ?? id;
+    }
+    return normalized;
+  }
+}
 
 extension AttachmentGalleryQueries on XmppDrift {
   Stream<List<AttachmentGalleryItem>> watchAttachmentGallery({

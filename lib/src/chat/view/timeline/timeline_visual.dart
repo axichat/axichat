@@ -1313,9 +1313,8 @@ class _MessageActionBar extends StatelessWidget {
     this.onSelect,
     this.onResend,
     this.onEdit,
-    this.importantDisabled = false,
-    this.onImportantToggle,
     required this.isImportant,
+    this.onAddToFolder,
     this.pinDisabled = false,
     this.pinLoading = false,
     this.onPinToggle,
@@ -1334,9 +1333,8 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final VoidCallback? onEdit;
-  final bool importantDisabled;
-  final VoidCallback? onImportantToggle;
   final bool isImportant;
+  final VoidCallback? onAddToFolder;
   final bool pinDisabled;
   final bool pinLoading;
   final VoidCallback? onPinToggle;
@@ -1385,16 +1383,11 @@ class _MessageActionBar extends StatelessWidget {
           label: l10n.chatActionRevoke,
           onPressed: onRevokeInvite,
         ),
-      if (onImportantToggle != null || importantDisabled)
+      if (onAddToFolder != null)
         ContextActionButton(
-          icon: Icon(
-            isImportant ? Icons.star_rounded : Icons.star_outline_rounded,
-            size: iconSize,
-          ),
-          label: isImportant
-              ? l10n.chatRemoveMessageImportant
-              : l10n.chatMarkMessageImportant,
-          onPressed: onImportantToggle,
+          icon: Icon(LucideIcons.folderPlus, size: iconSize),
+          label: l10n.chatAddMessageToFolder,
+          onPressed: onAddToFolder,
         ),
       if (onPinToggle != null || pinLoading || pinDisabled)
         ContextActionButton(

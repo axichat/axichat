@@ -241,7 +241,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
     required ContactExportLabels labels,
     required String fileLabel,
   }) async {
-    final directory = await _xmppService.loadContactsSnapshot();
+    final directory = await _xmppService.loadContactDirectorySnapshot();
     final contacts = _sortedContacts(
       directory
           .where(

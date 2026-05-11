@@ -4200,7 +4200,135 @@ void main() {
 
   group('important folder sync', () {
     test(
-      'setImportantMessage publishes the important membership payload',
+      'createMessageCollection publishes the folder definition payload',
+      () async {
+        final transport = RecordingMessageCollectionsPubSubTransport();
+        final manager = MessageCollectionDefinitionsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: transport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+
+        when(
+          () => mockConnection
+              .getManager<MessageCollectionDefinitionsPubSubManager>(),
+        ).thenReturn(manager);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        final collection = await xmppService.createMessageCollection(
+          title: 'Projects',
+        );
+
+        expect(collection.id, 'Projects');
+        expect(collection.title, isNull);
+        expect(collection.active, isTrue);
+        expect(transport.publishCount, 1);
+        expect(transport.subscribeCount, 1);
+
+        final payload = MessageCollectionDefinitionSyncPayload.fromXml(
+          transport.publishedItems.values.single,
+        );
+        expect(payload, isNotNull);
+        expect(payload!.collectionId, 'Projects');
+        expect(payload.active, isTrue);
+      },
+    );
+
+    test('createMessageCollection rejects invalid folder names', () async {
+      await expectLater(
+        xmppService.createMessageCollection(title: '   '),
+        throwsA(
+          isA<MessageCollectionNameException>().having(
+            (error) => error.failure,
+            'failure',
+            MessageCollectionNameFailure.empty,
+          ),
+        ),
+      );
+      await expectLater(
+        xmppService.createMessageCollection(title: 'Important'),
+        throwsA(
+          isA<MessageCollectionNameException>().having(
+            (error) => error.failure,
+            'failure',
+            MessageCollectionNameFailure.reserved,
+          ),
+        ),
+      );
+      await expectLater(
+        xmppService.createMessageCollection(title: 'Receipts'),
+        throwsA(
+          isA<MessageCollectionNameException>().having(
+            (error) => error.failure,
+            'failure',
+            MessageCollectionNameFailure.reserved,
+          ),
+        ),
+      );
+
+      await connectSuccessfully(
+        xmppService,
+        accountJid: 'owner@example.com/resource',
+      );
+      await xmppService.createMessageCollection(title: 'Projects');
+
+      await expectLater(
+        xmppService.createMessageCollection(title: ' projects '),
+        throwsA(
+          isA<MessageCollectionNameException>().having(
+            (error) => error.failure,
+            'failure',
+            MessageCollectionNameFailure.duplicate,
+          ),
+        ),
+      );
+    });
+
+    test(
+      'MessageCollectionDefinitionSyncUpdatedEvent cannot mutate important',
+      () async {
+        final events = StreamController<mox.XmppEvent>.broadcast();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => events.stream);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        events.add(
+          MessageCollectionDefinitionSyncUpdatedEvent(
+            MessageCollectionDefinitionSyncPayload(
+              collectionId: SystemMessageCollection.important.id,
+              updatedAt: DateTime.utc(2026, 4, 15, 9, 30),
+              active: false,
+            ),
+          ),
+        );
+
+        await pumpEventQueue(times: 10);
+
+        final important = await database.getMessageCollection(
+          SystemMessageCollection.important.id,
+        );
+        expect(important, isNotNull);
+        expect(important!.isSystem, isTrue);
+        expect(important.active, isTrue);
+        expect(important.title, isNull);
+
+        await events.close();
+      },
+    );
+
+    test(
+      'setMessageCollectionMembership publishes the important membership payload',
       () async {
         final transport = RecordingMessageCollectionsPubSubTransport();
         final manager = MessageCollectionsPubSubManager()
@@ -4230,12 +4358,14 @@ void main() {
               timestamp: DateTime.timestamp().toUtc(),
             );
 
-        await xmppService.setImportantMessage(
+        final changed = await xmppService.setMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
           chat: chat,
           message: message,
-          important: true,
+          active: true,
         );
 
+        expect(changed, isTrue);
         expect(transport.publishCount, 1);
         expect(transport.subscribeCount, 1);
         expect(transport.publishedItems, hasLength(1));
@@ -4255,6 +4385,140 @@ void main() {
         );
         expect(entry, isNotNull);
         expect(entry!.active, isTrue);
+      },
+    );
+
+    test(
+      'setMessageCollectionMembership reports unsupported messages without writing',
+      () async {
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        final chat = Chat.fromJid('friend@example.com');
+        final message = Message(
+          stanzaID: '',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'No stable reference',
+          timestamp: DateTime.timestamp().toUtc(),
+        );
+
+        final changed = await xmppService.setMessageCollectionMembership(
+          collectionId: 'receipts',
+          chat: chat,
+          message: message,
+          active: true,
+        );
+
+        expect(changed, isFalse);
+        expect(
+          await database.getMessageCollectionMembership(
+            collectionId: 'receipts',
+            chatJid: chat.jid,
+            messageReferenceId: '',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'removeMessageCollectionMembership tombstones only the membership',
+      () async {
+        final transport = RecordingMessageCollectionsPubSubTransport();
+        final manager = MessageCollectionsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: transport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+
+        when(
+          () => mockConnection.getManager<MessageCollectionsPubSubManager>(),
+        ).thenReturn(manager);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        const collectionId = 'Projects';
+        await database.applyMessageCollectionDefinitionMutation(
+          collectionId: collectionId,
+          updatedAt: DateTime.utc(2026, 4, 15, 10),
+          active: true,
+        );
+        final chat = Chat.fromJid('friend@example.com');
+        final message =
+            Message.fromMox(
+              generateRandomMessageEvent(senderJid: chat.jid),
+            ).copyWith(
+              chatJid: chat.jid,
+              senderJid: chat.jid,
+              timestamp: DateTime.timestamp().toUtc(),
+            );
+        await database.createChat(chat);
+        await database.saveMessage(message);
+
+        final added = await xmppService.setMessageCollectionMembership(
+          collectionId: collectionId,
+          chat: chat,
+          message: message,
+          active: true,
+        );
+        expect(added, isTrue);
+        final messageReferenceId = message
+            .collectionReference(isGroupChat: false)!
+            .value;
+        final activeEntry = await database.getMessageCollectionMembership(
+          collectionId: collectionId,
+          chatJid: chat.jid,
+          messageReferenceId: messageReferenceId,
+        );
+        expect(activeEntry, isNotNull);
+        expect(activeEntry!.active, isTrue);
+
+        final removed = await xmppService.removeMessageCollectionMembership(
+          FolderMessageItem(
+            collectionId: activeEntry.collectionId,
+            chatJid: activeEntry.chatJid,
+            messageReferenceId: activeEntry.messageReferenceId,
+            messageStanzaId: activeEntry.messageStanzaId,
+            messageOriginId: activeEntry.messageOriginId,
+            messageMucStanzaId: activeEntry.messageMucStanzaId,
+            deltaAccountId: activeEntry.deltaAccountId,
+            deltaMsgId: activeEntry.deltaMsgId,
+            addedAt: activeEntry.addedAt,
+            active: activeEntry.active,
+            message: message,
+            chat: chat,
+          ),
+        );
+        expect(removed, isTrue);
+
+        final removedEntry = await database.getMessageCollectionMembership(
+          collectionId: collectionId,
+          chatJid: chat.jid,
+          messageReferenceId: messageReferenceId,
+        );
+        final savedMessage = await database.getMessageByReferenceId(
+          messageReferenceId,
+          chatJid: chat.jid,
+        );
+        final payload = MessageCollectionSyncPayload.fromXml(
+          transport.publishedItems.values.single,
+        );
+
+        expect(transport.publishCount, 2);
+        expect(removedEntry, isNotNull);
+        expect(removedEntry!.active, isFalse);
+        expect(savedMessage, isNotNull);
+        expect(payload, isNotNull);
+        expect(payload!.collectionId, collectionId);
+        expect(payload.active, isFalse);
       },
     );
 

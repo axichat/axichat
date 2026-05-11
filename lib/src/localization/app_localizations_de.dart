@@ -40,6 +40,96 @@ class AppLocalizationsDe extends AppLocalizations {
       'Benutzerdefinierte Ordner kommen bald';
 
   @override
+  String get folderPickerTitle => 'Add to folder';
+
+  @override
+  String get folderPickerEmpty => 'Create a folder to save this message.';
+
+  @override
+  String get folderPickerAddFailed =>
+      'Could not add this message to the folder.';
+
+  @override
+  String get folderPickerUpdateFailed => 'Could not update this folder.';
+
+  @override
+  String get folderSystemReceipts => 'Receipts';
+
+  @override
+  String get folderSystemMarketing => 'Marketing';
+
+  @override
+  String get folderSystemNewsletters => 'Newsletters';
+
+  @override
+  String get folderCreateTitle => 'New folder';
+
+  @override
+  String get folderCreateAction => 'Create';
+
+  @override
+  String get folderCreateAndAddAction => 'Create and add';
+
+  @override
+  String get folderCreateFailed => 'Could not create this folder.';
+
+  @override
+  String get folderNameLabel => 'Folder name';
+
+  @override
+  String get folderNameEmptyError => 'Enter a folder name.';
+
+  @override
+  String get folderNameReservedError => 'That folder name is reserved.';
+
+  @override
+  String get folderNameDuplicateError =>
+      'A folder with that name already exists.';
+
+  @override
+  String get folderMessagesEmpty => 'No messages in this folder yet';
+
+  @override
+  String get folderRemoveMessage => 'Remove from folder';
+
+  @override
+  String get folderRemoveMessageFailed =>
+      'Could not remove this message from the folder.';
+
+  @override
+  String get contactFolderRuleAction => 'Send all to...';
+
+  @override
+  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+
+  @override
+  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsAction =>
+      'Send all messages and emails to...';
+
+  @override
+  String get contactFolderRuleTitle => 'Send all to folder';
+
+  @override
+  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+
+  @override
+  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsTitle =>
+      'Send messages and emails to folder';
+
+  @override
+  String get contactFolderRuleClear => 'Clear rule';
+
+  @override
+  String get contactFolderRuleFailed =>
+      'Could not update this contact folder rule.';
+
+  @override
   String get homeNoModules => 'Keine Module verfügbar';
 
   @override
@@ -393,6 +483,12 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get chatMessageForwardFailed =>
       'Nachricht konnte nicht weitergeleitet werden.';
+
+  @override
+  String get chatMessageAddedToFolder => 'Message added to folder.';
+
+  @override
+  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -922,10 +1018,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatPinnedMessagesTitle => 'Angeheftete Nachrichten';
 
   @override
-  String get chatMarkMessageImportant => 'Mark important';
-
-  @override
-  String get chatRemoveMessageImportant => 'Remove important';
+  String get chatAddMessageToFolder => 'Add to folder...';
 
   @override
   String get chatPinMessage => 'Nachricht anheften';
@@ -1584,6 +1677,21 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get calendarAdvancedShow => 'Erweiterte Optionen anzeigen';
+
+  @override
+  String get calendarTaskDetailsSection => 'Details';
+
+  @override
+  String get calendarTaskSortTooltip => 'Aufgaben sortieren';
+
+  @override
+  String get calendarTaskSortManual => 'Manuell';
+
+  @override
+  String get calendarTaskSortDateAdded => 'Hinzugefügt';
+
+  @override
+  String get calendarTaskSortImportance => 'Wichtigkeit';
 
   @override
   String get calendarUnscheduledTitle => 'Nicht terminierte Aufgaben';
@@ -3192,6 +3300,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get contactsDisplayNameLabel => 'Anzeigename';
 
   @override
+  String get contactsNewLabel => 'Neu';
+
+  @override
   String get contactsLocalOnlyLabel => 'Nur auf diesem Gerät';
 
   @override
@@ -3202,6 +3313,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get contactsStoredLabel => 'Gespeichert';
+
+  @override
+  String get contactsChatContactLabel => 'Chat contact';
+
+  @override
+  String get contactsEmailContactLabel => 'Email contact';
 
   @override
   String get contactsMessagesLabel => 'Messages';

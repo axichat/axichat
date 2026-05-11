@@ -930,6 +930,25 @@ class Contacts extends Table {
   Set<Column> get primaryKey => {nativeID};
 }
 
+@DataClassName('ContactPreference')
+class ContactPreferences extends Table {
+  TextColumn get addressKey => text()();
+
+  BoolColumn get favorited => boolean().withDefault(const Constant(false))();
+
+  TextColumn get displayNameOverride => text().nullable()();
+
+  TextColumn get folderCollectionId => text().nullable()();
+
+  DateTimeColumn get folderRuleUpdatedAt => dateTime().nullable()();
+
+  DateTimeColumn get updatedAt =>
+      dateTime().clientDefault(() => DateTime.timestamp().toUtc())();
+
+  @override
+  Set<Column> get primaryKey => {addressKey};
+}
+
 extension ChatThreadExtension on Chat {
   String get remoteJid => contactJid ?? jid;
 

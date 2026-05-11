@@ -46,12 +46,11 @@ _resolveTimelineMessageChromeActions({
   required void Function(Message message, {required chat_models.Chat? chat})
   onResendRequested,
   required Future<void> Function(Message message) onEditRequested,
-  required void Function(
+  required Future<void> Function(
     Message message, {
-    required bool important,
     required chat_models.Chat? chat,
   })
-  onImportantToggleRequested,
+  onAddToFolderRequested,
   required void Function(
     Message message, {
     required bool pin,
@@ -85,7 +84,6 @@ _resolveTimelineMessageChromeActions({
     isInviteRevocationMessage: isInviteRevocationMessage,
     inviteRevoked: inviteRevoked,
     isPinned: isPinned,
-    isImportant: isImportant,
     messageStatus: messageStatus,
     detailId: detailId,
     onReplyRequested: onReplyRequested,
@@ -97,7 +95,7 @@ _resolveTimelineMessageChromeActions({
     onStartMultiSelectRequested: onStartMultiSelectRequested,
     onResendRequested: onResendRequested,
     onEditRequested: onEditRequested,
-    onImportantToggleRequested: onImportantToggleRequested,
+    onAddToFolderRequested: onAddToFolderRequested,
     onPinToggleRequested: onPinToggleRequested,
     onRevokeInviteRequested: onRevokeInviteRequested,
     onBubbleTapRequested: onBubbleTapRequested,
@@ -116,9 +114,8 @@ _resolveTimelineMessageChromeActions({
     onSelect: callbacks.onSelect,
     onResend: callbacks.onResend,
     onEdit: callbacks.onEdit,
-    importantDisabled: callbacks.importantDisabled,
-    onImportantToggle: callbacks.onImportantToggle,
     isImportant: isImportant,
+    onAddToFolder: callbacks.onAddToFolder,
     pinDisabled: callbacks.pinDisabled,
     pinLoading: callbacks.pinLoading,
     onPinToggle: callbacks.onPinToggle,

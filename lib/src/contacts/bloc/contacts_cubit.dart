@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -18,7 +19,7 @@ class ContactsCubit extends Cubit<ContactsState> {
     : _xmppService = xmppService,
       _emailService = emailService,
       super(const ContactsState()) {
-    _contactsSubscription = _xmppService.contactsStream().listen(
+    _contactsSubscription = _xmppService.contactDirectoryStream().listen(
       _handleContacts,
     );
   }
@@ -40,10 +41,15 @@ class ContactsCubit extends Cubit<ContactsState> {
     return super.close();
   }
 
-  void updateCriteria({required String query, required SearchSortOrder sort}) {
+  void updateCriteria({
+    required String query,
+    required SearchSortOrder sort,
+    SearchFilterId? filterId,
+  }) {
     final next = ContactsViewCriteria(
       query: query.trim().toLowerCase(),
       sort: sort,
+      filterId: filterId,
     );
     if (next == _criteria) {
       return;
@@ -95,7 +101,29 @@ class ContactsCubit extends Cubit<ContactsState> {
         address: normalized,
         displayName: displayName,
       );
-    } on Exception {
+    } on EmailServiceException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.addEmail,
+            address: normalized,
+            reason: ContactFailureReason.addFailed,
+          ),
+        ),
+      );
+      return;
+    } on EmailProvisioningException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.addEmail,
+            address: normalized,
+            reason: ContactFailureReason.addFailed,
+          ),
+        ),
+      );
+      return;
+    } on DeltaChatException {
       emit(
         state.copyWith(
           actionState: ContactActionFailure(
@@ -112,6 +140,312 @@ class ContactsCubit extends Cubit<ContactsState> {
         actionState: ContactActionSuccess(
           action: ContactActionType.addEmail,
           address: normalized,
+        ),
+      ),
+    );
+  }
+
+  Future<void> setFavorited({
+    required ContactDirectoryEntry contact,
+    required bool favorited,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    if (normalized.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: favorited
+                ? ContactActionType.favorite
+                : ContactActionType.unfavorite,
+            address: normalized,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    final action = favorited
+        ? ContactActionType.favorite
+        : ContactActionType.unfavorite;
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(action: action, address: normalized),
+      ),
+    );
+    final previousItems = _items;
+    _replaceContact(
+      _currentContactOrFallback(contact).withFavorited(favorited),
+    );
+    try {
+      await _xmppService.setContactFavorited(
+        address: normalized,
+        favorited: favorited,
+      );
+    } on XmppContactDirectoryException {
+      _items = previousItems;
+      emit(
+        state.copyWith(
+          items: _items,
+          visibleItems: _visibleItems(),
+          actionState: ContactActionFailure(
+            action: action,
+            address: normalized,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        items: _items,
+        visibleItems: _visibleItems(),
+        actionState: ContactActionSuccess(action: action, address: normalized),
+      ),
+    );
+  }
+
+  Future<void> renameContact({
+    required ContactDirectoryEntry contact,
+    required String displayName,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    if (normalized.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.rename,
+            address: normalized,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    final trimmed = displayName.trim();
+    if (trimmed.isEmpty) {
+      await resetContactDisplayName(contact: contact);
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.rename,
+          address: normalized,
+        ),
+      ),
+    );
+    try {
+      await _xmppService.setContactDisplayNameOverride(
+        address: normalized,
+        displayName: trimmed,
+      );
+      if (contact.hasXmppRoster) {
+        try {
+          await _xmppService.renameRosterContact(
+            jid: normalized,
+            title: trimmed,
+          );
+        } on XmppRosterException {
+          // Local display overrides are Axichat-owned; roster sync is best effort.
+        }
+      }
+    } on XmppContactDirectoryException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.rename,
+            address: normalized,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionSuccess(
+          action: ContactActionType.rename,
+          address: normalized,
+        ),
+      ),
+    );
+  }
+
+  Future<void> resetContactDisplayName({
+    required ContactDirectoryEntry contact,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    if (normalized.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.resetRename,
+            address: normalized,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.resetRename,
+          address: normalized,
+        ),
+      ),
+    );
+    try {
+      await _xmppService.setContactDisplayNameOverride(
+        address: normalized,
+        displayName: null,
+      );
+    } on XmppContactDirectoryException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.resetRename,
+            address: normalized,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionSuccess(
+          action: ContactActionType.resetRename,
+          address: normalized,
+        ),
+      ),
+    );
+  }
+
+  Future<void> setContactFolderRule({
+    required ContactDirectoryEntry contact,
+    required String collectionId,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    final trimmedCollectionId = collectionId.trim();
+    if (normalized.isEmpty || trimmedCollectionId.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.setFolderRule,
+            address: normalized,
+            collectionId: trimmedCollectionId,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.setFolderRule,
+          address: normalized,
+          collectionId: trimmedCollectionId,
+        ),
+      ),
+    );
+    final previousItems = _items;
+    _replaceContact(
+      _currentContactOrFallback(
+        contact,
+      ).withFolderCollectionId(trimmedCollectionId),
+    );
+    try {
+      await _xmppService.setContactFolderRule(
+        address: normalized,
+        collectionId: trimmedCollectionId,
+      );
+    } on XmppContactDirectoryException {
+      _items = previousItems;
+      emit(
+        state.copyWith(
+          items: _items,
+          visibleItems: _visibleItems(),
+          actionState: ContactActionFailure(
+            action: ContactActionType.setFolderRule,
+            address: normalized,
+            collectionId: trimmedCollectionId,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        items: _items,
+        visibleItems: _visibleItems(),
+        actionState: ContactActionSuccess(
+          action: ContactActionType.setFolderRule,
+          address: normalized,
+          collectionId: trimmedCollectionId,
+        ),
+      ),
+    );
+  }
+
+  Future<void> clearContactFolderRule({
+    required ContactDirectoryEntry contact,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    if (normalized.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.clearFolderRule,
+            address: normalized,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.clearFolderRule,
+          address: normalized,
+          collectionId: contact.folderCollectionId,
+        ),
+      ),
+    );
+    final previousItems = _items;
+    _replaceContact(
+      _currentContactOrFallback(contact).withFolderCollectionId(null),
+    );
+    try {
+      await _xmppService.clearContactFolderRule(address: normalized);
+    } on XmppContactDirectoryException {
+      _items = previousItems;
+      emit(
+        state.copyWith(
+          items: _items,
+          visibleItems: _visibleItems(),
+          actionState: ContactActionFailure(
+            action: ContactActionType.clearFolderRule,
+            address: normalized,
+            collectionId: contact.folderCollectionId,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        items: _items,
+        visibleItems: _visibleItems(),
+        actionState: ContactActionSuccess(
+          action: ContactActionType.clearFolderRule,
+          address: normalized,
+          collectionId: contact.folderCollectionId,
         ),
       ),
     );
@@ -145,7 +479,29 @@ class ContactsCubit extends Cubit<ContactsState> {
     );
     try {
       await emailService.deleteContactsByNativeIds(nativeIds);
-    } on Exception {
+    } on EmailServiceException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.removeEmail,
+            address: normalized,
+            reason: ContactFailureReason.removeFailed,
+          ),
+        ),
+      );
+      return;
+    } on EmailProvisioningException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.removeEmail,
+            address: normalized,
+            reason: ContactFailureReason.removeFailed,
+          ),
+        ),
+      );
+      return;
+    } on DeltaChatException {
       emit(
         state.copyWith(
           actionState: ContactActionFailure(
@@ -173,18 +529,52 @@ class ContactsCubit extends Cubit<ContactsState> {
   }
 
   void _emitViewState() {
-    final visibleItems = _items == null
-        ? null
-        : List<ContactDirectoryEntry>.unmodifiable(
-            _applyCriteria(_items!, _criteria),
-          );
     emit(
       state.copyWith(
         items: _items,
-        visibleItems: visibleItems,
+        visibleItems: _visibleItems(),
         criteria: _criteria,
       ),
     );
+  }
+
+  List<ContactDirectoryEntry>? _visibleItems() {
+    final items = _items;
+    if (items == null) {
+      return null;
+    }
+    return List<ContactDirectoryEntry>.unmodifiable(
+      _applyCriteria(items, _criteria),
+    );
+  }
+
+  ContactDirectoryEntry _currentContactOrFallback(
+    ContactDirectoryEntry fallback,
+  ) {
+    final key = contactDirectoryAddressKey(fallback.address);
+    for (final item in _items ?? const <ContactDirectoryEntry>[]) {
+      if (contactDirectoryAddressKey(item.address) == key) {
+        return item;
+      }
+    }
+    return fallback;
+  }
+
+  void _replaceContact(ContactDirectoryEntry contact) {
+    final items = _items;
+    if (items == null) {
+      return;
+    }
+    final key = contactDirectoryAddressKey(contact.address);
+    _items = List<ContactDirectoryEntry>.unmodifiable(
+      items.map((item) {
+        if (contactDirectoryAddressKey(item.address) == key) {
+          return contact;
+        }
+        return item;
+      }),
+    );
+    _emitViewState();
   }
 
   List<ContactDirectoryEntry> _applyCriteria(
@@ -192,11 +582,20 @@ class ContactsCubit extends Cubit<ContactsState> {
     ContactsViewCriteria criteria,
   ) {
     Iterable<ContactDirectoryEntry> filtered = items;
+    filtered = switch (criteria.filterId ?? SearchFilterId.all) {
+      SearchFilterId.favorites => filtered.where((item) => item.favorited),
+      SearchFilterId.xmpp => filtered.where((item) => item.hasXmppRoster),
+      SearchFilterId.email => filtered.where((item) => item.hasEmailContact),
+      _ => filtered,
+    };
     if (criteria.query.isNotEmpty) {
       filtered = filtered.where((item) => _matchesQuery(item, criteria.query));
     }
     final sorted = filtered.toList();
     sorted.sort((a, b) {
+      if (a.favorited != b.favorited) {
+        return a.favorited ? -1 : 1;
+      }
       final comparison = a.displayName.toLowerCase().compareTo(
         b.displayName.toLowerCase(),
       );
@@ -212,6 +611,8 @@ class ContactsCubit extends Cubit<ContactsState> {
     final values = <String>[
       item.displayName,
       item.address,
+      if (item.displayNameOverride?.trim().isNotEmpty == true)
+        item.displayNameOverride!,
       if (item.xmppTitle?.trim().isNotEmpty == true) item.xmppTitle!,
       if (item.emailDisplayName?.trim().isNotEmpty == true)
         item.emailDisplayName!,

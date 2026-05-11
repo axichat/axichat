@@ -46,13 +46,15 @@ import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
+import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
+import 'package:axichat/src/folders/view/folder_messages_list.dart';
+import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
-import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -63,6 +65,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
+import 'package:axichat/src/storage/database.dart' as db;
 import 'package:axichat/src/storage/models.dart' as m;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:animations/animations.dart';
@@ -101,11 +104,16 @@ HomeSearchSlot? _resolveHomeSearchSlot({
   if (activeTab != HomeTab.folders) {
     return null;
   }
-  return switch (foldersSection) {
-    FolderHomeSection.important => HomeSearchSlot.foldersImportant,
-    FolderHomeSection.spam => HomeSearchSlot.foldersSpam,
-    null => null,
-  };
+  if (foldersSection == null) {
+    return null;
+  }
+  if (foldersSection.isSpam) {
+    return HomeSearchSlot.foldersSpam;
+  }
+  if (foldersSection.isImportant) {
+    return HomeSearchSlot.foldersImportant;
+  }
+  return HomeSearchSlot.foldersCollection;
 }
 
 @immutable
@@ -254,26 +262,28 @@ _HomeSearchPresentation _resolveHomeSearchPresentationForState({
       sortLabels: sortLabels,
     );
   }
-  return switch (foldersSection) {
-    FolderHomeSection.important => (
-      available: true,
-      filters: const <HomeSearchFilter>[],
-      label: l10n.homeTabImportant,
-      sortLabels: _HomeSearchSortLabels.chronological,
-    ),
-    FolderHomeSection.spam => (
-      available: true,
-      filters: spamSearchFilters(l10n),
-      label: l10n.homeTabSpam,
-      sortLabels: _HomeSearchSortLabels.chronological,
-    ),
-    null => (
+  if (foldersSection == null) {
+    return (
       available: false,
       filters: const <HomeSearchFilter>[],
       label: entry?.label ?? l10n.homeTabFolders,
       sortLabels: _HomeSearchSortLabels.chronological,
-    ),
-  };
+    );
+  }
+  if (foldersSection.isSpam) {
+    return (
+      available: true,
+      filters: spamSearchFilters(l10n),
+      label: l10n.homeTabSpam,
+      sortLabels: _HomeSearchSortLabels.chronological,
+    );
+  }
+  return (
+    available: true,
+    filters: const <HomeSearchFilter>[],
+    label: foldersSection.label(l10n),
+    sortLabels: _HomeSearchSortLabels.chronological,
+  );
 }
 
 @visibleForTesting
@@ -322,17 +332,20 @@ class HomeTabEntry {
   final List<HomeSearchFilter> searchFilters;
 }
 
-class _HomeImportantMessagesTab extends StatefulWidget {
-  const _HomeImportantMessagesTab({required this.searchSlot});
+class _HomeFolderMessagesTab extends StatefulWidget {
+  const _HomeFolderMessagesTab({
+    required this.folder,
+    required this.searchSlot,
+  });
 
+  final FolderHomeSection folder;
   final HomeSearchSlot searchSlot;
 
   @override
-  State<_HomeImportantMessagesTab> createState() =>
-      _HomeImportantMessagesTabState();
+  State<_HomeFolderMessagesTab> createState() => _HomeFolderMessagesTabState();
 }
 
-class _HomeImportantMessagesTabState extends State<_HomeImportantMessagesTab> {
+class _HomeFolderMessagesTabState extends State<_HomeFolderMessagesTab> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -355,33 +368,110 @@ class _HomeImportantMessagesTabState extends State<_HomeImportantMessagesTab> {
     );
   }
 
+  Future<bool> _removeItem(m.FolderMessageItem item) async {
+    return await context.read<FoldersCubit>().removeItem(item);
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<HomeBloc, HomeState>(
       listener: _syncSearchState,
-      child: ImportantMessagesList(
+      child: FolderMessagesList(
+        emptyLabel: widget.folder.isImportant
+            ? context.l10n.importantMessagesEmpty
+            : context.l10n.folderMessagesEmpty,
         showChatLabel: true,
+        showImportantMarker: widget.folder.isImportant,
         onPressed: (item) {
           unawaited(_openItem(item));
         },
+        onRemovePressed: widget.folder.isCustom ? _removeItem : null,
       ),
     );
   }
 }
 
-enum FolderHomeSection {
-  important,
-  spam;
+enum FolderHomeSectionKind { system, spam, custom }
 
-  String label(AppLocalizations l10n) => switch (this) {
-    FolderHomeSection.important => l10n.homeTabImportant,
-    FolderHomeSection.spam => l10n.homeTabSpam,
+@immutable
+class FolderHomeSection {
+  const FolderHomeSection._({
+    required this.kind,
+    required this.collectionId,
+    required this.title,
+  });
+
+  factory FolderHomeSection.system(m.SystemMessageCollection collection) {
+    return FolderHomeSection._(
+      kind: FolderHomeSectionKind.system,
+      collectionId: collection.id,
+      title: null,
+    );
+  }
+
+  static const spam = FolderHomeSection._(
+    kind: FolderHomeSectionKind.spam,
+    collectionId: null,
+    title: null,
+  );
+
+  factory FolderHomeSection.custom(db.MessageCollectionEntry collection) {
+    return FolderHomeSection._(
+      kind: FolderHomeSectionKind.custom,
+      collectionId: collection.id,
+      title: collection.displayTitle,
+    );
+  }
+
+  final FolderHomeSectionKind kind;
+  final String? collectionId;
+  final String? title;
+
+  m.SystemMessageCollection? get systemCollection => collectionId == null
+      ? null
+      : m.SystemMessageCollection.fromId(collectionId!);
+
+  bool get isImportant =>
+      systemCollection == m.SystemMessageCollection.important;
+  bool get isSpam => kind == FolderHomeSectionKind.spam;
+  bool get isCustom => kind == FolderHomeSectionKind.custom;
+  bool get isMessageCollection => !isSpam;
+
+  String get key => switch (kind) {
+    FolderHomeSectionKind.system => collectionId ?? 'system',
+    FolderHomeSectionKind.spam => 'spam',
+    FolderHomeSectionKind.custom => collectionId ?? 'custom',
   };
 
-  IconData get iconData => switch (this) {
-    FolderHomeSection.important => Icons.star_outline_rounded,
-    FolderHomeSection.spam => LucideIcons.shieldAlert,
+  String label(AppLocalizations l10n) => switch (kind) {
+    FolderHomeSectionKind.system =>
+      systemCollection?.label(l10n) ?? collectionId ?? l10n.homeTabFolders,
+    FolderHomeSectionKind.spam => l10n.homeTabSpam,
+    FolderHomeSectionKind.custom =>
+      title ?? collectionId ?? l10n.homeTabFolders,
   };
+
+  IconData get iconData => switch (kind) {
+    FolderHomeSectionKind.system => switch (systemCollection) {
+      m.SystemMessageCollection.important => LucideIcons.star,
+      m.SystemMessageCollection.receipts => LucideIcons.receiptText,
+      m.SystemMessageCollection.marketing => LucideIcons.megaphone,
+      m.SystemMessageCollection.newsletters => LucideIcons.newspaper,
+      null => LucideIcons.folder,
+    },
+    FolderHomeSectionKind.spam => LucideIcons.shieldAlert,
+    FolderHomeSectionKind.custom => LucideIcons.folder,
+  };
+
+  @override
+  bool operator ==(Object other) {
+    return other is FolderHomeSection &&
+        kind == other.kind &&
+        collectionId == other.collectionId;
+  }
+
+  @override
+  int get hashCode => Object.hash(kind, collectionId);
 }
 
 void _setFoldersSection(BuildContext context, FolderHomeSection? section) {
@@ -390,8 +480,7 @@ void _setFoldersSection(BuildContext context, FolderHomeSection? section) {
   if (scope == null || currentSection == section) {
     return;
   }
-  if (currentSection == FolderHomeSection.spam &&
-      section != FolderHomeSection.spam) {
+  if (currentSection?.isSpam == true && section?.isSpam != true) {
     context.read<HomeBloc>().add(
       const HomeSearchFilterChanged(
         SearchFilterId.all,
@@ -492,44 +581,61 @@ class _FoldersOverviewPage extends StatelessWidget {
     if (counts == null) {
       return const SizedBox.shrink();
     }
+    final folderState = context.watch<FoldersCubit>().state;
+    final collections = folderState.collections;
     final spacing = context.spacing;
+    if (collections == null) {
+      return Center(
+        child: AxiProgressIndicator(color: context.colorScheme.foreground),
+      );
+    }
+    final messageCollectionRows = collections
+        .where((collection) => collection.active)
+        .map((collection) {
+          final systemCollection = collection.systemCollection;
+          final section = systemCollection == null
+              ? FolderHomeSection.custom(collection)
+              : FolderHomeSection.system(systemCollection);
+          final membershipCount = folderState.memberships
+              ?.where((entry) => entry.collectionId == collection.id)
+              .length;
+          final badgeCount =
+              membershipCount ?? (section.isImportant ? counts.important : 0);
+          return _FoldersListItem(folder: section, badgeCount: badgeCount);
+        })
+        .toList(growable: false);
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView(
         padding: EdgeInsets.only(top: spacing.s, bottom: spacing.xxl),
         children: [
-          _FoldersListItem(
-            folder: FolderHomeSection.important,
-            badgeCount: counts.important,
-          ),
-          SizedBox(height: spacing.xs),
+          for (final row in messageCollectionRows) ...[
+            row,
+            SizedBox(height: spacing.xs),
+          ],
           _FoldersListItem(
             folder: FolderHomeSection.spam,
             badgeCount: counts.spam,
           ),
           SizedBox(height: spacing.s),
-          const _FoldersComingSoonHint(),
+          const _FoldersCreateListItem(),
         ],
       ),
     );
   }
 }
 
-class _FoldersComingSoonHint extends StatelessWidget {
-  const _FoldersComingSoonHint();
+class _FoldersCreateListItem extends StatelessWidget {
+  const _FoldersCreateListItem();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        context.spacing.m,
-        context.spacing.s,
-        context.spacing.m,
-        context.spacing.s,
-      ),
+    return AxiListButton(
+      leading: const Icon(LucideIcons.folderPlus),
+      onPressed: () => unawaited(showFolderCreateDialog(context)),
       child: Text(
-        context.l10n.homeFoldersCustomComingSoon,
-        style: context.textTheme.muted,
+        context.l10n.folderCreateTitle,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -549,6 +655,7 @@ class _FoldersListItem extends StatelessWidget {
         ? Duration.zero
         : context.watch<SettingsCubit>().animationDuration;
     final shadTheme = ShadTheme.of(context);
+    final collectionId = folder.collectionId;
     return OpenContainer<void>(
       closedColor: Colors.transparent,
       openColor: context.colorScheme.background,
@@ -577,7 +684,16 @@ class _FoldersListItem extends StatelessWidget {
           providers: [
             BlocProvider.value(value: locate<HomeBloc>()),
             BlocProvider.value(value: locate<ChatsCubit>()),
-            BlocProvider.value(value: locate<FoldersCubit>()),
+            if (folder.isImportant || folder.isSpam)
+              BlocProvider.value(value: locate<FoldersCubit>())
+            else
+              BlocProvider(
+                create: (context) => FoldersCubit(
+                  xmppService: locate<XmppService>(),
+                  collectionId:
+                      collectionId ?? m.SystemMessageCollection.important.id,
+                ),
+              ),
           ],
           child: _FoldersDetailPage(folder: folder, onClose: closeContainer),
         ),
@@ -598,17 +714,21 @@ class _FoldersDetailPage extends StatelessWidget {
     if (counts == null) {
       return const SizedBox.shrink();
     }
-    final content = switch (folder) {
-      FolderHomeSection.important => const _HomeImportantMessagesTab(
-        searchSlot: HomeSearchSlot.foldersImportant,
-      ),
-      FolderHomeSection.spam => const SpamList(
-        searchSlot: HomeSearchSlot.foldersSpam,
-      ),
-    };
-    final badgeCount = folder == FolderHomeSection.important
-        ? counts.important
-        : counts.spam;
+    final content = folder.isSpam
+        ? const SpamList(searchSlot: HomeSearchSlot.foldersSpam)
+        : _HomeFolderMessagesTab(
+            folder: folder,
+            searchSlot: folder.isImportant
+                ? HomeSearchSlot.foldersImportant
+                : HomeSearchSlot.foldersCollection,
+          );
+    final folderState = folder.isMessageCollection
+        ? context.watch<FoldersCubit>().state
+        : null;
+    final badgeCount = folder.isSpam
+        ? counts.spam
+        : folderState?.items?.length ??
+              (folder.isImportant ? counts.important : 0);
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, _) {
@@ -662,7 +782,7 @@ class _FolderListRow extends StatelessWidget {
         minHeight: sizing.listButtonHeight + spacing.s,
       ),
       child: AxiListButton(
-        key: ValueKey<String>('home-folders-row-${folder.name}'),
+        key: ValueKey<String>('home-folders-row-${folder.key}'),
         onPressed: onPressed,
         leading: Icon(folder.iconData),
         trailing: Row(
@@ -670,7 +790,7 @@ class _FolderListRow extends StatelessWidget {
           children: [
             if (badgeCount > 0)
               AxiCountBadge(
-                key: ValueKey<String>('home-folders-badge-${folder.name}'),
+                key: ValueKey<String>('home-folders-badge-${folder.key}'),
                 count: badgeCount,
                 diameter: sizing.iconButtonIconSize,
               ),
@@ -758,11 +878,19 @@ class HomeShellCalendarScope extends StatelessWidget {
         BlocProvider(
           create: (context) {
             final locate = context.read;
+            final settings = locate<SettingsCubit>().state.endpointConfig;
             return ContactsCubit(
               xmppService: locate<XmppService>(),
-              emailService: locate<EmailService>(),
+              emailService: settings.smtpEnabled
+                  ? locate<EmailService>()
+                  : null,
             );
           },
+        ),
+        BlocProvider(
+          create: (context) => EmailContactImportCubit(
+            emailService: context.read<EmailService>(),
+          ),
         ),
       ],
       child: HomeShell(navigationShell: navigationShell),
@@ -1005,7 +1133,8 @@ class _HomeShellState extends State<HomeShell> {
         id: HomeTab.contacts,
         label: l10n.homeTabContacts,
         body: const ContactsList(key: PageStorageKey('Contacts')),
-        fab: const ContactsAddButton(),
+        fab: const ContactsActionGroup(),
+        searchFilters: contactsSearchFilters(l10n),
       ),
       HomeTabEntry(
         id: HomeTab.drafts,
@@ -2109,9 +2238,7 @@ class _HomeBlocScope extends StatelessWidget {
                   ? locate<EmailService>()
                   : null;
               locate<HomeBloc>().add(HomeEmailServiceChanged(emailService));
-              locate<ContactsCubit>().updateEmailService(
-                locate<EmailService>(),
-              );
+              locate<ContactsCubit>().updateEmailService(emailService);
             },
           ),
           BlocListener<HomeBloc, HomeState>(

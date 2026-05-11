@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -17,10 +18,17 @@ void main() {
 
   late MockXmppService xmppService;
   late StreamController<List<FolderMessageItem>> foldersController;
+  late StreamController<List<MessageCollectionEntry>> collectionsController;
+  late StreamController<List<MessageCollectionMembershipEntry>>
+  membershipsController;
 
   setUp(() {
     xmppService = MockXmppService();
     foldersController = StreamController<List<FolderMessageItem>>.broadcast();
+    collectionsController =
+        StreamController<List<MessageCollectionEntry>>.broadcast();
+    membershipsController =
+        StreamController<List<MessageCollectionMembershipEntry>>.broadcast();
 
     when(
       () => xmppService.messageCollectionItemsStream(
@@ -28,10 +36,24 @@ void main() {
         chatJid: any(named: 'chatJid'),
       ),
     ).thenAnswer((_) => foldersController.stream);
+    when(
+      () => xmppService.messageCollectionsStream(
+        includeInactive: any(named: 'includeInactive'),
+        includeSystem: any(named: 'includeSystem'),
+      ),
+    ).thenAnswer((_) => collectionsController.stream);
+    when(
+      () => xmppService.allMessageCollectionMembershipsStream(
+        includeInactive: any(named: 'includeInactive'),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) => membershipsController.stream);
   });
 
   tearDown(() async {
     await foldersController.close();
+    await collectionsController.close();
+    await membershipsController.close();
   });
 
   test('filters only the active folder items for the current query', () async {
@@ -95,7 +117,7 @@ void main() {
     foldersController.add(items);
     await pumpEventQueue();
 
-    expect(cubit.state.folder, FolderCollection.important);
+    expect(cubit.state.collectionId, SystemMessageCollection.important.id);
     expect(cubit.state.visibleItems, hasLength(2));
 
     cubit.updateCriteria(
@@ -109,4 +131,92 @@ void main() {
       'important-match',
     );
   });
+
+  test('createFolder emits terminal success state', () async {
+    final collection = MessageCollectionEntry(
+      id: 'Projects',
+      title: null,
+      isSystem: false,
+      sortOrder: 0,
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+      active: true,
+    );
+    when(
+      () => xmppService.createMessageCollection(title: 'Projects'),
+    ).thenAnswer((_) async => collection);
+
+    final cubit = FoldersCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    expect(await cubit.createFolder('Projects'), collection);
+    expect(
+      cubit.state.actionState,
+      const FoldersActionSuccess(
+        action: FoldersActionType.createFolder,
+        collectionId: 'Projects',
+      ),
+    );
+  });
+
+  test('createFolder emits terminal name failure state', () async {
+    when(
+      () => xmppService.createMessageCollection(title: 'Projects'),
+    ).thenThrow(
+      const MessageCollectionNameException(
+        MessageCollectionNameFailure.duplicate,
+      ),
+    );
+
+    final cubit = FoldersCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    expect(await cubit.createFolder('Projects'), isNull);
+    expect(
+      cubit.state.actionState,
+      const FoldersActionFailure(
+        action: FoldersActionType.createFolder,
+        reason: FoldersFailureReason.invalidName,
+        nameFailure: MessageCollectionNameFailure.duplicate,
+      ),
+    );
+  });
+
+  test(
+    'removeItem emits terminal failure when service cannot remove',
+    () async {
+      final item = FolderMessageItem(
+        collectionId: 'Projects',
+        chatJid: 'peer@axi.im',
+        messageReferenceId: 'message-1',
+        messageStanzaId: 'message-1',
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026),
+        active: true,
+        message: null,
+        chat: null,
+      );
+      when(
+        () => xmppService.removeMessageCollectionMembership(item),
+      ).thenAnswer((_) async => false);
+
+      final cubit = FoldersCubit(xmppService: xmppService);
+      addTearDown(cubit.close);
+
+      expect(await cubit.removeItem(item), isFalse);
+      expect(
+        cubit.state.actionState,
+        const FoldersActionFailure(
+          action: FoldersActionType.removeMembership,
+          reason: FoldersFailureReason.removeFailed,
+          collectionId: 'Projects',
+          chatJid: 'peer@axi.im',
+          messageReferenceId: 'message-1',
+        ),
+      );
+    },
+  );
 }

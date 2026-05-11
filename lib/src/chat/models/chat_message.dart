@@ -68,6 +68,8 @@ enum ChatMessageKey {
   chatPinPermissionDenied,
   chatMessageForwarded,
   chatMessageForwardFailed,
+  chatMessageAddedToFolder,
+  chatMessageAddToFolderFailed,
   chatModerationRequested,
   chatModerationFailed,
   fanOutErrorNoRecipients,
@@ -182,6 +184,9 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.chatPinPermissionDenied => l10n.chatPinPermissionDenied,
     ChatMessageKey.chatMessageForwarded => l10n.chatMessageForwarded,
     ChatMessageKey.chatMessageForwardFailed => l10n.chatMessageForwardFailed,
+    ChatMessageKey.chatMessageAddedToFolder => l10n.chatMessageAddedToFolder,
+    ChatMessageKey.chatMessageAddToFolderFailed =>
+      l10n.chatMessageAddToFolderFailed,
     ChatMessageKey.chatModerationRequested => l10n.chatModerationRequested(
       moderationAction ?? '',
       moderationTarget ?? '',

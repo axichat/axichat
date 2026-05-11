@@ -12,6 +12,7 @@ enum SearchFilterId {
   email,
   hidden,
   attachments,
+  favorites,
 }
 
 /// Shared sort order used by search surfaces so we keep naming aligned.

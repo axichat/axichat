@@ -165,6 +165,174 @@ abstract class AppLocalizations {
   /// **'Custom folders coming soon'**
   String get homeFoldersCustomComingSoon;
 
+  /// No description provided for @folderPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to folder'**
+  String get folderPickerTitle;
+
+  /// No description provided for @folderPickerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a folder to save this message.'**
+  String get folderPickerEmpty;
+
+  /// No description provided for @folderPickerAddFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not add this message to the folder.'**
+  String get folderPickerAddFailed;
+
+  /// No description provided for @folderPickerUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this folder.'**
+  String get folderPickerUpdateFailed;
+
+  /// No description provided for @folderSystemReceipts.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipts'**
+  String get folderSystemReceipts;
+
+  /// No description provided for @folderSystemMarketing.
+  ///
+  /// In en, this message translates to:
+  /// **'Marketing'**
+  String get folderSystemMarketing;
+
+  /// No description provided for @folderSystemNewsletters.
+  ///
+  /// In en, this message translates to:
+  /// **'Newsletters'**
+  String get folderSystemNewsletters;
+
+  /// No description provided for @folderCreateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New folder'**
+  String get folderCreateTitle;
+
+  /// No description provided for @folderCreateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get folderCreateAction;
+
+  /// No description provided for @folderCreateAndAddAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create and add'**
+  String get folderCreateAndAddAction;
+
+  /// No description provided for @folderCreateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create this folder.'**
+  String get folderCreateFailed;
+
+  /// No description provided for @folderNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder name'**
+  String get folderNameLabel;
+
+  /// No description provided for @folderNameEmptyError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a folder name.'**
+  String get folderNameEmptyError;
+
+  /// No description provided for @folderNameReservedError.
+  ///
+  /// In en, this message translates to:
+  /// **'That folder name is reserved.'**
+  String get folderNameReservedError;
+
+  /// No description provided for @folderNameDuplicateError.
+  ///
+  /// In en, this message translates to:
+  /// **'A folder with that name already exists.'**
+  String get folderNameDuplicateError;
+
+  /// No description provided for @folderMessagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No messages in this folder yet'**
+  String get folderMessagesEmpty;
+
+  /// No description provided for @folderRemoveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from folder'**
+  String get folderRemoveMessage;
+
+  /// No description provided for @folderRemoveMessageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not remove this message from the folder.'**
+  String get folderRemoveMessageFailed;
+
+  /// No description provided for @contactFolderRuleAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send all to...'**
+  String get contactFolderRuleAction;
+
+  /// No description provided for @contactFolderRuleMessagesAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send all messages to...'**
+  String get contactFolderRuleMessagesAction;
+
+  /// No description provided for @contactFolderRuleEmailsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send all emails to...'**
+  String get contactFolderRuleEmailsAction;
+
+  /// No description provided for @contactFolderRuleMessagesAndEmailsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Send all messages and emails to...'**
+  String get contactFolderRuleMessagesAndEmailsAction;
+
+  /// No description provided for @contactFolderRuleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send all to folder'**
+  String get contactFolderRuleTitle;
+
+  /// No description provided for @contactFolderRuleMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send messages to folder'**
+  String get contactFolderRuleMessagesTitle;
+
+  /// No description provided for @contactFolderRuleEmailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send emails to folder'**
+  String get contactFolderRuleEmailsTitle;
+
+  /// No description provided for @contactFolderRuleMessagesAndEmailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send messages and emails to folder'**
+  String get contactFolderRuleMessagesAndEmailsTitle;
+
+  /// No description provided for @contactFolderRuleClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear rule'**
+  String get contactFolderRuleClear;
+
+  /// No description provided for @contactFolderRuleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update this contact folder rule.'**
+  String get contactFolderRuleFailed;
+
   /// No description provided for @homeNoModules.
   ///
   /// In en, this message translates to:
@@ -776,6 +944,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to forward message.'**
   String get chatMessageForwardFailed;
+
+  /// No description provided for @chatMessageAddedToFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Message added to folder.'**
+  String get chatMessageAddedToFolder;
+
+  /// No description provided for @chatMessageAddToFolderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to add message to folder.'**
+  String get chatMessageAddToFolderFailed;
 
   /// No description provided for @chatModerationRequested.
   ///
@@ -1699,17 +1879,11 @@ abstract class AppLocalizations {
   /// **'Pinned messages'**
   String get chatPinnedMessagesTitle;
 
-  /// No description provided for @chatMarkMessageImportant.
+  /// No description provided for @chatAddMessageToFolder.
   ///
   /// In en, this message translates to:
-  /// **'Mark important'**
-  String get chatMarkMessageImportant;
-
-  /// No description provided for @chatRemoveMessageImportant.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove important'**
-  String get chatRemoveMessageImportant;
+  /// **'Add to folder...'**
+  String get chatAddMessageToFolder;
 
   /// No description provided for @chatPinMessage.
   ///
@@ -2855,6 +3029,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show advanced options'**
   String get calendarAdvancedShow;
+
+  /// No description provided for @calendarTaskDetailsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get calendarTaskDetailsSection;
+
+  /// No description provided for @calendarTaskSortTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort tasks'**
+  String get calendarTaskSortTooltip;
+
+  /// No description provided for @calendarTaskSortManual.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get calendarTaskSortManual;
+
+  /// No description provided for @calendarTaskSortDateAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Date added'**
+  String get calendarTaskSortDateAdded;
+
+  /// No description provided for @calendarTaskSortImportance.
+  ///
+  /// In en, this message translates to:
+  /// **'Importance'**
+  String get calendarTaskSortImportance;
 
   /// No description provided for @calendarUnscheduledTitle.
   ///
@@ -5646,6 +5850,12 @@ abstract class AppLocalizations {
   /// **'Display name'**
   String get contactsDisplayNameLabel;
 
+  /// No description provided for @contactsNewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get contactsNewLabel;
+
   /// No description provided for @contactsLocalOnlyLabel.
   ///
   /// In en, this message translates to:
@@ -5669,6 +5879,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stored'**
   String get contactsStoredLabel;
+
+  /// No description provided for @contactsChatContactLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat contact'**
+  String get contactsChatContactLabel;
+
+  /// No description provided for @contactsEmailContactLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email contact'**
+  String get contactsEmailContactLabel;
 
   /// No description provided for @contactsMessagesLabel.
   ///

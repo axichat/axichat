@@ -987,8 +987,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                           unawaited(owner._startMultiSelect(message)),
                       onResendRequested: owner._handleMessageResendRequested,
                       onEditRequested: owner._handleEditMessage,
-                      onImportantToggleRequested:
-                          owner._handleImportantToggleRequested,
+                      onAddToFolderRequested: owner._handleAddToFolderRequested,
                       onPinToggleRequested: owner._handlePinToggleRequested,
                       onRevokeInviteRequested:
                           owner._handleInviteRevocationRequested,

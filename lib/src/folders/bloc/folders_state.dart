@@ -1,47 +1,208 @@
 part of 'folders_cubit.dart';
 
+enum FoldersActionType { createFolder, removeMembership }
+
+enum FoldersFailureReason { invalidName, createFailed, removeFailed }
+
+sealed class FoldersActionState extends Equatable {
+  const FoldersActionState();
+}
+
+final class FoldersActionIdle extends FoldersActionState {
+  const FoldersActionIdle();
+
+  @override
+  List<Object?> get props => const [];
+}
+
+final class FoldersActionLoading extends FoldersActionState {
+  const FoldersActionLoading({
+    required this.action,
+    this.collectionId,
+    this.chatJid,
+    this.messageReferenceId,
+  });
+
+  final FoldersActionType action;
+  final String? collectionId;
+  final String? chatJid;
+  final String? messageReferenceId;
+
+  @override
+  List<Object?> get props => [
+    action,
+    collectionId,
+    chatJid,
+    messageReferenceId,
+  ];
+}
+
+final class FoldersActionSuccess extends FoldersActionState {
+  const FoldersActionSuccess({
+    required this.action,
+    this.collectionId,
+    this.chatJid,
+    this.messageReferenceId,
+  });
+
+  final FoldersActionType action;
+  final String? collectionId;
+  final String? chatJid;
+  final String? messageReferenceId;
+
+  @override
+  List<Object?> get props => [
+    action,
+    collectionId,
+    chatJid,
+    messageReferenceId,
+  ];
+}
+
+final class FoldersActionFailure extends FoldersActionState {
+  const FoldersActionFailure({
+    required this.action,
+    required this.reason,
+    this.collectionId,
+    this.chatJid,
+    this.messageReferenceId,
+    this.nameFailure,
+  });
+
+  final FoldersActionType action;
+  final FoldersFailureReason reason;
+  final String? collectionId;
+  final String? chatJid;
+  final String? messageReferenceId;
+  final MessageCollectionNameFailure? nameFailure;
+
+  @override
+  List<Object?> get props => [
+    action,
+    reason,
+    collectionId,
+    chatJid,
+    messageReferenceId,
+    nameFailure,
+  ];
+}
+
 class FoldersState extends Equatable {
   const FoldersState({
-    required this.folder,
+    required this.collectionId,
     required this.chatJid,
+    required this.collections,
+    required this.memberships,
     required this.items,
     required this.visibleItems,
     this.query = '',
     this.sortOrder = SearchSortOrder.newestFirst,
+    this.actionState = const FoldersActionIdle(),
+    this.actionId = 0,
   });
 
-  final FolderCollection folder;
+  final String collectionId;
   final String? chatJid;
+  final List<MessageCollectionEntry>? collections;
+  final List<MessageCollectionMembershipEntry>? memberships;
   final List<FolderMessageItem>? items;
   final List<FolderMessageItem>? visibleItems;
   final String query;
   final SearchSortOrder sortOrder;
+  final FoldersActionState actionState;
+  final int actionId;
+
+  List<MessageCollectionEntry> get customCollections {
+    final entries = collections;
+    if (entries == null) {
+      return const <MessageCollectionEntry>[];
+    }
+    return entries
+        .where((collection) => collection.isCustom && collection.active)
+        .toList(growable: false);
+  }
+
+  List<MessageCollectionEntry> get activeCollections {
+    final entries = collections;
+    if (entries == null) {
+      return const <MessageCollectionEntry>[];
+    }
+    return entries
+        .where((collection) => collection.active)
+        .toList(growable: false);
+  }
+
+  Set<String> activeCollectionIdsForMessage({
+    required Chat chat,
+    required Message message,
+  }) {
+    final reference = message.collectionReference(
+      isGroupChat: chat.type == ChatType.groupChat,
+    );
+    if (reference == null) {
+      return const <String>{};
+    }
+    final entries = memberships;
+    if (entries == null) {
+      return const <String>{};
+    }
+    final aliases = message.referenceIds;
+    final chatJid = chat.jid.trim();
+    return entries
+        .where(
+          (entry) =>
+              entry.active &&
+              entry.chatJid.trim() == chatJid &&
+              (entry.messageReferenceId == reference.value ||
+                  aliases.contains(entry.messageReferenceId)),
+        )
+        .map((entry) => entry.collectionId)
+        .toSet();
+  }
 
   FoldersState copyWith({
-    FolderCollection? folder,
+    String? collectionId,
     String? chatJid,
+    List<MessageCollectionEntry>? collections,
+    List<MessageCollectionMembershipEntry>? memberships,
     List<FolderMessageItem>? items,
     List<FolderMessageItem>? visibleItems,
     String? query,
     SearchSortOrder? sortOrder,
+    FoldersActionState? actionState,
+    int? actionId,
   }) {
+    final nextActionState = actionState ?? this.actionState;
     return FoldersState(
-      folder: folder ?? this.folder,
+      collectionId: collectionId ?? this.collectionId,
       chatJid: chatJid ?? this.chatJid,
+      collections: collections ?? this.collections,
+      memberships: memberships ?? this.memberships,
       items: items ?? this.items,
       visibleItems: visibleItems ?? this.visibleItems,
       query: query ?? this.query,
       sortOrder: sortOrder ?? this.sortOrder,
+      actionState: nextActionState,
+      actionId:
+          actionId ??
+          (nextActionState is FoldersActionFailure &&
+                  nextActionState != this.actionState
+              ? this.actionId + 1
+              : this.actionId),
     );
   }
 
   @override
   List<Object?> get props => [
-    folder,
+    collectionId,
     chatJid,
+    collections,
+    memberships,
     items,
     visibleItems,
     query,
     sortOrder,
+    actionState,
+    actionId,
   ];
 }

@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -11,37 +12,50 @@ import 'package:equatable/equatable.dart';
 
 part 'folders_state.dart';
 
-enum FolderCollection {
-  important;
-
-  String get collectionId => switch (this) {
-    FolderCollection.important => SystemMessageCollection.important.id,
-  };
-}
-
 class FoldersCubit extends Cubit<FoldersState> {
   FoldersCubit({
     required XmppService xmppService,
-    this.folder = FolderCollection.important,
+    String collectionId = 'important',
     this.chatJid,
   }) : _xmppService = xmppService,
+       collectionId = collectionId.trim().isEmpty
+           ? SystemMessageCollection.important.id
+           : collectionId.trim(),
        super(
          FoldersState(
-           folder: folder,
+           collectionId: collectionId.trim().isEmpty
+               ? SystemMessageCollection.important.id
+               : collectionId.trim(),
            chatJid: chatJid,
+           collections: null,
+           memberships: null,
            items: null,
            visibleItems: null,
          ),
        ) {
-    _subscription = _xmppService
-        .messageCollectionItemsStream(folder.collectionId, chatJid: chatJid)
+    _itemsSubscription = _xmppService
+        .messageCollectionItemsStream(this.collectionId, chatJid: chatJid)
         .listen(_handleItems);
+    _collectionsSubscription = _xmppService.messageCollectionsStream().listen(
+      _handleCollections,
+    );
+    _membershipsSubscription = _xmppService
+        .allMessageCollectionMembershipsStream(chatJid: chatJid)
+        .listen(_handleMemberships);
   }
 
   final XmppService _xmppService;
-  final FolderCollection folder;
+  final String collectionId;
   final String? chatJid;
-  late final StreamSubscription<List<FolderMessageItem>> _subscription;
+  late final StreamSubscription<List<FolderMessageItem>> _itemsSubscription;
+  late final StreamSubscription<List<MessageCollectionEntry>>
+  _collectionsSubscription;
+  late final StreamSubscription<List<MessageCollectionMembershipEntry>>
+  _membershipsSubscription;
+
+  void _handleCollections(List<MessageCollectionEntry> collections) {
+    emit(state.copyWith(collections: collections));
+  }
 
   void _handleItems(List<FolderMessageItem> items) {
     emit(
@@ -54,6 +68,10 @@ class FoldersCubit extends Cubit<FoldersState> {
         ),
       ),
     );
+  }
+
+  void _handleMemberships(List<MessageCollectionMembershipEntry> memberships) {
+    emit(state.copyWith(memberships: memberships));
   }
 
   void updateCriteria({
@@ -78,6 +96,13 @@ class FoldersCubit extends Cubit<FoldersState> {
               ),
       ),
     );
+  }
+
+  void clearActionState() {
+    if (state.actionState is FoldersActionIdle) {
+      return;
+    }
+    emit(state.copyWith(actionState: const FoldersActionIdle()));
   }
 
   List<FolderMessageItem> _applyCriteria(
@@ -112,9 +137,115 @@ class FoldersCubit extends Cubit<FoldersState> {
     return ordered;
   }
 
+  Future<MessageCollectionEntry?> createFolder(String title) async {
+    emit(
+      state.copyWith(
+        actionState: const FoldersActionLoading(
+          action: FoldersActionType.createFolder,
+        ),
+      ),
+    );
+    try {
+      final collection = await _xmppService.createMessageCollection(
+        title: title,
+      );
+      emit(
+        state.copyWith(
+          actionState: FoldersActionSuccess(
+            action: FoldersActionType.createFolder,
+            collectionId: collection.id,
+          ),
+        ),
+      );
+      return collection;
+    } on MessageCollectionNameException catch (error) {
+      emit(
+        state.copyWith(
+          actionState: FoldersActionFailure(
+            action: FoldersActionType.createFolder,
+            reason: FoldersFailureReason.invalidName,
+            nameFailure: error.failure,
+          ),
+        ),
+      );
+      return null;
+    } on XmppMessageException {
+      emit(
+        state.copyWith(
+          actionState: const FoldersActionFailure(
+            action: FoldersActionType.createFolder,
+            reason: FoldersFailureReason.createFailed,
+          ),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<bool> removeItem(FolderMessageItem item) async {
+    final collectionId = item.collectionId.trim();
+    final chatJid = item.chatJid.trim();
+    final messageReferenceId = item.messageReferenceId.trim();
+    emit(
+      state.copyWith(
+        actionState: FoldersActionLoading(
+          action: FoldersActionType.removeMembership,
+          collectionId: collectionId,
+          chatJid: chatJid,
+          messageReferenceId: messageReferenceId,
+        ),
+      ),
+    );
+    try {
+      final removed = await _xmppService.removeMessageCollectionMembership(
+        item,
+      );
+      if (!removed) {
+        emit(
+          state.copyWith(
+            actionState: FoldersActionFailure(
+              action: FoldersActionType.removeMembership,
+              reason: FoldersFailureReason.removeFailed,
+              collectionId: collectionId,
+              chatJid: chatJid,
+              messageReferenceId: messageReferenceId,
+            ),
+          ),
+        );
+        return false;
+      }
+      emit(
+        state.copyWith(
+          actionState: FoldersActionSuccess(
+            action: FoldersActionType.removeMembership,
+            collectionId: collectionId,
+            chatJid: chatJid,
+            messageReferenceId: messageReferenceId,
+          ),
+        ),
+      );
+      return true;
+    } on XmppMessageException {
+      emit(
+        state.copyWith(
+          actionState: FoldersActionFailure(
+            action: FoldersActionType.removeMembership,
+            reason: FoldersFailureReason.removeFailed,
+            collectionId: collectionId,
+            chatJid: chatJid,
+            messageReferenceId: messageReferenceId,
+          ),
+        ),
+      );
+      return false;
+    }
+  }
+
   @override
   Future<void> close() async {
-    await _subscription.cancel();
+    await _itemsSubscription.cancel();
+    await _collectionsSubscription.cancel();
+    await _membershipsSubscription.cancel();
     return super.close();
   }
 }

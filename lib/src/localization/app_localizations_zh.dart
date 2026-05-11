@@ -39,6 +39,96 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeFoldersCustomComingSoon => '自定义文件夹即将推出';
 
   @override
+  String get folderPickerTitle => 'Add to folder';
+
+  @override
+  String get folderPickerEmpty => 'Create a folder to save this message.';
+
+  @override
+  String get folderPickerAddFailed =>
+      'Could not add this message to the folder.';
+
+  @override
+  String get folderPickerUpdateFailed => 'Could not update this folder.';
+
+  @override
+  String get folderSystemReceipts => 'Receipts';
+
+  @override
+  String get folderSystemMarketing => 'Marketing';
+
+  @override
+  String get folderSystemNewsletters => 'Newsletters';
+
+  @override
+  String get folderCreateTitle => 'New folder';
+
+  @override
+  String get folderCreateAction => 'Create';
+
+  @override
+  String get folderCreateAndAddAction => 'Create and add';
+
+  @override
+  String get folderCreateFailed => 'Could not create this folder.';
+
+  @override
+  String get folderNameLabel => 'Folder name';
+
+  @override
+  String get folderNameEmptyError => 'Enter a folder name.';
+
+  @override
+  String get folderNameReservedError => 'That folder name is reserved.';
+
+  @override
+  String get folderNameDuplicateError =>
+      'A folder with that name already exists.';
+
+  @override
+  String get folderMessagesEmpty => 'No messages in this folder yet';
+
+  @override
+  String get folderRemoveMessage => 'Remove from folder';
+
+  @override
+  String get folderRemoveMessageFailed =>
+      'Could not remove this message from the folder.';
+
+  @override
+  String get contactFolderRuleAction => 'Send all to...';
+
+  @override
+  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+
+  @override
+  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsAction =>
+      'Send all messages and emails to...';
+
+  @override
+  String get contactFolderRuleTitle => 'Send all to folder';
+
+  @override
+  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+
+  @override
+  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsTitle =>
+      'Send messages and emails to folder';
+
+  @override
+  String get contactFolderRuleClear => 'Clear rule';
+
+  @override
+  String get contactFolderRuleFailed =>
+      'Could not update this contact folder rule.';
+
+  @override
   String get homeNoModules => '没有可用模块';
 
   @override
@@ -373,6 +463,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatMessageForwardFailed => '无法转发消息。';
+
+  @override
+  String get chatMessageAddedToFolder => 'Message added to folder.';
+
+  @override
+  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -865,10 +961,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatPinnedMessagesTitle => '置顶消息';
 
   @override
-  String get chatMarkMessageImportant => 'Mark important';
-
-  @override
-  String get chatRemoveMessageImportant => 'Remove important';
+  String get chatAddMessageToFolder => 'Add to folder...';
 
   @override
   String get chatPinMessage => '置顶消息';
@@ -1490,6 +1583,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get calendarAdvancedShow => '显示高级选项';
+
+  @override
+  String get calendarTaskDetailsSection => '详情';
+
+  @override
+  String get calendarTaskSortTooltip => '排序任务';
+
+  @override
+  String get calendarTaskSortManual => '手动';
+
+  @override
+  String get calendarTaskSortDateAdded => '添加日期';
+
+  @override
+  String get calendarTaskSortImportance => '重要性';
 
   @override
   String get calendarUnscheduledTitle => '未安排的任务';
@@ -3042,6 +3150,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contactsDisplayNameLabel => '显示名称';
 
   @override
+  String get contactsNewLabel => '新建';
+
+  @override
   String get contactsLocalOnlyLabel => '仅在此设备上';
 
   @override
@@ -3052,6 +3163,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get contactsStoredLabel => '已保存';
+
+  @override
+  String get contactsChatContactLabel => 'Chat contact';
+
+  @override
+  String get contactsEmailContactLabel => 'Email contact';
 
   @override
   String get contactsMessagesLabel => 'Messages';
@@ -6219,6 +6336,96 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get homeFoldersCustomComingSoon => '自訂資料夾即將推出';
 
   @override
+  String get folderPickerTitle => 'Add to folder';
+
+  @override
+  String get folderPickerEmpty => 'Create a folder to save this message.';
+
+  @override
+  String get folderPickerAddFailed =>
+      'Could not add this message to the folder.';
+
+  @override
+  String get folderPickerUpdateFailed => 'Could not update this folder.';
+
+  @override
+  String get folderSystemReceipts => 'Receipts';
+
+  @override
+  String get folderSystemMarketing => 'Marketing';
+
+  @override
+  String get folderSystemNewsletters => 'Newsletters';
+
+  @override
+  String get folderCreateTitle => 'New folder';
+
+  @override
+  String get folderCreateAction => 'Create';
+
+  @override
+  String get folderCreateAndAddAction => 'Create and add';
+
+  @override
+  String get folderCreateFailed => 'Could not create this folder.';
+
+  @override
+  String get folderNameLabel => 'Folder name';
+
+  @override
+  String get folderNameEmptyError => 'Enter a folder name.';
+
+  @override
+  String get folderNameReservedError => 'That folder name is reserved.';
+
+  @override
+  String get folderNameDuplicateError =>
+      'A folder with that name already exists.';
+
+  @override
+  String get folderMessagesEmpty => 'No messages in this folder yet';
+
+  @override
+  String get folderRemoveMessage => 'Remove from folder';
+
+  @override
+  String get folderRemoveMessageFailed =>
+      'Could not remove this message from the folder.';
+
+  @override
+  String get contactFolderRuleAction => 'Send all to...';
+
+  @override
+  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+
+  @override
+  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsAction =>
+      'Send all messages and emails to...';
+
+  @override
+  String get contactFolderRuleTitle => 'Send all to folder';
+
+  @override
+  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+
+  @override
+  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+
+  @override
+  String get contactFolderRuleMessagesAndEmailsTitle =>
+      'Send messages and emails to folder';
+
+  @override
+  String get contactFolderRuleClear => 'Clear rule';
+
+  @override
+  String get contactFolderRuleFailed =>
+      'Could not update this contact folder rule.';
+
+  @override
   String get homeNoModules => '沒有可用模組';
 
   @override
@@ -6544,6 +6751,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatMessageForwardFailed => '無法轉發訊息。';
+
+  @override
+  String get chatMessageAddedToFolder => 'Message added to folder.';
+
+  @override
+  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -7606,6 +7819,21 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarAdvancedShow => '顯示進階選項';
+
+  @override
+  String get calendarTaskDetailsSection => '詳細資料';
+
+  @override
+  String get calendarTaskSortTooltip => '排序任務';
+
+  @override
+  String get calendarTaskSortManual => '手動';
+
+  @override
+  String get calendarTaskSortDateAdded => '加入日期';
+
+  @override
+  String get calendarTaskSortImportance => '重要性';
 
   @override
   String get calendarUnscheduledTitle => '未排程的任務';
@@ -9065,10 +9293,19 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get contactsDisplayNameLabel => '顯示名稱';
 
   @override
+  String get contactsNewLabel => '新增';
+
+  @override
   String get contactsLocalOnlyLabel => '僅在此裝置上';
 
   @override
   String get contactsStoredLabel => '已儲存';
+
+  @override
+  String get contactsChatContactLabel => 'Chat contact';
+
+  @override
+  String get contactsEmailContactLabel => 'Email contact';
 
   @override
   String get contactsEmailLabel => '電子郵件';
