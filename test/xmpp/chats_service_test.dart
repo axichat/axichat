@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
@@ -731,6 +732,82 @@ void main() {
       ).called(1);
     });
 
+    test('Opening an email-backed chat does not send chat state.', () async {
+      await connectSuccessfully(xmppService);
+
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
+
+      const emailJid = 'no-reply@twitch.tv';
+      await database.createChat(
+        Chat.fromJid(emailJid).copyWith(
+          transport: MessageTransport.email,
+          emailAddress: emailJid,
+          deltaChatId: 42,
+        ),
+      );
+      clearInteractions(mockConnection);
+
+      await xmppService.openChat(emailJid);
+
+      await pumpEventQueue();
+
+      final chat = await database.getChat(emailJid);
+      expect(chat?.open, isTrue);
+      verifyNever(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      );
+    });
+
+    test(
+      'Switching away from an email-backed chat does not send inactive state.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(
+          () => mockConnection.sendChatState(
+            jid: any(named: 'jid'),
+            state: any(named: 'state'),
+          ),
+        ).thenAnswer((_) async {});
+
+        const emailJid = 'no-reply@twitch.tv';
+        await database.createChat(
+          Chat.fromJid(emailJid).copyWith(
+            transport: MessageTransport.email,
+            emailAddress: emailJid,
+            deltaChatId: 42,
+          ),
+        );
+        await database.openChat(emailJid);
+        clearInteractions(mockConnection);
+
+        await xmppService.openChat(jid);
+
+        await pumpEventQueue();
+
+        verifyNever(
+          () => mockConnection.sendChatState(
+            jid: emailJid,
+            state: mox.ChatState.inactive,
+          ),
+        );
+        verify(
+          () => mockConnection.sendChatState(
+            jid: jid,
+            state: mox.ChatState.active,
+          ),
+        ).called(1);
+      },
+    );
+
     test('Opening the local welcome chat does not send chat state.', () async {
       await connectSuccessfully(xmppService);
       clearInteractions(mockConnection);
@@ -757,6 +834,44 @@ void main() {
       );
     });
   });
+
+  test(
+    'closeChat does not send chat state for an email-backed chat.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      when(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      ).thenAnswer((_) async {});
+
+      const emailJid = 'no-reply@twitch.tv';
+      await database.createChat(
+        Chat.fromJid(emailJid).copyWith(
+          transport: MessageTransport.email,
+          emailAddress: emailJid,
+          deltaChatId: 42,
+        ),
+      );
+      await database.openChat(emailJid);
+      clearInteractions(mockConnection);
+
+      await xmppService.closeChat();
+
+      await pumpEventQueue();
+
+      final afterClose = await database.getChat(emailJid);
+      expect(afterClose?.open, isFalse);
+      verifyNever(
+        () => mockConnection.sendChatState(
+          jid: any(named: 'jid'),
+          state: any(named: 'state'),
+        ),
+      );
+    },
+  );
 
   test('closeChat closes any open chats.', () async {
     await connectSuccessfully(xmppService);

@@ -628,6 +628,19 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     );
   }
 
+  Future<void> _sendChatStateForChat({
+    required Chat? chat,
+    required mox.ChatState state,
+  }) async {
+    if (chat == null || chat.isEmailBacked || chat.defaultTransport.isEmail) {
+      return;
+    }
+    final targetJid = chat.remoteJid.trim().isNotEmpty
+        ? chat.remoteJid
+        : chat.jid;
+    await sendChatState(jid: targetJid, state: state);
+  }
+
   Future<void> openChat(String jid) async {
     final existingBeforeOpen = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(jid),
@@ -636,24 +649,32 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       jid: jid,
       unreadCount: existingBeforeOpen?.unreadCount ?? 0,
     );
-    final closed = await _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.openChat(jid),
+    final transition =
+        await _dbOpReturning<XmppDatabase, ({Chat? closed, Chat? opened})>((
+          db,
+        ) async {
+          final closed = await db.openChat(jid);
+          final opened = await db.getChat(jid);
+          return (closed: closed, opened: opened);
+        });
+    await _sendChatStateForChat(
+      chat: transition.closed,
+      state: mox.ChatState.inactive,
     );
-    if (closed != null) {
-      await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
-    }
     if (existingBeforeOpen == null) {
       await _seedConversationIndexForDirectChatCreation(jid);
     }
-    await sendChatState(jid: jid, state: mox.ChatState.active);
+    await _sendChatStateForChat(
+      chat: transition.opened,
+      state: mox.ChatState.active,
+    );
   }
 
   Future<void> closeChat() async {
-    await _dbOp<XmppDatabase>((db) async {
-      final closed = await db.closeChat();
-      if (closed == null) return;
-      await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
-    });
+    final closed = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.closeChat(),
+    );
+    await _sendChatStateForChat(chat: closed, state: mox.ChatState.inactive);
   }
 
   Future<void> toggleChatMuted({
