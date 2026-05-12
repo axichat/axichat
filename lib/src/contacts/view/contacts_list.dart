@@ -32,6 +32,48 @@ class ContactsList extends StatefulWidget {
   State<ContactsList> createState() => _ContactsListState();
 }
 
+Future<void> showContactDetailsSheet({
+  required BuildContext context,
+  required ContactDirectoryEntry contact,
+}) async {
+  final locate = context.read;
+  final action = await showAdaptiveBottomSheet<_ContactDetailsSheetAction>(
+    context: context,
+    isScrollControlled: true,
+    useBottomSafeArea: false,
+    surfacePadding: EdgeInsets.zero,
+    showDragHandle: true,
+    builder: (_) {
+      return MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: locate<ContactsCubit>()),
+          BlocProvider.value(value: locate<RosterCubit>()),
+          BlocProvider.value(value: locate<BlocklistCubit>()),
+          BlocProvider.value(value: locate<FoldersCubit>()),
+        ],
+        child: _ContactDetailsSheet(contact: contact),
+      );
+    },
+  );
+  if (!context.mounted) {
+    return;
+  }
+  switch (action) {
+    case _ContactDetailsSheetAction.openChat:
+      await context.read<ChatsCubit>().openChat(jid: contact.address);
+    case _ContactDetailsSheetAction.composeEmail:
+      openComposeDraft(
+        context,
+        jids: [contact.address],
+        attachmentMetadataIds: const <String>[],
+      );
+    case null:
+      return;
+  }
+}
+
+enum _ContactDetailsSheetAction { openChat, composeEmail }
+
 class _ContactsListState extends State<ContactsList> {
   @override
   void didChangeDependencies() {
@@ -324,7 +366,6 @@ class _ContactListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
     final spacing = context.spacing;
     final emailEnabled = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.endpointConfig.smtpEnabled,
@@ -352,25 +393,8 @@ class _ContactListTile extends StatelessWidget {
       ),
       child: AxiListTile(
         key: ValueKey(address),
-        onTap: () => showAdaptiveBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          useBottomSafeArea: false,
-          surfacePadding: EdgeInsets.zero,
-          showDragHandle: true,
-          builder: (sheetContext) {
-            return MultiBlocProvider(
-              providers: [
-                BlocProvider.value(value: locate<ContactsCubit>()),
-                BlocProvider.value(value: locate<RosterCubit>()),
-                BlocProvider.value(value: locate<ChatsCubit>()),
-                BlocProvider.value(value: locate<BlocklistCubit>()),
-                BlocProvider.value(value: locate<FoldersCubit>()),
-              ],
-              child: _ContactDetailsSheet(contact: contact),
-            );
-          },
-        ),
+        onTap: () =>
+            showContactDetailsSheet(context: context, contact: contact),
         menuItems: [
           if (contact.hasXmppRoster)
             ShadContextMenuItem(
@@ -445,18 +469,7 @@ class _ContactListTile extends StatelessWidget {
           status: null,
         ),
         titleWidget: _ContactListTileContent(contact: contact),
-        actions: contact.favorited
-            ? [
-                Semantics(
-                  label: context.l10n.commonFavorite,
-                  child: Icon(
-                    LucideIcons.star,
-                    size: context.sizing.menuItemIconSize,
-                    color: context.colorScheme.primary,
-                  ),
-                ),
-              ]
-            : null,
+        actions: contact.favorited ? [const _ContactFavoriteIndicator()] : null,
       ),
     );
   }
@@ -477,14 +490,13 @@ class _ContactListTileContent extends StatelessWidget {
         Text(
           contact.displayName,
           overflow: TextOverflow.ellipsis,
-          style: context.textTheme.small.copyWith(
+          style: context.textTheme.small.strong.copyWith(
             color: context.colorScheme.foreground,
-            fontWeight: FontWeight.w700,
           ),
         ),
         if (secondaryValues.isNotEmpty)
           Text(
-            secondaryValues.join(' • '),
+            secondaryValues.join(context.l10n.commonListSeparator),
             overflow: TextOverflow.ellipsis,
             style: context.textTheme.muted.copyWith(
               color: context.colorScheme.mutedForeground,
@@ -690,21 +702,27 @@ class _ContactDetailsSheet extends StatelessWidget {
             contactsActionState is ContactActionLoading &&
             contactsActionState.action == ContactActionType.removeEmail &&
             contactsActionState.address == address;
+        final detailRows = _contactDetailRows(
+          context.l10n,
+          currentContact,
+          emailEnabled: emailEnabled,
+        );
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
-            title: Text(currentContact.displayName),
-            subtitle: currentContact.displayName == address
-                ? null
-                : Text(address),
+            title: Text(context.l10n.contactsDetailsSectionTitle),
             onClose: () => Navigator.of(context).maybePop(),
           ),
           bodyPadding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.s),
           children: [
-            _ContactSummaryCard(
-              contact: currentContact,
-              emailEnabled: emailEnabled,
-            ),
+            _ContactSummaryCard(contact: currentContact),
             SizedBox(height: spacing.m),
+            if (detailRows.isNotEmpty) ...[
+              _ContactDetailsInfoCard(
+                contact: currentContact,
+                rows: detailRows,
+              ),
+              SizedBox(height: spacing.m),
+            ],
             _ContactDetailsActions(
               contact: currentContact,
               emailEnabled: emailEnabled,
@@ -719,13 +737,9 @@ class _ContactDetailsSheet extends StatelessWidget {
 }
 
 class _ContactSummaryCard extends StatelessWidget {
-  const _ContactSummaryCard({
-    required this.contact,
-    required this.emailEnabled,
-  });
+  const _ContactSummaryCard({required this.contact});
 
   final ContactDirectoryEntry contact;
-  final bool emailEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -734,7 +748,7 @@ class _ContactSummaryCard extends StatelessWidget {
     final l10n = context.l10n;
     final sourceItems = _contactSourceItems(l10n, contact);
     return AxiModalSurface(
-      backgroundColor: context.colorScheme.background,
+      key: ValueKey('contact-summary-$address'),
       borderColor: context.borderSide.color,
       padding: EdgeInsets.all(spacing.m),
       child: Row(
@@ -757,34 +771,165 @@ class _ContactSummaryCard extends StatelessWidget {
           ),
           SizedBox(width: spacing.m),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (contact.favorited) ...[
-                  _ContactStatusRow(
-                    icon: LucideIcons.star,
-                    label: l10n.commonFavorite,
-                  ),
-                  if (sourceItems.isNotEmpty) SizedBox(height: spacing.s),
-                ],
-                for (var index = 0; index < sourceItems.length; index += 1) ...[
-                  if (index > 0) SizedBox(height: spacing.s),
-                  _ContactStatusRow(
-                    icon: sourceItems[index].icon,
-                    label: sourceItems[index].label,
-                  ),
-                ],
-                if (contact.hasEmailContact && !emailEnabled) ...[
-                  SizedBox(height: spacing.s),
-                  _ContactStatusRow(
-                    icon: LucideIcons.mailWarning,
-                    label: l10n.contactsEmailUnavailableLabel,
-                  ),
-                ],
-              ],
+            child: _ContactIdentityContent(
+              contact: contact,
+              sourceItems: sourceItems,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ContactIdentityContent extends StatelessWidget {
+  const _ContactIdentityContent({
+    required this.contact,
+    required this.sourceItems,
+  });
+
+  final ContactDirectoryEntry contact;
+  final List<({IconData icon, String label})> sourceItems;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final l10n = context.l10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          contact.displayName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: context.modalHeaderTextStyle,
+        ),
+        if (contact.displayName != contact.address) ...[
+          SizedBox(height: spacing.xs),
+          Text(
+            contact.address,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.muted.copyWith(
+              color: context.colorScheme.mutedForeground,
+            ),
+          ),
+        ],
+        if (contact.favorited || sourceItems.isNotEmpty) ...[
+          SizedBox(height: spacing.m),
+          if (contact.favorited) ...[
+            _ContactStatusRow(
+              icon: LucideIcons.star,
+              label: l10n.commonFavorite,
+            ),
+            if (sourceItems.isNotEmpty) SizedBox(height: spacing.s),
+          ],
+          for (var index = 0; index < sourceItems.length; index += 1) ...[
+            if (index > 0) SizedBox(height: spacing.s),
+            _ContactStatusRow(
+              icon: sourceItems[index].icon,
+              label: sourceItems[index].label,
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _ContactDetailsInfoCard extends StatelessWidget {
+  const _ContactDetailsInfoCard({required this.contact, required this.rows});
+
+  final ContactDirectoryEntry contact;
+  final List<({IconData icon, String label, String value})> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiModalSurface(
+      key: ValueKey('contact-details-${contact.address}'),
+      borderColor: context.borderSide.color,
+      padding: EdgeInsets.all(context.spacing.m),
+      child: Column(
+        children: [
+          for (var index = 0; index < rows.length; index += 1) ...[
+            if (index > 0) SizedBox(height: context.spacing.m),
+            _ContactDetailRow(
+              icon: rows[index].icon,
+              label: rows[index].label,
+              value: rows[index].value,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactDetailRow extends StatelessWidget {
+  const _ContactDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: context.sizing.menuItemIconSize,
+          color: context.colorScheme.mutedForeground,
+        ),
+        SizedBox(width: context.spacing.s),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.muted.copyWith(
+                  color: context.colorScheme.mutedForeground,
+                ),
+              ),
+              SizedBox(height: context.spacing.xxs),
+              Text(
+                value,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small.copyWith(
+                  color: context.colorScheme.foreground,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContactFavoriteIndicator extends StatelessWidget {
+  const _ContactFavoriteIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsDirectional.only(end: context.spacing.xs),
+      child: Semantics(
+        label: context.l10n.commonFavorite,
+        child: Icon(
+          Icons.star_rounded,
+          size: context.sizing.menuItemIconSize,
+          color: context.colorScheme.primary,
+        ),
       ),
     );
   }
@@ -952,6 +1097,16 @@ class _ContactDetailsActions extends StatelessWidget {
     await showContactFolderRuleSheet(context, contact: contact);
   }
 
+  Future<void> _openChat(BuildContext context) async {
+    await Navigator.of(context).maybePop(_ContactDetailsSheetAction.openChat);
+  }
+
+  Future<void> _composeEmail(BuildContext context) async {
+    await Navigator.of(
+      context,
+    ).maybePop(_ContactDetailsSheetAction.composeEmail);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -1013,11 +1168,7 @@ class _ContactDetailsActions extends StatelessWidget {
           if (contact.hasXmppRoster)
             AxiButton.outline(
               widthBehavior: AxiButtonWidth.expand,
-              onPressed: disabled
-                  ? null
-                  : () => context.read<ChatsCubit>().openChat(
-                      jid: contact.address,
-                    ),
+              onPressed: disabled ? null : () => _openChat(context),
               child: Text(l10n.commonOpen),
             ),
           if (_emailComposeEnabled(
@@ -1027,13 +1178,7 @@ class _ContactDetailsActions extends StatelessWidget {
             SizedBox(height: spacing.s),
             AxiButton.outline(
               widthBehavior: AxiButtonWidth.expand,
-              onPressed: disabled
-                  ? null
-                  : () => openComposeDraft(
-                      context,
-                      jids: [contact.address],
-                      attachmentMetadataIds: const <String>[],
-                    ),
+              onPressed: disabled ? null : () => _composeEmail(context),
               child: Text(l10n.contactsComposeEmail),
             ),
           ],
@@ -1124,6 +1269,36 @@ List<({IconData icon, String label})> _contactSourceItems(
     if (contact.isEmailOnly)
       (icon: LucideIcons.smartphone, label: l10n.contactsLocalOnlyLabel),
   ];
+}
+
+List<({IconData icon, String label, String value})> _contactDetailRows(
+  AppLocalizations l10n,
+  ContactDirectoryEntry contact, {
+  required bool emailEnabled,
+}) {
+  final folderCollectionId = _trimmedContactDetail(contact.folderCollectionId);
+  return <({IconData icon, String label, String value})>[
+    if (folderCollectionId != null)
+      (
+        icon: LucideIcons.folder,
+        label: l10n.homeTabFolders,
+        value: folderCollectionId,
+      ),
+    if (contact.hasEmailContact && !emailEnabled)
+      (
+        icon: LucideIcons.mailWarning,
+        label: l10n.contactsEmailLabel,
+        value: l10n.contactsEmailUnavailableLabel,
+      ),
+  ];
+}
+
+String? _trimmedContactDetail(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }
 
 String _contactFolderRuleActionLabel(
