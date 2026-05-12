@@ -13,8 +13,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 const String _participantsSectionTitle = 'People';
 const String _organizerSectionLabel = 'Organizer';
 const String _attendeesSectionLabel = 'Attendees';
-const String _organizerNameLabel = 'Name';
-const String _organizerAddressLabel = 'Address';
 const String _organizerNameHint = 'Organizer name';
 const String _organizerAddressHint = 'Organizer address';
 const String _attendeeAddressHint = 'Add attendee';
@@ -196,7 +194,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
-    final TextStyle labelStyle = context.textTheme.labelSm;
+    final TextStyle labelStyle = context.textTheme.labelSm.strong;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,7 +206,6 @@ class _OrganizerFieldState extends State<_OrganizerField> {
             Expanded(
               child: TaskTextField(
                 controller: _addressController,
-                labelText: _organizerAddressLabel,
                 hintText: _organizerAddressHint,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
@@ -222,7 +219,6 @@ class _OrganizerFieldState extends State<_OrganizerField> {
             Expanded(
               child: TaskTextField(
                 controller: _nameController,
-                labelText: _organizerNameLabel,
                 hintText: _organizerNameHint,
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
@@ -333,7 +329,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
   @override
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
-    final TextStyle labelStyle = context.textTheme.labelSm;
+    final TextStyle labelStyle = context.textTheme.labelSm.strong;
     final List<CalendarAttendee> attendees = widget.attendees.isEmpty
         ? _emptyAttendees
         : widget.attendees;

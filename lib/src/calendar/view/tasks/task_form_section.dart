@@ -37,7 +37,7 @@ class TaskSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextStyle style = switch (size) {
-      TaskSectionLabelSize.small => context.textTheme.labelSm,
+      TaskSectionLabelSize.small => context.textTheme.labelSm.strong,
       TaskSectionLabelSize.large => context.textTheme.sectionLabelLg,
       TaskSectionLabelSize.medium => context.textTheme.sectionLabelM,
     };

@@ -10,12 +10,9 @@ import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 const String _linkGeoSectionTitle = 'Link & geo';
-const String _linkFieldLabel = 'Link';
-const String _linkFieldHint = 'https://';
-const String _latitudeFieldLabel = 'Latitude';
-const String _latitudeFieldHint = '0.0000';
-const String _longitudeFieldLabel = 'Longitude';
-const String _longitudeFieldHint = '0.0000';
+const String _linkFieldHint = 'Link';
+const String _latitudeFieldHint = 'Latitude';
+const String _longitudeFieldHint = 'Longitude';
 const String _geoSeparator = ', ';
 const int _geoPrecision = 4;
 
@@ -185,7 +182,6 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
         ],
         TaskTextField(
           controller: _urlController,
-          labelText: _linkFieldLabel,
           hintText: _linkFieldHint,
           textInputAction: TextInputAction.next,
           textCapitalization: TextCapitalization.none,
@@ -200,7 +196,6 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
             Expanded(
               child: TaskTextField(
                 controller: _latitudeController,
-                labelText: _latitudeFieldLabel,
                 hintText: _latitudeFieldHint,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.none,
@@ -214,7 +209,6 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
             Expanded(
               child: TaskTextField(
                 controller: _longitudeController,
-                labelText: _longitudeFieldLabel,
                 hintText: _longitudeFieldHint,
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.none,

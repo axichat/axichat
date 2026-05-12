@@ -45,7 +45,7 @@ class ReminderPreferencesField extends StatefulWidget {
     this.advancedAlarms,
     this.onAdvancedAlarmsChanged,
     this.referenceStart,
-    this.showAdvancedAlarms = true,
+    this.showAdvancedAlarms = false,
     this.enabled = true,
   });
 
@@ -326,7 +326,7 @@ class _ReminderSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final ShadColorScheme colors = context.colorScheme;
-    final TextStyle labelStyle = context.textTheme.labelSm;
+    final TextStyle labelStyle = context.textTheme.labelSm.strong;
     final spacing = context.spacing;
 
     return Column(

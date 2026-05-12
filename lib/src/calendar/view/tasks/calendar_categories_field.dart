@@ -176,7 +176,6 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
         hintText: widget.hintText,
         onSubmitted: _submitInput,
         enabled: widget.enabled,
-        backgroundColor: barBackground,
       ),
     ];
     final Widget content = ChipsBarSurface(
@@ -264,7 +263,6 @@ class _CategoryInputField extends StatelessWidget {
     required this.hintText,
     required this.onSubmitted,
     required this.enabled,
-    required this.backgroundColor,
   });
 
   final TextEditingController controller;
@@ -272,13 +270,14 @@ class _CategoryInputField extends StatelessWidget {
   final String hintText;
   final VoidCallback onSubmitted;
   final bool enabled;
-  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final Color hintColor = colors.mutedForeground.withValues(alpha: 0.8);
-    final TextStyle textStyle = context.textTheme.p;
+    final TextStyle textStyle = context.textTheme.small.copyWith(
+      color: colors.foreground,
+    );
 
     return ConstrainedBox(
       constraints: const BoxConstraints(
@@ -287,30 +286,19 @@ class _CategoryInputField extends StatelessWidget {
       ),
       child: SizedBox(
         height: chipsBarHeight,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(chipsBarHeight / 2),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: context.spacing.s),
-            child: AxiTextInput(
-              controller: controller,
-              focusNode: focusNode,
-              maxLines: 1,
-              enabled: enabled,
-              textInputAction: TextInputAction.done,
-              textCapitalization: TextCapitalization.words,
-              variant: AxiInputVariant.plain,
-              placeholder: Text(hintText),
-              placeholderStyle: textStyle.copyWith(color: hintColor),
-              padding: EdgeInsets.zero,
-              inputPadding: EdgeInsets.zero,
-              style: textStyle,
-              strutStyle: StrutStyle.fromTextStyle(textStyle),
-              onSubmitted: (_) => onSubmitted(),
-            ),
-          ),
+        child: AxiTextInput(
+          controller: controller,
+          focusNode: focusNode,
+          maxLines: 1,
+          enabled: enabled,
+          textInputAction: TextInputAction.done,
+          textCapitalization: TextCapitalization.words,
+          variant: AxiInputVariant.ghost,
+          placeholder: Text(hintText),
+          placeholderStyle: textStyle.copyWith(color: hintColor),
+          style: textStyle,
+          strutStyle: StrutStyle.fromTextStyle(textStyle),
+          onSubmitted: (_) => onSubmitted(),
         ),
       ),
     );

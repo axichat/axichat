@@ -915,14 +915,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             unscheduledOrder,
                           );
                         }
-                        if (!listEquals(
-                          settingsUnscheduledOrder,
-                          unscheduledOrder,
-                        )) {
-                          context
-                              .read<SettingsCubit>()
-                              .saveUnscheduledSidebarOrder(unscheduledOrder);
-                        }
                         orderedUnscheduled = _orderedTasksFromOrder(
                           unscheduledTasks,
                           unscheduledOrder,
@@ -966,11 +958,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         );
                         if (!listEquals(_reminderOrder, reminderOrder)) {
                           _reminderOrder = List<String>.from(reminderOrder);
-                        }
-                        if (!listEquals(settingsReminderOrder, reminderOrder)) {
-                          context
-                              .read<SettingsCubit>()
-                              .saveReminderSidebarOrder(reminderOrder);
                         }
                         orderedReminders = _orderedTasksFromOrder(
                           reminderTasks,
@@ -1078,7 +1065,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         },
                         onUnscheduledReorder: (oldIndex, newIndex) {
                           _handleTaskListReorder(
-                            tasks: orderedUnscheduled,
+                            visibleTasks: orderedUnscheduled,
+                            allTasks: allUnscheduledTasks,
                             cache: _unscheduledOrder,
                             updateCache: (next) {
                               _unscheduledOrder = next;
@@ -1092,7 +1080,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         },
                         onReminderReorder: (oldIndex, newIndex) {
                           _handleTaskListReorder(
-                            tasks: orderedReminders,
+                            visibleTasks: orderedReminders,
+                            allTasks: allReminderTasks,
                             cache: _reminderOrder,
                             updateCache: (next) {
                               _reminderOrder = next;
@@ -2571,6 +2560,26 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @visibleForTesting
   CalendarSidebarState get debugSidebarState => _sidebarController.state;
 
+  @visibleForTesting
+  void debugReorderUnscheduledTasks({
+    required List<CalendarTask> visibleTasks,
+    required List<CalendarTask> allTasks,
+    required int oldIndex,
+    required int newIndex,
+  }) {
+    _handleTaskListReorder(
+      visibleTasks: visibleTasks,
+      allTasks: allTasks,
+      cache: _unscheduledOrder,
+      updateCache: (next) {
+        _unscheduledOrder = next;
+        context.read<SettingsCubit>().saveUnscheduledSidebarOrder(next);
+      },
+      oldIndex: oldIndex,
+      newIndex: newIndex,
+    );
+  }
+
   List<CalendarTask> _sortTasksByDeadline(List<CalendarTask> tasks) {
     final List<CalendarTask> tasksCopy = List.from(tasks);
     final DateTime now = DateTime.now();
@@ -2667,30 +2676,48 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleTaskListReorder({
-    required List<CalendarTask> tasks,
+    required List<CalendarTask> visibleTasks,
+    required List<CalendarTask> allTasks,
     required List<String> cache,
     required void Function(List<String> nextOrder) updateCache,
     required int oldIndex,
     required int newIndex,
   }) {
-    if (tasks.isEmpty) {
+    if (visibleTasks.isEmpty) {
       return;
     }
-    final List<String> order = _deriveOrder(tasks, cache);
-    if (oldIndex < 0 || oldIndex >= order.length) {
+    final List<String> fullOrder = _deriveOrder(allTasks, cache);
+    final Set<String> allIds = allTasks.map((task) => task.id).toSet();
+    final List<String> visibleOrder = [
+      for (final CalendarTask task in visibleTasks)
+        if (allIds.contains(task.id)) task.id,
+    ];
+    if (oldIndex < 0 || oldIndex >= visibleOrder.length) {
       return;
     }
     int targetIndex = newIndex;
     if (newIndex > oldIndex) {
       targetIndex -= 1;
     }
-    if (targetIndex < 0 || targetIndex > order.length) {
+    if (targetIndex < 0 || targetIndex > visibleOrder.length) {
       return;
     }
     setState(() {
-      final List<String> nextOrder = List<String>.from(order);
-      final String moved = nextOrder.removeAt(oldIndex);
-      nextOrder.insert(targetIndex, moved);
+      final List<String> nextVisibleOrder = List<String>.from(visibleOrder);
+      final String moved = nextVisibleOrder.removeAt(oldIndex);
+      nextVisibleOrder.insert(targetIndex, moved);
+
+      final Set<String> visibleIds = nextVisibleOrder.toSet();
+      final Iterator<String> replacements = nextVisibleOrder.iterator;
+      final List<String> nextOrder = <String>[];
+      for (final String id in fullOrder) {
+        if (!visibleIds.contains(id)) {
+          nextOrder.add(id);
+          continue;
+        }
+        replacements.moveNext();
+        nextOrder.add(replacements.current);
+      }
       updateCache(nextOrder);
     });
   }

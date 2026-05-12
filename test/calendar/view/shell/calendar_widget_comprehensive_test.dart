@@ -398,15 +398,35 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Bravo task'), findsNothing);
 
+      tester
+          .state<TaskSidebarState>(find.byType(TaskSidebar))
+          .debugReorderUnscheduledTasks(
+            visibleTasks: [charlie, alpha],
+            allTasks: [charlie, bravo, alpha],
+            oldIndex: 1,
+            newIndex: 0,
+          );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .element(find.byType(TaskSidebar))
+            .read<SettingsCubit>()
+            .state
+            .unscheduledSidebarOrder,
+        [alpha.id, bravo.id, charlie.id],
+      );
+      await tester.pumpAndSettle();
+
       await tester.tap(completedToggle);
       await tester.pumpAndSettle();
 
+      final double alphaTop = tester.getTopLeft(find.text('Alpha task')).dy;
       final double charlieTop = tester.getTopLeft(find.text('Charlie task')).dy;
       final double bravoTop = tester.getTopLeft(find.text('Bravo task')).dy;
-      final double alphaTop = tester.getTopLeft(find.text('Alpha task')).dy;
 
-      expect(charlieTop, lessThan(bravoTop));
-      expect(bravoTop, lessThan(alphaTop));
+      expect(alphaTop, lessThan(bravoTop));
+      expect(bravoTop, lessThan(charlieTop));
     });
 
     testWidgets('TaskSidebar applies configured task list sort modes', (

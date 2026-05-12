@@ -124,7 +124,7 @@ class _ScheduleField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: context.textTheme.labelSm),
+        Text(label.toUpperCase(), style: context.textTheme.labelSm.strong),
         SizedBox(height: spacing.s),
         CalendarDateTimeField(
           value: value,
