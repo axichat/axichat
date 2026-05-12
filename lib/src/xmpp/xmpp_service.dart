@@ -686,6 +686,7 @@ enum _XmppBootstrapOperationOutcome { success, failed, aborted, skipped }
 final class _XmppBootstrapPass {
   _XmppBootstrapPass();
 
+  bool aborted = false;
   final Map<Object, Future<void>> tasks = <Object, Future<void>>{};
   final Map<Object, _XmppBootstrapOperationOutcome> completedOperations =
       <Object, _XmppBootstrapOperationOutcome>{};
@@ -1045,6 +1046,10 @@ class XmppService extends XmppBase
           }
           return;
         }
+        if (event.error is mox.StreamConflictError &&
+            await _recoverFromReconnectStreamConflict()) {
+          return;
+        }
 
         _reconnectBlocked = true;
         _sessionReconnectEnabled = false;
@@ -1058,6 +1063,28 @@ class XmppService extends XmppBase
           );
         }
       });
+  }
+
+  Future<bool> _recoverFromReconnectStreamConflict() async {
+    if (!_sessionReconnectEnabled) {
+      return false;
+    }
+    if (!_connectInFlight && !await _connection.isReconnecting()) {
+      return false;
+    }
+    _xmppLogger.info(
+      'Ignoring stream conflict while reconnect is already active.',
+    );
+    _reconnectBlocked = false;
+    if (connectionState != ConnectionState.connected) {
+      _setConnectionState(ConnectionState.notConnected);
+    }
+    try {
+      await _connection.setShouldReconnect(true);
+    } catch (error, stackTrace) {
+      _xmppLogger.fine(_reconnectEnableFailedLog, error, stackTrace);
+    }
+    return true;
   }
 
   @override
@@ -1196,7 +1223,7 @@ class XmppService extends XmppBase
     if (state != ConnectionState.connected) {
       _clearMamNegotiationState();
       _clearSelfAvatarNegotiationState();
-      _activeBootstrapPass = null;
+      _abortActiveBootstrapPass();
       if (_streamNegotiationsDone.isCompleted) {
         _streamNegotiationsDone = Completer<void>();
       }
@@ -1313,8 +1340,8 @@ class XmppService extends XmppBase
 
   @override
   void resetBootstrapOperations() {
+    _abortActiveBootstrapPass();
     _bootstrapOperations.clear();
-    _activeBootstrapPass = null;
   }
 
   @override
@@ -1342,6 +1369,9 @@ class XmppService extends XmppBase
             .where((operation) => operation.triggers.contains(trigger))
             .toList(growable: false)
           ..sort((left, right) => left.priority.compareTo(right.priority));
+    if (connectionState != ConnectionState.connected) {
+      return;
+    }
     final activePass = pass ?? _activeBootstrapPass ?? _XmppBootstrapPass();
     _activeBootstrapPass ??= activePass;
     if (operations.isEmpty) {
@@ -1355,7 +1385,9 @@ class XmppService extends XmppBase
     final scheduled = activePass.scheduler
         .then((_) async {
           var index = 0;
-          while (index < operations.length) {
+          while (index < operations.length &&
+              !activePass.aborted &&
+              connectionState == ConnectionState.connected) {
             final priority = operations[index].priority;
             final futures = <Future<void>>[];
             while (index < operations.length &&
@@ -1393,6 +1425,15 @@ class XmppService extends XmppBase
     _XmppBootstrapPass pass,
     XmppBootstrapOperation operation,
   ) {
+    if (pass.aborted || connectionState != ConnectionState.connected) {
+      _recordBootstrapOutcome(
+        pass: pass,
+        operation: operation,
+        outcome: _XmppBootstrapOperationOutcome.aborted,
+      );
+      _xmppLogger.fine('${operation.operationName} aborted.');
+      return Future<void>.value();
+    }
     final completed = pass.completedOperations[operation.key];
     if (completed == _XmppBootstrapOperationOutcome.success ||
         completed == _XmppBootstrapOperationOutcome.aborted) {
@@ -1469,6 +1510,15 @@ class XmppService extends XmppBase
     _activeBootstrapPass = null;
   }
 
+  void _abortActiveBootstrapPass() {
+    final pass = _activeBootstrapPass;
+    if (pass == null) {
+      return;
+    }
+    pass.aborted = true;
+    _activeBootstrapPass = null;
+  }
+
   Future<void> _startBootstrapOperation(
     _XmppBootstrapPass pass,
     XmppBootstrapOperation operation,
@@ -1480,7 +1530,13 @@ class XmppService extends XmppBase
     late final Future<void> future;
     future = Future<void>.microtask(() async {
       try {
+        if (pass.aborted || connectionState != ConnectionState.connected) {
+          throw XmppAbortedException();
+        }
         await operation.run();
+        if (pass.aborted || connectionState != ConnectionState.connected) {
+          throw XmppAbortedException();
+        }
         _recordBootstrapOutcome(
           pass: pass,
           operation: operation,

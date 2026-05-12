@@ -2985,6 +2985,186 @@ void main() {
       },
     );
 
+    test('Stream conflict outside reconnect remains fatal.', () async {
+      eventStreamController.add(
+        mox.NonRecoverableErrorEvent(mox.StreamConflictError()),
+      );
+      await pumpEventQueue();
+
+      expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+      expect(
+        await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+        isFalse,
+      );
+    });
+
+    test(
+      'Stream conflict from replaced old stream does not disable active reconnect.',
+      () async {
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(mox.StreamConflictError()),
+        );
+        await pumpEventQueue();
+
+        expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
+        expect(await reconnectionPolicy.getIsReconnecting(), isTrue);
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'Stream conflict from replaced old stream does not demote connected replacement.',
+      () async {
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(mox.StreamConflictError()),
+        );
+        await pumpEventQueue();
+
+        expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
+        expect(xmppService.connectionState, ConnectionState.connected);
+      },
+    );
+
+    test(
+      'Bootstrap pass stops scheduling operations after disconnect.',
+      () async {
+        final operationStarted = Completer<void>();
+        final allowOperationToFinish = Completer<void>();
+        var secondOperationRan = false;
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        xmppService
+          ..registerBootstrapOperation(
+            XmppBootstrapOperation(
+              key: Object(),
+              priority: -2,
+              triggers: const <XmppBootstrapTrigger>{
+                XmppBootstrapTrigger.manualRefresh,
+              },
+              operationName: 'blocking bootstrap test',
+              run: () async {
+                operationStarted.complete();
+                await allowOperationToFinish.future;
+              },
+            ),
+          )
+          ..registerBootstrapOperation(
+            XmppBootstrapOperation(
+              key: Object(),
+              priority: -1,
+              triggers: const <XmppBootstrapTrigger>{
+                XmppBootstrapTrigger.manualRefresh,
+              },
+              operationName: 'second bootstrap test',
+              run: () async {
+                secondOperationRan = true;
+              },
+            ),
+          );
+
+        final runFuture = xmppService.runBootstrapOperations(
+          XmppBootstrapTrigger.manualRefresh,
+        );
+        await operationStarted.future;
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue();
+
+        allowOperationToFinish.complete();
+        await runFuture;
+
+        expect(secondOperationRan, isFalse);
+      },
+    );
+
+    test('Bootstrap pass stops scheduling operations after reset.', () async {
+      final operationStarted = Completer<void>();
+      final allowOperationToFinish = Completer<void>();
+      var secondOperationRan = false;
+
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.notConnected,
+        ),
+      );
+      await pumpEventQueue();
+
+      xmppService
+        ..registerBootstrapOperation(
+          XmppBootstrapOperation(
+            key: Object(),
+            priority: -2,
+            triggers: const <XmppBootstrapTrigger>{
+              XmppBootstrapTrigger.manualRefresh,
+            },
+            operationName: 'blocking bootstrap reset test',
+            run: () async {
+              operationStarted.complete();
+              await allowOperationToFinish.future;
+            },
+          ),
+        )
+        ..registerBootstrapOperation(
+          XmppBootstrapOperation(
+            key: Object(),
+            priority: -1,
+            triggers: const <XmppBootstrapTrigger>{
+              XmppBootstrapTrigger.manualRefresh,
+            },
+            operationName: 'second bootstrap reset test',
+            run: () async {
+              secondOperationRan = true;
+            },
+          ),
+        );
+
+      final runFuture = xmppService.runBootstrapOperations(
+        XmppBootstrapTrigger.manualRefresh,
+      );
+      await operationStarted.future;
+
+      xmppService.resetBootstrapOperations();
+
+      allowOperationToFinish.complete();
+      await runFuture;
+
+      expect(secondOperationRan, isFalse);
+    });
+
     test(
       'Foreground migration is skipped while lower reconnect is active.',
       () async {
