@@ -40,94 +40,95 @@ class AppLocalizationsEs extends AppLocalizations {
       'Las carpetas personalizadas llegarán pronto';
 
   @override
-  String get folderPickerTitle => 'Add to folder';
+  String get folderPickerTitle => 'Agregar a carpeta';
 
   @override
-  String get folderPickerEmpty => 'Create a folder to save this message.';
+  String get folderPickerEmpty => 'Crea una carpeta para guardar este mensaje.';
 
   @override
   String get folderPickerAddFailed =>
-      'Could not add this message to the folder.';
+      'No se pudo agregar este mensaje a la carpeta.';
 
   @override
-  String get folderPickerUpdateFailed => 'Could not update this folder.';
+  String get folderPickerUpdateFailed => 'No se pudo actualizar esta carpeta.';
 
   @override
-  String get folderSystemReceipts => 'Receipts';
+  String get folderSystemReceipts => 'Recibos';
 
   @override
   String get folderSystemMarketing => 'Marketing';
 
   @override
-  String get folderSystemNewsletters => 'Newsletters';
+  String get folderSystemNewsletters => 'Boletines';
 
   @override
-  String get folderCreateTitle => 'New folder';
+  String get folderCreateTitle => 'Nueva carpeta';
 
   @override
-  String get folderCreateAction => 'Create';
+  String get folderCreateAction => 'Crear';
 
   @override
-  String get folderCreateAndAddAction => 'Create and add';
+  String get folderCreateAndAddAction => 'Crear y agregar';
 
   @override
-  String get folderCreateFailed => 'Could not create this folder.';
+  String get folderCreateFailed => 'No se pudo crear esta carpeta.';
 
   @override
-  String get folderNameLabel => 'Folder name';
+  String get folderNameLabel => 'Nombre de carpeta';
 
   @override
-  String get folderNameEmptyError => 'Enter a folder name.';
+  String get folderNameEmptyError => 'Ingresa un nombre de carpeta.';
 
   @override
-  String get folderNameReservedError => 'That folder name is reserved.';
+  String get folderNameReservedError => 'Ese nombre de carpeta está reservado.';
 
   @override
   String get folderNameDuplicateError =>
-      'A folder with that name already exists.';
+      'Ya existe una carpeta con ese nombre.';
 
   @override
-  String get folderMessagesEmpty => 'No messages in this folder yet';
+  String get folderMessagesEmpty => 'Todavía no hay mensajes en esta carpeta';
 
   @override
-  String get folderRemoveMessage => 'Remove from folder';
+  String get folderRemoveMessage => 'Quitar de carpeta';
 
   @override
   String get folderRemoveMessageFailed =>
-      'Could not remove this message from the folder.';
+      'No se pudo quitar este mensaje de la carpeta.';
 
   @override
   String get contactFolderRuleAction => 'Send all to...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+  String get contactFolderRuleMessagesAction =>
+      'Enviar todos los mensajes a...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+  String get contactFolderRuleEmailsAction => 'Enviar todos los correos a...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'Send all messages and emails to...';
+      'Enviar todos los mensajes y correos a...';
 
   @override
   String get contactFolderRuleTitle => 'Send all to folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+  String get contactFolderRuleMessagesTitle => 'Enviar mensajes a carpeta';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+  String get contactFolderRuleEmailsTitle => 'Enviar correos a carpeta';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Send messages and emails to folder';
+      'Enviar mensajes y correos a carpeta';
 
   @override
-  String get contactFolderRuleClear => 'Clear rule';
+  String get contactFolderRuleClear => 'Borrar regla';
 
   @override
   String get contactFolderRuleFailed =>
-      'Could not update this contact folder rule.';
+      'No se pudo actualizar la regla de carpeta de este contacto.';
 
   @override
   String get homeNoModules => 'No hay módulos disponibles';
@@ -215,7 +216,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatSearchExcludeSubject => 'Excluir asunto';
 
   @override
-  String get chatSearchImportantOnly => 'Important only';
+  String get chatSearchImportantOnly => 'Solo importantes';
 
   @override
   String get chatSearchFailed => 'Búsqueda fallida';
@@ -456,10 +457,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatNicknameUpdateFailed => 'No se pudo cambiar el apodo.';
 
   @override
-  String get chatLeaveRoomFailed => 'Could not leave room.';
+  String get chatLeaveRoomFailed => 'No se pudo salir de la sala.';
 
   @override
-  String get chatDestroyRoomFailed => 'Could not destroy room.';
+  String get chatDestroyRoomFailed => 'No se pudo eliminar la sala.';
 
   @override
   String get chatRoomAvatarPermissionDenied =>
@@ -483,10 +484,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatMessageForwardFailed => 'No se pudo reenviar el mensaje.';
 
   @override
-  String get chatMessageAddedToFolder => 'Message added to folder.';
+  String get chatMessageAddedToFolder => 'Mensaje agregado a la carpeta.';
 
   @override
-  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
+  String get chatMessageAddToFolderFailed =>
+      'No se pudo agregar el mensaje a la carpeta.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -744,6 +746,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatContactRenameAction => 'Renombrar';
 
   @override
+  String get chatContactEditAction => 'Editar contacto';
+
+  @override
   String get chatContactRenameTooltip => 'Renombrar contacto';
 
   @override
@@ -805,23 +810,23 @@ class AppLocalizationsEs extends AppLocalizations {
   String get draftSend => 'Enviar borrador';
 
   @override
-  String get emailSendConfirmTitle => 'Review email before sending';
+  String get emailSendConfirmTitle => 'Revisar correo antes de enviar';
 
   @override
   String get emailSendConfirmMessage =>
-      'Confirm the recipients and body below before sending.';
+      'Confirma los destinatarios y el cuerpo abajo antes de enviar.';
 
   @override
-  String get emailSendConfirmRecipientsLabel => 'Recipients';
+  String get emailSendConfirmRecipientsLabel => 'Destinatarios';
 
   @override
-  String get emailSendConfirmBodyLabel => 'Body';
+  String get emailSendConfirmBodyLabel => 'Cuerpo';
 
   @override
-  String get emailSendConfirmEmptyBody => '(No body)';
+  String get emailSendConfirmEmptyBody => '(Sin cuerpo)';
 
   @override
-  String get emailSendConfirmDontShowAgain => 'Don\'t show this again';
+  String get emailSendConfirmDontShowAgain => 'No volver a mostrar';
 
   @override
   String get draftDiscard => 'Descartar';
@@ -995,16 +1000,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatSubjectHint => 'Asunto';
 
   @override
-  String get chatCollapseLongEmails => 'Collapse long emails';
+  String get chatCollapseLongEmails => 'Contraer correos largos';
 
   @override
-  String get chatExpandLongEmails => 'Expand long emails';
+  String get chatExpandLongEmails => 'Expandir correos largos';
 
   @override
   String get chatAttachmentTooltip => 'Adjuntos';
 
   @override
-  String get chatImportantMessagesTooltip => 'Important messages';
+  String get chatImportantMessagesTooltip => 'Mensajes importantes';
 
   @override
   String get chatPinnedMessagesTooltip => 'Mensajes fijados';
@@ -1013,7 +1018,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatPinnedMessagesTitle => 'Mensajes fijados';
 
   @override
-  String get chatAddMessageToFolder => 'Add to folder...';
+  String get chatAddMessageToFolder => 'Agregar a carpeta...';
 
   @override
   String get chatPinMessage => 'Fijar mensaje';
@@ -1029,7 +1034,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'El mensaje fijado no está disponible.';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet';
+  String get importantMessagesEmpty => 'Todavía no hay mensajes importantes';
 
   @override
   String get chatSendMessageTooltip => 'Enviar mensaje';
@@ -1454,21 +1459,22 @@ class AppLocalizationsEs extends AppLocalizations {
   String get signupContinue => 'Continuar';
 
   @override
-  String get signupSkipPassword => 'Skip';
+  String get signupSkipPassword => 'Omitir';
 
   @override
-  String get signupSkipPasswordConfirmTitle => 'Skip password setup?';
+  String get signupSkipPasswordConfirmTitle =>
+      '¿Omitir configuración de contraseña?';
 
   @override
   String get signupSkipPasswordConfirmMessage =>
-      'Axichat will create a secure password and keep it only on this device. You will not be able to sign in or sync this account on any other device unless you later set a password you know in Settings. If you lose this device or delete the app, you will lose this account and all data permanently.';
+      'Axichat creará una contraseña segura y la guardará solo en este dispositivo. No podrás iniciar sesión ni sincronizar esta cuenta en ningún otro dispositivo a menos que más tarde establezcas una contraseña que conozcas en Ajustes. Si pierdes este dispositivo o eliminas la app, perderás esta cuenta y todos los datos de forma permanente.';
 
   @override
-  String get signupSkipPasswordConfirmAction => 'Skip and continue';
+  String get signupSkipPasswordConfirmAction => 'Omitir y continuar';
 
   @override
   String get signupDeviceOnlyRememberMeLocked =>
-      'Remember me is required while using a device-managed password.';
+      'Recordarme es obligatorio mientras se usa una contraseña gestionada por el dispositivo.';
 
   @override
   String get signupProgressLabel => 'Progreso de registro';
@@ -2055,7 +2061,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get profileLinkedEmailAccounts => 'Cuentas de correo';
 
   @override
-  String get profileBlocklistTitle => 'Blocklist';
+  String get profileBlocklistTitle => 'Lista de bloqueo';
 
   @override
   String get profileChangePassword => 'Cambiar contraseña';
@@ -2311,11 +2317,12 @@ class AppLocalizationsEs extends AppLocalizations {
       'Si está activado, Enter envía mensajes de correo. Mayús+Enter inserta una línea nueva.';
 
   @override
-  String get settingsEmailSendConfirmation => 'Confirm before sending email';
+  String get settingsEmailSendConfirmation =>
+      'Confirmar antes de enviar correos';
 
   @override
   String get settingsEmailSendConfirmationDescription =>
-      'Show a review prompt with recipients and body before each email send.';
+      'Muestra una revisión con destinatarios y cuerpo antes de enviar cada correo.';
 
   @override
   String get settingsEmailComposerWatermark =>
@@ -2429,11 +2436,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authDeviceOnlyPasswordManagedChangeHint =>
-      'This account uses a device-managed password. Current password is not required on this device.';
+      'Esta cuenta usa una contraseña gestionada por el dispositivo. La contraseña actual no es necesaria en este dispositivo.';
 
   @override
   String get authDeviceOnlyPasswordManagedDeleteHint =>
-      'This account uses a device-managed password. Axichat will use it automatically to confirm deletion.';
+      'Esta cuenta usa una contraseña gestionada por el dispositivo. Axichat la usará automáticamente para confirmar la eliminación.';
 
   @override
   String get authChangePasswordProgressLabel =>
@@ -2466,7 +2473,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatEmailInteractiveContentBlockedLabel =>
-      'Interactive content blocked for safety';
+      'Contenido interactivo bloqueado por seguridad';
+
+  @override
+  String get chatEmailRecoveredContentLabel => 'Contenido adicional del correo';
+
+  @override
+  String get chatEmailInlineImagesUnsupportedLabel =>
+      'Algunas imágenes insertadas del correo no se pueden mostrar.';
 
   @override
   String get chatAttachmentBlockedDescription =>
@@ -2606,52 +2620,54 @@ class AppLocalizationsEs extends AppLocalizations {
       'Actualización disponible: cierra sesión y reinicia la app';
 
   @override
-  String get updatePromptTitle => 'Update available';
+  String get updatePromptTitle => 'Actualización disponible';
 
   @override
   String get updatePromptStoreMessage =>
-      'A newer version of Axichat is available. Update now to install the latest version.';
+      'Hay una versión más reciente de Axichat disponible. Actualiza ahora para instalar la última versión.';
 
   @override
   String updatePromptStoreMessageVersion(String version) {
-    return 'Version $version of Axichat is available. Update now to install the latest version.';
+    return 'La versión $version de Axichat está disponible. Actualiza ahora para instalar la última versión.';
   }
 
   @override
-  String get updatePromptPatchReadyTitle => 'Patch ready';
+  String get updatePromptPatchReadyTitle => 'Parche listo';
 
   @override
   String get updatePromptPatchReadyMessage =>
-      'The latest Axichat patch is ready. Restart the app to apply it.';
+      'El último parche de Axichat está listo. Reinicia la app para aplicarlo.';
 
   @override
-  String get updateStatusStoreAvailable => 'Update available';
+  String get updateStatusStoreAvailable => 'Actualización disponible';
 
   @override
   String updateStatusStoreAvailableVersion(String version) {
-    return 'Update available: v$version';
+    return 'Actualización disponible: v$version';
   }
 
   @override
-  String get updateStatusPatchReady => 'Patch ready: restart app to apply it';
+  String get updateStatusPatchReady =>
+      'Parche listo: reinicia la app para aplicarlo';
 
   @override
-  String get updateActionUpdate => 'Update';
+  String get updateActionUpdate => 'Actualizar';
 
   @override
-  String get updateActionLater => 'Later';
+  String get updateActionLater => 'Más tarde';
 
   @override
-  String get updateActionOk => 'OK';
+  String get updateActionOk => 'Aceptar';
 
   @override
-  String get updateActionFailed => 'Could not start the update.';
+  String get updateActionFailed => 'No se pudo iniciar la actualización.';
 
   @override
-  String get updateActionOpenFailed => 'Could not open the update page.';
+  String get updateActionOpenFailed =>
+      'No se pudo abrir la página de actualización.';
 
   @override
-  String get updateActionDeclined => 'Update was declined.';
+  String get updateActionDeclined => 'La actualización fue rechazada.';
 
   @override
   String get calendarEditTaskTitle => 'Editar tarea';
@@ -2915,21 +2931,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mucLeaveRoom => 'Salir de la sala';
 
   @override
-  String get mucLeaveRoomConfirmTitle => 'Leave room?';
+  String get mucLeaveRoomConfirmTitle => '¿Salir de la sala?';
 
   @override
   String get mucLeaveRoomConfirmBody =>
-      'You will leave this room and it will close locally until you join again.';
+      'Saldrás de esta sala y se cerrará localmente hasta que vuelvas a unirte.';
 
   @override
-  String get mucDestroyRoom => 'Destroy room';
+  String get mucDestroyRoom => 'Eliminar sala';
 
   @override
-  String get mucDestroyRoomConfirmTitle => 'Destroy room?';
+  String get mucDestroyRoomConfirmTitle => '¿Eliminar sala?';
 
   @override
   String get mucDestroyRoomConfirmBody =>
-      'This removes the room for everyone currently inside it.';
+      'Esto elimina la sala para todos los que están dentro actualmente.';
 
   @override
   String get mucNoMembers => 'Aún no hay miembros';
@@ -3297,31 +3313,31 @@ class AppLocalizationsEs extends AppLocalizations {
   String get contactsLocalOnlyLabel => 'En este dispositivo';
 
   @override
-  String get contactsDetailsSectionTitle => 'Details';
+  String get contactsDetailsSectionTitle => 'Detalles';
 
   @override
-  String get contactsAddressLabel => 'Address';
+  String get contactsAddressLabel => 'Dirección';
 
   @override
   String get contactsStoredLabel => 'Guardado';
 
   @override
-  String get contactsChatContactLabel => 'Chat contact';
+  String get contactsChatContactLabel => 'Contacto de chat';
 
   @override
-  String get contactsEmailContactLabel => 'Email contact';
+  String get contactsEmailContactLabel => 'Contacto de correo';
 
   @override
-  String get contactsMessagesLabel => 'Messages';
+  String get contactsMessagesLabel => 'Mensajes';
 
   @override
   String get contactsEmailLabel => 'Correo';
 
   @override
-  String get contactsMessagesNameLabel => 'Messages name';
+  String get contactsMessagesNameLabel => 'Nombre en mensajes';
 
   @override
-  String get contactsEmailNameLabel => 'Email name';
+  String get contactsEmailNameLabel => 'Nombre de correo';
 
   @override
   String get contactsGivenNameLabel => 'Nombre';
@@ -3389,7 +3405,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String contactsRemoveContactConfirm(Object jid) {
-    return 'Remove $jid from contacts?';
+    return '¿Eliminar $jid de los contactos?';
   }
 
   @override
@@ -4491,11 +4507,11 @@ class AppLocalizationsEs extends AppLocalizations {
       'Busca en la ayuda de tu proveedor o empieza aquí:';
 
   @override
-  String get emailForwardingWelcomeSetupFrom => 'Setup forwarding from:';
+  String get emailForwardingWelcomeSetupFrom => 'Configurar reenvío desde:';
 
   @override
   String get emailForwardingWelcomeOtherProviderHint =>
-      'If you use another provider, their website should have instructions as well.';
+      'Si usas otro proveedor, su sitio web también debería tener instrucciones.';
 
   @override
   String get emailForwardingGuideNotificationsTitle =>
@@ -6477,7 +6493,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authDeviceOnlyPasswordUnavailable =>
-      'Device-managed password is unavailable on this device. Account recovery is not possible.';
+      'La contraseña gestionada por el dispositivo no está disponible en este dispositivo. No es posible recuperar la cuenta.';
 
   @override
   String get authAccountNotFound => 'No se encontró la cuenta.';

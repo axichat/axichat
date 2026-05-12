@@ -40,94 +40,97 @@ class AppLocalizationsDe extends AppLocalizations {
       'Benutzerdefinierte Ordner kommen bald';
 
   @override
-  String get folderPickerTitle => 'Add to folder';
+  String get folderPickerTitle => 'Zu Ordner hinzufügen';
 
   @override
-  String get folderPickerEmpty => 'Create a folder to save this message.';
+  String get folderPickerEmpty =>
+      'Erstelle einen Ordner, um diese Nachricht zu speichern.';
 
   @override
   String get folderPickerAddFailed =>
-      'Could not add this message to the folder.';
+      'Diese Nachricht konnte nicht zum Ordner hinzugefügt werden.';
 
   @override
-  String get folderPickerUpdateFailed => 'Could not update this folder.';
+  String get folderPickerUpdateFailed =>
+      'Dieser Ordner konnte nicht aktualisiert werden.';
 
   @override
-  String get folderSystemReceipts => 'Receipts';
+  String get folderSystemReceipts => 'Belege';
 
   @override
   String get folderSystemMarketing => 'Marketing';
 
   @override
-  String get folderSystemNewsletters => 'Newsletters';
+  String get folderSystemNewsletters => 'Newsletter';
 
   @override
-  String get folderCreateTitle => 'New folder';
+  String get folderCreateTitle => 'Neuer Ordner';
 
   @override
-  String get folderCreateAction => 'Create';
+  String get folderCreateAction => 'Erstellen';
 
   @override
-  String get folderCreateAndAddAction => 'Create and add';
+  String get folderCreateAndAddAction => 'Erstellen und hinzufügen';
 
   @override
-  String get folderCreateFailed => 'Could not create this folder.';
+  String get folderCreateFailed =>
+      'Dieser Ordner konnte nicht erstellt werden.';
 
   @override
-  String get folderNameLabel => 'Folder name';
+  String get folderNameLabel => 'Ordnername';
 
   @override
-  String get folderNameEmptyError => 'Enter a folder name.';
+  String get folderNameEmptyError => 'Ordnernamen eingeben.';
 
   @override
-  String get folderNameReservedError => 'That folder name is reserved.';
+  String get folderNameReservedError => 'Dieser Ordnername ist reserviert.';
 
   @override
   String get folderNameDuplicateError =>
-      'A folder with that name already exists.';
+      'Ein Ordner mit diesem Namen existiert bereits.';
 
   @override
-  String get folderMessagesEmpty => 'No messages in this folder yet';
+  String get folderMessagesEmpty => 'Noch keine Nachrichten in diesem Ordner';
 
   @override
-  String get folderRemoveMessage => 'Remove from folder';
+  String get folderRemoveMessage => 'Aus Ordner entfernen';
 
   @override
   String get folderRemoveMessageFailed =>
-      'Could not remove this message from the folder.';
+      'Diese Nachricht konnte nicht aus dem Ordner entfernt werden.';
 
   @override
   String get contactFolderRuleAction => 'Send all to...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+  String get contactFolderRuleMessagesAction => 'Alle Nachrichten senden an...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+  String get contactFolderRuleEmailsAction => 'Alle E-Mails senden an...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'Send all messages and emails to...';
+      'Alle Nachrichten und E-Mails senden an...';
 
   @override
   String get contactFolderRuleTitle => 'Send all to folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+  String get contactFolderRuleMessagesTitle => 'Nachrichten an Ordner senden';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+  String get contactFolderRuleEmailsTitle => 'E-Mails an Ordner senden';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Send messages and emails to folder';
+      'Nachrichten und E-Mails an Ordner senden';
 
   @override
-  String get contactFolderRuleClear => 'Clear rule';
+  String get contactFolderRuleClear => 'Regel löschen';
 
   @override
   String get contactFolderRuleFailed =>
-      'Could not update this contact folder rule.';
+      'Kontakt-Ordner-Regel konnte nicht aktualisiert werden.';
 
   @override
   String get homeNoModules => 'Keine Module verfügbar';
@@ -215,7 +218,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatSearchExcludeSubject => 'Betreff ausschließen';
 
   @override
-  String get chatSearchImportantOnly => 'Important only';
+  String get chatSearchImportantOnly => 'Nur wichtige';
 
   @override
   String get chatSearchFailed => 'Suche fehlgeschlagen';
@@ -457,10 +460,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Spitzname konnte nicht geändert werden.';
 
   @override
-  String get chatLeaveRoomFailed => 'Could not leave room.';
+  String get chatLeaveRoomFailed => 'Raum konnte nicht verlassen werden.';
 
   @override
-  String get chatDestroyRoomFailed => 'Could not destroy room.';
+  String get chatDestroyRoomFailed => 'Raum konnte nicht gelöscht werden.';
 
   @override
   String get chatRoomAvatarPermissionDenied =>
@@ -485,10 +488,11 @@ class AppLocalizationsDe extends AppLocalizations {
       'Nachricht konnte nicht weitergeleitet werden.';
 
   @override
-  String get chatMessageAddedToFolder => 'Message added to folder.';
+  String get chatMessageAddedToFolder => 'Nachricht zum Ordner hinzugefügt.';
 
   @override
-  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
+  String get chatMessageAddToFolderFailed =>
+      'Nachricht konnte nicht zum Ordner hinzugefügt werden.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -546,7 +550,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatComposerEmailHint => 'E-Mail-Nachricht senden';
 
   @override
-  String get chatComposerEmailWatermark => 'Sent from Axichat';
+  String get chatComposerEmailWatermark => 'Gesendet von Axichat';
 
   @override
   String get chatTransportChoiceTitle => 'Sendeart wählen';
@@ -747,6 +751,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatContactRenameAction => 'Umbenennen';
 
   @override
+  String get chatContactEditAction => 'Kontakt bearbeiten';
+
+  @override
   String get chatContactRenameTooltip => 'Kontakt umbenennen';
 
   @override
@@ -809,23 +816,23 @@ class AppLocalizationsDe extends AppLocalizations {
   String get draftSend => 'Entwurf senden';
 
   @override
-  String get emailSendConfirmTitle => 'Review email before sending';
+  String get emailSendConfirmTitle => 'E-Mail vor dem Senden prüfen';
 
   @override
   String get emailSendConfirmMessage =>
-      'Confirm the recipients and body below before sending.';
+      'Bestätige die Empfänger und den Inhalt unten vor dem Senden.';
 
   @override
-  String get emailSendConfirmRecipientsLabel => 'Recipients';
+  String get emailSendConfirmRecipientsLabel => 'Empfänger';
 
   @override
-  String get emailSendConfirmBodyLabel => 'Body';
+  String get emailSendConfirmBodyLabel => 'Inhalt';
 
   @override
-  String get emailSendConfirmEmptyBody => '(No body)';
+  String get emailSendConfirmEmptyBody => '(Kein Inhalt)';
 
   @override
-  String get emailSendConfirmDontShowAgain => 'Don\'t show this again';
+  String get emailSendConfirmDontShowAgain => 'Nicht erneut anzeigen';
 
   @override
   String get draftDiscard => 'Verwerfen';
@@ -1000,16 +1007,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatSubjectHint => 'Betreff';
 
   @override
-  String get chatCollapseLongEmails => 'Collapse long emails';
+  String get chatCollapseLongEmails => 'Lange E-Mails einklappen';
 
   @override
-  String get chatExpandLongEmails => 'Expand long emails';
+  String get chatExpandLongEmails => 'Lange E-Mails ausklappen';
 
   @override
   String get chatAttachmentTooltip => 'Anhänge';
 
   @override
-  String get chatImportantMessagesTooltip => 'Important messages';
+  String get chatImportantMessagesTooltip => 'Wichtige Nachrichten';
 
   @override
   String get chatPinnedMessagesTooltip => 'Angeheftete Nachrichten';
@@ -1018,7 +1025,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatPinnedMessagesTitle => 'Angeheftete Nachrichten';
 
   @override
-  String get chatAddMessageToFolder => 'Add to folder...';
+  String get chatAddMessageToFolder => 'Zu Ordner hinzufügen...';
 
   @override
   String get chatPinMessage => 'Nachricht anheften';
@@ -1034,7 +1041,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Angeheftete Nachricht ist nicht verfügbar.';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet';
+  String get importantMessagesEmpty => 'Noch keine wichtigen Nachrichten';
 
   @override
   String get chatSendMessageTooltip => 'Nachricht senden';
@@ -2065,7 +2072,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileLinkedEmailAccounts => 'E-Mail-Konten';
 
   @override
-  String get profileBlocklistTitle => 'Blocklist';
+  String get profileBlocklistTitle => 'Blockliste';
 
   @override
   String get profileChangePassword => 'Passwort ändern';
@@ -2319,18 +2326,20 @@ class AppLocalizationsDe extends AppLocalizations {
       'Wenn aktiviert, sendet Enter E-Mail-Nachrichten. Umschalt+Enter fügt eine neue Zeile ein.';
 
   @override
-  String get settingsEmailSendConfirmation => 'Confirm before sending email';
+  String get settingsEmailSendConfirmation =>
+      'Vor dem Senden von E-Mails bestätigen';
 
   @override
   String get settingsEmailSendConfirmationDescription =>
-      'Show a review prompt with recipients and body before each email send.';
+      'Vor jedem E-Mail-Versand eine Prüfung mit Empfängern und Inhalt anzeigen.';
 
   @override
-  String get settingsEmailComposerWatermark => 'Prepopulate email watermark';
+  String get settingsEmailComposerWatermark =>
+      'E-Mail-Wasserzeichen vorbefüllen';
 
   @override
   String get settingsEmailComposerWatermarkDescription =>
-      'Pre-fills new email messages with \"Sent from Axichat\" text that you can edit or delete.';
+      'Füllt neue E-Mails mit dem Text \"Gesendet von Axichat\" vor, den du bearbeiten oder löschen kannst.';
 
   @override
   String get settingsTypingIndicators => 'Tippanzeigen senden';
@@ -2471,7 +2480,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatEmailInteractiveContentBlockedLabel =>
-      'Interactive content blocked for safety';
+      'Interaktive Inhalte aus Sicherheitsgründen blockiert';
+
+  @override
+  String get chatEmailRecoveredContentLabel => 'Zusätzlicher E-Mail-Inhalt';
+
+  @override
+  String get chatEmailInlineImagesUnsupportedLabel =>
+      'Einige eingebettete E-Mail-Bilder können nicht angezeigt werden.';
 
   @override
   String get chatAttachmentBlockedDescription =>
@@ -2611,52 +2627,54 @@ class AppLocalizationsDe extends AppLocalizations {
       'Update verfügbar: abmelden und die App neu starten';
 
   @override
-  String get updatePromptTitle => 'Update available';
+  String get updatePromptTitle => 'Update verfügbar';
 
   @override
   String get updatePromptStoreMessage =>
-      'A newer version of Axichat is available. Update now to install the latest version.';
+      'Eine neuere Version von Axichat ist verfügbar. Aktualisiere jetzt, um die neueste Version zu installieren.';
 
   @override
   String updatePromptStoreMessageVersion(String version) {
-    return 'Version $version of Axichat is available. Update now to install the latest version.';
+    return 'Version $version von Axichat ist verfügbar. Aktualisiere jetzt, um die neueste Version zu installieren.';
   }
 
   @override
-  String get updatePromptPatchReadyTitle => 'Patch ready';
+  String get updatePromptPatchReadyTitle => 'Patch bereit';
 
   @override
   String get updatePromptPatchReadyMessage =>
-      'The latest Axichat patch is ready. Restart the app to apply it.';
+      'Der neueste Axichat-Patch ist bereit. Starte die App neu, um ihn anzuwenden.';
 
   @override
-  String get updateStatusStoreAvailable => 'Update available';
+  String get updateStatusStoreAvailable => 'Update verfügbar';
 
   @override
   String updateStatusStoreAvailableVersion(String version) {
-    return 'Update available: v$version';
+    return 'Update verfügbar: v$version';
   }
 
   @override
-  String get updateStatusPatchReady => 'Patch ready: restart app to apply it';
+  String get updateStatusPatchReady =>
+      'Patch bereit: App neu starten, um ihn anzuwenden';
 
   @override
-  String get updateActionUpdate => 'Update';
+  String get updateActionUpdate => 'Aktualisieren';
 
   @override
-  String get updateActionLater => 'Later';
+  String get updateActionLater => 'Später';
 
   @override
   String get updateActionOk => 'OK';
 
   @override
-  String get updateActionFailed => 'Could not start the update.';
+  String get updateActionFailed => 'Update konnte nicht gestartet werden.';
 
   @override
-  String get updateActionOpenFailed => 'Could not open the update page.';
+  String get updateActionOpenFailed =>
+      'Update-Seite konnte nicht geöffnet werden.';
 
   @override
-  String get updateActionDeclined => 'Update was declined.';
+  String get updateActionDeclined => 'Update wurde abgelehnt.';
 
   @override
   String get calendarEditTaskTitle => 'Aufgabe bearbeiten';
@@ -2923,21 +2941,21 @@ class AppLocalizationsDe extends AppLocalizations {
   String get mucLeaveRoom => 'Raum verlassen';
 
   @override
-  String get mucLeaveRoomConfirmTitle => 'Leave room?';
+  String get mucLeaveRoomConfirmTitle => 'Raum verlassen?';
 
   @override
   String get mucLeaveRoomConfirmBody =>
-      'You will leave this room and it will close locally until you join again.';
+      'Du verlässt diesen Raum, und er wird lokal geschlossen, bis du wieder beitrittst.';
 
   @override
-  String get mucDestroyRoom => 'Destroy room';
+  String get mucDestroyRoom => 'Raum löschen';
 
   @override
-  String get mucDestroyRoomConfirmTitle => 'Destroy room?';
+  String get mucDestroyRoomConfirmTitle => 'Raum löschen?';
 
   @override
   String get mucDestroyRoomConfirmBody =>
-      'This removes the room for everyone currently inside it.';
+      'Dadurch wird der Raum für alle entfernt, die sich derzeit darin befinden.';
 
   @override
   String get mucNoMembers => 'Noch keine Mitglieder';
@@ -3306,31 +3324,31 @@ class AppLocalizationsDe extends AppLocalizations {
   String get contactsLocalOnlyLabel => 'Nur auf diesem Gerät';
 
   @override
-  String get contactsDetailsSectionTitle => 'Details';
+  String get contactsDetailsSectionTitle => 'Einzelheiten';
 
   @override
-  String get contactsAddressLabel => 'Address';
+  String get contactsAddressLabel => 'Adresse';
 
   @override
   String get contactsStoredLabel => 'Gespeichert';
 
   @override
-  String get contactsChatContactLabel => 'Chat contact';
+  String get contactsChatContactLabel => 'Chat-Kontakt';
 
   @override
-  String get contactsEmailContactLabel => 'Email contact';
+  String get contactsEmailContactLabel => 'E-Mail-Kontakt';
 
   @override
-  String get contactsMessagesLabel => 'Messages';
+  String get contactsMessagesLabel => 'Nachrichten';
 
   @override
   String get contactsEmailLabel => 'E-Mail';
 
   @override
-  String get contactsMessagesNameLabel => 'Messages name';
+  String get contactsMessagesNameLabel => 'Name für Nachrichten';
 
   @override
-  String get contactsEmailNameLabel => 'Email name';
+  String get contactsEmailNameLabel => 'E-Mail-Name';
 
   @override
   String get contactsGivenNameLabel => 'Vorname';
@@ -3398,7 +3416,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String contactsRemoveContactConfirm(Object jid) {
-    return 'Remove $jid from contacts?';
+    return '$jid aus Kontakten entfernen?';
   }
 
   @override
@@ -4496,11 +4514,11 @@ class AppLocalizationsDe extends AppLocalizations {
       'Suche in der Hilfe deines Anbieters oder starte hier:';
 
   @override
-  String get emailForwardingWelcomeSetupFrom => 'Setup forwarding from:';
+  String get emailForwardingWelcomeSetupFrom => 'Weiterleitung einrichten von:';
 
   @override
   String get emailForwardingWelcomeOtherProviderHint =>
-      'If you use another provider, their website should have instructions as well.';
+      'Wenn du einen anderen Anbieter verwendest, sollte dessen Website ebenfalls Anleitungen enthalten.';
 
   @override
   String get emailForwardingGuideNotificationsTitle =>

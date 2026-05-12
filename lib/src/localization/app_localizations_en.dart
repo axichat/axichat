@@ -731,6 +731,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatContactRenameAction => 'Rename';
 
   @override
+  String get chatContactEditAction => 'Edit contact';
+
+  @override
   String get chatContactRenameTooltip => 'Rename contact';
 
   @override
@@ -2430,6 +2433,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chatEmailInteractiveContentBlockedLabel =>
       'Interactive content blocked for safety';
+
+  @override
+  String get chatEmailRecoveredContentLabel => 'Additional email content';
+
+  @override
+  String get chatEmailInlineImagesUnsupportedLabel =>
+      'Some inline email images cannot be shown.';
 
   @override
   String get chatAttachmentBlockedDescription =>

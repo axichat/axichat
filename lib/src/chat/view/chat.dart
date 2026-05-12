@@ -1631,33 +1631,15 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  void _openEmailInFullView({required String messageId}) {
-    if (!mounted) return;
-    unawaited(_selectMessage(messageId));
-  }
-
   void _appendCollapsedEmailPreviewBubbleContent({
     required BuildContext context,
-    required bool isSelfBubble,
-    required bool shouldShowViewFullEmailAction,
     required String collapsedEmailPreviewText,
-    required String messageId,
     required Object bubbleContentKey,
     required TextStyle baseTextStyle,
     required List<InlineSpan> messageDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<Widget> bubbleTextChildren,
   }) {
-    final l10n = context.l10n;
-    if (shouldShowViewFullEmailAction) {
-      bubbleTextChildren.add(
-        _MessageViewFullAction(
-          self: isSelfBubble,
-          label: l10n.chatMessageViewFullAction,
-          onPressed: () => _openEmailInFullView(messageId: messageId),
-        ),
-      );
-    }
     bubbleTextChildren.add(
       Text(
         collapsedEmailPreviewText,
@@ -1681,12 +1663,10 @@ class _ChatState extends State<Chat> {
     required BuildContext context,
     required bool isSelfBubble,
     required bool isSingleSelection,
-    required bool shouldShowViewFullEmailAction,
     required bool autoLoadEmailImages,
     required bool hasRemoteHtmlImages,
     required String normalizedHtmlBody,
     required String? normalizedHtmlText,
-    required String messageId,
     required String? messageDatabaseId,
     required Object bubbleContentKey,
     required TextStyle baseTextStyle,
@@ -1715,10 +1695,6 @@ class _ChatState extends State<Chat> {
     final shouldUseSelectedInlineEmailWebView =
         isSingleSelection && shouldRenderHtmlBody;
     final shouldShowImageGallery = hasRemoteHtmlImages && shouldRenderHtmlBody;
-    final shouldShowViewFullInMessageBubble =
-        shouldUseSelectedInlineEmailWebView
-        ? true
-        : shouldShowViewFullEmailAction;
     if (!shouldRenderHtmlBody &&
         emailFallbackText != null &&
         emailFallbackText.isNotEmpty) {
@@ -1735,19 +1711,6 @@ class _ChatState extends State<Chat> {
       );
     }
     if (shouldRenderHtmlBody) {
-      if (shouldShowViewFullInMessageBubble) {
-        bubbleTextChildren.add(
-          _MessageViewFullAction(
-            self: isSelfBubble,
-            label: shouldUseSelectedInlineEmailWebView
-                ? context.l10n.commonHide
-                : context.l10n.chatMessageViewFullAction,
-            onPressed: shouldUseSelectedInlineEmailWebView
-                ? () => unawaited(_clearMessageSelection())
-                : () => _openEmailInFullView(messageId: messageId),
-          ),
-        );
-      }
       final linkColor =
           linkStyle.color ??
           (isSelfBubble
@@ -1803,9 +1766,6 @@ class _ChatState extends State<Chat> {
 
   void _appendTextBodyBubbleContent({
     required BuildContext context,
-    required bool isSelfBubble,
-    required bool shouldShowViewFullEmailAction,
-    required String messageId,
     required Object bubbleContentKey,
     required String displayMessageText,
     required String trimmedDisplayMessageText,
@@ -1815,16 +1775,6 @@ class _ChatState extends State<Chat> {
     required Map<int, double> detailOpticalOffsetFactors,
     required List<Widget> bubbleTextChildren,
   }) {
-    final l10n = context.l10n;
-    if (shouldShowViewFullEmailAction) {
-      bubbleTextChildren.add(
-        _MessageViewFullAction(
-          self: isSelfBubble,
-          label: l10n.chatMessageViewFullAction,
-          onPressed: () => _openEmailInFullView(messageId: messageId),
-        ),
-      );
-    }
     if (trimmedDisplayMessageText.isNotEmpty) {
       bubbleTextChildren.add(
         _ParsedMessageBody(
@@ -2113,11 +2063,21 @@ class _ChatState extends State<Chat> {
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
         : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
+    final visibleSanitizedHtmlText = normalizedHtmlBody == null
+        ? null
+        : HtmlContentCodec.toPlainText(
+            HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+              normalizedHtmlBody,
+              allowRemoteImages: false,
+            ),
+          ).trim();
     final displayMessageText = messageText;
     final trimmedDisplayMessageText = displayMessageText.trim();
     final textBubbleMessageText =
         isEmailMessage && trimmedDisplayMessageText.isEmpty
-        ? (normalizedHtmlText ?? displayMessageText)
+        ? (visibleSanitizedHtmlText?.isNotEmpty == true
+              ? visibleSanitizedHtmlText!
+              : displayMessageText)
         : displayMessageText;
     final trimmedTextBubbleMessageText = textBubbleMessageText.trim();
     final (
@@ -2158,7 +2118,7 @@ class _ChatState extends State<Chat> {
         metadataIdForCaption.isNotEmpty;
     final fullEmailPreviewText = displayMessageText.trim().isNotEmpty
         ? displayMessageText.trim()
-        : (normalizedHtmlText?.trim() ?? _emptyText);
+        : (visibleSanitizedHtmlText?.trim() ?? _emptyText);
     final collapsedEmailPreviewText = _collapsedEmailPreviewText(
       fullEmailPreviewText,
     );
@@ -2188,15 +2148,31 @@ class _ChatState extends State<Chat> {
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
         (defaultShowsInlineEmailHtmlBody || isSingleSelection);
-    final shouldShowViewFullEmailAction =
-        hasRichEmailHtmlBody &&
-        shouldRenderTextContent &&
-        !hasAttachmentCaption &&
-        !isSingleSelection;
+    final recoveredEmailContent =
+        isEmailMessage && normalizedHtmlBody != null && shouldRenderTextContent
+        ? HtmlContentCodec.recoverSanitizedEmailContent(
+            normalizedHtmlBody,
+            visibleSanitizedText: [
+              if (trimmedDisplayMessageText.isNotEmpty)
+                trimmedDisplayMessageText,
+              if (visibleSanitizedHtmlText?.isNotEmpty == true)
+                visibleSanitizedHtmlText!,
+            ].join('\n'),
+          )
+        : const <EmailRecoveredContent>[];
     final autoLoadEmailImages = context
         .watch<SettingsCubit>()
         .state
         .autoLoadEmailImages;
+    if (recoveredEmailContent.isNotEmpty) {
+      bubbleTextChildren.add(
+        EmailRecoveredContentView(
+          items: recoveredEmailContent,
+          textStyle: baseTextStyle,
+          onLinkTap: _handleLinkTap,
+        ),
+      );
+    }
     if (hasAttachmentCaption) {
       _appendAttachmentCaptionBubbleContent(
         context: context,
@@ -2211,10 +2187,7 @@ class _ChatState extends State<Chat> {
     } else if (shouldCollapseEmailPreview) {
       _appendCollapsedEmailPreviewBubbleContent(
         context: context,
-        isSelfBubble: isSelfBubble,
-        shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
         collapsedEmailPreviewText: collapsedEmailPreviewText,
-        messageId: messageModel.stanzaID,
         bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
         messageDetails: messageDetails,
@@ -2229,12 +2202,10 @@ class _ChatState extends State<Chat> {
         context: context,
         isSelfBubble: isSelfBubble,
         isSingleSelection: isSingleSelection,
-        shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
         autoLoadEmailImages: autoLoadEmailImages,
         hasRemoteHtmlImages: hasRemoteHtmlImages,
         normalizedHtmlBody: normalizedHtmlBody,
-        normalizedHtmlText: normalizedHtmlText,
-        messageId: messageModel.stanzaID,
+        normalizedHtmlText: visibleSanitizedHtmlText,
         messageDatabaseId: messageModel.id,
         bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
@@ -2248,9 +2219,6 @@ class _ChatState extends State<Chat> {
     } else if (shouldRenderTextContent) {
       _appendTextBodyBubbleContent(
         context: context,
-        isSelfBubble: isSelfBubble,
-        shouldShowViewFullEmailAction: shouldShowViewFullEmailAction,
-        messageId: messageModel.stanzaID,
         bubbleContentKey: bubbleContentKey,
         displayMessageText: textBubbleMessageText,
         trimmedDisplayMessageText: trimmedTextBubbleMessageText,

@@ -6,6 +6,50 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
 import 'package:axichat/src/common/url_safety.dart';
 
+enum EmailRecoveredContentKind {
+  verificationCode,
+  actionLink,
+  reference,
+  additionalText;
+
+  int get _sortPriority => switch (this) {
+    EmailRecoveredContentKind.verificationCode => 0,
+    EmailRecoveredContentKind.actionLink => 1,
+    EmailRecoveredContentKind.reference => 2,
+    EmailRecoveredContentKind.additionalText => 3,
+  };
+}
+
+class EmailRecoveredContent {
+  const EmailRecoveredContent({
+    required this.kind,
+    required this.text,
+    this.href,
+  });
+
+  final EmailRecoveredContentKind kind;
+  final String text;
+  final String? href;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmailRecoveredContent &&
+          other.kind == kind &&
+          other.text == text &&
+          other.href == href;
+
+  @override
+  int get hashCode => Object.hash(kind, text, href);
+}
+
+class _EmailRecoveryCandidate {
+  const _EmailRecoveryCandidate({required this.text, this.href});
+
+  final String text;
+  final String? href;
+}
+
 class HtmlContentCodec {
   static const String _htmlNamespaceUri = 'http://www.w3.org/1999/xhtml';
   static const Set<String> _flutterTableWrapperTags = <String>{
@@ -50,9 +94,9 @@ class HtmlContentCodec {
       'display:inline-block; vertical-align:top; margin-right:8px; font-weight:bold;';
   static const String _tableRowStyle =
       'display:block; padding:0; margin:0 0 4px 0;';
-  static const String _webViewViewportContent =
+  static const String _standardWebViewViewportContent =
       'width=device-width, initial-scale=1.0, viewport-fit=cover';
-  static const String _webViewBaseStyle = '''
+  static const String _standardWebViewBaseStyle = '''
 html, body {
   margin: 0 !important;
   padding: 0 !important;
@@ -344,6 +388,32 @@ pre, code {
     'track',
     'video',
   };
+  static const Set<String> _emailRecoveryContainerTags = <String>{
+    'button',
+    'form',
+    'option',
+    'select',
+    'textarea',
+  };
+  static const Set<String> _emailRecoveryExcludedTextTags = <String>{
+    'audio',
+    'base',
+    'canvas',
+    'embed',
+    'frame',
+    'frameset',
+    'iframe',
+    'input',
+    'link',
+    'meta',
+    'object',
+    'script',
+    'source',
+    'style',
+    'svg',
+    'track',
+    'video',
+  };
   static const Set<String> _webViewRemovedAttributes = <String>{
     'action',
     'formaction',
@@ -369,6 +439,30 @@ pre, code {
     caseSensitive: false,
   );
   static final RegExp _cssCommentPattern = RegExp(r'/\*[\s\S]*?\*/');
+  static final RegExp _emailRecoveryVerificationContextPattern = RegExp(
+    r'\b(?:code|otp|one[-\s]?time|verification|verify|security|login|sign[-\s]?in|confirm(?:ation)?)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoveryStandaloneCodePattern = RegExp(
+    r'^[A-Z0-9](?:[A-Z0-9 -]{2,12}[A-Z0-9])$',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoveryCodeTokenPattern = RegExp(
+    r'\b[A-Z0-9]{4,10}\b',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoveryReferencePattern = RegExp(
+    r'\b(?:booking|confirmation|invoice|order|receipt|reference|ticket)\b.{0,40}\b(?:id|no|number|#)?\s*[A-Z0-9][A-Z0-9-]{3,}\b',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoveryUrlLikeLabelPattern = RegExp(
+    r'^(?:https?|data|cid):',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoverySpacerLabelPattern = RegExp(
+    r'\b(?:beacon|pixel|spacer|tracking)\b',
+    caseSensitive: false,
+  );
   static final RegExp _cssExpressionPattern = RegExp(
     r'expression\s*\([^)]*\)',
     caseSensitive: false,
@@ -533,6 +627,45 @@ pre, code {
     }
   }
 
+  static List<EmailRecoveredContent> recoverSanitizedEmailContent(
+    String html, {
+    String? visibleSanitizedText,
+  }) {
+    final trimmed = html.trim();
+    if (trimmed.isEmpty) {
+      return const <EmailRecoveredContent>[];
+    }
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      final candidates = <_EmailRecoveryCandidate>[];
+      _collectEmailRecoveryCandidates(fragment.nodes, candidates, budget, 0);
+      if (candidates.isEmpty) {
+        return const <EmailRecoveredContent>[];
+      }
+      final visibleKeys = _emailRecoveryVisibleKeys(visibleSanitizedText ?? '');
+      final recovered = <EmailRecoveredContent>[];
+      final byTextKey = <String, int>{};
+      for (final candidate in candidates) {
+        _addEmailRecoveredContent(candidate, recovered, byTextKey, visibleKeys);
+      }
+      recovered.sort((a, b) {
+        final kindOrder = a.kind._sortPriority.compareTo(b.kind._sortPriority);
+        if (kindOrder != 0) {
+          return kindOrder;
+        }
+        return a.text.compareTo(b.text);
+      });
+      return List<EmailRecoveredContent>.unmodifiable(recovered);
+    } on Exception {
+      return const <EmailRecoveredContent>[];
+    }
+  }
+
   static bool shouldRenderRichEmailHtml({
     required String? normalizedHtmlBody,
     required String? normalizedHtmlText,
@@ -577,6 +710,15 @@ pre, code {
       final uri = Uri.tryParse(source);
       final scheme = uri?.scheme.trim().toLowerCase();
       if (_remoteImageSchemes.contains(scheme)) return true;
+    }
+    return false;
+  }
+
+  static bool containsCidImages(String html) {
+    for (final source in imageSources(html)) {
+      final uri = Uri.tryParse(source);
+      final scheme = uri?.scheme.trim().toLowerCase();
+      if (scheme == 'cid') return true;
     }
     return false;
   }
@@ -657,7 +799,7 @@ pre, code {
     required bool includeWebViewChrome,
   }) {
     final document = html_parser.parse(_truncateHtmlInput(html));
-    _removeHiddenEmailNodes(document.nodes);
+    _removeRecoveredEmailNodes(document.nodes);
     if (includeWebViewChrome) {
       final head =
           document.head ??
@@ -683,11 +825,11 @@ pre, code {
       head.append(
         dom.Element.tag('meta')
           ..attributes['name'] = 'viewport'
-          ..attributes['content'] = _webViewViewportContent,
+          ..attributes['content'] = _standardWebViewViewportContent,
       );
       final styleElement = document.createElement('style')
         ..id = 'axichat-email-webview-style'
-        ..text = _webViewBaseStyle;
+        ..text = _standardWebViewBaseStyle;
       head.append(styleElement);
     }
     _normalizeWebViewNodes(
@@ -703,7 +845,7 @@ pre, code {
     required bool allowRemoteImages,
   }) {
     final document = html_parser.parse(_truncateHtmlInput(html));
-    _removeHiddenEmailNodes(document.nodes);
+    _removeRecoveredEmailNodes(document.nodes);
     _normalizeFlutterHtmlNodes(
       document.nodes,
       allowRemoteImages: allowRemoteImages,
@@ -762,7 +904,9 @@ pre, code {
     List<dom.Node> nodes, {
     required bool allowRemoteImages,
   }) {
-    for (final node in List<dom.Node>.from(nodes)) {
+    var index = 0;
+    while (index < nodes.length) {
+      final node = nodes[index];
       if (node is dom.Element) {
         if (_isBlockedWebViewElement(node)) {
           node.remove();
@@ -778,7 +922,6 @@ pre, code {
             continue;
           }
           node.text = sanitizedStyleText;
-          continue;
         }
         var removeNode = false;
         final attributeNames = node.attributes.keys
@@ -786,6 +929,7 @@ pre, code {
             .toList();
         for (final attributeName in attributeNames) {
           final normalizedName = attributeName.trim().toLowerCase();
+          final rawValue = node.attributes[attributeName] ?? '';
           if (normalizedName.isEmpty) {
             node.attributes.remove(attributeName);
             continue;
@@ -795,7 +939,6 @@ pre, code {
             node.attributes.remove(attributeName);
             continue;
           }
-          final rawValue = node.attributes[attributeName] ?? '';
           if (normalizedName == _hrefAttribute) {
             final safeValue = _sanitizeUriValue(
               rawValue,
@@ -850,7 +993,310 @@ pre, code {
           allowRemoteImages: allowRemoteImages,
         );
       }
+      index++;
     }
+  }
+
+  static void _collectEmailRecoveryCandidates(
+    List<dom.Node> nodes,
+    List<_EmailRecoveryCandidate> candidates,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    for (final node in nodes) {
+      if (!budget.allow(depth)) {
+        return;
+      }
+      if (node is! dom.Element) {
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (_emailRecoveryExcludedTextTags.contains(tag)) {
+        continue;
+      }
+      if (_isRecoverableEmailContentRoot(node)) {
+        _collectEmailRecoveryRootCandidates(node, candidates);
+        continue;
+      }
+      if (node.nodes.isNotEmpty) {
+        _collectEmailRecoveryCandidates(
+          node.nodes,
+          candidates,
+          budget,
+          depth + 1,
+        );
+      }
+    }
+  }
+
+  static void _collectEmailRecoveryRootCandidates(
+    dom.Element element,
+    List<_EmailRecoveryCandidate> candidates,
+  ) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (tag == 'a') {
+      final href = _sanitizeUriValue(
+        element.attributes[_hrefAttribute] ?? '',
+        _sanitizedLinkSchemes,
+      );
+      if (href != null) {
+        _addEmailRecoveryTextCandidate(
+          _emailRecoveryLabelForElement(element),
+          candidates,
+          href: href,
+        );
+      }
+    }
+    if (_emailRecoveryContainerTags.contains(tag)) {
+      _addEmailRecoveryTextCandidate(
+        _emailRecoveryLabelForElement(element),
+        candidates,
+      );
+    }
+    for (final descendant in element.querySelectorAll(
+      'button, option, select, textarea',
+    )) {
+      _addEmailRecoveryTextCandidate(
+        _emailRecoveryLabelForElement(descendant),
+        candidates,
+      );
+    }
+    for (final descendant in element.querySelectorAll('a')) {
+      if (_isBlockedWebViewElement(descendant)) {
+        continue;
+      }
+      final href = _sanitizeUriValue(
+        descendant.attributes[_hrefAttribute] ?? '',
+        _sanitizedLinkSchemes,
+      );
+      if (href == null) {
+        continue;
+      }
+      _addEmailRecoveryTextCandidate(
+        _emailRecoveryLabelForElement(descendant),
+        candidates,
+        href: href,
+      );
+    }
+    _addEmailRecoveryTextCandidate(_safeEmailRecoveryText(element), candidates);
+  }
+
+  static bool _isRecoverableEmailContentRoot(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (_emailRecoveryContainerTags.contains(tag)) {
+      return true;
+    }
+    if (tag == 'a' &&
+        _sanitizeUriValue(
+              element.attributes[_hrefAttribute] ?? '',
+              _sanitizedLinkSchemes,
+            ) !=
+            null) {
+      return _isHiddenEmailElement(element) ||
+          _hasRecoverableEmailHidingStyle(element.attributes['style']);
+    }
+    return _isHiddenEmailElement(element) ||
+        _hasRecoverableEmailHidingStyle(element.attributes['style']);
+  }
+
+  static String _emailRecoveryLabelForElement(dom.Element element) {
+    for (final attribute in const <String>['aria-label', _titleAttribute]) {
+      final label = element.attributes[attribute]?.trim();
+      if (label != null && label.isNotEmpty) {
+        return label;
+      }
+    }
+    final imageLabel = _linkedEmailRecoveryImageLabel(element);
+    if (imageLabel != null) {
+      return imageLabel;
+    }
+    return _safeEmailRecoveryText(element);
+  }
+
+  static String? _linkedEmailRecoveryImageLabel(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (tag != 'a' && !_emailRecoveryContainerTags.contains(tag)) {
+      return null;
+    }
+    for (final image in element.querySelectorAll('img')) {
+      if (_isTrackerOrSpacerEmailImage(image)) {
+        continue;
+      }
+      for (final attribute in const <String>[_altAttribute, _titleAttribute]) {
+        final label = image.attributes[attribute]?.trim();
+        if (label != null && _isUsefulEmailRecoveryImageLabel(label)) {
+          return label;
+        }
+      }
+    }
+    return null;
+  }
+
+  static bool _isUsefulEmailRecoveryImageLabel(String label) {
+    final normalized = _normalizePlainText(label);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (_emailRecoveryUrlLikeLabelPattern.hasMatch(normalized)) {
+      return false;
+    }
+    return !_emailRecoverySpacerLabelPattern.hasMatch(normalized);
+  }
+
+  static bool _isTrackerOrSpacerEmailImage(dom.Element image) {
+    final width = image.attributes[_widthAttribute]?.trim();
+    final height = image.attributes[_heightAttribute]?.trim();
+    if (width != null && height != null) {
+      final parsedWidth = double.tryParse(width);
+      final parsedHeight = double.tryParse(height);
+      if (parsedWidth != null &&
+          parsedHeight != null &&
+          parsedWidth <= 1 &&
+          parsedHeight <= 1) {
+        return true;
+      }
+    }
+    final source = image.attributes[_srcAttribute]?.trim();
+    return source != null && _emailRecoverySpacerLabelPattern.hasMatch(source);
+  }
+
+  static String _safeEmailRecoveryText(dom.Node node) {
+    final buffer = StringBuffer();
+    _appendSafeEmailRecoveryText(buffer, node);
+    return _normalizePlainText(buffer.toString());
+  }
+
+  static void _appendSafeEmailRecoveryText(StringBuffer buffer, dom.Node node) {
+    if (node is dom.Text) {
+      buffer
+        ..write(node.text)
+        ..write(' ');
+      return;
+    }
+    if (node is! dom.Element) {
+      return;
+    }
+    final tag = (node.localName ?? '').toLowerCase();
+    if (_emailRecoveryExcludedTextTags.contains(tag)) {
+      return;
+    }
+    if (tag == 'a' &&
+        node.attributes.containsKey(_hrefAttribute) &&
+        _sanitizeUriValue(
+              node.attributes[_hrefAttribute] ?? '',
+              _sanitizedLinkSchemes,
+            ) ==
+            null) {
+      return;
+    }
+    if (_blockTags.contains(tag) && buffer.isNotEmpty) {
+      buffer.write(_lineBreak);
+    }
+    for (final child in node.nodes) {
+      _appendSafeEmailRecoveryText(buffer, child);
+    }
+    if (_blockTags.contains(tag)) {
+      buffer.write(_lineBreak);
+    }
+  }
+
+  static void _addEmailRecoveryTextCandidate(
+    String text,
+    List<_EmailRecoveryCandidate> candidates, {
+    String? href,
+  }) {
+    final normalized = _normalizePlainText(text);
+    if (normalized.isEmpty) {
+      return;
+    }
+    candidates.add(_EmailRecoveryCandidate(text: normalized, href: href));
+  }
+
+  static ({Set<String> items, Set<String> lines}) _emailRecoveryVisibleKeys(
+    String visibleText,
+  ) {
+    final normalized = _normalizePlainText(visibleText);
+    if (normalized.isEmpty) {
+      return (items: const <String>{}, lines: const <String>{});
+    }
+    final items = <String>{_emailRecoveryDedupeKey(normalized)};
+    final lines = <String>{};
+    for (final line in normalized.split(_lineBreak)) {
+      final key = _emailRecoveryDedupeKey(line);
+      if (key.isNotEmpty) {
+        lines.add(key);
+      }
+    }
+    return (items: items, lines: lines);
+  }
+
+  static void _addEmailRecoveredContent(
+    _EmailRecoveryCandidate candidate,
+    List<EmailRecoveredContent> recovered,
+    Map<String, int> byTextKey,
+    ({Set<String> items, Set<String> lines}) visibleKeys,
+  ) {
+    final text = _normalizePlainText(candidate.text);
+    final textKey = _emailRecoveryDedupeKey(text);
+    if (textKey.isEmpty) {
+      return;
+    }
+    final lineKeys = text
+        .split(_lineBreak)
+        .map(_emailRecoveryDedupeKey)
+        .where((key) => key.isNotEmpty)
+        .toList();
+    if (visibleKeys.items.contains(textKey) ||
+        (lineKeys.isNotEmpty &&
+            lineKeys.every((key) => visibleKeys.lines.contains(key)))) {
+      return;
+    }
+    final href = candidate.href;
+    final item = EmailRecoveredContent(
+      kind: _classifyEmailRecoveredContent(text, href: href),
+      text: text,
+      href: href,
+    );
+    final existingIndex = byTextKey[textKey];
+    if (existingIndex == null) {
+      byTextKey[textKey] = recovered.length;
+      recovered.add(item);
+      return;
+    }
+    if (recovered[existingIndex].href == null && item.href != null) {
+      recovered[existingIndex] = item;
+    }
+  }
+
+  static String _emailRecoveryDedupeKey(String text) =>
+      _normalizePlainText(text).toLowerCase();
+
+  static EmailRecoveredContentKind _classifyEmailRecoveredContent(
+    String text, {
+    String? href,
+  }) {
+    if (href != null) {
+      return EmailRecoveredContentKind.actionLink;
+    }
+    if (_isLikelyEmailVerificationCode(text)) {
+      return EmailRecoveredContentKind.verificationCode;
+    }
+    if (_emailRecoveryReferencePattern.hasMatch(text)) {
+      return EmailRecoveredContentKind.reference;
+    }
+    return EmailRecoveredContentKind.additionalText;
+  }
+
+  static bool _isLikelyEmailVerificationCode(String text) {
+    final normalized = _normalizePlainText(text).replaceAll(' ', '');
+    if (_emailRecoveryStandaloneCodePattern.hasMatch(normalized) &&
+        RegExp(r'\d').hasMatch(normalized)) {
+      return true;
+    }
+    if (!_emailRecoveryVerificationContextPattern.hasMatch(text)) {
+      return false;
+    }
+    return _emailRecoveryCodeTokenPattern.hasMatch(text);
   }
 
   static dom.Element _formatFlutterTableRow(dom.Element row) {
@@ -1643,19 +2089,20 @@ pre, code {
       return (sanitized: null, blocked: _containsUnsafeCssValue(trimmed));
     }
     final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
-    if (_webViewStylePropertiesToStrip.contains(property)) {
-      return (sanitized: null, blocked: false);
-    }
     final value = trimmed.substring(separatorIndex + 1).trim();
     if (value.isEmpty) {
       return (sanitized: null, blocked: false);
     }
-    if (_webViewBlockedStyleProperties.contains(property)) {
+    if (property == 'content') {
       return (sanitized: null, blocked: true);
     }
-    final blockedKeywords = _webViewBlockedStyleKeywords[property];
-    if (blockedKeywords != null &&
-        blockedKeywords.contains(_normalizeCssKeywordValue(value))) {
+    if (_webViewStylePropertiesToStrip.contains(property)) {
+      return (sanitized: null, blocked: false);
+    }
+    if (_isBlockedWebViewStyleProperty(property)) {
+      return (sanitized: null, blocked: true);
+    }
+    if (_hasBlockedWebViewStyleKeyword(property, value)) {
       return (sanitized: null, blocked: true);
     }
     if (_containsUnsafeCssValue(value)) {
@@ -1765,16 +2212,171 @@ pre, code {
     return (sanitized: sanitized, blocked: blocked);
   }
 
+  static bool _hasRecoverableEmailHidingStyle(String? style) {
+    final rawDeclarations = style?.trim();
+    if (rawDeclarations == null || rawDeclarations.isEmpty) {
+      return false;
+    }
+    final stripOverflowHidden = _containsZeroBoxHidingDeclaration(
+      rawDeclarations,
+    );
+    for (final declaration in rawDeclarations.split(';')) {
+      final parts = _parseCssDeclaration(declaration);
+      if (parts == null) {
+        continue;
+      }
+      if (_isRecoverableHidingStyleDeclaration(
+        parts.property,
+        parts.value,
+        stripOverflowHidden: stripOverflowHidden,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _containsZeroBoxHidingDeclaration(String rawDeclarations) {
+    for (final declaration in rawDeclarations.split(';')) {
+      final parts = _parseCssDeclaration(declaration);
+      if (parts == null) {
+        continue;
+      }
+      if (const <String>{
+            'height',
+            'max-height',
+            'width',
+          }.contains(parts.property) &&
+          _isZeroCssLength(parts.value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static ({String property, String value})? _parseCssDeclaration(
+    String declaration,
+  ) {
+    final trimmed = declaration.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0) {
+      return null;
+    }
+    final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
+    final value = trimmed.substring(separatorIndex + 1).trim();
+    if (property.isEmpty || value.isEmpty) {
+      return null;
+    }
+    return (property: property, value: value);
+  }
+
+  static bool _isRecoverableHidingStyleDeclaration(
+    String property,
+    String value, {
+    required bool stripOverflowHidden,
+  }) {
+    final normalized = _normalizeCssDeclarationValue(value);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return switch (property) {
+      'display' => _normalizeCssKeywordValue(value) == 'none',
+      'visibility' => const <String>{
+        'collapse',
+        'hidden',
+      }.contains(_normalizeCssKeywordValue(value)),
+      'mso-hide' => _normalizeCssKeywordValue(value) == 'all',
+      'opacity' => _isZeroCssLength(value),
+      'font-size' || 'line-height' => _isZeroCssLength(value),
+      'height' || 'max-height' || 'width' => _isZeroCssLength(value),
+      'overflow' =>
+        stripOverflowHidden && _normalizeCssKeywordValue(value) == 'hidden',
+      'text-indent' => _isLargeNegativeCssLength(value),
+      'left' ||
+      'right' ||
+      'top' ||
+      'bottom' ||
+      'margin-left' ||
+      'margin-right' ||
+      'margin-top' ||
+      'margin-bottom' => _containsLargeNegativeCssLength(value),
+      'transform' => _isHidingTransform(value),
+      _ => false,
+    };
+  }
+
+  static bool _isBlockedWebViewStyleProperty(String property) =>
+      _webViewBlockedStyleProperties.contains(property);
+
+  static bool _hasBlockedWebViewStyleKeyword(String property, String value) {
+    final normalizedValue = _normalizeCssKeywordValue(value);
+    return _webViewBlockedStyleKeywords[property]?.contains(normalizedValue) ??
+        false;
+  }
+
   static String _normalizeCssKeywordValue(String value) {
-    final normalized = value
-        .trim()
-        .toLowerCase()
-        .replaceAll('!important', '')
-        .trim();
+    final normalized = _normalizeCssDeclarationValue(value);
     if (normalized.isEmpty) {
       return '';
     }
     return normalized.split(RegExp(r'\s+')).first;
+  }
+
+  static String _normalizeCssDeclarationValue(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s*!important\s*$', caseSensitive: false), '')
+        .trim();
+  }
+
+  static bool _isZeroCssLength(String value) {
+    final normalized = _normalizeCssDeclarationValue(value);
+    if (normalized == '0') {
+      return true;
+    }
+    final match = RegExp(
+      r'^(-?\d+(?:\.\d+)?)(?:px|pt|pc|em|rem|ex|ch|vw|vh|vmin|vmax|%)?$',
+    ).firstMatch(normalized);
+    final number = match == null ? null : double.tryParse(match.group(1)!);
+    return number == 0;
+  }
+
+  static bool _isLargeNegativeCssLength(String value) {
+    final normalized = _normalizeCssDeclarationValue(value);
+    final match = RegExp(
+      r'^(-\d+(?:\.\d+)?)(?:px|pt|pc|em|rem|ex|ch|vw|vh|vmin|vmax|%)?$',
+    ).firstMatch(normalized);
+    final number = match == null ? null : double.tryParse(match.group(1)!);
+    return number != null && number <= -100;
+  }
+
+  static bool _containsLargeNegativeCssLength(String value) {
+    final normalized = _normalizeCssDeclarationValue(value);
+    final matches = RegExp(
+      r'(-\d+(?:\.\d+)?)(?:px|pt|pc|em|rem|ex|ch|vw|vh|vmin|vmax|%)?',
+    ).allMatches(normalized);
+    for (final match in matches) {
+      final number = double.tryParse(match.group(1)!);
+      if (number != null && number <= -100) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _isHidingTransform(String value) {
+    final normalized = _normalizeCssDeclarationValue(value);
+    if (RegExp(r'scale(?:x|y)?\(\s*0(?:\.0+)?\s*\)').hasMatch(normalized)) {
+      return true;
+    }
+    if (!normalized.contains('translate')) {
+      return false;
+    }
+    return _containsLargeNegativeCssLength(normalized);
   }
 
   static bool _containsUnsafeCssValue(String value) {
@@ -1793,16 +2395,16 @@ pre, code {
         containsSuspiciousUriText(normalized);
   }
 
-  static void _removeHiddenEmailNodes(List<dom.Node> nodes) {
+  static void _removeRecoveredEmailNodes(List<dom.Node> nodes) {
     for (final node in nodes.toList()) {
       if (node is dom.Element) {
-        if (_isHiddenEmailElement(node)) {
+        if (_isRecoverableEmailContentRoot(node)) {
           node.remove();
           continue;
         }
       }
       if (node.nodes.isNotEmpty) {
-        _removeHiddenEmailNodes(node.nodes);
+        _removeRecoveredEmailNodes(node.nodes);
       }
     }
   }

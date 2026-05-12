@@ -39,94 +39,88 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeFoldersCustomComingSoon => '自定义文件夹即将推出';
 
   @override
-  String get folderPickerTitle => 'Add to folder';
+  String get folderPickerTitle => '添加到文件夹';
 
   @override
-  String get folderPickerEmpty => 'Create a folder to save this message.';
+  String get folderPickerEmpty => '创建文件夹来保存此消息。';
 
   @override
-  String get folderPickerAddFailed =>
-      'Could not add this message to the folder.';
+  String get folderPickerAddFailed => '无法将此消息添加到文件夹。';
 
   @override
-  String get folderPickerUpdateFailed => 'Could not update this folder.';
+  String get folderPickerUpdateFailed => '无法更新此文件夹。';
 
   @override
-  String get folderSystemReceipts => 'Receipts';
+  String get folderSystemReceipts => '收据';
 
   @override
-  String get folderSystemMarketing => 'Marketing';
+  String get folderSystemMarketing => '营销';
 
   @override
-  String get folderSystemNewsletters => 'Newsletters';
+  String get folderSystemNewsletters => '新闻通讯';
 
   @override
-  String get folderCreateTitle => 'New folder';
+  String get folderCreateTitle => '新建文件夹';
 
   @override
-  String get folderCreateAction => 'Create';
+  String get folderCreateAction => '创建';
 
   @override
-  String get folderCreateAndAddAction => 'Create and add';
+  String get folderCreateAndAddAction => '创建并添加';
 
   @override
-  String get folderCreateFailed => 'Could not create this folder.';
+  String get folderCreateFailed => '无法创建此文件夹。';
 
   @override
-  String get folderNameLabel => 'Folder name';
+  String get folderNameLabel => '文件夹名称';
 
   @override
-  String get folderNameEmptyError => 'Enter a folder name.';
+  String get folderNameEmptyError => '输入文件夹名称。';
 
   @override
-  String get folderNameReservedError => 'That folder name is reserved.';
+  String get folderNameReservedError => '该文件夹名称已保留。';
 
   @override
-  String get folderNameDuplicateError =>
-      'A folder with that name already exists.';
+  String get folderNameDuplicateError => '已存在同名文件夹。';
 
   @override
-  String get folderMessagesEmpty => 'No messages in this folder yet';
+  String get folderMessagesEmpty => '此文件夹中还没有消息';
 
   @override
-  String get folderRemoveMessage => 'Remove from folder';
+  String get folderRemoveMessage => '从文件夹移除';
 
   @override
-  String get folderRemoveMessageFailed =>
-      'Could not remove this message from the folder.';
+  String get folderRemoveMessageFailed => '无法从文件夹移除此消息。';
 
   @override
   String get contactFolderRuleAction => 'Send all to...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+  String get contactFolderRuleMessagesAction => '将所有消息发送到...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+  String get contactFolderRuleEmailsAction => '将所有邮件发送到...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction =>
-      'Send all messages and emails to...';
+  String get contactFolderRuleMessagesAndEmailsAction => '将所有消息和邮件发送到...';
 
   @override
   String get contactFolderRuleTitle => 'Send all to folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+  String get contactFolderRuleMessagesTitle => '将消息发送到文件夹';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+  String get contactFolderRuleEmailsTitle => '将邮件发送到文件夹';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Send messages and emails to folder';
+  String get contactFolderRuleMessagesAndEmailsTitle => '将消息和邮件发送到文件夹';
 
   @override
-  String get contactFolderRuleClear => 'Clear rule';
+  String get contactFolderRuleClear => '清除规则';
 
   @override
-  String get contactFolderRuleFailed =>
-      'Could not update this contact folder rule.';
+  String get contactFolderRuleFailed => '无法更新此联系人的文件夹规则。';
 
   @override
   String get homeNoModules => '没有可用模块';
@@ -214,7 +208,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSearchExcludeSubject => '排除主题';
 
   @override
-  String get chatSearchImportantOnly => 'Important only';
+  String get chatSearchImportantOnly => '仅重要';
 
   @override
   String get chatSearchFailed => '搜索失败';
@@ -441,10 +435,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatNicknameUpdateFailed => '无法更改昵称。';
 
   @override
-  String get chatLeaveRoomFailed => 'Could not leave room.';
+  String get chatLeaveRoomFailed => '无法离开群组。';
 
   @override
-  String get chatDestroyRoomFailed => 'Could not destroy room.';
+  String get chatDestroyRoomFailed => '无法删除群组。';
 
   @override
   String get chatRoomAvatarPermissionDenied => '你没有权限更新群组头像。';
@@ -465,10 +459,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageForwardFailed => '无法转发消息。';
 
   @override
-  String get chatMessageAddedToFolder => 'Message added to folder.';
+  String get chatMessageAddedToFolder => '消息已添加到文件夹。';
 
   @override
-  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
+  String get chatMessageAddToFolderFailed => '无法将消息添加到文件夹。';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -524,7 +518,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatComposerEmailHint => '发送邮件消息';
 
   @override
-  String get chatComposerEmailWatermark => 'Sent from Axichat';
+  String get chatComposerEmailWatermark => '由 Axichat 发送';
 
   @override
   String get chatTransportChoiceTitle => '选择发送方式';
@@ -702,6 +696,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatContactRenameAction => '重命名';
 
   @override
+  String get chatContactEditAction => '编辑联系人';
+
+  @override
   String get chatContactRenameTooltip => '重命名联系人';
 
   @override
@@ -762,23 +759,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSend => '发送草稿';
 
   @override
-  String get emailSendConfirmTitle => 'Review email before sending';
+  String get emailSendConfirmTitle => '发送前检查邮件';
 
   @override
-  String get emailSendConfirmMessage =>
-      'Confirm the recipients and body below before sending.';
+  String get emailSendConfirmMessage => '发送前请确认下方的收件人和正文。';
 
   @override
-  String get emailSendConfirmRecipientsLabel => 'Recipients';
+  String get emailSendConfirmRecipientsLabel => '收件人';
 
   @override
-  String get emailSendConfirmBodyLabel => 'Body';
+  String get emailSendConfirmBodyLabel => '正文';
 
   @override
-  String get emailSendConfirmEmptyBody => '(No body)';
+  String get emailSendConfirmEmptyBody => '（无正文）';
 
   @override
-  String get emailSendConfirmDontShowAgain => 'Don\'t show this again';
+  String get emailSendConfirmDontShowAgain => '不再显示';
 
   @override
   String get draftDiscard => '丢弃';
@@ -943,16 +939,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSubjectHint => '主题';
 
   @override
-  String get chatCollapseLongEmails => 'Collapse long emails';
+  String get chatCollapseLongEmails => '折叠长邮件';
 
   @override
-  String get chatExpandLongEmails => 'Expand long emails';
+  String get chatExpandLongEmails => '展开长邮件';
 
   @override
   String get chatAttachmentTooltip => '附件';
 
   @override
-  String get chatImportantMessagesTooltip => 'Important messages';
+  String get chatImportantMessagesTooltip => '重要消息';
 
   @override
   String get chatPinnedMessagesTooltip => '置顶消息';
@@ -961,7 +957,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatPinnedMessagesTitle => '置顶消息';
 
   @override
-  String get chatAddMessageToFolder => 'Add to folder...';
+  String get chatAddMessageToFolder => '添加到文件夹...';
 
   @override
   String get chatPinMessage => '置顶消息';
@@ -976,7 +972,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatPinnedMissingMessage => '置顶消息不可用。';
 
   @override
-  String get importantMessagesEmpty => 'No important messages yet';
+  String get importantMessagesEmpty => '还没有重要消息';
 
   @override
   String get chatSendMessageTooltip => '发送消息';
@@ -1956,7 +1952,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileLinkedEmailAccounts => '邮箱账户';
 
   @override
-  String get profileBlocklistTitle => 'Blocklist';
+  String get profileBlocklistTitle => '屏蔽列表';
 
   @override
   String get profileChangePassword => '更改密码';
@@ -2202,18 +2198,18 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后，按 Enter 发送邮件消息；按 Shift+Enter 插入新行。';
 
   @override
-  String get settingsEmailSendConfirmation => 'Confirm before sending email';
+  String get settingsEmailSendConfirmation => '发送邮件前确认';
 
   @override
   String get settingsEmailSendConfirmationDescription =>
-      'Show a review prompt with recipients and body before each email send.';
+      '每次发送邮件前显示包含收件人和正文的检查提示。';
 
   @override
-  String get settingsEmailComposerWatermark => 'Prepopulate email watermark';
+  String get settingsEmailComposerWatermark => '预填邮件水印';
 
   @override
   String get settingsEmailComposerWatermarkDescription =>
-      'Pre-fills new email messages with \"Sent from Axichat\" text that you can edit or delete.';
+      '为新邮件预填“由 Axichat 发送”文本，你可以编辑或删除。';
 
   @override
   String get settingsTypingIndicators => '发送正在输入指示';
@@ -2347,8 +2343,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEmailImageFailedLabel => '图片加载失败';
 
   @override
-  String get chatEmailInteractiveContentBlockedLabel =>
-      'Interactive content blocked for safety';
+  String get chatEmailInteractiveContentBlockedLabel => '为安全起见，互动内容已被屏蔽';
+
+  @override
+  String get chatEmailRecoveredContentLabel => '其他邮件内容';
+
+  @override
+  String get chatEmailInlineImagesUnsupportedLabel => '部分内嵌邮件图片无法显示。';
 
   @override
   String get chatAttachmentBlockedDescription => '仅在信任未知联系人时加载附件。你确认后我们才会获取。';
@@ -2480,52 +2481,50 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shorebirdUpdateAvailable => '有可用更新：请注销并重新启动应用。';
 
   @override
-  String get updatePromptTitle => 'Update available';
+  String get updatePromptTitle => '有可用更新';
 
   @override
-  String get updatePromptStoreMessage =>
-      'A newer version of Axichat is available. Update now to install the latest version.';
+  String get updatePromptStoreMessage => 'Axichat 有新版本可用。立即更新以安装最新版本。';
 
   @override
   String updatePromptStoreMessageVersion(String version) {
-    return 'Version $version of Axichat is available. Update now to install the latest version.';
+    return 'Axichat $version 版本可用。立即更新以安装最新版本。';
   }
 
   @override
-  String get updatePromptPatchReadyTitle => 'Patch ready';
+  String get updatePromptPatchReadyTitle => '补丁已就绪';
 
   @override
-  String get updatePromptPatchReadyMessage =>
-      'The latest Axichat patch is ready. Restart the app to apply it.';
+  String get updatePromptPatchReadyMessage => '最新 Axichat 补丁已就绪。重启应用以应用补丁。';
 
   @override
-  String get updateStatusStoreAvailable => 'Update available';
+  String get updateStatusStoreAvailable => '有可用更新';
 
   @override
   String updateStatusStoreAvailableVersion(String version) {
-    return 'Update available: v$version';
+    return '有可用更新：v$version';
   }
 
   @override
-  String get updateStatusPatchReady => 'Patch ready: restart app to apply it';
+  String get updateStatusPatchReady => '补丁已就绪：重启应用以应用';
 
   @override
-  String get updateActionUpdate => 'Update';
+  String get updateActionUpdate => '更新';
 
   @override
-  String get updateActionLater => 'Later';
+  String get updateActionLater => '稍后';
 
   @override
-  String get updateActionOk => 'OK';
+  String get updateActionOk => '确定';
 
   @override
-  String get updateActionFailed => 'Could not start the update.';
+  String get updateActionFailed => '无法启动更新。';
 
   @override
-  String get updateActionOpenFailed => 'Could not open the update page.';
+  String get updateActionOpenFailed => '无法打开更新页面。';
 
   @override
-  String get updateActionDeclined => 'Update was declined.';
+  String get updateActionDeclined => '更新已被拒绝。';
 
   @override
   String get calendarEditTaskTitle => '编辑任务';
@@ -2784,21 +2783,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucLeaveRoom => '离开房间';
 
   @override
-  String get mucLeaveRoomConfirmTitle => 'Leave room?';
+  String get mucLeaveRoomConfirmTitle => '离开群组？';
 
   @override
-  String get mucLeaveRoomConfirmBody =>
-      'You will leave this room and it will close locally until you join again.';
+  String get mucLeaveRoomConfirmBody => '你将离开此群组，并且它会在本地关闭，直到你再次加入。';
 
   @override
-  String get mucDestroyRoom => 'Destroy room';
+  String get mucDestroyRoom => '删除群组';
 
   @override
-  String get mucDestroyRoomConfirmTitle => 'Destroy room?';
+  String get mucDestroyRoomConfirmTitle => '删除群组？';
 
   @override
-  String get mucDestroyRoomConfirmBody =>
-      'This removes the room for everyone currently inside it.';
+  String get mucDestroyRoomConfirmBody => '这会为当前在群组内的所有人移除此群组。';
 
   @override
   String get mucNoMembers => '暂无成员';
@@ -3156,31 +3153,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contactsLocalOnlyLabel => '仅在此设备上';
 
   @override
-  String get contactsDetailsSectionTitle => 'Details';
+  String get contactsDetailsSectionTitle => '详细信息';
 
   @override
-  String get contactsAddressLabel => 'Address';
+  String get contactsAddressLabel => '地址';
 
   @override
   String get contactsStoredLabel => '已保存';
 
   @override
-  String get contactsChatContactLabel => 'Chat contact';
+  String get contactsChatContactLabel => '聊天联系人';
 
   @override
-  String get contactsEmailContactLabel => 'Email contact';
+  String get contactsEmailContactLabel => '邮件联系人';
 
   @override
-  String get contactsMessagesLabel => 'Messages';
+  String get contactsMessagesLabel => '消息';
 
   @override
   String get contactsEmailLabel => '电子邮件';
 
   @override
-  String get contactsMessagesNameLabel => 'Messages name';
+  String get contactsMessagesNameLabel => '消息名称';
 
   @override
-  String get contactsEmailNameLabel => 'Email name';
+  String get contactsEmailNameLabel => '邮件名称';
 
   @override
   String get contactsGivenNameLabel => '名字';
@@ -3247,7 +3244,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String contactsRemoveContactConfirm(Object jid) {
-    return 'Remove $jid from contacts?';
+    return '从联系人中移除 $jid？';
   }
 
   @override
@@ -4280,11 +4277,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailForwardingGuideLinksSubtitle => '请在你的服务商帮助文档中查找，或从这里开始：';
 
   @override
-  String get emailForwardingWelcomeSetupFrom => 'Setup forwarding from:';
+  String get emailForwardingWelcomeSetupFrom => '设置转发来源：';
 
   @override
   String get emailForwardingWelcomeOtherProviderHint =>
-      'If you use another provider, their website should have instructions as well.';
+      '如果你使用其他服务商，他们的网站也应该提供相关说明。';
 
   @override
   String get emailForwardingGuideNotificationsTitle => '消息通知';
@@ -6336,94 +6333,88 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get homeFoldersCustomComingSoon => '自訂資料夾即將推出';
 
   @override
-  String get folderPickerTitle => 'Add to folder';
+  String get folderPickerTitle => '加入資料夾';
 
   @override
-  String get folderPickerEmpty => 'Create a folder to save this message.';
+  String get folderPickerEmpty => '建立資料夾以儲存此訊息。';
 
   @override
-  String get folderPickerAddFailed =>
-      'Could not add this message to the folder.';
+  String get folderPickerAddFailed => '無法將此訊息加入資料夾。';
 
   @override
-  String get folderPickerUpdateFailed => 'Could not update this folder.';
+  String get folderPickerUpdateFailed => '無法更新此資料夾。';
 
   @override
-  String get folderSystemReceipts => 'Receipts';
+  String get folderSystemReceipts => '收據';
 
   @override
-  String get folderSystemMarketing => 'Marketing';
+  String get folderSystemMarketing => '市場推廣';
 
   @override
-  String get folderSystemNewsletters => 'Newsletters';
+  String get folderSystemNewsletters => '電子報';
 
   @override
-  String get folderCreateTitle => 'New folder';
+  String get folderCreateTitle => '新增資料夾';
 
   @override
-  String get folderCreateAction => 'Create';
+  String get folderCreateAction => '建立';
 
   @override
-  String get folderCreateAndAddAction => 'Create and add';
+  String get folderCreateAndAddAction => '建立並加入';
 
   @override
-  String get folderCreateFailed => 'Could not create this folder.';
+  String get folderCreateFailed => '無法建立此資料夾。';
 
   @override
-  String get folderNameLabel => 'Folder name';
+  String get folderNameLabel => '資料夾名稱';
 
   @override
-  String get folderNameEmptyError => 'Enter a folder name.';
+  String get folderNameEmptyError => '輸入資料夾名稱。';
 
   @override
-  String get folderNameReservedError => 'That folder name is reserved.';
+  String get folderNameReservedError => '此資料夾名稱已保留。';
 
   @override
-  String get folderNameDuplicateError =>
-      'A folder with that name already exists.';
+  String get folderNameDuplicateError => '已存在同名資料夾。';
 
   @override
-  String get folderMessagesEmpty => 'No messages in this folder yet';
+  String get folderMessagesEmpty => '此資料夾尚無訊息';
 
   @override
-  String get folderRemoveMessage => 'Remove from folder';
+  String get folderRemoveMessage => '從資料夾移除';
 
   @override
-  String get folderRemoveMessageFailed =>
-      'Could not remove this message from the folder.';
+  String get folderRemoveMessageFailed => '無法從資料夾移除此訊息。';
 
   @override
   String get contactFolderRuleAction => 'Send all to...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+  String get contactFolderRuleMessagesAction => '將所有訊息傳送到...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+  String get contactFolderRuleEmailsAction => '將所有電郵傳送到...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction =>
-      'Send all messages and emails to...';
+  String get contactFolderRuleMessagesAndEmailsAction => '將所有訊息和電郵傳送到...';
 
   @override
   String get contactFolderRuleTitle => 'Send all to folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+  String get contactFolderRuleMessagesTitle => '將訊息傳送到資料夾';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+  String get contactFolderRuleEmailsTitle => '將電郵傳送到資料夾';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Send messages and emails to folder';
+  String get contactFolderRuleMessagesAndEmailsTitle => '將訊息和電郵傳送到資料夾';
 
   @override
-  String get contactFolderRuleClear => 'Clear rule';
+  String get contactFolderRuleClear => '清除規則';
 
   @override
-  String get contactFolderRuleFailed =>
-      'Could not update this contact folder rule.';
+  String get contactFolderRuleFailed => '無法更新此聯絡人的資料夾規則。';
 
   @override
   String get homeNoModules => '沒有可用模組';
@@ -6509,6 +6500,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatSearchExcludeSubject => '排除主題';
+
+  @override
+  String get chatSearchImportantOnly => '僅重要';
 
   @override
   String get chatSearchFailed => '搜尋失敗';
@@ -6735,6 +6729,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatNicknameUpdateFailed => '無法變更暱稱。';
 
   @override
+  String get chatLeaveRoomFailed => '無法離開聊天室。';
+
+  @override
+  String get chatDestroyRoomFailed => '無法刪除聊天室。';
+
+  @override
   String get chatRoomAvatarPermissionDenied => '你沒有權限更新聊天室頭像。';
 
   @override
@@ -6753,10 +6753,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatMessageForwardFailed => '無法轉發訊息。';
 
   @override
-  String get chatMessageAddedToFolder => 'Message added to folder.';
+  String get chatMessageAddedToFolder => '訊息已加入資料夾。';
 
   @override
-  String get chatMessageAddToFolderFailed => 'Unable to add message to folder.';
+  String get chatMessageAddToFolderFailed => '無法將訊息加入資料夾。';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
@@ -6810,6 +6810,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatComposerEmailHint => '傳送電郵訊息';
+
+  @override
+  String get chatComposerEmailWatermark => '由 Axichat 傳送';
 
   @override
   String get chatTransportChoiceTitle => '選擇傳送方式';
@@ -6987,6 +6990,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatContactRenameAction => '重新命名';
 
   @override
+  String get chatContactEditAction => '編輯聯絡人';
+
+  @override
   String get chatContactRenameTooltip => '重新命名聯絡人';
 
   @override
@@ -7045,6 +7051,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get draftSend => '傳送草稿';
+
+  @override
+  String get emailSendConfirmTitle => '傳送前檢查電郵';
+
+  @override
+  String get emailSendConfirmMessage => '傳送前請確認以下收件人和內文。';
+
+  @override
+  String get emailSendConfirmRecipientsLabel => '收件人';
+
+  @override
+  String get emailSendConfirmBodyLabel => '內文';
+
+  @override
+  String get emailSendConfirmEmptyBody => '（沒有內文）';
+
+  @override
+  String get emailSendConfirmDontShowAgain => '不要再顯示';
 
   @override
   String get draftDiscard => '捨棄';
@@ -7209,13 +7233,25 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatSubjectHint => '主旨';
 
   @override
+  String get chatCollapseLongEmails => '摺疊長電郵';
+
+  @override
+  String get chatExpandLongEmails => '展開長電郵';
+
+  @override
   String get chatAttachmentTooltip => '附件';
+
+  @override
+  String get chatImportantMessagesTooltip => '重要訊息';
 
   @override
   String get chatPinnedMessagesTooltip => '置頂訊息';
 
   @override
   String get chatPinnedMessagesTitle => '置頂訊息';
+
+  @override
+  String get chatAddMessageToFolder => '加入資料夾...';
 
   @override
   String get chatPinMessage => '置頂訊息';
@@ -7228,6 +7264,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatPinnedMissingMessage => '置頂訊息不可用。';
+
+  @override
+  String get importantMessagesEmpty => '尚無重要訊息';
 
   @override
   String get chatSendMessageTooltip => '傳送訊息';
@@ -7631,6 +7670,22 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get signupContinue => '繼續';
+
+  @override
+  String get signupSkipPassword => '略過';
+
+  @override
+  String get signupSkipPasswordConfirmTitle => '略過密碼設定？';
+
+  @override
+  String get signupSkipPasswordConfirmMessage =>
+      'Axichat 會建立安全密碼，並只保存在此裝置上。除非你稍後在設定中設定一個你知道的密碼，否則你將無法在其他裝置登入或同步此帳戶。如果你遺失此裝置或刪除應用程式，你將永久失去此帳戶和所有資料。';
+
+  @override
+  String get signupSkipPasswordConfirmAction => '略過並繼續';
+
+  @override
+  String get signupDeviceOnlyRememberMeLocked => '使用由裝置管理的密碼時必須啟用記住我。';
 
   @override
   String get signupProgressLabel => '註冊進度';
@@ -8192,6 +8247,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get profileLinkedEmailAccounts => '電郵帳戶';
 
   @override
+  String get profileBlocklistTitle => '封鎖名單';
+
+  @override
   String get profileChangePassword => '更改密碼';
 
   @override
@@ -8435,6 +8493,20 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       '開啟後，按 Enter 傳送電郵訊息；按 Shift+Enter 插入新行。';
 
   @override
+  String get settingsEmailSendConfirmation => '傳送電郵前確認';
+
+  @override
+  String get settingsEmailSendConfirmationDescription =>
+      '每次傳送電郵前顯示包含收件人和內文的檢查提示。';
+
+  @override
+  String get settingsEmailComposerWatermark => '預填電郵水印';
+
+  @override
+  String get settingsEmailComposerWatermarkDescription =>
+      '為新電郵預填「由 Axichat 傳送」文字，你可以編輯或刪除。';
+
+  @override
   String get settingsTypingIndicators => '傳送輸入指示';
 
   @override
@@ -8531,6 +8603,14 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authPasswordConfirmNewPlaceholder => '確認新密碼';
 
   @override
+  String get authDeviceOnlyPasswordManagedChangeHint =>
+      '此帳戶使用由裝置管理的密碼。此裝置不需要目前密碼。';
+
+  @override
+  String get authDeviceOnlyPasswordManagedDeleteHint =>
+      '此帳戶使用由裝置管理的密碼。Axichat 會自動使用它來確認刪除。';
+
+  @override
   String get authChangePasswordProgressLabel => '正在等待變更密碼';
 
   @override
@@ -8556,6 +8636,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatEmailImageFailedLabel => '圖片載入失敗';
+
+  @override
+  String get chatEmailInteractiveContentBlockedLabel => '為安全起見，互動內容已被封鎖';
+
+  @override
+  String get chatEmailRecoveredContentLabel => '其他電郵內容';
+
+  @override
+  String get chatEmailInlineImagesUnsupportedLabel => '部分內嵌電郵圖片無法顯示。';
 
   @override
   String get chatAttachmentBlockedDescription => '僅在你信任未知聯絡人時才載入附件。你同意後我們才會擷取。';
@@ -8685,6 +8774,53 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get shorebirdUpdateAvailable => '有可用更新：請登出並重新啟動應用程式。';
+
+  @override
+  String get updatePromptTitle => '有可用更新';
+
+  @override
+  String get updatePromptStoreMessage => 'Axichat 有新版本可用。立即更新以安裝最新版本。';
+
+  @override
+  String updatePromptStoreMessageVersion(String version) {
+    return 'Axichat $version 版本可用。立即更新以安裝最新版本。';
+  }
+
+  @override
+  String get updatePromptPatchReadyTitle => '修補程式已準備好';
+
+  @override
+  String get updatePromptPatchReadyMessage =>
+      '最新 Axichat 修補程式已準備好。重新啟動應用程式以套用。';
+
+  @override
+  String get updateStatusStoreAvailable => '有可用更新';
+
+  @override
+  String updateStatusStoreAvailableVersion(String version) {
+    return '有可用更新：v$version';
+  }
+
+  @override
+  String get updateStatusPatchReady => '修補程式已準備好：重新啟動應用程式以套用';
+
+  @override
+  String get updateActionUpdate => '更新';
+
+  @override
+  String get updateActionLater => '稍後';
+
+  @override
+  String get updateActionOk => '確定';
+
+  @override
+  String get updateActionFailed => '無法開始更新。';
+
+  @override
+  String get updateActionOpenFailed => '無法開啟更新頁面。';
+
+  @override
+  String get updateActionDeclined => '更新已被拒絕。';
 
   @override
   String get calendarEditTaskTitle => '編輯任務';
@@ -8941,6 +9077,21 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get mucLeaveRoom => '離開聊天室';
+
+  @override
+  String get mucLeaveRoomConfirmTitle => '離開聊天室？';
+
+  @override
+  String get mucLeaveRoomConfirmBody => '你將離開此聊天室，而它會在本機關閉，直到你再次加入。';
+
+  @override
+  String get mucDestroyRoom => '刪除聊天室';
+
+  @override
+  String get mucDestroyRoomConfirmTitle => '刪除聊天室？';
+
+  @override
+  String get mucDestroyRoomConfirmBody => '這會為目前在聊天室內的所有人移除此聊天室。';
 
   @override
   String get mucNoMembers => '暫無成員';
@@ -9299,16 +9450,31 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get contactsLocalOnlyLabel => '僅在此裝置上';
 
   @override
+  String get contactsDetailsSectionTitle => '詳細資料';
+
+  @override
+  String get contactsAddressLabel => '地址';
+
+  @override
   String get contactsStoredLabel => '已儲存';
 
   @override
-  String get contactsChatContactLabel => 'Chat contact';
+  String get contactsChatContactLabel => '聊天聯絡人';
 
   @override
-  String get contactsEmailContactLabel => 'Email contact';
+  String get contactsEmailContactLabel => '電郵聯絡人';
+
+  @override
+  String get contactsMessagesLabel => '訊息';
 
   @override
   String get contactsEmailLabel => '電子郵件';
+
+  @override
+  String get contactsMessagesNameLabel => '訊息名稱';
+
+  @override
+  String get contactsEmailNameLabel => '電郵名稱';
 
   @override
   String get contactsGivenNameLabel => '名字';
@@ -9372,6 +9538,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get contactsRemoveContactLabel => '移除聯絡人';
+
+  @override
+  String contactsRemoveContactConfirm(Object jid) {
+    return '從聯絡人中移除 $jid？';
+  }
 
   @override
   String get contactsRemoveXmppLabel => '移除聊天聯絡人';
@@ -10401,6 +10572,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get emailForwardingGuideLinksSubtitle => '請在你的服務供應商說明文件中查找，或從這裡開始：';
+
+  @override
+  String get emailForwardingWelcomeSetupFrom => '設定轉寄來源：';
+
+  @override
+  String get emailForwardingWelcomeOtherProviderHint =>
+      '如果你使用其他服務供應商，他們的網站也應該提供相關說明。';
 
   @override
   String get emailForwardingGuideNotificationsTitle => '訊息通知';
@@ -12240,6 +12418,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authPasswordIncorrect => '密碼錯誤。請再試一次。';
+
+  @override
+  String get authDeviceOnlyPasswordUnavailable => '由裝置管理的密碼在此裝置上不可用。無法復原帳戶。';
 
   @override
   String get authAccountNotFound => '找不到帳號。';

@@ -198,31 +198,71 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   }
 }
 
-class _MessageViewFullAction extends StatelessWidget {
-  const _MessageViewFullAction({
-    required this.self,
-    required this.label,
-    required this.onPressed,
+class EmailRecoveredContentView extends StatelessWidget {
+  const EmailRecoveredContentView({
+    super.key,
+    required this.items,
+    required this.textStyle,
+    required this.onLinkTap,
   });
 
-  final bool self;
-  final String label;
-  final VoidCallback onPressed;
+  final List<EmailRecoveredContent> items;
+  final TextStyle textStyle;
+  final ValueChanged<String> onLinkTap;
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final spacing = context.spacing;
-    return Padding(
-      padding: EdgeInsets.only(bottom: spacing.xs),
-      child: Align(
-        alignment: self ? Alignment.centerRight : Alignment.centerLeft,
-        widthFactor: 1.0,
-        child: AxiButton.secondary(
-          size: AxiButtonSize.sm,
-          onPressed: onPressed,
-          child: Text(label),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: AxiModalSurface(
+        padding: EdgeInsets.all(spacing.s),
+        child: Column(
+          spacing: spacing.xs,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.l10n.chatEmailRecoveredContentLabel,
+              style: context.textTheme.muted,
+            ),
+            for (final item in items)
+              _EmailRecoveredContentItem(
+                item: item,
+                textStyle: textStyle,
+                onLinkTap: onLinkTap,
+              ),
+          ],
         ),
       ),
     );
+  }
+}
+
+class _EmailRecoveredContentItem extends StatelessWidget {
+  const _EmailRecoveredContentItem({
+    required this.item,
+    required this.textStyle,
+    required this.onLinkTap,
+  });
+
+  final EmailRecoveredContent item;
+  final TextStyle textStyle;
+  final ValueChanged<String> onLinkTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final href = item.href;
+    if (href != null) {
+      return AxiButton.secondary(
+        size: AxiButtonSize.sm,
+        onPressed: () => onLinkTap(href),
+        child: Text(item.text),
+      );
+    }
+    return SelectableText(item.text, style: textStyle);
   }
 }

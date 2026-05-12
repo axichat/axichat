@@ -53,7 +53,7 @@ void main() {
       final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
         '<style>.note { position: absolute; top: 0; z-index: 9999; '
         'color: red; margin: 8px; }</style>'
-        '<p class="note" style="display:none; left:0; pointer-events:auto; '
+        '<p class="note" style="left:0; pointer-events:auto; '
         'transform:translateY(-12px); color:red; margin:8px; width:999px;">ok</p>',
         allowRemoteImages: true,
       );
@@ -67,6 +67,30 @@ void main() {
       expect(prepared.contains('width:999px'), isFalse);
       expect(prepared.contains('color: red'), isTrue);
       expect(prepared.contains('margin: 8px'), isTrue);
+    });
+
+    test('standard mode removes hidden nodes', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<p style="display:none">123456</p>'
+        '<p style="visibility:hidden">234567</p>'
+        '<p hidden>345678</p>'
+        '<p aria-hidden="true">456789</p>'
+        '<p style="mso-hide:all">567890</p>'
+        '<p style="opacity:0">678901</p>'
+        '<p style="height:0; overflow:hidden">789012</p>'
+        '<p style="position:absolute; left:-9999px">890123</p>'
+        '<p>visible</p>',
+        allowRemoteImages: true,
+      );
+      expect(prepared.contains('123456'), isFalse);
+      expect(prepared.contains('234567'), isFalse);
+      expect(prepared.contains('345678'), isFalse);
+      expect(prepared.contains('456789'), isFalse);
+      expect(prepared.contains('567890'), isFalse);
+      expect(prepared.contains('678901'), isFalse);
+      expect(prepared.contains('789012'), isFalse);
+      expect(prepared.contains('890123'), isFalse);
+      expect(prepared.contains('visible'), isTrue);
     });
 
     test('keeps safe @media rules while stripping blocked declarations', () {
@@ -118,6 +142,183 @@ void main() {
     });
   });
 
+  group('HtmlContentCodec.recoverSanitizedEmailContent', () {
+    test('recovers hidden and off-screen readable content', () {
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        '<p style="display:none">123456</p>'
+        '<p style="visibility:hidden">234567</p>'
+        '<p hidden>345678</p>'
+        '<p aria-hidden="true">456789</p>'
+        '<p style="mso-hide:all">567890</p>'
+        '<p style="opacity:0">678901</p>'
+        '<p style="font-size:0">789012</p>'
+        '<p style="height:0; overflow:hidden">890123</p>'
+        '<p style="text-indent:-9999px">901234</p>'
+        '<p style="position:absolute; left:-9999px">012345</p>'
+        '<p style="transform:translateX(-9999px)">135790</p>',
+      );
+
+      expect(
+        recovered.map((item) => item.text),
+        containsAll(const <String>[
+          '123456',
+          '234567',
+          '345678',
+          '456789',
+          '567890',
+          '678901',
+          '789012',
+          '890123',
+          '901234',
+          '012345',
+          '135790',
+        ]),
+      );
+    });
+
+    test('recovers unclassified hidden text without OTP classification', () {
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        '<div style="display:none">Use the backup phrase blue window</div>',
+      );
+
+      expect(recovered, hasLength(1));
+      expect(recovered.single.text, 'Use the backup phrase blue window');
+      expect(recovered.single.kind, EmailRecoveredContentKind.additionalText);
+    });
+
+    test('recovers safe action labels and sanitized hrefs', () {
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        '<div hidden>'
+        '<a href="https://example.com/confirm" aria-label="Confirm account"></a>'
+        '<a href="javascript:alert(1)">Bad link</a>'
+        '<a href="https://example.com/image"><img alt="Open dashboard" /></a>'
+        '</div>'
+        '<form action="https://evil.test/post">'
+        '<button title="Approve sign in"></button>'
+        '<select><option>Use code 246810</option></select>'
+        '<input type="hidden" value="do-not-show" />'
+        '</form>',
+      );
+
+      expect(
+        recovered,
+        contains(
+          const EmailRecoveredContent(
+            kind: EmailRecoveredContentKind.actionLink,
+            text: 'Confirm account',
+            href: 'https://example.com/confirm',
+          ),
+        ),
+      );
+      expect(
+        recovered,
+        contains(
+          const EmailRecoveredContent(
+            kind: EmailRecoveredContentKind.actionLink,
+            text: 'Open dashboard',
+            href: 'https://example.com/image',
+          ),
+        ),
+      );
+      expect(recovered.map((item) => item.text), contains('Approve sign in'));
+      expect(recovered.map((item) => item.text), contains('Use code 246810'));
+      expect(recovered.map((item) => item.text), isNot(contains('Bad link')));
+      expect(
+        recovered.map((item) => item.text),
+        isNot(contains('do-not-show')),
+      );
+    });
+
+    test('recovers safe action links hidden by css hiding styles', () {
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        '<a href="https://example.com/confirm" style="opacity:0">'
+        'Confirm account'
+        '</a>'
+        '<a href="https://example.com/offscreen" '
+        'style="position:absolute; left:-9999px">'
+        'Approve login'
+        '</a>',
+      );
+
+      expect(
+        recovered,
+        contains(
+          const EmailRecoveredContent(
+            kind: EmailRecoveredContentKind.actionLink,
+            text: 'Confirm account',
+            href: 'https://example.com/confirm',
+          ),
+        ),
+      );
+      expect(
+        recovered,
+        contains(
+          const EmailRecoveredContent(
+            kind: EmailRecoveredContentKind.actionLink,
+            text: 'Approve login',
+            href: 'https://example.com/offscreen',
+          ),
+        ),
+      );
+    });
+
+    test('dedupes only exact visible lines', () {
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        '<p hidden>123456</p>'
+        '<p hidden>654321</p>'
+        '<p hidden>Your code is 777888</p>',
+        visibleSanitizedText: '123456\nYour code is 777888',
+      );
+
+      expect(recovered.map((item) => item.text), contains('654321'));
+      expect(recovered.map((item) => item.text), isNot(contains('123456')));
+      expect(
+        recovered.map((item) => item.text),
+        isNot(contains('Your code is 777888')),
+      );
+    });
+
+    test('does not dedupe against sanitized hidden text', () {
+      const html =
+          '<p style="opacity:0">123456</p>'
+          '<p style="position:absolute; left:-9999px">Use code 654321</p>'
+          '<p>visible</p>';
+      final visibleText = HtmlContentCodec.toPlainText(
+        HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+          html,
+          allowRemoteImages: false,
+        ),
+      );
+
+      expect(visibleText.contains('123456'), isFalse);
+      expect(visibleText.contains('654321'), isFalse);
+
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        html,
+        visibleSanitizedText: visibleText,
+      );
+
+      expect(recovered.map((item) => item.text), contains('123456'));
+      expect(recovered.map((item) => item.text), contains('Use code 654321'));
+    });
+
+    test('does not recover unsafe or non-readable content', () {
+      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
+        '<script>123456</script>'
+        '<style>.code::before { content: "234567"; }</style>'
+        '<svg><text>345678</text></svg>'
+        '<iframe>456789</iframe>'
+        '<input type="hidden" value="567890" />'
+        '<a hidden href="javascript:alert(1)">678901</a>'
+        '<a hidden href="https://example.com/track">'
+        '<img width="1" height="1" alt="tracking pixel" />'
+        '</a>',
+      );
+
+      expect(recovered, isEmpty);
+    });
+  });
+
   group('HtmlContentCodec.containsRemoteImages', () {
     test('treats cleartext and https images as remote', () {
       expect(
@@ -132,6 +333,26 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+
+  group('HtmlContentCodec.containsCidImages', () {
+    test('detects unsupported cid images', () {
+      expect(
+        HtmlContentCodec.containsCidImages('<img src="cid:abc123" />'),
+        isTrue,
+      );
+      expect(
+        HtmlContentCodec.containsCidImages(
+          '<img src="https://example.com/x.png" />',
+        ),
+        isFalse,
+      );
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<img src="cid:abc123" />',
+        allowRemoteImages: true,
+      );
+      expect(prepared.contains('cid:abc123'), isFalse);
     });
   });
 
@@ -199,6 +420,15 @@ void main() {
       expect(
         HtmlContentCodec.containsBlockedWebViewContent(
           '<a href=javascript:alert(1)>bad',
+        ),
+        isTrue,
+      );
+    });
+
+    test('detects active form content', () {
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<form><button>Confirm</button></form>',
         ),
         isTrue,
       );

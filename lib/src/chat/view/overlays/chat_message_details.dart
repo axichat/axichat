@@ -130,12 +130,35 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 HtmlContentCodec.containsBlockedWebViewContent(
                   normalizedHtmlBody,
                 );
+            final bool hasCidHtmlImages =
+                hasHtmlBody &&
+                HtmlContentCodec.containsCidImages(normalizedHtmlBody);
             final String preparedHtmlBody = hasHtmlBody
                 ? HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
                     normalizedHtmlBody,
                     allowRemoteImages: false,
                   )
                 : '';
+            final visibleEmailHtmlText = hasHtmlBody
+                ? HtmlContentCodec.toPlainText(preparedHtmlBody).trim()
+                : '';
+            final recoveredEmailContent = hasHtmlBody
+                ? HtmlContentCodec.recoverSanitizedEmailContent(
+                    normalizedHtmlBody,
+                    visibleSanitizedText: visibleEmailHtmlText,
+                  )
+                : const <EmailRecoveredContent>[];
+            final Widget? emailHtmlLoadingFallback =
+                preparedHtmlBody.trim().isEmpty
+                ? null
+                : _MessageHtmlBody(
+                    html: preparedHtmlBody,
+                    textStyle: textTheme.lead,
+                    textColor: context.colorScheme.foreground,
+                    linkColor: context.colorScheme.primary,
+                    shouldLoadImages: false,
+                    onLinkTap: (url) => _handleLinkTap(context, url),
+                  );
             final String? fallbackBodyText = switch (message.body?.trim()) {
               final String text when text.isNotEmpty => text,
               _ => null,
@@ -241,6 +264,13 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     if (hasBlockedHtmlContent) const _EmailHtmlSafetyNotice(),
+                    if (hasCidHtmlImages) const _EmailHtmlCidNotice(),
+                    if (recoveredEmailContent.isNotEmpty)
+                      EmailRecoveredContentView(
+                        items: recoveredEmailContent,
+                        textStyle: textTheme.lead,
+                        onLinkTap: (url) => _handleLinkTap(context, url),
+                      ),
                     if (hasHtmlBody)
                       DecoratedBox(
                         decoration: ShapeDecoration(
@@ -270,19 +300,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                               backgroundColor: context.colorScheme.card,
                               textColor: context.colorScheme.foreground,
                               linkColor: context.colorScheme.primary,
-                              loadingFallback: preparedHtmlBody.trim().isEmpty
-                                  ? null
-                                  : _MessageHtmlBody(
-                                      html: preparedHtmlBody,
-                                      textStyle: textTheme.lead,
-                                      textColor: context.colorScheme.foreground,
-                                      linkColor: context.colorScheme.primary,
-                                      shouldLoadImages: false,
-                                      onLinkTap: (url) =>
-                                          _handleLinkTap(context, url),
-                                    ),
+                              loadingFallback: emailHtmlLoadingFallback,
                               simplifyLayout: true,
-                              minHeight: context.sizing.attachmentPreviewExtent,
+                              minHeight: sizing.attachmentPreviewExtent,
                               onLinkTap: (url) => _handleLinkTap(context, url),
                             ),
                           ],
@@ -978,8 +998,11 @@ class _MessageDetailsReactionChip extends StatelessWidget {
   }
 }
 
-class _EmailHtmlSafetyNotice extends StatelessWidget {
-  const _EmailHtmlSafetyNotice();
+class _EmailHtmlStatusNotice extends StatelessWidget {
+  const _EmailHtmlStatusNotice({required this.iconData, required this.label});
+
+  final IconData iconData;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -993,18 +1016,40 @@ class _EmailHtmlSafetyNotice extends StatelessWidget {
       alignment: WrapAlignment.center,
       children: [
         Icon(
-          LucideIcons.shieldAlert,
+          iconData,
           size: sizing.menuItemIconSize,
           color: colors.mutedForeground,
         ),
         Text(
-          context.l10n.chatEmailInteractiveContentBlockedLabel,
-          style: context.textTheme.muted.copyWith(
-            color: colors.mutedForeground,
-          ),
+          label,
+          style: context.textTheme.muted,
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+}
+
+class _EmailHtmlSafetyNotice extends StatelessWidget {
+  const _EmailHtmlSafetyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return _EmailHtmlStatusNotice(
+      iconData: LucideIcons.shieldAlert,
+      label: context.l10n.chatEmailInteractiveContentBlockedLabel,
+    );
+  }
+}
+
+class _EmailHtmlCidNotice extends StatelessWidget {
+  const _EmailHtmlCidNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return _EmailHtmlStatusNotice(
+      iconData: LucideIcons.imageOff,
+      label: context.l10n.chatEmailInlineImagesUnsupportedLabel,
     );
   }
 }

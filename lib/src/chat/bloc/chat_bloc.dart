@@ -79,6 +79,7 @@ const _emptySignatureValue = '';
 const int _deltaMessageIdUnset = 0;
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
+
 const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
 const _roomAvatarUpdateFailedLogMessage = 'Failed to update room avatar.';
 const _roomAffiliationRefreshFailedLogMessage =
@@ -3429,13 +3430,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 ),
           );
         emit(state.copyWith(items: updatedItems, focused: fetched));
-        _maybeRequestEmailFullHtml(fetched);
+        _requestEmailFullHtml(fetched);
         _maybeRequestEmailQuotedText(fetched);
         return;
       }
     }
     emit(state.copyWith(focused: target));
-    _maybeRequestEmailFullHtml(target);
+    _requestEmailFullHtml(target);
     _maybeRequestEmailQuotedText(target);
   }
 
@@ -3649,13 +3650,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  void _maybeRequestEmailFullHtml(Message? message) {
+  void _requestEmailFullHtml(Message? message) {
     final deltaMessageId = message?.deltaMsgId;
     if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      return;
-    }
-    final htmlBody = message?.htmlBody?.trim();
-    if (htmlBody != null && htmlBody.isNotEmpty) {
       return;
     }
     if (state.emailFullHtmlByDeltaId.containsKey(deltaMessageId)) {
@@ -3672,7 +3669,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   void _maybeRequestVisibleEmailFullHtml(List<Message> messages) {
     for (final message in messages) {
-      _maybeRequestEmailFullHtml(message);
+      _requestEmailFullHtml(message);
     }
   }
 
@@ -4378,7 +4375,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       } else {
         _maybeRequestVisibleEmailFullHtml(state.items);
       }
-      _maybeRequestEmailFullHtml(state.focused);
+      _requestEmailFullHtml(state.focused);
       _maybeRequestEmailQuotedText(state.focused);
     } else {
       _applyEmailSyncState(const EmailSyncState.ready(), emit);

@@ -639,6 +639,14 @@ class _PinnedMessageTile extends StatelessWidget {
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
         : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
+    final visibleSanitizedHtmlText = normalizedHtmlBody == null
+        ? null
+        : HtmlContentCodec.toPlainText(
+            HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+              normalizedHtmlBody,
+              allowRemoteImages: false,
+            ),
+          ).trim();
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
     final messageText = renderedText;
@@ -665,6 +673,20 @@ class _PinnedMessageTile extends StatelessWidget {
         !hasAttachmentCaption &&
         normalizedHtmlBody != null &&
         (!hasVisibleEmailText || shouldPreferRichEmailHtml);
+    final recoveredEmailContent =
+        isEmailMessage &&
+            normalizedHtmlBody != null &&
+            shouldRenderTextContent &&
+            effectiveMessage != null
+        ? HtmlContentCodec.recoverSanitizedEmailContent(
+            normalizedHtmlBody,
+            visibleSanitizedText: [
+              if (messageText.trim().isNotEmpty) messageText.trim(),
+              if (visibleSanitizedHtmlText?.isNotEmpty == true)
+                visibleSanitizedHtmlText!,
+            ].join('\n'),
+          )
+        : const <EmailRecoveredContent>[];
     final contentChildren = <Widget>[];
     final extraChildren = <Widget>[];
     void addExtra(Widget child) {
@@ -772,7 +794,21 @@ class _PinnedMessageTile extends StatelessWidget {
             onPressed: () {},
           ),
         );
-      } else if (hasAttachmentCaption) {
+      } else {
+        if (recoveredEmailContent.isNotEmpty) {
+          contentChildren.add(
+            EmailRecoveredContentView(
+              items: recoveredEmailContent,
+              textStyle: baseTextStyle,
+              onLinkTap: onMessageLinkTap,
+            ),
+          );
+        }
+      }
+      if (messageError.isNone &&
+          !isInviteMessage &&
+          !isInviteRevocationMessage &&
+          hasAttachmentCaption) {
         final metadata = metadataFor(metadataIdForCaption);
         final filename = metadata?.filename.trim() ?? _emptyText;
         final displayFilename = filename.isNotEmpty
@@ -793,7 +829,10 @@ class _PinnedMessageTile extends StatelessWidget {
             onLinkLongPress: onMessageLinkTap,
           ),
         );
-      } else if (shouldRenderInlineEmailHtmlBody) {
+      } else if (messageError.isNone &&
+          !isInviteMessage &&
+          !isInviteRevocationMessage &&
+          shouldRenderInlineEmailHtmlBody) {
         final preparedHtmlBody =
             HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
               normalizedHtmlBody,
@@ -821,7 +860,11 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
           ),
         );
-      } else if (shouldRenderTextContent && messageText.isNotEmpty) {
+      } else if (messageError.isNone &&
+          !isInviteMessage &&
+          !isInviteRevocationMessage &&
+          shouldRenderTextContent &&
+          messageText.isNotEmpty) {
         contentChildren.add(
           _ParsedMessageBody(
             contentKey: previewItemId,
@@ -834,7 +877,11 @@ class _PinnedMessageTile extends StatelessWidget {
             onLinkLongPress: onMessageLinkTap,
           ),
         );
-      } else if (attachmentIds.isEmpty &&
+      } else if (messageError.isNone &&
+          !isInviteMessage &&
+          !isInviteRevocationMessage &&
+          recoveredEmailContent.isEmpty &&
+          attachmentIds.isEmpty &&
           calendarTask == null &&
           calendarFragment == null &&
           availabilityMessage == null) {

@@ -3648,6 +3648,71 @@ void main() {
   });
 
   test(
+    'loaded email window requests full html even when inline html is present',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final message = Message(
+        stanzaID: 'email-inline-html',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 102,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+        body: 'Rendered fallback body',
+        htmlBody: '<p>Inline html</p>',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.getMessageFullHtml(any()),
+      ).thenAnswer((_) async => '<p>Full html</p>');
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.messagesLoaded, isTrue);
+      verify(() => emailService.getMessageFullHtml(message)).called(1);
+      expect(
+        bloc.state.emailFullHtmlByDeltaId[message.deltaMsgId],
+        '<p>Full html</p>',
+      );
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test(
     'email details keep html and quoted preloading but load raw headers only on request',
     () async {
       final emailService = MockEmailService();

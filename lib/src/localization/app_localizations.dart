@@ -1407,6 +1407,12 @@ abstract class AppLocalizations {
   /// **'Rename'**
   String get chatContactRenameAction;
 
+  /// No description provided for @chatContactEditAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit contact'**
+  String get chatContactEditAction;
+
   /// No description provided for @chatContactRenameTooltip.
   ///
   /// In en, this message translates to:
@@ -4409,6 +4415,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Interactive content blocked for safety'**
   String get chatEmailInteractiveContentBlockedLabel;
+
+  /// No description provided for @chatEmailRecoveredContentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional email content'**
+  String get chatEmailRecoveredContentLabel;
+
+  /// No description provided for @chatEmailInlineImagesUnsupportedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Some inline email images cannot be shown.'**
+  String get chatEmailInlineImagesUnsupportedLabel;
 
   /// No description provided for @chatAttachmentBlockedDescription.
   ///

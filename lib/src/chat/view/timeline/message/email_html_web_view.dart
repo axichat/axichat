@@ -45,20 +45,15 @@ String _buildEmailWebViewThemeStyle({
   final fallbackBackgroundColor = brightness == Brightness.dark
       ? const Color(0xFFFFFFFF)
       : backgroundColor;
-  return '''
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<style id="axichat-email-webview-theme">
+  const viewportContent =
+      'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+  const layoutStyle = '''
 html, body {
-  background-color: ${_emailWebViewCssColor(fallbackBackgroundColor)} !important;
-  box-sizing: border-box !important;
-  margin: 0 !important;
-  padding: 0 !important;
   width: 100% !important;
   max-width: 100% !important;
   overflow-x: hidden !important;
 }
 *, *::before, *::after {
-  box-sizing: border-box !important;
   max-width: 100% !important;
 }
 body > *:first-child {
@@ -81,6 +76,20 @@ pre, code, blockquote, td, th, div, p, span, a {
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
 }
+''';
+  return '''
+<meta name="viewport" content="$viewportContent">
+<style id="axichat-email-webview-theme">
+html, body {
+  background-color: ${_emailWebViewCssColor(fallbackBackgroundColor)} !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+*, *::before, *::after {
+  box-sizing: border-box !important;
+}
+$layoutStyle
 </style>
 ''';
 }
@@ -189,24 +198,52 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   @override
   void didUpdateWidget(covariant EmailHtmlWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final layoutChanged =
+        oldWidget.html != widget.html ||
+        oldWidget.simplifyLayout != widget.simplifyLayout ||
+        oldWidget._mode != widget._mode ||
+        oldWidget.useHybridComposition != widget.useHybridComposition;
+    if (oldWidget.simplifyLayout != widget.simplifyLayout ||
+        oldWidget._mode != widget._mode ||
+        oldWidget.useHybridComposition != widget.useHybridComposition) {
+      _controller = null;
+    }
+    if (layoutChanged) {
+      _heightMeasurementEpoch++;
+      _contentHeight = null;
+      _linuxHeightObserverInstalled = false;
+      _linuxFitLockedHeight = null;
+      _lastLinuxPlatformViewId = null;
+      _lastLinuxPlatformViewSize = null;
+      _lastLinuxPlatformViewOffset = null;
+    }
     if (oldWidget.html != widget.html ||
         oldWidget.allowRemoteImages != widget.allowRemoteImages ||
+        oldWidget.simplifyLayout != widget.simplifyLayout ||
+        oldWidget._mode != widget._mode ||
         oldWidget.backgroundColor != widget.backgroundColor ||
         oldWidget.textColor != widget.textColor ||
         oldWidget.linkColor != widget.linkColor) {
       _preparedHtmlInputKey = null;
-      _contentHeight = null;
       _linuxHeightObserverInstalled = false;
       _linuxFitLockedHeight = null;
-      _refreshPreparedHtml(reload: _controller != null);
+      _refreshPreparedHtml(
+        reload: _controller != null,
+        preserveMeasuredHeight: !layoutChanged,
+      );
     }
   }
 
-  void _refreshPreparedHtml({required bool reload}) {
+  void _refreshPreparedHtml({
+    required bool reload,
+    bool preserveMeasuredHeight = false,
+  }) {
     final brightness = context.brightness;
     final inputKey = [
       widget.html.hashCode,
       widget.allowRemoteImages,
+      widget._mode.name,
+      widget.simplifyLayout,
       brightness.name,
       widget.backgroundColor.toARGB32(),
     ].join(':');
@@ -219,6 +256,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         inputKey: inputKey,
         reload: reload,
         brightness: brightness,
+        preserveMeasuredHeight: preserveMeasuredHeight,
       ),
     );
   }
@@ -227,6 +265,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     required String inputKey,
     required bool reload,
     required Brightness brightness,
+    required bool preserveMeasuredHeight,
   }) async {
     if (mounted) {
       setState(() {
@@ -234,7 +273,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         if (!reload) {
           _preparedHtmlData = null;
         }
-        _contentHeight = null;
+        if (!preserveMeasuredHeight) {
+          _contentHeight = null;
+        }
         _linuxFitLockedHeight = null;
       });
     }
@@ -721,6 +762,14 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     );
   }
 
+  Key get _webViewSettingsKey => ValueKey<String>(
+    [
+      widget._mode.name,
+      widget.simplifyLayout,
+      widget.useHybridComposition,
+    ].join(':'),
+  );
+
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
@@ -745,6 +794,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     final webView = _preparedHtmlData == null
         ? null
         : InAppWebView(
+            key: _webViewSettingsKey,
             gestureRecognizers: !widget._usesInternalScroll
                 ? _tapOnlyGestureRecognizers
                 : null,
@@ -864,27 +914,36 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         widget.loadingFallback != null &&
         (_isLoading || _preparedHtmlData == null);
     if (shouldShowLoadingFallback) {
+      final fallbackStack = Stack(
+        children: [
+          widget.loadingFallback!,
+          if (webView != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Visibility(
+                  visible: false,
+                  maintainState: true,
+                  maintainAnimation: true,
+                  maintainSize: true,
+                  child: webView,
+                ),
+              ),
+            ),
+          loadingOverlay,
+        ],
+      );
+      final preservedHeight = webView == null || _contentHeight == null
+          ? null
+          : _resolvedHeight;
       return SizedBox(
         key: _platformViewSizeKey,
         width: double.infinity,
-        child: Stack(
-          children: [
-            widget.loadingFallback!,
-            if (webView != null)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Visibility(
-                    visible: false,
-                    maintainState: true,
-                    maintainAnimation: true,
-                    maintainSize: true,
-                    child: webView,
-                  ),
-                ),
+        child: preservedHeight == null
+            ? fallbackStack
+            : ConstrainedBox(
+                constraints: BoxConstraints(minHeight: preservedHeight),
+                child: fallbackStack,
               ),
-            loadingOverlay,
-          ],
-        ),
       );
     }
 
