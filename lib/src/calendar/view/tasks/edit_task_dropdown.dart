@@ -1445,10 +1445,6 @@ class _EditTaskDescriptionField extends StatelessWidget {
       minLines: 2,
       maxLines: 4,
       textCapitalization: TextCapitalization.sentences,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: context.spacing.xs,
-        vertical: context.spacing.s,
-      ),
       enabled: enabled,
     );
   }
@@ -1473,10 +1469,6 @@ class _EditTaskLocationField extends StatelessWidget {
       controller: controller,
       hintText: context.l10n.calendarLocationOptionalHint,
       textCapitalization: TextCapitalization.words,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: context.spacing.xs,
-        vertical: context.spacing.s,
-      ),
       autocomplete: locationHelper,
       onChanged: onChanged,
       enabled: enabled,

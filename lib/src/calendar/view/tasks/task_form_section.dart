@@ -441,10 +441,6 @@ class TaskTitleField extends StatelessWidget {
       enabled: enabled,
       validator: validator,
       autovalidateMode: autovalidateMode,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: context.spacing.xs,
-        vertical: context.spacing.s,
-      ),
       errorText: errorText,
       errorStyle: errorStyle,
       variant: variant,

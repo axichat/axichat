@@ -318,10 +318,6 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                               Icons.search,
                               color: calendarSubtitleColor,
                             ),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: spacing.xs,
-                              vertical: spacing.s,
-                            ),
                           ),
                           SizedBox(height: spacing.xxs),
                           _FilterRow(

@@ -43,11 +43,7 @@ class AxiCheckboxFormField extends FormField<bool> {
                ? colors.destructive.withValues(
                    alpha: context.motion.tapHoverAlpha,
                  )
-               : (value
-                     ? colors.primary.withValues(
-                         alpha: context.motion.tapHoverAlpha,
-                       )
-                     : Colors.transparent);
+               : Colors.transparent;
 
            void handleChanged(bool newValue) {
              if (!isEnabled) return;

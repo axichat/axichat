@@ -3546,10 +3546,6 @@ class _SelectionTextField extends StatelessWidget {
           enabled: enabled,
           minLines: minLines,
           maxLines: maxLines ?? minLines,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: context.spacing.xs,
-            vertical: context.spacing.s,
-          ),
           onChanged: onChanged,
         ),
       ],
@@ -3593,10 +3589,6 @@ class _SelectionLocationField extends StatelessWidget {
           textCapitalization: TextCapitalization.words,
           enabled: enabled,
           onChanged: onChanged,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: context.spacing.xs,
-            vertical: context.spacing.s,
-          ),
           autocomplete: helper,
         ),
       ],
@@ -5681,7 +5673,7 @@ class _QuickTaskInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final padding = EdgeInsets.symmetric(
-      horizontal: context.spacing.xs,
+      horizontal: context.spacing.m,
       vertical: context.spacing.s,
     );
     final field = TaskTextFormField(
@@ -6023,20 +6015,12 @@ class _AdvancedOptions extends StatelessWidget {
                 hintText: l10n.calendarDescriptionHint,
                 minLines: 2,
                 maxLines: 4,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: context.spacing.xs,
-                  vertical: context.spacing.s,
-                ),
                 variant: AxiInputVariant.ghost,
               ),
               SizedBox(height: context.spacing.m),
               TaskLocationField(
                 controller: locationController,
                 hintText: l10n.calendarLocationHint,
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: context.spacing.xs,
-                  vertical: context.spacing.s,
-                ),
                 variant: AxiInputVariant.ghost,
                 autocomplete: locationHelper,
               ),

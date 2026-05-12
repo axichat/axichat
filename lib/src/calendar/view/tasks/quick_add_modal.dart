@@ -1306,14 +1306,9 @@ class _QuickAddDescriptionField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final spacing = context.spacing;
     return TaskDescriptionField(
       controller: controller,
       hintText: l10n.calendarDescriptionHint,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: spacing.xs,
-        vertical: spacing.s,
-      ),
       textCapitalization: TextCapitalization.sentences,
     );
   }
@@ -1333,15 +1328,10 @@ class _QuickAddLocationField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final spacing = context.spacing;
     return TaskLocationField(
       controller: controller,
       hintText: l10n.calendarLocationHint,
       textCapitalization: TextCapitalization.words,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: spacing.xs,
-        vertical: spacing.s,
-      ),
       onChanged: onChanged,
       autocomplete: helper,
     );

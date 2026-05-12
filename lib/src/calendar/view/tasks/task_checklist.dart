@@ -445,10 +445,6 @@ class _ChecklistTextInput extends StatelessWidget {
       textInputAction: textInputAction,
       placeholder: Text(placeholder),
       variant: variant,
-      padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.xs,
-        vertical: context.spacing.s,
-      ),
     );
   }
 }
