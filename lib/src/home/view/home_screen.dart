@@ -2173,11 +2173,8 @@ class _HomeContent extends StatelessWidget {
                 },
               )
             : mainContent;
-        final shouldResizeForKeyboard =
-            navPlacement != NavPlacement.bottom || pane.hasChatPane;
-
         final scaffold = Scaffold(
-          resizeToAvoidBottomInset: shouldResizeForKeyboard,
+          resizeToAvoidBottomInset: false,
           body: DefaultTabController(
             length: tabs.length,
             animationDuration: animationDuration,
