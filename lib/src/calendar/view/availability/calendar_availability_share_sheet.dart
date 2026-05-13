@@ -1152,7 +1152,7 @@ class _AvailabilityPresetNameField extends StatelessWidget {
         SizedBox(height: context.spacing.xs),
         AxiTextInput(
           controller: controller,
-          variant: AxiInputVariant.underline,
+          variant: AxiInputVariant.ghost,
           placeholder: Text(
             context.l10n.calendarAvailabilitySharePresetNameHint,
           ),

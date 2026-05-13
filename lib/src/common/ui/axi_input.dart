@@ -33,7 +33,7 @@ class AxiInput extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.decoration,
-    this.variant = AxiInputVariant.outlined,
+    this.variant = AxiInputVariant.ghost,
     this.undoController,
     TextInputType? keyboardType,
     this.textInputAction,

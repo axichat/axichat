@@ -39,7 +39,7 @@ class CalendarParticipantsField extends StatefulWidget {
     required this.onAttendeesChanged,
     this.title = _participantsSectionTitle,
     this.headerSize = TaskSectionLabelSize.medium,
-    this.inputVariant = AxiInputVariant.underline,
+    this.inputVariant = AxiInputVariant.ghost,
     this.enabled = true,
   });
 

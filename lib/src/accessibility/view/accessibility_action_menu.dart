@@ -2861,6 +2861,7 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
                 maxLines: widget.maxLines,
                 placeholder: Text(widget.hintText),
                 onChanged: widget.onChanged,
+                variant: AxiInputVariant.plain,
                 decoration: const ShadDecoration(
                   border: ShadBorder.none,
                   focusedBorder: ShadBorder.none,

@@ -715,6 +715,7 @@ class _SubjectTextField extends StatelessWidget {
                 onSubmitted: enabled ? (_) => onSubmitted() : null,
                 onEditingComplete: enabled ? onSubmitted : null,
                 keyboardType: TextInputType.text,
+                variant: AxiInputVariant.plain,
                 style: subjectStyle,
                 strutStyle: subjectStrutStyle,
                 cursorHeight: subjectStyle.fontSize,

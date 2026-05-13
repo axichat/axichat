@@ -1222,7 +1222,7 @@ class _RecurrenceEndControls extends StatelessWidget {
             controller: countController,
             enabled: enabled,
             keyboardType: TextInputType.number,
-            variant: AxiInputVariant.underline,
+            variant: AxiInputVariant.ghost,
             placeholder: Text(l10n.calendarRepeatTimes),
             placeholderStyle: context.textTheme.label.copyWith(
               color: calendarSubtitleColor.withValues(alpha: 0.55),

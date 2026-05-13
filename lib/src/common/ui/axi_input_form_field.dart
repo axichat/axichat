@@ -34,6 +34,7 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
     super.onReset,
     super.focusNode,
     ShadDecoration? decoration,
+    AxiInputVariant variant = AxiInputVariant.ghost,
     Widget? placeholder,
     TextMagnifierConfiguration magnifierConfiguration =
         TextMagnifierConfiguration.disabled,
@@ -117,6 +118,7 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
              enabled: state.enabled,
              focusNode: state.focusNode,
              decoration: state.decoration,
+             variant: variant,
              style: style,
              cursorColor: cursorColor,
              selectionColor: selectionColor,

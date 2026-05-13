@@ -282,7 +282,7 @@ class TaskTextFormField extends StatefulWidget {
     this.validator,
     this.autovalidateMode,
     this.contentPadding,
-    this.variant = AxiInputVariant.underline,
+    this.variant = AxiInputVariant.ghost,
     this.textStyle,
     this.errorText,
     this.errorStyle,
@@ -1122,7 +1122,7 @@ class TaskDescriptionField extends StatelessWidget {
     this.enabled = true,
     this.onChanged,
     this.contentPadding,
-    this.variant = AxiInputVariant.underline,
+    this.variant = AxiInputVariant.ghost,
   });
 
   final TextEditingController controller;
@@ -1173,7 +1173,7 @@ class TaskLocationField extends StatefulWidget {
     this.autofocus = false,
     this.onChanged,
     this.contentPadding,
-    this.variant = AxiInputVariant.underline,
+    this.variant = AxiInputVariant.ghost,
     this.autocomplete,
     this.autocompleteLimit = 6,
     this.enabled = true,

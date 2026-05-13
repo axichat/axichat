@@ -25,7 +25,7 @@ class CalendarLinkGeoFields extends StatefulWidget {
     required this.onGeoChanged,
     this.title = _linkGeoSectionTitle,
     this.headerSize = TaskSectionLabelSize.medium,
-    this.inputVariant = AxiInputVariant.underline,
+    this.inputVariant = AxiInputVariant.ghost,
     this.enabled = true,
   });
 

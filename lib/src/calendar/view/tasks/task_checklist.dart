@@ -22,7 +22,7 @@ class TaskChecklist extends StatefulWidget {
     this.headerSize = TaskSectionLabelSize.medium,
     this.showDivider = true,
     this.showHeader = true,
-    this.inputVariant = AxiInputVariant.underline,
+    this.inputVariant = AxiInputVariant.ghost,
     this.enabled = true,
   });
 
@@ -424,7 +424,7 @@ class _ChecklistTextInput extends StatelessWidget {
     this.onChanged,
     this.onSubmitted,
     this.textInputAction,
-    this.variant = AxiInputVariant.underline,
+    this.variant = AxiInputVariant.ghost,
   });
 
   final TextEditingController controller;

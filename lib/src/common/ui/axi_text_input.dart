@@ -33,7 +33,7 @@ class AxiTextInput extends StatelessWidget {
     this.onSubmitted,
     this.inputFormatters,
     this.decoration,
-    this.variant = AxiInputVariant.outlined,
+    this.variant = AxiInputVariant.ghost,
     this.style,
     this.strutStyle,
     this.cursorHeight,

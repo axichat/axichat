@@ -33,7 +33,7 @@ class TaskTextField extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.contentPadding,
-    this.variant = AxiInputVariant.underline,
+    this.variant = AxiInputVariant.ghost,
     this.textStyle,
     this.helperText,
     this.helperStyle,

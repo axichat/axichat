@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'axi_input.dart';
 import 'axi_input_form_field.dart';
 
 class AxiTextFormField extends StatelessWidget {
@@ -12,6 +13,7 @@ class AxiTextFormField extends StatelessWidget {
     this.controller,
     this.focusNode,
     this.placeholder,
+    this.variant = AxiInputVariant.ghost,
     this.keyboardType,
     this.enabled,
     this.obscureText,
@@ -41,6 +43,7 @@ class AxiTextFormField extends StatelessWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final Widget? placeholder;
+  final AxiInputVariant variant;
   final TextInputType? keyboardType;
   final bool? enabled;
   final bool? obscureText;
@@ -72,6 +75,7 @@ class AxiTextFormField extends StatelessWidget {
       controller: controller,
       focusNode: focusNode,
       placeholder: placeholder,
+      variant: variant,
       keyboardType: keyboardType,
       enabled: enabled ?? true,
       obscureText: obscureText ?? false,

@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
 import 'package:axichat/src/calendar/view/tasks/schedule_range_fields.dart';
+import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -385,9 +386,9 @@ class _AvailabilityTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final field = AxiTextFormField(
+    final field = TaskTextField(
       controller: controller,
-      placeholder: Text(placeholder),
+      hintText: placeholder,
       minLines: minLines,
       maxLines: maxLines,
       enabled: enabled,
