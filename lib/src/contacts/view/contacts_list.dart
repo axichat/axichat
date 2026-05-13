@@ -387,9 +387,9 @@ class _ContactListTile extends StatelessWidget {
     return ListItemPadding(
       padding: EdgeInsets.fromLTRB(
         spacing.m,
-        spacing.xxs,
+        spacing.xs,
         spacing.m,
-        spacing.xxs,
+        spacing.xs,
       ),
       child: AxiListTile(
         key: ValueKey(address),
@@ -457,6 +457,7 @@ class _ContactListTile extends StatelessWidget {
           vertical: spacing.xxs,
         ),
         minTileHeight: context.sizing.listButtonHeight + spacing.xs,
+        horizontalTitleGap: spacing.s,
         leading: HydratedAxiAvatar(
           avatar: AvatarPresentation.avatar(
             label: address,

@@ -6,7 +6,6 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
-import 'package:axichat/src/avatar/view/avatar_badge_overlay.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -462,6 +461,65 @@ class _CalendarRoomTitle extends StatelessWidget {
   }
 }
 
+class _ChatAvatar extends StatelessWidget {
+  const _ChatAvatar({
+    required this.chat,
+    required this.selfIdentity,
+    required this.size,
+  });
+
+  final Chat chat;
+  final SelfAvatar selfIdentity;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarData = chat.avatarPresentation(selfAvatar: selfIdentity);
+    if (avatarData.isAppIcon) {
+      return AxichatAppIconAvatar(size: size);
+    }
+    return HydratedAxiAvatar(avatar: avatarData, size: size);
+  }
+}
+
+class _EmailChatTitle extends StatelessWidget {
+  const _EmailChatTitle({
+    required this.chat,
+    required this.selfIdentity,
+    required this.title,
+  });
+
+  final Chat chat;
+  final SelfAvatar selfIdentity;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    return Row(
+      children: [
+        _ChatAvatar(
+          chat: chat,
+          selfIdentity: selfIdentity,
+          size: context.sizing.iconButtonIconSize,
+        ),
+        SizedBox(width: spacing.xs),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.small.strong.copyWith(
+              color: colors.foreground,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class ChatListTile extends StatefulWidget {
   const ChatListTile({
     super.key,
@@ -686,7 +744,7 @@ class _ChatListTileState extends State<ChatListTile> {
   bool _focused = false;
   late final FocusNode _focusNode;
   String? _cachedTimestampLabel;
-  double _cachedTimestampWidth = 0;
+  Size? _cachedTimestampSize;
   double _textScaleFactor = 1;
 
   @override
@@ -712,7 +770,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (oldWidget.item.lastMessage != widget.item.lastMessage ||
         oldWidget.item.primaryView != widget.item.primaryView) {
       _cachedTimestampLabel = null;
-      _cachedTimestampWidth = 0;
+      _cachedTimestampSize = null;
     }
   }
 
@@ -741,7 +799,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (_textScaleFactor != scaleFactor) {
       _textScaleFactor = scaleFactor;
       _cachedTimestampLabel = null;
-      _cachedTimestampWidth = 0;
+      _cachedTimestampSize = null;
     }
 
     final displayName = item.displayName;
@@ -752,6 +810,7 @@ class _ChatListTileState extends State<ChatListTile> {
       now: widget.timestampNow,
     );
     final isCalendarFirstRoom = item.isCalendarFirstRoom;
+    final isEmailChatRow = item.isEmailBacked && !isCalendarFirstRoom;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadDiameter = showUnreadBadge
@@ -780,12 +839,17 @@ class _ChatListTileState extends State<ChatListTile> {
             widget.timestampNow,
             item.lastChangeTimestamp,
           );
-    final timestampThickness = timestampLabel == null
+    final timestampCutoutSideGap = spacing.xs;
+    final timestampOffset = spacing.xxs;
+    final timestampSize = timestampLabel == null
+        ? null
+        : _resolveTimestampSize(context, timestampLabel);
+    final timestampCutoutDepth = timestampSize == null
         ? 0.0
-        : math.max(
-            scaled(sizing.menuItemHeight),
-            _resolveTimestampWidth(context, timestampLabel) + scaled(spacing.m),
-          );
+        : timestampSize.height / 2;
+    final timestampThickness = timestampSize == null
+        ? 0.0
+        : timestampSize.width + scaled(timestampCutoutSideGap * 2);
     final selectionActive = widget.selectionActive;
     final isSelected = widget.isSelected;
     final isOpen = widget.isOpen;
@@ -807,11 +871,12 @@ class _ChatListTileState extends State<ChatListTile> {
         await _handleTap(item);
       };
     }
+    final leadingAvatarSize = sizing.iconButtonSize;
     final tilePadding = EdgeInsetsDirectional.only(
-      start: scaled(spacing.m),
-      end: scaled(showUnreadBadge ? spacing.l : spacing.m),
-      top: scaled(spacing.xs),
-      bottom: scaled(spacing.xs),
+      start: scaled(spacing.s),
+      end: scaled(showUnreadBadge ? spacing.m : spacing.s),
+      top: scaled(isEmailChatRow ? spacing.xxs : spacing.xs),
+      bottom: scaled(isEmailChatRow ? spacing.xxs : spacing.xs),
     );
     final tileActions = trailingTimestampLabel == null
         ? null
@@ -838,32 +903,31 @@ class _ChatListTileState extends State<ChatListTile> {
         }
       },
       leadingConstraints: BoxConstraints(
-        maxWidth: scaled(sizing.iconButtonTapTarget + spacing.s),
-        maxHeight: scaled(sizing.iconButtonTapTarget + spacing.s),
+        maxWidth: scaled(sizing.iconButtonTapTarget),
+        maxHeight: scaled(sizing.iconButtonTapTarget),
       ),
       selected: isOpen || isSelected,
       paintSurface: false,
       contentPadding: tilePadding,
+      minTileHeight: scaled(sizing.chatTileMinHeight),
+      horizontalTitleGap: isEmailChatRow ? null : scaled(spacing.s),
       tapBounce: false,
-      leading: () {
-        final avatarData = item.avatarPresentation(
-          selfAvatar: widget.selfIdentity,
-        );
-        if (avatarData.isAppIcon) {
-          return AxichatAppIconAvatar(size: sizing.iconButtonTapTarget);
-        }
-        return AvatarTransportBadgeOverlay(
-          size: sizing.iconButtonTapTarget,
-          transport: item.defaultTransport,
-          child: HydratedAxiAvatar(
-            avatar: avatarData,
-            size: sizing.iconButtonTapTarget,
-          ),
-        );
-      }(),
-      title: isCalendarFirstRoom ? null : displayName,
+      leading: isEmailChatRow
+          ? null
+          : _ChatAvatar(
+              chat: item,
+              selfIdentity: widget.selfIdentity,
+              size: leadingAvatarSize,
+            ),
+      title: isCalendarFirstRoom || isEmailChatRow ? null : displayName,
       titleWidget: isCalendarFirstRoom
           ? _CalendarRoomTitle(title: displayName)
+          : isEmailChatRow
+          ? _EmailChatTitle(
+              chat: item,
+              selfIdentity: widget.selfIdentity,
+              title: displayName,
+            )
           : null,
       subtitle: subtitleText,
       subtitlePlaceholder: isCalendarFirstRoom
@@ -877,7 +941,6 @@ class _ChatListTileState extends State<ChatListTile> {
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
     final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
-    final timestampOffset = spacing.xs;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
         CutoutSpec(
@@ -915,7 +978,7 @@ class _ChatListTileState extends State<ChatListTile> {
         CutoutSpec(
           edge: CutoutEdge.bottom,
           alignment: const Alignment(0.52, 1),
-          depth: spacing.m,
+          depth: timestampCutoutDepth,
           thickness: timestampThickness,
           cornerRadius: context.radii.container,
           child: Transform.translate(
@@ -1030,18 +1093,19 @@ class _ChatListTileState extends State<ChatListTile> {
     );
   }
 
-  double _resolveTimestampWidth(BuildContext context, String label) {
-    if (_cachedTimestampLabel == label && _cachedTimestampWidth > 0) {
-      return _cachedTimestampWidth;
+  Size _resolveTimestampSize(BuildContext context, String label) {
+    final cachedTimestampSize = _cachedTimestampSize;
+    if (_cachedTimestampLabel == label && cachedTimestampSize != null) {
+      return cachedTimestampSize;
     }
     final painter = TextPainter(
-      text: TextSpan(text: label, style: context.textTheme.small),
+      text: TextSpan(text: label, style: context.textTheme.muted),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.of(context).textScaler,
     )..layout();
     _cachedTimestampLabel = label;
-    _cachedTimestampWidth = painter.width;
-    return _cachedTimestampWidth;
+    _cachedTimestampSize = painter.size;
+    return painter.size;
   }
 
   double _resolveUnreadDiameter(BuildContext context) {

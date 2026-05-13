@@ -113,10 +113,6 @@ class _DraftsListBody extends StatelessWidget {
 
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final listItemPadding = EdgeInsets.symmetric(
-      horizontal: spacing.m,
-      vertical: spacing.xs,
-    );
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
@@ -150,7 +146,6 @@ class _DraftsListBody extends StatelessWidget {
             );
           }
           return ListItemPadding(
-            padding: listItemPadding,
             child: AxiListTile(
               key: Key(item.id.toString()),
               onTap: () => openComposeDraft(
@@ -176,10 +171,17 @@ class _DraftsListBody extends StatelessWidget {
                   },
                 ),
               ],
+              contentPadding: EdgeInsetsDirectional.only(
+                start: spacing.s,
+                end: spacing.s,
+                top: spacing.xs,
+                bottom: spacing.xs,
+              ),
               leading: leadingAvatar,
               title:
                   '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
-              minTileHeight: sizing.listButtonHeight,
+              minTileHeight: sizing.chatTileMinHeight,
+              horizontalTitleGap: spacing.s,
               subtitle: item.body?.isNotEmpty == true
                   ? item.body
                   : item.jids.join(', '),

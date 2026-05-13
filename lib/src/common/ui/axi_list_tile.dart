@@ -34,6 +34,7 @@ class AxiListTile extends StatelessWidget {
     this.contentPadding,
     this.tapBounce = true,
     this.minTileHeight,
+    this.horizontalTitleGap,
   }) : assert(
          title == null || titleWidget == null,
          'Provide either title or titleWidget, not both.',
@@ -56,6 +57,7 @@ class AxiListTile extends StatelessWidget {
   final EdgeInsetsGeometry? contentPadding;
   final bool tapBounce;
   final double? minTileHeight;
+  final double? horizontalTitleGap;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,7 @@ class AxiListTile extends StatelessWidget {
 
     Widget child = ListTile(
       titleAlignment: ListTileTitleAlignment.center,
-      horizontalTitleGap: 16.0,
+      horizontalTitleGap: horizontalTitleGap ?? context.spacing.m,
       contentPadding: contentPadding ?? _defaultContentPadding,
       minTileHeight: resolvedMinTileHeight,
       selected: selected,
