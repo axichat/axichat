@@ -2895,9 +2895,12 @@ class EmailService {
         await refreshChatlistFromCore();
         break;
       case DeltaEventType.connectivityChanged:
-        await _refreshConnectivityState(
+        final connectivity = await _refreshConnectivityState(
           source: _EmailSyncSource.connectivityChangedEvent,
         );
+        if (connectivity != null && connectivity < _connectivityConnectedMin) {
+          break;
+        }
         await _bootstrapActiveAccountIfNeeded();
         await _runReconnectCatchUp();
         break;
@@ -3342,42 +3345,44 @@ class EmailService {
     );
   }
 
-  Future<void> _refreshConnectivityState({
+  Future<int?> _refreshConnectivityState({
     _EmailSyncSource source = _EmailSyncSource.unknown,
   }) async {
     if (!_acceptsRuntimeWork) {
-      return;
+      return null;
     }
     try {
       final connectivity = await _transport.connectivity();
-      if (connectivity == null) return;
+      if (connectivity == null) return null;
       _recordConnectivitySample(connectivity: connectivity, source: source);
       if (connectivity >= _connectivityConnectedMin) {
         _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready(), source: source);
-        return;
+        return connectivity;
       }
       if (connectivity >= _connectivityWorkingMin) {
         _cancelConnectivityDowngrade();
         if (_syncState.status == EmailSyncStatus.ready) {
-          return;
+          return connectivity;
         }
         _updateSyncState(
           EmailSyncState.recovering(_l10n.emailSyncMessageSyncing),
           source: source,
         );
-        return;
+        return connectivity;
       }
       if (_syncState.status == EmailSyncStatus.ready) {
         _scheduleConnectivityDowngrade(connectivity);
-        return;
+        return connectivity;
       }
       _applyConnectivityState(
         connectivity,
         source: _EmailSyncSource.connectivityApply,
       );
+      return connectivity;
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
+      return null;
     }
   }
 
@@ -3956,12 +3961,25 @@ class EmailService {
           return;
         }
         final connectivity = await _transport.connectivity();
-        if (connectivity == null ||
-            connectivity >= _connectivityConnectingMin) {
+        if (connectivity == null || connectivity >= _connectivityWorkingMin) {
+          return;
+        }
+        if (connectivity == _connectivityConnectingMin) {
+          await _transport.notifyNetworkAvailable();
+          await Future.delayed(_reconnectRestartDelay);
+          if (!_acceptsRuntimeWork) {
+            return;
+          }
+          final retryConnectivity = await _transport.connectivity();
+          if (retryConnectivity == null ||
+              retryConnectivity >= _connectivityWorkingMin) {
+            return;
+          }
+        } else if (connectivity > _connectivityConnectingMin) {
           return;
         }
         _log.warning(
-          'Email transport still offline after network available; restarting.',
+          'Email transport still offline or connecting after network available; restarting.',
         );
         await stop();
         await start();
