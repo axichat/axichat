@@ -1204,10 +1204,13 @@ class XmppService extends XmppBase
   static const _reconnectEnableFailedLog =
       'Failed to enable reconnection before requesting reconnect.';
 
-  void _setConnectionState(ConnectionState state) {
-    if (state == ConnectionState.connecting) {
+  void _setConnectionState(
+    ConnectionState state, {
+    bool scheduleConnectingWatchdog = true,
+  }) {
+    if (state == ConnectionState.connecting && scheduleConnectingWatchdog) {
       _scheduleConnectingWatchdog();
-    } else {
+    } else if (state != ConnectionState.connecting) {
       _cancelConnectingWatchdog();
     }
 
@@ -1250,6 +1253,13 @@ class XmppService extends XmppBase
   void _cancelConnectingWatchdog() {
     _connectingWatchdogTimer?.cancel();
     _connectingWatchdogTimer = null;
+  }
+
+  void _refreshConnectingWatchdogIfActive() {
+    if (_connectingWatchdogTimer == null) {
+      return;
+    }
+    _scheduleConnectingWatchdog();
   }
 
   Future<void> _handleConnectingWatchdogTimeout() async {
@@ -2809,6 +2819,7 @@ class XmppService extends XmppBase
     _connection.socketWrapper.registerConnectionCallbacks(
       onConnectSuccess: _resetConnectTimeoutTracking,
       onConnectError: _handleSocketConnectError,
+      onConnectFailure: _moveAwaitingSocketReconnectToBackoff,
     );
   }
 
@@ -2868,6 +2879,13 @@ class XmppService extends XmppBase
     if (!connected) {
       _setConnectionState(ConnectionState.notConnected);
     }
+  }
+
+  void _moveAwaitingSocketReconnectToBackoff() {
+    fireAndForget(
+      _connection.reconnectionPolicy.moveAwaitingSocketToBackoff,
+      operationName: 'XmppService.moveAwaitingSocketReconnectToBackoff',
+    );
   }
 
   bool _isTimeoutSocketError(SocketException error) {
@@ -3029,9 +3047,16 @@ class XmppService extends XmppBase
       _xmppLogger.info('Reconnect request failed while enabling reconnection.');
       return false;
     }
+    if (trigger == ReconnectTrigger.resume &&
+        connectionState == ConnectionState.connecting) {
+      _refreshConnectingWatchdogIfActive();
+    }
     if (trigger.shouldBypassBackoff &&
         connectionState != ConnectionState.connecting) {
-      _setConnectionState(ConnectionState.connecting);
+      _setConnectionState(
+        ConnectionState.connecting,
+        scheduleConnectingWatchdog: false,
+      );
     }
     final outcome = await _dispatchReconnectRequest(
       trigger,
@@ -3219,7 +3244,10 @@ class XmppService extends XmppBase
     final XmppConnection oldConnection = _connection;
     XmppConnection? foregroundAttemptConnection;
     try {
-      _setConnectionState(ConnectionState.connecting);
+      _setConnectionState(
+        ConnectionState.connecting,
+        scheduleConnectingWatchdog: false,
+      );
       _xmppLogger.info(
         'Migrating XMPP connection to foreground socket. '
         'fromSocket=${_socketWrapperLabel(oldConnection)}',
@@ -4054,6 +4082,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
 
   void Function()? _onConnectSuccess;
   void Function(SocketException error)? _onConnectError;
+  void Function()? _onConnectFailure;
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
   final Set<Socket> _expectedClosures = {};
@@ -4089,9 +4118,11 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   void registerConnectionCallbacks({
     void Function()? onConnectSuccess,
     void Function(SocketException error)? onConnectError,
+    void Function()? onConnectFailure,
   }) {
     _onConnectSuccess = onConnectSuccess;
     _onConnectError = onConnectError;
+    _onConnectFailure = onConnectFailure;
   }
 
   void destroy() {
@@ -4203,6 +4234,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
         _log.severe(
           'No static server mapping and no host override provided. DNS lookups are disabled.',
         );
+        _onConnectFailure?.call();
         return false;
       }
       resolvedHost = target.host;
@@ -4237,6 +4269,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     _log.warning(
       'Socket connection failed. DNS/SRV fallbacks are disabled for all domains except axi.im A fallback.',
     );
+    _onConnectFailure?.call();
     return false;
   }
 

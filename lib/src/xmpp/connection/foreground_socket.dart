@@ -651,6 +651,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       StreamController.broadcast();
   void Function()? _onConnectSuccess;
   void Function(SocketException error)? _onConnectError;
+  void Function()? _onConnectFailure;
 
   var _connect = Completer<bool>();
   var _secure = Completer<bool>();
@@ -728,9 +729,11 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   void registerConnectionCallbacks({
     void Function()? onConnectSuccess,
     void Function(SocketException error)? onConnectError,
+    void Function()? onConnectFailure,
   }) {
     _onConnectSuccess = onConnectSuccess;
     _onConnectError = onConnectError;
+    _onConnectFailure = onConnectFailure;
   }
 
   @override
@@ -778,6 +781,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
     final target = _resolveTarget(domain, host: host, port: port);
     if (target == null) {
+      _onConnectFailure?.call();
       return false;
     }
 
@@ -808,7 +812,11 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     }
 
     _sendToTask([connectPrefix, domain, target.host, target.port]);
-    return _awaitConnectResponse();
+    final connected = await _awaitConnectResponse();
+    if (!connected) {
+      _onConnectFailure?.call();
+    }
+    return connected;
   }
 
   _SocketTarget? _resolveTarget(String domain, {String? host, int? port}) {

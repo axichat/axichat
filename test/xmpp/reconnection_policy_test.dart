@@ -305,6 +305,38 @@ void main() {
     expect(policy.reconnectActivity, XmppReconnectActivity.awaitingSocket);
   });
 
+  test('socket failure moves pre-socket reconnect to backoff', () {
+    fakeAsync((async) {
+      final policy = XmppReconnectionPolicy.exponential();
+      var reconnectCalls = 0;
+      policy.register(() async {
+        reconnectCalls++;
+      });
+
+      var movedToBackoff = false;
+      fireAndForget(() async {
+        await policy.setShouldReconnect(true);
+        await policy.requestReconnect(ReconnectTrigger.immediateRetry);
+        movedToBackoff = await policy.moveAwaitingSocketToBackoff();
+      });
+      async.flushMicrotasks();
+
+      expect(reconnectCalls, 1);
+      expect(movedToBackoff, isTrue);
+      expect(policy.reconnectActivity, XmppReconnectActivity.scheduledBackoff);
+
+      final outcomes = <ReconnectRequestOutcome>[];
+      fireAndForget(() async {
+        outcomes.add(await policy.requestReconnect(ReconnectTrigger.resume));
+      });
+      async.flushMicrotasks();
+
+      expect(outcomes, [ReconnectRequestOutcome.dispatched]);
+      expect(reconnectCalls, 2);
+      expect(policy.reconnectActivity, XmppReconnectActivity.awaitingSocket);
+    });
+  });
+
   test('awaiting negotiation cycle can move into backoff and retry', () {
     fakeAsync((async) {
       final policy = XmppReconnectionPolicy.exponential();

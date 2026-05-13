@@ -53,6 +53,33 @@ void main() {
   });
 
   test(
+    'waitForConnection returns after timeout when probes stay unavailable',
+    () async {
+      const timeout = Duration(milliseconds: 10);
+      const domain = 'wait-timeout.test';
+      var probeCalls = 0;
+      final manager = XmppConnectivityManager.forXmppConnection(
+        domainProvider: () => domain,
+        shouldContinue: () async => true,
+        pollInterval: const Duration(milliseconds: 1),
+        waitTimeout: timeout,
+        connectivityProbe: (_) async {
+          probeCalls++;
+          return false;
+        },
+      );
+
+      final stopwatch = Stopwatch()..start();
+      await manager.waitForConnection().timeout(const Duration(seconds: 1));
+      stopwatch.stop();
+
+      expect(probeCalls, greaterThan(1));
+      expect(stopwatch.elapsed, greaterThanOrEqualTo(timeout));
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
+    },
+  );
+
+  test(
     'waitForConnection stops polling once reconnect should no longer continue',
     () async {
       const domain = 'wait-stop.test';
@@ -62,7 +89,7 @@ void main() {
         domainProvider: () => domain,
         shouldContinue: () async => keepWaiting,
         pollInterval: const Duration(milliseconds: 1),
-        waitTimeout: const Duration(milliseconds: 2),
+        waitTimeout: const Duration(seconds: 1),
         connectivityProbe: (_) async {
           probeCalls++;
           return false;

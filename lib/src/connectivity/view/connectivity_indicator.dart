@@ -170,6 +170,7 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
           color: colors.green,
           foregroundColor: darkForeground,
           iconData: LucideIcons.cloud,
+          showProgress: false,
           text: l10n.connectivityStatusConnected,
         ),
       _ConnectivityIndicatorDisplay.connecting =>
@@ -177,6 +178,7 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
           color: connectingColors.primary,
           foregroundColor: connectingColors.primaryForeground,
           iconData: LucideIcons.cloudCog,
+          showProgress: true,
           text: l10n.connectivityStatusConnecting,
         ),
       _ConnectivityIndicatorDisplay.notConnected =>
@@ -184,12 +186,14 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
           color: colors.warning,
           foregroundColor: darkForeground,
           iconData: LucideIcons.cloudOff,
+          showProgress: false,
           text: l10n.connectivityStatusNotConnected,
         ),
       _ConnectivityIndicatorDisplay.error => _ConnectivityIndicatorPresentation(
         color: colors.destructive,
         foregroundColor: colors.destructiveForeground,
         iconData: LucideIcons.cloudOff,
+        showProgress: false,
         text: l10n.connectivityStatusFailed,
       ),
     };
@@ -210,12 +214,14 @@ class _ConnectivityIndicatorPresentation {
     required this.color,
     required this.foregroundColor,
     required this.iconData,
+    required this.showProgress,
     required this.text,
   });
 
   final Color color;
   final Color foregroundColor;
   final IconData iconData;
+  final bool showProgress;
   final String text;
 }
 
@@ -242,6 +248,7 @@ class _ConnectivityIndicatorContainer extends StatelessWidget {
             color: presentation!.color,
             foregroundColor: presentation!.foregroundColor,
             iconData: presentation!.iconData,
+            showProgress: presentation!.showProgress,
             text: presentation!.text,
             topInset: topInset,
           )
@@ -282,6 +289,7 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
     required this.color,
     required this.foregroundColor,
     required this.iconData,
+    required this.showProgress,
     required this.text,
     required this.topInset,
   });
@@ -289,6 +297,7 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
   final Color color;
   final Color foregroundColor;
   final IconData iconData;
+  final bool showProgress;
   final String text;
   final double topInset;
 
@@ -318,10 +327,28 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
               ),
               SizedBox.square(dimension: spacing.s),
               Text(text, style: textStyle),
+              if (showProgress) ...[
+                SizedBox(width: spacing.m),
+                _ConnectivityBannerProgressIndicator(color: foregroundColor),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ConnectivityBannerProgressIndicator extends StatelessWidget {
+  const _ConnectivityBannerProgressIndicator({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: context.sizing.progressIndicatorSize,
+      child: FittedBox(child: AxiProgressIndicator(color: color)),
     );
   }
 }

@@ -3234,6 +3234,70 @@ void main() {
     );
 
     test(
+      'Resume reconnect refreshes the connecting watchdog while joining active cycle.',
+      () async {
+        await xmppService.close();
+        await pumpEventQueue();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+          connectingWatchdogTimeout: const Duration(milliseconds: 120),
+        );
+        await connectSuccessfully(xmppService);
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+        await reconnectionPolicy.onSuccess();
+        when(
+          () => mockConnection.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) async {
+          reconnectTriggers.add(ReconnectTrigger.resume);
+          return ReconnectRequestOutcome.joinedActiveCycle;
+        });
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingNegotiation,
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.resume),
+          isTrue,
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(reconnectTriggers, [ReconnectTrigger.resume]);
+
+        await Future<void>.delayed(const Duration(milliseconds: 70));
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.scheduledBackoff,
+        );
+      },
+    );
+
+    test(
       'Connecting watchdog moves stale awaiting negotiation to backoff.',
       () async {
         await xmppService.close();
@@ -3279,7 +3343,7 @@ void main() {
     );
 
     test(
-      'Connecting watchdog clears pre-socket reconnect without scheduling backoff.',
+      'Service-level pre-socket connecting state does not start the watchdog.',
       () async {
         await xmppService.close();
         await pumpEventQueue();
@@ -3293,15 +3357,16 @@ void main() {
         );
         await connectSuccessfully(xmppService);
         await reconnectionPolicy.setShouldReconnect(true);
-        await reconnectionPolicy.requestReconnect(
-          ReconnectTrigger.immediateRetry,
-        );
+        when(
+          () => mockConnection.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) async {
+          reconnectTriggers.add(ReconnectTrigger.resume);
+          return reconnectionPolicy.requestReconnect(ReconnectTrigger.resume);
+        });
 
-        eventStreamController.add(
-          mox.ConnectionStateChangedEvent(
-            mox.XmppConnectionState.connecting,
-            mox.XmppConnectionState.notConnected,
-          ),
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.resume),
+          isTrue,
         );
         await pumpEventQueue();
 
@@ -3314,7 +3379,8 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await pumpEventQueue();
 
-        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(reconnectTriggers, [ReconnectTrigger.resume]);
         expect(
           reconnectionPolicy.reconnectActivity,
           XmppReconnectActivity.awaitingSocket,
@@ -3418,6 +3484,26 @@ void main() {
           isNull,
           reason: '$uncaughtError\n$uncaughtStackTrace',
         );
+      },
+    );
+
+    test(
+      'connect failure callback fires when no endpoint is available',
+      () async {
+        final wrapper = XmppSocketWrapper();
+        var failures = 0;
+        wrapper.registerConnectionCallbacks(onConnectFailure: () => failures++);
+
+        expect(await wrapper.connect('example.invalid'), isFalse);
+        expect(failures, 1);
+
+        final clientSocket = await Socket.connect(
+          InternetAddress.loopbackIPv4,
+          serverSocket.port,
+        );
+        final acceptedSocket = await acceptedSocketFuture;
+        clientSocket.destroy();
+        acceptedSocket.destroy();
       },
     );
   });

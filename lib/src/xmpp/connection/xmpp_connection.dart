@@ -698,6 +698,19 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _clearReconnectCycle(resetAttempts: true);
   }
 
+  Future<bool> moveAwaitingSocketToBackoff() {
+    if (reconnectActivity != XmppReconnectActivity.awaitingSocket) {
+      _log.info('moveAwaitingSocketToBackoff ignored: ${_stateSummary()}');
+      return Future.value(false);
+    }
+    _log.info(
+      'Moving stale awaiting-socket reconnect cycle to backoff: '
+      'cycleId=$_activeCycleId ${_stateSummary()}',
+    );
+    _scheduleReconnectBackoff();
+    return Future.value(true);
+  }
+
   Future<bool> moveAwaitingNegotiationToBackoff() async {
     if (reconnectActivity != XmppReconnectActivity.awaitingNegotiation) {
       _log.info('moveAwaitingNegotiationToBackoff ignored: ${_stateSummary()}');
@@ -731,7 +744,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   }) : _domainProvider = domainProvider,
        _connectivityProbe = connectivityProbe,
        _pollInterval = pollInterval ?? _defaultPollInterval,
-       _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
+       _waitTimeout = waitTimeout ?? const Duration(seconds: 5);
 
   final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
@@ -760,7 +773,7 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
          shouldContinue: shouldContinue,
        );
 
-  static const timeoutDuration = Duration(seconds: 15);
+  static const timeoutDuration = Duration(seconds: 2);
   static const _offlineErrnos = <int>{
     50, // ENETDOWN (macOS)
     51, // ENETUNREACH (macOS)
@@ -795,18 +808,17 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     if (shouldContinue != null && !await shouldContinue!()) return;
 
     final stopwatch = Stopwatch()..start();
-    var hasWarned = false;
     while (true) {
       if (shouldContinue != null && !await shouldContinue!()) return;
       if (await hasConnection()) {
         return;
       }
       final timeout = _waitTimeout;
-      if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
+      if (timeout != null && stopwatch.elapsed >= timeout) {
         _log.warning(
-          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Continuing endpoint probes.',
+          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Continuing to XMPP socket attempt.',
         );
-        hasWarned = true;
+        return;
       }
       await Future.delayed(_pollInterval);
     }
