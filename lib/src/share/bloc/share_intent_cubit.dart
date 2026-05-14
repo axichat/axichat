@@ -35,10 +35,12 @@ extension SharedAttachmentTypeExtensions on SharedAttachmentType {
 class SharePayload {
   const SharePayload({
     this.text,
+    this.conversationIdentifier,
     this.attachments = const <ShareAttachmentPayload>[],
   });
 
   final String? text;
+  final String? conversationIdentifier;
   final List<ShareAttachmentPayload> attachments;
 
   bool get hasText => text != null && text!.isNotEmpty;
@@ -109,6 +111,13 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
     }
   }
 
+  Future<void> consumeIfCurrent(SharePayload payload) async {
+    if (!identical(state.payload, payload)) {
+      return;
+    }
+    await consume();
+  }
+
   Future<void> _resetInitialSharedMedia() async {
     if (!_isSupportedPlatform) {
       return;
@@ -135,13 +144,22 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
 
   SharePayload? _sanitizePayload(SharedMedia media) {
     final String? sanitizedText = _sanitizeSharedText(media.content ?? '');
+    final String? conversationIdentifier = _sanitizeConversationIdentifier(
+      media.conversationIdentifier,
+    );
     final List<ShareAttachmentPayload> attachments = _sanitizeSharedAttachments(
       media.attachments,
     );
-    if (sanitizedText == null && attachments.isEmpty) {
+    if (sanitizedText == null &&
+        conversationIdentifier == null &&
+        attachments.isEmpty) {
       return null;
     }
-    return SharePayload(text: sanitizedText, attachments: attachments);
+    return SharePayload(
+      text: sanitizedText,
+      conversationIdentifier: conversationIdentifier,
+      attachments: attachments,
+    );
   }
 
   String? _sanitizeSharedText(String text) {
@@ -150,6 +168,17 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
       return null;
     }
     if (normalized.length > _maxSharedTextLength) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String? _sanitizeConversationIdentifier(String? value) {
+    final String? normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    if (normalized.contains('\u0000')) {
       return null;
     }
     return normalized;

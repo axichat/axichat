@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
@@ -30,9 +29,6 @@ import 'package:axichat/src/chats/view/chats_add_button.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/file_metadata_tools.dart';
-import 'package:axichat/src/common/file_type_detector.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -47,7 +43,6 @@ import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
-import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
@@ -64,6 +59,8 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
+import 'package:axichat/src/share/share_handoff.dart';
+import 'package:axichat/src/share/system_share_target_service.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/database.dart' as db;
 import 'package:axichat/src/storage/models.dart' as m;
@@ -77,7 +74,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
-import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'nexus.dart';
@@ -1351,27 +1347,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const String _shareFileSchemePrefix = 'file://';
   static const String _emptyShareBody = '';
   static const List<String> _emptyShareJids = [''];
-  static const int _shareAttachmentUnknownSizeBytes = 0;
-  static const int _shareAttachmentMinSizeBytes = 1;
 
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
   final StreamController<void> _shareIntentRequests = StreamController<void>(
     sync: true,
   );
-  late final StreamSubscription<void> _shareIntentRequestSubscription =
-      _shareIntentRequests.stream
-          .asyncMap((_) {
-            return fireAndForget(
-              _handleShareIntent,
-              operationName: 'HomeScreen.handleShareIntent',
-              loggerName: 'HomeScreen',
-            );
-          })
-          .listen((_) {});
+  late final StreamSubscription<void> _shareIntentRequestSubscription;
+  bool _queuedInitialShareIntentHandling = false;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
   ValueListenable<int>? _bottomNavIndexNotifier;
@@ -1380,6 +1365,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _shareIntentRequestSubscription = _shareIntentRequests.stream
+        .asyncMap((_) => _handleShareIntent())
+        .listen((_) {});
     _calendarCanHandleBack.addListener(_handleCalendarCanHandleBackChanged);
   }
 
@@ -1527,50 +1515,84 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    final shareState = context.read<ShareIntentCubit>().state;
-    if (shareState.hasPayload != true) {
-      return;
-    }
-    final payload = shareState.payload;
+    final locate = context.read;
+    final payload = locate<ShareIntentCubit>().state.payload;
     if (payload == null) {
       return;
     }
-    final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
-    final bool hasBody = resolvedBody.isNotEmpty;
-    final messageService = context.read<XmppService>();
+    final String body = payload.text?.trim() ?? _emptyShareBody;
+    final String? targetJid;
+    if (payload.conversationIdentifier != null) {
+      var chats = locate<ChatsCubit>().state.items;
+      chats ??= await locate<ChatsCubit>().stream
+          .map((state) => state.items)
+          .firstWhere((items) => items != null);
+      if (!mounted) {
+        return;
+      }
+      if (chats == null) {
+        return;
+      }
+      targetJid = SystemShareTargetService.resolveConversationTargetJid(
+        conversationIdentifier: payload.conversationIdentifier,
+        chats: chats,
+        smtpEnabled: locate<SettingsCubit>().state.endpointConfig.smtpEnabled,
+      );
+    } else {
+      targetJid = null;
+    }
+    if (targetJid != null) {
+      final attachments = await prepareSharedAttachments(
+        attachments: payload.attachments,
+        optimize: false,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (body.isEmpty && attachments.isEmpty) {
+        await locate<ShareIntentCubit>().consumeIfCurrent(payload);
+        return;
+      }
+      locate<ShareComposerSeedQueue>().enqueue(
+        jid: targetJid,
+        body: body,
+        attachments: attachments,
+      );
+      await locate<ChatsCubit>().openChat(
+        jid: targetJid,
+        route: ChatRouteIndex.main,
+      );
+      if (!mounted) {
+        return;
+      }
+      await locate<ShareIntentCubit>().consumeIfCurrent(payload);
+      return;
+    }
     final List<String> attachmentMetadataIds = await _persistSharedAttachments(
-      messageService: messageService,
+      messageService: locate<XmppService>(),
       attachments: payload.attachments,
     );
     if (!mounted) {
       return;
     }
-    if (!hasBody && attachmentMetadataIds.isEmpty) {
-      await _consumeSharePayload(payload);
+    if (body.isEmpty && attachmentMetadataIds.isEmpty) {
+      await locate<ShareIntentCubit>().consumeIfCurrent(payload);
       return;
     }
     openComposeDraft(
       context,
-      body: resolvedBody,
+      body: body,
       jids: _emptyShareJids,
       attachmentMetadataIds: attachmentMetadataIds,
     );
-    await _consumeSharePayload(payload);
-  }
-
-  Future<void> _consumeSharePayload(SharePayload payload) async {
-    final shareCubit = context.read<ShareIntentCubit>();
-    if (!identical(shareCubit.state.payload, payload)) {
-      return;
-    }
-    await shareCubit.consume();
+    await locate<ShareIntentCubit>().consumeIfCurrent(payload);
   }
 
   Future<List<String>> _persistSharedAttachments({
     required MessageService messageService,
     required List<ShareAttachmentPayload> attachments,
   }) async {
-    final List<Attachment> prepared = await _prepareSharedAttachments(
+    final prepared = await prepareSharedAttachments(
       attachments: attachments,
       optimize: true,
     );
@@ -1578,99 +1600,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return const <String>[];
     }
     return messageService.persistDraftAttachmentMetadata(prepared);
-  }
-
-  Future<List<Attachment>> _prepareSharedAttachments({
-    required List<ShareAttachmentPayload> attachments,
-    required bool optimize,
-  }) async {
-    if (attachments.isEmpty) {
-      return const <Attachment>[];
-    }
-    final List<Attachment> prepared = <Attachment>[];
-    for (final ShareAttachmentPayload attachment in attachments) {
-      final String normalizedPath = _normalizeSharedAttachmentPath(
-        attachment.path,
-      );
-      if (normalizedPath.isEmpty) {
-        continue;
-      }
-      final File file = File(normalizedPath);
-      final entityType = await FileSystemEntity.type(
-        normalizedPath,
-        followLinks: false,
-      );
-      if (entityType != FileSystemEntityType.file || !await file.exists()) {
-        continue;
-      }
-      final String fileName = _resolveSharedAttachmentFileName(normalizedPath);
-      final int sizeBytes = await _resolveSharedAttachmentSizeBytes(file);
-      final int resolvedSizeBytes = sizeBytes >= _shareAttachmentMinSizeBytes
-          ? sizeBytes
-          : _shareAttachmentUnknownSizeBytes;
-      final String mimeType = await _resolveSharedAttachmentMimeType(
-        fileName: fileName,
-        path: normalizedPath,
-        attachment: attachment,
-      );
-      Attachment attachmentValue = Attachment(
-        path: normalizedPath,
-        fileName: fileName,
-        sizeBytes: resolvedSizeBytes,
-        mimeType: mimeType,
-      );
-      if (optimize) {
-        attachmentValue = await EmailAttachmentOptimizer.optimize(
-          attachmentValue,
-        );
-      }
-      prepared.add(attachmentValue);
-    }
-    return List<Attachment>.unmodifiable(prepared);
-  }
-
-  String _normalizeSharedAttachmentPath(String path) {
-    final String trimmed = path.trim();
-    if (trimmed.isEmpty) {
-      return trimmed;
-    }
-    if (!trimmed.startsWith(_shareFileSchemePrefix)) {
-      return trimmed;
-    }
-    final String? resolved = Uri.tryParse(trimmed)?.toFilePath();
-    if (resolved == null || resolved.isEmpty) {
-      return trimmed;
-    }
-    return resolved;
-  }
-
-  String _resolveSharedAttachmentFileName(String path) {
-    final String baseName = p.basename(path);
-    if (baseName.isNotEmpty) {
-      return baseName;
-    }
-    return path;
-  }
-
-  Future<String> _resolveSharedAttachmentMimeType({
-    required String fileName,
-    required String path,
-    required ShareAttachmentPayload attachment,
-  }) async {
-    final String? resolvedMimeType = await resolveMimeTypeFromPath(
-      path: path,
-      fileName: fileName,
-      declaredMimeType: attachment.type.mimeTypeFallback,
-    );
-    return resolvedMimeType ?? attachment.type.mimeTypeFallback;
-  }
-
-  Future<int> _resolveSharedAttachmentSizeBytes(File file) async {
-    try {
-      return await file.length();
-    } on Exception {
-      return _shareAttachmentUnknownSizeBytes;
-    }
   }
 
   @override
@@ -1685,7 +1614,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final locate = context.read;
     final chatsState = locate<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
-    _queueShareIntentHandling();
+    if (!_queuedInitialShareIntentHandling) {
+      _queuedInitialShareIntentHandling = true;
+      _queueShareIntentHandling();
+    }
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {

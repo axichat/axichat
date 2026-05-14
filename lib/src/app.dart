@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_cont
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -33,6 +34,8 @@ import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
+import 'package:axichat/src/share/share_handoff.dart';
+import 'package:axichat/src/share/system_share_target_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/app_storage.dart';
@@ -153,6 +156,13 @@ class _AxichatState extends State<Axichat> {
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
         RepositoryProvider.value(value: _reminderController),
+        RepositoryProvider<SystemShareTargetService>(
+          create: (context) => SystemShareTargetService(),
+        ),
+        RepositoryProvider<ShareComposerSeedQueue>(
+          create: (context) => ShareComposerSeedQueue(),
+          dispose: (queue) => queue.dispose(),
+        ),
         RepositoryProvider<CredentialStore>(
           create: (context) => CredentialStore(
             capability: context.read<Capability>(),
@@ -419,6 +429,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       storedConversationMessageCount:
           profileState.storedConversationMessageCount,
     );
+    _syncSystemShareTargets(context, null);
   }
 
   @override
@@ -708,6 +719,17 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     context.read<UpdateCubit>().refresh();
                   },
                 ),
+                BlocListener<ChatsCubit, ChatsState>(
+                  listenWhen: (previous, current) =>
+                      !listEquals(previous.items, current.items),
+                  listener: _syncSystemShareTargets,
+                ),
+                BlocListener<SettingsCubit, SettingsState>(
+                  listenWhen: (previous, current) =>
+                      previous.endpointConfig.smtpEnabled !=
+                      current.endpointConfig.smtpEnabled,
+                  listener: _syncSystemShareTargets,
+                ),
                 BlocListener<AuthenticationCubit, AuthenticationState>(
                   listener: (context, state) async {
                     final locate = context.read;
@@ -735,6 +757,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     final onGuestRoute = onLoginRoute || !authRequired;
                     final authCompletionDuration =
                         settingsCubit.authCompletionDuration;
+                    if (state is AuthenticationComplete) {
+                      _syncSystemShareTargets(context, state);
+                    }
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
@@ -835,6 +860,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   void _handleLifecycleResume() {
     context.read<UpdateCubit>().refresh();
+    _syncSystemShareTargets(context, null);
     _handleNotificationIntent();
     _handleShareIntent();
   }
@@ -964,6 +990,31 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     }
     _shareIntentAwaitingRoute = true;
     _router.go(const HomeRoute().location);
+  }
+
+  void _syncSystemShareTargets(BuildContext context, Object? _) {
+    final locate = context.read;
+    if (locate<AuthenticationCubit>().state is! AuthenticationComplete) {
+      return;
+    }
+    final chats = locate<ChatsCubit>().state.items;
+    if (chats == null) {
+      return;
+    }
+    final smtpEnabled =
+        locate<SettingsCubit>().state.endpointConfig.smtpEnabled;
+    final shareTargetService = locate<SystemShareTargetService>();
+    final xmppService = locate<XmppService>();
+    fireAndForget(
+      () => shareTargetService.publishTargets(
+        chats: chats,
+        smtpEnabled: smtpEnabled,
+        loadAvatarBytes: (path) =>
+            xmppService.resolveSafeAvatarBytes(avatarPath: path),
+      ),
+      operationName: 'MaterialAxichat.publishSystemShareTargets',
+      loggerName: 'MaterialAxichat',
+    );
   }
 
   bool _isOnHomeRoute() {
