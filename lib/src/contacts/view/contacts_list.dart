@@ -17,12 +17,10 @@ import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ContactsList extends StatefulWidget {
@@ -47,7 +45,6 @@ Future<void> showContactDetailsSheet({
       return MultiBlocProvider(
         providers: [
           BlocProvider.value(value: locate<ContactsCubit>()),
-          BlocProvider.value(value: locate<RosterCubit>()),
           BlocProvider.value(value: locate<BlocklistCubit>()),
           BlocProvider.value(value: locate<FoldersCubit>()),
         ],
@@ -98,30 +95,13 @@ class _ContactsListState extends State<ContactsList> {
         BlocListener<HomeBloc, HomeState>(
           listener: (context, searchState) => _syncCriteria(searchState),
         ),
-        BlocListener<RosterCubit, RosterState>(
-          listenWhen: (previous, current) =>
-              previous.actionState != current.actionState,
-          listener: (context, state) {
-            final actionState = state.actionState;
-            if (actionState is! RosterActionFailure ||
-                actionState.action != RosterActionType.remove) {
-              return;
-            }
-            ShadToaster.maybeOf(context)?.show(
-              FeedbackToast.error(
-                message: _rosterFailureMessage(context, actionState.reason),
-              ),
-            );
-          },
-        ),
         BlocListener<ContactsCubit, ContactsState>(
           listenWhen: (previous, current) =>
               previous.actionState != current.actionState,
           listener: (context, state) {
             final actionState = state.actionState;
             if (actionState is! ContactActionFailure ||
-                (actionState.action != ContactActionType.removeEmail &&
-                    actionState.action != ContactActionType.removeManual)) {
+                actionState.action != ContactActionType.removeContact) {
               return;
             }
             ShadToaster.maybeOf(context)?.show(
@@ -328,11 +308,8 @@ class ContactsAddButton extends StatelessWidget {
       iconData: LucideIcons.userPlus,
       label: l10n.contactsNewLabel,
       dialogBuilder: (dialogContext) {
-        return MultiBlocProvider(
-          providers: [
-            BlocProvider.value(value: locate<ContactsCubit>()),
-            BlocProvider.value(value: locate<RosterCubit>()),
-          ],
+        return BlocProvider.value(
+          value: locate<ContactsCubit>(),
           child: const _ContactsAddDialog(),
         );
       },
@@ -372,19 +349,15 @@ class _ContactListTile extends StatelessWidget {
       (cubit) => cubit.state.endpointConfig.smtpEnabled,
     );
     final address = contact.address;
-    final rosterActionState = context.watch<RosterCubit>().state.actionState;
+    final addressKey = contactDirectoryAddressKey(address);
     final contactsActionState = context
         .watch<ContactsCubit>()
         .state
         .actionState;
-    final isRemovingXmpp =
-        rosterActionState is RosterActionLoading &&
-        rosterActionState.action == RosterActionType.remove &&
-        rosterActionState.jid == address;
-    final isRemovingEmail =
+    final isRemoving =
         contactsActionState is ContactActionLoading &&
-        contactsActionState.action == ContactActionType.removeEmail &&
-        contactsActionState.address == address;
+        contactsActionState.action == ContactActionType.removeContact &&
+        contactDirectoryAddressKey(contactsActionState.address) == addressKey;
     return ListItemPadding(
       padding: EdgeInsets.fromLTRB(
         spacing.m,
@@ -417,38 +390,24 @@ class _ContactListTile extends StatelessWidget {
                 attachmentMetadataIds: const <String>[],
               ),
             ),
-          if (contact.hasXmppRoster)
+          if (contact.hasPrivateContact ||
+              contact.hasXmppRoster ||
+              contact.hasEmailContact)
             AxiDeleteMenuItem(
-              onPressed: isRemovingXmpp
+              onPressed: isRemoving
                   ? null
                   : () async {
                       final confirmed = await confirm(
                         context,
-                        text: context.l10n.rosterRemoveConfirm(address),
+                        text: context.l10n.contactsRemoveContactConfirm(
+                          address,
+                        ),
                       );
                       if (confirmed != true || !context.mounted) {
                         return;
                       }
-                      await context.read<RosterCubit>().removeContact(
-                        jid: address,
-                      );
-                    },
-            ),
-          if (contact.hasEmailContact)
-            AxiDeleteMenuItem(
-              onPressed: isRemovingEmail
-                  ? null
-                  : () async {
-                      final confirmed = await confirm(
-                        context,
-                        text: context.l10n.contactsRemoveEmailConfirm(address),
-                      );
-                      if (confirmed != true || !context.mounted) {
-                        return;
-                      }
-                      await context.read<ContactsCubit>().removeEmailContact(
-                        address: address,
-                        nativeIds: contact.emailNativeIds,
+                      await context.read<ContactsCubit>().removeContact(
+                        contact,
                       );
                     },
             ),
@@ -519,39 +478,32 @@ class _ContactsAddDialog extends StatefulWidget {
 class _ContactsAddDialogState extends State<_ContactsAddDialog> {
   String _address = '';
   String _displayName = '';
-  MessageTransport? _selectedTransport;
+  String _submittedAddress = '';
 
-  Future<void> _submit() async {
-    final resolvedTransport = await _resolveTransport();
+  Future<void> _submit({
+    required bool supportsEmail,
+    required bool supportsXmpp,
+  }) async {
+    final resolvedTransport = await _resolveTransport(
+      supportsEmail: supportsEmail,
+      supportsXmpp: supportsXmpp,
+    );
     if (resolvedTransport == null || !mounted) {
       return;
     }
-    setState(() => _selectedTransport = resolvedTransport);
     final title = _displayName.trim().isEmpty ? null : _displayName.trim();
-    final manualAdded = await context.read<ContactsCubit>().addManualContact(
+    setState(() => _submittedAddress = _address);
+    await context.read<ContactsCubit>().addContact(
       address: _address,
       displayName: title,
-    );
-    if (!manualAdded || !mounted) {
-      return;
-    }
-    if (resolvedTransport.isXmpp) {
-      await context.read<RosterCubit>().addContact(
-        jid: _address.trim(),
-        title: title,
-      );
-      return;
-    }
-    await context.read<ContactsCubit>().addEmailContact(
-      address: _address,
-      displayName: title,
+      transport: resolvedTransport,
     );
   }
 
-  Future<MessageTransport?> _resolveTransport() async {
-    final settings = context.read<SettingsCubit>().state.endpointConfig;
-    final supportsEmail = settings.smtpEnabled;
-    final supportsXmpp = settings.xmppEnabled;
+  Future<MessageTransport?> _resolveTransport({
+    required bool supportsEmail,
+    required bool supportsXmpp,
+  }) async {
     if (supportsEmail && !supportsXmpp) {
       return MessageTransport.email;
     }
@@ -568,119 +520,89 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
     );
   }
 
+  bool _matchesSubmittedAddress(String address) {
+    final submittedKey = contactDirectoryAddressKey(_submittedAddress);
+    return submittedKey.isNotEmpty &&
+        contactDirectoryAddressKey(address) == submittedKey;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    return MultiBlocListener(
-      listeners: [
-        BlocListener<RosterCubit, RosterState>(
-          listenWhen: (previous, current) =>
-              previous.actionState != current.actionState,
-          listener: (context, state) {
-            final actionState = state.actionState;
-            if (_selectedTransport != MessageTransport.xmpp) {
-              return;
-            }
-            if (actionState is RosterActionSuccess &&
-                actionState.action == RosterActionType.add &&
-                context.canPop()) {
-              context.pop();
-            }
-          },
-        ),
-        BlocListener<ContactsCubit, ContactsState>(
-          listenWhen: (previous, current) =>
-              previous.actionState != current.actionState,
-          listener: (context, state) {
-            final actionState = state.actionState;
-            if (_selectedTransport != MessageTransport.email) {
-              return;
-            }
-            if (actionState is ContactActionSuccess &&
-                actionState.action == ContactActionType.addEmail &&
-                context.canPop()) {
-              context.pop();
-            }
-          },
-        ),
-      ],
-      child: BlocBuilder<RosterCubit, RosterState>(
+    final supportsEmail = context.select<SettingsCubit, bool>(
+      (cubit) => cubit.state.endpointConfig.smtpEnabled,
+    );
+    final supportsXmpp = context.select<SettingsCubit, bool>(
+      (cubit) => cubit.state.endpointConfig.xmppEnabled,
+    );
+    return BlocListener<ContactsCubit, ContactsState>(
+      listenWhen: (previous, current) =>
+          previous.actionState != current.actionState,
+      listener: (context, state) {
+        final actionState = state.actionState;
+        if (actionState is ContactActionSuccess &&
+            actionState.action == ContactActionType.addContact &&
+            _matchesSubmittedAddress(actionState.address) &&
+            Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: BlocBuilder<ContactsCubit, ContactsState>(
         buildWhen: (previous, current) =>
+            previous.items != current.items ||
             previous.actionState != current.actionState,
-        builder: (context, rosterState) {
-          return BlocBuilder<ContactsCubit, ContactsState>(
-            buildWhen: (previous, current) =>
-                previous.items != current.items ||
-                previous.actionState != current.actionState,
-            builder: (context, contactsState) {
-              final rosterActionState = rosterState.actionState;
-              final contactsActionState = contactsState.actionState;
-              final contactAddLoading =
-                  contactsActionState is ContactActionLoading &&
-                  (contactsActionState.action == ContactActionType.addManual ||
-                      contactsActionState.action == ContactActionType.addEmail);
-              final loading = contactAddLoading
-                  ? true
-                  : _selectedTransport == MessageTransport.xmpp
-                  ? rosterActionState is RosterActionLoading &&
-                        rosterActionState.action == RosterActionType.add
-                  : _selectedTransport == MessageTransport.email
-                  ? contactsActionState is ContactActionLoading &&
-                        contactsActionState.action == ContactActionType.addEmail
-                  : false;
-              final errorMessage = _selectedTransport == MessageTransport.xmpp
-                  ? switch (rosterActionState) {
-                      RosterActionFailure(:final reason)
-                          when rosterActionState.action ==
-                              RosterActionType.add =>
-                        _rosterFailureMessage(context, reason),
-                      _ => null,
-                    }
-                  : _selectedTransport == MessageTransport.email
-                  ? switch (contactsActionState) {
-                      ContactActionFailure(:final reason)
-                          when contactsActionState.action ==
-                                  ContactActionType.addEmail ||
-                              contactsActionState.action ==
-                                  ContactActionType.addManual =>
-                        _contactFailureMessage(context, reason),
-                      _ => null,
-                    }
-                  : null;
-              return AxiInputDialog(
-                title: Text(l10n.rosterAddTitle),
-                loading: loading,
-                callback: _address.trim().isEmpty || loading ? null : _submit,
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    JidInput(
-                      enabled: !loading,
-                      error: errorMessage,
-                      jidOptions:
-                          (contactsState.items ??
-                                  const <ContactDirectoryEntry>[])
-                              .map((item) => item.address)
-                              .toList(growable: false),
-                      onChanged: (value) {
-                        setState(() {
-                          _address = value;
-                          _selectedTransport = null;
-                        });
-                      },
-                    ),
-                    SizedBox(height: spacing.s),
-                    AxiTextFormField(
-                      enabled: !loading,
-                      placeholder: Text(l10n.contactsDisplayNameLabel),
-                      onChanged: (value) =>
-                          setState(() => _displayName = value),
-                    ),
-                  ],
+        builder: (context, contactsState) {
+          final contactsActionState = contactsState.actionState;
+          final loading =
+              contactsActionState is ContactActionLoading &&
+              contactsActionState.action == ContactActionType.addContact &&
+              _matchesSubmittedAddress(contactsActionState.address);
+          final errorMessage = switch (contactsActionState) {
+            ContactActionFailure(:final reason, :final address)
+                when contactsActionState.action ==
+                        ContactActionType.addContact &&
+                    _matchesSubmittedAddress(address) =>
+              _contactFailureMessage(context, reason),
+            _ => null,
+          };
+          return AxiInputDialog(
+            title: Text(l10n.rosterAddTitle),
+            loading: loading,
+            callback:
+                _address.trim().isEmpty ||
+                    loading ||
+                    (!supportsEmail && !supportsXmpp)
+                ? null
+                : () => _submit(
+                    supportsEmail: supportsEmail,
+                    supportsXmpp: supportsXmpp,
+                  ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                JidInput(
+                  enabled: !loading,
+                  error: errorMessage,
+                  jidOptions:
+                      (contactsState.items ?? const <ContactDirectoryEntry>[])
+                          .map((item) => item.address)
+                          .toList(growable: false),
+                  onChanged: (value) {
+                    setState(() {
+                      _address = value;
+                      _submittedAddress = '';
+                    });
+                  },
                 ),
-              );
-            },
+                SizedBox(height: spacing.s),
+                AxiTextFormField(
+                  enabled: !loading,
+                  placeholder: Text(l10n.contactsDisplayNameLabel),
+                  onChanged: (value) => setState(() => _displayName = value),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -695,60 +617,90 @@ class _ContactDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ContactsCubit, ContactsState>(
-      buildWhen: (previous, current) =>
-          previous.items != current.items ||
+    return BlocListener<ContactsCubit, ContactsState>(
+      listenWhen: (previous, current) =>
           previous.actionState != current.actionState,
-      builder: (context, state) {
-        final spacing = context.spacing;
-        final currentContact = _currentContactForSheet(state.items, contact);
-        final address = currentContact.address;
-        final emailEnabled = context.select<SettingsCubit, bool>(
-          (cubit) => cubit.state.endpointConfig.smtpEnabled,
-        );
-        final rosterActionState = context
-            .watch<RosterCubit>()
-            .state
-            .actionState;
-        final contactsActionState = state.actionState;
-        final isRemovingXmpp =
-            rosterActionState is RosterActionLoading &&
-            rosterActionState.action == RosterActionType.remove &&
-            rosterActionState.jid == address;
-        final isRemovingEmail =
-            contactsActionState is ContactActionLoading &&
-            contactsActionState.action == ContactActionType.removeEmail &&
-            contactsActionState.address == address;
-        final detailRows = _contactDetailRows(
-          context.l10n,
-          currentContact,
-          emailEnabled: emailEnabled,
-        );
-        return AxiSheetScaffold.scroll(
-          header: AxiSheetHeader(
-            title: Text(context.l10n.contactsDetailsSectionTitle),
-            onClose: () => Navigator.of(context).maybePop(),
-          ),
-          bodyPadding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.s),
-          children: [
-            _ContactSummaryCard(contact: currentContact),
-            SizedBox(height: spacing.m),
-            if (detailRows.isNotEmpty) ...[
-              _ContactDetailsInfoCard(
-                contact: currentContact,
-                rows: detailRows,
-              ),
-              SizedBox(height: spacing.m),
-            ],
-            _ContactDetailsActions(
-              contact: currentContact,
-              emailEnabled: emailEnabled,
-              isRemovingEmail: isRemovingEmail,
-              isRemovingXmpp: isRemovingXmpp,
+      listener: (context, state) {
+        final actionState = state.actionState;
+        if (actionState is ContactActionSuccess &&
+            actionState.action == ContactActionType.removeContact &&
+            contactDirectoryAddressKey(actionState.address) ==
+                contactDirectoryAddressKey(contact.address) &&
+            Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+          return;
+        }
+        final actionAddress = switch (actionState) {
+          ContactActionSuccess(:final address) => address,
+          ContactActionFailure(:final address) => address,
+          _ => null,
+        };
+        if (contactDirectoryAddressKey(actionAddress) !=
+            contactDirectoryAddressKey(contact.address)) {
+          return;
+        }
+        if (actionState is ContactActionSuccess &&
+            (actionState.action == ContactActionType.rename ||
+                actionState.action == ContactActionType.resetRename)) {
+          ShadToaster.maybeOf(context)?.show(
+            FeedbackToast.success(
+              message: context.l10n.chatContactRenameSuccess,
             ),
-          ],
-        );
+          );
+          return;
+        }
+        if (actionState is ContactActionFailure &&
+            (actionState.action == ContactActionType.rename ||
+                actionState.action == ContactActionType.resetRename)) {
+          ShadToaster.maybeOf(context)?.show(
+            FeedbackToast.error(message: context.l10n.chatContactRenameFailure),
+          );
+        }
       },
+      child: BlocBuilder<ContactsCubit, ContactsState>(
+        buildWhen: (previous, current) =>
+            previous.items != current.items ||
+            previous.actionState != current.actionState,
+        builder: (context, state) {
+          final spacing = context.spacing;
+          final currentContact = _currentContactForSheet(state.items, contact);
+          final emailEnabled = context.select<SettingsCubit, bool>(
+            (cubit) => cubit.state.endpointConfig.smtpEnabled,
+          );
+          final detailRows = _contactDetailRows(
+            context.l10n,
+            currentContact,
+            emailEnabled: emailEnabled,
+          );
+          return AxiSheetScaffold.scroll(
+            header: AxiSheetHeader(
+              title: Text(context.l10n.contactsDetailsSectionTitle),
+              onClose: () => Navigator.of(context).maybePop(),
+            ),
+            bodyPadding: EdgeInsets.fromLTRB(
+              spacing.m,
+              0,
+              spacing.m,
+              spacing.s,
+            ),
+            children: [
+              _ContactSummaryCard(contact: currentContact),
+              SizedBox(height: spacing.m),
+              if (detailRows.isNotEmpty) ...[
+                _ContactDetailsInfoCard(
+                  contact: currentContact,
+                  rows: detailRows,
+                ),
+                SizedBox(height: spacing.m),
+              ],
+              _ContactDetailsActions(
+                contact: currentContact,
+                emailEnabled: emailEnabled,
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -1021,14 +973,10 @@ class _ContactDetailsActions extends StatelessWidget {
   const _ContactDetailsActions({
     required this.contact,
     required this.emailEnabled,
-    required this.isRemovingEmail,
-    required this.isRemovingXmpp,
   });
 
   final ContactDirectoryEntry contact;
   final bool emailEnabled;
-  final bool isRemovingEmail;
-  final bool isRemovingXmpp;
 
   Future<void> _removeContact(BuildContext context) async {
     final l10n = context.l10n;
@@ -1039,54 +987,10 @@ class _ContactDetailsActions extends StatelessWidget {
     if (confirmed != true || !context.mounted) {
       return;
     }
-    var removed = true;
-    if (contact.hasManualState) {
-      await context.read<ContactsCubit>().removeManualContact(contact: contact);
-      if (!context.mounted) {
-        return;
-      }
-      final actionState = context.read<ContactsCubit>().state.actionState;
-      removed =
-          actionState is ContactActionSuccess &&
-          actionState.action == ContactActionType.removeManual &&
-          actionState.address == contact.address;
-    } else if (contact.hasEmailContact) {
-      await context.read<ContactsCubit>().removeEmailContact(
-        address: contact.address,
-        nativeIds: contact.emailNativeIds,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      final emailActionState = context.read<ContactsCubit>().state.actionState;
-      removed =
-          removed &&
-          emailActionState is ContactActionSuccess &&
-          emailActionState.action == ContactActionType.removeEmail &&
-          emailActionState.address == contact.address;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    if (!contact.hasManualState && contact.hasXmppRoster) {
-      await context.read<RosterCubit>().removeContact(jid: contact.address);
-      if (!context.mounted) {
-        return;
-      }
-      final rosterActionState = context.read<RosterCubit>().state.actionState;
-      removed =
-          removed &&
-          rosterActionState is RosterActionSuccess &&
-          rosterActionState.action == RosterActionType.remove &&
-          rosterActionState.jid == contact.address;
-    }
-    if (removed && context.mounted && context.canPop()) {
-      context.pop();
-    }
+    await context.read<ContactsCubit>().removeContact(contact);
   }
 
   Future<void> _renameContact(BuildContext context) async {
-    final l10n = context.l10n;
     final result = await showContactRenameDialog(
       context: context,
       initialValue: contact.displayName,
@@ -1102,28 +1006,6 @@ class _ContactDetailsActions extends StatelessWidget {
       await context.read<ContactsCubit>().renameContact(
         contact: contact,
         displayName: result,
-      );
-    }
-    if (!context.mounted) {
-      return;
-    }
-    final actionState = context.read<ContactsCubit>().state.actionState;
-    final showToast = ShadToaster.maybeOf(context)?.show;
-    if (actionState is ContactActionSuccess &&
-        actionState.address == contact.address &&
-        (actionState.action == ContactActionType.rename ||
-            actionState.action == ContactActionType.resetRename)) {
-      showToast?.call(
-        FeedbackToast.success(message: l10n.chatContactRenameSuccess),
-      );
-      return;
-    }
-    if (actionState is ContactActionFailure &&
-        actionState.address == contact.address &&
-        (actionState.action == ContactActionType.rename ||
-            actionState.action == ContactActionType.resetRename)) {
-      showToast?.call(
-        FeedbackToast.error(message: l10n.chatContactRenameFailure),
       );
     }
   }
@@ -1154,27 +1036,26 @@ class _ContactDetailsActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final addressKey = contactDirectoryAddressKey(contact.address);
     final contactsActionState = context
         .watch<ContactsCubit>()
         .state
         .actionState;
     final isUpdatingContact =
         contactsActionState is ContactActionLoading &&
-        contactsActionState.address == contact.address;
+        contactDirectoryAddressKey(contactsActionState.address) == addressKey;
     final blocklistState = context.watch<BlocklistCubit>().state;
     final isBlocking =
         blocklistState is BlocklistLoading &&
         (blocklistState.jid == contact.address || blocklistState.jid == null);
     final isRemoving =
-        isRemovingXmpp ||
-        isRemovingEmail ||
-        (contactsActionState is ContactActionLoading &&
-            contactsActionState.action == ContactActionType.removeManual &&
-            contactsActionState.address == contact.address);
+        contactsActionState is ContactActionLoading &&
+        contactsActionState.action == ContactActionType.removeContact &&
+        contactDirectoryAddressKey(contactsActionState.address) == addressKey;
     final disabled = isRemoving || isUpdatingContact || isBlocking;
     final isRenaming =
         contactsActionState is ContactActionLoading &&
-        contactsActionState.address == contact.address &&
+        contactDirectoryAddressKey(contactsActionState.address) == addressKey &&
         (contactsActionState.action == ContactActionType.rename ||
             contactsActionState.action == ContactActionType.resetRename);
     return Padding(
@@ -1240,7 +1121,7 @@ class _ContactDetailsActions extends StatelessWidget {
               child: Text(l10n.blocklistBlock),
             ),
           ],
-          if (contact.hasManualState ||
+          if (contact.hasPrivateContact ||
               contact.hasXmppRoster ||
               contact.hasEmailContact) ...[
             SizedBox(height: spacing.s),
@@ -1268,16 +1149,6 @@ String _contactFailureMessage(
     ContactFailureReason.addFailed ||
     ContactFailureReason.removeFailed ||
     ContactFailureReason.updateFailed => l10n.authGenericError,
-  };
-}
-
-String _rosterFailureMessage(BuildContext context, RosterFailureReason reason) {
-  final l10n = context.l10n;
-  return switch (reason) {
-    RosterFailureReason.invalidJid => l10n.jidInputInvalid,
-    RosterFailureReason.addFailed ||
-    RosterFailureReason.removeFailed ||
-    RosterFailureReason.rejectFailed => l10n.authGenericError,
   };
 }
 

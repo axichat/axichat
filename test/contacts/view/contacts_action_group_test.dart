@@ -12,7 +12,6 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -78,6 +77,70 @@ void main() {
     expect(find.text('New'), findsOneWidget);
   });
 
+  testWidgets(
+    'contacts add dialog dispatches contact add without RosterCubit',
+    (tester) async {
+      final xmppService = MockXmppService();
+      _stubContactsShellService(
+        xmppService,
+        contacts: const <ContactDirectoryEntry>[],
+      );
+      when(
+        () => xmppService.addToRoster(
+          jid: 'new@example.com',
+          title: any(named: 'title'),
+        ),
+      ).thenAnswer((_) async {});
+      final homeBloc = HomeBloc(
+        xmppService: xmppService,
+        tabs: const <HomeTab>[HomeTab.contacts],
+      );
+      final contactsCubit = ContactsCubit(xmppService: xmppService);
+      final settingsCubit = _settingsCubit(
+        endpointConfig: const EndpointConfig(
+          smtpEnabled: false,
+          xmppEnabled: true,
+        ),
+      );
+      addTearDown(homeBloc.close);
+      addTearDown(contactsCubit.close);
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<HomeBloc>.value(value: homeBloc),
+            BlocProvider<ContactsCubit>.value(value: contactsCubit),
+            BlocProvider<SettingsCubit>.value(value: settingsCubit),
+          ],
+          child: const _ContactsTestApp(child: ContactsActionGroup()),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('New'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('john@axi.im'), warnIfMissed: false);
+      tester.testTextInput.enterText('new@example.com');
+      await tester.pump();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      verify(
+        () => xmppService.addToRoster(
+          jid: 'new@example.com',
+          title: any(named: 'title'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => xmppService.addManualContact(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+        ),
+      );
+    },
+  );
+
   testWidgets('contact detail sheet shows identity and structured fields', (
     tester,
   ) async {
@@ -103,13 +166,11 @@ void main() {
       tabs: const <HomeTab>[HomeTab.contacts, HomeTab.chats],
     );
     final contactsCubit = ContactsCubit(xmppService: xmppService);
-    final rosterCubit = RosterCubit(rosterService: xmppService);
     final chatsCubit = ChatsCubit(xmppService: xmppService);
     final blocklistCubit = BlocklistCubit(xmppService: xmppService);
     final foldersCubit = FoldersCubit(xmppService: xmppService);
     addTearDown(homeBloc.close);
     addTearDown(contactsCubit.close);
-    addTearDown(rosterCubit.close);
     addTearDown(chatsCubit.close);
     addTearDown(blocklistCubit.close);
     addTearDown(foldersCubit.close);
@@ -119,7 +180,6 @@ void main() {
         providers: [
           BlocProvider<HomeBloc>.value(value: homeBloc),
           BlocProvider<ContactsCubit>.value(value: contactsCubit),
-          BlocProvider<RosterCubit>.value(value: rosterCubit),
           BlocProvider<ChatsCubit>.value(value: chatsCubit),
           BlocProvider<BlocklistCubit>.value(value: blocklistCubit),
           BlocProvider<FoldersCubit>.value(value: foldersCubit),
@@ -130,7 +190,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+    expect(find.byIcon(LucideIcons.star), findsOneWidget);
 
     await tester.tap(find.text('Alice Local'));
     await tester.pumpAndSettle();
@@ -198,14 +258,12 @@ void main() {
       tabs: const <HomeTab>[HomeTab.contacts],
     );
     final contactsCubit = ContactsCubit(xmppService: xmppService);
-    final rosterCubit = RosterCubit(rosterService: xmppService);
     final chatsCubit = ChatsCubit(xmppService: xmppService);
     final blocklistCubit = BlocklistCubit(xmppService: xmppService);
     final foldersCubit = FoldersCubit(xmppService: xmppService);
     final composeWindowCubit = ComposeWindowCubit();
     addTearDown(homeBloc.close);
     addTearDown(contactsCubit.close);
-    addTearDown(rosterCubit.close);
     addTearDown(chatsCubit.close);
     addTearDown(blocklistCubit.close);
     addTearDown(foldersCubit.close);
@@ -216,7 +274,6 @@ void main() {
         providers: [
           BlocProvider<HomeBloc>.value(value: homeBloc),
           BlocProvider<ContactsCubit>.value(value: contactsCubit),
-          BlocProvider<RosterCubit>.value(value: rosterCubit),
           BlocProvider<ChatsCubit>.value(value: chatsCubit),
           BlocProvider<BlocklistCubit>.value(value: blocklistCubit),
           BlocProvider<FoldersCubit>.value(value: foldersCubit),
@@ -251,11 +308,13 @@ void main() {
   });
 }
 
-MockSettingsCubit _settingsCubit() {
+MockSettingsCubit _settingsCubit({
+  EndpointConfig endpointConfig = const EndpointConfig(smtpEnabled: true),
+}) {
   final settingsCubit = MockSettingsCubit();
-  when(() => settingsCubit.state).thenReturn(
-    const SettingsState(endpointConfig: EndpointConfig(smtpEnabled: true)),
-  );
+  when(
+    () => settingsCubit.state,
+  ).thenReturn(SettingsState(endpointConfig: endpointConfig));
   when(
     () => settingsCubit.stream,
   ).thenAnswer((_) => const Stream<SettingsState>.empty());
@@ -283,6 +342,9 @@ void _stubContactsShellService(
   when(
     () => xmppService.recipientAddressSuggestionsStream(),
   ).thenAnswer((_) => const Stream<List<String>>.empty());
+  when(
+    () => xmppService.contactFolderRulesStream(),
+  ).thenAnswer((_) => const Stream<Map<String, String>>.empty());
   when(
     () => xmppService.demoResetStream,
   ).thenAnswer((_) => const Stream<void>.empty());

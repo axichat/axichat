@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -56,6 +57,232 @@ class ContactsCubit extends Cubit<ContactsState> {
     }
     _criteria = next;
     _emitViewState();
+  }
+
+  Future<void> addContact({
+    required String address,
+    String? displayName,
+    required MessageTransport transport,
+  }) async {
+    final normalized = bareAddress(address) ?? address.trim();
+    if (!normalized.isValidJid) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.addContact,
+            address: normalized,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.addContact,
+          address: normalized,
+        ),
+      ),
+    );
+    final title = _trimmedOrNull(displayName);
+    if (transport.isXmpp) {
+      try {
+        await _xmppService.addToRoster(jid: normalized, title: title);
+      } on XmppRosterException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.addContact,
+              address: normalized,
+              reason: ContactFailureReason.addFailed,
+            ),
+          ),
+        );
+        return;
+      }
+    } else {
+      final emailService = _emailService;
+      if (emailService == null) {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.addContact,
+              address: normalized,
+              reason: ContactFailureReason.unavailable,
+            ),
+          ),
+        );
+        return;
+      }
+      try {
+        await emailService.addContactAddress(
+          address: normalized,
+          displayName: title,
+        );
+      } on EmailServiceException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.addContact,
+              address: normalized,
+              reason: ContactFailureReason.addFailed,
+            ),
+          ),
+        );
+        return;
+      } on EmailProvisioningException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.addContact,
+              address: normalized,
+              reason: ContactFailureReason.addFailed,
+            ),
+          ),
+        );
+        return;
+      } on DeltaChatException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.addContact,
+              address: normalized,
+              reason: ContactFailureReason.addFailed,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionSuccess(
+          action: ContactActionType.addContact,
+          address: normalized,
+        ),
+      ),
+    );
+  }
+
+  Future<void> removeContact(ContactDirectoryEntry contact) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    if (normalized.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.removeContact,
+            address: contact.address,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    final EmailService? emailService;
+    if (contact.hasEmailContact) {
+      emailService = _emailService;
+      if (emailService == null) {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.removeContact,
+              address: normalized,
+              reason: ContactFailureReason.unavailable,
+            ),
+          ),
+        );
+        return;
+      }
+    } else {
+      emailService = null;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.removeContact,
+          address: normalized,
+        ),
+      ),
+    );
+    if (contact.hasXmppRoster) {
+      try {
+        await _xmppService.removeFromRoster(jid: normalized);
+      } on XmppRosterException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.removeContact,
+              address: normalized,
+              reason: ContactFailureReason.removeFailed,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    if (emailService != null) {
+      try {
+        await emailService.deleteContactsByNativeIds(contact.emailNativeIds);
+      } on EmailServiceException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.removeContact,
+              address: normalized,
+              reason: ContactFailureReason.removeFailed,
+            ),
+          ),
+        );
+        return;
+      } on EmailProvisioningException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.removeContact,
+              address: normalized,
+              reason: ContactFailureReason.removeFailed,
+            ),
+          ),
+        );
+        return;
+      } on DeltaChatException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.removeContact,
+              address: normalized,
+              reason: ContactFailureReason.removeFailed,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    if (contact.hasPrivateContact) {
+      try {
+        await _xmppService.deactivatePrivateContact(address: normalized);
+      } on XmppContactDirectoryException {
+        emit(
+          state.copyWith(
+            actionState: ContactActionFailure(
+              action: ContactActionType.removeContact,
+              address: normalized,
+              reason: ContactFailureReason.removeFailed,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionSuccess(
+          action: ContactActionType.removeContact,
+          address: normalized,
+        ),
+      ),
+    );
   }
 
   Future<bool> addManualContact({
@@ -136,7 +363,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       ),
     );
     try {
-      await _xmppService.deactivateManualContact(address: contact.address);
+      await _xmppService.deactivatePrivateContact(address: contact.address);
     } on XmppContactDirectoryException {
       emit(
         state.copyWith(
@@ -705,4 +932,12 @@ class ContactsCubit extends Cubit<ContactsState> {
     }
     return false;
   }
+}
+
+String? _trimmedOrNull(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }

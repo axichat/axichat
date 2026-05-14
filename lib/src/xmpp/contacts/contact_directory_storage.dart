@@ -60,6 +60,10 @@ mixin ContactDirectoryStorage
   }
 
   Future<void> deactivateManualContact({required String address}) async {
+    await deactivatePrivateContact(address: address);
+  }
+
+  Future<void> deactivatePrivateContact({required String address}) async {
     final key = contactDirectoryAddressKey(address);
     if (key.isEmpty) {
       throw XmppContactDirectoryException();
