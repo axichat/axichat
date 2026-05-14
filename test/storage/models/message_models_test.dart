@@ -65,4 +65,63 @@ void main() {
       );
     });
   });
+
+  group('Message.isStaleUnackedXmppSendAgainCandidate', () {
+    test('requires stale unresolved outgoing XMPP state without a marker', () {
+      final staleBefore = DateTime.utc(2024, 1, 1, 12);
+      final message = Message(
+        stanzaID: stanzaId,
+        senderJid: 'self@example.com',
+        chatJid: directChatJid,
+        timestamp: DateTime.utc(2024, 1, 1, 11, 57),
+      );
+
+      expect(
+        message.isStaleUnackedXmppSendAgainCandidate(
+          isSelf: true,
+          isEmailChat: false,
+          staleBefore: staleBefore,
+        ),
+        isTrue,
+      );
+      expect(
+        message
+            .copyWith(acked: true)
+            .isStaleUnackedXmppSendAgainCandidate(
+              isSelf: true,
+              isEmailChat: false,
+              staleBefore: staleBefore,
+            ),
+        isFalse,
+      );
+      expect(
+        message
+            .copyWith(manualSendAgainStanzaID: 'copy-1')
+            .isStaleUnackedXmppSendAgainCandidate(
+              isSelf: true,
+              isEmailChat: false,
+              staleBefore: staleBefore,
+            ),
+        isFalse,
+      );
+      expect(
+        message.isStaleUnackedXmppSendAgainCandidate(
+          isSelf: true,
+          isEmailChat: true,
+          staleBefore: staleBefore,
+        ),
+        isFalse,
+      );
+      expect(
+        message
+            .copyWith(timestamp: staleBefore)
+            .isStaleUnackedXmppSendAgainCandidate(
+              isSelf: false,
+              isEmailChat: false,
+              staleBefore: staleBefore,
+            ),
+        isFalse,
+      );
+    });
+  });
 }

@@ -1748,6 +1748,7 @@ _resolveTimelineMessagePreviews({
   VoidCallback onDetails,
   VoidCallback? onSelect,
   VoidCallback? onResend,
+  bool resendUsesSendAgainLabel,
   VoidCallback? onEdit,
   VoidCallback? onPinToggle,
   VoidCallback? onAddToFolder,
@@ -1824,6 +1825,7 @@ _resolveTimelineMessageActionCallbacks({
 }) {
   final includeSelectAction = !multiSelectActive;
   final canRetry = messageStatus == MessageStatus.failed;
+  final canSendAgain = timelineMessageItem.canSendAgain;
   final canShowReactionManager = canReact && isSingleSelection;
   final reactionManagerDisabled =
       canShowReactionManager && requiresMucReference;
@@ -1860,8 +1862,10 @@ _resolveTimelineMessageActionCallbacks({
 
   VoidCallback? onResend;
   VoidCallback? onEdit;
-  if (canRetry) {
+  if (canRetry || canSendAgain) {
     onResend = () => onResendRequested(messageModel, chat: chatEntity);
+  }
+  if (canRetry) {
     onEdit = () => unawaited(onEditRequested(messageModel));
   }
 
@@ -1917,6 +1921,7 @@ _resolveTimelineMessageActionCallbacks({
     onDetails: onDetails,
     onSelect: onSelect,
     onResend: onResend,
+    resendUsesSendAgainLabel: canSendAgain && !canRetry,
     onEdit: onEdit,
     onPinToggle: onPinToggle,
     onAddToFolder: onAddToFolder,

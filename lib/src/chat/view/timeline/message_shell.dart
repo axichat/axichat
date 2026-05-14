@@ -113,6 +113,7 @@ _resolveTimelineMessageChromeActions({
     replyLoading: callbacks.replyLoading,
     onSelect: callbacks.onSelect,
     onResend: callbacks.onResend,
+    resendUsesSendAgainLabel: callbacks.resendUsesSendAgainLabel,
     onEdit: callbacks.onEdit,
     isImportant: isImportant,
     onAddToFolder: callbacks.onAddToFolder,

@@ -535,7 +535,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get chatTransportChoiceAxichatLabel => 'Axichat';
+  String get chatTransportChoiceAxichatLabel => '聊天';
 
   @override
   String get chatComposerMessageHint => '发送消息';
@@ -649,6 +649,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatActionResend => '重新发送';
+
+  @override
+  String get chatActionSendAgain => '再次发送...';
 
   @override
   String get chatActionEdit => '编辑';
@@ -6835,7 +6838,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
-  String get chatTransportChoiceAxichatLabel => 'Axichat';
+  String get chatTransportChoiceAxichatLabel => '聊天';
 
   @override
   String get chatComposerMessageHint => '傳送訊息';
@@ -6949,6 +6952,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatActionResend => '重新傳送';
+
+  @override
+  String get chatActionSendAgain => '再次傳送...';
 
   @override
   String get chatActionEdit => '編輯';

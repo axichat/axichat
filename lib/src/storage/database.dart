@@ -360,6 +360,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageDisplayed(String stanzaID, {String? chatJid});
 
+  Future<void> markMessageManualSendAgain({
+    required String stanzaID,
+    required String sendAgainStanzaID,
+  });
+
   Future<int> markMessagesStatusThrough({
     required String messageId,
     required String chatJid,
@@ -1820,7 +1825,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 43;
+  int get schemaVersion => 44;
 
   @override
   MigrationStrategy get migration {
@@ -2133,6 +2138,13 @@ WHERE transport IS NULL
           await m.createTable(privateContactRecords);
           await m.createTable(privateContactDetailFields);
           await _migrateContactPreferencesToPrivateContacts();
+        }
+        if (from < 44 &&
+            !await _tableHasColumn(
+              messages.actualTableName,
+              'manual_send_again_stanza_i_d',
+            )) {
+          await m.addColumn(messages, messages.manualSendAgainStanzaID);
         }
       },
       beforeOpen: (_) async {
@@ -3570,6 +3582,28 @@ WHERE jid = ?
     if (updatedRows > 0) {
       _log.info('Marking message displayed');
     }
+  }
+
+  @override
+  Future<void> markMessageManualSendAgain({
+    required String stanzaID,
+    required String sendAgainStanzaID,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedSendAgainStanzaId = sendAgainStanzaID.trim();
+    if (normalizedStanzaId.isEmpty || normalizedSendAgainStanzaId.isEmpty) {
+      return;
+    }
+    await (update(messages)..where(
+          (tbl) =>
+              tbl.stanzaID.equals(normalizedStanzaId) &
+              tbl.manualSendAgainStanzaID.isNull(),
+        ))
+        .write(
+          MessagesCompanion(
+            manualSendAgainStanzaID: Value(normalizedSendAgainStanzaId),
+          ),
+        );
   }
 
   @override

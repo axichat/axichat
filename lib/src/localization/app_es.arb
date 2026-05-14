@@ -181,7 +181,7 @@
       "address": {}
     }
   },
-  "chatTransportChoiceAxichatLabel": "Axichat",
+  "chatTransportChoiceAxichatLabel": "Chat",
   "chatComposerMessageHint": "Enviar mensaje",
   "chatComposerFromHint": "Enviando desde {address}",
   "chatComposerEmptyMessage": "El mensaje no puede estar vacío.",
@@ -219,6 +219,7 @@
   "chatActionReply": "Responder",
   "chatActionForward": "Reenviar",
   "chatActionResend": "Reenviar",
+  "chatActionSendAgain": "Enviar de nuevo...",
   "chatActionEdit": "Editar",
   "chatActionRevoke": "Revocar",
   "chatActionCopy": "Copiar",

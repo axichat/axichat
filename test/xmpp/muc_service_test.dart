@@ -2641,6 +2641,9 @@ void main() {
       'DINV-010B [HP] resendInvitePseudoMessage reuses the stored token without membership changes',
       () async {
         const originalToken = 'original-token';
+        var inviteSaved = false;
+        var callbackObservedSavedInvite = false;
+        String? storedInviteStanzaId;
         when(() => mockConnection.generateId()).thenReturn(_stanzaId);
         when(
           () => mockDatabase.saveMessage(
@@ -2648,7 +2651,9 @@ void main() {
             chatType: any(named: 'chatType'),
             selfJid: any(named: 'selfJid'),
           ),
-        ).thenAnswer((_) async {});
+        ).thenAnswer((_) async {
+          inviteSaved = true;
+        });
         when(
           () => mockConnection.sendMessage(any()),
         ).thenAnswer((_) async => true);
@@ -2671,7 +2676,13 @@ void main() {
           },
         );
 
-        await xmppService.resendInvitePseudoMessage(message);
+        await xmppService.resendInvitePseudoMessage(
+          message,
+          onLocalMessageStored: (stanzaId) {
+            storedInviteStanzaId = stanzaId;
+            callbackObservedSavedInvite = inviteSaved;
+          },
+        );
 
         final captured =
             verify(
@@ -2686,6 +2697,8 @@ void main() {
         expect(axiInvite, isNotNull);
         expect(axiInvite?.token, equals(originalToken));
         expect(axiInvite?.invitee, equals(_inviteeJid));
+        expect(storedInviteStanzaId, equals(_stanzaId));
+        expect(callbackObservedSavedInvite, isTrue);
         verifyNever(
           () => mucManager.sendAdminIq(
             roomJid: any(named: 'roomJid'),

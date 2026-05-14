@@ -289,7 +289,10 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => mucService.resendInvitePseudoMessage(any()),
+      () => mucService.resendInvitePseudoMessage(
+        any(),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
     ).thenAnswer((_) async {});
     when(
       () => mucService.kickOccupant(
@@ -353,6 +356,13 @@ void main() {
         desiredWindow: any(named: 'desiredWindow'),
         filter: any(named: 'filter'),
         visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.verifyUnackedMessagesFromMamForChat(
+        chat: any(named: 'chat'),
+        candidates: any(named: 'candidates'),
         pageSize: any(named: 'pageSize'),
       ),
     ).thenAnswer((_) async {});
@@ -487,6 +497,24 @@ void main() {
     when(
       () =>
           messageService.resendMessage(any(), chatType: any(named: 'chatType')),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.resendMessage(
+        any(),
+        chatType: any(named: 'chatType'),
+        onLocalMessageStored: any(named: 'onLocalMessageStored'),
+      ),
+    ).thenAnswer((invocation) async {
+      final callback =
+          invocation.namedArguments[#onLocalMessageStored]
+              as void Function(String)?;
+      callback?.call('manual-send-again-copy');
+    });
+    when(
+      () => messageService.markMessageManualSendAgain(
+        stanzaID: any(named: 'stanzaID'),
+        sendAgainStanzaID: any(named: 'sendAgainStanzaID'),
+      ),
     ).thenAnswer((_) async {});
     when(
       () => messageService.loadEarlierFromMamForChatSession(
@@ -2223,6 +2251,125 @@ void main() {
   });
 
   test(
+    'send again marks the original stale unacked message after local copy',
+    () async {
+      final message = Message(
+        stanzaID: 'stale-unacked-message',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Still pending',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add([message]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.resendMessage(
+          'stale-unacked-message',
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verify(
+        () => messageService.markMessageManualSendAgain(
+          stanzaID: 'stale-unacked-message',
+          sendAgainStanzaID: 'manual-send-again-copy',
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'send again marks the original stale unacked invite after local copy',
+    () async {
+      when(
+        () => mucService.resendInvitePseudoMessage(
+          any(),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).thenAnswer((invocation) async {
+        final callback =
+            invocation.namedArguments[#onLocalMessageStored]
+                as void Function(String)?;
+        callback?.call('manual-send-again-invite-copy');
+      });
+
+      final message = Message(
+        stanzaID: 'stale-unacked-invite',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'You have been invited to a group chat',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+        pseudoMessageType: PseudoMessageType.mucInvite,
+        pseudoMessageData: const <String, dynamic>{
+          'roomJid': 'room@conference.axi.im',
+          'invitee': 'peer@axi.im',
+          'token': 'invite-token',
+        },
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add([message]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => mucService.resendInvitePseudoMessage(
+          message,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verify(
+        () => messageService.markMessageManualSendAgain(
+          stanzaID: 'stale-unacked-invite',
+          sendAgainStanzaID: 'manual-send-again-invite-copy',
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'resending welcome attachments uses the local-only attachment path',
     () async {
       final file = File(
@@ -2432,7 +2579,12 @@ void main() {
       );
       await _pumpBloc();
 
-      verify(() => mucService.resendInvitePseudoMessage(message)).called(1);
+      verify(
+        () => mucService.resendInvitePseudoMessage(
+          message,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
       verifyNever(
         () => messageService.resendMessage(
           'failed-invite',

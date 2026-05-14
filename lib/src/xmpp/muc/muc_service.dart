@@ -5105,7 +5105,10 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     );
   }
 
-  Future<void> resendInvitePseudoMessage(Message message) async {
+  Future<void> resendInvitePseudoMessage(
+    Message message, {
+    void Function(String stanzaId)? onLocalMessageStored,
+  }) async {
     final pseudoMessageType = message.pseudoMessageType;
     if (pseudoMessageType?.isInvite != true) {
       throw XmppMessageException();
@@ -5133,6 +5136,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       password: (payload['password'] as String?)?.trim(),
       roomName: (payload['roomName'] as String?)?.trim(),
       displayBody: message.body?.trim(),
+      onLocalMessageStored: onLocalMessageStored,
     );
   }
 
@@ -5145,6 +5149,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     String? password,
     String? roomName,
     String? displayBody,
+    void Function(String stanzaId)? onLocalMessageStored,
   }) async {
     final myBare = _myJid?.toBare().toString();
     if (myBare == null) throw XmppMessageException();
@@ -5197,6 +5202,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         selfJid: myBare,
       ),
     );
+    onLocalMessageStored?.call(storedMessage.stanzaID);
     final extensions = <mox.StanzaHandlerExtension>[
       if (!revoked)
         DirectMucInviteData(

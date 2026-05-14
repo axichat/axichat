@@ -1092,7 +1092,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatTransportChoiceAxichatLabel.
   ///
   /// In en, this message translates to:
-  /// **'Axichat'**
+  /// **'Chat'**
   String get chatTransportChoiceAxichatLabel;
 
   /// No description provided for @chatComposerMessageHint.
@@ -1316,6 +1316,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Resend'**
   String get chatActionResend;
+
+  /// No description provided for @chatActionSendAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Send again...'**
+  String get chatActionSendAgain;
 
   /// No description provided for @chatActionEdit.
   ///

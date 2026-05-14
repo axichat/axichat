@@ -1316,6 +1316,7 @@ class _MessageActionBar extends StatelessWidget {
     this.replyLoading = false,
     this.onSelect,
     this.onResend,
+    this.resendUsesSendAgainLabel = false,
     this.onEdit,
     required this.isImportant,
     this.onAddToFolder,
@@ -1336,6 +1337,7 @@ class _MessageActionBar extends StatelessWidget {
   final bool replyLoading;
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
+  final bool resendUsesSendAgainLabel;
   final VoidCallback? onEdit;
   final bool isImportant;
   final VoidCallback? onAddToFolder;
@@ -1372,7 +1374,9 @@ class _MessageActionBar extends StatelessWidget {
       if (onResend != null)
         ContextActionButton(
           icon: Icon(LucideIcons.repeat, size: iconSize),
-          label: l10n.chatActionResend,
+          label: resendUsesSendAgainLabel
+              ? l10n.chatActionSendAgain
+              : l10n.chatActionResend,
           onPressed: onResend,
         ),
       if (onEdit != null)

@@ -518,6 +518,9 @@ class _ChatScaffoldBody extends StatelessWidget {
                       emptyStateLabel: emptyStateLabel,
                       isGroupChat: isGroupChat,
                       isEmailChat: isEmailChat,
+                      staleUnackedCutoff: DateTime.timestamp().subtract(
+                        XmppStreamManagementManager.ackTimeoutDuration,
+                      ),
                       profileJid: profileJid,
                       resolvedEmailSelfJid: resolvedEmailSelfJid,
                       currentUserId: currentUserId,

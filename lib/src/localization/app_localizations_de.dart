@@ -569,7 +569,7 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get chatTransportChoiceAxichatLabel => 'Axichat';
+  String get chatTransportChoiceAxichatLabel => 'Chat';
 
   @override
   String get chatComposerMessageHint => 'Nachricht senden';
@@ -703,6 +703,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatActionResend => 'Erneut senden';
+
+  @override
+  String get chatActionSendAgain => 'Erneut senden...';
 
   @override
   String get chatActionEdit => 'Bearbeiten';

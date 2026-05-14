@@ -7063,7 +7063,28 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     });
   }
 
-  Future<void> resendMessage(String stanzaID, {ChatType? chatType}) async {
+  Future<void> markMessageManualSendAgain({
+    required String stanzaID,
+    required String sendAgainStanzaID,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedSendAgainStanzaId = sendAgainStanzaID.trim();
+    if (normalizedStanzaId.isEmpty || normalizedSendAgainStanzaId.isEmpty) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.markMessageManualSendAgain(
+        stanzaID: normalizedStanzaId,
+        sendAgainStanzaID: normalizedSendAgainStanzaId,
+      ),
+    );
+  }
+
+  Future<void> resendMessage(
+    String stanzaID, {
+    ChatType? chatType,
+    void Function(String stanzaId)? onLocalMessageStored,
+  }) async {
     final message = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(stanzaID),
     );
@@ -7103,6 +7124,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       calendarTaskIcsReadOnly: taskIcsReadOnly,
       calendarAvailabilityMessage: availabilityMessage,
       chatType: targetChatType,
+      onLocalMessageStored: onLocalMessageStored,
     );
   }
 
@@ -7359,6 +7381,105 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       isMuc: chat.type == ChatType.groupChat,
       after: after,
     );
+  }
+
+  Future<MamPageResult> fetchWindowFromArchiveForChat({
+    required Chat chat,
+    required DateTime start,
+    required DateTime end,
+    int pageSize = 50,
+    String? after,
+  }) async {
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null || !await _canFetchMamForChat(chat)) {
+      return const MamPageResult(complete: true);
+    }
+    return _fetchMamPage(
+      jid: jid,
+      start: start,
+      end: end,
+      pageSize: pageSize,
+      isMuc: chat.type == ChatType.groupChat,
+      after: after,
+    );
+  }
+
+  Future<void> verifyUnackedMessagesFromMamForChat({
+    required Chat chat,
+    required Iterable<Message> candidates,
+    int pageSize = 50,
+  }) async {
+    final candidateMessages = candidates
+        .where((message) => message.timestamp != null)
+        .toList(growable: false);
+    if (candidateMessages.isEmpty) {
+      return;
+    }
+    DateTime oldest = candidateMessages.first.timestamp!.toUtc();
+    DateTime newest = oldest;
+    final candidateIds = <String>{};
+    for (final message in candidateMessages) {
+      candidateIds.add(message.stanzaID);
+      final timestamp = message.timestamp!.toUtc();
+      if (timestamp.isBefore(oldest)) {
+        oldest = timestamp;
+      }
+      if (timestamp.isAfter(newest)) {
+        newest = timestamp;
+      }
+    }
+    if (candidateIds.isEmpty) {
+      return;
+    }
+    final start = oldest.subtract(const Duration(seconds: 30));
+    final end = newest.add(const Duration(seconds: 30));
+    String? afterId;
+    while (true) {
+      final result = await fetchWindowFromArchiveForChat(
+        chat: chat,
+        start: start,
+        end: end,
+        pageSize: pageSize,
+        after: afterId,
+      );
+      if (result.complete) {
+        return;
+      }
+      final nextAfterId = result.lastId ?? afterId;
+      if (nextAfterId == null || nextAfterId == afterId) {
+        return;
+      }
+      if (await _mamVerificationCandidatesResolved(
+        candidateIds,
+        chatJid: chat.jid,
+      )) {
+        return;
+      }
+      afterId = nextAfterId;
+    }
+  }
+
+  Future<bool> _mamVerificationCandidatesResolved(
+    Set<String> candidateIds, {
+    required String chatJid,
+  }) async {
+    final messages = await loadMessagesByReferenceIds(
+      candidateIds,
+      chatJid: chatJid,
+    );
+    if (messages.isEmpty) {
+      return false;
+    }
+    final resolvedCandidateIds = <String>{};
+    for (final message in messages) {
+      if (!candidateIds.contains(message.stanzaID)) {
+        continue;
+      }
+      if (message.acked || message.received || message.displayed) {
+        resolvedCandidateIds.add(message.stanzaID);
+      }
+    }
+    return resolvedCandidateIds.length == candidateIds.length;
   }
 
   Future<List<MamPageResult>> catchUpChatFromMamOnConnect({
@@ -7733,6 +7854,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? before,
     String? after,
     DateTime? start,
+    DateTime? end,
     int pageSize = 50,
     bool isMuc = false,
   }) async {
@@ -7754,6 +7876,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final options = mox.MAMQueryOptions(
         withJid: isMuc ? null : peerJid,
         start: start,
+        end: end,
         formType: mox.mamXmlns,
         forceForm: true,
       );

@@ -4627,7 +4627,9 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
 /// message loss during network disruptions or app lifecycle changes.
 class XmppStreamManagementManager extends mox.StreamManagementManager {
   XmppStreamManagementManager({required this.owner})
-    : super(ackTimeout: const Duration(minutes: 2));
+    : super(ackTimeout: ackTimeoutDuration);
+
+  static const ackTimeoutDuration = Duration(minutes: 2);
 
   final XmppService owner;
   final _log = Logger('XmppStreamManagementManager');

@@ -1269,6 +1269,63 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  DateTime get _staleUnackedSendAgainCutoff => DateTime.timestamp().subtract(
+    XmppStreamManagementManager.ackTimeoutDuration,
+  );
+
+  bool _isSelfMessageForSendAgain(Message message, Chat chat) {
+    if (chat.type == ChatType.groupChat) {
+      final roomState = state.roomState ?? _mucService.roomStateFor(chat.jid);
+      if (roomState != null) {
+        return roomState.isSelfSenderJid(
+          message.senderJid,
+          selfJid: _chatsService.myJid,
+          fallbackSelfNick: chat.myNickname,
+        );
+      }
+      final selfNick = chat.myNickname?.trim();
+      final senderNick = addressResourcePart(message.senderJid)?.trim();
+      return selfNick != null &&
+          selfNick.isNotEmpty &&
+          senderNick != null &&
+          senderNick == selfNick;
+    }
+    return sameNormalizedAddressValue(message.senderJid, _chatsService.myJid);
+  }
+
+  List<Message> _staleUnackedSendAgainCandidates(Chat chat) {
+    final candidates = <Message>[];
+    for (final message in state.items) {
+      if (message.isStaleUnackedXmppSendAgainCandidate(
+        isSelf: _isSelfMessageForSendAgain(message, chat),
+        isEmailChat: chat.defaultTransport.isEmail,
+        staleBefore: _staleUnackedSendAgainCutoff,
+      )) {
+        candidates.add(message);
+      }
+    }
+    return List<Message>.unmodifiable(candidates);
+  }
+
+  Future<void> _verifyStaleUnackedMessagesFromMam(Chat chat) async {
+    if (!_xmppAllowedForChat(chat)) {
+      return;
+    }
+    final candidates = _staleUnackedSendAgainCandidates(chat);
+    if (candidates.isEmpty) {
+      return;
+    }
+    try {
+      await _messageService.verifyUnackedMessagesFromMamForChat(
+        chat: chat,
+        candidates: candidates,
+        pageSize: messageBatchSize,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
+    }
+  }
+
   Future<void> _ensureMucMembership(Chat chat) async {
     if (chat.type != ChatType.groupChat) return;
     if (!_xmppAllowedForChat(chat)) return;
@@ -1723,6 +1780,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (_xmppAllowedForChat(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
+      if (emit.isDone) return;
+      await _verifyStaleUnackedMessagesFromMam(event.chat);
       if (emit.isDone) return;
     }
     if (showXmppCapabilities) {
@@ -3381,6 +3440,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (_xmppAllowedForChat(chat)) {
       await _catchUpFromMam();
+      if (_isClosing || isClosed) {
+        return;
+      }
+      await _verifyStaleUnackedMessagesFromMam(chat);
       if (_isClosing || isClosed) {
         return;
       }
@@ -5180,13 +5243,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final pseudoMessageType = message.pseudoMessageType;
     final isEmailMessage = message.deltaChatId != null;
     final isLocalOnlyChat = isAxichatWelcomeThreadJid(message.chatJid);
+    final shouldMarkManualSendAgain = message
+        .isStaleUnackedXmppSendAgainCandidate(
+          isSelf: state.chat == null
+              ? false
+              : _isSelfMessageForSendAgain(message, state.chat!),
+          isEmailChat: state.chat?.defaultTransport.isEmail == true,
+          staleBefore: _staleUnackedSendAgainCutoff,
+        );
+    String? manualSendAgainStanzaId;
+    void captureManualSendAgainStanzaId(String stanzaId) {
+      final normalizedStanzaId = stanzaId.trim();
+      if (manualSendAgainStanzaId == null && normalizedStanzaId.isNotEmpty) {
+        manualSendAgainStanzaId = normalizedStanzaId;
+      }
+    }
+
     try {
       if (isEmailMessage) {
         await _resendEmailMessage(message, emit);
         return;
       }
       if (pseudoMessageType?.isInvite == true) {
-        await _mucService.resendInvitePseudoMessage(message);
+        await _mucService.resendInvitePseudoMessage(
+          message,
+          onLocalMessageStored: shouldMarkManualSendAgain
+              ? captureManualSendAgainStanzaId
+              : null,
+        );
         return;
       }
       final attachments = await _attachmentsForMessage(message);
@@ -5221,6 +5305,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                   message.forwardedOriginalSenderLabel,
               transportGroupId: attachmentGroupId,
               attachmentOrder: index,
+              onLocalMessageStored: shouldMarkManualSendAgain
+                  ? captureManualSendAgainStanzaId
+                  : null,
             );
           } else {
             await _messageService.sendAttachment(
@@ -5230,8 +5317,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               quotedMessage: index == 0 ? quoted : null,
               chatType: chatType,
               htmlCaption: shouldApplyCaption ? htmlCaption : null,
+              forwarded: message.isForwarded,
+              forwardedFromJid: message.forwardedFromJid,
+              forwardedOriginalSenderLabel:
+                  message.forwardedOriginalSenderLabel,
               transportGroupId: attachmentGroupId,
               attachmentOrder: index,
+              onLocalMessageStored: shouldMarkManualSendAgain
+                  ? captureManualSendAgainStanzaId
+                  : null,
             );
           }
         }
@@ -5267,15 +5361,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           forwardedFromJid: message.forwardedFromJid,
           forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
           chatType: chatType,
+          onLocalMessageStored: shouldMarkManualSendAgain
+              ? captureManualSendAgainStanzaId
+              : null,
         );
       } else {
-        await _messageService.resendMessage(
-          message.stanzaID,
-          chatType: chatType,
-        );
+        if (shouldMarkManualSendAgain) {
+          await _messageService.resendMessage(
+            message.stanzaID,
+            chatType: chatType,
+            onLocalMessageStored: captureManualSendAgainStanzaId,
+          );
+        } else {
+          await _messageService.resendMessage(
+            message.stanzaID,
+            chatType: chatType,
+          );
+        }
       }
     } on Exception catch (error, stackTrace) {
       _log.warning(_messageResendFailedLogMessage, error, stackTrace);
+    } finally {
+      if (shouldMarkManualSendAgain && manualSendAgainStanzaId != null) {
+        try {
+          await _messageService.markMessageManualSendAgain(
+            stanzaID: message.stanzaID,
+            sendAgainStanzaID: manualSendAgainStanzaId!,
+          );
+        } on Exception catch (error, stackTrace) {
+          _log.warning(_messageResendFailedLogMessage, error, stackTrace);
+        }
+      }
     }
   }
 

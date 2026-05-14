@@ -320,6 +320,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     String? stickerPackID,
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
+    String? manualSendAgainStanzaID,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
     @Default(DeltaAccountDefaults.legacyId) int deltaAccountId,
     int? deltaChatId,
@@ -359,6 +360,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required String? stickerPackID,
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
+    required String? manualSendAgainStanzaID,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
     required int deltaAccountId,
     required int? deltaChatId,
@@ -680,6 +682,11 @@ abstract class Message with _$Message implements Insertable<Message> {
         const MapStringDynamicConverter().toSql(pseudoMessageData!),
       );
     }
+    if (manualSendAgainStanzaID != null) {
+      map['manual_send_again_stanza_i_d'] = Variable<String>(
+        manualSendAgainStanzaID,
+      );
+    }
     if (deltaChatId != null) {
       map['delta_chat_id'] = Variable<int>(deltaChatId);
     }
@@ -692,6 +699,28 @@ abstract class Message with _$Message implements Insertable<Message> {
 
 extension MessageContent on Message {
   bool get isEmailBacked => deltaChatId != null || deltaMsgId != null;
+
+  bool isStaleUnackedXmppSendAgainCandidate({
+    required bool isSelf,
+    required bool isEmailChat,
+    required DateTime staleBefore,
+  }) {
+    final messageTimestamp = timestamp;
+    if (messageTimestamp == null) {
+      return false;
+    }
+    final sendAgainStanzaId = manualSendAgainStanzaID?.trim();
+    return !isEmailChat &&
+        !isEmailBacked &&
+        isSelf &&
+        error.isNone &&
+        !acked &&
+        !received &&
+        !displayed &&
+        !fileUploading &&
+        sendAgainStanzaId?.isNotEmpty != true &&
+        !messageTimestamp.toUtc().isAfter(staleBefore.toUtc());
+  }
 
   bool get isHiddenMultiDeviceSyncMessage =>
       isHiddenInternalMultiDeviceSyncMessage(
@@ -1400,6 +1429,8 @@ class Messages extends Table {
 
   TextColumn get pseudoMessageData =>
       text().nullable().map(const MapStringDynamicConverter())();
+
+  TextColumn get manualSendAgainStanzaID => text().nullable()();
 
   IntColumn get deltaChatId => integer().nullable()();
 
