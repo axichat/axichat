@@ -328,7 +328,7 @@ class _ContactsListBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
-        padding: EdgeInsets.only(top: spacing.l, bottom: spacing.m),
+        padding: EdgeInsets.only(top: spacing.m, bottom: spacing.m),
         itemCount: items.length,
         itemBuilder: (context, index) =>
             _ContactListTile(contact: items[index]),
