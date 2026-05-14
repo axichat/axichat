@@ -29,6 +29,7 @@ class FoldersCubit extends Cubit<FoldersState> {
            chatJid: chatJid,
            collections: null,
            memberships: null,
+           contactFolderRules: const <String, String>{},
            items: null,
            visibleItems: null,
          ),
@@ -42,6 +43,9 @@ class FoldersCubit extends Cubit<FoldersState> {
     _membershipsSubscription = _xmppService
         .allMessageCollectionMembershipsStream(chatJid: chatJid)
         .listen(_handleMemberships);
+    _contactFolderRulesSubscription = _xmppService
+        .contactFolderRulesStream()
+        .listen(_handleContactFolderRules);
   }
 
   final XmppService _xmppService;
@@ -52,6 +56,8 @@ class FoldersCubit extends Cubit<FoldersState> {
   _collectionsSubscription;
   late final StreamSubscription<List<MessageCollectionMembershipEntry>>
   _membershipsSubscription;
+  late final StreamSubscription<Map<String, String>>
+  _contactFolderRulesSubscription;
 
   void _handleCollections(List<MessageCollectionEntry> collections) {
     emit(state.copyWith(collections: collections));
@@ -72,6 +78,10 @@ class FoldersCubit extends Cubit<FoldersState> {
 
   void _handleMemberships(List<MessageCollectionMembershipEntry> memberships) {
     emit(state.copyWith(memberships: memberships));
+  }
+
+  void _handleContactFolderRules(Map<String, String> rules) {
+    emit(state.copyWith(contactFolderRules: rules));
   }
 
   void updateCriteria({
@@ -183,6 +193,9 @@ class FoldersCubit extends Cubit<FoldersState> {
   }
 
   Future<bool> removeItem(FolderMessageItem item) async {
+    if (item.isContactRuleDerived) {
+      return false;
+    }
     final collectionId = item.collectionId.trim();
     final chatJid = item.chatJid.trim();
     final messageReferenceId = item.messageReferenceId.trim();
@@ -246,6 +259,7 @@ class FoldersCubit extends Cubit<FoldersState> {
     await _itemsSubscription.cancel();
     await _collectionsSubscription.cancel();
     await _membershipsSubscription.cancel();
+    await _contactFolderRulesSubscription.cancel();
     return super.close();
   }
 }

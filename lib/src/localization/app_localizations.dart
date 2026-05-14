@@ -189,6 +189,12 @@ abstract class AppLocalizations {
   /// **'Could not update this folder.'**
   String get folderPickerUpdateFailed;
 
+  /// No description provided for @folderPickerRuleDerived.
+  ///
+  /// In en, this message translates to:
+  /// **'Applied by contact rule'**
+  String get folderPickerRuleDerived;
+
   /// No description provided for @folderSystemReceipts.
   ///
   /// In en, this message translates to:
@@ -255,6 +261,12 @@ abstract class AppLocalizations {
   /// **'A folder with that name already exists.'**
   String get folderNameDuplicateError;
 
+  /// No description provided for @folderNameTooLongError.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder names must be 128 bytes or less.'**
+  String get folderNameTooLongError;
+
   /// No description provided for @folderMessagesEmpty.
   ///
   /// In en, this message translates to:
@@ -306,19 +318,19 @@ abstract class AppLocalizations {
   /// No description provided for @contactFolderRuleMessagesTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send messages to folder'**
+  /// **'Send all messages to folder'**
   String get contactFolderRuleMessagesTitle;
 
   /// No description provided for @contactFolderRuleEmailsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send emails to folder'**
+  /// **'Send all emails to folder'**
   String get contactFolderRuleEmailsTitle;
 
   /// No description provided for @contactFolderRuleMessagesAndEmailsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send messages and emails to folder'**
+  /// **'Send all messages and emails to folder'**
   String get contactFolderRuleMessagesAndEmailsTitle;
 
   /// No description provided for @contactFolderRuleClear.

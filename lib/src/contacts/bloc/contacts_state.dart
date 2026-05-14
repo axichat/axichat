@@ -16,6 +16,8 @@ final class ContactsViewCriteria extends Equatable {
 }
 
 enum ContactActionType {
+  addManual,
+  removeManual,
   addEmail,
   removeEmail,
   favorite,

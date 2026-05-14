@@ -13,6 +13,10 @@ enum SearchFilterId {
   hidden,
   attachments,
   favorites,
+  contactFolderImportant,
+  contactFolderReceipts,
+  contactFolderMarketing,
+  contactFolderNewsletters,
 }
 
 /// Shared sort order used by search surfaces so we keep naming aligned.

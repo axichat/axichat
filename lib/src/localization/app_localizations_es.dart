@@ -53,6 +53,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get folderPickerUpdateFailed => 'No se pudo actualizar esta carpeta.';
 
   @override
+  String get folderPickerRuleDerived => 'Aplicado por regla de contacto';
+
+  @override
   String get folderSystemReceipts => 'Recibos';
 
   @override
@@ -87,6 +90,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ya existe una carpeta con ese nombre.';
 
   @override
+  String get folderNameTooLongError =>
+      'Los nombres de carpeta deben tener 128 bytes o menos.';
+
+  @override
   String get folderMessagesEmpty => 'Todavía no hay mensajes en esta carpeta';
 
   @override
@@ -97,7 +104,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo quitar este mensaje de la carpeta.';
 
   @override
-  String get contactFolderRuleAction => 'Send all to...';
+  String get contactFolderRuleAction => 'Enviar todo a...';
 
   @override
   String get contactFolderRuleMessagesAction =>
@@ -111,17 +118,19 @@ class AppLocalizationsEs extends AppLocalizations {
       'Enviar todos los mensajes y correos a...';
 
   @override
-  String get contactFolderRuleTitle => 'Send all to folder';
+  String get contactFolderRuleTitle => 'Enviar todo a una carpeta';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Enviar mensajes a carpeta';
+  String get contactFolderRuleMessagesTitle =>
+      'Enviar todos los mensajes a una carpeta';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Enviar correos a carpeta';
+  String get contactFolderRuleEmailsTitle =>
+      'Enviar todos los correos a una carpeta';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Enviar mensajes y correos a carpeta';
+      'Enviar todos los mensajes y correos a una carpeta';
 
   @override
   String get contactFolderRuleClear => 'Borrar regla';

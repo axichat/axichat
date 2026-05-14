@@ -3,6 +3,7 @@
 
 // ignore_for_file: avoid_renaming_method_parameters
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
@@ -765,9 +766,19 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<ContactPreference>> getContactPreferences();
 
+  Future<List<PrivateContactRecord>> getPrivateContactRecords({
+    bool includeInactive = false,
+  });
+
+  Future<PrivateContactRecord?> getPrivateContactRecord(String addressKey);
+
   Future<List<ContactPreference>> getContactFolderRulePreferences({
     bool includeInactive = false,
   });
+
+  Stream<Map<String, String>> watchActiveContactFolderRules();
+
+  Future<Map<String, String>> getActiveContactFolderRules();
 
   Future<ContactPreference?> getContactPreference(String addressKey);
 
@@ -781,7 +792,7 @@ abstract interface class XmppDatabase implements Database {
     required String? displayName,
   });
 
-  Future<List<MessageCollectionMembershipEntry>> setContactFolderRule({
+  Future<void> setContactFolderRule({
     required String addressKey,
     required String collectionId,
   });
@@ -793,6 +804,49 @@ abstract interface class XmppDatabase implements Database {
     required String? collectionId,
     required DateTime updatedAt,
     required bool active,
+  });
+
+  Future<PrivateContactRecord?> upsertManualPrivateContact({
+    required String addressKey,
+    String? displayName,
+  });
+
+  Future<PrivateContactRecord?> deactivateManualPrivateContact({
+    required String addressKey,
+  });
+
+  Future<PrivateContactRecord?> applyPrivateContactMutation({
+    required String addressKey,
+    required bool active,
+    required bool manual,
+    required bool favorited,
+    required String? displayNameOverride,
+    required String? folderCollectionId,
+    required DateTime updatedAt,
+    required DateTime? activeUpdatedAt,
+    required DateTime? manualUpdatedAt,
+    required DateTime? favoriteUpdatedAt,
+    required DateTime? displayNameUpdatedAt,
+    required DateTime? folderRuleUpdatedAt,
+    String? sourceId,
+  });
+
+  Future<List<PrivateContactDetailFieldEntry>> getPrivateContactDetailFields(
+    String addressKey, {
+    bool includeInactive = false,
+  });
+
+  Future<PrivateContactDetailFieldEntry?>
+  applyPrivateContactDetailFieldMutation({
+    required String addressKey,
+    required String fieldId,
+    required ContactDetailFieldKind kind,
+    required String? label,
+    required String value,
+    required int sortOrder,
+    required bool active,
+    required DateTime updatedAt,
+    String? sourceId,
   });
 
   Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
@@ -1676,6 +1730,8 @@ class EmailSpamlistAccessor
     EmailChatAccounts,
     Contacts,
     ContactPreferences,
+    PrivateContactRecords,
+    PrivateContactDetailFields,
     Blocklist,
     Stickers,
     StickerPacks,
@@ -1764,7 +1820,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 42;
+  int get schemaVersion => 43;
 
   @override
   MigrationStrategy get migration {
@@ -2073,6 +2129,11 @@ WHERE transport IS NULL
             contactPreferences.folderRuleUpdatedAt,
           );
         }
+        if (from < 43) {
+          await m.createTable(privateContactRecords);
+          await m.createTable(privateContactDetailFields);
+          await _migrateContactPreferencesToPrivateContacts();
+        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -2097,6 +2158,39 @@ WHERE transport IS NULL
     for (final entry in collections) {
       await into(messageCollections).insertOnConflictUpdate(entry);
     }
+  }
+
+  Future<void> _migrateContactPreferencesToPrivateContacts() async {
+    final preferences = await select(contactPreferences).get();
+    if (preferences.isEmpty) {
+      return;
+    }
+    await batch((batch) {
+      for (final preference in preferences) {
+        final key = contactDirectoryAddressKey(preference.addressKey);
+        if (key.isEmpty) {
+          continue;
+        }
+        final updatedAt = preference.updatedAt.toUtc();
+        batch.insert(
+          privateContactRecords,
+          PrivateContactRecordsCompanion.insert(
+            addressKey: key,
+            active: const Value(true),
+            manual: const Value(false),
+            favorited: Value(preference.favorited),
+            displayNameOverride: Value(preference.displayNameOverride),
+            folderCollectionId: Value(preference.folderCollectionId),
+            favoriteUpdatedAt: Value(updatedAt),
+            displayNameUpdatedAt: Value(updatedAt),
+            folderRuleUpdatedAt: Value(preference.folderRuleUpdatedAt),
+            createdAt: Value(updatedAt),
+            updatedAt: Value(updatedAt),
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    });
   }
 
   @override
@@ -2185,7 +2279,6 @@ WHERE transport IS NULL
       return;
     }
     final normalizedUpdatedAt = updatedAt.toUtc();
-    var shouldBackfillContactRules = false;
     await transaction(() async {
       final existing = await getMessageCollection(normalizedCollectionId);
       if (existing != null &&
@@ -2203,14 +2296,7 @@ WHERE transport IS NULL
           active: active,
         ),
       );
-      shouldBackfillContactRules = active;
     });
-    if (shouldBackfillContactRules) {
-      await _backfillContactFolderRulesForCollection(
-        collectionId: normalizedCollectionId,
-        addedAt: normalizedUpdatedAt,
-      );
-    }
   }
 
   @override
@@ -3056,7 +3142,6 @@ WHERE transport IS NULL
       message.chatJid,
       selfJid: selfJid,
     );
-    var applyContactFolderRule = false;
     await transaction(() async {
       await into(chats).insert(
         ChatsCompanion.insert(
@@ -3119,15 +3204,12 @@ WHERE transport IS NULL
             await repairChatSummaryPreservingTimestamp(message.chatJid);
           }
         }
-        applyContactFolderRule = true;
         return;
       }
 
       if (persisted.retracted) {
         return;
       }
-
-      applyContactFolderRule = true;
 
       final persistedMessageId = persisted.id ?? resolvedMessageId;
       final incomingMetadataId = messageToSave.fileMetadataID?.trim();
@@ -3198,63 +3280,6 @@ WHERE transport IS NULL
         ),
       );
     });
-    if (!applyContactFolderRule) {
-      return;
-    }
-    await _applyContactFolderRuleForSavedMessage(
-      message: message.copyWith(id: resolvedMessageId),
-      chatType: chatType,
-    );
-  }
-
-  Future<void> _applyContactFolderRuleForSavedMessage({
-    required Message message,
-    required ChatType chatType,
-  }) async {
-    final chat = await getChat(message.chatJid);
-    if (chatType == ChatType.groupChat || chat?.type == ChatType.groupChat) {
-      return;
-    }
-    final reference = message.collectionReference(isGroupChat: false);
-    if (reference == null) {
-      return;
-    }
-    final addressKeys = <String>{};
-    if (chat != null) {
-      addressKeys.addAll(_contactAddressKeysForChat(chat));
-    }
-    final chatKey = contactDirectoryAddressKey(message.chatJid);
-    if (chatKey.isNotEmpty) {
-      addressKeys.add(chatKey);
-    }
-    for (final key in addressKeys) {
-      final preference = await (select(
-        contactPreferences,
-      )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
-      final collectionId = preference?.folderCollectionId?.trim();
-      if (collectionId == null || collectionId.isEmpty) {
-        continue;
-      }
-      final collection = await getMessageCollection(collectionId);
-      if (collection?.active != true) {
-        continue;
-      }
-      await applyMessageCollectionMembershipMutation(
-        collectionId: collectionId,
-        chatJid: message.chatJid,
-        messageReferenceId: reference.value,
-        messageStanzaId: message.trimmedStanzaId,
-        messageOriginId: message.trimmedOriginId,
-        messageMucStanzaId: message.trimmedMucStanzaId,
-        deltaAccountId: message.deltaMsgId == null
-            ? null
-            : message.deltaAccountId,
-        deltaMsgId: message.deltaMsgId,
-        addedAt: DateTime.timestamp().toUtc(),
-        active: true,
-      );
-      return;
-    }
   }
 
   bool _messageCountsTowardUnread({required Message message}) {
@@ -4972,10 +4997,65 @@ WHERE email_from_address IN ($placeholderClause)
     String collectionId, {
     String? chatJid,
   }) {
-    return _folderMessageItemsQuery(
-      collectionId,
-      chatJid: chatJid,
-    ).watch().map(_folderMessageItemsFromRows).distinct(listEquals);
+    late final StreamController<List<FolderMessageItem>> controller;
+    final subscriptions = <StreamSubscription<Object?>>[];
+    List<FolderMessageItem>? lastItems;
+    var emitting = false;
+    var pending = false;
+
+    Future<void> emitItems() async {
+      if (emitting) {
+        pending = true;
+        return;
+      }
+      emitting = true;
+      try {
+        do {
+          pending = false;
+          final items = await getFolderMessageItems(
+            collectionId,
+            chatJid: chatJid,
+          );
+          if (!listEquals(lastItems, items)) {
+            lastItems = items;
+            if (!controller.isClosed) {
+              controller.add(items);
+            }
+          }
+        } while (pending);
+      } catch (error, stackTrace) {
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      } finally {
+        emitting = false;
+      }
+    }
+
+    controller = StreamController<List<FolderMessageItem>>(
+      onListen: () {
+        subscriptions
+          ..add(
+            select(
+              messageCollectionMemberships,
+            ).watch().listen((_) => emitItems()),
+          )
+          ..add(select(messages).watch().listen((_) => emitItems()))
+          ..add(select(chats).watch().listen((_) => emitItems()))
+          ..add(
+            select(privateContactRecords).watch().listen((_) => emitItems()),
+          )
+          ..add(select(messageCollections).watch().listen((_) => emitItems()));
+        unawaited(emitItems());
+      },
+      onCancel: () async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+        subscriptions.clear();
+      },
+    );
+    return controller.stream;
   }
 
   @override
@@ -5009,13 +5089,25 @@ WHERE email_from_address IN ($placeholderClause)
     String collectionId, {
     String? chatJid,
     bool includeInactive = false,
-  }) async => _folderMessageItemsFromRows(
-    await _folderMessageItemsQuery(
-      collectionId,
-      chatJid: chatJid,
-      includeInactive: includeInactive,
-    ).get(),
-  );
+  }) async {
+    final explicitItems = _folderMessageItemsFromRows(
+      await _folderMessageItemsQuery(
+        collectionId,
+        chatJid: chatJid,
+        includeInactive: includeInactive,
+      ).get(),
+    );
+    if (includeInactive) {
+      return explicitItems;
+    }
+    return _mergeFolderMessageItems(
+      explicitItems,
+      await _contactRuleDerivedFolderMessageItems(
+        collectionId,
+        chatJid: chatJid,
+      ),
+    );
+  }
 
   @override
   Future<List<MessageCollectionMembershipEntry>>
@@ -5109,27 +5201,149 @@ WHERE email_from_address IN ($placeholderClause)
     final itemsByKey = <String, FolderMessageItem>{};
     for (final row in rows) {
       final entry = row.readTable(messageCollectionMemberships);
-      final key =
-          '${entry.collectionId}\n${entry.chatJid.trim()}\n${entry.messageReferenceId.trim()}';
-      itemsByKey.putIfAbsent(
-        key,
-        () => FolderMessageItem(
-          collectionId: entry.collectionId,
-          chatJid: entry.chatJid,
-          messageReferenceId: entry.messageReferenceId,
-          messageStanzaId: entry.messageStanzaId,
-          messageOriginId: entry.messageOriginId,
-          messageMucStanzaId: entry.messageMucStanzaId,
-          deltaAccountId: entry.deltaAccountId,
-          deltaMsgId: entry.deltaMsgId,
-          addedAt: entry.addedAt,
-          active: entry.active,
-          message: row.readTableOrNull(messages),
-          chat: row.readTableOrNull(chats),
+      final message = row.readTableOrNull(messages);
+      final item = FolderMessageItem(
+        collectionId: entry.collectionId,
+        chatJid: entry.chatJid,
+        messageReferenceId: entry.messageReferenceId,
+        messageStanzaId: entry.messageStanzaId,
+        messageOriginId: entry.messageOriginId,
+        messageMucStanzaId: entry.messageMucStanzaId,
+        deltaAccountId: entry.deltaAccountId,
+        deltaMsgId: entry.deltaMsgId,
+        addedAt: entry.addedAt,
+        active: entry.active,
+        message: message,
+        chat: row.readTableOrNull(chats),
+      );
+      final key = _folderMessageItemKey(item);
+      itemsByKey.putIfAbsent(key, () => item);
+    }
+    return itemsByKey.values.toList(growable: false);
+  }
+
+  Future<List<FolderMessageItem>> _contactRuleDerivedFolderMessageItems(
+    String collectionId, {
+    String? chatJid,
+  }) async {
+    final normalizedCollectionId = collectionId.trim();
+    if (normalizedCollectionId.isEmpty) {
+      return const <FolderMessageItem>[];
+    }
+    final collection = await getMessageCollection(normalizedCollectionId);
+    if (collection?.active != true) {
+      return const <FolderMessageItem>[];
+    }
+    final ruleRecords = await _activeContactFolderRuleRecords(
+      collectionId: normalizedCollectionId,
+    );
+    if (ruleRecords.isEmpty) {
+      return const <FolderMessageItem>[];
+    }
+    final recordsByAddressKey = <String, PrivateContactRecord>{
+      for (final record in ruleRecords)
+        contactDirectoryAddressKey(record.addressKey): record,
+    };
+    final normalizedChatJid = chatJid?.trim();
+    final candidateChats = <String, Chat>{};
+    for (final chat in await getChats(start: 0, end: 0)) {
+      if (chat.type == ChatType.groupChat) {
+        continue;
+      }
+      if (normalizedChatJid != null &&
+          normalizedChatJid.isNotEmpty &&
+          chat.jid != normalizedChatJid) {
+        continue;
+      }
+      final matchesRule = _contactAddressKeysForChat(
+        chat,
+      ).any(recordsByAddressKey.containsKey);
+      if (matchesRule) {
+        candidateChats[chat.jid] = chat;
+      }
+    }
+    if (candidateChats.isEmpty) {
+      return const <FolderMessageItem>[];
+    }
+    final messageRows =
+        await (select(messages)
+              ..where(
+                (tbl) =>
+                    tbl.chatJid.isIn(candidateChats.keys) &
+                    tbl.retracted.equals(false),
+              )
+              ..orderBy([
+                (tbl) => OrderingTerm(
+                  expression: tbl.timestamp,
+                  mode: OrderingMode.desc,
+                ),
+                (tbl) => OrderingTerm(
+                  expression: tbl.stanzaID,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .get();
+    final items = <FolderMessageItem>[];
+    for (final message in messageRows) {
+      final reference = message.collectionReference(isGroupChat: false);
+      if (reference == null) {
+        continue;
+      }
+      final timestamp = message.timestamp;
+      if (timestamp == null) {
+        continue;
+      }
+      final chat = candidateChats[message.chatJid];
+      items.add(
+        FolderMessageItem(
+          collectionId: normalizedCollectionId,
+          chatJid: message.chatJid,
+          messageReferenceId: reference.value,
+          messageStanzaId: message.trimmedStanzaId,
+          messageOriginId: message.trimmedOriginId,
+          messageMucStanzaId: message.trimmedMucStanzaId,
+          deltaAccountId: message.deltaMsgId == null
+              ? null
+              : message.deltaAccountId,
+          deltaMsgId: message.deltaMsgId,
+          addedAt: timestamp.toUtc(),
+          active: true,
+          message: message,
+          chat: chat,
+          isContactRuleDerived: true,
         ),
       );
     }
-    return itemsByKey.values.toList(growable: false);
+    return items;
+  }
+
+  List<FolderMessageItem> _mergeFolderMessageItems(
+    List<FolderMessageItem> explicitItems,
+    List<FolderMessageItem> derivedItems,
+  ) {
+    final itemsByKey = <String, FolderMessageItem>{};
+    for (final item in explicitItems) {
+      itemsByKey[_folderMessageItemKey(item)] = item;
+    }
+    for (final item in derivedItems) {
+      itemsByKey.putIfAbsent(_folderMessageItemKey(item), () => item);
+    }
+    final items = itemsByKey.values.toList(growable: false)
+      ..sort((a, b) {
+        final addedAtOrder = b.markedAt.compareTo(a.markedAt);
+        if (addedAtOrder != 0) {
+          return addedAtOrder;
+        }
+        return b.messageReferenceId.compareTo(a.messageReferenceId);
+      });
+    return items;
+  }
+
+  String _folderMessageItemKey(FolderMessageItem item) {
+    final message = item.message;
+    final reference =
+        message?.trimmedStanzaId ?? item.messageReferenceId.trim();
+    return '${item.collectionId.trim()}\n${item.chatJid.trim()}\n$reference';
   }
 
   @override
@@ -6635,13 +6849,64 @@ WHERE jid = ?
 
   @override
   Stream<List<ContactDirectoryEntry>> watchContactDirectoryEntries() {
-    return customSelect(
-          'SELECT 1',
-          readsFrom: {roster, contacts, contactPreferences, chats},
-        )
-        .watch()
-        .asyncMap((_) => getContactDirectoryEntries())
-        .distinct(listEquals);
+    late final StreamController<List<ContactDirectoryEntry>> controller;
+    final subscriptions = <StreamSubscription<Object?>>[];
+    List<ContactDirectoryEntry>? lastItems;
+    var emitting = false;
+    var pending = false;
+
+    Future<void> emitDirectory() async {
+      if (emitting) {
+        pending = true;
+        return;
+      }
+      emitting = true;
+      try {
+        do {
+          pending = false;
+          final items = await getContactDirectoryEntries();
+          if (!listEquals(lastItems, items)) {
+            lastItems = items;
+            if (!controller.isClosed) {
+              controller.add(items);
+            }
+          }
+        } while (pending);
+      } catch (error, stackTrace) {
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      } finally {
+        emitting = false;
+      }
+    }
+
+    controller = StreamController<List<ContactDirectoryEntry>>(
+      onListen: () {
+        subscriptions
+          ..add(select(roster).watch().listen((_) => emitDirectory()))
+          ..add(select(contacts).watch().listen((_) => emitDirectory()))
+          ..add(
+            select(
+              privateContactRecords,
+            ).watch().listen((_) => emitDirectory()),
+          )
+          ..add(
+            select(
+              privateContactDetailFields,
+            ).watch().listen((_) => emitDirectory()),
+          )
+          ..add(select(chats).watch().listen((_) => emitDirectory()));
+        unawaited(emitDirectory());
+      },
+      onCancel: () async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+        subscriptions.clear();
+      },
+    );
+    return controller.stream;
   }
 
   @override
@@ -6649,30 +6914,61 @@ WHERE jid = ?
     return _mergeContactDirectoryEntries(
       await rosterAccessor.selectAll(),
       await contactsAccessor.selectAll(),
-      await getContactPreferences(),
+      await getPrivateContactRecords(),
+      await _getPrivateContactDetailFieldsByAddress(),
       await getChats(start: 0, end: 0),
     );
   }
 
   @override
-  Stream<List<ContactPreference>> watchContactPreferences() =>
-      select(contactPreferences).watch();
+  Stream<List<ContactPreference>> watchContactPreferences() {
+    final query = select(privateContactRecords)
+      ..where((tbl) => tbl.active.equals(true));
+    return query
+        .watch()
+        .map(_privateContactsAsPreferences)
+        .distinct(listEquals);
+  }
 
   @override
-  Future<List<ContactPreference>> getContactPreferences() =>
-      select(contactPreferences).get();
+  Future<List<ContactPreference>> getContactPreferences() async =>
+      _privateContactsAsPreferences(await getPrivateContactRecords());
+
+  @override
+  Future<List<PrivateContactRecord>> getPrivateContactRecords({
+    bool includeInactive = false,
+  }) {
+    final query = select(privateContactRecords);
+    if (!includeInactive) {
+      query.where((tbl) => tbl.active.equals(true));
+    }
+    return query.get();
+  }
+
+  @override
+  Future<PrivateContactRecord?> getPrivateContactRecord(String addressKey) {
+    final key = contactDirectoryAddressKey(addressKey);
+    if (key.isEmpty) {
+      return Future<PrivateContactRecord?>.value();
+    }
+    return (select(
+      privateContactRecords,
+    )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
+  }
 
   @override
   Future<List<ContactPreference>> getContactFolderRulePreferences({
     bool includeInactive = false,
   }) async {
-    final query = select(contactPreferences);
-    query.where(
-      (tbl) =>
-          tbl.folderCollectionId.isNotNull() |
-          tbl.folderRuleUpdatedAt.isNotNull(),
-    );
-    final entries = await query.get();
+    final entries =
+        _privateContactsAsPreferences(
+              await getPrivateContactRecords(includeInactive: true),
+            )
+            .where((entry) {
+              return entry.folderCollectionId != null ||
+                  entry.folderRuleUpdatedAt != null;
+            })
+            .toList(growable: false);
     if (includeInactive) {
       return entries;
     }
@@ -6682,14 +6978,184 @@ WHERE jid = ?
   }
 
   @override
+  Stream<Map<String, String>> watchActiveContactFolderRules() {
+    late final StreamController<Map<String, String>> controller;
+    final subscriptions = <StreamSubscription<Object?>>[];
+    Map<String, String>? lastRules;
+    var emitting = false;
+    var pending = false;
+
+    Future<void> emitRules() async {
+      if (emitting) {
+        pending = true;
+        return;
+      }
+      emitting = true;
+      try {
+        do {
+          pending = false;
+          final rules = await getActiveContactFolderRules();
+          if (!mapEquals(lastRules, rules)) {
+            lastRules = rules;
+            if (!controller.isClosed) {
+              controller.add(rules);
+            }
+          }
+        } while (pending);
+      } catch (error, stackTrace) {
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      } finally {
+        emitting = false;
+      }
+    }
+
+    controller = StreamController<Map<String, String>>(
+      onListen: () {
+        subscriptions
+          ..add(
+            select(privateContactRecords).watch().listen((_) => emitRules()),
+          )
+          ..add(select(messageCollections).watch().listen((_) => emitRules()));
+        unawaited(emitRules());
+      },
+      onCancel: () async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+        subscriptions.clear();
+      },
+    );
+    return controller.stream;
+  }
+
+  @override
+  Future<Map<String, String>> getActiveContactFolderRules() async {
+    final rules = <String, String>{};
+    for (final record in await _activeContactFolderRuleRecords()) {
+      final key = contactDirectoryAddressKey(record.addressKey);
+      final collectionId = record.folderCollectionId?.trim();
+      if (key.isEmpty || collectionId == null || collectionId.isEmpty) {
+        continue;
+      }
+      rules[key] = collectionId;
+    }
+    return Map<String, String>.unmodifiable(rules);
+  }
+
+  Future<List<PrivateContactRecord>> _activeContactFolderRuleRecords({
+    String? collectionId,
+  }) async {
+    final normalizedCollectionId = collectionId?.trim();
+    final activeCollections = (await getMessageCollections(
+      includeInactive: false,
+    )).map((entry) => entry.id);
+    final activeCollectionIds = activeCollections.toSet();
+    if (activeCollectionIds.isEmpty) {
+      return const <PrivateContactRecord>[];
+    }
+    final query = select(privateContactRecords)
+      ..where(
+        (tbl) => tbl.active.equals(true) & tbl.folderCollectionId.isNotNull(),
+      );
+    if (normalizedCollectionId != null && normalizedCollectionId.isNotEmpty) {
+      query.where(
+        (tbl) => tbl.folderCollectionId.equals(normalizedCollectionId),
+      );
+    }
+    final records = await query.get();
+    return records
+        .where((record) {
+          final ruleCollectionId = record.folderCollectionId?.trim();
+          return ruleCollectionId != null &&
+              ruleCollectionId.isNotEmpty &&
+              activeCollectionIds.contains(ruleCollectionId);
+        })
+        .toList(growable: false);
+  }
+
+  @override
   Future<ContactPreference?> getContactPreference(String addressKey) {
     final key = contactDirectoryAddressKey(addressKey);
     if (key.isEmpty) {
       return Future<ContactPreference?>.value();
     }
-    return (select(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
+    return getPrivateContactRecord(key).then(
+      (record) => record == null ? null : _privateContactAsPreference(record),
+    );
+  }
+
+  List<ContactPreference> _privateContactsAsPreferences(
+    List<PrivateContactRecord> records,
+  ) {
+    return records.map(_privateContactAsPreference).toList(growable: false);
+  }
+
+  ContactPreference _privateContactAsPreference(PrivateContactRecord record) {
+    return ContactPreference(
+      addressKey: record.addressKey,
+      favorited: record.active && record.favorited,
+      displayNameOverride: record.active ? record.displayNameOverride : null,
+      folderCollectionId: record.active ? record.folderCollectionId : null,
+      folderRuleUpdatedAt: record.folderRuleUpdatedAt,
+      updatedAt: record.updatedAt,
+    );
+  }
+
+  bool _privateContactShouldRemainActive({
+    required bool manual,
+    required bool favorited,
+    required String? displayNameOverride,
+    required String? folderCollectionId,
+  }) {
+    return manual ||
+        favorited ||
+        _trimmedContactValue(displayNameOverride) != null ||
+        _trimmedContactValue(folderCollectionId) != null;
+  }
+
+  Future<PrivateContactRecord> _writePrivateContactRecord({
+    required String addressKey,
+    required bool active,
+    required bool manual,
+    required bool favorited,
+    required String? displayNameOverride,
+    required String? folderCollectionId,
+    required DateTime updatedAt,
+    required DateTime? activeUpdatedAt,
+    required DateTime? manualUpdatedAt,
+    required DateTime? favoriteUpdatedAt,
+    required DateTime? displayNameUpdatedAt,
+    required DateTime? folderRuleUpdatedAt,
+    String? sourceId,
+  }) async {
+    final key = contactDirectoryAddressKey(addressKey);
+    final existing = await getPrivateContactRecord(key);
+    final normalizedUpdatedAt = updatedAt.toUtc();
+    final record = PrivateContactRecord(
+      addressKey: key,
+      active: active,
+      manual: manual,
+      favorited: favorited,
+      displayNameOverride: _trimmedContactValue(displayNameOverride),
+      folderCollectionId: _trimmedContactValue(folderCollectionId),
+      activeUpdatedAt: activeUpdatedAt?.toUtc() ?? existing?.activeUpdatedAt,
+      manualUpdatedAt: manualUpdatedAt?.toUtc() ?? existing?.manualUpdatedAt,
+      favoriteUpdatedAt:
+          favoriteUpdatedAt?.toUtc() ?? existing?.favoriteUpdatedAt,
+      displayNameUpdatedAt:
+          displayNameUpdatedAt?.toUtc() ?? existing?.displayNameUpdatedAt,
+      folderRuleUpdatedAt:
+          folderRuleUpdatedAt?.toUtc() ?? existing?.folderRuleUpdatedAt,
+      createdAt: existing?.createdAt.toUtc() ?? normalizedUpdatedAt,
+      updatedAt: normalizedUpdatedAt,
+      sourceId: _trimmedContactValue(sourceId ?? existing?.sourceId),
+    );
+    await into(
+      privateContactRecords,
+    ).insertOnConflictUpdate(record.toCompanion(false));
+    return record;
   }
 
   @override
@@ -6702,38 +7168,28 @@ WHERE jid = ?
       return;
     }
     final now = DateTime.timestamp().toUtc();
-    final existing = await (select(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
-    if (existing == null) {
-      if (!favorited) {
-        return;
-      }
-      await into(contactPreferences).insert(
-        ContactPreferencesCompanion.insert(
-          addressKey: key,
-          favorited: Value(favorited),
-          updatedAt: Value(now),
-        ),
-      );
+    final existing = await getPrivateContactRecord(key);
+    if (existing == null && !favorited) {
       return;
     }
-    if (!favorited &&
-        existing.displayNameOverride?.trim().isNotEmpty != true &&
-        existing.folderCollectionId?.trim().isNotEmpty != true &&
-        existing.folderRuleUpdatedAt == null) {
-      await (delete(
-        contactPreferences,
-      )..where((tbl) => tbl.addressKey.equals(key))).go();
-      return;
-    }
-    await (update(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).write(
-      ContactPreferencesCompanion(
-        favorited: Value(favorited),
-        updatedAt: Value(now),
+    await _writePrivateContactRecord(
+      addressKey: key,
+      active: _privateContactShouldRemainActive(
+        manual: existing?.manual ?? false,
+        favorited: favorited,
+        displayNameOverride: existing?.displayNameOverride,
+        folderCollectionId: existing?.folderCollectionId,
       ),
+      manual: existing?.manual ?? false,
+      favorited: favorited,
+      displayNameOverride: existing?.displayNameOverride,
+      folderCollectionId: existing?.folderCollectionId,
+      updatedAt: now,
+      activeUpdatedAt: now,
+      manualUpdatedAt: null,
+      favoriteUpdatedAt: now,
+      displayNameUpdatedAt: null,
+      folderRuleUpdatedAt: null,
     );
   }
 
@@ -6748,93 +7204,56 @@ WHERE jid = ?
     }
     final trimmed = displayName?.trim();
     final now = DateTime.timestamp().toUtc();
-    final existing = await (select(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
-    if (trimmed == null || trimmed.isEmpty) {
-      if (existing == null) {
-        return;
-      }
-      if (!existing.favorited &&
-          existing.folderCollectionId?.trim().isNotEmpty != true &&
-          existing.folderRuleUpdatedAt == null) {
-        await (delete(
-          contactPreferences,
-        )..where((tbl) => tbl.addressKey.equals(key))).go();
-        return;
-      }
-      await (update(
-        contactPreferences,
-      )..where((tbl) => tbl.addressKey.equals(key))).write(
-        ContactPreferencesCompanion(
-          displayNameOverride: const Value<String?>(null),
-          updatedAt: Value(now),
-        ),
-      );
+    final existing = await getPrivateContactRecord(key);
+    if ((trimmed == null || trimmed.isEmpty) && existing == null) {
       return;
     }
-    if (existing == null) {
-      await into(contactPreferences).insert(
-        ContactPreferencesCompanion.insert(
-          addressKey: key,
-          displayNameOverride: Value(trimmed),
-          updatedAt: Value(now),
-        ),
-      );
-      return;
-    }
-    await (update(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).write(
-      ContactPreferencesCompanion(
-        displayNameOverride: Value(trimmed),
-        updatedAt: Value(now),
+    await _writePrivateContactRecord(
+      addressKey: key,
+      active: _privateContactShouldRemainActive(
+        manual: existing?.manual ?? false,
+        favorited: existing?.favorited ?? false,
+        displayNameOverride: trimmed,
+        folderCollectionId: existing?.folderCollectionId,
       ),
+      manual: existing?.manual ?? false,
+      favorited: existing?.favorited ?? false,
+      displayNameOverride: trimmed,
+      folderCollectionId: existing?.folderCollectionId,
+      updatedAt: now,
+      activeUpdatedAt: now,
+      manualUpdatedAt: null,
+      favoriteUpdatedAt: null,
+      displayNameUpdatedAt: now,
+      folderRuleUpdatedAt: null,
     );
   }
 
   @override
-  Future<List<MessageCollectionMembershipEntry>> setContactFolderRule({
+  Future<void> setContactFolderRule({
     required String addressKey,
     required String collectionId,
   }) async {
     final key = contactDirectoryAddressKey(addressKey);
     final normalizedCollectionId = collectionId.trim();
     if (key.isEmpty || normalizedCollectionId.isEmpty) {
-      return const <MessageCollectionMembershipEntry>[];
-    }
-    final collection = await getMessageCollection(normalizedCollectionId);
-    if (collection?.active != true) {
-      return const <MessageCollectionMembershipEntry>[];
+      return;
     }
     final now = DateTime.timestamp().toUtc();
-    final existing = await (select(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
-    if (existing == null) {
-      await into(contactPreferences).insert(
-        ContactPreferencesCompanion.insert(
-          addressKey: key,
-          folderCollectionId: Value(normalizedCollectionId),
-          folderRuleUpdatedAt: Value(now),
-          updatedAt: Value(now),
-        ),
-      );
-    } else {
-      await (update(
-        contactPreferences,
-      )..where((tbl) => tbl.addressKey.equals(key))).write(
-        ContactPreferencesCompanion(
-          folderCollectionId: Value(normalizedCollectionId),
-          folderRuleUpdatedAt: Value(now),
-          updatedAt: Value(now),
-        ),
-      );
-    }
-    return _backfillContactFolderMemberships(
+    final existing = await getPrivateContactRecord(key);
+    await _writePrivateContactRecord(
       addressKey: key,
-      collectionId: normalizedCollectionId,
-      addedAt: now,
+      active: true,
+      manual: existing?.manual ?? false,
+      favorited: existing?.favorited ?? false,
+      displayNameOverride: existing?.displayNameOverride,
+      folderCollectionId: normalizedCollectionId,
+      updatedAt: now,
+      activeUpdatedAt: now,
+      manualUpdatedAt: null,
+      favoriteUpdatedAt: null,
+      displayNameUpdatedAt: null,
+      folderRuleUpdatedAt: now,
     );
   }
 
@@ -6844,21 +7263,29 @@ WHERE jid = ?
     if (key.isEmpty) {
       return;
     }
-    final existing = await (select(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).getSingleOrNull();
+    final existing = await getPrivateContactRecord(key);
     if (existing == null) {
       return;
     }
     final now = DateTime.timestamp().toUtc();
-    await (update(
-      contactPreferences,
-    )..where((tbl) => tbl.addressKey.equals(key))).write(
-      ContactPreferencesCompanion(
-        folderCollectionId: const Value<String?>(null),
-        folderRuleUpdatedAt: Value(now),
-        updatedAt: Value(now),
+    await _writePrivateContactRecord(
+      addressKey: key,
+      active: _privateContactShouldRemainActive(
+        manual: existing.manual,
+        favorited: existing.favorited,
+        displayNameOverride: existing.displayNameOverride,
+        folderCollectionId: null,
       ),
+      manual: existing.manual,
+      favorited: existing.favorited,
+      displayNameOverride: existing.displayNameOverride,
+      folderCollectionId: null,
+      updatedAt: now,
+      activeUpdatedAt: now,
+      manualUpdatedAt: null,
+      favoriteUpdatedAt: null,
+      displayNameUpdatedAt: null,
+      folderRuleUpdatedAt: now,
     );
   }
 
@@ -6880,7 +7307,7 @@ WHERE jid = ?
         return;
       }
     }
-    final existing = await getContactPreference(key);
+    final existing = await getPrivateContactRecord(key);
     final existingRuleUpdatedAt =
         existing?.folderRuleUpdatedAt?.toUtc() ?? existing?.updatedAt.toUtc();
     if (existing != null &&
@@ -6889,113 +7316,264 @@ WHERE jid = ?
       return;
     }
     final nextFolderCollectionId = active ? normalizedCollectionId : null;
-    if (existing == null) {
-      await into(contactPreferences).insert(
-        ContactPreferencesCompanion.insert(
-          addressKey: key,
-          folderCollectionId: Value(nextFolderCollectionId),
-          folderRuleUpdatedAt: Value(normalizedUpdatedAt),
-          updatedAt: Value(normalizedUpdatedAt),
-        ),
-      );
-    } else {
-      await (update(
-        contactPreferences,
-      )..where((tbl) => tbl.addressKey.equals(key))).write(
-        ContactPreferencesCompanion(
-          folderCollectionId: Value(nextFolderCollectionId),
-          folderRuleUpdatedAt: Value(normalizedUpdatedAt),
-          updatedAt: Value(normalizedUpdatedAt),
-        ),
-      );
-    }
-    if (nextFolderCollectionId == null) {
-      return;
-    }
-    final collection = await getMessageCollection(nextFolderCollectionId);
-    if (collection?.active == true) {
-      await _backfillContactFolderMemberships(
-        addressKey: key,
-        collectionId: nextFolderCollectionId,
-        addedAt: normalizedUpdatedAt,
-      );
-    }
+    await _writePrivateContactRecord(
+      addressKey: key,
+      active:
+          active ||
+          _privateContactShouldRemainActive(
+            manual: existing?.manual ?? false,
+            favorited: existing?.favorited ?? false,
+            displayNameOverride: existing?.displayNameOverride,
+            folderCollectionId: nextFolderCollectionId,
+          ),
+      manual: existing?.manual ?? false,
+      favorited: existing?.favorited ?? false,
+      displayNameOverride: existing?.displayNameOverride,
+      folderCollectionId: nextFolderCollectionId,
+      updatedAt: normalizedUpdatedAt,
+      activeUpdatedAt: normalizedUpdatedAt,
+      manualUpdatedAt: null,
+      favoriteUpdatedAt: null,
+      displayNameUpdatedAt: null,
+      folderRuleUpdatedAt: normalizedUpdatedAt,
+    );
   }
 
-  Future<void> _backfillContactFolderRulesForCollection({
-    required String collectionId,
-    required DateTime addedAt,
+  @override
+  Future<PrivateContactRecord?> upsertManualPrivateContact({
+    required String addressKey,
+    String? displayName,
   }) async {
-    final normalizedCollectionId = collectionId.trim();
-    if (normalizedCollectionId.isEmpty) {
-      return;
+    final key = contactDirectoryAddressKey(addressKey);
+    if (key.isEmpty) {
+      return null;
     }
-    final collection = await getMessageCollection(normalizedCollectionId);
-    if (collection?.active != true) {
-      return;
+    final now = DateTime.timestamp().toUtc();
+    final existing = await getPrivateContactRecord(key);
+    return _writePrivateContactRecord(
+      addressKey: key,
+      active: true,
+      manual: true,
+      favorited: existing?.favorited ?? false,
+      displayNameOverride:
+          _trimmedContactValue(displayName) ?? existing?.displayNameOverride,
+      folderCollectionId: existing?.folderCollectionId,
+      updatedAt: now,
+      activeUpdatedAt: now,
+      manualUpdatedAt: now,
+      favoriteUpdatedAt: null,
+      displayNameUpdatedAt: _trimmedContactValue(displayName) == null
+          ? null
+          : now,
+      folderRuleUpdatedAt: null,
+    );
+  }
+
+  @override
+  Future<PrivateContactRecord?> deactivateManualPrivateContact({
+    required String addressKey,
+  }) async {
+    final key = contactDirectoryAddressKey(addressKey);
+    if (key.isEmpty) {
+      return null;
     }
-    final preferences =
-        await (select(contactPreferences)..where(
-              (tbl) => tbl.folderCollectionId.equals(normalizedCollectionId),
+    final existing = await getPrivateContactRecord(key);
+    if (existing == null) {
+      return null;
+    }
+    final now = DateTime.timestamp().toUtc();
+    return _writePrivateContactRecord(
+      addressKey: key,
+      active: false,
+      manual: false,
+      favorited: existing.favorited,
+      displayNameOverride: existing.displayNameOverride,
+      folderCollectionId: existing.folderCollectionId,
+      updatedAt: now,
+      activeUpdatedAt: now,
+      manualUpdatedAt: now,
+      favoriteUpdatedAt: null,
+      displayNameUpdatedAt: null,
+      folderRuleUpdatedAt: null,
+    );
+  }
+
+  @override
+  Future<PrivateContactRecord?> applyPrivateContactMutation({
+    required String addressKey,
+    required bool active,
+    required bool manual,
+    required bool favorited,
+    required String? displayNameOverride,
+    required String? folderCollectionId,
+    required DateTime updatedAt,
+    required DateTime? activeUpdatedAt,
+    required DateTime? manualUpdatedAt,
+    required DateTime? favoriteUpdatedAt,
+    required DateTime? displayNameUpdatedAt,
+    required DateTime? folderRuleUpdatedAt,
+    String? sourceId,
+  }) async {
+    final key = contactDirectoryAddressKey(addressKey);
+    if (key.isEmpty) {
+      return null;
+    }
+    final normalizedUpdatedAt = updatedAt.toUtc();
+    final existing = await getPrivateContactRecord(key);
+    if (existing != null &&
+        !normalizedUpdatedAt.isAfter(existing.updatedAt.toUtc())) {
+      return existing;
+    }
+    return _writePrivateContactRecord(
+      addressKey: key,
+      active: active,
+      manual: manual,
+      favorited: favorited,
+      displayNameOverride: displayNameOverride,
+      folderCollectionId: folderCollectionId,
+      updatedAt: normalizedUpdatedAt,
+      activeUpdatedAt: activeUpdatedAt ?? normalizedUpdatedAt,
+      manualUpdatedAt: manualUpdatedAt,
+      favoriteUpdatedAt: favoriteUpdatedAt,
+      displayNameUpdatedAt: displayNameUpdatedAt,
+      folderRuleUpdatedAt: folderRuleUpdatedAt,
+      sourceId: sourceId,
+    );
+  }
+
+  @override
+  Future<List<PrivateContactDetailFieldEntry>> getPrivateContactDetailFields(
+    String addressKey, {
+    bool includeInactive = false,
+  }) {
+    final key = contactDirectoryAddressKey(addressKey);
+    if (key.isEmpty) {
+      return Future<List<PrivateContactDetailFieldEntry>>.value(
+        const <PrivateContactDetailFieldEntry>[],
+      );
+    }
+    final query = select(privateContactDetailFields)
+      ..where((tbl) => tbl.addressKey.equals(key))
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.sortOrder),
+        (tbl) => OrderingTerm(expression: tbl.fieldId),
+      ]);
+    if (!includeInactive) {
+      query.where((tbl) => tbl.active.equals(true));
+    }
+    return query.get();
+  }
+
+  @override
+  Future<PrivateContactDetailFieldEntry?>
+  applyPrivateContactDetailFieldMutation({
+    required String addressKey,
+    required String fieldId,
+    required ContactDetailFieldKind kind,
+    required String? label,
+    required String value,
+    required int sortOrder,
+    required bool active,
+    required DateTime updatedAt,
+    String? sourceId,
+  }) async {
+    final key = contactDirectoryAddressKey(addressKey);
+    final normalizedFieldId = fieldId.trim();
+    final normalizedValue = value.trim();
+    if (key.isEmpty || normalizedFieldId.isEmpty || normalizedValue.isEmpty) {
+      return null;
+    }
+    final normalizedUpdatedAt = updatedAt.toUtc();
+    final existing =
+        await (select(privateContactDetailFields)..where(
+              (tbl) =>
+                  tbl.addressKey.equals(key) &
+                  tbl.fieldId.equals(normalizedFieldId),
             ))
-            .get();
-    for (final preference in preferences) {
-      final key = contactDirectoryAddressKey(preference.addressKey);
+            .getSingleOrNull();
+    if (existing != null &&
+        !normalizedUpdatedAt.isAfter(existing.updatedAt.toUtc())) {
+      return existing;
+    }
+    final entry = PrivateContactDetailFieldEntry(
+      addressKey: key,
+      fieldId: normalizedFieldId,
+      kind: kind,
+      label: _trimmedContactValue(label),
+      value: normalizedValue,
+      sortOrder: sortOrder,
+      active: active,
+      updatedAt: normalizedUpdatedAt,
+      sourceId: _trimmedContactValue(sourceId),
+    );
+    await into(privateContactDetailFields).insertOnConflictUpdate(entry);
+    final record = await getPrivateContactRecord(key);
+    if (record == null) {
+      await _writePrivateContactRecord(
+        addressKey: key,
+        active: true,
+        manual: false,
+        favorited: false,
+        displayNameOverride: null,
+        folderCollectionId: null,
+        updatedAt: normalizedUpdatedAt,
+        activeUpdatedAt: normalizedUpdatedAt,
+        manualUpdatedAt: null,
+        favoriteUpdatedAt: null,
+        displayNameUpdatedAt: null,
+        folderRuleUpdatedAt: null,
+        sourceId: sourceId,
+      );
+    } else if (normalizedUpdatedAt.isAfter(record.updatedAt.toUtc())) {
+      await _writePrivateContactRecord(
+        addressKey: key,
+        active: record.active || active,
+        manual: record.manual,
+        favorited: record.favorited,
+        displayNameOverride: record.displayNameOverride,
+        folderCollectionId: record.folderCollectionId,
+        updatedAt: normalizedUpdatedAt,
+        activeUpdatedAt: null,
+        manualUpdatedAt: null,
+        favoriteUpdatedAt: null,
+        displayNameUpdatedAt: null,
+        folderRuleUpdatedAt: null,
+        sourceId: record.sourceId,
+      );
+    }
+    return entry;
+  }
+
+  Future<Map<String, List<PrivateContactDetailFieldEntry>>>
+  _getPrivateContactDetailFieldsByAddress({
+    bool includeInactive = false,
+  }) async {
+    final query = select(privateContactDetailFields)
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.addressKey),
+        (tbl) => OrderingTerm(expression: tbl.sortOrder),
+        (tbl) => OrderingTerm(expression: tbl.fieldId),
+      ]);
+    if (!includeInactive) {
+      query.where((tbl) => tbl.active.equals(true));
+    }
+    final fields = await query.get();
+    final byAddress = <String, List<PrivateContactDetailFieldEntry>>{};
+    for (final field in fields) {
+      final key = contactDirectoryAddressKey(field.addressKey);
       if (key.isEmpty) {
         continue;
       }
-      await _backfillContactFolderMemberships(
-        addressKey: key,
-        collectionId: normalizedCollectionId,
-        addedAt: addedAt,
-      );
+      byAddress
+          .putIfAbsent(key, () => <PrivateContactDetailFieldEntry>[])
+          .add(field);
     }
-  }
-
-  Future<List<MessageCollectionMembershipEntry>>
-  _backfillContactFolderMemberships({
-    required String addressKey,
-    required String collectionId,
-    required DateTime addedAt,
-  }) async {
-    final entries = <MessageCollectionMembershipEntry>[];
-    final chats = await getChats(start: 0, end: 0);
-    for (final chat in chats) {
-      if (chat.type == ChatType.groupChat ||
-          !_chatMatchesContactAddress(chat, addressKey)) {
-        continue;
-      }
-      final messages = await getAllMessagesForChat(chat.jid);
-      for (final message in messages) {
-        final reference = message.collectionReference(isGroupChat: false);
-        if (reference == null) {
-          continue;
-        }
-        await applyMessageCollectionMembershipMutation(
-          collectionId: collectionId,
-          chatJid: chat.jid,
-          messageReferenceId: reference.value,
-          messageStanzaId: message.trimmedStanzaId,
-          messageOriginId: message.trimmedOriginId,
-          messageMucStanzaId: message.trimmedMucStanzaId,
-          deltaAccountId: message.deltaMsgId == null
-              ? null
-              : message.deltaAccountId,
-          deltaMsgId: message.deltaMsgId,
-          addedAt: addedAt,
-          active: true,
-        );
-        final entry = await getMessageCollectionMembership(
-          collectionId: collectionId,
-          chatJid: chat.jid,
-          messageReferenceId: reference.value,
-        );
-        if (entry != null && entry.active) {
-          entries.add(entry);
-        }
-      }
-    }
-    return List<MessageCollectionMembershipEntry>.unmodifiable(entries);
+    return {
+      for (final entry in byAddress.entries)
+        entry.key: List<PrivateContactDetailFieldEntry>.unmodifiable(
+          entry.value,
+        ),
+    };
   }
 
   @override
@@ -7647,7 +8225,8 @@ WHERE value IS NOT NULL AND trim(value) != ''
 List<ContactDirectoryEntry> _mergeContactDirectoryEntries(
   List<RosterItem> rosterItems,
   List<Contact> emailContacts,
-  List<ContactPreference> preferences,
+  List<PrivateContactRecord> privateContacts,
+  Map<String, List<PrivateContactDetailFieldEntry>> detailFieldsByAddress,
   List<Chat> chats,
 ) {
   final rosterByAddress = <String, RosterItem>{};
@@ -7706,16 +8285,17 @@ List<ContactDirectoryEntry> _mergeContactDirectoryEntries(
     }
   }
 
-  final preferencesByAddress = <String, ContactPreference>{};
-  for (final preference in preferences) {
-    final key = contactDirectoryAddressKey(preference.addressKey);
+  final privateContactsByAddress = <String, PrivateContactRecord>{};
+  for (final contact in privateContacts) {
+    final key = contactDirectoryAddressKey(contact.addressKey);
     if (key.isEmpty) {
       continue;
     }
-    preferencesByAddress[key] = preference;
+    privateContactsByAddress[key] = contact;
   }
 
   final addresses = <String>{
+    ...privateContactsByAddress.keys,
     ...rosterByAddress.keys,
     ...emailByAddress.keys,
   }.toList(growable: false)..sort();
@@ -7724,22 +8304,29 @@ List<ContactDirectoryEntry> _mergeContactDirectoryEntries(
   for (final address in addresses) {
     final roster = rosterByAddress[address];
     final email = emailByAddress[address];
-    final preference = preferencesByAddress[address];
+    final privateContact = privateContactsByAddress[address];
     items.add(
       ContactDirectoryEntry(
         address: address,
+        hasPrivateContact: privateContact != null,
         hasXmppRoster: roster != null,
         hasEmailContact: email != null,
         emailNativeIds: List<String>.unmodifiable(
           email?.nativeIds ?? const <String>[],
         ),
+        isManualContact: privateContact?.manual ?? false,
         xmppTitle: roster == null ? null : _contactDisplayName(roster),
         emailDisplayName: email?.displayName,
-        displayNameOverride: preference?.displayNameOverride,
+        displayNameOverride: privateContact?.displayNameOverride,
         folderCollectionId: _trimmedContactValue(
-          preference?.folderCollectionId,
+          privateContact?.folderCollectionId,
         ),
-        favorited: preference?.favorited ?? false,
+        favorited: privateContact?.favorited ?? false,
+        detailFields:
+            detailFieldsByAddress[address]
+                ?.map(_contactDetailFieldEntry)
+                .toList(growable: false) ??
+            const <ContactDetailFieldEntry>[],
         avatarPath:
             _trimmedContactValue(roster?.avatarPath) ??
             avatarPathsByAddress[address],
@@ -7749,6 +8336,21 @@ List<ContactDirectoryEntry> _mergeContactDirectoryEntries(
   }
   items.sort(_compareContactDirectoryEntries);
   return List<ContactDirectoryEntry>.unmodifiable(items);
+}
+
+ContactDetailFieldEntry _contactDetailFieldEntry(
+  PrivateContactDetailFieldEntry entry,
+) {
+  return ContactDetailFieldEntry(
+    fieldId: entry.fieldId,
+    kind: entry.kind,
+    label: entry.label,
+    value: entry.value,
+    sortOrder: entry.sortOrder,
+    active: entry.active,
+    updatedAt: entry.updatedAt,
+    sourceId: entry.sourceId,
+  );
 }
 
 int _compareContactDirectoryEntries(
@@ -7784,10 +8386,6 @@ class _EmailContactAggregate {
 String? _preferredContactAvatarPath(Chat chat) {
   return _trimmedContactValue(chat.avatarPath) ??
       _trimmedContactValue(chat.contactAvatarPath);
-}
-
-bool _chatMatchesContactAddress(Chat chat, String addressKey) {
-  return _contactAddressKeysForChat(chat).contains(addressKey);
 }
 
 Set<String> _contactAddressKeysForChat(Chat chat) {

@@ -149,89 +149,143 @@ void main() {
     },
   );
 
-  test('contact folder rules backfill and apply only while active', () async {
-    await database.applyMessageCollectionDefinitionMutation(
-      collectionId: 'Projects',
-      updatedAt: DateTime.utc(2026),
-      active: true,
-    );
-    await database.replaceContacts([
-      Contact.address(
-        nativeID: 'dc-contact-5',
-        address: 'alice@example.com',
-        displayName: 'Alice',
-        transport: MessageTransport.email,
-      ),
-    ]);
-    await database.saveMessage(
-      Message(
-        stanzaID: 'existing-message',
-        senderJid: 'alice@example.com',
-        chatJid: 'alice@example.com',
-        body: 'Existing',
+  test('watchContactPreferences follows private contact records', () async {
+    final setFuture = database.watchContactPreferences().firstWhere(
+      (items) => items.any(
+        (item) =>
+            item.addressKey == 'alice@example.com' &&
+            item.folderCollectionId == 'Projects',
       ),
     );
 
-    final backfilled = await database.setContactFolderRule(
+    await database.setContactFolderRule(
       addressKey: 'Alice@example.com',
       collectionId: 'Projects',
     );
 
-    expect(backfilled.map((entry) => entry.messageReferenceId), [
-      'existing-message',
-    ]);
-    expect(
-      (await database.getContactDirectoryEntries())
-          .singleWhere((item) => item.address == 'alice@example.com')
-          .folderCollectionId,
-      'Projects',
-    );
+    expect((await setFuture).single.folderCollectionId, 'Projects');
 
-    await database.saveMessage(
-      Message(
-        stanzaID: 'future-message',
-        senderJid: 'alice@example.com',
-        chatJid: 'alice@example.com',
-        body: 'Future',
-      ),
-    );
-
-    expect(
-      (await database.getMessageCollectionMembership(
-        collectionId: 'Projects',
-        chatJid: 'alice@example.com',
-        messageReferenceId: 'future-message',
-      ))?.active,
-      isTrue,
+    final clearFuture = database.watchContactPreferences().firstWhere(
+      (items) => items.every((item) => item.addressKey != 'alice@example.com'),
     );
 
     await database.clearContactFolderRule(addressKey: 'alice@example.com');
-    await database.saveMessage(
-      Message(
-        stanzaID: 'after-clear-message',
-        senderJid: 'alice@example.com',
-        chatJid: 'alice@example.com',
-        body: 'After clear',
-      ),
-    );
 
-    expect(
-      await database.getMessageCollectionMembership(
-        collectionId: 'Projects',
-        chatJid: 'alice@example.com',
-        messageReferenceId: 'after-clear-message',
-      ),
-      isNull,
-    );
-    expect(
-      (await database.getMessageCollectionMembership(
-        collectionId: 'Projects',
-        chatJid: 'alice@example.com',
-        messageReferenceId: 'existing-message',
-      ))?.active,
-      isTrue,
-    );
+    expect(await clearFuture, isEmpty);
   });
+
+  test(
+    'contact folder rules derive folder items without membership rows',
+    () async {
+      await database.applyMessageCollectionDefinitionMutation(
+        collectionId: 'Projects',
+        updatedAt: DateTime.utc(2026),
+        active: true,
+      );
+      await database.replaceContacts([
+        Contact.address(
+          nativeID: 'dc-contact-5',
+          address: 'alice@example.com',
+          displayName: 'Alice',
+          transport: MessageTransport.email,
+        ),
+      ]);
+      await database.saveMessage(
+        Message(
+          stanzaID: 'existing-message',
+          senderJid: 'alice@example.com',
+          chatJid: 'alice@example.com',
+          body: 'Existing',
+          timestamp: DateTime.utc(2026, 1, 1, 10),
+        ),
+      );
+
+      await database.setContactFolderRule(
+        addressKey: 'Alice@example.com',
+        collectionId: 'Projects',
+      );
+
+      expect(await database.getAllMessageCollectionMemberships(), isEmpty);
+      expect(
+        (await database.getContactDirectoryEntries())
+            .singleWhere((item) => item.address == 'alice@example.com')
+            .folderCollectionId,
+        'Projects',
+      );
+
+      await database.saveMessage(
+        Message(
+          stanzaID: 'future-message',
+          senderJid: 'alice@example.com',
+          chatJid: 'alice@example.com',
+          body: 'Future',
+          timestamp: DateTime.utc(2026, 1, 1, 11),
+        ),
+      );
+
+      expect(await database.getAllMessageCollectionMemberships(), isEmpty);
+      expect(
+        (await database.getFolderMessageItems(
+          'Projects',
+        )).map((item) => (item.messageReferenceId, item.isContactRuleDerived)),
+        [('future-message', true), ('existing-message', true)],
+      );
+
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: 'Projects',
+        chatJid: 'alice@example.com',
+        messageReferenceId: 'future-message',
+        messageStanzaId: 'future-message',
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026, 1, 2),
+        active: true,
+      );
+
+      expect(
+        (await database.getFolderMessageItems(
+          'Projects',
+        )).map((item) => (item.messageReferenceId, item.isContactRuleDerived)),
+        [('future-message', false), ('existing-message', true)],
+      );
+
+      await database.clearContactFolderRule(addressKey: 'alice@example.com');
+      await database.saveMessage(
+        Message(
+          stanzaID: 'after-clear-message',
+          senderJid: 'alice@example.com',
+          chatJid: 'alice@example.com',
+          body: 'After clear',
+          timestamp: DateTime.utc(2026, 1, 1, 12),
+        ),
+      );
+
+      expect(
+        await database.getMessageCollectionMembership(
+          collectionId: 'Projects',
+          chatJid: 'alice@example.com',
+          messageReferenceId: 'after-clear-message',
+        ),
+        isNull,
+      );
+      expect(
+        (await database.getMessageCollectionMembership(
+          collectionId: 'Projects',
+          chatJid: 'alice@example.com',
+          messageReferenceId: 'future-message',
+        ))?.active,
+        isTrue,
+      );
+      expect(
+        (await database.getFolderMessageItems(
+          'Projects',
+        )).map((item) => item.messageReferenceId),
+        ['future-message'],
+      );
+    },
+  );
 
   test('remote contact folder rule mutations use newest update', () async {
     await database.applyMessageCollectionDefinitionMutation(
@@ -338,12 +392,18 @@ void main() {
       );
 
       expect(
-        (await database.getMessageCollectionMembership(
+        await database.getMessageCollectionMembership(
           collectionId: 'Projects',
           chatJid: 'alice@example.com',
           messageReferenceId: 'pre-definition-message',
-        ))?.active,
-        isTrue,
+        ),
+        isNull,
+      );
+      expect(
+        (await database.getFolderMessageItems(
+          'Projects',
+        )).single.messageReferenceId,
+        'pre-definition-message',
       );
     },
   );

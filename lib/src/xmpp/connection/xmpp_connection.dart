@@ -133,19 +133,17 @@ class XmppConnection extends mox.XmppConnection {
         return pubSubHubManager?.getDelegate<ConversationIndexManager>() as T?;
       case == DraftsPubSubManager:
         return pubSubHubManager?.getDelegate<DraftsPubSubManager>() as T?;
-      case == MessageCollectionDefinitionsPubSubManager:
-        return pubSubHubManager
-                ?.getDelegate<MessageCollectionDefinitionsPubSubManager>()
-            as T?;
       case == MessageCollectionsPubSubManager:
         return pubSubHubManager?.getDelegate<MessageCollectionsPubSubManager>()
             as T?;
+      case == ContactsPubSubManager:
+        return pubSubHubManager?.getDelegate<ContactsPubSubManager>() as T?;
       case == SpamPubSubManager:
         return pubSubHubManager?.getDelegate<SpamPubSubManager>() as T?;
       case == AddressBlockPubSubManager:
         return pubSubHubManager?.getDelegate<AddressBlockPubSubManager>() as T?;
       default:
-        return null;
+        return pubSubHubManager?.getDelegate<T>();
     }
   }
 

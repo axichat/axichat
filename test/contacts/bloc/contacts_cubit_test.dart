@@ -323,35 +323,32 @@ void main() {
     );
   });
 
-  test(
-    'updates folder rule state immediately while preference saves',
-    () async {
-      const contact = ContactDirectoryEntry(
+  test('keeps confirmed folder rule state while preference saves', () async {
+    const contact = ContactDirectoryEntry(
+      address: 'alpha@example.com',
+      hasXmppRoster: false,
+      hasEmailContact: true,
+      emailNativeIds: <String>['alpha'],
+    );
+    final saveCompleter = Completer<void>();
+    contactsController.add(const [contact]);
+    await cubit.stream.firstWhere((state) => state.items?.length == 1);
+    when(
+      () => xmppService.setContactFolderRule(
         address: 'alpha@example.com',
-        hasXmppRoster: false,
-        hasEmailContact: true,
-        emailNativeIds: <String>['alpha'],
-      );
-      final saveCompleter = Completer<void>();
-      contactsController.add(const [contact]);
-      await cubit.stream.firstWhere((state) => state.items?.length == 1);
-      when(
-        () => xmppService.setContactFolderRule(
-          address: 'alpha@example.com',
-          collectionId: 'Projects',
-        ),
-      ).thenAnswer((_) => saveCompleter.future);
-
-      final save = cubit.setContactFolderRule(
-        contact: contact,
         collectionId: 'Projects',
-      );
+      ),
+    ).thenAnswer((_) => saveCompleter.future);
 
-      expect(cubit.state.visibleItems?.single.folderCollectionId, 'Projects');
-      saveCompleter.complete();
-      await save;
-    },
-  );
+    final save = cubit.setContactFolderRule(
+      contact: contact,
+      collectionId: 'Projects',
+    );
+
+    expect(cubit.state.visibleItems?.single.folderCollectionId, isNull);
+    saveCompleter.complete();
+    await save;
+  });
 
   test('clears contact folder rule through the service', () async {
     const contact = ContactDirectoryEntry(

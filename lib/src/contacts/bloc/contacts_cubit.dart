@@ -58,6 +58,107 @@ class ContactsCubit extends Cubit<ContactsState> {
     _emitViewState();
   }
 
+  Future<bool> addManualContact({
+    required String address,
+    String? displayName,
+  }) async {
+    final normalized = bareAddress(address) ?? address.trim();
+    if (!normalized.isValidJid) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.addManual,
+            address: normalized,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return false;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.addManual,
+          address: normalized,
+        ),
+      ),
+    );
+    try {
+      await _xmppService.addManualContact(
+        address: normalized,
+        displayName: displayName,
+      );
+    } on XmppContactDirectoryException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.addManual,
+            address: normalized,
+            reason: ContactFailureReason.addFailed,
+          ),
+        ),
+      );
+      return false;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionSuccess(
+          action: ContactActionType.addManual,
+          address: normalized,
+        ),
+      ),
+    );
+    return true;
+  }
+
+  Future<void> removeManualContact({
+    required ContactDirectoryEntry contact,
+  }) async {
+    final addressKey = contactDirectoryAddressKey(contact.address);
+    if (addressKey.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.removeManual,
+            address: contact.address,
+            reason: ContactFailureReason.invalidAddress,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionLoading(
+          action: ContactActionType.removeManual,
+          address: contact.address,
+        ),
+      ),
+    );
+    try {
+      await _xmppService.deactivateManualContact(address: contact.address);
+    } on XmppContactDirectoryException {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.removeManual,
+            address: contact.address,
+            reason: ContactFailureReason.removeFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    emit(
+      state.copyWith(
+        actionState: ContactActionSuccess(
+          action: ContactActionType.removeManual,
+          address: contact.address,
+        ),
+      ),
+    );
+  }
+
   Future<void> addEmailContact({
     required String address,
     String? displayName,
@@ -351,23 +452,14 @@ class ContactsCubit extends Cubit<ContactsState> {
         ),
       ),
     );
-    final previousItems = _items;
-    _replaceContact(
-      _currentContactOrFallback(
-        contact,
-      ).withFolderCollectionId(trimmedCollectionId),
-    );
     try {
       await _xmppService.setContactFolderRule(
         address: normalized,
         collectionId: trimmedCollectionId,
       );
     } on XmppContactDirectoryException {
-      _items = previousItems;
       emit(
         state.copyWith(
-          items: _items,
-          visibleItems: _visibleItems(),
           actionState: ContactActionFailure(
             action: ContactActionType.setFolderRule,
             address: normalized,
@@ -380,8 +472,6 @@ class ContactsCubit extends Cubit<ContactsState> {
     }
     emit(
       state.copyWith(
-        items: _items,
-        visibleItems: _visibleItems(),
         actionState: ContactActionSuccess(
           action: ContactActionType.setFolderRule,
           address: normalized,
@@ -416,18 +506,11 @@ class ContactsCubit extends Cubit<ContactsState> {
         ),
       ),
     );
-    final previousItems = _items;
-    _replaceContact(
-      _currentContactOrFallback(contact).withFolderCollectionId(null),
-    );
     try {
       await _xmppService.clearContactFolderRule(address: normalized);
     } on XmppContactDirectoryException {
-      _items = previousItems;
       emit(
         state.copyWith(
-          items: _items,
-          visibleItems: _visibleItems(),
           actionState: ContactActionFailure(
             action: ContactActionType.clearFolderRule,
             address: normalized,
@@ -440,8 +523,6 @@ class ContactsCubit extends Cubit<ContactsState> {
     }
     emit(
       state.copyWith(
-        items: _items,
-        visibleItems: _visibleItems(),
         actionState: ContactActionSuccess(
           action: ContactActionType.clearFolderRule,
           address: normalized,

@@ -120,7 +120,8 @@ class _ContactsListState extends State<ContactsList> {
           listener: (context, state) {
             final actionState = state.actionState;
             if (actionState is! ContactActionFailure ||
-                actionState.action != ContactActionType.removeEmail) {
+                (actionState.action != ContactActionType.removeEmail &&
+                    actionState.action != ContactActionType.removeManual)) {
               return;
             }
             ShadToaster.maybeOf(context)?.show(
@@ -470,7 +471,7 @@ class _ContactListTile extends StatelessWidget {
           status: null,
         ),
         titleWidget: _ContactListTileContent(contact: contact),
-        actions: contact.favorited ? [const _ContactFavoriteIndicator()] : null,
+        actions: _contactTileIndicators(contact),
       ),
     );
   }
@@ -527,6 +528,13 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
     }
     setState(() => _selectedTransport = resolvedTransport);
     final title = _displayName.trim().isEmpty ? null : _displayName.trim();
+    final manualAdded = await context.read<ContactsCubit>().addManualContact(
+      address: _address,
+      displayName: title,
+    );
+    if (!manualAdded || !mounted) {
+      return;
+    }
     if (resolvedTransport.isXmpp) {
       await context.read<RosterCubit>().addContact(
         jid: _address.trim(),
@@ -608,7 +616,13 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
             builder: (context, contactsState) {
               final rosterActionState = rosterState.actionState;
               final contactsActionState = contactsState.actionState;
-              final loading = _selectedTransport == MessageTransport.xmpp
+              final contactAddLoading =
+                  contactsActionState is ContactActionLoading &&
+                  (contactsActionState.action == ContactActionType.addManual ||
+                      contactsActionState.action == ContactActionType.addEmail);
+              final loading = contactAddLoading
+                  ? true
+                  : _selectedTransport == MessageTransport.xmpp
                   ? rosterActionState is RosterActionLoading &&
                         rosterActionState.action == RosterActionType.add
                   : _selectedTransport == MessageTransport.email
@@ -627,7 +641,9 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
                   ? switch (contactsActionState) {
                       ContactActionFailure(:final reason)
                           when contactsActionState.action ==
-                              ContactActionType.addEmail =>
+                                  ContactActionType.addEmail ||
+                              contactsActionState.action ==
+                                  ContactActionType.addManual =>
                         _contactFailureMessage(context, reason),
                       _ => null,
                     }
@@ -811,9 +827,7 @@ class _ContactIdentityContent extends StatelessWidget {
             contact.address,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: context.textTheme.muted.copyWith(
-              color: context.colorScheme.mutedForeground,
-            ),
+            style: context.textTheme.muted,
           ),
         ],
         if (contact.favorited || sourceItems.isNotEmpty) ...[
@@ -882,10 +896,13 @@ class _ContactDetailRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          icon,
-          size: context.sizing.menuItemIconSize,
-          color: context.colorScheme.mutedForeground,
+        Padding(
+          padding: EdgeInsets.only(top: context.spacing.xxs),
+          child: Icon(
+            icon,
+            size: context.sizing.menuItemIconSize,
+            color: context.colorScheme.mutedForeground,
+          ),
         ),
         SizedBox(width: context.spacing.s),
         Expanded(
@@ -896,18 +913,14 @@ class _ContactDetailRow extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: context.textTheme.muted.copyWith(
-                  color: context.colorScheme.mutedForeground,
-                ),
+                style: context.textTheme.muted,
               ),
               SizedBox(height: context.spacing.xxs),
               Text(
                 value,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: context.textTheme.small.copyWith(
-                  color: context.colorScheme.foreground,
-                ),
+                style: context.textTheme.small,
               ),
             ],
           ),
@@ -927,9 +940,30 @@ class _ContactFavoriteIndicator extends StatelessWidget {
       child: Semantics(
         label: context.l10n.commonFavorite,
         child: Icon(
-          Icons.star_rounded,
+          LucideIcons.star,
           size: context.sizing.menuItemIconSize,
           color: context.colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactFolderRuleIndicator extends StatelessWidget {
+  const _ContactFolderRuleIndicator({required this.collection});
+
+  final SystemMessageCollection collection;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsDirectional.only(end: context.spacing.xs),
+      child: Semantics(
+        label: collection.label(context.l10n),
+        child: Icon(
+          _contactFolderRuleIcon(collection),
+          size: context.sizing.menuItemIconSize,
+          color: context.colorScheme.mutedForeground,
         ),
       ),
     );
@@ -957,9 +991,7 @@ class _ContactStatusRow extends StatelessWidget {
             label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: context.textTheme.muted.copyWith(
-              color: context.colorScheme.mutedForeground,
-            ),
+            style: context.textTheme.muted,
           ),
         ),
       ],
@@ -1008,7 +1040,17 @@ class _ContactDetailsActions extends StatelessWidget {
       return;
     }
     var removed = true;
-    if (contact.hasEmailContact) {
+    if (contact.hasManualState) {
+      await context.read<ContactsCubit>().removeManualContact(contact: contact);
+      if (!context.mounted) {
+        return;
+      }
+      final actionState = context.read<ContactsCubit>().state.actionState;
+      removed =
+          actionState is ContactActionSuccess &&
+          actionState.action == ContactActionType.removeManual &&
+          actionState.address == contact.address;
+    } else if (contact.hasEmailContact) {
       await context.read<ContactsCubit>().removeEmailContact(
         address: contact.address,
         nativeIds: contact.emailNativeIds,
@@ -1026,7 +1068,7 @@ class _ContactDetailsActions extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    if (contact.hasXmppRoster) {
+    if (!contact.hasManualState && contact.hasXmppRoster) {
       await context.read<RosterCubit>().removeContact(jid: contact.address);
       if (!context.mounted) {
         return;
@@ -1123,7 +1165,12 @@ class _ContactDetailsActions extends StatelessWidget {
     final isBlocking =
         blocklistState is BlocklistLoading &&
         (blocklistState.jid == contact.address || blocklistState.jid == null);
-    final isRemoving = isRemovingXmpp || isRemovingEmail;
+    final isRemoving =
+        isRemovingXmpp ||
+        isRemovingEmail ||
+        (contactsActionState is ContactActionLoading &&
+            contactsActionState.action == ContactActionType.removeManual &&
+            contactsActionState.address == contact.address);
     final disabled = isRemoving || isUpdatingContact || isBlocking;
     final isRenaming =
         contactsActionState is ContactActionLoading &&
@@ -1192,6 +1239,10 @@ class _ContactDetailsActions extends StatelessWidget {
               leading: const Icon(LucideIcons.userX),
               child: Text(l10n.blocklistBlock),
             ),
+          ],
+          if (contact.hasManualState ||
+              contact.hasXmppRoster ||
+              contact.hasEmailContact) ...[
             SizedBox(height: spacing.s),
             AxiButton.destructive(
               widthBehavior: AxiButtonWidth.expand,
@@ -1240,6 +1291,29 @@ List<String> _contactSecondaryValues(
   ];
 }
 
+List<Widget>? _contactTileIndicators(ContactDirectoryEntry contact) {
+  final systemCollection = contact.folderCollectionId == null
+      ? null
+      : SystemMessageCollection.fromId(contact.folderCollectionId!);
+  final indicators = <Widget>[
+    if (contact.favorited &&
+        systemCollection != SystemMessageCollection.important)
+      const _ContactFavoriteIndicator(),
+    if (systemCollection != null)
+      _ContactFolderRuleIndicator(collection: systemCollection),
+  ];
+  return indicators.isEmpty ? null : indicators;
+}
+
+IconData _contactFolderRuleIcon(SystemMessageCollection collection) {
+  return switch (collection) {
+    SystemMessageCollection.important => LucideIcons.star,
+    SystemMessageCollection.receipts => LucideIcons.receiptText,
+    SystemMessageCollection.marketing => LucideIcons.megaphone,
+    SystemMessageCollection.newsletters => LucideIcons.newspaper,
+  };
+}
+
 bool _emailComposeEnabled({
   required ContactDirectoryEntry contact,
   required bool emailEnabled,
@@ -1278,12 +1352,16 @@ List<({IconData icon, String label, String value})> _contactDetailRows(
   required bool emailEnabled,
 }) {
   final folderCollectionId = _trimmedContactDetail(contact.folderCollectionId);
+  final folderCollectionLabel = folderCollectionId == null
+      ? null
+      : SystemMessageCollection.fromId(folderCollectionId)?.label(l10n) ??
+            folderCollectionId;
   return <({IconData icon, String label, String value})>[
-    if (folderCollectionId != null)
+    if (folderCollectionLabel != null)
       (
         icon: LucideIcons.folder,
         label: l10n.homeTabFolders,
-        value: folderCollectionId,
+        value: folderCollectionLabel,
       ),
     if (contact.hasEmailContact && !emailEnabled)
       (

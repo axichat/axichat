@@ -41,10 +41,13 @@ void main() {
 
   late MockXmppService xmppService;
   late StreamController<List<Chat>> chatsStreamController;
+  late StreamController<Map<String, String>> contactFolderRulesController;
 
   setUp(() {
     xmppService = MockXmppService();
     chatsStreamController = StreamController<List<Chat>>.broadcast();
+    contactFolderRulesController =
+        StreamController<Map<String, String>>.broadcast();
 
     when(
       () => xmppService.chatsStream(),
@@ -55,11 +58,15 @@ void main() {
     when(
       () => xmppService.demoResetStream,
     ).thenAnswer((_) => const Stream<void>.empty());
+    when(
+      () => xmppService.contactFolderRulesStream(),
+    ).thenAnswer((_) => contactFolderRulesController.stream);
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
   });
 
   tearDown(() async {
     await chatsStreamController.close();
+    await contactFolderRulesController.close();
   });
 
   test('spam search filters and query are applied in cubit', () async {
@@ -191,6 +198,42 @@ void main() {
     addTearDown(cubit.close);
 
     expect(cubit.state.visibleItems.first.jid, 'favorite@axi.im');
+  });
+
+  test('contact folder filters match contact rules only', () async {
+    final now = DateTime(2024, 1, 1, 12);
+    final importantChat = _chat(
+      jid: 'alpha@example.com',
+      title: 'Alpha',
+      timestamp: now,
+    );
+    final explicitOnlyChat = _chat(
+      jid: 'beta@example.com',
+      title: 'Beta',
+      timestamp: now.add(const Duration(minutes: 1)),
+    );
+    when(
+      () => xmppService.cachedChatList,
+    ).thenReturn([importantChat, explicitOnlyChat]);
+
+    final cubit = ChatsCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    contactFolderRulesController.add({
+      'alpha@example.com': SystemMessageCollection.important.id,
+    });
+    await pumpEventQueue();
+
+    cubit.updateSearchSnapshot(
+      active: true,
+      query: '',
+      filterId: SearchFilterId.contactFolderImportant,
+      sortOrder: SearchSortOrder.newestFirst,
+    );
+
+    expect(cubit.state.visibleItems.map((chat) => chat.jid), [
+      'alpha@example.com',
+    ]);
   });
 
   test('stored details route falls back to main without a focused message', () {
@@ -334,6 +377,9 @@ void main() {
     when(
       () => xmppMucService.demoResetStream,
     ).thenAnswer((_) => const Stream<void>.empty());
+    when(
+      () => xmppMucService.contactFolderRulesStream(),
+    ).thenAnswer((_) => const Stream<Map<String, String>>.empty());
     when(() => xmppMucService.cachedChatList).thenReturn(const <Chat>[]);
     when(
       () => xmppMucService.createRoom(
@@ -364,6 +410,9 @@ void main() {
     when(
       () => xmppMucService.demoResetStream,
     ).thenAnswer((_) => const Stream<void>.empty());
+    when(
+      () => xmppMucService.contactFolderRulesStream(),
+    ).thenAnswer((_) => const Stream<Map<String, String>>.empty());
     when(() => xmppMucService.cachedChatList).thenReturn(const <Chat>[]);
     when(
       () => xmppMucService.createRoom(

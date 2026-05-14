@@ -21,6 +21,7 @@ abstract class ChatsState with _$ChatsState {
     SearchFilterId? spamSearchFilter,
     @Default(SearchSortOrder.newestFirst) SearchSortOrder spamSearchSortOrder,
     @Default(<String>{}) Set<String> rosterContacts,
+    @Default(<String, String>{}) Map<String, String> contactFolderRules,
     @Default(<Chat>[]) List<Chat> visibleItems,
     @Default(<Chat>[]) List<Chat> archivedItems,
     @Default(<Chat>[]) List<Chat> selectedChats,

@@ -136,9 +136,11 @@ class _AxiMenuState extends State<AxiMenu> {
     final double maxHeight = widget.maxHeight ?? context.sizing.menuMaxHeight;
     final double minWidth = widget.minWidth ?? context.sizing.menuMinWidth;
     final double maxWidth = widget.maxWidth ?? context.sizing.menuMaxWidth;
+    final surfacePadding = EdgeInsets.all(context.spacing.xs);
     final double menuHeight =
         widget.actions.length * context.sizing.menuItemHeight;
-    final bool scrollable = menuHeight > maxHeight;
+    final double availableMenuHeight = maxHeight - surfacePadding.vertical;
+    final bool scrollable = menuHeight > availableMenuHeight;
 
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -148,7 +150,7 @@ class _AxiMenuState extends State<AxiMenu> {
       ),
       child: IntrinsicWidth(
         child: AxiModalSurface(
-          padding: EdgeInsets.all(context.spacing.xs),
+          padding: surfacePadding,
           backgroundColor: context.colorScheme.popover,
           borderColor: context.colorScheme.border,
           child: Focus(
@@ -303,9 +305,15 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
             ? const SizedBox.shrink()
             : Padding(
                 padding: EdgeInsets.only(left: context.spacing.s),
-                child: DefaultTextStyle(
-                  style: context.textTheme.muted.copyWith(color: foreground),
-                  child: widget.action.trailing!,
+                child: IconTheme(
+                  data: IconThemeData(
+                    size: context.sizing.menuItemIconSize,
+                    color: foreground,
+                  ),
+                  child: DefaultTextStyle(
+                    style: context.textTheme.muted.copyWith(color: foreground),
+                    child: widget.action.trailing!,
+                  ),
                 ),
               );
 

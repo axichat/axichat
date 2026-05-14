@@ -44,6 +44,22 @@ List<HomeSearchFilter> chatsSearchFilters(AppLocalizations l10n) => [
   ),
   HomeSearchFilter(id: SearchFilterId.xmpp, label: l10n.chatsFilterXmppOnly),
   HomeSearchFilter(id: SearchFilterId.email, label: l10n.chatsFilterEmailOnly),
+  HomeSearchFilter(
+    id: SearchFilterId.contactFolderImportant,
+    label: l10n.homeTabImportant,
+  ),
+  HomeSearchFilter(
+    id: SearchFilterId.contactFolderReceipts,
+    label: l10n.folderSystemReceipts,
+  ),
+  HomeSearchFilter(
+    id: SearchFilterId.contactFolderMarketing,
+    label: l10n.folderSystemMarketing,
+  ),
+  HomeSearchFilter(
+    id: SearchFilterId.contactFolderNewsletters,
+    label: l10n.folderSystemNewsletters,
+  ),
   HomeSearchFilter(id: SearchFilterId.hidden, label: l10n.chatsFilterHidden),
 ];
 

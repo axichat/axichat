@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -77,12 +78,15 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
           decoration: ShadDecoration.none,
           shadows: const <BoxShadow>[],
           popover: (context) {
+            final menuMaxHeight = _chatsFilterMenuMaxHeight(context);
             return AxiMenu(
+              maxHeight: menuMaxHeight,
               actions: [
                 for (final option in filters)
                   AxiMenuAction(
-                    icon: option.id == selectedFilter.id
-                        ? LucideIcons.check
+                    leading: Icon(_chatsFilterIconData(option.id)),
+                    trailing: option.id == selectedFilter.id
+                        ? const Icon(LucideIcons.check)
                         : null,
                     label: option.label,
                     onPressed: () {
@@ -100,4 +104,32 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
       },
     );
   }
+}
+
+double _chatsFilterMenuMaxHeight(BuildContext context) {
+  final mediaQuery = MediaQuery.of(context);
+  final availableHeight =
+      mediaQuery.size.height -
+      mediaQuery.viewPadding.vertical -
+      context.spacing.xl;
+  return availableHeight
+      .clamp(context.sizing.menuItemHeight, context.sizing.menuMaxHeight)
+      .toDouble();
+}
+
+IconData _chatsFilterIconData(SearchFilterId id) {
+  return switch (id) {
+    SearchFilterId.all => LucideIcons.inbox,
+    SearchFilterId.contacts => LucideIcons.userRoundCheck,
+    SearchFilterId.nonContacts => LucideIcons.userRoundX,
+    SearchFilterId.xmpp => LucideIcons.messagesSquare,
+    SearchFilterId.email => LucideIcons.mail,
+    SearchFilterId.hidden => LucideIcons.eyeOff,
+    SearchFilterId.contactFolderImportant => LucideIcons.star,
+    SearchFilterId.contactFolderReceipts => LucideIcons.receiptText,
+    SearchFilterId.contactFolderMarketing => LucideIcons.megaphone,
+    SearchFilterId.contactFolderNewsletters => LucideIcons.newspaper,
+    SearchFilterId.attachments => LucideIcons.paperclip,
+    SearchFilterId.favorites => LucideIcons.star,
+  };
 }

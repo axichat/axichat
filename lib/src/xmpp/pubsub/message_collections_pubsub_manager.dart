@@ -16,23 +16,12 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 const String messageCollectionsPubSubNode = 'urn:axi:message-collections';
 const String messageCollectionsNotifyFeature =
     'urn:axi:message-collections+notify';
-const String messageCollectionDefinitionsPubSubNode =
-    'urn:axi:message-collection-definitions';
-const String messageCollectionDefinitionsNotifyFeature =
-    'urn:axi:message-collection-definitions+notify';
-const String contactFolderRulesPubSubNode = 'urn:axi:contact-folder-rules';
-const String contactFolderRulesNotifyFeature =
-    'urn:axi:contact-folder-rules+notify';
 
 const int messageCollectionSyncMaxItems = 5000;
-const int messageCollectionDefinitionSyncMaxItems = 1000;
-const int contactFolderRuleSyncMaxItems = 1000;
 
 const String _entryTag = 'entry';
-const String _definitionTag = 'collection';
-const String _contactFolderRuleTag = 'rule';
+const String _collectionTag = 'collection';
 const String _collectionIdAttr = 'collection_id';
-const String _addressKeyAttr = 'address_key';
 const String _chatJidAttr = 'chat_jid';
 const String _messageReferenceIdAttr = 'message_reference_id';
 const String _messageStanzaIdAttr = 'message_stanza_id';
@@ -49,18 +38,19 @@ const String _messageCollectionsBootstrapOperationName =
     'MessageCollectionsPubSubManager.bootstrapOnNegotiations';
 const String _messageCollectionsRefreshOperationName =
     'MessageCollectionsPubSubManager.refreshFromServer';
-const String _messageCollectionDefinitionsBootstrapOperationName =
-    'MessageCollectionDefinitionsPubSubManager.bootstrapOnNegotiations';
-const String _messageCollectionDefinitionsRefreshOperationName =
-    'MessageCollectionDefinitionsPubSubManager.refreshFromServer';
-const String _contactFolderRulesBootstrapOperationName =
-    'ContactFolderRulesPubSubManager.bootstrapOnNegotiations';
-const String _contactFolderRulesRefreshOperationName =
-    'ContactFolderRulesPubSubManager.refreshFromServer';
 const int _collectionIdMaxBytes = 128;
 const int _messageReferenceIdMaxBytes = 1024;
 
-final class MessageCollectionSyncPayload {
+sealed class MessageCollectionSyncItem {
+  const MessageCollectionSyncItem();
+
+  String get itemId;
+  String get collectionId;
+  DateTime get updatedAt;
+  bool get active;
+}
+
+final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   const MessageCollectionSyncPayload({
     required this.collectionId,
     required this.chatJid,
@@ -75,6 +65,7 @@ final class MessageCollectionSyncPayload {
     this.deltaMsgId,
   });
 
+  @override
   final String collectionId;
   final String chatJid;
   final String messageReferenceId;
@@ -83,10 +74,13 @@ final class MessageCollectionSyncPayload {
   final String? messageMucStanzaId;
   final int? deltaAccountId;
   final int? deltaMsgId;
+  @override
   final DateTime updatedAt;
+  @override
   final bool active;
   final String sourceId;
 
+  @override
   String get itemId => itemIdFor(
     collectionId: collectionId,
     chatJid: chatJid,
@@ -255,32 +249,35 @@ final class MessageCollectionSyncPayload {
   }
 }
 
-final class MessageCollectionSyncUpdatedEvent extends mox.XmppEvent {
-  MessageCollectionSyncUpdatedEvent(this.payload);
-
-  final MessageCollectionSyncPayload payload;
-}
-
-final class MessageCollectionDefinitionSyncPayload {
-  const MessageCollectionDefinitionSyncPayload({
+final class MessageCollectionRecordSyncPayload
+    extends MessageCollectionSyncItem {
+  const MessageCollectionRecordSyncPayload({
     required this.collectionId,
     required this.updatedAt,
     required this.active,
   });
 
+  @override
   final String collectionId;
+  @override
   final DateTime updatedAt;
+  @override
   final bool active;
 
-  String get itemId => collectionId;
+  @override
+  String get itemId => itemIdFor(collectionId: collectionId);
 
-  static MessageCollectionDefinitionSyncPayload? fromXml(
+  static String itemIdFor({required String collectionId}) {
+    final digest = crypto.sha256.convert(utf8.encode(collectionId));
+    return 'collection:$digest';
+  }
+
+  static MessageCollectionRecordSyncPayload? fromXml(
     mox.XMLNode node, {
     String? itemId,
   }) {
-    if (node.tag != _definitionTag) return null;
-    if (node.attributes['xmlns']?.toString() !=
-        messageCollectionDefinitionsPubSubNode) {
+    if (node.tag != _collectionTag) return null;
+    if (node.attributes['xmlns']?.toString() != messageCollectionsPubSubNode) {
       return null;
     }
     final collectionId = MessageCollectionSyncPayload._normalizeCollectionId(
@@ -293,7 +290,7 @@ final class MessageCollectionDefinitionSyncPayload {
     if (collectionId == null || parsedUpdatedAt == null) {
       return null;
     }
-    final payload = MessageCollectionDefinitionSyncPayload(
+    final payload = MessageCollectionRecordSyncPayload(
       collectionId: collectionId,
       updatedAt: parsedUpdatedAt,
       active:
@@ -312,8 +309,8 @@ final class MessageCollectionDefinitionSyncPayload {
 
   mox.XMLNode toXml() {
     return mox.XMLNode.xmlns(
-      tag: _definitionTag,
-      xmlns: messageCollectionDefinitionsPubSubNode,
+      tag: _collectionTag,
+      xmlns: messageCollectionsPubSubNode,
       attributes: {
         _collectionIdAttr: collectionId,
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
@@ -323,255 +320,14 @@ final class MessageCollectionDefinitionSyncPayload {
   }
 }
 
-final class MessageCollectionDefinitionSyncUpdatedEvent extends mox.XmppEvent {
-  MessageCollectionDefinitionSyncUpdatedEvent(this.payload);
+final class MessageCollectionSyncUpdatedEvent extends mox.XmppEvent {
+  MessageCollectionSyncUpdatedEvent(this.payload);
 
-  final MessageCollectionDefinitionSyncPayload payload;
-}
-
-final class ContactFolderRuleSyncPayload {
-  const ContactFolderRuleSyncPayload({
-    required this.addressKey,
-    required this.updatedAt,
-    required this.active,
-    this.collectionId,
-  });
-
-  final String addressKey;
-  final String? collectionId;
-  final DateTime updatedAt;
-  final bool active;
-
-  String get itemId => itemIdFor(addressKey: addressKey);
-
-  static String itemIdFor({required String addressKey}) {
-    final digest = crypto.sha256.convert(utf8.encode(addressKey));
-    return digest.toString();
-  }
-
-  static ContactFolderRuleSyncPayload? fromXml(
-    mox.XMLNode node, {
-    String? itemId,
-  }) {
-    if (node.tag != _contactFolderRuleTag) return null;
-    if (node.attributes['xmlns']?.toString() != contactFolderRulesPubSubNode) {
-      return null;
-    }
-    final addressKey = node.attributes[_addressKeyAttr]
-        ?.toString()
-        .toBareJidOrNull(maxBytes: syncAddressMaxBytes);
-    final rawUpdatedAt = node.attributes[_updatedAtAttr]?.toString().trim();
-    final parsedUpdatedAt = rawUpdatedAt == null || rawUpdatedAt.isEmpty
-        ? null
-        : DateTime.tryParse(rawUpdatedAt)?.toUtc();
-    if (addressKey == null || parsedUpdatedAt == null) {
-      return null;
-    }
-    final active =
-        MessageCollectionSyncPayload._parseBoolAttr(
-          node.attributes[_activeAttr],
-        ) ??
-        true;
-    final collectionId = MessageCollectionSyncPayload._normalizeCollectionId(
-      node.attributes[_collectionIdAttr]?.toString(),
-    );
-    if (active && collectionId == null) {
-      return null;
-    }
-    final payload = ContactFolderRuleSyncPayload(
-      addressKey: addressKey,
-      collectionId: collectionId,
-      updatedAt: parsedUpdatedAt,
-      active: active,
-    );
-    if (itemId != null &&
-        itemId.trim().isNotEmpty &&
-        payload.itemId != itemId) {
-      return null;
-    }
-    return payload;
-  }
-
-  mox.XMLNode toXml() {
-    return mox.XMLNode.xmlns(
-      tag: _contactFolderRuleTag,
-      xmlns: contactFolderRulesPubSubNode,
-      attributes: {
-        _addressKeyAttr: addressKey,
-        _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
-        _activeAttr: active ? '1' : '0',
-        _collectionIdAttr: ?collectionId,
-      },
-    );
-  }
-}
-
-final class ContactFolderRuleSyncUpdatedEvent extends mox.XmppEvent {
-  ContactFolderRuleSyncUpdatedEvent(this.payload);
-
-  final ContactFolderRuleSyncPayload payload;
-}
-
-final class ContactFolderRulesPubSubManager
-    extends PepItemPubSubNodeManager<ContactFolderRuleSyncPayload>
-    implements PubSubHubDelegate {
-  ContactFolderRulesPubSubManager({String? maxItems})
-    : _maxItems = maxItems ?? _defaultRuleMaxItems,
-      super(managerId);
-
-  static const String managerId = 'axi.contact_folder_rules';
-  static const String _defaultRuleMaxItems = '$contactFolderRuleSyncMaxItems';
-
-  final String _maxItems;
-
-  @override
-  final SyncRateLimiter rateLimiter = SyncRateLimiter(
-    messageCollectionSyncRateLimit,
-  );
-
-  @override
-  String get nodeId => contactFolderRulesPubSubNode;
-
-  @override
-  String get maxItemsValue => _maxItems;
-
-  @override
-  String get defaultMaxItemsValue => _defaultRuleMaxItems;
-
-  @override
-  Duration get ensureNodeBackoff => _ensureNodeBackoff;
-
-  @override
-  String get bootstrapOperationName =>
-      _contactFolderRulesBootstrapOperationName;
-
-  @override
-  String get refreshOperationName => _contactFolderRulesRefreshOperationName;
-
-  @override
-  XmppOperationKind? get operationKind => null;
-
-  @override
-  bool get refreshOnRetractionEvent => true;
-
-  @override
-  bool get rebuildNodeOnPurge => false;
-
-  @override
-  bool get emitRetractionsOnClear => false;
-
-  @override
-  bool get emitRetractionsFromCompleteSnapshot => false;
-
-  Future<bool> publishEntry(ContactFolderRuleSyncPayload payload) =>
-      publishItem(payload);
-
-  @override
-  ContactFolderRuleSyncPayload? parsePayload(
-    mox.XMLNode payload, {
-    String? itemId,
-  }) => ContactFolderRuleSyncPayload.fromXml(payload, itemId: itemId);
-
-  @override
-  String itemIdOf(ContactFolderRuleSyncPayload payload) => payload.itemId;
-
-  @override
-  mox.XMLNode payloadToXml(ContactFolderRuleSyncPayload payload) =>
-      payload.toXml();
-
-  @override
-  void emitUpdatePayload(ContactFolderRuleSyncPayload payload) {
-    getAttributes().sendEvent(ContactFolderRuleSyncUpdatedEvent(payload));
-  }
-
-  @override
-  void emitRetractionId(String itemId) {}
-}
-
-final class MessageCollectionDefinitionsPubSubManager
-    extends PepItemPubSubNodeManager<MessageCollectionDefinitionSyncPayload>
-    implements PubSubHubDelegate {
-  MessageCollectionDefinitionsPubSubManager({String? maxItems})
-    : _maxItems = maxItems ?? _defaultDefinitionMaxItems,
-      super(managerId);
-
-  static const String managerId = 'axi.message_collection_definitions';
-
-  static const String _defaultDefinitionMaxItems =
-      '$messageCollectionDefinitionSyncMaxItems';
-
-  final String _maxItems;
-
-  @override
-  final SyncRateLimiter rateLimiter = SyncRateLimiter(
-    messageCollectionSyncRateLimit,
-  );
-
-  @override
-  String get nodeId => messageCollectionDefinitionsPubSubNode;
-
-  @override
-  String get maxItemsValue => _maxItems;
-
-  @override
-  String get defaultMaxItemsValue => _defaultDefinitionMaxItems;
-
-  @override
-  Duration get ensureNodeBackoff => _ensureNodeBackoff;
-
-  @override
-  String get bootstrapOperationName =>
-      _messageCollectionDefinitionsBootstrapOperationName;
-
-  @override
-  String get refreshOperationName =>
-      _messageCollectionDefinitionsRefreshOperationName;
-
-  @override
-  XmppOperationKind? get operationKind => null;
-
-  @override
-  bool get refreshOnRetractionEvent => true;
-
-  @override
-  bool get rebuildNodeOnPurge => false;
-
-  @override
-  bool get emitRetractionsOnClear => false;
-
-  @override
-  bool get emitRetractionsFromCompleteSnapshot => false;
-
-  Future<bool> publishEntry(MessageCollectionDefinitionSyncPayload payload) =>
-      publishItem(payload);
-
-  @override
-  MessageCollectionDefinitionSyncPayload? parsePayload(
-    mox.XMLNode payload, {
-    String? itemId,
-  }) => MessageCollectionDefinitionSyncPayload.fromXml(payload, itemId: itemId);
-
-  @override
-  String itemIdOf(MessageCollectionDefinitionSyncPayload payload) =>
-      payload.itemId;
-
-  @override
-  mox.XMLNode payloadToXml(MessageCollectionDefinitionSyncPayload payload) =>
-      payload.toXml();
-
-  @override
-  void emitUpdatePayload(MessageCollectionDefinitionSyncPayload payload) {
-    getAttributes().sendEvent(
-      MessageCollectionDefinitionSyncUpdatedEvent(payload),
-    );
-  }
-
-  @override
-  void emitRetractionId(String itemId) {}
+  final MessageCollectionSyncItem payload;
 }
 
 final class MessageCollectionsPubSubManager
-    extends PepItemPubSubNodeManager<MessageCollectionSyncPayload>
+    extends PepItemPubSubNodeManager<MessageCollectionSyncItem>
     implements PubSubHubDelegate {
   MessageCollectionsPubSubManager({String? maxItems})
     : _maxItems = maxItems ?? _defaultMaxItems,
@@ -620,24 +376,40 @@ final class MessageCollectionsPubSubManager
   @override
   bool get emitRetractionsFromCompleteSnapshot => false;
 
-  Future<bool> publishEntry(MessageCollectionSyncPayload payload) =>
+  Future<bool> publishEntry(MessageCollectionSyncItem payload) =>
       publishItem(payload);
 
   @override
-  MessageCollectionSyncPayload? parsePayload(
+  MessageCollectionSyncItem? parsePayload(
     mox.XMLNode payload, {
     String? itemId,
-  }) => MessageCollectionSyncPayload.fromXml(payload, itemId: itemId);
+  }) {
+    return switch (payload.tag) {
+      _entryTag => MessageCollectionSyncPayload.fromXml(
+        payload,
+        itemId: itemId,
+      ),
+      _collectionTag => MessageCollectionRecordSyncPayload.fromXml(
+        payload,
+        itemId: itemId,
+      ),
+      _ => null,
+    };
+  }
 
   @override
-  String itemIdOf(MessageCollectionSyncPayload payload) => payload.itemId;
+  String itemIdOf(MessageCollectionSyncItem payload) => payload.itemId;
 
   @override
-  mox.XMLNode payloadToXml(MessageCollectionSyncPayload payload) =>
-      payload.toXml();
+  mox.XMLNode payloadToXml(MessageCollectionSyncItem payload) {
+    return switch (payload) {
+      MessageCollectionSyncPayload() => payload.toXml(),
+      MessageCollectionRecordSyncPayload() => payload.toXml(),
+    };
+  }
 
   @override
-  void emitUpdatePayload(MessageCollectionSyncPayload payload) {
+  void emitUpdatePayload(MessageCollectionSyncItem payload) {
     getAttributes().sendEvent(MessageCollectionSyncUpdatedEvent(payload));
   }
 

@@ -9,6 +9,7 @@ import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
+import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
@@ -31,6 +32,7 @@ class RecordingMessageCollectionsPubSubTransport extends PubSubManager {
   int publishCount = 0;
   int subscribeCount = 0;
   final Map<String, mox.XMLNode> publishedItems = <String, mox.XMLNode>{};
+  final List<mox.XMLNode> publishedItemsInOrder = <mox.XMLNode>[];
 
   @override
   Future<String?> resolveSendLastPublishedItemForNode({
@@ -84,6 +86,7 @@ class RecordingMessageCollectionsPubSubTransport extends PubSubManager {
     publishCount += 1;
     final itemId = id ?? 'item-$publishCount';
     publishedItems['$node|$itemId'] = payload;
+    publishedItemsInOrder.add(payload);
     return const moxlib.Result(true);
   }
 }
@@ -4200,10 +4203,10 @@ void main() {
 
   group('important folder sync', () {
     test(
-      'createMessageCollection publishes the folder definition payload',
+      'createMessageCollection publishes the folder record payload',
       () async {
         final transport = RecordingMessageCollectionsPubSubTransport();
-        final manager = MessageCollectionDefinitionsPubSubManager()
+        final manager = MessageCollectionsPubSubManager()
           ..register(
             _messageCollectionsTestAttributes(
               pubSubManager: transport,
@@ -4212,8 +4215,7 @@ void main() {
           );
 
         when(
-          () => mockConnection
-              .getManager<MessageCollectionDefinitionsPubSubManager>(),
+          () => mockConnection.getManager<MessageCollectionsPubSubManager>(),
         ).thenReturn(manager);
 
         await connectSuccessfully(
@@ -4231,7 +4233,7 @@ void main() {
         expect(transport.publishCount, 1);
         expect(transport.subscribeCount, 1);
 
-        final payload = MessageCollectionDefinitionSyncPayload.fromXml(
+        final payload = MessageCollectionRecordSyncPayload.fromXml(
           transport.publishedItems.values.single,
         );
         expect(payload, isNotNull);
@@ -4290,42 +4292,39 @@ void main() {
       );
     });
 
-    test(
-      'MessageCollectionDefinitionSyncUpdatedEvent cannot mutate important',
-      () async {
-        final events = StreamController<mox.XmppEvent>.broadcast();
-        when(
-          () => mockConnection.asBroadcastStream(),
-        ).thenAnswer((_) => events.stream);
+    test('MessageCollectionSyncUpdatedEvent cannot mutate important', () async {
+      final events = StreamController<mox.XmppEvent>.broadcast();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => events.stream);
 
-        await connectSuccessfully(
-          xmppService,
-          accountJid: 'owner@example.com/resource',
-        );
+      await connectSuccessfully(
+        xmppService,
+        accountJid: 'owner@example.com/resource',
+      );
 
-        events.add(
-          MessageCollectionDefinitionSyncUpdatedEvent(
-            MessageCollectionDefinitionSyncPayload(
-              collectionId: SystemMessageCollection.important.id,
-              updatedAt: DateTime.utc(2026, 4, 15, 9, 30),
-              active: false,
-            ),
+      events.add(
+        MessageCollectionSyncUpdatedEvent(
+          MessageCollectionRecordSyncPayload(
+            collectionId: SystemMessageCollection.important.id,
+            updatedAt: DateTime.utc(2026, 4, 15, 9, 30),
+            active: false,
           ),
-        );
+        ),
+      );
 
-        await pumpEventQueue(times: 10);
+      await pumpEventQueue(times: 10);
 
-        final important = await database.getMessageCollection(
-          SystemMessageCollection.important.id,
-        );
-        expect(important, isNotNull);
-        expect(important!.isSystem, isTrue);
-        expect(important.active, isTrue);
-        expect(important.title, isNull);
+      final important = await database.getMessageCollection(
+        SystemMessageCollection.important.id,
+      );
+      expect(important, isNotNull);
+      expect(important!.isSystem, isTrue);
+      expect(important.active, isTrue);
+      expect(important.title, isNull);
 
-        await events.close();
-      },
-    );
+      await events.close();
+    });
 
     test(
       'setMessageCollectionMembership publishes the important membership payload',
@@ -4523,6 +4522,32 @@ void main() {
     );
 
     test(
+      'removeMessageCollectionMembership rejects contact-rule-derived items',
+      () async {
+        final removed = await xmppService.removeMessageCollectionMembership(
+          FolderMessageItem(
+            collectionId: SystemMessageCollection.receipts.id,
+            chatJid: 'friend@example.com',
+            messageReferenceId: 'message-1',
+            messageStanzaId: 'message-1',
+            messageOriginId: null,
+            messageMucStanzaId: null,
+            deltaAccountId: null,
+            deltaMsgId: null,
+            addedAt: DateTime.utc(2026, 4, 15, 10),
+            active: true,
+            message: null,
+            chat: null,
+            isContactRuleDerived: true,
+          ),
+        );
+
+        expect(removed, isFalse);
+        expect(await database.getAllMessageCollectionMemberships(), isEmpty);
+      },
+    );
+
+    test(
       'MessageCollectionSyncUpdatedEvent applies remote important changes',
       () async {
         final events = StreamController<mox.XmppEvent>.broadcast();
@@ -4564,6 +4589,72 @@ void main() {
         expect(entry.addedAt.toUtc(), updatedAt);
 
         await events.close();
+      },
+    );
+
+    test(
+      'contact folder rule sync publishes only the contact payload',
+      () async {
+        final contactTransport = RecordingMessageCollectionsPubSubTransport();
+        final contactsManager = ContactsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: contactTransport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+        final collectionTransport =
+            RecordingMessageCollectionsPubSubTransport();
+        final collectionsManager = MessageCollectionsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: collectionTransport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+
+        when(
+          () => mockConnection.getManager<ContactsPubSubManager>(),
+        ).thenReturn(contactsManager);
+        when(
+          () => mockConnection.getManager<MessageCollectionsPubSubManager>(),
+        ).thenReturn(collectionsManager);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        await xmppService.setContactFolderRule(
+          address: 'friend@example.com',
+          collectionId: SystemMessageCollection.important.id,
+        );
+        await xmppService.clearContactFolderRule(address: 'friend@example.com');
+
+        expect(collectionTransport.publishCount, 0);
+        expect(contactTransport.publishCount, 2);
+        expect(
+          contactTransport.publishedItems.keys,
+          everyElement(startsWith('$contactsPubSubNode|')),
+        );
+        expect(await database.getAllMessageCollectionMemberships(), isEmpty);
+
+        final setPayload = ContactSyncPayload.fromXml(
+          contactTransport.publishedItemsInOrder.first,
+        );
+        final clearPayload = ContactSyncPayload.fromXml(
+          contactTransport.publishedItemsInOrder.last,
+        );
+
+        expect(setPayload, isNotNull);
+        expect(setPayload!.addressKey, 'friend@example.com');
+        expect(
+          setPayload.folderCollectionId,
+          SystemMessageCollection.important.id,
+        );
+        expect(clearPayload, isNotNull);
+        expect(clearPayload!.addressKey, 'friend@example.com');
+        expect(clearPayload.folderCollectionId, isNull);
       },
     );
   });

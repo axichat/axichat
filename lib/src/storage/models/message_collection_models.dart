@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
@@ -52,12 +53,14 @@ enum SystemMessageCollection {
 enum MessageCollectionNameFailure {
   empty,
   reserved,
-  duplicate;
+  duplicate,
+  tooLong;
 
   String label(AppLocalizations l10n) => switch (this) {
     MessageCollectionNameFailure.empty => l10n.folderNameEmptyError,
     MessageCollectionNameFailure.reserved => l10n.folderNameReservedError,
     MessageCollectionNameFailure.duplicate => l10n.folderNameDuplicateError,
+    MessageCollectionNameFailure.tooLong => l10n.folderNameTooLongError,
   };
 }
 
@@ -71,6 +74,11 @@ String? normalizeCustomMessageCollectionTitle(String title) {
   final normalized = title.trim();
   if (normalized.isEmpty) {
     return null;
+  }
+  if (!isWithinUtf8ByteLimit(normalized, maxBytes: 128)) {
+    throw const MessageCollectionNameException(
+      MessageCollectionNameFailure.tooLong,
+    );
   }
   return normalized;
 }
@@ -165,6 +173,7 @@ class FolderMessageItem extends Equatable {
     required this.active,
     required this.message,
     required this.chat,
+    this.isContactRuleDerived = false,
     this.messageStanzaId,
     this.messageOriginId,
     this.messageMucStanzaId,
@@ -184,6 +193,7 @@ class FolderMessageItem extends Equatable {
   final bool active;
   final Message? message;
   final Chat? chat;
+  final bool isContactRuleDerived;
 
   DateTime get markedAt => addedAt;
 
@@ -203,5 +213,6 @@ class FolderMessageItem extends Equatable {
     active,
     message,
     chat,
+    isContactRuleDerived,
   ];
 }

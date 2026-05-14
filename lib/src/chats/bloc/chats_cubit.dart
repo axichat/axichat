@@ -114,6 +114,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     _demoResetSubscription = _xmppService.demoResetStream.listen(
       (_) => _handleDemoReset(),
     );
+    _contactFolderRulesSubscription = _xmppService
+        .contactFolderRulesStream()
+        .listen(_updateContactFolderRules);
   }
 
   static ChatsState _seedInitialState(List<Chat>? cached) {
@@ -121,6 +124,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final derived = _deriveChatViews(
       items: items,
       rosterContacts: const <String>{},
+      contactFolderRules: const <String, String>{},
       searchQuery: '',
       searchActive: false,
       searchFilter: SearchFilterId.all,
@@ -141,6 +145,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       creationStatus: RequestStatus.none,
       searchFilter: SearchFilterId.all,
       rosterContacts: const <String>{},
+      contactFolderRules: const <String, String>{},
       visibleItems: derived.visibleItems,
       archivedItems: derived.archivedItems,
       selectedChats: derived.selectedChats,
@@ -156,6 +161,8 @@ class ChatsCubit extends Cubit<ChatsState> {
   late final StreamSubscription<List<String>>
   _recipientAddressSuggestionsSubscription;
   late final StreamSubscription<void> _demoResetSubscription;
+  late final StreamSubscription<Map<String, String>>
+  _contactFolderRulesSubscription;
   final List<Timer> _exportCleanupTimers = [];
 
   void updateEmailService(EmailService? emailService) {
@@ -171,6 +178,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsSubscription.cancel();
     await _recipientAddressSuggestionsSubscription.cancel();
     await _demoResetSubscription.cancel();
+    await _contactFolderRulesSubscription.cancel();
     return super.close();
   }
 
@@ -216,6 +224,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final derived = _deriveChatViews(
       items: state.items ?? const <Chat>[],
       rosterContacts: state.rosterContacts,
+      contactFolderRules: state.contactFolderRules,
       searchQuery: normalizedQuery,
       searchActive: active,
       searchFilter: filterId,
@@ -273,6 +282,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final derived = _deriveChatViews(
       items: state.items ?? const <Chat>[],
       rosterContacts: contacts,
+      contactFolderRules: state.contactFolderRules,
       searchQuery: state.searchQuery,
       searchActive: state.searchActive,
       searchFilter: state.searchFilter,
@@ -289,9 +299,34 @@ class ChatsCubit extends Cubit<ChatsState> {
     );
   }
 
+  void _updateContactFolderRules(Map<String, String> rules) {
+    if (mapEquals(state.contactFolderRules, rules)) {
+      return;
+    }
+    final derived = _deriveChatViews(
+      items: state.items ?? const <Chat>[],
+      rosterContacts: state.rosterContacts,
+      contactFolderRules: rules,
+      searchQuery: state.searchQuery,
+      searchActive: state.searchActive,
+      searchFilter: state.searchFilter,
+      searchSortOrder: state.searchSortOrder,
+      selectedJids: state.selectedJids,
+    );
+    emit(
+      state.copyWith(
+        contactFolderRules: rules,
+        visibleItems: derived.visibleItems,
+        archivedItems: derived.archivedItems,
+        selectedChats: derived.selectedChats,
+      ),
+    );
+  }
+
   static _ChatViewResults _deriveChatViews({
     required List<Chat> items,
     required Set<String> rosterContacts,
+    required Map<String, String> contactFolderRules,
     required String searchQuery,
     required bool searchActive,
     required SearchFilterId? searchFilter,
@@ -309,6 +344,34 @@ class ChatsCubit extends Cubit<ChatsState> {
           !chat.hidden && !rosterContacts.contains(chat.jid),
         SearchFilterId.xmpp => !chat.hidden && chat.transport.isXmpp,
         SearchFilterId.email => !chat.hidden && chat.transport.isEmail,
+        SearchFilterId.contactFolderImportant =>
+          !chat.hidden &&
+              _chatHasContactFolderRule(
+                chat,
+                contactFolderRules,
+                SystemMessageCollection.important.id,
+              ),
+        SearchFilterId.contactFolderReceipts =>
+          !chat.hidden &&
+              _chatHasContactFolderRule(
+                chat,
+                contactFolderRules,
+                SystemMessageCollection.receipts.id,
+              ),
+        SearchFilterId.contactFolderMarketing =>
+          !chat.hidden &&
+              _chatHasContactFolderRule(
+                chat,
+                contactFolderRules,
+                SystemMessageCollection.marketing.id,
+              ),
+        SearchFilterId.contactFolderNewsletters =>
+          !chat.hidden &&
+              _chatHasContactFolderRule(
+                chat,
+                contactFolderRules,
+                SystemMessageCollection.newsletters.id,
+              ),
         SearchFilterId.hidden => chat.hidden,
         SearchFilterId.all => !chat.hidden,
         SearchFilterId.favorites => !chat.hidden,
@@ -351,6 +414,28 @@ class ChatsCubit extends Cubit<ChatsState> {
       archivedItems: archivedItems,
       selectedChats: selectedChats,
     );
+  }
+
+  static bool _chatHasContactFolderRule(
+    Chat chat,
+    Map<String, String> contactFolderRules,
+    String collectionId,
+  ) {
+    if (chat.type == ChatType.groupChat) {
+      return false;
+    }
+    for (final address in <String?>[
+      chat.jid,
+      chat.emailAddress,
+      chat.remoteJid,
+      chat.emailFromAddress,
+    ]) {
+      final key = contactDirectoryAddressKey(address);
+      if (key.isNotEmpty && contactFolderRules[key] == collectionId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static List<Chat> _deriveSpamItems({
@@ -438,6 +523,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final derived = _deriveChatViews(
       items: items,
       rosterContacts: state.rosterContacts,
+      contactFolderRules: state.contactFolderRules,
       searchQuery: state.searchQuery,
       searchActive: state.searchActive,
       searchFilter: state.searchFilter,
@@ -851,6 +937,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final derived = _deriveChatViews(
       items: state.items ?? const <Chat>[],
       rosterContacts: state.rosterContacts,
+      contactFolderRules: state.contactFolderRules,
       searchQuery: state.searchQuery,
       searchActive: state.searchActive,
       searchFilter: state.searchFilter,

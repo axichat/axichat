@@ -51,6 +51,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get folderPickerUpdateFailed => '无法更新此文件夹。';
 
   @override
+  String get folderPickerRuleDerived => '由联系人规则应用';
+
+  @override
   String get folderSystemReceipts => '收据';
 
   @override
@@ -84,6 +87,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get folderNameDuplicateError => '已存在同名文件夹。';
 
   @override
+  String get folderNameTooLongError => '文件夹名称必须不超过 128 字节。';
+
+  @override
   String get folderMessagesEmpty => '此文件夹中还没有消息';
 
   @override
@@ -93,28 +99,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get folderRemoveMessageFailed => '无法从文件夹移除此消息。';
 
   @override
-  String get contactFolderRuleAction => 'Send all to...';
+  String get contactFolderRuleAction => '发送全部到...';
 
   @override
-  String get contactFolderRuleMessagesAction => '将所有消息发送到...';
+  String get contactFolderRuleMessagesAction => '发送所有消息到...';
 
   @override
-  String get contactFolderRuleEmailsAction => '将所有邮件发送到...';
+  String get contactFolderRuleEmailsAction => '发送所有邮件到...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction => '将所有消息和邮件发送到...';
+  String get contactFolderRuleMessagesAndEmailsAction => '发送所有消息和邮件到...';
 
   @override
-  String get contactFolderRuleTitle => 'Send all to folder';
+  String get contactFolderRuleTitle => '发送全部到文件夹';
 
   @override
-  String get contactFolderRuleMessagesTitle => '将消息发送到文件夹';
+  String get contactFolderRuleMessagesTitle => '发送所有消息到文件夹';
 
   @override
-  String get contactFolderRuleEmailsTitle => '将邮件发送到文件夹';
+  String get contactFolderRuleEmailsTitle => '发送所有邮件到文件夹';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle => '将消息和邮件发送到文件夹';
+  String get contactFolderRuleMessagesAndEmailsTitle => '发送所有消息和邮件到文件夹';
 
   @override
   String get contactFolderRuleClear => '清除规则';
@@ -6345,6 +6351,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get folderPickerUpdateFailed => '無法更新此資料夾。';
 
   @override
+  String get folderPickerRuleDerived => '由聯絡人規則套用';
+
+  @override
   String get folderSystemReceipts => '收據';
 
   @override
@@ -6378,6 +6387,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get folderNameDuplicateError => '已存在同名資料夾。';
 
   @override
+  String get folderNameTooLongError => '資料夾名稱必須不超過 128 位元組。';
+
+  @override
   String get folderMessagesEmpty => '此資料夾尚無訊息';
 
   @override
@@ -6387,28 +6399,28 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get folderRemoveMessageFailed => '無法從資料夾移除此訊息。';
 
   @override
-  String get contactFolderRuleAction => 'Send all to...';
+  String get contactFolderRuleAction => '傳送全部到...';
 
   @override
-  String get contactFolderRuleMessagesAction => '將所有訊息傳送到...';
+  String get contactFolderRuleMessagesAction => '傳送所有訊息到...';
 
   @override
-  String get contactFolderRuleEmailsAction => '將所有電郵傳送到...';
+  String get contactFolderRuleEmailsAction => '傳送所有電郵到...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction => '將所有訊息和電郵傳送到...';
+  String get contactFolderRuleMessagesAndEmailsAction => '傳送所有訊息和電郵到...';
 
   @override
-  String get contactFolderRuleTitle => 'Send all to folder';
+  String get contactFolderRuleTitle => '傳送全部到資料夾';
 
   @override
-  String get contactFolderRuleMessagesTitle => '將訊息傳送到資料夾';
+  String get contactFolderRuleMessagesTitle => '傳送所有訊息到資料夾';
 
   @override
-  String get contactFolderRuleEmailsTitle => '將電郵傳送到資料夾';
+  String get contactFolderRuleEmailsTitle => '傳送所有電郵到資料夾';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle => '將訊息和電郵傳送到資料夾';
+  String get contactFolderRuleMessagesAndEmailsTitle => '傳送所有訊息和電郵到資料夾';
 
   @override
   String get contactFolderRuleClear => '清除規則';

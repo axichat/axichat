@@ -23,21 +23,22 @@ Future<void> showAddToFolderSheet(
 }) {
   final locate = context.read;
   final shadTheme = ShadTheme.of(context);
+  final sheet = ShadTheme(
+    data: shadTheme,
+    child: BlocProvider.value(
+      value: locate<FoldersCubit>(),
+      child: BlocProvider.value(
+        value: locate<ChatBloc>(),
+        child: _AddToFolderSheet(message: message, chat: chat),
+      ),
+    ),
+  );
   return showAdaptiveBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useRootNavigator: true,
     showCloseButton: false,
-    builder: (_) => ShadTheme(
-      data: shadTheme,
-      child: BlocProvider.value(
-        value: locate<FoldersCubit>(),
-        child: BlocProvider.value(
-          value: locate<ChatBloc>(),
-          child: _AddToFolderSheet(message: message, chat: chat),
-        ),
-      ),
-    ),
+    builder: (_) => sheet,
   );
 }
 
@@ -47,33 +48,35 @@ Future<void> showContactFolderRuleSheet(
 }) {
   final locate = context.read;
   final shadTheme = ShadTheme.of(context);
+  final sheet = ShadTheme(
+    data: shadTheme,
+    child: MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: locate<FoldersCubit>()),
+        BlocProvider.value(value: locate<ContactsCubit>()),
+      ],
+      child: _ContactFolderRuleSheet(contact: contact),
+    ),
+  );
   return showAdaptiveBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useRootNavigator: true,
     showCloseButton: false,
-    builder: (_) => ShadTheme(
-      data: shadTheme,
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: locate<FoldersCubit>()),
-          BlocProvider.value(value: locate<ContactsCubit>()),
-        ],
-        child: _ContactFolderRuleSheet(contact: contact),
-      ),
-    ),
+    builder: (_) => sheet,
   );
 }
 
 Future<MessageCollectionEntry?> showFolderCreateDialog(BuildContext context) {
   final locate = context.read;
+  final dialog = BlocProvider.value(
+    value: locate<FoldersCubit>(),
+    child: const _FolderCreateDialog(),
+  );
   return showFadeScaleDialog<MessageCollectionEntry>(
     context: context,
     useRootNavigator: true,
-    builder: (_) => BlocProvider.value(
-      value: locate<FoldersCubit>(),
-      child: const _FolderCreateDialog(),
-    ),
+    builder: (_) => dialog,
   );
 }
 
@@ -164,8 +167,13 @@ class _AddToFolderSheetState extends State<_AddToFolderSheet> {
                   style: context.textTheme.muted,
                 );
               }
-              final activeCollectionIds = foldersState
-                  .activeCollectionIdsForMessage(
+              final explicitCollectionIds = foldersState
+                  .explicitActiveCollectionIdsForMessage(
+                    chat: widget.chat,
+                    message: widget.message,
+                  );
+              final ruleDerivedCollectionIds = foldersState
+                  .ruleDerivedCollectionIdsForMessage(
                     chat: widget.chat,
                     message: widget.message,
                   );
@@ -177,7 +185,8 @@ class _AddToFolderSheetState extends State<_AddToFolderSheet> {
                   final actionState = chatState.collectionActionState;
                   return _FolderCollectionList(
                     collections: collections,
-                    activeCollectionIds: activeCollectionIds,
+                    explicitActiveCollectionIds: explicitCollectionIds,
+                    ruleDerivedCollectionIds: ruleDerivedCollectionIds,
                     loadingCollectionId:
                         actionState is ChatCollectionActionLoading &&
                             actionState.messageReferenceId == reference?.value
@@ -208,18 +217,23 @@ class _ContactFolderRuleSheet extends StatefulWidget {
 class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
   int _handledFailureId = 0;
 
-  void _setRule(MessageCollectionEntry collection, bool active) {
-    final cubit = context.read<ContactsCubit>();
+  void _setRule(
+    ContactDirectoryEntry contact,
+    MessageCollectionEntry collection,
+    bool active,
+  ) {
     if (active) {
       unawaited(
-        cubit.setContactFolderRule(
-          contact: widget.contact,
+        context.read<ContactsCubit>().setContactFolderRule(
+          contact: contact,
           collectionId: collection.id,
         ),
       );
       return;
     }
-    unawaited(cubit.clearContactFolderRule(contact: widget.contact));
+    unawaited(
+      context.read<ContactsCubit>().clearContactFolderRule(contact: contact),
+    );
   }
 
   Future<void> _createFolder() async {
@@ -227,7 +241,7 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
     if (!mounted || collection == null) {
       return;
     }
-    _setRule(collection, true);
+    _setRule(widget.contact, collection, true);
   }
 
   @override
@@ -266,30 +280,11 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
                 actionState.address == widget.contact.address &&
                 (actionState.action == ContactActionType.setFolderRule ||
                     actionState.action == ContactActionType.clearFolderRule);
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AxiButton.outline(
-                  onPressed: loading ? null : () => unawaited(_createFolder()),
-                  width: context.sizing.dialogMaxWidth,
-                  widthBehavior: AxiButtonWidth.expand,
-                  child: Text(l10n.folderCreateTitle),
-                ),
-                SizedBox(height: context.spacing.s),
-                AxiButton.ghost(
-                  onPressed: loading
-                      ? null
-                      : () => unawaited(
-                          context.read<ContactsCubit>().clearContactFolderRule(
-                            contact: widget.contact,
-                          ),
-                        ),
-                  width: context.sizing.dialogMaxWidth,
-                  widthBehavior: AxiButtonWidth.expand,
-                  child: Text(l10n.contactFolderRuleClear),
-                ),
-              ],
+            return AxiButton.outline(
+              onPressed: loading ? null : () => unawaited(_createFolder()),
+              width: context.sizing.dialogMaxWidth,
+              widthBehavior: AxiButtonWidth.expand,
+              child: Text(l10n.folderCreateTitle),
             );
           },
         ),
@@ -324,20 +319,29 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
                       ?.trim();
                   return _FolderCollectionList(
                     collections: collections,
-                    activeCollectionIds: <String>{
+                    explicitActiveCollectionIds: <String>{
                       if (activeCollectionId != null &&
                           activeCollectionId.isNotEmpty)
                         activeCollectionId,
                     },
+                    ruleDerivedCollectionIds: const <String>{},
                     loadingCollectionId:
                         actionState is ContactActionLoading &&
                             actionState.address == widget.contact.address &&
                             actionState.action ==
                                 ContactActionType.setFolderRule
                         ? actionState.collectionId
+                        : actionState is ContactActionLoading &&
+                              actionState.address == widget.contact.address &&
+                              actionState.action ==
+                                  ContactActionType.clearFolderRule
+                        ? actionState.collectionId
                         : null,
-                    singleSelect: true,
-                    onToggleFolder: _setRule,
+                    onToggleFolder: (collection, active) => _setRule(
+                      currentContact ?? widget.contact,
+                      collection,
+                      active,
+                    ),
                   );
                 },
               );
@@ -352,16 +356,16 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
 class _FolderCollectionList extends StatelessWidget {
   const _FolderCollectionList({
     required this.collections,
-    required this.activeCollectionIds,
+    required this.explicitActiveCollectionIds,
+    required this.ruleDerivedCollectionIds,
     required this.onToggleFolder,
     this.loadingCollectionId,
-    this.singleSelect = false,
   });
 
   final List<MessageCollectionEntry> collections;
-  final Set<String> activeCollectionIds;
+  final Set<String> explicitActiveCollectionIds;
+  final Set<String> ruleDerivedCollectionIds;
   final String? loadingCollectionId;
-  final bool singleSelect;
   final void Function(MessageCollectionEntry collection, bool active)
   onToggleFolder;
 
@@ -374,10 +378,10 @@ class _FolderCollectionList extends StatelessWidget {
         for (final collection in collections) ...[
           _FolderCollectionButton(
             collection: collection,
-            active: activeCollectionIds.contains(collection.id),
+            explicitActive: explicitActiveCollectionIds.contains(collection.id),
+            ruleDerived: ruleDerivedCollectionIds.contains(collection.id),
             loading: loadingCollectionId == collection.id,
             disabled: loadingCollectionId != null,
-            singleSelect: singleSelect,
             onPressed: onToggleFolder,
           ),
           if (collection != collections.last)
@@ -391,29 +395,40 @@ class _FolderCollectionList extends StatelessWidget {
 class _FolderCollectionButton extends StatelessWidget {
   const _FolderCollectionButton({
     required this.collection,
-    required this.active,
+    required this.explicitActive,
+    required this.ruleDerived,
     required this.loading,
     required this.disabled,
-    required this.singleSelect,
     required this.onPressed,
   });
 
   final MessageCollectionEntry collection;
-  final bool active;
+  final bool explicitActive;
+  final bool ruleDerived;
   final bool loading;
   final bool disabled;
-  final bool singleSelect;
   final void Function(MessageCollectionEntry collection, bool active) onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final active = explicitActive || ruleDerived;
+    final readOnly = ruleDerived && !explicitActive;
     return AxiListButton(
       leading: Icon(_folderCollectionIconData(collection)),
-      trailing: active ? const Icon(LucideIcons.check) : null,
-      loading: loading,
-      onPressed: disabled
+      trailing: loading
           ? null
-          : () => onPressed(collection, singleSelect ? true : !active),
+          : explicitActive
+          ? const Icon(LucideIcons.check)
+          : ruleDerived
+          ? AxiTooltip(
+              builder: (_) => Text(context.l10n.folderPickerRuleDerived),
+              child: const Icon(LucideIcons.workflow),
+            )
+          : null,
+      loading: loading,
+      onPressed: disabled || readOnly
+          ? null
+          : () => onPressed(collection, !active),
       child: Text(
         _folderCollectionLabel(context, collection),
         overflow: TextOverflow.ellipsis,
@@ -503,11 +518,21 @@ class _FolderCreateDialogState extends State<_FolderCreateDialog> {
     FoldersState state,
     AppLocalizations l10n,
   ) {
-    final title = normalizeCustomMessageCollectionTitle(value);
+    final String? title;
+    try {
+      title = normalizeCustomMessageCollectionTitle(value);
+    } on MessageCollectionNameException catch (error) {
+      return error.failure.label(l10n);
+    }
     if (title == null) {
       return MessageCollectionNameFailure.empty.label(l10n);
     }
-    final collectionId = normalizeCustomMessageCollectionId(title);
+    final String? collectionId;
+    try {
+      collectionId = normalizeCustomMessageCollectionId(title);
+    } on MessageCollectionNameException catch (error) {
+      return error.failure.label(l10n);
+    }
     if (collectionId == null) {
       return MessageCollectionNameFailure.empty.label(l10n);
     }

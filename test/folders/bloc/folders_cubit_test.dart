@@ -21,6 +21,7 @@ void main() {
   late StreamController<List<MessageCollectionEntry>> collectionsController;
   late StreamController<List<MessageCollectionMembershipEntry>>
   membershipsController;
+  late StreamController<Map<String, String>> contactFolderRulesController;
 
   setUp(() {
     xmppService = MockXmppService();
@@ -29,6 +30,8 @@ void main() {
         StreamController<List<MessageCollectionEntry>>.broadcast();
     membershipsController =
         StreamController<List<MessageCollectionMembershipEntry>>.broadcast();
+    contactFolderRulesController =
+        StreamController<Map<String, String>>.broadcast();
 
     when(
       () => xmppService.messageCollectionItemsStream(
@@ -48,12 +51,16 @@ void main() {
         chatJid: any(named: 'chatJid'),
       ),
     ).thenAnswer((_) => membershipsController.stream);
+    when(
+      () => xmppService.contactFolderRulesStream(),
+    ).thenAnswer((_) => contactFolderRulesController.stream);
   });
 
   tearDown(() async {
     await foldersController.close();
     await collectionsController.close();
     await membershipsController.close();
+    await contactFolderRulesController.close();
   });
 
   test('filters only the active folder items for the current query', () async {
@@ -219,4 +226,99 @@ void main() {
       );
     },
   );
+
+  test('exposes explicit and rule-derived folder ids separately', () async {
+    final chat = Chat(
+      jid: 'alpha@example.com',
+      title: 'Alpha',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+    );
+    final message = Message(
+      stanzaID: 'message-1',
+      senderJid: 'alpha@example.com',
+      chatJid: 'alpha@example.com',
+    );
+
+    final cubit = FoldersCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    collectionsController.add([
+      MessageCollectionEntry(
+        id: SystemMessageCollection.important.id,
+        title: null,
+        isSystem: true,
+        sortOrder: 0,
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+        active: true,
+      ),
+      MessageCollectionEntry(
+        id: SystemMessageCollection.receipts.id,
+        title: null,
+        isSystem: true,
+        sortOrder: 1,
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+        active: true,
+      ),
+    ]);
+    membershipsController.add([
+      MessageCollectionMembershipEntry(
+        collectionId: SystemMessageCollection.important.id,
+        chatJid: 'alpha@example.com',
+        messageReferenceId: 'message-1',
+        messageStanzaId: 'message-1',
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026),
+        active: true,
+      ),
+    ]);
+    contactFolderRulesController.add({
+      'alpha@example.com': SystemMessageCollection.receipts.id,
+    });
+    await pumpEventQueue();
+
+    expect(
+      cubit.state.explicitActiveCollectionIdsForMessage(
+        chat: chat,
+        message: message,
+      ),
+      {SystemMessageCollection.important.id},
+    );
+    expect(
+      cubit.state.ruleDerivedCollectionIdsForMessage(
+        chat: chat,
+        message: message,
+      ),
+      {SystemMessageCollection.receipts.id},
+    );
+  });
+
+  test('does not remove contact-rule-derived folder items', () async {
+    final item = FolderMessageItem(
+      collectionId: 'Projects',
+      chatJid: 'peer@axi.im',
+      messageReferenceId: 'message-1',
+      messageStanzaId: 'message-1',
+      messageOriginId: null,
+      messageMucStanzaId: null,
+      deltaAccountId: null,
+      deltaMsgId: null,
+      addedAt: DateTime.utc(2026),
+      active: true,
+      message: null,
+      chat: null,
+      isContactRuleDerived: true,
+    );
+
+    final cubit = FoldersCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    expect(await cubit.removeItem(item), isFalse);
+    verifyNever(() => xmppService.removeMessageCollectionMembership(item));
+  });
 }

@@ -55,6 +55,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de mettre à jour ce dossier.';
 
   @override
+  String get folderPickerRuleDerived => 'Appliqué par une règle de contact';
+
+  @override
   String get folderSystemReceipts => 'Reçus';
 
   @override
@@ -89,6 +92,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Un dossier portant ce nom existe déjà.';
 
   @override
+  String get folderNameTooLongError =>
+      'Les noms de dossier doivent faire 128 octets ou moins.';
+
+  @override
   String get folderMessagesEmpty =>
       'Aucun message dans ce dossier pour le moment';
 
@@ -100,7 +107,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de retirer ce message du dossier.';
 
   @override
-  String get contactFolderRuleAction => 'Send all to...';
+  String get contactFolderRuleAction => 'Envoyer tout vers...';
 
   @override
   String get contactFolderRuleMessagesAction =>
@@ -115,19 +122,19 @@ class AppLocalizationsFr extends AppLocalizations {
       'Envoyer tous les messages et e-mails vers...';
 
   @override
-  String get contactFolderRuleTitle => 'Send all to folder';
+  String get contactFolderRuleTitle => 'Envoyer tout vers un dossier';
 
   @override
   String get contactFolderRuleMessagesTitle =>
-      'Envoyer les messages vers un dossier';
+      'Envoyer tous les messages vers un dossier';
 
   @override
   String get contactFolderRuleEmailsTitle =>
-      'Envoyer les e-mails vers un dossier';
+      'Envoyer tous les e-mails vers un dossier';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Envoyer les messages et e-mails vers un dossier';
+      'Envoyer tous les messages et e-mails vers un dossier';
 
   @override
   String get contactFolderRuleClear => 'Effacer la règle';

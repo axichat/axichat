@@ -95,7 +95,9 @@ class FolderMessagesList extends StatelessWidget {
                     actionState.messageReferenceId ==
                         item.messageReferenceId.trim(),
                 onPressed: onPressed == null ? null : () => onPressed!(item),
-                onRemovePressed: onRemovePressed,
+                onRemovePressed: item.isContactRuleDerived
+                    ? null
+                    : onRemovePressed,
               );
             },
           );
@@ -188,12 +190,9 @@ class _FolderMessageTileState extends State<_FolderMessageTile> {
         widget.item.chat?.defaultTransport == MessageTransport.email;
     final previewStyle = context.textTheme.small.copyWith(
       color: message == null ? colors.mutedForeground : colors.foreground,
-      height: 1.3,
     );
     final detailStyle = context.textTheme.muted.copyWith(
       color: colors.mutedForeground,
-      height: 1.0,
-      textBaseline: TextBaseline.alphabetic,
     );
     final transportIconData = isEmailMessage
         ? LucideIcons.mail
@@ -248,10 +247,6 @@ class _FolderMessageTileState extends State<_FolderMessageTile> {
       backgroundColor: highlighted ? colors.secondary : colors.card,
       borderColor: highlighted ? colors.primary : chatTheme.recvEdge,
       borderRadius: context.radius,
-      shadowOpacity: 0,
-      shadows: const <BoxShadow>[],
-      bubbleWidthFraction: 1.0,
-      cornerClearance: 0,
       body: Padding(
         padding: EdgeInsets.all(spacing.m),
         child: Column(

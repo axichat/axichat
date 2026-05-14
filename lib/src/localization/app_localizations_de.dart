@@ -55,6 +55,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dieser Ordner konnte nicht aktualisiert werden.';
 
   @override
+  String get folderPickerRuleDerived => 'Durch Kontaktregel angewendet';
+
+  @override
   String get folderSystemReceipts => 'Belege';
 
   @override
@@ -90,6 +93,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ein Ordner mit diesem Namen existiert bereits.';
 
   @override
+  String get folderNameTooLongError =>
+      'Ordnernamen dürfen höchstens 128 Byte lang sein.';
+
+  @override
   String get folderMessagesEmpty => 'Noch keine Nachrichten in diesem Ordner';
 
   @override
@@ -100,7 +107,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Diese Nachricht konnte nicht aus dem Ordner entfernt werden.';
 
   @override
-  String get contactFolderRuleAction => 'Send all to...';
+  String get contactFolderRuleAction => 'Alles senden an...';
 
   @override
   String get contactFolderRuleMessagesAction => 'Alle Nachrichten senden an...';
@@ -113,17 +120,18 @@ class AppLocalizationsDe extends AppLocalizations {
       'Alle Nachrichten und E-Mails senden an...';
 
   @override
-  String get contactFolderRuleTitle => 'Send all to folder';
+  String get contactFolderRuleTitle => 'Alles an Ordner senden';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Nachrichten an Ordner senden';
+  String get contactFolderRuleMessagesTitle =>
+      'Alle Nachrichten an Ordner senden';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'E-Mails an Ordner senden';
+  String get contactFolderRuleEmailsTitle => 'Alle E-Mails an Ordner senden';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Nachrichten und E-Mails an Ordner senden';
+      'Alle Nachrichten und E-Mails an Ordner senden';
 
   @override
   String get contactFolderRuleClear => 'Regel löschen';

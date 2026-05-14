@@ -93,6 +93,7 @@ class FoldersState extends Equatable {
     required this.chatJid,
     required this.collections,
     required this.memberships,
+    required this.contactFolderRules,
     required this.items,
     required this.visibleItems,
     this.query = '',
@@ -105,6 +106,7 @@ class FoldersState extends Equatable {
   final String? chatJid;
   final List<MessageCollectionEntry>? collections;
   final List<MessageCollectionMembershipEntry>? memberships;
+  final Map<String, String> contactFolderRules;
   final List<FolderMessageItem>? items;
   final List<FolderMessageItem>? visibleItems;
   final String query;
@@ -132,7 +134,7 @@ class FoldersState extends Equatable {
         .toList(growable: false);
   }
 
-  Set<String> activeCollectionIdsForMessage({
+  Set<String> explicitActiveCollectionIdsForMessage({
     required Chat chat,
     required Message message,
   }) {
@@ -160,11 +162,47 @@ class FoldersState extends Equatable {
         .toSet();
   }
 
+  Set<String> ruleDerivedCollectionIdsForMessage({
+    required Chat chat,
+    required Message message,
+  }) {
+    if (chat.type == ChatType.groupChat ||
+        message.collectionReference(isGroupChat: false) == null) {
+      return const <String>{};
+    }
+    final activeCollectionIds = activeCollections
+        .map((collection) => collection.id)
+        .toSet();
+    if (activeCollectionIds.isEmpty) {
+      return const <String>{};
+    }
+    final collectionIds = <String>{};
+    for (final address in <String?>[
+      chat.jid,
+      chat.emailAddress,
+      chat.remoteJid,
+      chat.emailFromAddress,
+    ]) {
+      final key = contactDirectoryAddressKey(address);
+      if (key.isEmpty) {
+        continue;
+      }
+      final collectionId = contactFolderRules[key]?.trim();
+      if (collectionId != null &&
+          collectionId.isNotEmpty &&
+          activeCollectionIds.contains(collectionId)) {
+        collectionIds.add(collectionId);
+      }
+    }
+    return collectionIds;
+  }
+
   FoldersState copyWith({
     String? collectionId,
     String? chatJid,
     List<MessageCollectionEntry>? collections,
     List<MessageCollectionMembershipEntry>? memberships,
+    Map<String, String>? contactFolderRules,
     List<FolderMessageItem>? items,
     List<FolderMessageItem>? visibleItems,
     String? query,
@@ -178,6 +216,7 @@ class FoldersState extends Equatable {
       chatJid: chatJid ?? this.chatJid,
       collections: collections ?? this.collections,
       memberships: memberships ?? this.memberships,
+      contactFolderRules: contactFolderRules ?? this.contactFolderRules,
       items: items ?? this.items,
       visibleItems: visibleItems ?? this.visibleItems,
       query: query ?? this.query,
@@ -198,6 +237,7 @@ class FoldersState extends Equatable {
     chatJid,
     collections,
     memberships,
+    contactFolderRules,
     items,
     visibleItems,
     query,

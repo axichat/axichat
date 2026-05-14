@@ -52,6 +52,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get folderPickerUpdateFailed => 'Could not update this folder.';
 
   @override
+  String get folderPickerRuleDerived => 'Applied by contact rule';
+
+  @override
   String get folderSystemReceipts => 'Receipts';
 
   @override
@@ -86,6 +89,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'A folder with that name already exists.';
 
   @override
+  String get folderNameTooLongError =>
+      'Folder names must be 128 bytes or less.';
+
+  @override
   String get folderMessagesEmpty => 'No messages in this folder yet';
 
   @override
@@ -112,14 +119,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactFolderRuleTitle => 'Send all to folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Send messages to folder';
+  String get contactFolderRuleMessagesTitle => 'Send all messages to folder';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Send emails to folder';
+  String get contactFolderRuleEmailsTitle => 'Send all emails to folder';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Send messages and emails to folder';
+      'Send all messages and emails to folder';
 
   @override
   String get contactFolderRuleClear => 'Clear rule';
