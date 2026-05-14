@@ -991,7 +991,9 @@ class _RecipientAvatarBadge extends StatelessWidget {
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
     final recipientAvatarSize = spacing.l;
-    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    final shape = SquircleBorder(
+      cornerRadius: axiAvatarSquircleRadius(context, recipientAvatarSize),
+    );
     final avatarPath = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
     final avatarImagePath = avatarPath?.isNotEmpty == true ? avatarPath : null;
     return SizedBox(
@@ -1166,7 +1168,9 @@ class _TypingAvatar extends StatelessWidget {
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
     final recipientAvatarSize = spacing.l;
-    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    final shape = SquircleBorder(
+      cornerRadius: axiAvatarSquircleRadius(context, recipientAvatarSize),
+    );
     return Container(
       width: recipientAvatarSize,
       height: recipientAvatarSize,

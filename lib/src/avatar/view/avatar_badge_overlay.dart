@@ -22,10 +22,12 @@ class AvatarTransportBadgeOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final cutoutShape = transport.isEmail
         ? CutoutShape.squircle
         : CutoutShape.circle;
-    final badgeExtent = context.sizing.menuItemIconSize - spacing.xxs;
+    final badgeExtent = sizing.menuItemIconSize - spacing.xxs;
+    final avatarCornerRadius = axiAvatarSquircleRadius(context, size);
     final cutoutGap = spacing.xxs / 2;
     final horizontalOffset = -1.0;
     final verticalOffset = 0.0;
@@ -44,7 +46,7 @@ class AvatarTransportBadgeOverlay extends StatelessWidget {
       child: CutoutSurface(
         backgroundColor: Colors.transparent,
         borderColor: Colors.transparent,
-        shape: SquircleBorder(cornerRadius: context.radii.squircle),
+        shape: SquircleBorder(cornerRadius: avatarCornerRadius),
         cutouts: [
           CutoutSpec(
             edge: CutoutEdge.bottom,

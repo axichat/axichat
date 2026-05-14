@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/app_icon_provider.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +12,9 @@ class AxichatAppIconAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    final shape = SquircleBorder(
+      cornerRadius: axiAvatarSquircleRadius(context, size),
+    );
     final imageProvider = axichatAppIconProvider(context, size: size);
     return SizedBox.square(
       dimension: size,

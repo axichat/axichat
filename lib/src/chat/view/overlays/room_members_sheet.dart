@@ -329,22 +329,14 @@ class _RoomAvatarSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final motion = context.motion;
-    final radii = context.radii;
     final sizing = context.sizing;
     final spacing = context.spacing;
     final avatarSize = sizing.iconButtonTapTarget;
     final avatarSpacing = spacing.s;
     final l10n = context.l10n;
-    final sizeSpan = sizing.iconButtonSize - sizing.iconButtonIconSize;
-    final clampedProgress = sizeSpan <= 0
-        ? 1.0
-        : ((avatarSize - sizing.iconButtonIconSize) / sizeSpan)
-              .clamp(0.0, 1.0)
-              .toDouble();
-    final squircleCornerRadius =
-        radii.squircleSm +
-        ((radii.squircle - radii.squircleSm) * clampedProgress);
-    final avatarShape = SquircleBorder(cornerRadius: squircleCornerRadius);
+    final avatarShape = SquircleBorder(
+      cornerRadius: axiAvatarSquircleRadius(context, avatarSize),
+    );
     final overlayAlpha = motion.tapFocusAlpha + motion.tapHoverAlpha;
     final avatar = SizedBox.square(
       dimension: avatarSize,

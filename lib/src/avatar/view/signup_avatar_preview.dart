@@ -84,23 +84,13 @@ class _SignupAvatarPreviewState extends State<SignupAvatarPreview>
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final radii = context.radii;
-    final sizing = context.sizing;
     final borderSide = context.borderSide;
     final frameStrokeWidth = borderSide.width * 4;
     final previewInset = frameStrokeWidth / 2;
     final previewSize = (widget.size - frameStrokeWidth)
         .clamp(0.0, widget.size)
         .toDouble();
-    final sizeSpan = sizing.iconButtonSize - sizing.iconButtonIconSize;
-    final previewProgress = sizeSpan <= 0
-        ? 1.0
-        : ((previewSize - sizing.iconButtonIconSize) / sizeSpan)
-              .clamp(0.0, 1.0)
-              .toDouble();
-    final sharedCornerRadius =
-        radii.squircleSm +
-        ((radii.squircle - radii.squircleSm) * previewProgress);
+    final sharedCornerRadius = axiAvatarSquircleRadius(context, previewSize);
     final previewShape = SquircleBorder(cornerRadius: sharedCornerRadius);
     final resolvedBytes = widget.bytes;
     final hasBytes = resolvedBytes != null && resolvedBytes.isNotEmpty;

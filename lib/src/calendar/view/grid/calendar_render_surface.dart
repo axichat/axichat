@@ -17,8 +17,8 @@ import 'package:axichat/src/calendar/view/availability/calendar_free_busy_style.
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
-import 'calendar_task_geometry.dart';
-import 'calendar_task_surface.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_task_geometry.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_task_surface.dart';
 
 /// Controller that exposes geometry computed by [RenderCalendarSurface].
 class CalendarSurfaceController {

@@ -16,6 +16,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 enum AxiAvatarShape { circle, squircle }
 
+double axiAvatarSquircleRadius(BuildContext context, double shortestSide) {
+  return shortestSide * context.radii.avatarSquircleRadiusFraction;
+}
+
 class AxiAvatar extends StatelessWidget {
   const AxiAvatar({
     super.key,
@@ -44,20 +48,9 @@ class AxiAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final motion = context.motion;
-    final radii = context.radii;
-    final sizing = context.sizing;
-    final sizeSpan = sizing.iconButtonSize - sizing.iconButtonIconSize;
-    final clampedProgress = sizeSpan <= 0
-        ? 1.0
-        : ((size - sizing.iconButtonIconSize) / sizeSpan)
-              .clamp(0.0, 1.0)
-              .toDouble();
-    final squircleCornerRadius =
-        radii.squircleSm +
-        ((radii.squircle - radii.squircleSm) * clampedProgress);
     final ShapeBorder avatarShape = shape == AxiAvatarShape.circle
         ? const CircleBorder()
-        : SquircleBorder(cornerRadius: squircleCornerRadius);
+        : SquircleBorder(cornerRadius: axiAvatarSquircleRadius(context, size));
     final resolvedAvatarBytes = avatarBytes;
     final showLoadingOverlay = avatar.loading;
     final overlayAlpha = motion.tapFocusAlpha + motion.tapHoverAlpha;

@@ -2616,7 +2616,9 @@ class _RecipientHeaderAvatar extends StatelessWidget {
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
     final recipientAvatarSize = spacing.m;
-    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    final shape = SquircleBorder(
+      cornerRadius: axiAvatarSquircleRadius(context, recipientAvatarSize),
+    );
     return Container(
       width: recipientAvatarSize,
       height: recipientAvatarSize,

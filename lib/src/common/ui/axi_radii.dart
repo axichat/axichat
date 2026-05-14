@@ -8,12 +8,14 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
     required this.container,
     required this.squircle,
     required this.squircleSm,
+    required this.avatarSquircleRadiusFraction,
     required this.pill,
   });
 
   final double container;
   final double squircle;
   final double squircleSm;
+  final double avatarSquircleRadiusFraction;
   final double pill;
 
   @override
@@ -21,12 +23,15 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
     double? container,
     double? squircle,
     double? squircleSm,
+    double? avatarSquircleRadiusFraction,
     double? pill,
   }) {
     return AxiRadii(
       container: container ?? this.container,
       squircle: squircle ?? this.squircle,
       squircleSm: squircleSm ?? this.squircleSm,
+      avatarSquircleRadiusFraction:
+          avatarSquircleRadiusFraction ?? this.avatarSquircleRadiusFraction,
       pill: pill ?? this.pill,
     );
   }
@@ -40,6 +45,7 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
 
 const double axiContainerRadius = 8;
 const double axiSquircleRadius = 12;
+const double axiAvatarSquircleRadiusFraction = 0.30;
 const BorderRadius axiBorderRadius = BorderRadius.all(
   Radius.circular(axiContainerRadius),
 );
@@ -48,5 +54,6 @@ const AxiRadii axiRadii = AxiRadii(
   container: axiContainerRadius,
   squircle: axiSquircleRadius,
   squircleSm: axiContainerRadius,
+  avatarSquircleRadiusFraction: axiAvatarSquircleRadiusFraction,
   pill: 1000,
 );
