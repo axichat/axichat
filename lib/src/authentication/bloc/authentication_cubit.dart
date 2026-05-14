@@ -1099,8 +1099,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
+    await _triggerEmailReconnect(waitForNetworkAvailable: false);
+    if (state is! AuthenticationComplete) {
+      return;
+    }
     await _reconnectXmppForStickySession(source: source);
-    await _triggerEmailReconnect();
   }
 
   bool _hasEmailReconnectContext(EndpointConfig config) =>
@@ -1152,16 +1155,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> _triggerEmailReconnect() async {
+  Future<void> _triggerEmailReconnect({
+    bool waitForNetworkAvailable = true,
+  }) async {
     await _resumeEmailReconnectIfPossible(
       jid: _xmppService.myJid,
       requireStoredCredentials: state is! AuthenticationLogInInProgress,
+      waitForNetworkAvailable: waitForNetworkAvailable,
     );
   }
 
   Future<void> _resumeEmailReconnectIfPossible({
     required String? jid,
     required bool requireStoredCredentials,
+    bool waitForNetworkAvailable = true,
   }) async {
     final EndpointConfig config = endpointConfig;
     if (!config.smtpEnabled) return;
@@ -1186,6 +1193,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (!await emailService.canReconnectConfiguredSession(jid: jid)) {
         return;
       }
+      if (waitForNetworkAvailable) {
+        await _notifyEmailNetworkAvailable(emailService);
+      } else {
+        unawaited(_notifyEmailNetworkAvailable(emailService));
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.finer('Email reconnect trigger failed', error, stackTrace);
+    }
+  }
+
+  Future<void> _notifyEmailNetworkAvailable(EmailService emailService) async {
+    try {
       await emailService.handleNetworkAvailable();
     } on Exception catch (error, stackTrace) {
       _log.finer('Email reconnect trigger failed', error, stackTrace);

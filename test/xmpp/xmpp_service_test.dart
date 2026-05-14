@@ -3316,6 +3316,11 @@ void main() {
           ReconnectTrigger.immediateRetry,
         );
         await reconnectionPolicy.onSuccess();
+        final states = <ConnectionState>[];
+        final stateSubscription = xmppService.connectivityStream.listen(
+          states.add,
+        );
+        addTearDown(stateSubscription.cancel);
 
         eventStreamController.add(
           mox.ConnectionStateChangedEvent(
@@ -3323,9 +3328,6 @@ void main() {
             mox.XmppConnectionState.notConnected,
           ),
         );
-        await pumpEventQueue();
-
-        expect(xmppService.connectionState, ConnectionState.connecting);
         expect(
           reconnectionPolicy.reconnectActivity,
           XmppReconnectActivity.awaitingNegotiation,
@@ -3334,6 +3336,13 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await pumpEventQueue();
 
+        expect(
+          states,
+          containsAllInOrder([
+            ConnectionState.connecting,
+            ConnectionState.notConnected,
+          ]),
+        );
         expect(xmppService.connectionState, ConnectionState.notConnected);
         expect(
           reconnectionPolicy.reconnectActivity,
@@ -3387,6 +3396,176 @@ void main() {
         );
       },
     );
+
+    test(
+      'Current final socket failure clears connecting and schedules backoff.',
+      () async {
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingSocket,
+        );
+
+        expect(
+          await mockConnection.socketWrapper.connect('example.invalid'),
+          isFalse,
+        );
+
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.scheduledBackoff,
+        );
+      },
+    );
+
+    test(
+      'Current late socket failure does not move negotiating reconnect.',
+      () async {
+        await reconnectionPolicy.setShouldReconnect(true);
+        await reconnectionPolicy.requestReconnect(
+          ReconnectTrigger.immediateRetry,
+        );
+        await reconnectionPolicy.onSuccess();
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingNegotiation,
+        );
+
+        expect(
+          await mockConnection.socketWrapper.connect('example.invalid'),
+          isFalse,
+        );
+
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        expect(
+          reconnectionPolicy.reconnectActivity,
+          XmppReconnectActivity.awaitingNegotiation,
+        );
+      },
+    );
+
+    test('Stale socket failure callbacks do not move current policy', () async {
+      await xmppService.close();
+      await pumpEventQueue();
+
+      final staleConnection = MockXmppConnection();
+      final resetConnection = MockXmppConnection();
+      final currentConnection = MockXmppConnection();
+      final staleSocketWrapper = XmppSocketWrapper();
+      final resetSocketWrapper = XmppSocketWrapper();
+      final currentSocketWrapper = XmppSocketWrapper();
+      final stalePolicy = XmppReconnectionPolicy.exponential();
+      final resetPolicy = XmppReconnectionPolicy.exponential();
+      final currentPolicy = XmppReconnectionPolicy.exponential();
+      var connectionBuilds = 0;
+      when(() => mockStateStore.read(key: any(named: 'key'))).thenReturn(null);
+      when(
+        () => mockStateStore.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async => true);
+      when(() => mockStateStore.close()).thenAnswer((_) async {});
+      when(() => mockDatabase.close()).thenAnswer((_) async {});
+
+      void prepareOfflineConnection(
+        MockXmppConnection connection, {
+        required XmppSocketWrapper socketWrapper,
+        required XmppReconnectionPolicy policy,
+      }) {
+        when(() => connection.hasConnectionSettings).thenReturn(false);
+        when(() => connection.socketWrapper).thenReturn(socketWrapper);
+        when(() => connection.reconnectionPolicy).thenReturn(policy);
+        when(() => connection.setShouldReconnect(any())).thenAnswer((
+          invocation,
+        ) async {
+          await policy.setShouldReconnect(
+            invocation.positionalArguments.first as bool,
+          );
+        });
+      }
+
+      prepareOfflineConnection(
+        staleConnection,
+        socketWrapper: staleSocketWrapper,
+        policy: stalePolicy,
+      );
+      prepareOfflineConnection(
+        resetConnection,
+        socketWrapper: resetSocketWrapper,
+        policy: resetPolicy,
+      );
+      prepareOfflineConnection(
+        currentConnection,
+        socketWrapper: currentSocketWrapper,
+        policy: currentPolicy,
+      );
+
+      xmppService = XmppService(
+        buildConnection: () {
+          connectionBuilds++;
+          return switch (connectionBuilds) {
+            1 => staleConnection,
+            2 => resetConnection,
+            3 => currentConnection,
+            _ => XmppConnection(),
+          };
+        },
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => mockDatabase,
+        notificationService: mockNotificationService,
+      );
+
+      await xmppService.resumeOfflineSession(
+        jid: 'stale@axi.im',
+        databasePrefix: '',
+        databasePassphrase: '',
+      );
+      await xmppService.resumeOfflineSession(
+        jid: 'current@axi.im',
+        databasePrefix: '',
+        databasePassphrase: '',
+      );
+
+      await currentPolicy.setShouldReconnect(true);
+      await currentPolicy.requestReconnect(ReconnectTrigger.immediateRetry);
+
+      expect(
+        currentPolicy.reconnectActivity,
+        XmppReconnectActivity.awaitingSocket,
+      );
+
+      expect(await staleSocketWrapper.connect('example.invalid'), isFalse);
+
+      expect(
+        currentPolicy.reconnectActivity,
+        XmppReconnectActivity.awaitingSocket,
+      );
+    });
 
     test(
       'Connecting watchdog does not clear a completed stream negotiation.',

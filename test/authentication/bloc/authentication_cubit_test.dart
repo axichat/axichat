@@ -131,6 +131,7 @@ void main() {
     when(
       () => mockXmppService.connectionState,
     ).thenReturn(ConnectionState.notConnected);
+    when(() => mockXmppService.hasConnectionSettings).thenReturn(true);
     when(() => mockEmailService.currentAccount(any())).thenAnswer(
       (_) async =>
           const EmailAccount(address: validJid, password: validPassword),
@@ -2523,6 +2524,95 @@ void main() {
 
         await subscription.cancel();
         await bloc.close();
+      },
+    );
+  });
+
+  group('lifecycle resume', () {
+    test(
+      'starts email reconnect before XMPP without waiting for catch-up',
+      () async {
+        final emailCompleter = Completer<void>();
+        final events = <String>[];
+        when(() => mockEmailService.handleNetworkAvailable()).thenAnswer((_) {
+          events.add('email');
+          return emailCompleter.future;
+        });
+        when(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) async {
+          events.add('xmpp');
+          return true;
+        });
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        addTearDown(bloc.close);
+
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await pumpEventQueue();
+
+        expect(events, contains('email'));
+        expect(events, contains('xmpp'));
+        expect(events.indexOf('email'), lessThan(events.indexOf('xmpp')));
+        expect(emailCompleter.isCompleted, isFalse);
+
+        emailCompleter.complete();
+        await pumpEventQueue();
+      },
+    );
+
+    test(
+      'auth state change during email resume prevents XMPP reconnect',
+      () async {
+        var emailContextChecks = 0;
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+        when(() => mockEmailService.hasActiveSession).thenReturn(false);
+        when(() => mockEmailService.hasInMemoryReconnectContext).thenAnswer((
+          _,
+        ) {
+          emailContextChecks++;
+          return emailContextChecks == 1;
+        });
+        when(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) async => true);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        addTearDown(bloc.close);
+
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await pumpEventQueue();
+
+        expect(bloc.state, const AuthenticationNone());
+        verifyNever(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        );
       },
     );
   });

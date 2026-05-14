@@ -1279,7 +1279,7 @@ class XmppService extends XmppBase
       return;
     }
     if (activity == XmppReconnectActivity.awaitingNegotiation) {
-      await _connection.reconnectionPolicy.moveAwaitingNegotiationToBackoff();
+      await _connection.reconnectionPolicy.onFailure();
     }
     if (activity.shouldClearStaleConnecting) {
       _setConnectionState(ConnectionState.notConnected);
@@ -2817,10 +2817,26 @@ class XmppService extends XmppBase
   }
 
   void _configureSocketCallbacks() {
-    _connection.socketWrapper.registerConnectionCallbacks(
-      onConnectSuccess: _resetConnectTimeoutTracking,
-      onConnectError: _handleSocketConnectError,
-      onConnectFailure: _moveAwaitingSocketReconnectToBackoff,
+    final connection = _connection;
+    connection.socketWrapper.registerConnectionCallbacks(
+      onConnectSuccess: () {
+        if (!identical(_connection, connection)) {
+          return;
+        }
+        _resetConnectTimeoutTracking();
+      },
+      onConnectError: (error) {
+        if (!identical(_connection, connection)) {
+          return;
+        }
+        _handleSocketConnectError(error);
+      },
+      onConnectFailure: () async {
+        if (!identical(_connection, connection)) {
+          return;
+        }
+        await _handleSocketConnectFailure(connection);
+      },
     );
   }
 
@@ -2882,11 +2898,22 @@ class XmppService extends XmppBase
     }
   }
 
-  void _moveAwaitingSocketReconnectToBackoff() {
-    fireAndForget(
-      _connection.reconnectionPolicy.moveAwaitingSocketToBackoff,
-      operationName: 'XmppService.moveAwaitingSocketReconnectToBackoff',
-    );
+  Future<void> _handleSocketConnectFailure(XmppConnection connection) async {
+    final policy = connection.reconnectionPolicy;
+    final activity = policy.reconnectActivity;
+    if (activity == XmppReconnectActivity.awaitingNegotiation) {
+      return;
+    }
+    if (activity == XmppReconnectActivity.dispatching ||
+        activity == XmppReconnectActivity.awaitingSocket) {
+      await policy.onFailure();
+    }
+    if (!identical(_connection, connection)) {
+      return;
+    }
+    if (connectionState == ConnectionState.connecting) {
+      _setConnectionState(ConnectionState.notConnected);
+    }
   }
 
   bool _isTimeoutSocketError(SocketException error) {
@@ -4083,7 +4110,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
 
   void Function()? _onConnectSuccess;
   void Function(SocketException error)? _onConnectError;
-  void Function()? _onConnectFailure;
+  FutureOr<void> Function()? _onConnectFailure;
   Socket? _socket;
   StreamSubscription<dynamic>? _socketSubscription;
   final Set<Socket> _expectedClosures = {};
@@ -4119,7 +4146,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   void registerConnectionCallbacks({
     void Function()? onConnectSuccess,
     void Function(SocketException error)? onConnectError,
-    void Function()? onConnectFailure,
+    FutureOr<void> Function()? onConnectFailure,
   }) {
     _onConnectSuccess = onConnectSuccess;
     _onConnectError = onConnectError;
@@ -4235,7 +4262,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
         _log.severe(
           'No static server mapping and no host override provided. DNS lookups are disabled.',
         );
-        _onConnectFailure?.call();
+        await _onConnectFailure?.call();
         return false;
       }
       resolvedHost = target.host;
@@ -4270,7 +4297,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     _log.warning(
       'Socket connection failed. DNS/SRV fallbacks are disabled for all domains except axi.im A fallback.',
     );
-    _onConnectFailure?.call();
+    await _onConnectFailure?.call();
     return false;
   }
 

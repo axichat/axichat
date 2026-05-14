@@ -695,32 +695,6 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
     _log.info('completeReconnect() called: ${_stateSummary()}');
     _clearReconnectCycle(resetAttempts: true);
   }
-
-  Future<bool> moveAwaitingSocketToBackoff() {
-    if (reconnectActivity != XmppReconnectActivity.awaitingSocket) {
-      _log.info('moveAwaitingSocketToBackoff ignored: ${_stateSummary()}');
-      return Future.value(false);
-    }
-    _log.info(
-      'Moving stale awaiting-socket reconnect cycle to backoff: '
-      'cycleId=$_activeCycleId ${_stateSummary()}',
-    );
-    _scheduleReconnectBackoff();
-    return Future.value(true);
-  }
-
-  Future<bool> moveAwaitingNegotiationToBackoff() async {
-    if (reconnectActivity != XmppReconnectActivity.awaitingNegotiation) {
-      _log.info('moveAwaitingNegotiationToBackoff ignored: ${_stateSummary()}');
-      return false;
-    }
-    _log.info(
-      'Moving stale awaiting-negotiation reconnect cycle to backoff: '
-      'cycleId=$_activeCycleId ${_stateSummary()}',
-    );
-    _scheduleReconnectBackoff();
-    return true;
-  }
 }
 
 class IOEndpoint {

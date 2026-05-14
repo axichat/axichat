@@ -33,7 +33,9 @@ void main() {
     expect(find.byType(AxiProgressIndicator), findsNothing);
   });
 
-  testWidgets('connecting banner shows a progress indicator', (tester) async {
+  testWidgets('connecting banner shows progress after status text', (
+    tester,
+  ) async {
     final settingsCubit = _mockSettingsCubit();
     final xmppStates = StreamController<ConnectionState>.broadcast();
     final xmppService = _MockXmppService();
@@ -60,9 +62,29 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byType(AxiProgressIndicator), findsOneWidget);
-    expect(find.byIcon(LucideIcons.cloudCog), findsOneWidget);
-    expect(find.text('Connecting...'), findsOneWidget);
+    final progress = find.byType(AxiProgressIndicator);
+    final cloudIcon = find.byIcon(LucideIcons.cloudCog);
+    final statusText = find.text(
+      lookupAppLocalizations(const Locale('en')).connectivityStatusConnecting,
+    );
+
+    expect(progress, findsOneWidget);
+    expect(cloudIcon, findsOneWidget);
+    expect(statusText, findsOneWidget);
+
+    const spacing = axiSpacing;
+    expect(
+      tester.getCenter(cloudIcon).dx,
+      lessThan(tester.getTopLeft(statusText).dx),
+    );
+    expect(
+      tester.getTopLeft(progress).dx,
+      greaterThan(tester.getTopRight(statusText).dx),
+    );
+    expect(
+      tester.getTopLeft(progress).dx - tester.getTopRight(statusText).dx,
+      closeTo(spacing.m, spacing.xs),
+    );
   });
 }
 

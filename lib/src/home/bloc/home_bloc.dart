@@ -160,7 +160,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     emit(state.copyWith(refreshStatus: RequestStatus.loading));
 
-    final task = action();
+    final task = _runAfterRefreshLoadingTick(action);
     _syncTask = task;
 
     try {
@@ -183,6 +183,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         _syncTask = null;
       }
     }
+  }
+
+  Future<_HomeRefreshOutcome> _runAfterRefreshLoadingTick(
+    Future<_HomeRefreshOutcome> Function() action,
+  ) async {
+    await Future<void>.delayed(Duration.zero);
+    return action();
   }
 
   void _onRefreshStatusCleared(
