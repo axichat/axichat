@@ -20,6 +20,8 @@ import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
+import 'package:axichat/src/contacts/view/contacts_list.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -188,84 +190,95 @@ class _ChatsListBody extends StatelessWidget {
           context.read<ChatsCubit>().clearCreationStatus();
         }
       },
-      child: BlocBuilder<ChatsCubit, ChatsState>(
-        builder: (context, state) {
-          final items = state.items;
-          Widget child;
-          if (items == null) {
-            child = KeyedSubtree(
-              key: const ValueKey('chats-loading'),
-              child: Center(
-                child: AxiProgressIndicator(
-                  color: context.colorScheme.foreground,
-                ),
-              ),
-            );
-          } else {
-            final visibleItems = state.visibleItems;
-            Widget body;
-            if (visibleItems.isEmpty) {
-              body = Center(
-                child: Text(
-                  l10n.chatsEmptyList,
-                  style: context.textTheme.muted,
-                ),
-              );
-            } else {
-              final scrollPhysics = AlwaysScrollableScrollPhysics(
-                parent: ScrollConfiguration.of(
-                  context,
-                ).getScrollPhysics(context),
-              );
-              body = ColoredBox(
-                color: context.colorScheme.background,
-                child: AxiNowTicker(
-                  now: kEnableDemoChats ? demoNow : DateTime.now,
-                  builder: (context, nowListenable) => AnimatedChatsListView(
-                    items: visibleItems,
-                    animationDuration: context
-                        .watch<SettingsCubit>()
-                        .animationDuration,
-                    scrollPhysics: scrollPhysics,
-                    selectedJids: state.selectedJids,
-                    openJid: state.openJid,
-                    timestampNowListenable: nowListenable,
-                    calendarStorage: calendarStorage,
-                    selfIdentity: selfIdentity,
+      child: BlocBuilder<ContactsCubit, ContactsState>(
+        buildWhen: (previous, current) => previous.items != current.items,
+        builder: (context, contactsState) {
+          final contactsByAddressKey = _contactsByAddressKey(
+            contactsState.items,
+          );
+          return BlocBuilder<ChatsCubit, ChatsState>(
+            builder: (context, state) {
+              final items = state.items;
+              Widget child;
+              if (items == null) {
+                child = KeyedSubtree(
+                  key: const ValueKey('chats-loading'),
+                  child: Center(
+                    child: AxiProgressIndicator(
+                      color: context.colorScheme.foreground,
+                    ),
                   ),
-                ),
-              );
-            }
+                );
+              } else {
+                final visibleItems = state.visibleItems;
+                Widget body;
+                if (visibleItems.isEmpty) {
+                  body = Center(
+                    child: Text(
+                      l10n.chatsEmptyList,
+                      style: context.textTheme.muted,
+                    ),
+                  );
+                } else {
+                  final scrollPhysics = AlwaysScrollableScrollPhysics(
+                    parent: ScrollConfiguration.of(
+                      context,
+                    ).getScrollPhysics(context),
+                  );
+                  body = ColoredBox(
+                    color: context.colorScheme.background,
+                    child: AxiNowTicker(
+                      now: kEnableDemoChats ? demoNow : DateTime.now,
+                      builder: (context, nowListenable) =>
+                          AnimatedChatsListView(
+                            items: visibleItems,
+                            contactsByAddressKey: contactsByAddressKey,
+                            animationDuration: context
+                                .watch<SettingsCubit>()
+                                .animationDuration,
+                            scrollPhysics: scrollPhysics,
+                            selectedJids: state.selectedJids,
+                            openJid: state.openJid,
+                            timestampNowListenable: nowListenable,
+                            calendarStorage: calendarStorage,
+                            selfIdentity: selfIdentity,
+                          ),
+                    ),
+                  );
+                }
 
-            child = KeyedSubtree(
-              key: const ValueKey('chats-loaded'),
-              child: visibleItems.isEmpty
-                  ? ColoredBox(
-                      color: context.colorScheme.background,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final scrollPhysics = AlwaysScrollableScrollPhysics(
-                            parent: ScrollConfiguration.of(
-                              context,
-                            ).getScrollPhysics(context),
-                          );
-                          return ListView(
-                            physics: scrollPhysics,
-                            children: [
-                              SizedBox(
-                                height: constraints.maxHeight,
-                                child: body,
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    )
-                  : body,
-            );
-          }
+                child = KeyedSubtree(
+                  key: const ValueKey('chats-loaded'),
+                  child: visibleItems.isEmpty
+                      ? ColoredBox(
+                          color: context.colorScheme.background,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final scrollPhysics =
+                                  AlwaysScrollableScrollPhysics(
+                                    parent: ScrollConfiguration.of(
+                                      context,
+                                    ).getScrollPhysics(context),
+                                  );
+                              return ListView(
+                                physics: scrollPhysics,
+                                children: [
+                                  SizedBox(
+                                    height: constraints.maxHeight,
+                                    child: body,
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        )
+                      : body,
+                );
+              }
 
-          return child;
+              return child;
+            },
+          );
         },
       ),
     );
@@ -275,6 +288,7 @@ class _ChatsListBody extends StatelessWidget {
 class _AnimatedChatTile extends StatelessWidget {
   const _AnimatedChatTile({
     required this.chat,
+    required this.contactsByAddressKey,
     required this.animation,
     required this.entering,
     required this.fromTop,
@@ -289,6 +303,7 @@ class _AnimatedChatTile extends StatelessWidget {
   });
 
   final Chat chat;
+  final Map<String, ContactDirectoryEntry> contactsByAddressKey;
   final Animation<double> animation;
   final bool entering;
   final bool fromTop;
@@ -318,6 +333,7 @@ class _AnimatedChatTile extends StatelessWidget {
         position: tween.animate(slideAnimation),
         child: _ChatTileSlot(
           chat: chat,
+          contactsByAddressKey: contactsByAddressKey,
           archivedContext: archivedContext,
           onArchivedTap: onArchivedTap,
           selectionActive: selectionActive,
@@ -335,6 +351,7 @@ class _AnimatedChatTile extends StatelessWidget {
 class _ChatTileSlot extends StatelessWidget {
   const _ChatTileSlot({
     required this.chat,
+    required this.contactsByAddressKey,
     required this.archivedContext,
     required this.onArchivedTap,
     required this.selectionActive,
@@ -346,6 +363,7 @@ class _ChatTileSlot extends StatelessWidget {
   });
 
   final Chat chat;
+  final Map<String, ContactDirectoryEntry> contactsByAddressKey;
   final bool archivedContext;
   final Future<void> Function(Chat chat)? onArchivedTap;
   final bool selectionActive;
@@ -363,6 +381,7 @@ class _ChatTileSlot extends StatelessWidget {
         return ListItemPadding(
           child: ChatListTile(
             item: chat,
+            contactsByAddressKey: contactsByAddressKey,
             archivedContext: archivedContext,
             onArchivedTap: onArchivedTap,
             selectionActive: selectionActive,
@@ -529,6 +548,7 @@ class ChatListTile extends StatefulWidget {
     required this.isOpen,
     required this.timestampNow,
     required this.selfIdentity,
+    this.contactsByAddressKey = const <String, ContactDirectoryEntry>{},
     this.calendarStorage,
     this.archivedContext = false,
     this.spamContext = false,
@@ -538,6 +558,7 @@ class ChatListTile extends StatefulWidget {
   });
 
   final Chat item;
+  final Map<String, ContactDirectoryEntry> contactsByAddressKey;
   final bool selectionActive;
   final bool isSelected;
   final bool isOpen;
@@ -558,6 +579,7 @@ class AnimatedChatsListView extends StatefulWidget {
   const AnimatedChatsListView({
     super.key,
     required this.items,
+    required this.contactsByAddressKey,
     required this.animationDuration,
     required this.scrollPhysics,
     required this.selectedJids,
@@ -568,6 +590,7 @@ class AnimatedChatsListView extends StatefulWidget {
   });
 
   final List<Chat> items;
+  final Map<String, ContactDirectoryEntry> contactsByAddressKey;
   final Duration animationDuration;
   final ScrollPhysics scrollPhysics;
   final Set<String> selectedJids;
@@ -620,6 +643,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
     ) {
       return _AnimatedChatTile(
         chat: removedChat,
+        contactsByAddressKey: widget.contactsByAddressKey,
         animation: animation,
         entering: false,
         fromTop: removedIndex == 0,
@@ -704,6 +728,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
           final chat = _displayedItems[index];
           return _AnimatedChatTile(
             chat: chat,
+            contactsByAddressKey: widget.contactsByAddressKey,
             animation: animation,
             entering: true,
             fromTop: index == 0,
@@ -811,6 +836,12 @@ class _ChatListTileState extends State<ChatListTile> {
     );
     final isCalendarFirstRoom = item.isCalendarFirstRoom;
     final isEmailChatRow = item.isEmailBacked && !isCalendarFirstRoom;
+    final editContact = widget.archivedContext || widget.spamContext
+        ? null
+        : _editableContactForChat(
+            contactsByAddressKey: widget.contactsByAddressKey,
+            chat: item,
+          );
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadDiameter = showUnreadBadge
@@ -1030,10 +1061,12 @@ class _ChatListTileState extends State<ChatListTile> {
                       ),
                       child: _ChatActionPanel(
                         chat: item,
+                        editContact: editContact,
                         archivedContext: widget.archivedContext,
                         spamContext: widget.spamContext,
                         spamUpdating: widget.spamUpdating,
                         onMoveToInbox: widget.onMoveToInbox,
+                        onEditContact: _editContact,
                         onClose: _hideActions,
                         onDelete: () => _confirmDelete(item),
                       ),
@@ -1057,7 +1090,7 @@ class _ChatListTileState extends State<ChatListTile> {
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
-        items: [AxiMenu(actions: _chatContextMenuActions(item))],
+        items: [AxiMenu(actions: _chatContextMenuActions(item, editContact))],
         child: tileContent,
       );
     }
@@ -1189,6 +1222,11 @@ class _ChatListTileState extends State<ChatListTile> {
     await context.read<ChatsCubit>().openChat(jid: chat.jid);
   }
 
+  Future<void> _editContact(ContactDirectoryEntry contact) async {
+    _hideActions();
+    await showContactDetailsSheet(context: context, contact: contact);
+  }
+
   Future<void> _confirmDelete(Chat chat) async {
     final l10n = context.l10n;
     var deleteMessages = false;
@@ -1299,7 +1337,10 @@ class _ChatListTileState extends State<ChatListTile> {
     }
   }
 
-  List<AxiMenuAction> _chatContextMenuActions(Chat chat) {
+  List<AxiMenuAction> _chatContextMenuActions(
+    Chat chat,
+    ContactDirectoryEntry? editContact,
+  ) {
     final l10n = context.l10n;
     return [
       AxiMenuAction(
@@ -1315,6 +1356,14 @@ class _ChatListTileState extends State<ChatListTile> {
         onPressed: () =>
             context.read<ChatsCubit>().ensureChatSelected(chat.jid),
       ),
+      if (editContact != null)
+        AxiMenuAction(
+          icon: LucideIcons.userRound,
+          label: l10n.chatContactEditAction,
+          onPressed: () async {
+            await _editContact(editContact);
+          },
+        ),
       AxiMenuAction(
         icon: LucideIcons.share2,
         label: l10n.commonExport,
@@ -1379,19 +1428,23 @@ class _ChatListTileState extends State<ChatListTile> {
 class _ChatActionPanel extends StatefulWidget {
   const _ChatActionPanel({
     required this.chat,
+    required this.editContact,
     required this.archivedContext,
     required this.spamContext,
     required this.spamUpdating,
     required this.onMoveToInbox,
+    required this.onEditContact,
     required this.onClose,
     required this.onDelete,
   });
 
   final Chat chat;
+  final ContactDirectoryEntry? editContact;
   final bool archivedContext;
   final bool spamContext;
   final bool spamUpdating;
   final Future<void> Function()? onMoveToInbox;
+  final Future<void> Function(ContactDirectoryEntry contact) onEditContact;
   final VoidCallback onClose;
   final VoidCallback onDelete;
 
@@ -1431,6 +1484,12 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             icon: Icon(LucideIcons.pencilLine, size: iconSize),
             label: l10n.chatContactRenameAction,
             onPressed: _renameContact,
+          ),
+        if (widget.editContact != null)
+          ContextActionButton(
+            icon: Icon(LucideIcons.userRound, size: iconSize),
+            label: l10n.chatContactEditAction,
+            onPressed: _editContact,
           ),
         ContextActionButton(
           icon: Icon(
@@ -1570,6 +1629,14 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     }
   }
 
+  Future<void> _editContact() async {
+    final contact = widget.editContact;
+    if (contact == null) {
+      return;
+    }
+    await widget.onEditContact(contact);
+  }
+
   Future<void> _exportChat() async {
     final l10n = context.l10n;
     final scheduleExportCleanup = context
@@ -1638,6 +1705,38 @@ Future<bool> _confirmChatExport(BuildContext context) async {
     destructiveConfirm: false,
   );
   return confirmed == true;
+}
+
+ContactDirectoryEntry? _editableContactForChat({
+  required Map<String, ContactDirectoryEntry> contactsByAddressKey,
+  required Chat chat,
+}) {
+  if (chat.type != ChatType.chat || chat.isAxichatWelcomeThread) {
+    return null;
+  }
+  for (final candidate in chat.identityAddresses) {
+    final contact = contactsByAddressKey[contactDirectoryAddressKey(candidate)];
+    if (contact != null) {
+      return contact;
+    }
+  }
+  return null;
+}
+
+Map<String, ContactDirectoryEntry> _contactsByAddressKey(
+  List<ContactDirectoryEntry>? contacts,
+) {
+  if (contacts == null || contacts.isEmpty) {
+    return const <String, ContactDirectoryEntry>{};
+  }
+  final contactsByAddressKey = <String, ContactDirectoryEntry>{};
+  for (final contact in contacts) {
+    final key = contactDirectoryAddressKey(contact.address);
+    if (key.isNotEmpty) {
+      contactsByAddressKey[key] = contact;
+    }
+  }
+  return Map.unmodifiable(contactsByAddressKey);
 }
 
 class _UnreadBadge extends StatelessWidget {
