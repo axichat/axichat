@@ -195,6 +195,8 @@ void dc_accounts_stop_io(dc_accounts_t* accounts);
 void dc_accounts_maybe_network(dc_accounts_t* accounts);
 void dc_accounts_maybe_network_lost(dc_accounts_t* accounts);
 int dc_accounts_background_fetch(dc_accounts_t* accounts, uint64_t timeout);
+int axichat_dc_accounts_background_fetch(dc_accounts_t* accounts, uint64_t timeout_seconds);
+int axichat_dc_accounts_stop_background_fetch(dc_accounts_t* accounts);
 void dc_accounts_set_push_device_token(
     dc_accounts_t* accounts,
     const char* token);

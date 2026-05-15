@@ -819,6 +819,53 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test(
+    'syncSessionState keeps home refresh fetch and chatlist work active',
+    () async {
+      when(
+        () => transport.getContactIds(flags: any(named: 'flags')),
+      ).thenAnswer((_) async => const <int>[]);
+      when(
+        () => transport.getBlockedContactIds(),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => database.replaceContacts(any())).thenAnswer((_) async {});
+      when(
+        () => database.getEmailSpamlist(),
+      ).thenAnswer((_) async => <EmailSpamEntry>[]);
+      when(
+        () => database.getEmailBlocklist(),
+      ).thenAnswer((_) async => <EmailBlocklistEntry>[]);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+      clearInteractions(transport);
+      clearInteractions(database);
+
+      expect(await service.syncSessionState(), isTrue);
+
+      verify(
+        () => transport.performBackgroundFetch(const Duration(seconds: 25)),
+      ).called(1);
+      verify(() => transport.refreshChatlistSnapshot()).called(1);
+      verify(() => database.replaceContacts(any())).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
   test('foreground keepalive ignored before provisioning', () async {
     final service = EmailService(
       credentialStore: credentialStore,

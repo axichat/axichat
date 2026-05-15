@@ -221,6 +221,39 @@ class DeltaChatBindings {
   late final _dc_accounts_background_fetch = _dc_accounts_background_fetchPtr
       .asFunction<int Function(ffi.Pointer<dc_accounts_t>, int)>();
 
+  int axichat_dc_accounts_background_fetch(
+    ffi.Pointer<dc_accounts_t> accounts,
+    int timeout_seconds,
+  ) {
+    return _axichat_dc_accounts_background_fetch(
+      accounts,
+      timeout_seconds,
+    );
+  }
+
+  late final _axichat_dc_accounts_background_fetchPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(ffi.Pointer<dc_accounts_t>,
+              ffi.Uint64)>>('axichat_dc_accounts_background_fetch');
+  late final _axichat_dc_accounts_background_fetch =
+      _axichat_dc_accounts_background_fetchPtr
+          .asFunction<int Function(ffi.Pointer<dc_accounts_t>, int)>();
+
+  int axichat_dc_accounts_stop_background_fetch(
+    ffi.Pointer<dc_accounts_t> accounts,
+  ) {
+    return _axichat_dc_accounts_stop_background_fetch(
+      accounts,
+    );
+  }
+
+  late final _axichat_dc_accounts_stop_background_fetchPtr =
+      _lookup<ffi.NativeFunction<ffi.Int Function(ffi.Pointer<dc_accounts_t>)>>(
+          'axichat_dc_accounts_stop_background_fetch');
+  late final _axichat_dc_accounts_stop_background_fetch =
+      _axichat_dc_accounts_stop_background_fetchPtr
+          .asFunction<int Function(ffi.Pointer<dc_accounts_t>)>();
+
   void dc_accounts_set_push_device_token(
     ffi.Pointer<dc_accounts_t> accounts,
     ffi.Pointer<ffi.Char> token,
