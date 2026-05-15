@@ -1859,6 +1859,59 @@ void main() {
   );
 
   test(
+    'reconnect restart runs stopped background fetch when foreground IO is stuck',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        await service.handleNetworkAvailable();
+        clearInteractions(transport);
+        var backgroundFetchCompleted = false;
+        when(() => transport.isIoRunning).thenReturn(true);
+        when(() => transport.connectivity()).thenAnswer((_) async {
+          if (backgroundFetchCompleted) {
+            return 4000;
+          }
+          return 2000;
+        });
+        when(() => transport.performBackgroundFetch(any())).thenAnswer((
+          _,
+        ) async {
+          backgroundFetchCompleted = true;
+          return true;
+        });
+
+        await Future<void>.delayed(const Duration(milliseconds: 4300));
+        await pumpMicrotasks();
+
+        expect(service.syncState.status, EmailSyncStatus.ready);
+        verify(() => transport.stop()).called(1);
+        verify(
+          () => transport.performBackgroundFetch(const Duration(seconds: 25)),
+        ).called(1);
+        verify(() => transport.start()).called(1);
+        verify(() => transport.notifyNetworkAvailable()).called(2);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
     'reconnect restart re-notifies without restart when connecting reaches working',
     () async {
       final service = EmailService(

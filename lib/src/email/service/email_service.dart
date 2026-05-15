@@ -3964,6 +3964,7 @@ class EmailService {
         if (connectivity == null || connectivity >= _connectivityWorkingMin) {
           return;
         }
+        var restartConnectivity = connectivity;
         if (connectivity == _connectivityConnectingMin) {
           await _transport.notifyNetworkAvailable();
           await Future.delayed(_reconnectRestartDelay);
@@ -3975,14 +3976,29 @@ class EmailService {
               retryConnectivity >= _connectivityWorkingMin) {
             return;
           }
+          restartConnectivity = retryConnectivity;
         } else if (connectivity > _connectivityConnectingMin) {
           return;
         }
         _log.warning(
-          'Email transport still offline or connecting after network available; restarting.',
+          'Email transport still offline or connecting after network available; '
+          'restarting. connectivity=$restartConnectivity',
         );
         await stop();
-        await start();
+        var backgroundFetchCompleted = false;
+        try {
+          backgroundFetchCompleted = await performBackgroundFetch(
+            timeout: _imapSyncFetchTimeout,
+          );
+        } finally {
+          await start();
+        }
+        final postRestartConnectivity = await _transport.connectivity();
+        _log.warning(
+          'Email transport restart completed. '
+          'backgroundFetchCompleted=$backgroundFetchCompleted '
+          'connectivity=${postRestartConnectivity ?? _emailLogUnknownValue}',
+        );
         await _transport.notifyNetworkAvailable();
         await _bootstrapActiveAccountIfNeeded();
         await _runReconnectCatchUp();
