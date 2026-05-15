@@ -2067,10 +2067,10 @@ void main() {
     );
 
     test(
-      'Tracks anonymous MUC reaction continuity by occupant-id across nick changes',
+      'Tracks MUC reaction continuity by real JID across nick changes',
       () async {
         const roomJid = 'room@conference.axi.im';
-        const opaqueOccupantId = 'occupant-id-123';
+        const senderJid = 'friend@axi.im';
         const oldSenderNick = 'friend';
         const newSenderNick = 'friend-renamed';
         const oldSenderOccupantJid = '$roomJid/$oldSenderNick';
@@ -2101,7 +2101,6 @@ void main() {
             stanzaID: stanzaId,
             mucStanzaId: mucStanzaId,
             senderJid: oldSenderOccupantJid,
-            occupantID: opaqueOccupantId,
             chatJid: roomJid,
             timestamp: DateTime.timestamp(),
             body: 'hello',
@@ -2111,8 +2110,9 @@ void main() {
         );
         xmppService.updateOccupantFromPresence(
           roomJid: roomJid,
-          occupantId: opaqueOccupantId,
+          occupantId: oldSenderOccupantJid,
           nick: oldSenderNick,
+          realJid: senderJid,
           affiliation: OccupantAffiliation.member,
           role: OccupantRole.participant,
           isPresent: true,
@@ -2126,7 +2126,6 @@ void main() {
             false,
             mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
               const mox.MessageReactionsData(mucStanzaId, <String>[emoji]),
-              const mox.OccupantIdData(opaqueOccupantId),
             ]),
             id: uuid.v4(),
             type: 'groupchat',
@@ -2137,8 +2136,9 @@ void main() {
 
         xmppService.updateOccupantFromPresence(
           roomJid: roomJid,
-          occupantId: opaqueOccupantId,
+          occupantId: newSenderOccupantJid,
           nick: newSenderNick,
+          realJid: senderJid,
           affiliation: OccupantAffiliation.member,
           role: OccupantRole.participant,
           isPresent: true,
@@ -2154,7 +2154,6 @@ void main() {
               const mox.MessageReactionsData(mucStanzaId, <String>[
                 updatedEmoji,
               ]),
-              const mox.OccupantIdData(opaqueOccupantId),
             ]),
             id: uuid.v4(),
             type: 'groupchat',
@@ -2165,12 +2164,22 @@ void main() {
 
         final reactions = await database.getReactionsForMessageSender(
           messageId: stanzaId,
-          senderJid: opaqueOccupantId,
+          senderJid: senderJid,
+        );
+        final oldNickReactions = await database.getReactionsForMessageSender(
+          messageId: stanzaId,
+          senderJid: oldSenderOccupantJid,
+        );
+        final newNickReactions = await database.getReactionsForMessageSender(
+          messageId: stanzaId,
+          senderJid: newSenderOccupantJid,
         );
         expect(
           reactions.map((reaction) => reaction.emoji).toList(),
           equals(const <String>[updatedEmoji]),
         );
+        expect(oldNickReactions, isEmpty);
+        expect(newNickReactions, isEmpty);
 
         await controller.close();
       },
@@ -2181,7 +2190,6 @@ void main() {
       () async {
         const roomJid = 'room@conference.axi.im';
         const senderJid = 'friend@axi.im';
-        const opaqueOccupantId = 'occupant-id-123';
         const senderNick = 'friend';
         const senderOccupantJid = '$roomJid/$senderNick';
         const stanzaId = 'stored-muc-stanza-id';
@@ -2210,7 +2218,6 @@ void main() {
             stanzaID: stanzaId,
             mucStanzaId: mucStanzaId,
             senderJid: senderOccupantJid,
-            occupantID: opaqueOccupantId,
             chatJid: roomJid,
             timestamp: DateTime.timestamp(),
             body: 'hello',
@@ -2220,7 +2227,7 @@ void main() {
         );
         xmppService.updateOccupantFromPresence(
           roomJid: roomJid,
-          occupantId: opaqueOccupantId,
+          occupantId: senderOccupantJid,
           nick: senderNick,
           realJid: senderJid,
           affiliation: OccupantAffiliation.member,
@@ -2245,7 +2252,6 @@ void main() {
               const mox.MessageReactionsData(mucStanzaId, <String>[
                 updatedEmoji,
               ]),
-              const mox.OccupantIdData(opaqueOccupantId),
             ]),
             id: uuid.v4(),
             type: 'groupchat',
@@ -2262,18 +2268,12 @@ void main() {
           messageId: stanzaId,
           senderJid: senderOccupantJid,
         );
-        final occupantAliasReactions = await database
-            .getReactionsForMessageSender(
-              messageId: stanzaId,
-              senderJid: opaqueOccupantId,
-            );
 
         expect(
           verifiedReactions.map((reaction) => reaction.emoji).toList(),
           equals(const <String>[updatedEmoji]),
         );
         expect(nickAliasReactions, isEmpty);
-        expect(occupantAliasReactions, isEmpty);
 
         await controller.close();
       },
