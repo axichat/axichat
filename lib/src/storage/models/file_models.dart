@@ -277,24 +277,32 @@ sealed class FileMetadataData
   const FileMetadataData._();
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      FileMetadataCompanion(
-        id: Value(id),
-        filename: Value(filename),
-        path: Value.absentIfNull(path),
-        sourceUrls: Value.absentIfNull(sourceUrls),
-        mimeType: Value.absentIfNull(mimeType),
-        sizeBytes: Value.absentIfNull(sizeBytes),
-        width: Value.absentIfNull(width),
-        height: Value.absentIfNull(height),
-        encryptionKey: Value.absentIfNull(encryptionKey),
-        encryptionIV: Value.absentIfNull(encryptionIV),
-        encryptionScheme: Value.absentIfNull(encryptionScheme),
-        cipherTextHashes: Value.absentIfNull(cipherTextHashes),
-        plainTextHashes: Value.absentIfNull(plainTextHashes),
-        thumbnailType: Value.absentIfNull(thumbnailType),
-        thumbnailData: Value.absentIfNull(thumbnailData),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) {
+    Value<T?> nullableValue<T>(T? value) {
+      if (nullToAbsent && value == null) {
+        return const Value.absent();
+      }
+      return Value<T?>(value);
+    }
+
+    return FileMetadataCompanion(
+      id: Value(id),
+      filename: Value(filename),
+      path: nullableValue(path),
+      sourceUrls: nullableValue(sourceUrls),
+      mimeType: nullableValue(mimeType),
+      sizeBytes: nullableValue(sizeBytes),
+      width: nullableValue(width),
+      height: nullableValue(height),
+      encryptionKey: nullableValue(encryptionKey),
+      encryptionIV: nullableValue(encryptionIV),
+      encryptionScheme: nullableValue(encryptionScheme),
+      cipherTextHashes: nullableValue(cipherTextHashes),
+      plainTextHashes: nullableValue(plainTextHashes),
+      thumbnailType: nullableValue(thumbnailType),
+      thumbnailData: nullableValue(thumbnailData),
+    ).toColumns(nullToAbsent);
+  }
 }
 
 final class AttachmentGalleryItem {
@@ -471,20 +479,28 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
   }
 
   @override
-  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
-      DraftsCompanion(
-        id: Value(id),
-        jids: Value(jids),
-        draftSyncId: Value(draftSyncId),
-        draftUpdatedAt: Value(draftUpdatedAt),
-        draftSourceId: Value(draftSourceId),
-        draftRecipients: Value(draftRecipients),
-        body: Value.absentIfNull(body),
-        subject: Value.absentIfNull(subject),
-        quotingStanzaId: Value.absentIfNull(quotingStanzaId),
-        quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
-        attachmentMetadataIds: Value(attachmentMetadataIds),
-      ).toColumns(nullToAbsent);
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) {
+    Value<T?> nullableValue<T>(T? value) {
+      if (nullToAbsent && value == null) {
+        return const Value.absent();
+      }
+      return Value<T?>(value);
+    }
+
+    return DraftsCompanion(
+      id: Value(id),
+      jids: Value(jids),
+      draftSyncId: Value(draftSyncId),
+      draftUpdatedAt: Value(draftUpdatedAt),
+      draftSourceId: Value(draftSourceId),
+      draftRecipients: Value(draftRecipients),
+      body: nullableValue(body),
+      subject: nullableValue(subject),
+      quotingStanzaId: nullableValue(quotingStanzaId),
+      quotingReferenceKind: nullableValue(quotingReferenceKind),
+      attachmentMetadataIds: Value(attachmentMetadataIds),
+    ).toColumns(nullToAbsent);
+  }
 }
 
 @UseRowClass(Draft)
