@@ -2386,6 +2386,57 @@ void main() {
         ).called(1);
       },
     );
+
+    test(
+      'Retries only the latest queued read marker after negotiation',
+      () async {
+        const peerJid = 'friend@example.net';
+        const olderStanzaId = 'older-read-marker';
+        const latestStanzaId = 'latest-read-marker';
+        final controller = StreamController<mox.XmppEvent>.broadcast();
+        final sentStanzaIds = <String>[];
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        when(
+          () => mockConnection.sendChatMarker(
+            to: any(named: 'to'),
+            stanzaID: any(named: 'stanzaID'),
+            marker: any(named: 'marker'),
+            messageType: any(named: 'messageType'),
+          ),
+        ).thenAnswer((invocation) async {
+          sentStanzaIds.add(invocation.namedArguments[#stanzaID] as String);
+          return sentStanzaIds.length == 3;
+        });
+
+        await connectSuccessfully(xmppService);
+
+        await xmppService.sendReadMarker(peerJid, olderStanzaId);
+        await xmppService.sendReadMarker(peerJid, latestStanzaId);
+        controller.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+        await xmppService.runBootstrapOperations(
+          XmppBootstrapTrigger.resumedNegotiation,
+        );
+
+        expect(sentStanzaIds, <String>[
+          olderStanzaId,
+          latestStanzaId,
+          latestStanzaId,
+        ]);
+
+        await controller.close();
+      },
+    );
   });
 
   group('originID hot paths', () {
@@ -2614,6 +2665,108 @@ void main() {
             mox.JID.fromString(peerJid),
             mox.ChatMarker.displayed,
             originId,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(localStanzaId);
+        expect(stored?.acked, isTrue);
+        expect(stored?.received, isTrue);
+        expect(stored?.displayed, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Applies archived peer chat markers to outgoing direct messages.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        await database.saveMessage(
+          Message(
+            stanzaID: 'older-outgoing',
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 11, 59),
+            body: 'older',
+          ),
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            originID: originId,
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 12, 0),
+            body: 'latest',
+          ),
+        );
+
+        controller.add(
+          XmppTransportChatMarkerEvent(
+            from: mox.JID.fromString(peerJid),
+            to: mox.JID.fromString(xmppService.myJid!),
+            type: mox.ChatMarker.displayed,
+            id: originId,
+            isCarbon: false,
+            isFromMAM: true,
+            messageType: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final older = await database.getMessageByStanzaID('older-outgoing');
+        final latest = await database.getMessageByStanzaID(localStanzaId);
+        expect(older?.acked, isTrue);
+        expect(older?.received, isTrue);
+        expect(older?.displayed, isTrue);
+        expect(latest?.acked, isTrue);
+        expect(latest?.received, isTrue);
+        expect(latest?.displayed, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Applies delayed peer chat markers to outgoing direct messages.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            originID: originId,
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.utc(2026, 3, 18, 12, 0),
+            body: 'latest',
+          ),
+        );
+
+        controller.add(
+          XmppTransportChatMarkerEvent(
+            from: mox.JID.fromString(peerJid),
+            to: mox.JID.fromString(xmppService.myJid!),
+            type: mox.ChatMarker.displayed,
+            id: originId,
+            isCarbon: false,
+            isFromMAM: false,
+            isDelayed: true,
+            messageType: 'chat',
           ),
         );
         await pumpEventQueue();
@@ -4151,6 +4304,154 @@ void main() {
         final stored = await database.getMessageByStanzaID(stanzaId);
         expect(stored?.acked, isTrue);
         expect(stored?.received, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Queues failed direct auto-acks and flushes them after negotiation',
+      () async {
+        final controller = StreamController<mox.XmppEvent>.broadcast();
+        var markerAttempts = 0;
+        var receiptAttempts = 0;
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        when(
+          () => mockConnection.sendChatMarker(
+            to: any(named: 'to'),
+            stanzaID: any(named: 'stanzaID'),
+            marker: any(named: 'marker'),
+            messageType: any(named: 'messageType'),
+          ),
+        ).thenAnswer((_) async {
+          markerAttempts += 1;
+          return markerAttempts > 1;
+        });
+        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {
+          receiptAttempts += 1;
+          return receiptAttempts > 1;
+        });
+
+        await connectSuccessfully(xmppService);
+
+        const peerJid = 'friend@example.net/phone';
+        const stanzaId = 'queued-direct-auto-ack';
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(peerJid),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('Queue failed auto-acks'),
+              const mox.MarkableData(true),
+              const mox.MessageDeliveryReceiptData(true),
+              mox.MessageIdData(stanzaId),
+            ]),
+            id: stanzaId,
+            type: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        var stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.acked, isFalse);
+        expect(stored?.received, isFalse);
+        expect(markerAttempts, 1);
+        expect(receiptAttempts, 1);
+
+        controller.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+        await xmppService.runBootstrapOperations(
+          XmppBootstrapTrigger.resumedNegotiation,
+        );
+
+        stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.acked, isTrue);
+        expect(stored?.received, isTrue);
+        expect(markerAttempts, 2);
+        expect(receiptAttempts, 2);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Marks direct auto-acks sent when one requested reply succeeds',
+      () async {
+        final controller = StreamController<mox.XmppEvent>.broadcast();
+        var receiptAttempts = 0;
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        when(
+          () => mockConnection.sendChatMarker(
+            to: any(named: 'to'),
+            stanzaID: any(named: 'stanzaID'),
+            marker: any(named: 'marker'),
+            messageType: any(named: 'messageType'),
+          ),
+        ).thenAnswer((_) async => true);
+        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {
+          receiptAttempts += 1;
+          return receiptAttempts > 1;
+        });
+
+        await connectSuccessfully(xmppService);
+
+        const peerJid = 'friend@example.net/phone';
+        const stanzaId = 'partial-direct-auto-ack';
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(peerJid),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('Partial auto-ack'),
+              const mox.MarkableData(true),
+              const mox.MessageDeliveryReceiptData(true),
+              mox.MessageIdData(stanzaId),
+            ]),
+            id: stanzaId,
+            type: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        var stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.acked, isTrue);
+        expect(stored?.received, isTrue);
+        expect(receiptAttempts, 1);
+
+        controller.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+        await xmppService.runBootstrapOperations(
+          XmppBootstrapTrigger.resumedNegotiation,
+        );
+
+        stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.acked, isTrue);
+        expect(stored?.received, isTrue);
+        expect(receiptAttempts, 2);
 
         await controller.close();
       },

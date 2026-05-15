@@ -61,6 +61,7 @@ class XmppTransportChatMarkerEvent extends mox.XmppEvent {
     required this.isCarbon,
     required this.isFromMAM,
     required this.messageType,
+    this.isDelayed = false,
     this.thread,
   });
 
@@ -70,8 +71,11 @@ class XmppTransportChatMarkerEvent extends mox.XmppEvent {
   final String id;
   final bool isCarbon;
   final bool isFromMAM;
+  final bool isDelayed;
   final String? messageType;
   final String? thread;
+
+  bool get isArchived => isFromMAM || isDelayed;
 }
 
 class TransportChatMarkerManager extends mox.XmppManagerBase {
@@ -122,6 +126,7 @@ class TransportChatMarkerManager extends mox.XmppManagerBase {
           isCarbon: state.extensions.get<mox.CarbonsData>()?.isCarbon ?? false,
           isFromMAM:
               state.extensions.get<mox.MAMContextData>()?.isFromMAM ?? false,
+          isDelayed: state.extensions.get<mox.DelayedDeliveryData>() != null,
           messageType: stanza.attributes['type'] as String?,
           thread: threadText == null || threadText.isEmpty ? null : threadText,
         ),
@@ -158,6 +163,59 @@ final class _PendingOutboundMessageStatus {
       received: this.received || received,
       displayed: this.displayed || displayed,
       applyThrough: this.applyThrough || applyThrough,
+    );
+  }
+}
+
+final class _PendingReadMarker {
+  const _PendingReadMarker({
+    required this.to,
+    required this.stanzaId,
+    required this.chatType,
+  });
+
+  final String to;
+  final String stanzaId;
+  final ChatType chatType;
+}
+
+final class _PendingInboundAcknowledgement {
+  const _PendingInboundAcknowledgement({
+    required this.target,
+    required this.chatJid,
+    required this.stanzaId,
+    this.chatMarker = false,
+    this.deliveryReceipt = false,
+  });
+
+  final String target;
+  final String chatJid;
+  final String stanzaId;
+  final bool chatMarker;
+  final bool deliveryReceipt;
+
+  bool get hasWork => chatMarker || deliveryReceipt;
+
+  _PendingInboundAcknowledgement copyWith({
+    bool? chatMarker,
+    bool? deliveryReceipt,
+  }) {
+    return _PendingInboundAcknowledgement(
+      target: target,
+      chatJid: chatJid,
+      stanzaId: stanzaId,
+      chatMarker: chatMarker ?? this.chatMarker,
+      deliveryReceipt: deliveryReceipt ?? this.deliveryReceipt,
+    );
+  }
+
+  _PendingInboundAcknowledgement merge(_PendingInboundAcknowledgement pending) {
+    return _PendingInboundAcknowledgement(
+      target: target,
+      chatJid: chatJid,
+      stanzaId: stanzaId,
+      chatMarker: chatMarker || pending.chatMarker,
+      deliveryReceipt: deliveryReceipt || pending.deliveryReceipt,
     );
   }
 }
@@ -4138,6 +4196,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   _pendingOutboundMessageStatusesByChat = {};
   final Map<String, Map<String, XmppTransportChatMarkerEvent>>
   _pendingSelfDisplayedMarkersByChat = {};
+  final Map<String, _PendingReadMarker> _pendingReadMarkersByTarget = {};
+  final Map<String, Map<String, _PendingInboundAcknowledgement>>
+  _pendingInboundAcknowledgementsByTarget = {};
+  final Object _receiptRetryBootstrapOperationKey = Object();
   int? _attachmentCacheBytes;
   Directory? _attachmentDirectory;
   String? _attachmentCacheSessionPrefix;
@@ -4765,6 +4827,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         },
       ),
     );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
+        key: _receiptRetryBootstrapOperationKey,
+        priority: 2,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
+        },
+        operationName:
+            'MessageService.flushPendingReceiptRetriesOnNegotiations',
+        run: () async {
+          await _flushPendingReceiptRetries();
+        },
+      ),
+    );
     manager
       ..registerHandler<DraftSyncUpdatedEvent>((event) async {
         await _applyDraftSyncUpdate(event.payload);
@@ -4903,14 +4980,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
         message = _applyArchivedUnreadState(message, event);
 
-        final acknowledgement = await _acknowledgeMessage(event);
-        if (acknowledgement.acked || acknowledgement.received) {
-          message = message.copyWith(
-            acked: message.acked || acknowledgement.acked,
-            received: message.received || acknowledgement.received,
-          );
-        }
-
         if (shouldPersistAttachment) {
           await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
           message = message.copyWith(fileMetadataID: metadata.id);
@@ -4982,6 +5051,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           isGroupChat: isGroupChat,
         );
         _messageStream.add(message);
+        await _acknowledgeMessage(event);
       })
       ..registerHandler<MucArchiveSyncRequestedEvent>((event) async {
         final roomJid = event.roomJid.trim();
@@ -4992,7 +5062,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         );
       })
       ..registerHandler<XmppTransportChatMarkerEvent>((event) async {
-        await _applySelfDisplayedChatMarker(event);
+        if (await _applySelfDisplayedChatMarker(event)) {
+          return;
+        }
+        await _applyPeerTransportChatMarker(event);
       })
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
         _log.info('Received chat marker');
@@ -7133,7 +7206,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required ChatType chatType,
   }) async {
     if (chatType == ChatType.groupChat) return false;
-    if (to == myJid) return false;
+    if (sameNormalizedAddressValue(to, myJid)) return false;
     return true;
   }
 
@@ -7142,17 +7215,56 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String stanzaID, {
     ChatType chatType = ChatType.chat,
   }) async {
-    if (!await _canSendChatMarkers(to: to, chatType: chatType)) return;
+    final target = to.trim();
+    if (target.isEmpty) return;
+    if (!await _canSendChatMarkers(to: target, chatType: chatType)) return;
     final normalizedStanzaId = stanzaID.trim();
     if (normalizedStanzaId.isEmpty) {
       return;
     }
-    await _connection.sendChatMarker(
-      to: to,
-      stanzaID: normalizedStanzaId,
+    final pending = _PendingReadMarker(
+      to: target,
+      stanzaId: normalizedStanzaId,
+      chatType: chatType,
+    );
+    if (await _sendReadMarkerNow(pending)) return;
+    _queuePendingReadMarker(pending);
+  }
+
+  Future<bool> _sendReadMarkerNow(_PendingReadMarker pending) async {
+    return _connection.sendChatMarker(
+      to: pending.to,
+      stanzaID: pending.stanzaId,
       marker: mox.ChatMarker.displayed,
       messageType: _messageTypeChat,
     );
+  }
+
+  void _queuePendingReadMarker(_PendingReadMarker pending) {
+    final targetKey = normalizedBareAddressValue(pending.to) ?? pending.to;
+    final normalizedTargetKey = targetKey.trim();
+    if (normalizedTargetKey.isEmpty) return;
+    _pendingReadMarkersByTarget[normalizedTargetKey] = pending;
+  }
+
+  Future<void> _flushPendingReadMarkers() async {
+    final entries = _pendingReadMarkersByTarget.entries.toList(growable: false);
+    for (final entry in entries) {
+      final pending = entry.value;
+      if (!await _canSendChatMarkers(
+        to: pending.to,
+        chatType: pending.chatType,
+      )) {
+        _pendingReadMarkersByTarget.remove(entry.key);
+        continue;
+      }
+      if (!await _sendReadMarkerNow(pending)) {
+        continue;
+      }
+      if (identical(_pendingReadMarkersByTarget[entry.key], pending)) {
+        _pendingReadMarkersByTarget.remove(entry.key);
+      }
+    }
   }
 
   Future<MamPageResult> fetchLatestFromArchive({
@@ -8741,6 +8853,41 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return true;
   }
 
+  Future<bool> _applyPeerTransportChatMarker(
+    XmppTransportChatMarkerEvent event,
+  ) async {
+    if (!(event.isCarbon || event.isArchived) ||
+        event.messageType == _messageTypeGroupchat) {
+      return false;
+    }
+    final accountJid = myJid;
+    if (accountJid == null || accountJid.isEmpty) {
+      return false;
+    }
+    final fromBare = event.from.toBare().toString();
+    if (fromBare.isEmpty || sameNormalizedAddressValue(fromBare, accountJid)) {
+      return false;
+    }
+    final toBare = event.to.toBare().toString();
+    if (toBare.isNotEmpty && !sameNormalizedAddressValue(toBare, accountJid)) {
+      return false;
+    }
+    final referenceId = event.id.trim();
+    if (referenceId.isEmpty) {
+      return false;
+    }
+
+    await _recordObservedPeerCapabilities(jid: fromBare, supportsMarkers: true);
+    return _applyPeerOutboundMessageStatus(
+      chatJid: fromBare,
+      id: referenceId,
+      acked: true,
+      received: _chatMarkerCountsAsReceived(event.type),
+      displayed: _chatMarkerCountsAsDisplayed(event.type),
+      applyThrough: true,
+    );
+  }
+
   void _queuePendingSelfDisplayedMarker(XmppTransportChatMarkerEvent event) {
     final chatJid = event.to.toBare().toString();
     final referenceId = event.id.trim();
@@ -8785,7 +8932,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (!_chatMarkerCountsAsDisplayed(event.type)) {
       return false;
     }
-    if (!(event.isCarbon || event.isFromMAM) ||
+    if (!(event.isCarbon || event.isArchived) ||
         event.messageType == _messageTypeGroupchat ||
         event.thread?.trim().isNotEmpty == true) {
       return false;
@@ -8875,10 +9022,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (localReferenceId == null) {
         return (acked: false, received: false);
       }
-      await _dbOp<XmppDatabase>((db) async {
-        await db.markMessageReceived(localReferenceId, chatJid: chatJid);
-        await db.markMessageAcked(localReferenceId, chatJid: chatJid);
-      });
+      await _markIncomingMessageAcknowledged(
+        stanzaId: localReferenceId,
+        chatJid: chatJid,
+      );
       return (acked: true, received: true);
     }
     final directStanzaId = _trimmedIncomingMessageStanzaId(event);
@@ -8886,42 +9033,134 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _log.fine('Skipping IM acknowledgement for message without stanza id.');
       return (acked: false, received: false);
     }
-    final target = event.from.toString();
-    const messageType = _messageTypeChat;
-    var acknowledged = false;
-
-    if (markable) {
-      await _connection.sendChatMarker(
-        to: target,
-        stanzaID: directStanzaId,
-        marker: mox.ChatMarker.received,
-        messageType: messageType,
-      );
-      acknowledged = true;
+    final pending = _PendingInboundAcknowledgement(
+      target: event.from.toString(),
+      chatJid: chatJid,
+      stanzaId: directStanzaId,
+      chatMarker: markable,
+      deliveryReceipt: deliveryReceiptRequested,
+    );
+    final sent = await _sendInboundAcknowledgementNow(pending);
+    final acknowledged = sent.chatMarker || sent.deliveryReceipt;
+    final unsent = pending.copyWith(
+      chatMarker: pending.chatMarker && !sent.chatMarker,
+      deliveryReceipt: pending.deliveryReceipt && !sent.deliveryReceipt,
+    );
+    if (unsent.hasWork) {
+      _queuePendingInboundAcknowledgement(unsent);
     }
-    if (deliveryReceiptRequested) {
-      await _connection.sendMessage(
-        mox.MessageEvent(
-          _myJid!,
-          mox.JID.fromString(target),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            mox.MessageDeliveryReceivedData(directStanzaId),
-          ]),
-          type: messageType,
-        ),
-      );
-      acknowledged = true;
-    }
-
     if (!acknowledged) {
       return (acked: false, received: false);
     }
-    await _dbOp<XmppDatabase>((db) async {
-      await db.markMessageReceived(directStanzaId, chatJid: chatJid);
-      await db.markMessageAcked(directStanzaId, chatJid: chatJid);
-    });
+    await _markIncomingMessageAcknowledged(
+      stanzaId: directStanzaId,
+      chatJid: chatJid,
+    );
     return (acked: true, received: true);
+  }
+
+  Future<({bool chatMarker, bool deliveryReceipt})>
+  _sendInboundAcknowledgementNow(_PendingInboundAcknowledgement pending) async {
+    var sentChatMarker = false;
+    if (pending.chatMarker) {
+      sentChatMarker = await _connection.sendChatMarker(
+        to: pending.target,
+        stanzaID: pending.stanzaId,
+        marker: mox.ChatMarker.received,
+        messageType: _messageTypeChat,
+      );
+    }
+
+    var sentDeliveryReceipt = false;
+    if (pending.deliveryReceipt) {
+      sentDeliveryReceipt = await _connection.sendMessage(
+        mox.MessageEvent(
+          _myJid!,
+          mox.JID.fromString(pending.target),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageDeliveryReceivedData(pending.stanzaId),
+          ]),
+          type: _messageTypeChat,
+        ),
+      );
+    }
+
+    return (chatMarker: sentChatMarker, deliveryReceipt: sentDeliveryReceipt);
+  }
+
+  void _queuePendingInboundAcknowledgement(
+    _PendingInboundAcknowledgement pending,
+  ) {
+    if (!pending.hasWork) return;
+    final targetKey =
+        normalizedBareAddressValue(pending.target) ?? pending.target;
+    final normalizedTargetKey = targetKey.trim();
+    if (normalizedTargetKey.isEmpty || pending.stanzaId.trim().isEmpty) {
+      return;
+    }
+    final pendingById = _pendingInboundAcknowledgementsByTarget.putIfAbsent(
+      normalizedTargetKey,
+      () => <String, _PendingInboundAcknowledgement>{},
+    );
+    pendingById.update(
+      pending.stanzaId,
+      (current) => current.merge(pending),
+      ifAbsent: () => pending,
+    );
+  }
+
+  Future<void> _flushPendingInboundAcknowledgements() async {
+    final targetEntries = _pendingInboundAcknowledgementsByTarget.entries
+        .toList(growable: false);
+    for (final targetEntry in targetEntries) {
+      final pendingEntries = targetEntry.value.entries.toList(growable: false);
+      for (final pendingEntry in pendingEntries) {
+        final pending = pendingEntry.value;
+        final sent = await _sendInboundAcknowledgementNow(pending);
+        final acknowledged = sent.chatMarker || sent.deliveryReceipt;
+        if (acknowledged) {
+          await _markIncomingMessageAcknowledged(
+            stanzaId: pending.stanzaId,
+            chatJid: pending.chatJid,
+          );
+        }
+
+        final currentById =
+            _pendingInboundAcknowledgementsByTarget[targetEntry.key];
+        final current = currentById?[pending.stanzaId];
+        if (!identical(current, pending)) {
+          continue;
+        }
+        final unsent = pending.copyWith(
+          chatMarker: pending.chatMarker && !sent.chatMarker,
+          deliveryReceipt: pending.deliveryReceipt && !sent.deliveryReceipt,
+        );
+        if (unsent.hasWork) {
+          currentById![pending.stanzaId] = unsent;
+          continue;
+        }
+        currentById?.remove(pending.stanzaId);
+        if (currentById?.isEmpty ?? false) {
+          _pendingInboundAcknowledgementsByTarget.remove(targetEntry.key);
+        }
+      }
+    }
+  }
+
+  Future<void> _markIncomingMessageAcknowledged({
+    required String stanzaId,
+    required String chatJid,
+  }) async {
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markMessageReceived(stanzaId, chatJid: chatJid);
+      await db.markMessageAcked(stanzaId, chatJid: chatJid);
+    });
+  }
+
+  Future<void> _flushPendingReceiptRetries() async {
+    await _flushPendingReadMarkers();
+    await _flushPendingInboundAcknowledgements();
   }
 
   Future<void> _applyOutboundMessageStatus(
@@ -8987,6 +9226,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _capabilityCacheLoaded = false;
     _pendingOutboundMessageStatusesByChat.clear();
     _pendingSelfDisplayedMarkersByChat.clear();
+    _pendingReadMarkersByTarget.clear();
+    _pendingInboundAcknowledgementsByTarget.clear();
     _httpUploadSupport = const HttpUploadSupport(supported: false);
     _outboundPinMutationsByStanzaId.clear();
     _inboundAttachmentDownloads.clear();
