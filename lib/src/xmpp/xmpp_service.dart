@@ -601,6 +601,8 @@ abstract interface class XmppBase {
 
   Future<void> disconnect();
 
+  Future<void> pauseAutomaticReconnect();
+
   Future<void> cleanupUnregisterLocalData({
     required String jid,
     String? databasePrefix,
@@ -1589,6 +1591,7 @@ class XmppService extends XmppBase
   bool _sessionReconnectEnabled = false;
   bool _connectInFlight = false;
   bool _reconnectBlocked = false;
+  bool _automaticReconnectPaused = false;
   var _foregroundServiceNotificationSent = false;
   var _connectionPasswordPreHashed = false;
   final Set<int> _timeoutErrorCodes = {60, 110, 10060};
@@ -1625,6 +1628,7 @@ class XmppService extends XmppBase
     return 'connectionState=$connectionState '
         'sessionReconnectEnabled=$_sessionReconnectEnabled '
         'reconnectBlocked=$_reconnectBlocked '
+        'automaticReconnectPaused=$_automaticReconnectPaused '
         'connectInFlight=$_connectInFlight '
         'policyReconnecting=$policyReconnecting '
         'policyShouldReconnect=$policyShouldReconnect '
@@ -1644,6 +1648,7 @@ class XmppService extends XmppBase
   }) async {
     _databasePrefix = databasePrefix;
     _reconnectBlocked = false;
+    _automaticReconnectPaused = false;
     _ensureNetworkAvailabilityListener();
     if (_synchronousConnection.isCompleted && connected) {
       throw XmppAlreadyConnectedException();
@@ -1800,6 +1805,7 @@ class XmppService extends XmppBase
   }) async {
     _databasePrefix = databasePrefix;
     _reconnectBlocked = false;
+    _automaticReconnectPaused = false;
     _ensureNetworkAvailabilityListener();
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
@@ -2677,6 +2683,21 @@ class XmppService extends XmppBase
   }
 
   @override
+  Future<void> pauseAutomaticReconnect() async {
+    if (!hasConnectionSettings) {
+      return;
+    }
+    _automaticReconnectPaused = true;
+    _pingController.stop();
+    await _stopNetworkAvailabilityListener();
+    _cancelConnectingWatchdog();
+    if (connectionState == ConnectionState.connecting) {
+      _setConnectionState(ConnectionState.notConnected);
+    }
+    await _connection.setShouldReconnect(false);
+  }
+
+  @override
   Future<void> cleanupUnregisterLocalData({
     required String jid,
     String? databasePrefix,
@@ -2936,6 +2957,28 @@ class XmppService extends XmppBase
         await csi.setInactive();
       }
     }
+    if (active && _automaticReconnectPaused) {
+      if (!await _restoreAutomaticReconnectAfterPause()) {
+        _xmppLogger.info(
+          'Failed to restore automatic reconnect after foreground client state.',
+        );
+      }
+    }
+  }
+
+  Future<bool> _restoreAutomaticReconnectAfterPause() async {
+    if (!_automaticReconnectPaused) {
+      return true;
+    }
+    if (_sessionReconnectEnabled &&
+        _connection.hasConnectionSettings &&
+        !await _enableReconnectIfNeeded()) {
+      return false;
+    }
+    _automaticReconnectPaused = false;
+    _ensureNetworkAvailabilityListener();
+    _pingController.handleConnectionState(connectionState);
+    return true;
   }
 
   Future<bool> _enableReconnectIfNeeded() async {
@@ -3032,6 +3075,12 @@ class XmppService extends XmppBase
       'Reconnect request started: trigger=$trigger '
       '${await _reconnectStateSummary()}',
     );
+    if (_automaticReconnectPaused && trigger.keepsAutomaticReconnectPaused) {
+      _xmppLogger.info(
+        'Reconnect request ignored: automatic reconnect paused.',
+      );
+      return false;
+    }
     if (trigger == ReconnectTrigger.autoFailure) {
       return _requestAutoFailureReconnect();
     }
@@ -3070,6 +3119,14 @@ class XmppService extends XmppBase
         'Reconnect request ignored: lower reconnect already active.',
       );
       return true;
+    }
+    if (_automaticReconnectPaused &&
+        trigger.clearsAutomaticReconnectPause &&
+        !await _restoreAutomaticReconnectAfterPause()) {
+      _xmppLogger.info(
+        'Reconnect request failed while restoring automatic reconnect.',
+      );
+      return false;
     }
     if (!await _enableReconnectIfNeeded()) {
       _xmppLogger.info('Reconnect request failed while enabling reconnection.');
@@ -3505,6 +3562,7 @@ class XmppService extends XmppBase
     await _stopNetworkAvailabilityListener();
     await _clearSelfPresenceOnDisconnect();
     _connectInFlight = false;
+    _automaticReconnectPaused = false;
     _consecutiveConnectTimeouts = 0;
 
     // Only disable session reconnect for fatal errors (auth/database).

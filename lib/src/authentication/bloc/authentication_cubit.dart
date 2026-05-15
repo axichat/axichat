@@ -163,11 +163,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EndpointConfig? initialEndpointConfig,
     EndpointResolver endpointResolver = const EndpointResolver(),
     Duration authRequestTimeout = const Duration(minutes: 1),
+    Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
+       _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
        super(initialState ?? const AuthenticationNone()) {
     _ownedHttpClient = httpClient == null ? http.Client() : null;
     _httpClient = httpClient ?? _ownedHttpClient!;
@@ -186,6 +188,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       onRestart: () => _handleLifecycleResume('onRestart'),
       onDetach: _handleLifecycleDetach,
       onStateChange: (lifeCycleState) async {
+        _latestLifecycleState = lifeCycleState;
+        _syncXmppReconnectPauseTimer();
         _log.info(
           'Lifecycle state changed: state=$lifeCycleState '
           'xmppConnected=${_xmppService.connected} '
@@ -315,6 +319,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _CoalescingAsyncQueue();
   DateTime? _lastEmailProvisioningRecoveryAt;
   final Duration _authRequestTimeout;
+  final Duration _xmppReconnectPauseDelay;
+  Timer? _xmppReconnectPauseTimer;
+  AppLifecycleState? _latestLifecycleState;
 
   late final AppLifecycleListener _lifecycleListener;
 
@@ -383,6 +390,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _rebuildEmailProvisioningClient(config);
     _emailService?.updateEndpointConfig(config);
     emit(state.copyWithConfig(config));
+    _syncXmppReconnectPauseTimer();
     _updateEmailForegroundKeepalive();
   }
 
@@ -662,7 +670,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
     _updateLoginBackoff(state);
-    emit(state.copyWithConfig(endpointConfig));
+    final nextState = state.copyWithConfig(endpointConfig);
+    emit(nextState);
+    if (nextState is AuthenticationComplete) {
+      _syncXmppReconnectPauseTimer();
+    } else {
+      _cancelXmppReconnectPauseTimer();
+    }
   }
 
   void _updateLoginBackoff(AuthenticationState nextState) {
@@ -1022,6 +1036,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleLifecycleResume(String source) async {
+    _cancelXmppReconnectPauseTimer();
     final activeLifecycleResume = _activeLifecycleResume;
     if (activeLifecycleResume != null) {
       _log.info(
@@ -1041,6 +1056,67 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _activeLifecycleResume = null;
       }
     }
+  }
+
+  AppLifecycleState? get _effectiveLifecycleState =>
+      WidgetsBinding.instance.lifecycleState ?? _latestLifecycleState;
+
+  bool _isXmppReconnectPauseBackground(AppLifecycleState? state) =>
+      state != null &&
+      state != AppLifecycleState.resumed &&
+      state != AppLifecycleState.inactive;
+
+  void _syncXmppReconnectPauseTimer() {
+    if (state is! AuthenticationComplete ||
+        !endpointConfig.xmppEnabled ||
+        !_isXmppReconnectPauseBackground(_effectiveLifecycleState) ||
+        foregroundServiceActive.value) {
+      _cancelXmppReconnectPauseTimer();
+      return;
+    }
+    if (_xmppReconnectPauseTimer != null) {
+      return;
+    }
+    _xmppReconnectPauseTimer = Timer(
+      _xmppReconnectPauseDelay,
+      _handleXmppReconnectPauseTimer,
+    );
+  }
+
+  void _cancelXmppReconnectPauseTimer() {
+    _xmppReconnectPauseTimer?.cancel();
+    _xmppReconnectPauseTimer = null;
+  }
+
+  void _handleXmppReconnectPauseTimer() {
+    _xmppReconnectPauseTimer = null;
+    Future<void>(() async {
+      try {
+        await _pauseXmppAutomaticReconnectIfStillBackgrounded();
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          'Failed to pause background XMPP automatic reconnect.',
+          error,
+          stackTrace,
+        );
+      }
+    });
+  }
+
+  Future<void> _pauseXmppAutomaticReconnectIfStillBackgrounded() async {
+    if (state is! AuthenticationComplete) {
+      return;
+    }
+    if (!endpointConfig.xmppEnabled) {
+      return;
+    }
+    if (!_isXmppReconnectPauseBackground(_effectiveLifecycleState)) {
+      return;
+    }
+    if (foregroundServiceActive.value) {
+      return;
+    }
+    await _xmppService.pauseAutomaticReconnect();
   }
 
   Future<void> _runLifecycleResume({required String source}) async {
@@ -1335,6 +1411,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleForegroundServiceActiveChanged() async {
+    _syncXmppReconnectPauseTimer();
     await _updateEmailForegroundKeepalive();
     if (!endpointConfig.xmppEnabled || !_stickyAuthActive) {
       return;
@@ -1563,6 +1640,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   @override
   Future<void> close() async {
+    _cancelXmppReconnectPauseTimer();
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();

@@ -352,10 +352,8 @@ enum ReconnectTrigger {
   immediateRetry,
   foregroundMigration,
   networkAvailable,
-  autoFailure,
-}
+  autoFailure;
 
-extension ReconnectTriggerBehavior on ReconnectTrigger {
   bool get shouldBypassBackoff => switch (this) {
     ReconnectTrigger.resume => true,
     ReconnectTrigger.immediateRetry => true,
@@ -369,6 +367,22 @@ extension ReconnectTriggerBehavior on ReconnectTrigger {
     ReconnectTrigger.immediateRetry => true,
     ReconnectTrigger.foregroundMigration => true,
     ReconnectTrigger.networkAvailable => true,
+    ReconnectTrigger.autoFailure => false,
+  };
+
+  bool get keepsAutomaticReconnectPaused => switch (this) {
+    ReconnectTrigger.networkAvailable => true,
+    ReconnectTrigger.autoFailure => true,
+    ReconnectTrigger.resume => false,
+    ReconnectTrigger.immediateRetry => false,
+    ReconnectTrigger.foregroundMigration => false,
+  };
+
+  bool get clearsAutomaticReconnectPause => switch (this) {
+    ReconnectTrigger.resume => true,
+    ReconnectTrigger.immediateRetry => true,
+    ReconnectTrigger.foregroundMigration => true,
+    ReconnectTrigger.networkAvailable => false,
     ReconnectTrigger.autoFailure => false,
   };
 }

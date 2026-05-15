@@ -197,6 +197,15 @@ void main() {
     ).thenAnswer((_) async {});
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
     when(() => mockXmppService.clearSessionTokens()).thenAnswer((_) async {});
+    when(
+      () => mockXmppService.pauseAutomaticReconnect(),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+    ).thenAnswer((_) async => true);
+    when(
+      () => mockXmppService.ensureForegroundSocketIfActive(),
+    ).thenAnswer((_) async {});
     when(() => mockDatabase.getMessageByStanzaID(_welcomeStanzaId)).thenAnswer(
       (_) async => Message(
         stanzaID: _welcomeStanzaId,
@@ -2615,6 +2624,190 @@ void main() {
         );
       },
     );
+
+    test('skips resume reconnect when XMPP is already connected', () async {
+      when(() => mockXmppService.connected).thenReturn(true);
+
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      );
+      addTearDown(bloc.close);
+
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      await pumpEventQueue();
+
+      verifyNever(
+        () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+      );
+    });
+  });
+
+  group('background XMPP reconnect pause', () {
+    const pauseDelay = Duration(milliseconds: 10);
+
+    void restoreForegroundLifecycle() {
+      final binding = WidgetsBinding.instance;
+      if (binding.lifecycleState == AppLifecycleState.paused) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      }
+      if (binding.lifecycleState == AppLifecycleState.hidden) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      }
+      if (binding.lifecycleState == AppLifecycleState.inactive ||
+          binding.lifecycleState == null) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      }
+      withForeground = false;
+      resetForegroundNotifier(value: false);
+    }
+
+    void enterHiddenLifecycle() {
+      final binding = WidgetsBinding.instance;
+      if (binding.lifecycleState == AppLifecycleState.resumed ||
+          binding.lifecycleState == null) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      }
+      if (binding.lifecycleState == AppLifecycleState.inactive) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      }
+    }
+
+    test('hidden lifecycle starts the pause timer', () async {
+      restoreForegroundLifecycle();
+      addTearDown(restoreForegroundLifecycle);
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+        xmppReconnectPauseDelay: pauseDelay,
+      );
+      addTearDown(bloc.close);
+
+      enterHiddenLifecycle();
+      await Future<void>.delayed(pauseDelay * 2);
+      await pumpEventQueue();
+
+      verify(() => mockXmppService.pauseAutomaticReconnect()).called(1);
+    });
+
+    test('inactive lifecycle cancels the pause timer', () async {
+      restoreForegroundLifecycle();
+      addTearDown(restoreForegroundLifecycle);
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+        xmppReconnectPauseDelay: pauseDelay,
+      );
+      addTearDown(bloc.close);
+
+      enterHiddenLifecycle();
+      await Future<void>.delayed(pauseDelay ~/ 2);
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      await Future<void>.delayed(pauseDelay * 2);
+      await pumpEventQueue();
+
+      verifyNever(() => mockXmppService.pauseAutomaticReconnect());
+    });
+
+    test('resumed lifecycle cancels the pause timer', () async {
+      restoreForegroundLifecycle();
+      addTearDown(restoreForegroundLifecycle);
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+        xmppReconnectPauseDelay: pauseDelay,
+      );
+      addTearDown(bloc.close);
+
+      enterHiddenLifecycle();
+      await Future<void>.delayed(pauseDelay ~/ 2);
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      await Future<void>.delayed(pauseDelay * 2);
+      await pumpEventQueue();
+
+      verifyNever(() => mockXmppService.pauseAutomaticReconnect());
+    });
+
+    test('active foreground service prevents the pause', () async {
+      restoreForegroundLifecycle();
+      withForeground = true;
+      resetForegroundNotifier(value: true);
+      addTearDown(restoreForegroundLifecycle);
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+        xmppReconnectPauseDelay: pauseDelay,
+      );
+      addTearDown(bloc.close);
+
+      enterHiddenLifecycle();
+      await Future<void>.delayed(pauseDelay * 2);
+      await pumpEventQueue();
+
+      verifyNever(() => mockXmppService.pauseAutomaticReconnect());
+    });
+
+    test('foreground service activation cancels the pause timer', () async {
+      restoreForegroundLifecycle();
+      addTearDown(restoreForegroundLifecycle);
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+        xmppReconnectPauseDelay: pauseDelay,
+      );
+      addTearDown(bloc.close);
+
+      enterHiddenLifecycle();
+      await Future<void>.delayed(pauseDelay ~/ 2);
+      withForeground = true;
+      resetForegroundNotifier(value: true);
+      await Future<void>.delayed(pauseDelay * 2);
+      await pumpEventQueue();
+
+      verifyNever(() => mockXmppService.pauseAutomaticReconnect());
+    });
   });
 
   //Make real network calls and just accept the flakiness to know if we

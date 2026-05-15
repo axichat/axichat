@@ -2880,6 +2880,124 @@ void main() {
     );
 
     test(
+      'pauseAutomaticReconnect disables lower reconnect and clears connecting state.',
+      () async {
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connecting,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+        await reconnectionPolicy.setShouldReconnect(true);
+
+        await xmppService.pauseAutomaticReconnect();
+
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+      },
+    );
+
+    test(
+      'networkAvailable and autoFailure stay ignored while automatic reconnect is paused.',
+      () async {
+        await xmppService.pauseAutomaticReconnect();
+        reconnectTriggers.clear();
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isFalse,
+        );
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.autoFailure),
+          isFalse,
+        );
+
+        expect(reconnectTriggers, isEmpty);
+        expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+      },
+    );
+
+    test('resume clears pause and dispatches reconnect normally.', () async {
+      await xmppService.pauseAutomaticReconnect();
+      reconnectTriggers.clear();
+
+      expect(
+        await xmppService.requestReconnect(ReconnectTrigger.resume),
+        isTrue,
+      );
+
+      expect(reconnectTriggers, [ReconnectTrigger.resume]);
+      expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
+    });
+
+    test('connected resume request does not clear reconnect pause.', () async {
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.notConnected,
+        ),
+      );
+      await pumpEventQueue();
+      await xmppService.pauseAutomaticReconnect();
+      reconnectTriggers.clear();
+
+      expect(
+        await xmppService.requestReconnect(ReconnectTrigger.resume),
+        isTrue,
+      );
+
+      expect(reconnectTriggers, isEmpty);
+      expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+      expect(
+        await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+        isFalse,
+      );
+    });
+
+    test(
+      'connected active client state restores reconnect without dispatching.',
+      () async {
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.notConnected,
+          ),
+        );
+        await pumpEventQueue();
+        await xmppService.pauseAutomaticReconnect();
+        reconnectTriggers.clear();
+
+        await xmppService.setClientState();
+
+        expect(xmppService.connectionState, ConnectionState.connected);
+        expect(reconnectTriggers, isEmpty);
+        expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
+      },
+    );
+
+    test('inactive client state does not clear reconnect pause.', () async {
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.notConnected,
+        ),
+      );
+      await pumpEventQueue();
+      await xmppService.pauseAutomaticReconnect();
+      reconnectTriggers.clear();
+
+      await xmppService.setClientState(false);
+
+      expect(reconnectTriggers, isEmpty);
+      expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+      expect(
+        await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+        isFalse,
+      );
+    });
+
+    test(
       'syncSessionState returns false when reconnect setup fails before dispatch.',
       () async {
         eventStreamController.add(
