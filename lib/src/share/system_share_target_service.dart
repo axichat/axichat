@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:axichat/src/common/transport.dart';
@@ -59,6 +60,8 @@ class SystemShareTargetService {
   static final Logger _logger = Logger('SystemShareTargetService');
 
   final MethodChannel _channel;
+  _SystemShareTargetSyncRequest? _pendingRequest;
+  Future<void>? _syncOperation;
   String? _lastPublishedFingerprint;
 
   Future<int> getMaxShareTargetCount() async {
@@ -88,45 +91,117 @@ class SystemShareTargetService {
     required bool smtpEnabled,
     Future<Uint8List?> Function(String path)? loadAvatarBytes,
   }) async {
+    _pendingRequest = _PublishSystemShareTargets(
+      chats: List<Chat>.unmodifiable(chats),
+      smtpEnabled: smtpEnabled,
+      loadAvatarBytes: loadAvatarBytes,
+    );
+    await _ensureSyncOperation();
+  }
+
+  Future<void> clearShareTargets() async {
+    _pendingRequest = const _ClearSystemShareTargets();
+    await _ensureSyncOperation();
+  }
+
+  Future<void> _ensureSyncOperation() {
+    final operation = _syncOperation;
+    if (operation != null) {
+      return operation;
+    }
+    final nextOperation = _drainSyncRequests();
+    _syncOperation = nextOperation.whenComplete(() {
+      _syncOperation = null;
+      if (_pendingRequest != null) {
+        unawaited(_ensureSyncOperation());
+      }
+    });
+    return _syncOperation!;
+  }
+
+  Future<void> _drainSyncRequests() async {
+    while (_pendingRequest != null) {
+      final request = _pendingRequest!;
+      _pendingRequest = null;
+      await switch (request) {
+        _PublishSystemShareTargets() => _applyPublishRequest(request),
+        _ClearSystemShareTargets() => _applyClearRequest(),
+      };
+    }
+  }
+
+  Future<void> _applyPublishRequest(_PublishSystemShareTargets request) async {
     if (!_isAndroid) {
       _lastPublishedFingerprint = null;
       return;
     }
     final maxCount = await getMaxShareTargetCount();
+    if (_pendingRequest != null) {
+      return;
+    }
     final targets = deriveTargets(
-      chats: chats,
-      smtpEnabled: smtpEnabled,
+      chats: request.chats,
+      smtpEnabled: request.smtpEnabled,
       maxCount: maxCount,
     );
     if (targets.isEmpty) {
-      final fingerprint = stableFingerprint(targets);
+      final fingerprint = _emptyTargetFingerprint;
       if (_lastPublishedFingerprint == fingerprint) {
         return;
       }
-      await clearShareTargets();
-      _lastPublishedFingerprint = fingerprint;
+      _lastPublishedFingerprint = null;
+      if (await _invokeClearShareTargets()) {
+        _lastPublishedFingerprint = fingerprint;
+      }
       return;
     }
-    try {
-      final channelTargets = await channelValuesForTargets(
-        targets,
-        loadAvatarBytes: loadAvatarBytes,
-      );
-      final fingerprint = stableChannelFingerprint(channelTargets);
-      if (_lastPublishedFingerprint == fingerprint) {
-        return;
-      }
-      await _channel.invokeMethod<void>('setShareTargets', channelTargets);
+
+    final channelTargets = await channelValuesForTargets(
+      targets,
+      loadAvatarBytes: request.loadAvatarBytes,
+    );
+    if (_pendingRequest != null) {
+      return;
+    }
+    final fingerprint = stableChannelFingerprint(channelTargets);
+    if (_lastPublishedFingerprint == fingerprint) {
+      return;
+    }
+    _lastPublishedFingerprint = null;
+    if (await _invokeSetShareTargets(channelTargets)) {
       _lastPublishedFingerprint = fingerprint;
+    }
+  }
+
+  Future<void> _applyClearRequest() async {
+    if (!_isAndroid) {
+      _lastPublishedFingerprint = null;
+      return;
+    }
+    if (_lastPublishedFingerprint == _emptyTargetFingerprint) {
+      return;
+    }
+    _lastPublishedFingerprint = null;
+    if (await _invokeClearShareTargets()) {
+      _lastPublishedFingerprint = _emptyTargetFingerprint;
+    }
+  }
+
+  Future<bool> _invokeSetShareTargets(
+    List<Map<String, Object?>> channelTargets,
+  ) async {
+    try {
+      await _channel.invokeMethod<void>('setShareTargets', channelTargets);
+      return true;
     } on MissingPluginException {
-      _lastPublishedFingerprint = null;
+      return false;
     } on PlatformException catch (error, stackTrace) {
-      _lastPublishedFingerprint = null;
       _logger.warning(
         'Failed to publish Android share targets.',
         error,
         stackTrace,
       );
+      return false;
     }
   }
 
@@ -147,22 +222,19 @@ class SystemShareTargetService {
     return List<Map<String, Object?>>.unmodifiable(values);
   }
 
-  Future<void> clearShareTargets() async {
-    _lastPublishedFingerprint = null;
-    if (!_isAndroid) {
-      return;
-    }
+  Future<bool> _invokeClearShareTargets() async {
     try {
       await _channel.invokeMethod<void>('clearShareTargets');
+      return true;
     } on MissingPluginException {
-      return;
+      return false;
     } on PlatformException catch (error, stackTrace) {
       _logger.warning(
         'Failed to clear Android share targets.',
         error,
         stackTrace,
       );
-      return;
+      return false;
     }
   }
 
@@ -248,6 +320,9 @@ class SystemShareTargetService {
     return jsonEncode(targets);
   }
 
+  static String get _emptyTargetFingerprint =>
+      stableFingerprint(const <SystemShareTarget>[]);
+
   static bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
@@ -270,4 +345,24 @@ class SystemShareTargetService {
     }
     return null;
   }
+}
+
+sealed class _SystemShareTargetSyncRequest {
+  const _SystemShareTargetSyncRequest();
+}
+
+final class _PublishSystemShareTargets extends _SystemShareTargetSyncRequest {
+  const _PublishSystemShareTargets({
+    required this.chats,
+    required this.smtpEnabled,
+    required this.loadAvatarBytes,
+  });
+
+  final List<Chat> chats;
+  final bool smtpEnabled;
+  final Future<Uint8List?> Function(String path)? loadAvatarBytes;
+}
+
+final class _ClearSystemShareTargets extends _SystemShareTargetSyncRequest {
+  const _ClearSystemShareTargets();
 }

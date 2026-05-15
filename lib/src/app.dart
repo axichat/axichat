@@ -757,9 +757,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     final onGuestRoute = onLoginRoute || !authRequired;
                     final authCompletionDuration =
                         settingsCubit.authCompletionDuration;
-                    if (state is AuthenticationComplete) {
-                      _syncSystemShareTargets(context, state);
-                    }
+                    _syncSystemShareTargets(context, state);
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
@@ -994,7 +992,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   void _syncSystemShareTargets(BuildContext context, Object? _) {
     final locate = context.read;
+    final shareTargetService = locate<SystemShareTargetService>();
     if (locate<AuthenticationCubit>().state is! AuthenticationComplete) {
+      fireAndForget(
+        shareTargetService.clearShareTargets,
+        operationName: 'MaterialAxichat.clearSystemShareTargets',
+        loggerName: 'MaterialAxichat',
+      );
       return;
     }
     final chats = locate<ChatsCubit>().state.items;
@@ -1003,11 +1007,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     }
     final smtpEnabled =
         locate<SettingsCubit>().state.endpointConfig.smtpEnabled;
-    final shareTargetService = locate<SystemShareTargetService>();
     final xmppService = locate<XmppService>();
     fireAndForget(
       () => shareTargetService.publishTargets(
-        chats: chats,
+        chats: List<Chat>.unmodifiable(chats),
         smtpEnabled: smtpEnabled,
         loadAvatarBytes: (path) =>
             xmppService.resolveSafeAvatarBytes(avatarPath: path),

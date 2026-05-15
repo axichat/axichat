@@ -145,7 +145,18 @@ class MainActivity : FlutterActivity() {
       }
       removeShareTargets(removedIds)
       if (shortcuts.isNotEmpty()) {
-        ShortcutManagerCompat.setDynamicShortcuts(this, shortcuts)
+        val published = ShortcutManagerCompat.setDynamicShortcuts(
+            this,
+            shortcuts
+        )
+        if (!published) {
+          result.error(
+              "share_targets_rejected",
+              "Android rejected share target shortcut update.",
+              null
+          )
+          return
+        }
       }
       storeShareTargetState(nextIds)
       result.success(null)
