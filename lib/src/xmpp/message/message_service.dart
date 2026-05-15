@@ -7227,7 +7227,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       stanzaId: normalizedStanzaId,
       chatType: chatType,
     );
-    if (await _sendReadMarkerNow(pending)) return;
+    final targetKey = _readMarkerTargetKey(target);
+    final queuedBeforeSend = targetKey == null
+        ? null
+        : _pendingReadMarkersByTarget[targetKey];
+    if (await _sendReadMarkerNow(pending)) {
+      if (targetKey != null &&
+          queuedBeforeSend != null &&
+          identical(_pendingReadMarkersByTarget[targetKey], queuedBeforeSend)) {
+        _pendingReadMarkersByTarget.remove(targetKey);
+      }
+      return;
+    }
     _queuePendingReadMarker(pending);
   }
 
@@ -7241,10 +7252,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   void _queuePendingReadMarker(_PendingReadMarker pending) {
-    final targetKey = normalizedBareAddressValue(pending.to) ?? pending.to;
+    final targetKey = _readMarkerTargetKey(pending.to);
+    if (targetKey == null) return;
+    _pendingReadMarkersByTarget[targetKey] = pending;
+  }
+
+  String? _readMarkerTargetKey(String target) {
+    final targetKey = normalizedBareAddressValue(target) ?? target;
     final normalizedTargetKey = targetKey.trim();
-    if (normalizedTargetKey.isEmpty) return;
-    _pendingReadMarkersByTarget[normalizedTargetKey] = pending;
+    if (normalizedTargetKey.isEmpty) return null;
+    return normalizedTargetKey;
   }
 
   Future<void> _flushPendingReadMarkers() async {

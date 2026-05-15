@@ -2437,6 +2437,46 @@ void main() {
         await controller.close();
       },
     );
+
+    test(
+      'Clears stale queued read markers after a newer immediate send succeeds',
+      () async {
+        const peerJid = 'friend@example.net';
+        const olderStanzaId = 'older-read-marker';
+        const latestStanzaId = 'latest-read-marker';
+        final controller = StreamController<mox.XmppEvent>.broadcast();
+        final sentStanzaIds = <String>[];
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        when(
+          () => mockConnection.sendChatMarker(
+            to: any(named: 'to'),
+            stanzaID: any(named: 'stanzaID'),
+            marker: any(named: 'marker'),
+            messageType: any(named: 'messageType'),
+          ),
+        ).thenAnswer((invocation) async {
+          sentStanzaIds.add(invocation.namedArguments[#stanzaID] as String);
+          return sentStanzaIds.length > 1;
+        });
+
+        await connectSuccessfully(xmppService);
+
+        await xmppService.sendReadMarker(peerJid, olderStanzaId);
+        await xmppService.sendReadMarker(peerJid, latestStanzaId);
+        await xmppService.runBootstrapOperations(
+          XmppBootstrapTrigger.resumedNegotiation,
+        );
+
+        expect(sentStanzaIds, <String>[olderStanzaId, latestStanzaId]);
+
+        await controller.close();
+      },
+    );
   });
 
   group('originID hot paths', () {
