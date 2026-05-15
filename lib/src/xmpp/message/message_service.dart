@@ -2572,12 +2572,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       end: end,
       filter: filter,
     ).map((messages) {
-      if (messages.isEmpty || !_internalEnvelopeChats.contains(jid)) {
+      if (messages.isEmpty) {
         return messages;
       }
-      final filtered = messages
-          .where((message) => !_isInternalSyncEnvelope(message.body))
-          .toList(growable: false);
+      final filtered = <Message>[];
+      for (final message in messages) {
+        if (_isInternalSyncEnvelope(message.body)) {
+          _internalEnvelopeChats.add(jid);
+          continue;
+        }
+        filtered.add(message);
+      }
+      if (!_internalEnvelopeChats.contains(jid)) {
+        return messages;
+      }
       return List<Message>.unmodifiable(filtered);
     });
   }
@@ -7197,6 +7205,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       calendarTaskIcsReadOnly: taskIcsReadOnly,
       calendarAvailabilityMessage: availabilityMessage,
       chatType: targetChatType,
+      forwarded: message.isForwarded,
+      forwardedFromJid: message.forwardedFromJid,
+      forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
       onLocalMessageStored: onLocalMessageStored,
     );
   }

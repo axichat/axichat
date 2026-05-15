@@ -520,7 +520,10 @@ bool normalizeReactionNamespace(mox.Stanza stanza) {
   if (rawXmlns != null && rawXmlns.isNotEmpty) {
     return false;
   }
-  reactionNode.attributes[_xmlNamespaceAttr] = mox.messageReactionsXmlns;
+  reactionNode.attributes = <String, dynamic>{
+    ...reactionNode.attributes,
+    _xmlNamespaceAttr: mox.messageReactionsXmlns,
+  };
   return true;
 }
 
