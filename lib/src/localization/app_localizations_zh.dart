@@ -535,7 +535,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get chatTransportChoiceAxichatLabel => '聊天';
+  String get chatTransportChoiceAxichatLabel => 'Axichat';
 
   @override
   String get chatComposerMessageHint => '发送消息';
@@ -6838,7 +6838,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
-  String get chatTransportChoiceAxichatLabel => '聊天';
+  String get chatTransportChoiceAxichatLabel => 'Axichat';
 
   @override
   String get chatComposerMessageHint => '傳送訊息';

@@ -1092,7 +1092,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatTransportChoiceAxichatLabel.
   ///
   /// In en, this message translates to:
-  /// **'Chat'**
+  /// **'Axichat'**
   String get chatTransportChoiceAxichatLabel;
 
   /// No description provided for @chatComposerMessageHint.

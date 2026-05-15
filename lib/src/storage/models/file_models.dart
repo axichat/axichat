@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
@@ -276,58 +277,24 @@ sealed class FileMetadataData
   const FileMetadataData._();
 
   @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{
-      'id': Variable<String>(id),
-      'filename': Variable<String>(filename),
-    };
-
-    void writeNullableString(String column, String? value) {
-      if (!nullToAbsent || value != null) {
-        map[column] = Variable<String>(value);
-      }
-    }
-
-    void writeNullableInt(String column, int? value) {
-      if (!nullToAbsent || value != null) {
-        map[column] = Variable<int>(value);
-      }
-    }
-
-    void writeNullableStringList(String column, List<String>? value) {
-      if (!nullToAbsent || value != null) {
-        map[column] = Variable<String>(
-          value == null ? null : ListConverter<String>().toSql(value),
-        );
-      }
-    }
-
-    void writeNullableHashes(
-      String column,
-      Map<mox.HashFunction, String>? value,
-    ) {
-      if (!nullToAbsent || value != null) {
-        map[column] = Variable<String>(
-          value == null ? null : HashesConverter().toSql(value),
-        );
-      }
-    }
-
-    writeNullableString('path', path);
-    writeNullableStringList('source_urls', sourceUrls);
-    writeNullableString('mime_type', mimeType);
-    writeNullableInt('size_bytes', sizeBytes);
-    writeNullableInt('width', width);
-    writeNullableInt('height', height);
-    writeNullableString('encryption_key', encryptionKey);
-    writeNullableString('encryption_i_v', encryptionIV);
-    writeNullableString('encryption_scheme', encryptionScheme);
-    writeNullableHashes('cipher_text_hashes', cipherTextHashes);
-    writeNullableHashes('plain_text_hashes', plainTextHashes);
-    writeNullableString('thumbnail_type', thumbnailType);
-    writeNullableString('thumbnail_data', thumbnailData);
-    return map;
-  }
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
+      FileMetadataCompanion(
+        id: Value(id),
+        filename: Value(filename),
+        path: Value.absentIfNull(path),
+        sourceUrls: Value.absentIfNull(sourceUrls),
+        mimeType: Value.absentIfNull(mimeType),
+        sizeBytes: Value.absentIfNull(sizeBytes),
+        width: Value.absentIfNull(width),
+        height: Value.absentIfNull(height),
+        encryptionKey: Value.absentIfNull(encryptionKey),
+        encryptionIV: Value.absentIfNull(encryptionIV),
+        encryptionScheme: Value.absentIfNull(encryptionScheme),
+        cipherTextHashes: Value.absentIfNull(cipherTextHashes),
+        plainTextHashes: Value.absentIfNull(plainTextHashes),
+        thumbnailType: Value.absentIfNull(thumbnailType),
+        thumbnailData: Value.absentIfNull(thumbnailData),
+      ).toColumns(nullToAbsent);
 }
 
 final class AttachmentGalleryItem {
@@ -504,37 +471,20 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
   }
 
   @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{
-      'id': Variable<int>(id),
-      'jids': Variable<String>(ListConverter<String>().toSql(jids)),
-      'draft_sync_id': Variable<String>(draftSyncId),
-      'draft_updated_at': Variable<DateTime>(draftUpdatedAt),
-      'draft_source_id': Variable<String>(draftSourceId),
-      'draft_recipients': Variable<String>(
-        const DraftRecipientListConverter().toSql(draftRecipients),
-      ),
-      'attachment_metadata_ids': Variable<String>(
-        ListConverter<String>().toSql(attachmentMetadataIds),
-      ),
-    };
-
-    void writeNullableString(String column, String? value) {
-      if (!nullToAbsent || value != null) {
-        map[column] = Variable<String>(value);
-      }
-    }
-
-    writeNullableString('body', body);
-    writeNullableString('subject', subject);
-    writeNullableString('quoting_stanza_id', quotingStanzaId);
-    if (!nullToAbsent || quotingReferenceKind != null) {
-      map['quoting_reference_kind'] = Variable<int>(
-        quotingReferenceKind?.index,
-      );
-    }
-    return map;
-  }
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
+      DraftsCompanion(
+        id: Value(id),
+        jids: Value(jids),
+        draftSyncId: Value(draftSyncId),
+        draftUpdatedAt: Value(draftUpdatedAt),
+        draftSourceId: Value(draftSourceId),
+        draftRecipients: Value(draftRecipients),
+        body: Value.absentIfNull(body),
+        subject: Value.absentIfNull(subject),
+        quotingStanzaId: Value.absentIfNull(quotingStanzaId),
+        quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
+        attachmentMetadataIds: Value(attachmentMetadataIds),
+      ).toColumns(nullToAbsent);
 }
 
 @UseRowClass(Draft)

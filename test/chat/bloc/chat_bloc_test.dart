@@ -2302,6 +2302,60 @@ void main() {
   );
 
   test(
+    'verifies stale unacked messages from MAM after initial messages load',
+    () async {
+      final message = Message(
+        stanzaID: 'initial-stale-unacked-message',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Still pending',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+      );
+      when(
+        () => messageService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => Stream<List<Message>>.value([message]));
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      final verification = verify(
+        () => messageService.verifyUnackedMessagesFromMamForChat(
+          chat: any(named: 'chat'),
+          candidates: captureAny(named: 'candidates'),
+          pageSize: ChatBloc.messageBatchSize,
+        ),
+      );
+      verification.called(1);
+      final candidates = verification.captured.single as Iterable<Message>;
+      expect(
+        candidates.map((message) => message.stanzaID),
+        contains('initial-stale-unacked-message'),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'send again marks the original stale unacked invite after local copy',
     () async {
       when(

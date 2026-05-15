@@ -181,7 +181,7 @@
       "address": {}
     }
   },
-  "chatTransportChoiceAxichatLabel": "Chat",
+  "chatTransportChoiceAxichatLabel": "Axichat",
   "chatComposerMessageHint": "Enviar mensaje",
   "chatComposerFromHint": "Enviando desde {address}",
   "chatComposerEmptyMessage": "El mensaje no puede estar vacío.",

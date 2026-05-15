@@ -1781,8 +1781,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_xmppAllowedForChat(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
       if (emit.isDone) return;
-      await _verifyStaleUnackedMessagesFromMam(event.chat);
-      if (emit.isDone) return;
+      if (!resetContext) {
+        await _verifyStaleUnackedMessagesFromMam(event.chat);
+        if (emit.isDone) return;
+      }
     }
     if (showXmppCapabilities) {
       final capabilities = await _resolvePeerCapabilities(event.chat);
@@ -2174,6 +2176,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         : state.scrollTargetMessageId;
     final shouldGateInitialEmailPresentation =
         _awaitingInitialEmailPresentation || !state.messagesLoaded;
+    final staleUnackedMamChat =
+        chat != null && _xmppAllowedForChat(chat) && !state.messagesLoaded
+        ? chat
+        : null;
     final pendingInitialEmailPresentation = shouldGateInitialEmailPresentation
         ? _resolveInitialEmailPresentationPendingDeltaIds(
             messages: filteredItems,
@@ -2202,6 +2208,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             : state.scrollTargetRequestId,
       ),
     );
+    if (staleUnackedMamChat != null) {
+      await _verifyStaleUnackedMessagesFromMam(staleUnackedMamChat);
+      if (emit.isDone) {
+        return _syncReadStateLocallyIfAvailable(
+          chat: chat,
+          items: filteredItems,
+        );
+      }
+    }
     if (initialEmailPresentationReady) {
       _maybeRequestVisibleEmailFullHtml(filteredItems);
     } else {

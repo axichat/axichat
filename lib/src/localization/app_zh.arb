@@ -180,7 +180,7 @@
       "address": {}
     }
   },
-  "chatTransportChoiceAxichatLabel": "聊天",
+  "chatTransportChoiceAxichatLabel": "Axichat",
   "chatComposerMessageHint": "发送消息",
   "chatComposerFromHint": "发送自 {address}",
   "chatComposerEmptyMessage": "消息不能为空。",
