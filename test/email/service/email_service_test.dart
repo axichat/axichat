@@ -1912,6 +1912,49 @@ void main() {
   );
 
   test(
+    'reconnect restart continues recovery when stopped background fetch fails',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        await service.handleNetworkAvailable();
+        clearInteractions(transport);
+        when(() => transport.isIoRunning).thenReturn(true);
+        when(() => transport.connectivity()).thenAnswer((_) async => 2000);
+        when(
+          () => transport.performBackgroundFetch(any()),
+        ).thenThrow(Exception('fetch failed'));
+
+        await Future<void>.delayed(const Duration(milliseconds: 4300));
+        await pumpMicrotasks();
+
+        verify(() => transport.stop()).called(1);
+        verify(
+          () => transport.performBackgroundFetch(const Duration(seconds: 25)),
+        ).called(1);
+        verify(() => transport.start()).called(1);
+        verify(() => transport.notifyNetworkAvailable()).called(2);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
     'reconnect restart re-notifies without restart when connecting reaches working',
     () async {
       final service = EmailService(

@@ -3990,6 +3990,12 @@ class EmailService {
           backgroundFetchCompleted = await performBackgroundFetch(
             timeout: _imapSyncFetchTimeout,
           );
+        } on Exception catch (error, stackTrace) {
+          _log.warning(
+            'Email stopped background fetch failed; continuing restart recovery',
+            error,
+            stackTrace,
+          );
         } finally {
           await start();
         }
