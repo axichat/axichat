@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:axichat/src/common/transport.dart';
@@ -60,7 +61,8 @@ class SystemShareTargetService {
   static final Logger _logger = Logger('SystemShareTargetService');
 
   final MethodChannel _channel;
-  _SystemShareTargetSyncRequest? _pendingRequest;
+  final Queue<_SystemShareTargetSyncRequest> _pendingRequests =
+      Queue<_SystemShareTargetSyncRequest>();
   Future<void>? _syncOperation;
   String? _lastPublishedFingerprint;
 
@@ -91,16 +93,23 @@ class SystemShareTargetService {
     required bool smtpEnabled,
     Future<Uint8List?> Function(String path)? loadAvatarBytes,
   }) async {
-    _pendingRequest = _PublishSystemShareTargets(
-      chats: List<Chat>.unmodifiable(chats),
-      smtpEnabled: smtpEnabled,
-      loadAvatarBytes: loadAvatarBytes,
+    _pendingRequests.removeWhere(
+      (request) => request is _PublishSystemShareTargets,
+    );
+    _pendingRequests.add(
+      _PublishSystemShareTargets(
+        chats: List<Chat>.unmodifiable(chats),
+        smtpEnabled: smtpEnabled,
+        loadAvatarBytes: loadAvatarBytes,
+      ),
     );
     await _ensureSyncOperation();
   }
 
   Future<void> clearShareTargets() async {
-    _pendingRequest = const _ClearSystemShareTargets();
+    _pendingRequests
+      ..clear()
+      ..add(const _ClearSystemShareTargets());
     await _ensureSyncOperation();
   }
 
@@ -112,7 +121,7 @@ class SystemShareTargetService {
     final nextOperation = _drainSyncRequests();
     _syncOperation = nextOperation.whenComplete(() {
       _syncOperation = null;
-      if (_pendingRequest != null) {
+      if (_pendingRequests.isNotEmpty) {
         unawaited(_ensureSyncOperation());
       }
     });
@@ -120,13 +129,26 @@ class SystemShareTargetService {
   }
 
   Future<void> _drainSyncRequests() async {
-    while (_pendingRequest != null) {
-      final request = _pendingRequest!;
-      _pendingRequest = null;
-      await switch (request) {
-        _PublishSystemShareTargets() => _applyPublishRequest(request),
-        _ClearSystemShareTargets() => _applyClearRequest(),
-      };
+    while (_pendingRequests.isNotEmpty) {
+      final request = _pendingRequests.removeFirst();
+      switch (request) {
+        case _PublishSystemShareTargets():
+          await _applyPublishRequest(request);
+        case _ClearSystemShareTargets():
+          if (!await _applyClearRequest()) {
+            _dropRequestsUntilNextClear();
+            if (_pendingRequests.isEmpty) {
+              return;
+            }
+          }
+      }
+    }
+  }
+
+  void _dropRequestsUntilNextClear() {
+    while (_pendingRequests.isNotEmpty &&
+        _pendingRequests.first is! _ClearSystemShareTargets) {
+      _pendingRequests.removeFirst();
     }
   }
 
@@ -136,7 +158,7 @@ class SystemShareTargetService {
       return;
     }
     final maxCount = await getMaxShareTargetCount();
-    if (_pendingRequest != null) {
+    if (_pendingRequests.isNotEmpty) {
       return;
     }
     final targets = deriveTargets(
@@ -160,7 +182,7 @@ class SystemShareTargetService {
       targets,
       loadAvatarBytes: request.loadAvatarBytes,
     );
-    if (_pendingRequest != null) {
+    if (_pendingRequests.isNotEmpty) {
       return;
     }
     final fingerprint = stableChannelFingerprint(channelTargets);
@@ -173,18 +195,20 @@ class SystemShareTargetService {
     }
   }
 
-  Future<void> _applyClearRequest() async {
+  Future<bool> _applyClearRequest() async {
     if (!_isAndroid) {
       _lastPublishedFingerprint = null;
-      return;
+      return true;
     }
     if (_lastPublishedFingerprint == _emptyTargetFingerprint) {
-      return;
+      return true;
     }
     _lastPublishedFingerprint = null;
     if (await _invokeClearShareTargets()) {
       _lastPublishedFingerprint = _emptyTargetFingerprint;
+      return true;
     }
+    return false;
   }
 
   Future<bool> _invokeSetShareTargets(

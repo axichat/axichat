@@ -262,6 +262,151 @@ void main() {
       expect(clearCount, 1);
     });
 
+    test(
+      'queued clear runs before later publish after stale publish',
+      () async {
+        final nativeCalls = <String>[];
+        final nativeSetJids = <List<String>>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              switch (call.method) {
+                case 'getMaxShareTargetCount':
+                  return 4;
+                case 'setShareTargets':
+                  nativeCalls.add('setShareTargets');
+                  nativeSetJids.add(_targetJids(call.arguments));
+                  throw PlatformException(
+                    code: 'share_targets_rejected',
+                    message: 'Android rejected share target shortcut update.',
+                  );
+                case 'clearShareTargets':
+                  nativeCalls.add('clearShareTargets');
+                  return null;
+              }
+              fail('Unexpected method call: ${call.method}');
+            });
+        final service = SystemShareTargetService(channel: channel);
+        final avatarLoadStarted = Completer<void>();
+        final avatarLoad = Completer<Uint8List?>();
+
+        final olderPublish = service.publishTargets(
+          chats: [_chat('old@example.com', avatarPath: '/avatars/old.png')],
+          smtpEnabled: false,
+          loadAvatarBytes: (path) {
+            avatarLoadStarted.complete();
+            return avatarLoad.future;
+          },
+        );
+        await avatarLoadStarted.future;
+
+        final clear = service.clearShareTargets();
+        final newerPublish = service.publishTargets(
+          chats: [_chat('new@example.com')],
+          smtpEnabled: false,
+        );
+        avatarLoad.complete(Uint8List.fromList([1, 2, 3]));
+        await Future.wait([olderPublish, clear, newerPublish]);
+
+        expect(nativeCalls, ['clearShareTargets', 'setShareTargets']);
+        expect(nativeSetJids, [
+          ['new@example.com'],
+        ]);
+      },
+    );
+
+    test('failed clear drops queued publish without retrying', () async {
+      final nativeCalls = <String>[];
+      final clearStarted = Completer<void>();
+      final finishClear = Completer<void>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            switch (call.method) {
+              case 'getMaxShareTargetCount':
+                return 4;
+              case 'clearShareTargets':
+                nativeCalls.add('clearShareTargets');
+                clearStarted.complete();
+                await finishClear.future;
+                throw PlatformException(
+                  code: 'share_targets_unavailable',
+                  message: 'Android share targets are unavailable.',
+                );
+              case 'setShareTargets':
+                nativeCalls.add('setShareTargets');
+                return null;
+            }
+            fail('Unexpected method call: ${call.method}');
+          });
+      final service = SystemShareTargetService(channel: channel);
+
+      final clear = service.clearShareTargets();
+      await clearStarted.future;
+      final publish = service.publishTargets(
+        chats: [_chat('new@example.com')],
+        smtpEnabled: false,
+      );
+      finishClear.complete();
+      await Future.wait([clear, publish]).timeout(const Duration(seconds: 1));
+
+      expect(nativeCalls, ['clearShareTargets']);
+    });
+
+    test('failed clear preserves a later queued clear and publish', () async {
+      final nativeCalls = <String>[];
+      final nativeSetJids = <List<String>>[];
+      final firstClearStarted = Completer<void>();
+      final finishFirstClear = Completer<void>();
+      var clearCount = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            switch (call.method) {
+              case 'getMaxShareTargetCount':
+                return 4;
+              case 'clearShareTargets':
+                nativeCalls.add('clearShareTargets');
+                clearCount += 1;
+                if (clearCount == 1) {
+                  firstClearStarted.complete();
+                  await finishFirstClear.future;
+                  throw PlatformException(
+                    code: 'share_targets_unavailable',
+                    message: 'Android share targets are unavailable.',
+                  );
+                }
+                return null;
+              case 'setShareTargets':
+                nativeCalls.add('setShareTargets');
+                nativeSetJids.add(_targetJids(call.arguments));
+                return null;
+            }
+            fail('Unexpected method call: ${call.method}');
+          });
+      final service = SystemShareTargetService(channel: channel);
+
+      final firstClear = service.clearShareTargets();
+      await firstClearStarted.future;
+      final secondClear = service.clearShareTargets();
+      final publish = service.publishTargets(
+        chats: [_chat('new@example.com')],
+        smtpEnabled: false,
+      );
+      finishFirstClear.complete();
+      await Future.wait([
+        firstClear,
+        secondClear,
+        publish,
+      ]).timeout(const Duration(seconds: 1));
+
+      expect(nativeCalls, [
+        'clearShareTargets',
+        'clearShareTargets',
+        'setShareTargets',
+      ]);
+      expect(nativeSetJids, [
+        ['new@example.com'],
+      ]);
+    });
+
     test('native rejection does not cache fingerprint', () async {
       var setCount = 0;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
