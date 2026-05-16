@@ -173,9 +173,9 @@ dependencies = [
 
 [[package]]
 name = "astral-tokio-tar"
-version = "0.5.6"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec179a06c1769b1e42e1e2cbe74c7dcdb3d6383c838454d063eaac5bbb7ebbe5"
+checksum = "4ce73b17c62717c4b6a9af10b43e87c578b0cac27e00666d48304d3b7d2c0693"
 dependencies = [
  "filetime",
  "futures-core",
@@ -1042,7 +1042,7 @@ dependencies = [
 [[package]]
 name = "deltachat"
 version = "2.22.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 dependencies = [
  "anyhow",
  "astral-tokio-tar",
@@ -1125,7 +1125,7 @@ dependencies = [
 [[package]]
 name = "deltachat-contact-tools"
 version = "0.0.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1136,7 +1136,7 @@ dependencies = [
 [[package]]
 name = "deltachat-jsonrpc"
 version = "2.22.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -1157,12 +1157,12 @@ dependencies = [
 [[package]]
 name = "deltachat-time"
 version = "1.0.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 
 [[package]]
 name = "deltachat_derive"
 version = "2.0.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 dependencies = [
  "quote",
  "syn",
@@ -1171,7 +1171,7 @@ dependencies = [
 [[package]]
 name = "deltachat_ffi"
 version = "2.22.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1757,7 +1757,7 @@ dependencies = [
 [[package]]
 name = "format-flowed"
 version = "1.0.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 
 [[package]]
 name = "funty"
@@ -3330,11 +3330,10 @@ dependencies = [
 
 [[package]]
 name = "num-bigint-dig"
-version = "0.8.4"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc84195820f291c7697304f3cbdadd1cb7199c0efc917ff5eafd71225c136151"
+checksum = "e661dda6640fad38e827a6d4a310ff4763082116fe217f279885c97f511bb0b7"
 dependencies = [
- "byteorder",
  "lazy_static",
  "libm",
  "num-integer",
@@ -3691,9 +3690,9 @@ dependencies = [
 
 [[package]]
 name = "pgp"
-version = "0.17.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d918d5da2ce943e4c6088d7694f33f47c19374d6f0f2080a0c5e8010afdfd29"
+checksum = "eaffe1ec22db286599c30ae6be75b37493b558735d86c8e59ec5c38794415fe4"
 dependencies = [
  "aead",
  "aes",
@@ -3710,7 +3709,6 @@ dependencies = [
  "camellia",
  "cast5",
  "cfb-mode",
- "chrono",
  "cipher",
  "const-oid",
  "crc24",
@@ -4301,7 +4299,7 @@ dependencies = [
 [[package]]
 name = "ratelimit"
 version = "1.0.0"
-source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=52beedd77f6de9f1597bf7c2be6cc6bd0c052937#52beedd77f6de9f1597bf7c2be6cc6bd0c052937"
 
 [[package]]
 name = "rcgen"
@@ -4467,9 +4465,9 @@ dependencies = [
 
 [[package]]
 name = "rsa"
-version = "0.9.8"
+version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78928ac1ed176a5ca1d17e578a1825f3d81ca54cf41053a592584b020cfd691b"
+checksum = "b8573f03f5883dcaebdfcf4725caa1ecb9c15b2ef50c43a07b816e06799bb12d"
 dependencies = [
  "const-oid",
  "digest",
