@@ -27,7 +27,7 @@ void main() {
 
   test('close invalidates a delayed carousel tick before it can emit', () {
     fakeAsync((async) {
-      final templates = <AvatarTemplate>[];
+      final templates = <AvatarTemplate>[_fakeTemplate(id: 'delayed-template')];
       final buildCompleter = Completer<EditableAvatar>();
       final cubit = AvatarEditorCubit(
         xmppService: xmppService,
@@ -41,8 +41,6 @@ void main() {
 
       unawaited(cubit.setCarouselEnabled(true, colors));
       async.flushMicrotasks();
-
-      templates.add(_fakeTemplate(id: 'delayed-template'));
 
       async.elapse(const Duration(seconds: 1));
       async.flushMicrotasks();
@@ -138,6 +136,75 @@ void main() {
       expect((await cubit.buildSelectedAvatarPayload())?.hash, isNotNull);
     },
   );
+
+  test('room avatar carousel seeds existing avatar without selecting it', () {
+    fakeAsync((async) {
+      final colors = ShadColorScheme.fromName(
+        'zinc',
+        brightness: Brightness.light,
+      );
+      when(
+        () => xmppService.loadAvatarBytes('room-avatar'),
+      ).thenAnswer((_) async => Uint8List.fromList(const [1, 2, 3]));
+      final cubit = AvatarEditorCubit(
+        xmppService: xmppService,
+        templates: <AvatarTemplate>[
+          _fakeTemplate(id: 'preview-template-1'),
+          _fakeTemplate(id: 'preview-template-2'),
+        ],
+        pipeline: _ImmediateAvatarPipeline(),
+      );
+
+      unawaited(
+        cubit.initializeRoomAvatarCarousel(colors, avatarPath: 'room-avatar'),
+      );
+      async.flushMicrotasks();
+
+      final seededPreview = cubit.state.carouselAvatar;
+      expect(seededPreview?.payload.hash, 'upload-3');
+      expect(cubit.state.draftAvatar, isNull);
+      expect(cubit.state.carouselRunning, isTrue);
+
+      async.elapse(AvatarEditorCubit.avatarCarouselInterval);
+      async.flushMicrotasks();
+
+      expect(cubit.state.draftAvatar, isNull);
+      expect(cubit.state.carouselAvatar?.payload.hash, isNot('upload-3'));
+      expect(cubit.state.carouselRunning, isTrue);
+    });
+  });
+
+  test('close cancels a delayed room avatar carousel seed load', () {
+    fakeAsync((async) {
+      final colors = ShadColorScheme.fromName(
+        'zinc',
+        brightness: Brightness.light,
+      );
+      final loadCompleter = Completer<Uint8List?>();
+      when(
+        () => xmppService.loadAvatarBytes('room-avatar'),
+      ).thenAnswer((_) => loadCompleter.future);
+      final cubit = AvatarEditorCubit(
+        xmppService: xmppService,
+        templates: <AvatarTemplate>[_fakeTemplate(id: 'preview-template')],
+        pipeline: _ImmediateAvatarPipeline(),
+      );
+
+      unawaited(
+        cubit.initializeRoomAvatarCarousel(colors, avatarPath: 'room-avatar'),
+      );
+      async.flushMicrotasks();
+
+      unawaited(cubit.close());
+      async.flushMicrotasks();
+
+      loadCompleter.complete(Uint8List.fromList(const [1, 2, 3]));
+      async.flushMicrotasks();
+
+      expect(cubit.state.carouselAvatar, isNull);
+      expect(cubit.state.carouselRunning, isFalse);
+    });
+  });
 }
 
 class _TestAvatarPipeline extends AvatarPipeline {
@@ -191,6 +258,23 @@ class _ImmediateAvatarPipeline extends AvatarPipeline {
     double cropSide = 100000.0,
   }) async {
     return _avatarFromTemplate(template: template, background: background);
+  }
+
+  @override
+  Future<EditableAvatar> buildFromUpload(Uint8List bytes) async {
+    return EditableAvatar(
+      source: AvatarSource.upload,
+      payload: AvatarUploadPayload(
+        bytes: bytes,
+        mimeType: 'image/png',
+        width: 1,
+        height: 1,
+        hash: 'upload-${bytes.length}',
+      ),
+      sourceBytes: bytes,
+      sourceWidth: 1,
+      sourceHeight: 1,
+    );
   }
 }
 

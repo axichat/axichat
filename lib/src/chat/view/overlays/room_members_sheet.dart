@@ -1012,14 +1012,10 @@ class RoomAvatarEditorSheet extends StatefulWidget {
         final pop = Navigator.of(sheetContext).pop;
         final colors = sheetContext.colorScheme;
         return BlocProvider(
-          create: (_) =>
-              AvatarEditorCubit(
-                  xmppService: sheetContext.read<XmppService>(),
-                  templates: buildDefaultAvatarTemplates(),
-                )
-                ..initialize(colors)
-                ..setCarouselEnabled(true, colors)
-                ..seedFromAvatarPath(avatarPath),
+          create: (_) => AvatarEditorCubit(
+            xmppService: sheetContext.read<XmppService>(),
+            templates: buildDefaultAvatarTemplates(),
+          )..initializeRoomAvatarCarousel(colors, avatarPath: avatarPath),
           child: RoomAvatarEditorSheet(
             avatarPath: avatarPath,
             onCancel: () => pop(),

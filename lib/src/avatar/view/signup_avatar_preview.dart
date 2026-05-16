@@ -94,6 +94,9 @@ class _SignupAvatarPreviewState extends State<SignupAvatarPreview>
     final previewShape = SquircleBorder(cornerRadius: sharedCornerRadius);
     final resolvedBytes = widget.bytes;
     final hasBytes = resolvedBytes != null && resolvedBytes.isNotEmpty;
+    final transitionDuration = widget.showRotationTimer
+        ? Duration.zero
+        : widget.animationDuration;
 
     return SizedBox.square(
       dimension: widget.size,
@@ -110,7 +113,7 @@ class _SignupAvatarPreviewState extends State<SignupAvatarPreview>
         child: Padding(
           padding: EdgeInsets.all(previewInset),
           child: PageTransitionSwitcher(
-            duration: widget.animationDuration,
+            duration: transitionDuration,
             transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
                 FadeTransition(
                   opacity: primaryAnimation,

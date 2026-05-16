@@ -1,25 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
-import 'package:axichat/src/avatar/editing/editable_avatar.dart';
 import 'package:axichat/src/avatar/editing/avatar_carousel_engine.dart';
+import 'package:axichat/src/avatar/editing/avatar_carousel_session.dart';
+import 'package:axichat/src/avatar/editing/editable_avatar.dart';
 import 'package:axichat/src/avatar/editing/avatar_pipeline.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
-import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image/image.dart' as img;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'signup_avatar_state.dart';
@@ -69,6 +67,19 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         abstractWarmupDuration: _abstractWarmupDuration,
       ),
     );
+    _carousel = AvatarCarouselSession(
+      engine: _carouselEngine,
+      interval: avatarCarouselInterval,
+      initialBufferSize: _avatarCarouselInitialBuffer,
+      sustainBufferSize: _avatarCarouselSustainBuffer,
+      canRun: () => _shouldRunCarousel,
+      currentBackground: () => state.backgroundColor,
+      renderSpec: _resolveCarouselRenderSpec,
+      preferAbstract: () => !_nonAbstractReady,
+      fallbackAvatar: _buildCarouselFallback,
+      onRunningChanged: _setCarouselRunning,
+      onPreviewChanged: _emitCarouselFrame,
+    );
   }
 
   static const AvatarPipelineConfig _defaultPipelineConfig =
@@ -82,7 +93,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   static const double avatarInsetFraction = 0.10;
   static const double avatarTransparentInsetFraction = 0.10;
   static const double minCropSide = 48.0;
-  static const avatarCarouselInterval = Duration(seconds: 2);
+  static const avatarCarouselInterval = Duration(seconds: 4);
   static const _avatarCarouselInitialBuffer = 4;
   static const _avatarCarouselSustainBuffer = 3;
   static const _avatarCarouselHistoryLimit = 12;
@@ -94,36 +105,28 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   final AvatarPipeline _pipeline;
   Rect? _pendingCropRect;
   late final AvatarCarouselEngine _carouselEngine;
-  final List<EditableAvatar> _carouselBuffer = <EditableAvatar>[];
-  Timer? _avatarCarouselTimer;
-  int _carouselGeneration = 0;
-  Future<bool>? _prefillCarouselFuture;
+  late final AvatarCarouselSession _carousel;
   _CarouselVisibility _carouselVisibility = _CarouselVisibility.visible;
-  ShadColorScheme? _colors;
-  EditableAvatar? _currentCarouselAvatar;
 
   @override
   Future<void> close() async {
-    _stopAvatarCarousel();
+    _carousel.reset();
     return super.close();
   }
 
   Future<void> initialize(ShadColorScheme colors) async {
-    _colors = colors;
-    _carouselEngine.startWarmupIfNeeded();
     emit(state.copyWith(backgroundColor: colors.accent, clearError: true));
     if (_isCarouselVisible) {
-      await _startAvatarCarousel();
+      await _carousel.start(colors);
     }
   }
 
   Future<void> setVisible(bool visible, ShadColorScheme colors) async {
-    _colors = colors;
     _carouselVisibility = visible
         ? _CarouselVisibility.visible
         : _CarouselVisibility.hidden;
     if (!visible) {
-      _stopAvatarCarousel();
+      _carousel.stop();
       return;
     }
     await initialize(colors);
@@ -132,16 +135,14 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   void pauseCarousel() {
     _carouselVisibility = _CarouselVisibility.hidden;
-    _stopAvatarCarousel();
+    _carousel.stop();
   }
 
   void selectCarouselAvatar() {
     if (state.processing) return;
-    final selected = state.carouselAvatar ?? _currentCarouselAvatar;
+    final selected = state.carouselAvatar ?? _carousel.currentAvatar;
     if (selected == null) return;
-    _stopAvatarCarousel();
-    _carouselBuffer.clear();
-    _currentCarouselAvatar = null;
+    _carousel.reset();
     _pendingCropRect = null;
     emit(
       state.copyWith(
@@ -165,25 +166,18 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   Future<void> pauseOnPreviewAvatar(ShadColorScheme colors) async {
-    _colors = colors;
     if (state.processing) return;
 
-    _stopAvatarCarousel();
     _carouselVisibility = _CarouselVisibility.hidden;
 
-    EditableAvatar? previewAvatar;
-    if (_carouselBuffer.isNotEmpty) {
-      previewAvatar = _carouselBuffer.removeAt(0);
-    } else {
-      previewAvatar = await _buildManualPreviewAvatar(colors);
-    }
+    final previewAvatar = await _carousel.manualPreview(colors);
     if (previewAvatar == null) {
       return;
     }
-    _currentCarouselAvatar = previewAvatar;
     _pendingCropRect = null;
     emit(
       state.copyWith(
+        avatar: null,
         carouselAvatar: previewAvatar,
         carouselRunning: false,
         carouselStartedAt: null,
@@ -194,8 +188,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> seedAvatarFromBytes(Uint8List bytes) async {
     if (bytes.isEmpty) return;
-    _stopAvatarCarousel();
-    _currentCarouselAvatar = null;
+    _carousel.reset();
     _pendingCropRect = null;
     emit(
       state.copyWith(
@@ -209,12 +202,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   Future<void> shuffleBackground(ShadColorScheme colors) async {
-    _colors = colors;
     if (state.processing || !state.canShuffleBackground) {
       return;
     }
     final activeAvatar =
-        state.carouselAvatar ?? state.avatar ?? _currentCarouselAvatar;
+        state.carouselAvatar ?? state.avatar ?? _carousel.currentAvatar;
     final template = activeAvatar?.template;
     if (template == null) {
       return;
@@ -226,7 +218,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final previewingCandidate =
         state.carouselAvatar != null || state.avatar == null;
     if (previewingCandidate) {
-      _stopAvatarCarousel();
+      _carousel.reset();
       emit(state.copyWith(processing: true, clearError: true));
       try {
         final updated = await _buildAvatarFromTemplate(
@@ -234,7 +226,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
           background: background,
           colors: colors,
         );
-        _currentCarouselAvatar = updated;
         emit(
           state.copyWith(
             processing: false,
@@ -261,12 +252,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     required ShadColorScheme colors,
     Color? background,
   }) async {
-    _colors = colors;
     if (state.processing) return;
 
-    _stopAvatarCarousel();
-    _carouselBuffer.clear();
-    _currentCarouselAvatar = null;
+    _carousel.reset();
     _pendingCropRect = null;
 
     emit(
@@ -310,7 +298,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> pickAvatarFromFiles() async {
     if (state.processing) return;
-    _stopAvatarCarousel();
+    _carousel.reset();
 
     emit(
       state.copyWith(processing: true, carouselAvatar: null, clearError: true),
@@ -497,7 +485,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       emit(
         state.copyWith(avatar: updated, processing: false, clearError: true),
       );
-      _stopAvatarCarousel();
+      _carousel.reset();
       return updated;
     } on FormatException {
       emit(
@@ -554,179 +542,8 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
   }
 
-  Future<void> _startAvatarCarousel() async {
-    if (!_shouldRunCarousel || _avatarCarouselTimer != null) {
-      return;
-    }
-    final colors = _colors;
-    if (colors == null) return;
-    _setCarouselRunning(true);
-    final generation = _carouselGeneration;
-
-    if (state.carouselAvatar == null && _currentCarouselAvatar == null) {
-      await _prefillCarousel(targetSize: 1, preferAbstract: true);
-      if (generation != _carouselGeneration) {
-        return;
-      }
-      if (state.hasUserSelectedAvatar ||
-          state.processing ||
-          _avatarCarouselTimer != null) {
-        return;
-      }
-      if (!_showNextCarouselAvatar(colors, allowFallback: false)) {
-        _showNextCarouselAvatar(colors, allowFallback: true);
-      }
-    }
-
-    await _prefillCarousel(
-      targetSize: _avatarCarouselInitialBuffer,
-      preferAbstract: !_nonAbstractReady,
-    );
-    if (generation != _carouselGeneration) {
-      return;
-    }
-
-    if (!_shouldRunCarousel || _avatarCarouselTimer != null) {
-      return;
-    }
-    _scheduleCarouselTick();
-  }
-
-  void _stopAvatarCarousel() {
-    _avatarCarouselTimer?.cancel();
-    _avatarCarouselTimer = null;
-    _carouselGeneration++;
-    _setCarouselRunning(false);
-  }
-
   Future<void> _resumeAvatarCarouselIfNeeded() async {
-    if (!_shouldRunCarousel || _avatarCarouselTimer != null) {
-      return;
-    }
-    _carouselEngine.startWarmupIfNeeded();
-    await _startAvatarCarousel();
-  }
-
-  bool _showNextCarouselAvatar(
-    ShadColorScheme colors, {
-    bool allowFallback = true,
-  }) {
-    if (!_isCarouselVisible ||
-        state.processing ||
-        state.hasUserSelectedAvatar) {
-      return false;
-    }
-    if (_carouselBuffer.isEmpty) {
-      if (!allowFallback) {
-        return false;
-      }
-      final fallbackBackground = state.backgroundColor == Colors.transparent
-          ? colors.accent
-          : state.backgroundColor;
-      final fallback = _fallbackAvatarPayload(
-        background: fallbackBackground,
-        accent: colors.primary,
-      );
-      final entry = EditableAvatar(
-        source: AvatarSource.template,
-        payload: fallback,
-        backgroundColor: fallbackBackground,
-      );
-      _currentCarouselAvatar = entry;
-      emit(
-        state.copyWith(
-          carouselAvatar: entry,
-          carouselStartedAt: state.carouselRunning
-              ? DateTime.timestamp()
-              : null,
-          clearError: true,
-        ),
-      );
-      return true;
-    }
-
-    final entry = _carouselBuffer.removeAt(0);
-    _currentCarouselAvatar = entry;
-    emit(
-      state.copyWith(
-        carouselAvatar: entry,
-        carouselStartedAt: state.carouselRunning ? DateTime.timestamp() : null,
-        backgroundColor: entry.template?.hasAlphaBackground == true
-            ? entry.backgroundColor ?? state.backgroundColor
-            : state.backgroundColor,
-        clearError: true,
-      ),
-    );
-    return true;
-  }
-
-  Future<bool> _prefillCarousel({
-    int targetSize = 2,
-    bool preferAbstract = false,
-  }) async {
-    if (_prefillCarouselFuture != null) {
-      return _prefillCarouselFuture!;
-    }
-    if (!_isCarouselVisible ||
-        state.hasUserSelectedAvatar ||
-        state.processing) {
-      return _carouselBuffer.isNotEmpty;
-    }
-    final future = _performCarouselPrefill(
-      targetSize: targetSize,
-      preferAbstract: preferAbstract,
-    );
-    _prefillCarouselFuture = future;
-    try {
-      return await future;
-    } finally {
-      _prefillCarouselFuture = null;
-    }
-  }
-
-  Future<bool> _performCarouselPrefill({
-    int targetSize = 2,
-    bool preferAbstract = false,
-  }) async {
-    final colors = _colors;
-    if (colors == null) return false;
-    _carouselEngine.startWarmupIfNeeded();
-    final remaining = targetSize - _carouselBuffer.length;
-    if (remaining <= 0) return true;
-    final context = AvatarCarouselBuildContext(
-      colors: colors,
-      currentBackground: state.backgroundColor,
-    );
-    final avatars = await _carouselEngine.prefill(
-      targetSize: remaining,
-      preferAbstract: preferAbstract,
-      context: context,
-      renderSpec: _resolveCarouselRenderSpec,
-    );
-    if (avatars.isNotEmpty) {
-      _carouselBuffer.addAll(avatars);
-    }
-    if (avatars.isEmpty &&
-        _carouselBuffer.isEmpty &&
-        _isCarouselVisible &&
-        !state.hasUserSelectedAvatar) {
-      final fallbackBackground = state.backgroundColor == Colors.transparent
-          ? colors.accent
-          : state.backgroundColor;
-      final fallback = _fallbackAvatarPayload(
-        background: fallbackBackground,
-        accent: colors.primary,
-      );
-      _carouselBuffer.add(
-        EditableAvatar(
-          source: AvatarSource.template,
-          payload: fallback,
-          backgroundColor: fallbackBackground,
-        ),
-      );
-      return true;
-    }
-    return avatars.isNotEmpty;
+    await _carousel.resume();
   }
 
   Color _resolveTemplateBackground(
@@ -768,92 +585,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     );
   }
 
-  AvatarUploadPayload _fallbackAvatarPayload({
-    required Color background,
-    required Color accent,
-  }) {
-    final generated = _fallbackGeneratedAvatar(
-      background: background,
-      accent: accent,
-    );
-    final hash = sha1.convert(generated.bytes).toString();
-    return AvatarUploadPayload(
-      bytes: generated.bytes,
-      mimeType: generated.mimeType,
-      width: generated.width,
-      height: generated.height,
-      hash: hash,
-    );
-  }
-
-  GeneratedAvatar _fallbackGeneratedAvatar({
-    required Color background,
-    required Color accent,
-  }) {
-    final size = _pipeline.config.targetSize;
-    final base = background == Colors.transparent ? accent : background;
-    final image = img.Image(width: size, height: size, numChannels: 4);
-    img.fill(image, color: _imgColor(base));
-    final bytes = Uint8List.fromList(img.encodePng(image, level: 1));
-    return GeneratedAvatar(
-      bytes: bytes,
-      mimeType: 'image/png',
-      width: size,
-      height: size,
-      hasAlpha: false,
-    );
-  }
-
-  img.Color _imgColor(Color color) {
-    final argb = color.toARGB32();
-    final a = (argb >> 24) & 0xFF;
-    final r = (argb >> 16) & 0xFF;
-    final g = (argb >> 8) & 0xFF;
-    final b = argb & 0xFF;
-    return img.ColorRgba8(r, g, b, a);
-  }
-
-  void _scheduleCarouselTick() {
-    _avatarCarouselTimer?.cancel();
-    if (!_shouldRunCarousel) return;
-    final generation = _carouselGeneration;
-    _avatarCarouselTimer = Timer(avatarCarouselInterval, () async {
-      await _handleCarouselTick(generation);
-    });
-  }
-
-  Future<void> _handleCarouselTick(int generation) async {
-    if (generation != _carouselGeneration) {
-      return;
-    }
-    if (!_shouldRunCarousel) {
-      _stopAvatarCarousel();
-      return;
-    }
-    final colors = _colors;
-    if (colors == null) {
-      _stopAvatarCarousel();
-      return;
-    }
-    if (!_showNextCarouselAvatar(colors, allowFallback: false)) {
-      _showNextCarouselAvatar(colors, allowFallback: true);
-    }
-    if (_carouselBuffer.length < _avatarCarouselSustainBuffer) {
-      await _prefillCarousel(
-        targetSize: _avatarCarouselSustainBuffer,
-        preferAbstract: !_nonAbstractReady,
-      );
-    }
-    if (generation != _carouselGeneration) {
-      return;
-    }
-    if (!_shouldRunCarousel) {
-      _stopAvatarCarousel();
-      return;
-    }
-    _scheduleCarouselTick();
-  }
-
   bool get _isCarouselVisible =>
       _carouselVisibility == _CarouselVisibility.visible;
 
@@ -862,32 +593,29 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   bool get _shouldRunCarousel =>
       _isCarouselVisible && !state.hasUserSelectedAvatar && !state.processing;
 
-  Future<EditableAvatar?> _buildManualPreviewAvatar(
-    ShadColorScheme colors,
-  ) async {
-    final context = AvatarCarouselBuildContext(
-      colors: colors,
-      currentBackground: state.backgroundColor,
-    );
-    final nextAvatar = await _carouselEngine.buildNext(
-      context: context,
-      renderSpec: _resolveCarouselRenderSpec,
-      preferAbstract: !_nonAbstractReady,
-    );
-    if (nextAvatar != null) {
-      return nextAvatar;
-    }
+  EditableAvatar _buildCarouselFallback(ShadColorScheme colors) {
     final fallbackBackground = state.backgroundColor == Colors.transparent
         ? colors.accent
         : state.backgroundColor;
-    final fallback = _fallbackAvatarPayload(
+    return buildAvatarCarouselFallback(
+      pipeline: _pipeline,
       background: fallbackBackground,
       accent: colors.primary,
     );
-    return EditableAvatar(
-      source: AvatarSource.template,
-      payload: fallback,
-      backgroundColor: fallbackBackground,
+  }
+
+  void _emitCarouselFrame(AvatarCarouselFrame frame) {
+    final avatar = frame.avatar;
+    emit(
+      state.copyWith(
+        carouselAvatar: avatar,
+        carouselRunning: true,
+        carouselStartedAt: frame.startedAt,
+        backgroundColor: avatar.template?.hasAlphaBackground == true
+            ? avatar.backgroundColor ?? state.backgroundColor
+            : state.backgroundColor,
+        clearError: true,
+      ),
     );
   }
 

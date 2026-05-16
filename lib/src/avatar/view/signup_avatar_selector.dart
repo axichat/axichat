@@ -60,7 +60,9 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
     final animationDuration = widget.animationDuration;
     final avatarSize = sizing.iconButtonTapTarget;
     final overlayShape = RoundedSuperellipseBorder(
-      borderRadius: BorderRadius.circular(context.radii.squircle),
+      borderRadius: BorderRadius.circular(
+        axiAvatarSquircleRadius(context, avatarSize),
+      ),
       side: context.borderSide,
     );
     final displayJid = widget.username.isEmpty

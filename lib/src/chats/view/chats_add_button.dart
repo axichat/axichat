@@ -49,13 +49,10 @@ class ChatsAddButton extends StatelessWidget {
       dialogBuilder: (context) {
         final colors = context.colorScheme;
         return BlocProvider(
-          create: (_) =>
-              AvatarEditorCubit(
-                  xmppService: context.read<XmppService>(),
-                  templates: buildDefaultAvatarTemplates(),
-                )
-                ..initialize(colors)
-                ..setCarouselEnabled(true, colors),
+          create: (_) => AvatarEditorCubit(
+            xmppService: context.read<XmppService>(),
+            templates: buildDefaultAvatarTemplates(),
+          )..initializeCarousel(colors),
           child: const _ChatRoomCreateDialog(),
         );
       },
@@ -168,9 +165,6 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
             final canSubmit =
                 _title.trim().isNotEmpty && !avatarState.isBusy && !loading;
             final useActionEnabled = avatarState.canUseCarouselAvatar;
-            final selectorBytes = _showAvatarEditor
-                ? avatarState.displayedBytes
-                : avatarState.draftAvatar?.bytes;
             final previewWidth = math.min(
               MediaQuery.sizeOf(context).width,
               sizing.dialogMaxWidth,
@@ -197,7 +191,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                             AbsorbPointer(
                               absorbing: loading,
                               child: SignupAvatarSelector(
-                                bytes: selectorBytes,
+                                bytes: avatarState.displayedBytes,
                                 username: _title,
                                 processing: avatarState.isBusy,
                                 showRotationTimer: avatarState.carouselRunning,
