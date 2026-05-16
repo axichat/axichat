@@ -229,6 +229,46 @@ void main() {
     ]);
   });
 
+  test('refresh starts XMPP while email sync is still pending', () async {
+    final emailCompleter = Completer<bool>();
+    final xmppStarted = Completer<void>();
+    when(
+      () => emailService.syncSessionState(),
+    ).thenAnswer((_) => emailCompleter.future);
+    when(() => xmppService.syncSessionState()).thenAnswer((_) async {
+      if (!xmppStarted.isCompleted) {
+        xmppStarted.complete();
+      }
+      return true;
+    });
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(() async {
+      await subscription.cancel();
+      await bloc.close();
+    });
+
+    bloc.add(const HomeRefreshRequested());
+    await xmppStarted.future;
+
+    expect(emailCompleter.isCompleted, isFalse);
+    emailCompleter.complete(true);
+    await pumpEventQueue();
+
+    expect(emittedStates.map((state) => state.refreshStatus), [
+      RequestStatus.loading,
+      RequestStatus.success,
+    ]);
+    verify(() => emailService.syncSessionState()).called(1);
+    verify(() => xmppService.syncSessionState()).called(1);
+  });
+
   test(
     'email sync failure still runs XMPP sync and reports success when XMPP is configured',
     () async {

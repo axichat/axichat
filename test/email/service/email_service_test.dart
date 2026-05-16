@@ -859,14 +859,16 @@ void main() {
         jid: 'alice@example.org',
         passwordOverride: 'password',
       );
+      when(() => transport.isConfigured()).thenAnswer((_) async => true);
       clearInteractions(transport);
       clearInteractions(database);
 
       expect(await service.syncSessionState(), isTrue);
 
-      verify(
-        () => transport.performBackgroundFetch(const Duration(seconds: 25)),
-      ).called(1);
+      final captured = verify(
+        () => transport.performBackgroundFetch(captureAny()),
+      ).captured;
+      expect(captured, [const Duration(seconds: 15)]);
       verify(() => transport.refreshChatlistSnapshot()).called(1);
       verify(() => database.replaceContacts(any())).called(1);
 
@@ -1732,6 +1734,86 @@ void main() {
     },
   );
 
+  for (final connectivity in const [2000, 3000]) {
+    test(
+      'home refresh fetch at connectivity $connectivity settles ready',
+      () async {
+        final service = EmailService(
+          credentialStore: credentialStore,
+          databaseBuilder: () async => database,
+          transport: transport,
+          notificationService: notificationService,
+          foregroundBridge: foregroundBridge,
+        );
+
+        try {
+          await service.ensureProvisioned(
+            displayName: 'Bob',
+            databasePrefix: 'bob',
+            databasePassphrase: 'secret',
+            jid: 'bob@axi.im',
+            passwordOverride: 'password',
+          );
+          emitNetworkError();
+          await pumpMicrotasks();
+          expect(service.syncState.status, EmailSyncStatus.offline);
+
+          clearInteractions(transport);
+          when(
+            () => transport.connectivity(),
+          ).thenAnswer((_) async => connectivity);
+
+          expect(await service.refreshHistoryForHomeRefresh(), isTrue);
+
+          expect(service.syncState.status, EmailSyncStatus.ready);
+          verify(
+            () => transport.performBackgroundFetch(const Duration(seconds: 15)),
+          ).called(1);
+          verify(() => transport.refreshChatlistSnapshot()).called(1);
+        } finally {
+          await service.shutdown(jid: 'bob@axi.im');
+        }
+      },
+    );
+  }
+
+  test(
+    'background fetch completion keeps ready during transient offline sample',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+        expect(service.syncState.status, EmailSyncStatus.ready);
+
+        clearInteractions(transport);
+        when(() => transport.connectivity()).thenAnswer((_) async => 1000);
+
+        expect(await service.refreshHistoryForHomeRefresh(), isTrue);
+
+        expect(service.syncState.status, EmailSyncStatus.ready);
+        verify(
+          () => transport.performBackgroundFetch(const Duration(seconds: 15)),
+        ).called(1);
+        verify(() => transport.refreshChatlistSnapshot()).called(1);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
   test(
     'connectivityChanged at connected level runs bootstrap and catch-up',
     () async {
@@ -1996,6 +2078,51 @@ void main() {
         verifyNever(
           () => transport.performBackgroundFetch(const Duration(seconds: 25)),
         );
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
+    'home refresh delayed restart probe settles ready without restart',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+        emitNetworkError();
+        await pumpMicrotasks();
+        expect(service.syncState.status, EmailSyncStatus.offline);
+
+        clearInteractions(transport);
+        when(() => transport.isConfigured()).thenAnswer((_) async => true);
+        when(() => transport.connectivity()).thenAnswer((_) async => 2000);
+
+        expect(await service.recoverForHomeRefresh(), isTrue);
+        expect(service.syncState.status, EmailSyncStatus.offline);
+
+        await Future<void>.delayed(const Duration(milliseconds: 2200));
+        await pumpMicrotasks();
+
+        expect(service.syncState.status, EmailSyncStatus.ready);
+        verify(() => transport.notifyNetworkAvailable()).called(1);
+        verifyNever(() => transport.removeEventListener(any()));
+        verifyNever(() => transport.stop());
+        verifyNever(() => transport.addEventListener(any()));
+        verifyNever(() => transport.start());
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }

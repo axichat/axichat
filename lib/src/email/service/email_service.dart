@@ -2369,7 +2369,12 @@ class EmailService {
     }
     try {
       await ensureEventChannelActive();
-      await handleNetworkAvailable();
+      await _transport.notifyNetworkAvailable();
+      await _bootstrapActiveAccountIfNeeded();
+      fireAndForget(
+        _scheduleReconnectRestartIfOffline,
+        operationName: 'EmailService.reconnectRestartIfOffline',
+      );
       return !_blocksRuntimeReentry;
     } on Exception {
       _log.fine('Email transport recovery failed.');
@@ -2382,14 +2387,17 @@ class EmailService {
       return true;
     }
     try {
-      const emailUnreadFetchTimeout = Duration(seconds: 15);
       final fetched = await performBackgroundFetch(
-        timeout: emailUnreadFetchTimeout,
+        timeout: _foregroundFetchTimeout,
       );
       if (!fetched) {
         return false;
       }
       await refreshChatlistFromCore();
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.backgroundFetchDone,
+        recoveryCompleted: true,
+      );
       return true;
     } on Exception {
       _log.fine('Email unread sync failed.');
@@ -2402,14 +2410,17 @@ class EmailService {
       return true;
     }
     try {
-      const emailHistoryFetchTimeout = Duration(seconds: 25);
       final fetched = await performBackgroundFetch(
-        timeout: emailHistoryFetchTimeout,
+        timeout: _foregroundFetchTimeout,
       );
       if (!fetched) {
         return false;
       }
       await refreshChatlistFromCore();
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.backgroundFetchDone,
+        recoveryCompleted: true,
+      );
       return true;
     } on Exception {
       _log.fine('Email background sync failed.');
@@ -2893,8 +2904,9 @@ class EmailService {
         await _handleBackgroundFetchDone();
         await _bootstrapActiveAccountIfNeeded();
         await refreshChatlistFromCore();
-        await _markRecoveredIfTransportUsable(
+        await _refreshConnectivityState(
           source: _EmailSyncSource.backgroundFetchDone,
+          recoveryCompleted: true,
         );
         break;
       case DeltaEventType.connectivityChanged:
@@ -3350,6 +3362,7 @@ class EmailService {
 
   Future<int?> _refreshConnectivityState({
     _EmailSyncSource source = _EmailSyncSource.unknown,
+    bool recoveryCompleted = false,
   }) async {
     if (!_acceptsRuntimeWork) {
       return null;
@@ -3358,6 +3371,11 @@ class EmailService {
       final connectivity = await _transport.connectivity();
       if (connectivity == null) return null;
       _recordConnectivitySample(connectivity: connectivity, source: source);
+      if (recoveryCompleted && connectivity >= _connectivityConnectingMin) {
+        _cancelConnectivityDowngrade();
+        _updateSyncState(const EmailSyncState.ready(), source: source);
+        return connectivity;
+      }
       if (connectivity >= _connectivityConnectedMin) {
         _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready(), source: source);
@@ -3386,29 +3404,6 @@ class EmailService {
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
       return null;
-    }
-  }
-
-  Future<void> _markRecoveredIfTransportUsable({
-    required _EmailSyncSource source,
-  }) async {
-    if (!_acceptsRuntimeWork) {
-      return;
-    }
-    try {
-      final connectivity = await _transport.connectivity();
-      if (connectivity == null) {
-        return;
-      }
-      _recordConnectivitySample(connectivity: connectivity, source: source);
-      if (connectivity >= _connectivityConnectingMin) {
-        _cancelConnectivityDowngrade();
-        _updateSyncState(const EmailSyncState.ready(), source: source);
-        return;
-      }
-      _applyConnectivityState(connectivity, source: source);
-    } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to settle email recovery', error, stackTrace);
     }
   }
 
@@ -3780,6 +3775,7 @@ class EmailService {
         await refreshChatlistFromCore();
         await _refreshConnectivityState(
           source: _EmailSyncSource.backgroundFetchDone,
+          recoveryCompleted: true,
         );
       }
     } on Exception catch (error, stackTrace) {
@@ -3973,8 +3969,9 @@ class EmailService {
       if (!_acceptsRuntimeWork) {
         return;
       }
-      await _markRecoveredIfTransportUsable(
+      await _refreshConnectivityState(
         source: _EmailSyncSource.reconnectCatchUp,
+        recoveryCompleted: true,
       );
     });
   }
@@ -3990,7 +3987,10 @@ class EmailService {
         if (!_acceptsRuntimeWork) {
           return;
         }
-        final connectivity = await _transport.connectivity();
+        final connectivity = await _refreshConnectivityState(
+          source: _EmailSyncSource.reconnectRestart,
+          recoveryCompleted: true,
+        );
         if (connectivity == null ||
             connectivity >= _connectivityConnectingMin) {
           return;

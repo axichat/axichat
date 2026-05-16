@@ -313,8 +313,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<_HomeRefreshOutcome> _runRefreshGesture() async {
-    final emailOutcome = await _runEmailSessionSync();
-    final xmppOutcome = await _runXmppSessionSync();
+    final outcomes = await Future.wait([
+      _runEmailSessionSync(),
+      _runXmppSessionSync(),
+    ]);
+    final emailOutcome = outcomes.first;
+    final xmppOutcome = outcomes.last;
 
     if (xmppOutcome.isFailure) {
       return _HomeRefreshOutcome.failure;
