@@ -2893,12 +2893,15 @@ class EmailService {
         await _handleBackgroundFetchDone();
         await _bootstrapActiveAccountIfNeeded();
         await refreshChatlistFromCore();
+        await _markRecoveredIfTransportUsable(
+          source: _EmailSyncSource.backgroundFetchDone,
+        );
         break;
       case DeltaEventType.connectivityChanged:
         final connectivity = await _refreshConnectivityState(
           source: _EmailSyncSource.connectivityChangedEvent,
         );
-        if (connectivity != null && connectivity < _connectivityConnectedMin) {
+        if (connectivity == null || connectivity < _connectivityConnectingMin) {
           break;
         }
         await _bootstrapActiveAccountIfNeeded();
@@ -3386,6 +3389,29 @@ class EmailService {
     }
   }
 
+  Future<void> _markRecoveredIfTransportUsable({
+    required _EmailSyncSource source,
+  }) async {
+    if (!_acceptsRuntimeWork) {
+      return;
+    }
+    try {
+      final connectivity = await _transport.connectivity();
+      if (connectivity == null) {
+        return;
+      }
+      _recordConnectivitySample(connectivity: connectivity, source: source);
+      if (connectivity >= _connectivityConnectingMin) {
+        _cancelConnectivityDowngrade();
+        _updateSyncState(const EmailSyncState.ready(), source: source);
+        return;
+      }
+      _applyConnectivityState(connectivity, source: source);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to settle email recovery', error, stackTrace);
+    }
+  }
+
   void _scheduleConnectivityDowngrade(int connectivity) {
     if (!_acceptsRuntimeWork) {
       return;
@@ -3420,6 +3446,9 @@ class EmailService {
         return;
       }
       if (connectivityLevel >= _connectivityWorkingMin) {
+        return;
+      }
+      if (connectivityLevel >= _connectivityConnectingMin) {
         return;
       }
       _applyConnectivityState(
@@ -3944,7 +3973,7 @@ class EmailService {
       if (!_acceptsRuntimeWork) {
         return;
       }
-      await _refreshConnectivityState(
+      await _markRecoveredIfTransportUsable(
         source: _EmailSyncSource.reconnectCatchUp,
       );
     });
@@ -3955,35 +3984,22 @@ class EmailService {
       if (!_acceptsRuntimeWork) {
         return;
       }
+      var restartAttempted = false;
       try {
         await Future.delayed(_reconnectRestartDelay);
         if (!_acceptsRuntimeWork) {
           return;
         }
         final connectivity = await _transport.connectivity();
-        if (connectivity == null || connectivity >= _connectivityWorkingMin) {
-          return;
-        }
-        var restartConnectivity = connectivity;
-        if (connectivity == _connectivityConnectingMin) {
-          await _transport.notifyNetworkAvailable();
-          await Future.delayed(_reconnectRestartDelay);
-          if (!_acceptsRuntimeWork) {
-            return;
-          }
-          final retryConnectivity = await _transport.connectivity();
-          if (retryConnectivity == null ||
-              retryConnectivity >= _connectivityWorkingMin) {
-            return;
-          }
-          restartConnectivity = retryConnectivity;
-        } else if (connectivity > _connectivityConnectingMin) {
+        if (connectivity == null ||
+            connectivity >= _connectivityConnectingMin) {
           return;
         }
         _log.warning(
-          'Email transport still offline or connecting after network available; '
-          'restarting. connectivity=$restartConnectivity',
+          'Email transport still offline after network available; '
+          'restarting. connectivity=$connectivity',
         );
+        restartAttempted = true;
         await stop();
         var backgroundFetchCompleted = false;
         try {
@@ -4008,10 +4024,8 @@ class EmailService {
         await _transport.notifyNetworkAvailable();
         await _bootstrapActiveAccountIfNeeded();
         await _runReconnectCatchUp();
-      } on Exception catch (error, stackTrace) {
-        _log.warning('Email transport restart failed', error, stackTrace);
       } finally {
-        if (_acceptsRuntimeWork) {
+        if (restartAttempted && _acceptsRuntimeWork) {
           await _refreshConnectivityState(
             source: _EmailSyncSource.reconnectRestart,
           );
