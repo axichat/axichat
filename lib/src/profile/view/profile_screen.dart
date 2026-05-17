@@ -67,26 +67,24 @@ class ProfileScreen extends StatelessWidget {
     final locate = context.read;
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final emailEnabled = endpointConfig.smtpEnabled;
-    final EmailService? emailService = emailEnabled
-        ? locate<EmailService>()
-        : null;
+    final emailService = locate<EmailService>();
+    final EmailService? activeEmailService = emailEnabled ? emailService : null;
     return RepositoryProvider.value(
       value: locate<Capability>(),
       child: MultiBlocProvider(
         providers: [
           BlocProvider.value(value: locate<ProfileCubit>()),
           BlocProvider.value(value: locate<ConnectivityCubit>()),
-          if (emailEnabled && emailService != null)
-            BlocProvider(
-              create: (context) =>
-                  EmailContactImportCubit(emailService: emailService),
-            ),
+          BlocProvider(
+            create: (context) =>
+                EmailContactImportCubit(emailService: emailService),
+          ),
           BlocProvider.value(value: locate<SettingsCubit>()),
           BlocProvider.value(value: locate<AuthenticationCubit>()),
           BlocProvider(
             create: (context) => ProfileExportCubit(
               xmppService: locate<XmppService>(),
-              emailService: emailService,
+              emailService: activeEmailService,
             ),
           ),
         ],

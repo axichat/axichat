@@ -14,6 +14,7 @@ import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/pinned_message_mutator.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -51,7 +52,6 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 enum _EmailSyncSource {
   unknown,
@@ -372,7 +372,7 @@ class EmailService {
     EmailDeltaTransport? transport,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
-    MessageService? messageService,
+    PinnedMessageMutator? pinnedMessages,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
@@ -386,7 +386,7 @@ class EmailService {
            const EmailConnectionConfigBuilder(_defaultConnectionConfig),
        _log = logger ?? Logger('EmailService'),
        _notificationService = notificationService,
-       _messageService = messageService,
+       _pinnedMessages = pinnedMessages,
        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _transport =
         transport ??
@@ -426,7 +426,7 @@ class EmailService {
   EndpointConfig _endpointConfig;
   bool _emailReadReceiptsEnabled;
   final NotificationService? _notificationService;
-  final MessageService? _messageService;
+  final PinnedMessageMutator? _pinnedMessages;
   final ForegroundTaskBridge? _foregroundBridge;
   AppLocalizations? _localizations;
   final _EmailCredentialRuntimeSession _credentialSession =
@@ -2801,9 +2801,9 @@ class EmailService {
     if (chatJid.isEmpty || stanzaId.isEmpty) {
       return;
     }
-    final messageService = _messageService;
-    if (messageService != null) {
-      await messageService.pinMessage(chatJid: chatJid, message: message);
+    final pinnedMessages = _pinnedMessages;
+    if (pinnedMessages != null) {
+      await pinnedMessages.pinMessage(chatJid: chatJid, message: message);
       return;
     }
     final pinnedAt = DateTime.timestamp().toUtc();
@@ -2828,9 +2828,9 @@ class EmailService {
     if (chatJid.isEmpty || stanzaId.isEmpty) {
       return;
     }
-    final messageService = _messageService;
-    if (messageService != null) {
-      await messageService.unpinMessage(chatJid: chatJid, message: message);
+    final pinnedMessages = _pinnedMessages;
+    if (pinnedMessages != null) {
+      await pinnedMessages.unpinMessage(chatJid: chatJid, message: message);
       return;
     }
     final db = await _databaseBuilder();

@@ -164,7 +164,7 @@ class HomeShellRoute extends StatefulShellRouteData {
     GoRouterState state,
     StatefulNavigationShell navigationShell,
   ) {
-    return HomeShellCalendarScope(navigationShell: navigationShell);
+    return HomeRouteHost(navigationShell: navigationShell);
   }
 }
 

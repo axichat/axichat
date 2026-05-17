@@ -1261,7 +1261,8 @@ enum _MessageCollectionSyncDecision { applyRemote, publishLocal, skip }
 
 enum _DraftSyncDecision { applyRemote, publishLocal, skip }
 
-mixin MessageService on XmppBase, BaseStreamService, BlockingService {
+mixin MessageService on XmppBase, BaseStreamService, BlockingService
+    implements PinnedMessageMutator {
   bool _draftSnapshotInFlight = false;
   String? _draftSourceId;
   bool _pendingDraftSyncLoaded = false;
@@ -3985,6 +3986,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  @override
   Future<void> pinMessage({
     required String chatJid,
     required Message message,
@@ -4024,6 +4026,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _flushPendingPinSyncForChat(normalizedChat);
   }
 
+  @override
   Future<void> unpinMessage({
     required String chatJid,
     required Message message,

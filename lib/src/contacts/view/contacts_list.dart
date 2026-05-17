@@ -11,6 +11,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
@@ -259,37 +260,56 @@ class ContactsImportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) =>
+          EmailContactImportCubit(emailService: context.read<EmailService>()),
+      child: const _ContactsImportButtonContent(),
+    );
+  }
+}
+
+class _ContactsImportButtonContent extends StatelessWidget {
+  const _ContactsImportButtonContent();
+
+  @override
+  Widget build(BuildContext context) {
     final locate = context.read;
     final l10n = context.l10n;
-    final emailEnabled = context.select<SettingsCubit, bool>(
-      (cubit) => cubit.state.endpointConfig.smtpEnabled,
-    );
-    if (!emailEnabled) {
-      return AxiFab(
-        tooltip: l10n.emailContactsImportAccountRequired,
-        iconData: LucideIcons.userRoundPlus,
-        text: l10n.emailContactsImportAction,
-      );
-    }
-    return BlocSelector<EmailContactImportCubit, EmailContactImportState, bool>(
-      selector: (state) => state is EmailContactImportInProgress,
-      builder: (context, loading) {
-        return AxiFab(
-          tooltip: l10n.emailContactsImportTitle,
-          iconData: LucideIcons.userRoundPlus,
-          text: l10n.emailContactsImportAction,
-          onPressed: loading
-              ? null
-              : () {
-                  locate<EmailContactImportCubit>().reset();
-                  showFadeScaleDialog(
-                    context: context,
-                    builder: (dialogContext) => BlocProvider.value(
-                      value: locate<EmailContactImportCubit>(),
-                      child: const EmailContactImportDialog(),
-                    ),
-                  );
-                },
+    return BlocSelector<SettingsCubit, SettingsState, bool>(
+      selector: (state) => state.endpointConfig.smtpEnabled,
+      builder: (context, emailEnabled) {
+        if (!emailEnabled) {
+          return AxiFab(
+            tooltip: l10n.emailContactsImportAccountRequired,
+            iconData: LucideIcons.userRoundPlus,
+            text: l10n.emailContactsImportAction,
+          );
+        }
+        return BlocSelector<
+          EmailContactImportCubit,
+          EmailContactImportState,
+          bool
+        >(
+          selector: (state) => state is EmailContactImportInProgress,
+          builder: (context, loading) {
+            return AxiFab(
+              tooltip: l10n.emailContactsImportTitle,
+              iconData: LucideIcons.userRoundPlus,
+              text: l10n.emailContactsImportAction,
+              onPressed: loading
+                  ? null
+                  : () {
+                      locate<EmailContactImportCubit>().reset();
+                      showFadeScaleDialog(
+                        context: context,
+                        builder: (dialogContext) => BlocProvider.value(
+                          value: locate<EmailContactImportCubit>(),
+                          child: const EmailContactImportDialog(),
+                        ),
+                      );
+                    },
+            );
+          },
         );
       },
     );

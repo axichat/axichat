@@ -20,9 +20,8 @@ import 'package:axichat/src/calendar/view/shell/calendar_drag_cancel_bucket.dart
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_feedback_observer.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
+import 'package:axichat/src/chat/view/chat_session_providers.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/chat_selection_bar.dart';
 import 'package:axichat/src/chats/view/chats_add_button.dart';
@@ -42,7 +41,6 @@ import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
-import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
@@ -52,7 +50,6 @@ import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -856,8 +853,8 @@ class _HomeShellScope extends InheritedWidget {
   }
 }
 
-class HomeShellCalendarScope extends StatelessWidget {
-  const HomeShellCalendarScope({super.key, required this.navigationShell});
+class HomeRouteHost extends StatelessWidget {
+  const HomeRouteHost({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
@@ -882,11 +879,6 @@ class HomeShellCalendarScope extends StatelessWidget {
                   : null,
             );
           },
-        ),
-        BlocProvider(
-          create: (context) => EmailContactImportCubit(
-            emailService: context.read<EmailService>(),
-          ),
         ),
       ],
       child: HomeShell(navigationShell: navigationShell),
@@ -1938,6 +1930,7 @@ class _HomeContent extends StatelessWidget {
                         final Widget chatPane = Align(
                           alignment: Alignment.topLeft,
                           child: _HomeSecondaryChatPane(
+                            key: ValueKey(pane.scopeKey),
                             pane: pane,
                             settings: settings,
                             emailEnabled: emailEnabled,
@@ -2197,6 +2190,7 @@ class _HomeBlocScope extends StatelessWidget {
 
 class _HomeSecondaryChatPane extends StatelessWidget {
   const _HomeSecondaryChatPane({
+    super.key,
     required this.pane,
     required this.settings,
     required this.emailEnabled,
@@ -2212,50 +2206,12 @@ class _HomeSecondaryChatPane extends StatelessWidget {
     if (resolvedJid == null || resolvedJid.isEmpty) {
       return const SizedBox.shrink();
     }
-    return MultiBlocProvider(
-      key: ValueKey(pane.scopeKey),
-      providers: [
-        BlocProvider(
-          create: (context) {
-            final locate = context.read;
-            final settingsSnapshot = ChatSettingsSnapshot(
-              language: settings.language,
-              chatReadReceipts: settings.chatReadReceipts,
-              emailReadReceipts: settings.emailReadReceipts,
-              shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
-              autoDownloadImages: settings.autoDownloadImages,
-              autoDownloadVideos: settings.autoDownloadVideos,
-              autoDownloadDocuments: settings.autoDownloadDocuments,
-              autoDownloadArchives: settings.autoDownloadArchives,
-            );
-            return ChatBloc(
-              jid: resolvedJid,
-              messageService: locate<XmppService>(),
-              chatsService: locate<XmppService>(),
-              mucService: locate<XmppService>(),
-              notificationService: locate<NotificationService>(),
-              emailService: emailEnabled ? locate<EmailService>() : null,
-              settings: settingsSnapshot,
-            );
-          },
-        ),
-        BlocProvider(
-          create: (context) {
-            final locate = context.read;
-            return ChatSearchCubit(
-              jid: resolvedJid,
-              messageService: locate<XmppService>(),
-              emailService: emailEnabled ? locate<EmailService>() : null,
-            );
-          },
-        ),
-        BlocProvider(
-          create: (context) => FoldersCubit(
-            xmppService: context.read<XmppService>(),
-            chatJid: resolvedJid,
-          ),
-        ),
-      ],
+    final locate = context.read;
+    return ChatSessionProviders(
+      jid: resolvedJid,
+      settings: settings,
+      emailService: emailEnabled ? locate<EmailService>() : null,
+      locate: locate,
       child: Chat(syncWithOpenChatRoute: pane.syncWithOpenChatRoute),
     );
   }

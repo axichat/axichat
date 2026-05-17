@@ -11,15 +11,12 @@ import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
+import 'package:axichat/src/chat/view/chat_session_providers.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -40,13 +37,9 @@ class ArchivedChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final xmppService = locate<XmppService>();
-    final notificationService = locate<NotificationService>();
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final EmailService? emailService = endpointConfig.smtpEnabled
         ? locate<EmailService>()
-        : null;
-    final OmemoService? omemoService = xmppService is OmemoService
-        ? xmppService as OmemoService
         : null;
     final settings = locate<SettingsCubit>().state;
     final storageManager = locate<CalendarStorageManager>();
@@ -115,42 +108,11 @@ class ArchivedChatScreen extends StatelessWidget {
               value: availabilityCoordinator,
             ),
         ],
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider(
-              create: (_) => ChatBloc(
-                jid: jid,
-                messageService: xmppService,
-                chatsService: xmppService,
-                mucService: xmppService,
-                notificationService: notificationService,
-                emailService: emailService,
-                omemoService: omemoService,
-                settings: ChatSettingsSnapshot(
-                  language: settings.language,
-                  chatReadReceipts: settings.chatReadReceipts,
-                  emailReadReceipts: settings.emailReadReceipts,
-                  shareTokenSignatureEnabled:
-                      settings.shareTokenSignatureEnabled,
-                  autoDownloadImages: settings.autoDownloadImages,
-                  autoDownloadVideos: settings.autoDownloadVideos,
-                  autoDownloadDocuments: settings.autoDownloadDocuments,
-                  autoDownloadArchives: settings.autoDownloadArchives,
-                ),
-              ),
-            ),
-            BlocProvider(
-              create: (_) => ChatSearchCubit(
-                jid: jid,
-                messageService: xmppService,
-                emailService: emailService,
-              ),
-            ),
-            BlocProvider(
-              create: (_) =>
-                  FoldersCubit(xmppService: xmppService, chatJid: jid),
-            ),
-          ],
+        child: ChatSessionProviders(
+          jid: jid,
+          settings: settings,
+          emailService: emailService,
+          locate: locate,
           child: const _ArchivedChatBody(),
         ),
       ),
