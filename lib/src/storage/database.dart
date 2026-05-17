@@ -205,14 +205,6 @@ abstract interface class XmppDatabase implements Database {
     String? occupantID,
   });
 
-  Future<int> backfillSelfMucMessageSenderRealJidForInterval({
-    required String chatJid,
-    required String senderJid,
-    required String realJid,
-    required DateTime start,
-    required DateTime end,
-  });
-
   Future<void> saveMessageMucStanzaId({
     required String stanzaID,
     required String mucStanzaId,
@@ -4419,47 +4411,6 @@ WHERE stanza_i_d = ?
             ),
           ),
         );
-  }
-
-  @override
-  Future<int> backfillSelfMucMessageSenderRealJidForInterval({
-    required String chatJid,
-    required String senderJid,
-    required String realJid,
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    final normalizedChatJid = bareAddress(chatJid)?.trim();
-    final normalizedSenderJid = fullAddress(senderJid)?.trim();
-    final normalizedRealJid = bareAddress(realJid)?.trim();
-    if (normalizedChatJid == null ||
-        normalizedChatJid.isEmpty ||
-        normalizedSenderJid == null ||
-        normalizedSenderJid.isEmpty ||
-        normalizedRealJid == null ||
-        normalizedRealJid.isEmpty ||
-        end.isBefore(start)) {
-      return 0;
-    }
-    return customUpdate(
-      '''
-UPDATE messages
-SET sender_real_jid = ?
-WHERE lower(trim(chat_jid)) = lower(trim(?))
-  AND lower(trim(sender_jid)) = lower(trim(?))
-  AND (sender_real_jid IS NULL OR trim(sender_real_jid) = '')
-  AND timestamp >= ?
-  AND timestamp <= ?
-''',
-      variables: [
-        Variable<String>(normalizedRealJid),
-        Variable<String>(normalizedChatJid),
-        Variable<String>(normalizedSenderJid),
-        Variable<DateTime>(start.toUtc()),
-        Variable<DateTime>(end.toUtc()),
-      ],
-      updates: {messages},
-    );
   }
 
   @override

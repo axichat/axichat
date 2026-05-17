@@ -194,49 +194,6 @@ void main() {
     expect(await db.countUnreadMessagesForChat(roomJid, selfJid: selfJid), 0);
   });
 
-  test('backfills sender real JID for bounded self MUC sender rows', () async {
-    const roomJid = 'room@conference.example.com';
-    const realJid = 'friend@example.com';
-    await db.saveMessage(
-      Message(
-        stanzaID: 'group-legacy-1',
-        senderJid: '$roomJid/old',
-        chatJid: roomJid,
-        timestamp: DateTime.utc(2024, 1, 1, 10),
-        body: 'Legacy MUC message',
-        encryptionProtocol: EncryptionProtocol.none,
-      ),
-      chatType: ChatType.groupChat,
-    );
-    await db.saveMessage(
-      Message(
-        stanzaID: 'group-legacy-outside-interval',
-        senderJid: '$roomJid/old',
-        chatJid: roomJid,
-        timestamp: DateTime.utc(2024, 1, 1, 8),
-        body: 'Older reused nick message',
-        encryptionProtocol: EncryptionProtocol.none,
-      ),
-      chatType: ChatType.groupChat,
-    );
-
-    final updated = await db.backfillSelfMucMessageSenderRealJidForInterval(
-      chatJid: roomJid,
-      senderJid: '$roomJid/old',
-      realJid: realJid,
-      start: DateTime.utc(2024, 1, 1, 9),
-      end: DateTime.utc(2024, 1, 1, 11),
-    );
-    final stored = await db.getMessageByStanzaID('group-legacy-1');
-    final untouched = await db.getMessageByStanzaID(
-      'group-legacy-outside-interval',
-    );
-
-    expect(updated, 1);
-    expect(stored?.senderRealJid, realJid);
-    expect(untouched?.senderRealJid, isNull);
-  });
-
   test('hydrates missing MUC identity without clobbering real JID', () async {
     const roomJid = 'room@conference.example.com';
     await db.saveMessage(

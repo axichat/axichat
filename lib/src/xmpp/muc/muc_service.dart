@@ -368,7 +368,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   final _roomSubjects = <String, String?>{};
   final _roomSubjectStreams = <String, StreamController<String?>>{};
   final _roomSessions = <String, _MucRoomSession>{};
-  final _selfMucOccupantIntervalStarts = <String, DateTime>{};
   static const int _mucJoinAttemptIdStart = 1;
   int _nextMucJoinAttemptId = _mucJoinAttemptIdStart;
   String? _mucServiceHost;
@@ -2544,7 +2543,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     final key = _roomKey(roomJid);
     _setRoomHasLeft(key, true);
     _setInstantRoomPending(key, false);
-    _clearSelfMucOccupantIntervalsForRoom(key);
     if (!preserveOccupants) {
       _setRoomNeedsJoin(key, false);
     }
@@ -4732,41 +4730,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     await _archiveRoomChat(roomJid: roomJid);
   }
 
-  String _selfMucOccupantIntervalKey({
-    required String roomJid,
-    required String occupantJid,
-  }) => '${_roomKey(roomJid)}\n${occupantJid.trim()}';
-
-  void _clearSelfMucOccupantIntervalsForRoom(String roomJid) {
-    final key = _roomKey(roomJid);
-    _selfMucOccupantIntervalStarts.removeWhere(
-      (intervalKey, _) => intervalKey.startsWith('$key\n'),
-    );
-  }
-
-  Future<void> _backfillSelfMucMessageSenderRealJidForInterval({
-    required String roomJid,
-    required String senderJid,
-    required String? realJid,
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    final normalizedRealJid = _normalizeBareJid(realJid);
-    if (normalizedRealJid == null || normalizedRealJid.isEmpty) {
-      return;
-    }
-    await _dbOp<XmppDatabase>(
-      (db) => db.backfillSelfMucMessageSenderRealJidForInterval(
-        chatJid: roomJid,
-        senderJid: senderJid,
-        realJid: normalizedRealJid,
-        start: start,
-        end: end,
-      ),
-      awaitDatabase: true,
-    );
-  }
-
   Future<void> _handleSelfPresence(MucSelfPresenceEvent event) async {
     final roomJid = _roomKey(event.roomJid);
     _logJoinEvent(
@@ -4804,31 +4767,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
 
     final nextNick = event.nextNick;
     if (nextNick.isEmpty) return;
-    final observedAt = DateTime.timestamp();
-    final intervalKey = _selfMucOccupantIntervalKey(
-      roomJid: roomJid,
-      occupantJid: event.occupantJid,
-    );
     final selfRealJid = _myJid?.toBare().toString();
-    if (event.isNickChange) {
-      final startedAt = _selfMucOccupantIntervalStarts.remove(intervalKey);
-      if (startedAt != null) {
-        await _backfillSelfMucMessageSenderRealJidForInterval(
-          roomJid: roomJid,
-          senderJid: event.occupantJid,
-          realJid: selfRealJid,
-          start: startedAt,
-          end: observedAt,
-        );
-      }
-      _selfMucOccupantIntervalStarts[_selfMucOccupantIntervalKey(
-            roomJid: roomJid,
-            occupantJid: event.nextOccupantJid,
-          )] =
-          observedAt;
-    } else {
-      _selfMucOccupantIntervalStarts.putIfAbsent(intervalKey, () => observedAt);
-    }
 
     _markRoomJoined(roomJid);
     _clearRoomNeedsJoin(roomJid);
