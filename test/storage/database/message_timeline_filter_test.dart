@@ -170,6 +170,140 @@ void main() {
     },
   );
 
+  test('group messages persist sender real JID and skip self unread', () async {
+    const roomJid = 'room@conference.example.com';
+    const selfJid = 'me@example.com';
+    await db.saveMessage(
+      Message(
+        stanzaID: 'group-self-1',
+        senderJid: '$roomJid/old',
+        senderRealJid: selfJid,
+        chatJid: roomJid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'Self message before nick change',
+        encryptionProtocol: EncryptionProtocol.none,
+      ),
+      chatType: ChatType.groupChat,
+      selfJid: selfJid,
+    );
+
+    final stored = await db.getMessageByStanzaID('group-self-1');
+    expect(stored?.senderJid, '$roomJid/old');
+    expect(stored?.senderRealJid, selfJid);
+    expect((await db.getChat(roomJid))?.unreadCount, 0);
+    expect(await db.countUnreadMessagesForChat(roomJid, selfJid: selfJid), 0);
+  });
+
+  test('backfills sender real JID for bounded self MUC sender rows', () async {
+    const roomJid = 'room@conference.example.com';
+    const realJid = 'friend@example.com';
+    await db.saveMessage(
+      Message(
+        stanzaID: 'group-legacy-1',
+        senderJid: '$roomJid/old',
+        chatJid: roomJid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'Legacy MUC message',
+        encryptionProtocol: EncryptionProtocol.none,
+      ),
+      chatType: ChatType.groupChat,
+    );
+    await db.saveMessage(
+      Message(
+        stanzaID: 'group-legacy-outside-interval',
+        senderJid: '$roomJid/old',
+        chatJid: roomJid,
+        timestamp: DateTime.utc(2024, 1, 1, 8),
+        body: 'Older reused nick message',
+        encryptionProtocol: EncryptionProtocol.none,
+      ),
+      chatType: ChatType.groupChat,
+    );
+
+    final updated = await db.backfillSelfMucMessageSenderRealJidForInterval(
+      chatJid: roomJid,
+      senderJid: '$roomJid/old',
+      realJid: realJid,
+      start: DateTime.utc(2024, 1, 1, 9),
+      end: DateTime.utc(2024, 1, 1, 11),
+    );
+    final stored = await db.getMessageByStanzaID('group-legacy-1');
+    final untouched = await db.getMessageByStanzaID(
+      'group-legacy-outside-interval',
+    );
+
+    expect(updated, 1);
+    expect(stored?.senderRealJid, realJid);
+    expect(untouched?.senderRealJid, isNull);
+  });
+
+  test('hydrates missing MUC identity without clobbering real JID', () async {
+    const roomJid = 'room@conference.example.com';
+    await db.saveMessage(
+      Message(
+        stanzaID: 'muc-identity-hydrate',
+        senderJid: '$roomJid/alice',
+        senderRealJid: 'alice@example.com',
+        chatJid: roomJid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'MUC message',
+        encryptionProtocol: EncryptionProtocol.none,
+      ),
+      chatType: ChatType.groupChat,
+    );
+
+    await db.hydrateMessageMucIdentity(
+      stanzaID: 'muc-identity-hydrate',
+      senderRealJid: 'mallory@example.com',
+      occupantID: 'opaque-alice',
+      mucStanzaId: 'room-stanza-id',
+    );
+    final stored = await db.getMessageByStanzaID('muc-identity-hydrate');
+
+    expect(stored?.senderRealJid, 'alice@example.com');
+    expect(stored?.occupantID, 'opaque-alice');
+    expect(stored?.mucStanzaId, 'room-stanza-id');
+  });
+
+  test('replaces only pending outbound MUC identity', () async {
+    const roomJid = 'room@conference.example.com';
+    await db.saveMessage(
+      Message(
+        stanzaID: 'pending-muc-send',
+        senderJid: '$roomJid/old',
+        senderRealJid: 'me@example.com',
+        chatJid: roomJid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'pending send',
+        encryptionProtocol: EncryptionProtocol.none,
+      ),
+      chatType: ChatType.groupChat,
+    );
+
+    await db.replacePendingOutboundMucIdentity(
+      stanzaID: 'pending-muc-send',
+      senderJid: '$roomJid/new',
+      senderRealJid: 'me@example.com',
+      occupantID: 'opaque-self',
+    );
+    final refreshed = await db.getMessageByStanzaID('pending-muc-send');
+    expect(refreshed?.senderJid, '$roomJid/new');
+    expect(refreshed?.senderRealJid, 'me@example.com');
+    expect(refreshed?.occupantID, 'opaque-self');
+
+    await db.markMessageAcked('pending-muc-send', chatJid: roomJid);
+    await db.replacePendingOutboundMucIdentity(
+      stanzaID: 'pending-muc-send',
+      senderJid: '$roomJid/too-late',
+      senderRealJid: 'other@example.com',
+      occupantID: 'other-occupant',
+    );
+    final acked = await db.getMessageByStanzaID('pending-muc-send');
+    expect(acked?.senderJid, '$roomJid/new');
+    expect(acked?.senderRealJid, 'me@example.com');
+    expect(acked?.occupantID, 'opaque-self');
+  });
+
   test(
     'saveMessage increments unread for inbound invite pseudo messages',
     () async {

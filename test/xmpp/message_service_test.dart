@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -119,6 +120,7 @@ mox.XmppManagerAttributes _messageCollectionsTestAttributes({
 bool compareMessages(Message a, Message b) =>
     a.stanzaID == b.stanzaID &&
     a.senderJid == b.senderJid &&
+    a.senderRealJid == b.senderRealJid &&
     a.chatJid == b.chatJid &&
     //Drift only has second precision in test environment
     a.timestamp?.floorSeconds == b.timestamp?.floorSeconds &&
@@ -909,6 +911,205 @@ void main() {
       },
     );
 
+    test(
+      'Stores and fails a MUC text message when send preparation fails.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const roomNick = 'me';
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        when(
+          () => mockConnection.getManager<MUCManager>(),
+        ).thenReturn(mucManager);
+        when(
+          () => mucManager.getRoomState(any()),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenThrow(Exception('join failed'));
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.groupChat,
+            myNickname: roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+
+        await expectLater(
+          xmppService.sendMessage(
+            jid: roomJid,
+            text: text,
+            chatType: ChatType.groupChat,
+          ),
+          throwsA(isA<XmppMessageException>()),
+        );
+
+        final messages = await database.getChatMessages(
+          roomJid,
+          start: 0,
+          end: 10,
+        );
+        expect(messages, hasLength(1));
+        expect(messages.single.body, text);
+        expect(messages.single.error, MessageError.unknown);
+        verifyNever(() => mockConnection.sendMessage(any()));
+      },
+    );
+
+    test(
+      'Stores and fails a MUC attachment when send preparation fails.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const roomNick = 'me';
+        const fileName = 'failed-prepare.txt';
+        final attachment = Attachment(
+          path: '/tmp/$fileName',
+          fileName: fileName,
+          sizeBytes: 12,
+          mimeType: 'text/plain',
+        );
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        when(
+          () => mockConnection.getManager<MUCManager>(),
+        ).thenReturn(mucManager);
+        when(
+          () => mucManager.getRoomState(any()),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenThrow(Exception('join failed'));
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.groupChat,
+            myNickname: roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+
+        await expectLater(
+          xmppService.sendAttachment(
+            jid: roomJid,
+            attachment: attachment,
+            chatType: ChatType.groupChat,
+          ),
+          throwsA(isA<XmppMessageException>()),
+        );
+
+        final messages = await database.getChatMessages(
+          roomJid,
+          start: 0,
+          end: 10,
+        );
+        expect(messages, hasLength(1));
+        expect(messages.single.fileMetadataID, isNotNull);
+        expect(messages.single.error, MessageError.unknown);
+        verifyNever(() => mockConnection.sendMessage(any()));
+        verifyNever(() => mockConnection.sendStanza(any()));
+      },
+    );
+
+    test(
+      'Refreshes the stored outbound MUC identity after preparation changes nick.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const oldNick = 'old';
+        const newNick = 'new';
+        const body = 'nick changed during prepare';
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        when(
+          () => mockConnection.getManager<MUCManager>(),
+        ).thenReturn(mucManager);
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(roomJid),
+          joined: false,
+          nick: oldNick,
+        );
+        when(
+          () => mucManager.getRoomState(any()),
+        ).thenAnswer((_) async => managerRoomState);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          managerRoomState
+            ..joined = true
+            ..nick = newNick;
+          xmppService.updateOccupantFromPresence(
+            roomJid: roomJid,
+            occupantId: '$roomJid/$newNick',
+            nick: newNick,
+            realJid: xmppService.myJid,
+            affiliation: OccupantAffiliation.member,
+            role: OccupantRole.participant,
+            isPresent: true,
+            fromPresence: true,
+          );
+          return const moxlib.Result<bool, mox.MUCError>(true);
+        });
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.groupChat,
+            myNickname: oldNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+
+        await xmppService.sendMessage(
+          jid: roomJid,
+          text: body,
+          chatType: ChatType.groupChat,
+        );
+
+        verify(
+          () => mockConnection.sendMessage(
+            any(
+              that: isA<mox.MessageEvent>().having(
+                (event) => event.from.toString(),
+                'from',
+                '$roomJid/$newNick',
+              ),
+            ),
+          ),
+        ).called(1);
+        final messages = await database.getChatMessages(
+          roomJid,
+          start: 0,
+          end: 10,
+        );
+        expect(messages, hasLength(1));
+        expect(messages.single.senderJid, '$roomJid/$newNick');
+        expect(messages.single.senderRealJid, xmppService.myJid);
+      },
+    );
+
     test('Uses origin-id for direct replies.', () async {
       const peerJid = 'friend@axi.im';
       const quotedStanzaId = 'quoted-local-stanza-id';
@@ -1217,7 +1418,349 @@ void main() {
           (message) => message.body == replyBody,
         );
         expect(stored.senderJid, equals('$roomJid/$roomNick'));
+        expect(stored.senderRealJid, equals(xmppService.myJid));
         expect(stored.occupantID, equals(opaqueOccupantId));
+      },
+    );
+
+    test('Stores known inbound MUC sender real JIDs', () async {
+      const roomJid = 'room@conference.axi.im';
+      const senderNick = 'friend';
+      const senderRealJid = 'friend@axi.im';
+      const body = 'hello from a known occupant';
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+
+      await connectSuccessfully(xmppService);
+      await xmppService.setMucServiceHost('conference.axi.im');
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: '$roomJid/$senderNick',
+        nick: senderNick,
+        realJid: senderRealJid,
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+      );
+
+      controller.add(
+        mox.MessageEvent(
+          mox.JID.fromString('$roomJid/$senderNick'),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData(body),
+            mox.MessageIdData('known-muc-sender-stanza'),
+          ]),
+          id: 'known-muc-sender-stanza',
+          type: 'groupchat',
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      final stored = await database.getMessageByStanzaID(
+        'known-muc-sender-stanza',
+      );
+      expect(stored?.senderJid, '$roomJid/$senderNick');
+      expect(stored?.senderRealJid, senderRealJid);
+      expect(stored?.occupantID, isNull);
+      await controller.close();
+    });
+
+    test(
+      'Does not store MUC real JID from same-nick occupant lookup',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const senderNick = 'friend';
+        const senderRealJid = 'friend@axi.im';
+        const body = 'hello from reused nick';
+        const stanzaId = 'same-nick-muc-sender-stanza';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: 'opaque-occupant-id',
+          nick: senderNick,
+          realJid: senderRealJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString('$roomJid/$senderNick'),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData(body),
+              mox.MessageIdData(stanzaId),
+            ]),
+            id: stanzaId,
+            type: 'groupchat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.senderJid, '$roomJid/$senderNick');
+        expect(stored?.senderRealJid, isNull);
+        await controller.close();
+      },
+    );
+
+    test('MAM replay matches stored MUC messages by room stanza-id', () async {
+      const roomJid = 'room@conference.axi.im';
+      const mucStanzaId = 'room-stable-message-id';
+      const localStanzaId = 'local-muc-stanza-id';
+      const archivedStanzaId = 'archived-muc-stanza-id';
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+
+      await connectSuccessfully(xmppService);
+      await database.saveMessage(
+        Message(
+          stanzaID: localStanzaId,
+          mucStanzaId: mucStanzaId,
+          senderJid: '$roomJid/old',
+          senderRealJid: xmppService.myJid,
+          chatJid: roomJid,
+          timestamp: DateTime.utc(2026, 1, 1, 10),
+          body: 'local copy',
+        ),
+        chatType: ChatType.groupChat,
+        selfJid: xmppService.myJid,
+      );
+
+      controller.add(
+        mox.MessageEvent(
+          mox.JID.fromString('$roomJid/old'),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('archived copy'),
+            mox.MessageIdData(archivedStanzaId),
+            mox.StableIdData(null, [
+              mox.StanzaId(mucStanzaId, mox.JID.fromString(roomJid)),
+            ]),
+          ]),
+          id: archivedStanzaId,
+          type: 'groupchat',
+          isFromMAM: true,
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      final messages = await database.getChatMessages(
+        roomJid,
+        start: 0,
+        end: 10,
+      );
+      final stored = await database.getMessageByStanzaID(localStanzaId);
+      final replay = await database.getMessageByStanzaID(archivedStanzaId);
+      expect(messages, hasLength(1));
+      expect(stored?.senderRealJid, xmppService.myJid);
+      expect(stored?.acked, isTrue);
+      expect(replay, isNull);
+      await controller.close();
+    });
+
+    test(
+      'MAM replay does not hydrate MUC real JID from room state occupant id',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const mucStanzaId = 'room-stable-occupant-id-message';
+        const localStanzaId = 'local-occupant-id-message';
+        const archivedStanzaId = 'archived-occupant-id-message';
+        const occupantId = 'opaque-self-occupant';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: occupantId,
+          nick: 'old',
+          realJid: xmppService.myJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            mucStanzaId: mucStanzaId,
+            occupantID: occupantId,
+            senderJid: '$roomJid/old',
+            chatJid: roomJid,
+            timestamp: DateTime.utc(2026, 1, 1, 10),
+            body: 'legacy local copy',
+          ),
+          chatType: ChatType.groupChat,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString('$roomJid/old'),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('archived copy'),
+              const mox.OccupantIdData(occupantId),
+              mox.MessageIdData(archivedStanzaId),
+              mox.StableIdData(null, [
+                mox.StanzaId(mucStanzaId, mox.JID.fromString(roomJid)),
+              ]),
+            ]),
+            id: archivedStanzaId,
+            type: 'groupchat',
+            isFromMAM: true,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(localStanzaId);
+        final replay = await database.getMessageByStanzaID(archivedStanzaId);
+        expect(stored?.senderRealJid, isNull);
+        expect(replay, isNull);
+        await controller.close();
+      },
+    );
+
+    test('MAM replay does not infer MUC real JID from reused nick', () async {
+      const roomJid = 'room@conference.axi.im';
+      const mucStanzaId = 'room-stable-reused-nick-message';
+      const localStanzaId = 'local-reused-nick-message';
+      const archivedStanzaId = 'archived-reused-nick-message';
+      final controller = StreamController<mox.XmppEvent>();
+      when(
+        () => mockConnection.asBroadcastStream(),
+      ).thenAnswer((_) => controller.stream);
+
+      await connectSuccessfully(xmppService);
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: '$roomJid/old',
+        nick: 'old',
+        realJid: 'other@axi.im',
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: localStanzaId,
+          mucStanzaId: mucStanzaId,
+          senderJid: '$roomJid/old',
+          chatJid: roomJid,
+          timestamp: DateTime.utc(2026, 1, 1, 10),
+          body: 'legacy local copy',
+        ),
+        chatType: ChatType.groupChat,
+      );
+
+      controller.add(
+        mox.MessageEvent(
+          mox.JID.fromString('$roomJid/old'),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('archived copy'),
+            mox.MessageIdData(archivedStanzaId),
+            mox.StableIdData(null, [
+              mox.StanzaId(mucStanzaId, mox.JID.fromString(roomJid)),
+            ]),
+          ]),
+          id: archivedStanzaId,
+          type: 'groupchat',
+          isFromMAM: true,
+        ),
+      );
+      await pumpEventQueue();
+      await pumpEventQueue();
+
+      final stored = await database.getMessageByStanzaID(localStanzaId);
+      final replay = await database.getMessageByStanzaID(archivedStanzaId);
+      expect(stored?.senderRealJid, isNull);
+      expect(replay, isNull);
+      await controller.close();
+    });
+
+    test(
+      'MAM replay does not infer MUC real JID from current self nick',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const currentNick = 'current';
+        const mucStanzaId = 'room-stable-current-self-nick-message';
+        const localStanzaId = 'local-current-self-nick-message';
+        const archivedStanzaId = 'archived-current-self-nick-message';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: '$roomJid/$currentNick',
+          nick: currentNick,
+          realJid: xmppService.myJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            mucStanzaId: mucStanzaId,
+            senderJid: '$roomJid/$currentNick',
+            chatJid: roomJid,
+            timestamp: DateTime.utc(2026, 1, 1, 10),
+            body: 'legacy local copy',
+          ),
+          chatType: ChatType.groupChat,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString('$roomJid/$currentNick'),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('archived copy'),
+              mox.MessageIdData(archivedStanzaId),
+              mox.StableIdData(null, [
+                mox.StanzaId(mucStanzaId, mox.JID.fromString(roomJid)),
+              ]),
+            ]),
+            id: archivedStanzaId,
+            type: 'groupchat',
+            isFromMAM: true,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(localStanzaId);
+        final replay = await database.getMessageByStanzaID(archivedStanzaId);
+        expect(stored?.senderRealJid, isNull);
+        expect(replay, isNull);
+        await controller.close();
       },
     );
 
@@ -1894,6 +2437,96 @@ void main() {
           reactions.map((reaction) => reaction.emoji).toList(),
           equals(const <String>[emoji]),
         );
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Keeps archived MUC reactions unverified when only room state matches',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const senderNick = 'friend';
+        const senderOccupantId = '$roomJid/$senderNick';
+        const senderRealJid = 'friend@axi.im';
+        const stanzaId = 'stored-archived-reaction-muc-stanza-id';
+        const mucStanzaId = 'archived-reaction-room-stanza-id';
+
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.groupChat,
+            myNickname: 'me',
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: stanzaId,
+            mucStanzaId: mucStanzaId,
+            senderJid: senderOccupantId,
+            occupantID: senderOccupantId,
+            chatJid: roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+          chatType: ChatType.groupChat,
+          selfJid: xmppService.myJid,
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: senderOccupantId,
+          nick: senderNick,
+          realJid: senderRealJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+          fromPresence: true,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(senderOccupantId),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageReactionsData(mucStanzaId, <String>[emoji]),
+            ]),
+            id: uuid.v4(),
+            type: 'groupchat',
+            isFromMAM: true,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final canonicalReactions = await database.getReactionsForMessageSender(
+          messageId: stanzaId,
+          senderJid: senderRealJid,
+        );
+        expect(canonicalReactions, isEmpty);
+        final rawReactions = await database.getReactionsForMessageSender(
+          messageId: stanzaId,
+          senderJid: senderOccupantId,
+        );
+        expect(
+          rawReactions.map((reaction) => reaction.emoji).toList(),
+          equals(const <String>[emoji]),
+        );
+        final state = await database.getReactionState(
+          messageId: stanzaId,
+          senderJid: senderOccupantId,
+        );
+        expect(state?.identityVerified, isFalse);
 
         await controller.close();
       },
@@ -3595,6 +4228,202 @@ void main() {
 
         final stored = await database.getMessageByStanzaID(stanzaId);
         expect(stored?.retracted, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Applies archived MUC corrections with stored real JID on exact room stanza-id and sender match.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const senderOccupantId = '$roomJid/friend';
+        const senderRealJid = 'friend@axi.im';
+        const stanzaId = 'stored-archived-muc-correction';
+        const mucStanzaId = 'archived-room-stanza-id';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        await database.saveMessage(
+          Message(
+            stanzaID: stanzaId,
+            mucStanzaId: mucStanzaId,
+            senderJid: senderOccupantId,
+            senderRealJid: senderRealJid,
+            chatJid: roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'before',
+          ),
+          chatType: ChatType.groupChat,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(senderOccupantId),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('after'),
+              const mox.LastMessageCorrectionData(mucStanzaId),
+              mox.MessageIdData(uuid.v4()),
+            ]),
+            id: uuid.v4(),
+            type: 'groupchat',
+            isFromMAM: true,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.body, 'after');
+        expect(stored?.edited, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Applies archived MUC retractions with stored real JID on exact room stanza-id and sender match.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const senderOccupantId = '$roomJid/friend';
+        const senderRealJid = 'friend@axi.im';
+        const stanzaId = 'stored-archived-muc-retraction';
+        const mucStanzaId = 'archived-room-retraction-id';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        await database.saveMessage(
+          Message(
+            stanzaID: stanzaId,
+            mucStanzaId: mucStanzaId,
+            senderJid: senderOccupantId,
+            senderRealJid: senderRealJid,
+            chatJid: roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+          chatType: ChatType.groupChat,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(senderOccupantId),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              mox.MessageRetractionData(mucStanzaId, null),
+              mox.MessageIdData(uuid.v4()),
+            ]),
+            id: uuid.v4(),
+            type: 'groupchat',
+            isFromMAM: true,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final stored = await database.getMessageByStanzaID(stanzaId);
+        expect(stored?.retracted, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Rejects archived MUC mutations with stored real JID on sender mismatch or local-id-only target.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const senderOccupantId = '$roomJid/friend';
+        const otherOccupantId = '$roomJid/other';
+        const senderRealJid = 'friend@axi.im';
+        const localOnlyStanzaId = 'local-only-target-stanza';
+        const localOnlyMucStanzaId = 'different-room-stanza-id';
+        const senderMismatchStanzaId = 'sender-mismatch-stanza';
+        const senderMismatchMucStanzaId = 'sender-mismatch-room-stanza-id';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        await database.saveMessage(
+          Message(
+            stanzaID: localOnlyStanzaId,
+            mucStanzaId: localOnlyMucStanzaId,
+            senderJid: senderOccupantId,
+            senderRealJid: senderRealJid,
+            chatJid: roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'before local id',
+          ),
+          chatType: ChatType.groupChat,
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: senderMismatchStanzaId,
+            mucStanzaId: senderMismatchMucStanzaId,
+            senderJid: senderOccupantId,
+            senderRealJid: senderRealJid,
+            chatJid: roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'before sender mismatch',
+          ),
+          chatType: ChatType.groupChat,
+        );
+
+        controller
+          ..add(
+            mox.MessageEvent(
+              mox.JID.fromString(senderOccupantId),
+              mox.JID.fromString(xmppService.myJid!),
+              false,
+              mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+                const mox.MessageBodyData('bad local id edit'),
+                const mox.LastMessageCorrectionData(localOnlyStanzaId),
+                mox.MessageIdData(uuid.v4()),
+              ]),
+              id: uuid.v4(),
+              type: 'groupchat',
+              isFromMAM: true,
+            ),
+          )
+          ..add(
+            mox.MessageEvent(
+              mox.JID.fromString(otherOccupantId),
+              mox.JID.fromString(xmppService.myJid!),
+              false,
+              mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+                mox.MessageRetractionData(senderMismatchMucStanzaId, null),
+                mox.MessageIdData(uuid.v4()),
+              ]),
+              id: uuid.v4(),
+              type: 'groupchat',
+              isFromMAM: true,
+            ),
+          );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final localOnlyStored = await database.getMessageByStanzaID(
+          localOnlyStanzaId,
+        );
+        final senderMismatchStored = await database.getMessageByStanzaID(
+          senderMismatchStanzaId,
+        );
+        expect(localOnlyStored?.body, 'before local id');
+        expect(localOnlyStored?.edited, isFalse);
+        expect(senderMismatchStored?.retracted, isFalse);
 
         await controller.close();
       },

@@ -101,17 +101,16 @@ bool _timelineQuotedMessageIsSelf({
   required Message quotedMessage,
   required bool isGroupChat,
   required RoomState? roomState,
-  required String? fallbackSelfNick,
   required String? currentUserId,
 }) {
   if (isGroupChat) {
     return isMucSelfMessage(
-      senderJid: quotedMessage.senderJid,
+      message: quotedMessage,
       roomState: roomState,
-      fallbackSelfNick: fallbackSelfNick,
+      selfJid: currentUserId,
     );
   }
-  return quotedMessage.isFromAuthorizedJid(currentUserId);
+  return quotedMessage.isFromAccount(currentUserId);
 }
 
 String _timelineForwardedSenderLabel({
@@ -179,7 +178,6 @@ Widget? _timelineQuotedPreview({
   required Message? quotedMessage,
   required bool isGroupChat,
   required RoomState? roomState,
-  required String? fallbackSelfNick,
   required String? currentUserId,
   required String? chatDisplayName,
   required AppLocalizations l10n,
@@ -192,7 +190,6 @@ Widget? _timelineQuotedPreview({
     quotedMessage: quotedMessage,
     isGroupChat: isGroupChat,
     roomState: roomState,
-    fallbackSelfNick: fallbackSelfNick,
     currentUserId: currentUserId,
   );
   return _QuotedMessagePreview(
@@ -1715,7 +1712,6 @@ _resolveTimelineMessagePreviews({
     quotedMessage: timelineMessageItem.quotedMessage,
     isGroupChat: isGroupChat,
     roomState: roomState,
-    fallbackSelfNick: selfNick,
     currentUserId: currentUserId,
     chatDisplayName: resolvedDirectChatDisplayName,
     l10n: l10n,

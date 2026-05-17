@@ -8,7 +8,6 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
-import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
@@ -290,6 +289,7 @@ abstract class Message with _$Message implements Insertable<Message> {
   const factory Message({
     required String stanzaID,
     required String senderJid,
+    String? senderRealJid,
     required String chatJid,
     DateTime? timestamp,
     String? id,
@@ -334,6 +334,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required String? mucStanzaId,
     required String? occupantID,
     required String senderJid,
+    required String? senderRealJid,
     required String chatJid,
     required String? body,
     required String? htmlBody,
@@ -367,7 +368,11 @@ abstract class Message with _$Message implements Insertable<Message> {
     required int? deltaMsgId,
   }) = _MessageFromDb;
 
-  factory Message.fromMox(mox.MessageEvent event, {String? accountJid}) {
+  factory Message.fromMox(
+    mox.MessageEvent event, {
+    String? accountJid,
+    String? senderRealJid,
+  }) {
     final get = event.extensions.get;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
@@ -436,10 +441,15 @@ abstract class Message with _$Message implements Insertable<Message> {
     final occupantId = rawOccupantId == null || rawOccupantId.isEmpty
         ? null
         : rawOccupantId;
+    final normalizedSenderRealJid = bareAddress(senderRealJid)?.trim();
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
       senderJid: senderJid,
+      senderRealJid:
+          normalizedSenderRealJid == null || normalizedSenderRealJid.isEmpty
+          ? null
+          : normalizedSenderRealJid,
       chatJid: chatJid,
       body: invite?.displayBody ?? (resolvedText.isEmpty ? null : resolvedText),
       htmlBody: normalizedHtml,
@@ -488,6 +498,10 @@ abstract class Message with _$Message implements Insertable<Message> {
     if (trimmedJid == null || trimmedJid.isEmpty) {
       return false;
     }
+    final realJid = effectiveSenderRealJid;
+    if (realJid != null) {
+      return sameBareAddress(realJid, trimmedJid);
+    }
     try {
       return authorized(mox.JID.fromString(trimmedJid));
     } on Exception {
@@ -495,24 +509,63 @@ abstract class Message with _$Message implements Insertable<Message> {
     }
   }
 
-  bool senderMatchesClaimedJid(String claimedJid, {RoomState? roomState}) {
+  String? get effectiveSenderRealJid {
+    final realJid = bareAddress(senderRealJid)?.trim();
+    if (realJid == null || realJid.isEmpty) {
+      return null;
+    }
+    return realJid;
+  }
+
+  bool get isMucOccupantSender {
+    final parsedSender = parseJid(senderJid);
+    if (parsedSender == null || parsedSender.resource.trim().isEmpty) {
+      return false;
+    }
+    return sameNormalizedAddressValue(
+      parsedSender.toBare().toString(),
+      chatJid,
+    );
+  }
+
+  bool isFromAccount(String? accountJid) {
+    final realJid = effectiveSenderRealJid;
+    if (realJid != null) {
+      return sameBareAddress(realJid, accountJid);
+    }
+    return sameBareAddress(senderJid, accountJid);
+  }
+
+  bool senderMatchesClaimedJid(String claimedJid) {
     final trimmedClaimed = claimedJid.trim();
     if (trimmedClaimed.isEmpty) {
       return false;
     }
-    if (roomState == null) {
-      return sameNormalizedAddressValue(senderJid, trimmedClaimed);
+    final realJid = effectiveSenderRealJid;
+    if (realJid != null) {
+      return sameBareAddress(realJid, trimmedClaimed);
     }
-    return roomState.senderMatchesClaimedJid(
-      senderJid: senderJid,
-      claimedJid: trimmedClaimed,
-    );
+    if (isMucOccupantSender) {
+      return false;
+    }
+    return sameBareAddress(senderJid, trimmedClaimed);
   }
 
-  bool authorizedForMutation({required mox.JID from}) {
+  bool authorizedForMutation({required mox.JID from, String? actorRealJid}) {
     final sender = senderJid.trim();
     if (sender.isEmpty) {
       return false;
+    }
+    final realJid = effectiveSenderRealJid;
+    if (realJid != null) {
+      final normalizedActorRealJid = bareAddress(actorRealJid)?.trim();
+      if (normalizedActorRealJid != null && normalizedActorRealJid.isNotEmpty) {
+        return sameBareAddress(realJid, normalizedActorRealJid);
+      }
+      if (isMucOccupantSender) {
+        return false;
+      }
+      return sameBareAddress(realJid, from.toBare().toString());
     }
     try {
       final senderParsed = mox.JID.fromString(sender);
@@ -636,6 +689,10 @@ abstract class Message with _$Message implements Insertable<Message> {
     if (originID != null) {
       map['origin_i_d'] = Variable<String>(originID);
     }
+    final storedSenderRealJid = effectiveSenderRealJid;
+    if (storedSenderRealJid != null) {
+      map['sender_real_jid'] = Variable<String>(storedSenderRealJid);
+    }
     if (mucStanzaId != null) {
       map['muc_stanza_id'] = Variable<String>(mucStanzaId);
     }
@@ -754,16 +811,33 @@ final class MessageReference {
 }
 
 final class MucActorIdentity {
-  const MucActorIdentity._({required this.senderJid, this.occupantJid});
+  const MucActorIdentity._({
+    required this.senderJid,
+    this.occupantJid,
+    this.occupantId,
+    this.senderRealJid,
+  });
 
-  const MucActorIdentity.direct({required String senderJid})
-    : this._(senderJid: senderJid);
+  const MucActorIdentity.direct({
+    required String senderJid,
+    String? senderRealJid,
+  }) : this._(senderJid: senderJid, senderRealJid: senderRealJid);
 
-  const MucActorIdentity.room({required String occupantJid})
-    : this._(senderJid: occupantJid, occupantJid: occupantJid);
+  const MucActorIdentity.room({
+    required String occupantJid,
+    String? occupantId,
+    String? senderRealJid,
+  }) : this._(
+         senderJid: occupantJid,
+         occupantJid: occupantJid,
+         occupantId: occupantId,
+         senderRealJid: senderRealJid,
+       );
 
   final String senderJid;
   final String? occupantJid;
+  final String? occupantId;
+  final String? senderRealJid;
 }
 
 extension MessageReferenceIds on Message {
@@ -804,9 +878,16 @@ extension MessageReferenceIds on Message {
         ? trimmedSender
         : null;
     if (occupantJid != null) {
-      return MucActorIdentity.room(occupantJid: occupantJid);
+      return MucActorIdentity.room(
+        occupantJid: occupantJid,
+        occupantId: occupantID,
+        senderRealJid: effectiveSenderRealJid,
+      );
     }
-    return MucActorIdentity.direct(senderJid: trimmedSender);
+    return MucActorIdentity.direct(
+      senderJid: trimmedSender,
+      senderRealJid: effectiveSenderRealJid,
+    );
   }
 
   bool get hasMucReference => trimmedMucStanzaId != null;
@@ -862,6 +943,10 @@ extension MessageReferenceIds on Message {
     required String? myOccupantJid,
   }) {
     if (!hasUnreadContent) {
+      return false;
+    }
+    final realJid = effectiveSenderRealJid;
+    if (realJid != null && sameNormalizedAddressValue(realJid, selfJid)) {
       return false;
     }
     if (sameNormalizedAddressValue(senderJid, selfJid)) {
@@ -1121,7 +1206,6 @@ extension MessageCalendarAvailabilityX on Message {
   }
 
   CalendarAvailabilityMessage? validatedCalendarAvailabilityMessage({
-    RoomState? roomState,
     String? Function(String shareId)? ownerJidForShare,
   }) {
     final raw = calendarAvailabilityMessage;
@@ -1129,16 +1213,10 @@ extension MessageCalendarAvailabilityX on Message {
       return null;
     }
     final isValid = raw.map(
-      share: (value) => senderMatchesClaimedJid(
-        value.share.overlay.owner,
-        roomState: roomState,
-      ),
+      share: (value) => senderMatchesClaimedJid(value.share.overlay.owner),
       request: (value) {
         final request = value.request;
-        if (!senderMatchesClaimedJid(
-          request.requesterJid,
-          roomState: roomState,
-        )) {
+        if (!senderMatchesClaimedJid(request.requesterJid)) {
           return false;
         }
         final claimedOwner = request.ownerJid?.trim();
@@ -1149,20 +1227,14 @@ extension MessageCalendarAvailabilityX on Message {
         if (knownOwner == null || knownOwner.isEmpty) {
           return true;
         }
-        if (roomState == null) {
-          return sameNormalizedAddressValue(claimedOwner, knownOwner);
-        }
-        return roomState.senderMatchesClaimedJid(
-          senderJid: claimedOwner,
-          claimedJid: knownOwner,
-        );
+        return sameBareAddress(claimedOwner, knownOwner);
       },
       response: (value) {
         final ownerJid = ownerJidForShare?.call(value.response.shareId)?.trim();
         if (ownerJid == null || ownerJid.isEmpty) {
           return true;
         }
-        return senderMatchesClaimedJid(ownerJid, roomState: roomState);
+        return senderMatchesClaimedJid(ownerJid);
       },
     );
     return isValid ? raw : null;
@@ -1368,6 +1440,8 @@ class Messages extends Table {
   TextColumn get occupantID => text().nullable()();
 
   TextColumn get senderJid => text()();
+
+  TextColumn get senderRealJid => text().nullable()();
 
   TextColumn get chatJid => text()();
 

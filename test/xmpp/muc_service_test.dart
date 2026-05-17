@@ -381,6 +381,15 @@ void main() {
     when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
     when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
+    when(
+      () => mockDatabase.backfillSelfMucMessageSenderRealJidForInterval(
+        chatJid: any(named: 'chatJid'),
+        senderJid: any(named: 'senderJid'),
+        realJid: any(named: 'realJid'),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
+    ).thenAnswer((_) async => 0);
     when(() => mockDatabase.getRosterItem(any())).thenAnswer((_) async => null);
     when(
       () => mockDatabase.countChatMessages(
@@ -470,6 +479,57 @@ void main() {
 
         expect(room.isReadyForMessaging, isTrue);
         expect(room.isBootstrapPending, isTrue);
+      },
+    );
+  });
+
+  group('MUC sender identity', () {
+    test(
+      'backfills observed self sender JID interval on nick change',
+      () async {
+        const oldOccupantJid = '$_roomJid/old';
+        const newNick = 'new';
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: oldOccupantJid,
+            nick: 'old',
+            affiliation: OccupantAffiliation.member.xmlValue,
+            role: OccupantRole.participant.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+        await pumpEventQueue();
+        clearInteractions(mockDatabase);
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: oldOccupantJid,
+            nick: 'old',
+            affiliation: OccupantAffiliation.member.xmlValue,
+            role: OccupantRole.participant.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: true,
+            statusCodes: {MucStatusCode.selfPresence.code},
+            newNick: newNick,
+          ),
+        );
+        await pumpEventQueue();
+
+        verify(
+          () => mockDatabase.backfillSelfMucMessageSenderRealJidForInterval(
+            chatJid: _roomJid,
+            senderJid: oldOccupantJid,
+            realJid: _accountBareJid,
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        ).called(1);
       },
     );
   });

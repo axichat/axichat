@@ -44,25 +44,21 @@ String? previewTextForMessage(Message message) {
 }
 
 bool isMucSelfMessage({
-  required String senderJid,
+  required Message message,
   required RoomState? roomState,
-  required String? fallbackSelfNick,
+  String? selfJid,
 }) {
-  if (roomState != null) {
-    return roomState.isSelfSenderJid(
-      senderJid,
-      fallbackSelfNick: fallbackSelfNick,
+  final realJid = message.effectiveSenderRealJid;
+  if (realJid != null) {
+    return sameBareAddress(
+      realJid,
+      roomState?.resolvedSelfJid(fallbackJid: selfJid) ?? selfJid,
     );
   }
-  final trimmedSelfNick = fallbackSelfNick?.trim();
-  if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
-    return false;
+  if (roomState != null) {
+    return roomState.isSelfOccupantId(message.senderJid);
   }
-  final senderNick = addressResourcePart(senderJid)?.trim();
-  if (senderNick == null || senderNick.isEmpty) {
-    return false;
-  }
-  return senderNick == trimmedSelfNick;
+  return false;
 }
 
 bool isEmailMessageForBubble({
@@ -287,23 +283,18 @@ resolveMainChatTimelineMessageAuthor({
   required String unknownLabel,
   required String? Function(String jid) avatarPathForBareJid,
 }) {
-  final senderBare = bareAddress(message.senderJid);
   final normalizedSenderBare = normalizedAddressKey(message.senderJid);
-  final isSelfXmpp =
-      senderBare != null && senderBare == bareAddress(profileJid);
-  final isSelfEmail =
-      senderBare != null &&
-      resolvedEmailSelfJid != null &&
-      senderBare == bareAddress(resolvedEmailSelfJid);
+  final isSelfXmpp = message.isFromAccount(profileJid);
+  final isSelfEmail = message.isFromAccount(resolvedEmailSelfJid);
   final isDeltaPlaceholderSender =
       normalizedSenderBare != null &&
       normalizedSenderBare.isDeltaPlaceholderJid;
   final isMucSelf =
       isGroupChat &&
       isMucSelfMessage(
-        senderJid: message.senderJid,
+        message: message,
         roomState: roomState,
-        fallbackSelfNick: selfNick,
+        selfJid: profileJid,
       );
   final isSelf =
       isSelfXmpp || isSelfEmail || isMucSelf || isDeltaPlaceholderSender;
@@ -696,10 +687,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
           message.retracted ||
           message.edited);
   final validatedAvailabilityMessage = message
-      .validatedCalendarAvailabilityMessage(
-        roomState: roomState,
-        ownerJidForShare: ownerJidForShare,
-      );
+      .validatedCalendarAvailabilityMessage(ownerJidForShare: ownerJidForShare);
   return ChatTimelineMessageItem(
     id: message.stanzaID,
     createdAt: timestamp.toLocal(),

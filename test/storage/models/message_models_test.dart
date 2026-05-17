@@ -42,6 +42,47 @@ void main() {
       );
       expect(authorized, isTrue);
     });
+
+    test('uses actor real JID for identified group messages', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: groupSenderJid,
+        senderRealJid: 'alice@example.com',
+        chatJid: groupChatBareJid,
+      );
+
+      final authorized = message.authorizedForMutation(
+        from: mox.JID.fromString(groupOtherSenderJid),
+        actorRealJid: 'alice@example.com',
+      );
+      final unverified = message.authorizedForMutation(
+        from: mox.JID.fromString(groupSenderJid),
+      );
+
+      expect(authorized, isTrue);
+      expect(unverified, isFalse);
+    });
+  });
+
+  group('Message.countsTowardUnread', () {
+    test('ignores group messages whose stored real JID is self', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: groupSenderJid,
+        senderRealJid: directSenderJid,
+        chatJid: groupChatBareJid,
+        body: 'hello',
+      );
+
+      expect(
+        message.countsTowardUnread(
+          selfJid: directSenderJid,
+          isGroupChat: true,
+          myOccupantJid: groupOtherSenderJid,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('Message.resolveForwardedOriginalSenderLabel', () {

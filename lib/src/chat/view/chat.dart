@@ -1435,17 +1435,16 @@ class _ChatState extends State<Chat> {
     required Message quotedMessage,
     required bool isGroupChat,
     required RoomState? roomState,
-    required String? fallbackSelfNick,
     required String? currentUserId,
   }) {
     if (isGroupChat) {
       return isMucSelfMessage(
-        senderJid: quotedMessage.senderJid,
+        message: quotedMessage,
         roomState: roomState,
-        fallbackSelfNick: fallbackSelfNick,
+        selfJid: currentUserId,
       );
     }
-    return quotedMessage.isFromAuthorizedJid(currentUserId);
+    return quotedMessage.isFromAccount(currentUserId);
   }
 
   String _quotedSenderLabel({
@@ -1964,13 +1963,11 @@ class _ChatState extends State<Chat> {
       if (currentActor == null) {
         return false;
       }
-      if (roomState == null) {
-        return sameNormalizedAddressValue(currentActor, claimedJid);
+      if (messageModel.effectiveSenderRealJid != null ||
+          messageModel.isMucOccupantSender) {
+        return messageModel.senderMatchesClaimedJid(claimedJid);
       }
-      return roomState.senderMatchesClaimedJid(
-        senderJid: currentActor,
-        claimedJid: claimedJid,
-      );
+      return sameBareAddress(currentActor, claimedJid);
     }
 
     final calendarMessageCardShape = ContinuousRectangleBorder(

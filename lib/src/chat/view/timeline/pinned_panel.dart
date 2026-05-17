@@ -307,15 +307,17 @@ class _PinnedMessageTile extends StatelessWidget {
   }
 
   bool isSelfMessage({required Message message, required String? accountJid}) {
-    if (chat.type == ChatType.groupChat) {
-      return roomState?.isSelfSenderJid(
-            message.senderJid,
-            selfJid: accountJid,
-            fallbackSelfNick: chat.myNickname,
-          ) ??
-          false;
+    if (message.isFromAccount(accountJid)) {
+      return true;
     }
-    return message.isFromAuthorizedJid(accountJid);
+    if (chat.type == ChatType.groupChat) {
+      return isMucSelfMessage(
+        message: message,
+        roomState: roomState,
+        selfJid: accountJid,
+      );
+    }
+    return false;
   }
 
   String? nickFromSender(String senderJid) =>

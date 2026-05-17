@@ -2789,9 +2789,58 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String chatJid,
     required String accountJid,
     required ChatType chatType,
-  }) {
-    return accountJid;
+  }) => _outboundMessageIdentityForChat(
+    chatJid: chatJid,
+    accountJid: accountJid,
+    chatType: chatType,
+  ).senderJid;
+
+  MucActorIdentity _outboundMessageIdentityForChat({
+    required String chatJid,
+    required String accountJid,
+    required ChatType chatType,
+  }) => MucActorIdentity.direct(senderJid: accountJid);
+
+  Future<Message> _refreshPendingOutboundMessageIdentityForChat({
+    required Message message,
+    required String accountJid,
+    required ChatType chatType,
+    required bool updateStoredMessage,
+  }) async {
+    if (chatType != ChatType.groupChat) {
+      return message;
+    }
+    final senderIdentity = _outboundMessageIdentityForChat(
+      chatJid: message.chatJid,
+      accountJid: accountJid,
+      chatType: chatType,
+    );
+    if (message.senderJid == senderIdentity.senderJid &&
+        message.senderRealJid == senderIdentity.senderRealJid &&
+        message.occupantID == senderIdentity.occupantId) {
+      return message;
+    }
+    if (updateStoredMessage) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.replacePendingOutboundMucIdentity(
+          stanzaID: message.stanzaID,
+          senderJid: senderIdentity.senderJid,
+          senderRealJid: senderIdentity.senderRealJid,
+          occupantID: senderIdentity.occupantId,
+        ),
+      );
+    }
+    return message.copyWith(
+      senderJid: senderIdentity.senderJid,
+      senderRealJid: senderIdentity.senderRealJid,
+      occupantID: senderIdentity.occupantId,
+    );
   }
+
+  String? _senderRealJidForInboundMessageEvent(
+    mox.MessageEvent event, {
+    required ChatType chatType,
+  }) => null;
 
   void _scheduleArchiveSyncAfterJoin({
     required String chatJid,
@@ -2857,6 +2906,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String senderJid,
     required String chatJid,
     required bool isGroupChat,
+    required bool isArchived,
   }) {
     if (!isGroupChat) {
       return (
@@ -3087,6 +3137,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       );
       if (existing != null) return true;
     }
+    final mucStanzaId = message.trimmedMucStanzaId;
+    if (mucStanzaId != null) {
+      final existing = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) =>
+            db.getMessageByReferenceId(mucStanzaId, chatJid: message.chatJid),
+      );
+      if (existing != null) return true;
+    }
     final existing = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(message.stanzaID),
     );
@@ -3106,6 +3164,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required Message incoming,
     FileMetadataData? metadata,
     String? body,
+    bool isArchivedDuplicate = false,
   }) async {
     final hasText = body?.trim().isNotEmpty == true;
     String? updatedMessageId;
@@ -3117,20 +3176,43 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
           chatJid: incoming.chatJid,
         );
       }
+      final incomingMucStanzaId = incoming.trimmedMucStanzaId;
+      if (existing == null && incomingMucStanzaId != null) {
+        existing = await db.getMessageByReferenceId(
+          incomingMucStanzaId,
+          chatJid: incoming.chatJid,
+        );
+      }
       existing ??= await db.getMessageByStanzaID(incoming.stanzaID);
       if (existing == null) return;
 
       final shouldUpdateDisplayed = incoming.displayed && !existing.displayed;
       final shouldUpdateReceived =
           (incoming.received || shouldUpdateDisplayed) && !existing.received;
+      final shouldAckExistingArchivedSelfMessage =
+          isArchivedDuplicate && existing.isFromAccount(myJid);
       final shouldUpdateAcked =
-          (incoming.acked || shouldUpdateReceived) && !existing.acked;
-      final incomingMucStanzaId = incoming.trimmedMucStanzaId;
+          (incoming.acked ||
+              shouldUpdateReceived ||
+              shouldAckExistingArchivedSelfMessage) &&
+          !existing.acked;
       final existingMucStanzaId = existing.trimmedMucStanzaId;
       final shouldUpdateMucStanzaId =
           incomingMucStanzaId != null &&
           incomingMucStanzaId.isNotEmpty &&
           (existingMucStanzaId == null || existingMucStanzaId.isEmpty);
+      final incomingSenderRealJid = incoming.effectiveSenderRealJid;
+      final existingSenderRealJid = existing.effectiveSenderRealJid;
+      final shouldUpdateSenderRealJid =
+          incomingSenderRealJid != null &&
+          incomingSenderRealJid.isNotEmpty &&
+          existingSenderRealJid == null;
+      final incomingOccupantID = incoming.occupantID?.trim();
+      final existingOccupantID = existing.occupantID?.trim();
+      final shouldUpdateOccupantID =
+          incomingOccupantID != null &&
+          incomingOccupantID.isNotEmpty &&
+          (existingOccupantID == null || existingOccupantID.isEmpty);
 
       final needsMetadata =
           metadata != null &&
@@ -3140,6 +3222,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       if (!needsMetadata &&
           !needsBody &&
           !shouldUpdateMucStanzaId &&
+          !shouldUpdateSenderRealJid &&
+          !shouldUpdateOccupantID &&
           !shouldUpdateAcked &&
           !shouldUpdateReceived &&
           !shouldUpdateDisplayed) {
@@ -3158,24 +3242,30 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
           mucStanzaId: incomingMucStanzaId,
         );
       }
+      if (shouldUpdateSenderRealJid || shouldUpdateOccupantID) {
+        await db.hydrateMessageMucIdentity(
+          stanzaID: existing.stanzaID,
+          senderRealJid: shouldUpdateSenderRealJid
+              ? incomingSenderRealJid
+              : null,
+          occupantID: shouldUpdateOccupantID ? incomingOccupantID : null,
+        );
+      }
 
       if (shouldUpdateDisplayed) {
         await db.markMessageDisplayed(
-          incoming.originID ?? incoming.stanzaID,
-          chatJid: incoming.chatJid,
+          existing.stanzaID,
+          chatJid: existing.chatJid,
         );
       }
       if (shouldUpdateReceived) {
         await db.markMessageReceived(
-          incoming.originID ?? incoming.stanzaID,
-          chatJid: incoming.chatJid,
+          existing.stanzaID,
+          chatJid: existing.chatJid,
         );
       }
       if (shouldUpdateAcked) {
-        await db.markMessageAcked(
-          incoming.originID ?? incoming.stanzaID,
-          chatJid: incoming.chatJid,
-        );
+        await db.markMessageAcked(existing.stanzaID, chatJid: existing.chatJid);
       }
     });
     if (updatedMessageId == null) {
@@ -4901,9 +4991,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         final metadata = _extractFileMetadata(event);
         final hasAttachmentMetadata = metadata != null;
 
-        var message = Message.fromMox(event, accountJid: myJid);
-        final shouldPersistAttachment = metadata != null && !message.noStore;
         final isGroupChat = event.type == 'groupchat';
+        var message = Message.fromMox(
+          event,
+          accountJid: myJid,
+          senderRealJid: _senderRealJidForInboundMessageEvent(
+            event,
+            chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+          ),
+        );
+        final shouldPersistAttachment = metadata != null && !message.noStore;
         final stableKey = _stableKeyForEvent(event);
 
         message = message.copyWith(
@@ -4913,8 +5010,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         final accountJid = myJid;
         if (accountJid != null && (event.isCarbon || event.isFromMAM)) {
           final bool isSelfDirectMessage =
-              !isGroupChat &&
-              sameNormalizedAddressValue(message.senderJid, accountJid);
+              !isGroupChat && message.isFromAccount(accountJid);
           final bool isSelfGroupMessage = _isSelfArchivedMessageEvent(
             event: event,
             chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
@@ -4955,6 +5051,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
             incoming: message,
             metadata: metadata,
             body: message.body,
+            isArchivedDuplicate: event.isFromMAM,
           );
           await _acknowledgeMessage(event);
           return;
@@ -5806,7 +5903,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       jid: jid,
       requestedChatType: chatType,
     );
-    final senderJid = _outboundSenderJidForChat(
+    final senderIdentity = _outboundMessageIdentityForChat(
       chatJid: jid,
       accountJid: accountJid,
       chatType: resolvedChatType,
@@ -5885,11 +5982,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
             message: quotedMessage,
             chatType: resolvedChatType,
           );
-    final message = Message(
+    var message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: senderJid,
+      senderJid: senderIdentity.senderJid,
+      senderRealJid: senderIdentity.senderRealJid,
       chatJid: jid,
+      occupantID: senderIdentity.occupantId,
       body: messageText,
       htmlBody: normalizedHtml,
       encryptionProtocol: resolvedEncryptionProtocol,
@@ -5941,6 +6040,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     try {
       await _prepareOutboundChatSend(chatJid: jid, chatType: resolvedChatType);
+      message = await _refreshPendingOutboundMessageIdentityForChat(
+        message: message,
+        accountJid: accountJid,
+        chatType: resolvedChatType,
+        updateStoredMessage: shouldStore,
+      );
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to prepare outbound send for ${message.stanzaID}',
@@ -5952,7 +6057,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       }
       throw XmppMessageException();
     }
-
     try {
       final mox.MessageEvent stanza = _buildOutgoingMessageEvent(
         message: message,
@@ -6128,7 +6232,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       jid: jid,
       requestedChatType: chatType,
     );
-    final senderJid = _outboundSenderJidForChat(
+    final senderIdentity = _outboundMessageIdentityForChat(
       chatJid: jid,
       accountJid: accountJid,
       chatType: resolvedChatType,
@@ -6167,11 +6271,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
             message: quotedMessage,
             chatType: resolvedChatType,
           );
-    final message = Message(
+    var message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: senderJid,
+      senderJid: senderIdentity.senderJid,
+      senderRealJid: senderIdentity.senderRealJid,
       chatJid: jid,
+      occupantID: senderIdentity.occupantId,
       body: body,
       htmlBody: normalizedHtmlCaption,
       encryptionProtocol: resolvedEncryptionProtocol,
@@ -6267,6 +6373,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     try {
       await _prepareOutboundChatSend(chatJid: jid, chatType: resolvedChatType);
+      message = await _refreshPendingOutboundMessageIdentityForChat(
+        message: message,
+        accountJid: accountJid,
+        chatType: resolvedChatType,
+        updateStoredMessage: shouldStore,
+      );
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to prepare outbound attachment send ${message.stanzaID}',
@@ -8853,8 +8965,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         normalizedId,
         chatJid: normalizedChatJid,
       );
-      if (target == null ||
-          !sameNormalizedAddressValue(target.senderJid, accountJid)) {
+      if (target == null || !target.isFromAccount(accountJid)) {
         return false;
       }
       await _applyOutboundMessageStatus(
@@ -9479,6 +9590,32 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
   }
 
+  bool _messageAuthorizedForMutation({
+    required Message message,
+    required mox.MessageEvent event,
+    required String targetId,
+    required String? actorRealJid,
+  }) {
+    if (message.authorizedForMutation(
+      from: event.from,
+      actorRealJid: actorRealJid,
+    )) {
+      return true;
+    }
+    if (event.type != _messageTypeGroupchat ||
+        !_isArchivedOrOfflineMessage(event)) {
+      return false;
+    }
+    final targetMucStanzaId = targetId.trim();
+    final messageMucStanzaId = message.trimmedMucStanzaId;
+    if (targetMucStanzaId.isEmpty ||
+        messageMucStanzaId == null ||
+        targetMucStanzaId != messageMucStanzaId) {
+      return false;
+    }
+    return message.senderJid.trim() == event.from.toString();
+  }
+
   Future<bool> _handleCorrection(mox.MessageEvent event, String jid) async {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
@@ -9488,10 +9625,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
 
     final chatJid = _chatJidForEvent(event);
+    final actorRealJid = _senderRealJidForInboundMessageEvent(
+      event,
+      chatType: event.type == _messageTypeGroupchat
+          ? ChatType.groupChat
+          : ChatType.chat,
+    );
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
       if (await db.getMessageByReferenceId(correction.id, chatJid: chatJid)
           case final message?) {
-        if (!message.authorizedForMutation(from: event.from) ||
+        if (!_messageAuthorizedForMutation(
+              message: message,
+              event: event,
+              targetId: correction.id,
+              actorRealJid: actorRealJid,
+            ) ||
             !message.editable) {
           return false;
         }
@@ -9514,10 +9662,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
 
     final chatJid = _chatJidForEvent(event);
+    final actorRealJid = _senderRealJidForInboundMessageEvent(
+      event,
+      chatType: event.type == _messageTypeGroupchat
+          ? ChatType.groupChat
+          : ChatType.chat,
+    );
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
       if (await db.getMessageByReferenceId(retraction.id, chatJid: chatJid)
           case final message?) {
-        if (!message.authorizedForMutation(from: event.from)) {
+        if (!_messageAuthorizedForMutation(
+          message: message,
+          event: event,
+          targetId: retraction.id,
+          actorRealJid: actorRealJid,
+        )) {
           return false;
         }
         await db.markMessageRetracted(message.stanzaID);
@@ -9643,6 +9802,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         referenceId: referenceId,
         rawSenderJid: rawSenderJid,
         isGroupChat: isGroupChat,
+        isArchived: _isArchivedOrOfflineMessage(event),
         emojis: sanitizedEmojis,
         updatedAt: updatedAt,
         delayedAt: delayedAt,
@@ -9658,6 +9818,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       message: message,
       rawSenderJid: rawSenderJid,
       isGroupChat: isGroupChat,
+      isArchived: _isArchivedOrOfflineMessage(event),
       emojis: sanitizedEmojis,
       updatedAt: updatedAt,
       delayedAt: delayedAt,
@@ -9670,6 +9831,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String referenceId,
     required String rawSenderJid,
     required bool isGroupChat,
+    required bool isArchived,
     required List<String> emojis,
     required DateTime updatedAt,
     required DateTime? delayedAt,
@@ -9695,6 +9857,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     final next = _PendingInboundReaction(
       rawSenderJid: normalizedSenderJid,
       isGroupChat: isGroupChat,
+      isArchived: isArchived,
       emojis: List<String>.unmodifiable(emojis),
       updatedAt: updatedAt.toUtc(),
       delayedAt: delayedAt,
@@ -9730,6 +9893,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         message: message,
         rawSenderJid: pending.rawSenderJid,
         isGroupChat: pending.isGroupChat,
+        isArchived: pending.isArchived,
         emojis: pending.emojis,
         updatedAt: pending.updatedAt,
         delayedAt: pending.delayedAt,
@@ -9749,6 +9913,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required Message message,
     required String rawSenderJid,
     required bool isGroupChat,
+    required bool isArchived,
     required List<String> emojis,
     required DateTime updatedAt,
     required DateTime? delayedAt,
@@ -9757,6 +9922,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       senderJid: rawSenderJid,
       chatJid: message.chatJid,
       isGroupChat: isGroupChat,
+      isArchived: isArchived,
     );
     if (!isGroupChat &&
         !_isDirectReactionSenderAuthorized(
@@ -10819,6 +10985,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     senderJid: senderJid,
     chatJid: chatJid,
     isGroupChat: isGroupChat,
+    isArchived: true,
   ).senderJid;
 
   bool _isDirectReactionSenderAuthorized({
@@ -12938,7 +13105,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (stanzaId.isEmpty) return;
     try {
       final accountJid = myJid?.trim();
-      final isSelf = sameNormalizedAddressValue(message.senderJid, accountJid);
+      final isSelf = message.isFromAccount(accountJid);
       var isTrusted = isSelf;
       if (!isTrusted) {
         isTrusted = await _dbOpReturning<XmppDatabase, bool>((db) async {
@@ -13034,6 +13201,7 @@ class _PendingInboundReaction {
   const _PendingInboundReaction({
     required this.rawSenderJid,
     required this.isGroupChat,
+    required this.isArchived,
     required this.emojis,
     required this.updatedAt,
     required this.delayedAt,
@@ -13041,6 +13209,7 @@ class _PendingInboundReaction {
 
   final String rawSenderJid;
   final bool isGroupChat;
+  final bool isArchived;
   final List<String> emojis;
   final DateTime updatedAt;
   final DateTime? delayedAt;

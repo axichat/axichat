@@ -191,6 +191,28 @@ abstract interface class XmppDatabase implements Database {
 
   Future<int> countUnreadMessagesForChat(String jid, {String? selfJid});
 
+  Future<void> hydrateMessageMucIdentity({
+    required String stanzaID,
+    String? senderRealJid,
+    String? occupantID,
+    String? mucStanzaId,
+  });
+
+  Future<void> replacePendingOutboundMucIdentity({
+    required String stanzaID,
+    required String senderJid,
+    String? senderRealJid,
+    String? occupantID,
+  });
+
+  Future<int> backfillSelfMucMessageSenderRealJidForInterval({
+    required String chatJid,
+    required String senderJid,
+    required String realJid,
+    required DateTime start,
+    required DateTime end,
+  });
+
   Future<void> saveMessageMucStanzaId({
     required String stanzaID,
     required String mucStanzaId,
@@ -1825,7 +1847,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 44;
+  int get schemaVersion => 45;
 
   @override
   MigrationStrategy get migration {
@@ -2145,6 +2167,13 @@ WHERE transport IS NULL
               'manual_send_again_stanza_i_d',
             )) {
           await m.addColumn(messages, messages.manualSendAgainStanzaID);
+        }
+        if (from < 45 &&
+            !await _tableHasColumn(
+              messages.actualTableName,
+              'sender_real_jid',
+            )) {
+          await m.addColumn(messages, messages.senderRealJid);
         }
       },
       beforeOpen: (_) async {
@@ -3108,10 +3137,7 @@ WHERE transport IS NULL
     );
     final bool shouldUpdateChatSummary = !isInternalSync;
     final currentChat = await getChat(message.chatJid);
-    final bool isSelfMessage = sameNormalizedAddressValue(
-      message.senderJid,
-      selfJid,
-    );
+    final bool isSelfMessage = message.isFromAccount(selfJid);
     final bool isSelfChat = sameNormalizedAddressValue(
       message.chatJid,
       selfJid,
@@ -3259,6 +3285,16 @@ WHERE transport IS NULL
       final hasIncomingMucStanzaId = incomingMucStanzaId?.isNotEmpty == true;
       final persistedMucStanzaId = persisted.mucStanzaId?.trim();
       final hasPersistedMucStanzaId = persistedMucStanzaId?.isNotEmpty == true;
+      final incomingSenderRealJid = messageToSave.effectiveSenderRealJid;
+      final persistedSenderRealJid = persisted.effectiveSenderRealJid;
+      final hasIncomingSenderRealJid =
+          incomingSenderRealJid?.isNotEmpty == true;
+      final hasPersistedSenderRealJid =
+          persistedSenderRealJid?.isNotEmpty == true;
+      final incomingOccupantID = messageToSave.occupantID?.trim();
+      final hasIncomingOccupantID = incomingOccupantID?.isNotEmpty == true;
+      final persistedOccupantID = persisted.occupantID?.trim();
+      final hasPersistedOccupantID = persistedOccupantID?.isNotEmpty == true;
 
       final shouldMergeBody = hasIncomingBody && !hasPersistedBody;
       final shouldMergeHtml = hasIncomingHtml && !hasPersistedHtml;
@@ -3266,10 +3302,16 @@ WHERE transport IS NULL
           hasIncomingMetadataId && !hasPersistedMetadataId;
       final shouldMergeMucStanzaId =
           hasIncomingMucStanzaId && !hasPersistedMucStanzaId;
+      final shouldMergeSenderRealJid =
+          hasIncomingSenderRealJid && !hasPersistedSenderRealJid;
+      final shouldMergeOccupantID =
+          hasIncomingOccupantID && !hasPersistedOccupantID;
       if (!shouldMergeBody &&
           !shouldMergeHtml &&
           !shouldMergeMetadataId &&
-          !shouldMergeMucStanzaId) {
+          !shouldMergeMucStanzaId &&
+          !shouldMergeSenderRealJid &&
+          !shouldMergeOccupantID) {
         return;
       }
 
@@ -3288,6 +3330,12 @@ WHERE transport IS NULL
               : const Value.absent(),
           mucStanzaId: shouldMergeMucStanzaId
               ? Value(incomingMucStanzaId)
+              : const Value.absent(),
+          senderRealJid: shouldMergeSenderRealJid
+              ? Value(incomingSenderRealJid)
+              : const Value.absent(),
+          occupantID: shouldMergeOccupantID
+              ? Value(incomingOccupantID)
               : const Value.absent(),
         ),
       );
@@ -4266,12 +4314,152 @@ WHERE email_from_address IN ($placeholderClause)
       if (!message.hasUnreadContent) {
         continue;
       }
-      if (sameNormalizedAddressValue(message.senderJid, normalizedSelfJid)) {
+      if (message.isFromAccount(normalizedSelfJid)) {
         continue;
       }
       unreadCount += 1;
     }
     return unreadCount;
+  }
+
+  @override
+  Future<void> hydrateMessageMucIdentity({
+    required String stanzaID,
+    String? senderRealJid,
+    String? occupantID,
+    String? mucStanzaId,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    if (normalizedStanzaId.isEmpty) {
+      return;
+    }
+    final normalizedRealJid = bareAddress(senderRealJid)?.trim();
+    if (normalizedRealJid != null && normalizedRealJid.isNotEmpty) {
+      await customUpdate(
+        '''
+UPDATE messages
+SET sender_real_jid = ?
+WHERE stanza_i_d = ?
+  AND (sender_real_jid IS NULL OR trim(sender_real_jid) = '')
+''',
+        variables: [
+          Variable<String>(normalizedRealJid),
+          Variable<String>(normalizedStanzaId),
+        ],
+        updates: {messages},
+      );
+    }
+    final normalizedOccupantID = occupantID?.trim();
+    if (normalizedOccupantID != null && normalizedOccupantID.isNotEmpty) {
+      await customUpdate(
+        '''
+UPDATE messages
+SET occupant_i_d = ?
+WHERE stanza_i_d = ?
+  AND (occupant_i_d IS NULL OR trim(occupant_i_d) = '')
+''',
+        variables: [
+          Variable<String>(normalizedOccupantID),
+          Variable<String>(normalizedStanzaId),
+        ],
+        updates: {messages},
+      );
+    }
+    final normalizedMucStanzaId = mucStanzaId?.trim();
+    if (normalizedMucStanzaId != null && normalizedMucStanzaId.isNotEmpty) {
+      await customUpdate(
+        '''
+UPDATE messages
+SET muc_stanza_id = ?
+WHERE stanza_i_d = ?
+  AND (muc_stanza_id IS NULL OR trim(muc_stanza_id) = '')
+''',
+        variables: [
+          Variable<String>(normalizedMucStanzaId),
+          Variable<String>(normalizedStanzaId),
+        ],
+        updates: {messages},
+      );
+    }
+  }
+
+  @override
+  Future<void> replacePendingOutboundMucIdentity({
+    required String stanzaID,
+    required String senderJid,
+    String? senderRealJid,
+    String? occupantID,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedSenderJid = senderJid.trim();
+    if (normalizedStanzaId.isEmpty || normalizedSenderJid.isEmpty) {
+      return;
+    }
+    final normalizedRealJid = bareAddress(senderRealJid)?.trim();
+    final normalizedOccupantID = occupantID?.trim();
+    await (update(messages)..where(
+          (tbl) =>
+              tbl.stanzaID.equals(normalizedStanzaId) &
+              tbl.acked.equals(false) &
+              tbl.received.equals(false) &
+              tbl.displayed.equals(false),
+        ))
+        .write(
+          MessagesCompanion(
+            senderJid: Value(normalizedSenderJid),
+            senderRealJid: Value(
+              normalizedRealJid == null || normalizedRealJid.isEmpty
+                  ? null
+                  : normalizedRealJid,
+            ),
+            occupantID: Value(
+              normalizedOccupantID == null || normalizedOccupantID.isEmpty
+                  ? null
+                  : normalizedOccupantID,
+            ),
+          ),
+        );
+  }
+
+  @override
+  Future<int> backfillSelfMucMessageSenderRealJidForInterval({
+    required String chatJid,
+    required String senderJid,
+    required String realJid,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final normalizedChatJid = bareAddress(chatJid)?.trim();
+    final normalizedSenderJid = fullAddress(senderJid)?.trim();
+    final normalizedRealJid = bareAddress(realJid)?.trim();
+    if (normalizedChatJid == null ||
+        normalizedChatJid.isEmpty ||
+        normalizedSenderJid == null ||
+        normalizedSenderJid.isEmpty ||
+        normalizedRealJid == null ||
+        normalizedRealJid.isEmpty ||
+        end.isBefore(start)) {
+      return 0;
+    }
+    return customUpdate(
+      '''
+UPDATE messages
+SET sender_real_jid = ?
+WHERE lower(trim(chat_jid)) = lower(trim(?))
+  AND lower(trim(sender_jid)) = lower(trim(?))
+  AND (sender_real_jid IS NULL OR trim(sender_real_jid) = '')
+  AND timestamp >= ?
+  AND timestamp <= ?
+''',
+      variables: [
+        Variable<String>(normalizedRealJid),
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedSenderJid),
+        Variable<DateTime>(start.toUtc()),
+        Variable<DateTime>(end.toUtc()),
+      ],
+      updates: {messages},
+    );
   }
 
   @override

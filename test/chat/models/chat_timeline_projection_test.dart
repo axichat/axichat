@@ -2,9 +2,83 @@ import 'package:axichat/src/chat/models/chat_timeline.dart';
 import 'package:axichat/src/chat/models/chat_timeline_projection.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
+import 'package:axichat/src/xmpp/muc/occupant.dart';
+import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('stale unacked send-again projection requires a cutoff', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@axi.im',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    final message = Message(
+      stanzaID: 'stale-unacked',
+      senderJid: 'self@axi.im',
+      chatJid: chat.jid,
+      body: 'Pending',
+      timestamp: DateTime.utc(2024, 1, 1, 9),
+    );
+
+    List<ChatTimelineItem> project(DateTime? staleUnackedCutoff) {
+      return buildMainChatTimelineItems(
+        messages: [message],
+        loadingMessages: false,
+        unreadBoundaryStanzaId: null,
+        emptyStateCreatedAt: DateTime.utc(2024, 1, 1),
+        unreadDividerItemId: 'unread-divider',
+        unreadDividerLabel: 'Unread',
+        emptyStateItemId: 'empty-state',
+        emptyStateLabel: 'Empty',
+        isGroupChat: false,
+        isEmailChat: false,
+        staleUnackedCutoff: staleUnackedCutoff,
+        profileJid: 'self@axi.im',
+        resolvedEmailSelfJid: null,
+        currentUserId: 'self@axi.im',
+        selfUserId: 'self@axi.im',
+        selfDisplayName: 'Self',
+        selfAvatarPath: null,
+        myOccupantJid: null,
+        selfNick: 'self',
+        roomState: null,
+        roomMemberSections: const [],
+        chat: chat,
+        messageById: const {},
+        shareContexts: const {},
+        shareReplies: const {},
+        emailFullHtmlByDeltaId: const {},
+        revokedInviteTokens: const {},
+        inviteRoomFallbackLabel: 'Room',
+        inviteBodyLabel: 'Invite',
+        inviteRevokedBodyLabel: 'Invite revoked',
+        unknownAuthorLabel: 'Unknown',
+        inviteActionLabel: (roomDisplayName) => 'Open $roomDisplayName',
+        supportsMarkers: false,
+        supportsReceipts: false,
+        attachmentsForMessage: (_) => const <String>[],
+        reactionPreviewsForMessage: (_) => const <ReactionPreview>[],
+        participantsForBanner: (_, _, _) => const <chat_models.Chat>[],
+        avatarPathForBareJid: (_) => null,
+        ownerJidForShare: (_) => null,
+        errorLabel: (_) => 'Error',
+        errorLabelWithBody: (_, body) => body,
+      );
+    }
+
+    final loadingMessage = project(
+      null,
+    ).whereType<ChatTimelineMessageItem>().single;
+    final loadedMessage = project(
+      DateTime.utc(2024, 1, 1, 10),
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(loadingMessage.canSendAgain, isFalse);
+    expect(loadedMessage.canSendAgain, isTrue);
+  });
+
   test(
     'group messages fall back to the sender nick when room state is absent',
     () {
@@ -69,6 +143,72 @@ void main() {
       expect(timelineMessage.authorDisplayName, equals('alice'));
     },
   );
+
+  test('group self direction uses stored real JID after nick changes', () {
+    const roomJid = 'room@conference.axi.im';
+    const selfJid = 'self@axi.im';
+    final roomState = RoomState(
+      roomJid: roomJid,
+      occupants: {
+        '$roomJid/new': Occupant(
+          occupantId: '$roomJid/new',
+          nick: 'new',
+          realJid: selfJid,
+        ),
+      },
+      myOccupantJid: '$roomJid/new',
+    );
+    final oldSelfMessage = Message(
+      stanzaID: 'old-self-message',
+      senderJid: '$roomJid/old',
+      senderRealJid: selfJid,
+      chatJid: roomJid,
+      body: 'sent before nick change',
+      timestamp: DateTime.utc(2024, 1, 1, 10),
+    );
+    final legacyOldNickMessage = Message(
+      stanzaID: 'legacy-old-nick-message',
+      senderJid: '$roomJid/old',
+      chatJid: roomJid,
+      body: 'legacy row without real jid',
+      timestamp: DateTime.utc(2024, 1, 1, 10),
+    );
+
+    expect(
+      isMucSelfMessage(
+        message: oldSelfMessage,
+        roomState: roomState,
+        selfJid: selfJid,
+      ),
+      isTrue,
+    );
+    expect(
+      isMucSelfMessage(
+        message: legacyOldNickMessage,
+        roomState: roomState,
+        selfJid: selfJid,
+      ),
+      isFalse,
+    );
+  });
+
+  test('group claimed-sender validation requires stored real JID', () {
+    const roomJid = 'room@conference.axi.im';
+    final anonymousMessage = Message(
+      stanzaID: 'anonymous-message',
+      senderJid: '$roomJid/alice',
+      chatJid: roomJid,
+      body: 'anonymous',
+      timestamp: DateTime.utc(2024, 1, 1, 10),
+    );
+    final identifiedMessage = anonymousMessage.copyWith(
+      stanzaID: 'identified-message',
+      senderRealJid: 'alice@axi.im',
+    );
+
+    expect(anonymousMessage.senderMatchesClaimedJid('alice@axi.im'), isFalse);
+    expect(identifiedMessage.senderMatchesClaimedJid('alice@axi.im'), isTrue);
+  });
 
   test(
     'email forwards extract the original author from common forwarded envelopes',

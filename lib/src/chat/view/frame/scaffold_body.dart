@@ -431,7 +431,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                           final ownerJid = value.share.overlay.owner;
                           final isValid = item.senderMatchesClaimedJid(
                             ownerJid,
-                            roomState: state.roomState,
                           );
                           if (isValid) {
                             availabilityShareOwnersById[value.share.id] =
@@ -618,7 +617,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                             quotedMessage: quotedMessage,
                             isGroupChat: isGroupChat,
                             roomState: state.roomState,
-                            fallbackSelfNick: selfNick,
                             currentUserId: currentUserId,
                           );
                     final quotedSenderLabel = quotedMessage == null
