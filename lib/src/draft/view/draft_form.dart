@@ -8,9 +8,7 @@ import 'package:async/async.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/task/task_share_formatter.dart';
-import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';
@@ -25,6 +23,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/draft_composer_view.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -210,16 +209,9 @@ class DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
-    final spacing = context.spacing;
     final settingsState = context.watch<SettingsCubit>().state;
     final endpointConfig = settingsState.endpointConfig;
     final locate = context.read;
-    final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
-    final sectionSpacing = spacing.m;
-    final smallGap = spacing.s;
-    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return BlocBuilder<ProfileCubit, ProfileState>(
       bloc: locate<ProfileCubit>(),
@@ -366,247 +358,61 @@ class DraftFormState extends State<DraftForm> {
                         final bool showAutosaveHint =
                             _lastAutosaveAt != null &&
                             _lastSavedSignature == _currentDraftSignature();
-                        return _DraftTaskDropRegion(
-                          onTaskDropped: enabled ? _handleTaskDrop : null,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              FormField<void>(
-                                validator: (_) => hasActiveRecipients
-                                    ? null
-                                    : l10n.draftNoRecipients,
-                                builder: (field) {
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      RecipientChipsBar(
-                                        recipients: _recipients,
-                                        availableChats: chats,
-                                        rosterItems: rosterItems,
-                                        databaseSuggestionAddresses: chatsState
-                                            .recipientAddressSuggestions,
-                                        selfJid: locate<ChatsCubit>().selfJid,
-                                        selfIdentity: selfIdentity,
-                                        recipientAddError: _recipientAddError,
-                                        onRecipientAdded: (target) async {
-                                          final added =
-                                              await _handleRecipientAdded(
-                                                target,
-                                              );
-                                          if (!mounted || !added) {
-                                            return false;
-                                          }
-                                          field.didChange(null);
-                                          return true;
-                                        },
-                                        onRecipientRemoved: (key) {
-                                          _handleRecipientRemoved(key);
-                                          field.didChange(null);
-                                        },
-                                        latestStatuses: const {},
-                                        collapsedByDefault: false,
-                                        suggestionAddresses:
-                                            widget.suggestionAddresses,
-                                        suggestionDomains:
-                                            widget.suggestionDomains,
-                                      ),
-                                      if (_showValidationMessages &&
-                                          field.hasError)
-                                        Padding(
-                                          padding: EdgeInsets.only(
-                                            top: spacing.s,
-                                          ),
-                                          child: Text(
-                                            field.errorText ?? '',
-                                            style: textTheme.small.copyWith(
-                                              color: colors.destructive,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              if (widget.banner case final Widget banner) ...[
-                                SizedBox(height: sectionSpacing),
-                                Padding(
-                                  padding: horizontalPadding,
-                                  child: banner,
-                                ),
-                              ],
-                              SizedBox(height: sectionSpacing),
-                              Padding(
-                                padding: horizontalPadding,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child: Semantics(
-                                            label: l10n.draftSubjectSemantics,
-                                            textField: true,
-                                            child: AxiTextFormField(
-                                              controller:
-                                                  _subjectTextController,
-                                              focusNode: _subjectFocusNode,
-                                              enabled: enabled,
-                                              maxLines: 1,
-                                              textInputAction:
-                                                  TextInputAction.next,
-                                              onSubmitted: (_) =>
-                                                  _bodyFocusNode.requestFocus(),
-                                              leading: Text(
-                                                '${l10n.chatSubjectHint}: ',
-                                                style: textTheme.small.copyWith(
-                                                  color: colors.mutedForeground,
-                                                ),
-                                              ),
-                                              trailing: widget.subjectTrailing,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: sectionSpacing),
-                                        _DraftSendIconButton(
-                                          readyToSend: readyToSend,
-                                          sending: isSending,
-                                          disabledReason: sendBlocker,
-                                          onPressed:
-                                              isSending ||
-                                                  _addingAttachment ||
-                                                  hasPreparingAttachments
-                                              ? null
-                                              : _handleSendDraft,
-                                        ),
-                                      ],
-                                    ),
-                                    if (showSendBlockerMessage)
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          top: spacing.s,
-                                        ),
-                                        child: Text(
-                                          sendBlocker,
-                                          style: textTheme.small.copyWith(
-                                            color: colors.destructive,
-                                          ),
-                                        ),
-                                      ),
-                                    if (sendErrorMessage != null &&
-                                        sendBlocker == null)
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          top: spacing.s,
-                                        ),
-                                        child: Text(
-                                          sendErrorMessage,
-                                          style: textTheme.small.copyWith(
-                                            color: colors.destructive,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(height: sectionSpacing),
-                              Padding(
-                                padding: horizontalPadding,
-                                child: _DraftAttachmentsSection(
-                                  enabled: enabled,
-                                  loading: _loadingAttachments,
-                                  attachments: _pendingAttachments,
-                                  addingAttachment: _addingAttachment,
-                                  onAddAttachment: _handleAttachmentAdded,
-                                  onRetry: _handlePendingAttachmentRetry,
-                                  onRemove: _handlePendingAttachmentRemoved,
-                                  onAttachmentPressed:
-                                      _handlePendingAttachmentPressed,
-                                  onAttachmentLongPressed:
-                                      _handlePendingAttachmentLongPressed,
-                                  onPreview: _showAttachmentPreview,
-                                ),
-                              ),
-                              SizedBox(height: sectionSpacing),
-                              Padding(
-                                padding: horizontalPadding,
-                                child: Semantics(
-                                  label: l10n.draftMessageSemantics,
-                                  textField: true,
-                                  child: AxiTextFormField(
-                                    controller: _bodyTextController,
-                                    focusNode: _bodyFocusNode,
-                                    enabled: enabled,
-                                    minLines: 7,
-                                    maxLines: null,
-                                    textInputAction: TextInputAction.newline,
-                                    placeholder: Text(l10n.draftMessageHint),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: sectionSpacing),
-                              Padding(
-                                padding: horizontalPadding,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    if (isSending)
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          bottom: spacing.s,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            AxiProgressIndicator(
-                                              color: colors.primary,
-                                            ),
-                                            SizedBox(width: smallGap),
-                                            Text(
-                                              l10n.draftSendingStatus,
-                                              style: textTheme.muted,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    if (showAutosaveHint)
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          bottom: spacing.s,
-                                        ),
-                                        child: Text(
-                                          l10n.draftAutosaved,
-                                          style: textTheme.muted,
-                                        ),
-                                      ),
-                                    Row(
-                                      children: [
-                                        AxiButton.destructive(
-                                          onPressed: canDiscard
-                                              ? _handleDiscard
-                                              : null,
-                                          child: Text(l10n.draftDiscard),
-                                        ),
-                                        const Spacer(),
-                                        AxiButton.outline(
-                                          onPressed: canSave
-                                              ? _handleSaveDraft
-                                              : null,
-                                          child: Text(l10n.draftSave),
-                                        ),
-                                      ],
-                                    ),
-                                    if (!keyboardVisible)
-                                      SizedBox(height: sectionSpacing),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                        return DraftComposerView(
+                          enabled: enabled,
+                          showValidationMessages: _showValidationMessages,
+                          recipients: _recipients,
+                          availableChats: chats,
+                          rosterItems: rosterItems,
+                          databaseSuggestionAddresses:
+                              chatsState.recipientAddressSuggestions,
+                          selfJid: locate<ChatsCubit>().selfJid,
+                          selfIdentity: selfIdentity,
+                          latestStatuses: const {},
+                          collapsedRecipientsByDefault: false,
+                          suggestionAddresses: widget.suggestionAddresses,
+                          suggestionDomains: widget.suggestionDomains,
+                          recipientAddError: _recipientAddError,
+                          onRecipientAdded: _handleRecipientAdded,
+                          onRecipientRemoved: _handleRecipientRemoved,
+                          subjectController: _subjectTextController,
+                          subjectFocusNode: _subjectFocusNode,
+                          bodyController: _bodyTextController,
+                          bodyFocusNode: _bodyFocusNode,
+                          onSubjectSubmitted: _bodyFocusNode.requestFocus,
+                          banner: widget.banner,
+                          subjectTrailing: widget.subjectTrailing,
+                          loadingAttachments: _loadingAttachments,
+                          attachments: _pendingAttachments,
+                          addingAttachment: _addingAttachment,
+                          onAddAttachment: _handleAttachmentAdded,
+                          onAttachmentRetry: _handlePendingAttachmentRetry,
+                          onAttachmentRemove: _handlePendingAttachmentRemoved,
+                          onAttachmentPressed: _handlePendingAttachmentPressed,
+                          onAttachmentLongPressed:
+                              _handlePendingAttachmentLongPressed,
+                          onAttachmentPreview: _showAttachmentPreview,
+                          readyToSend: readyToSend,
+                          sending: isSending,
+                          disabledSendReason: sendBlocker,
+                          onSendPressed:
+                              isSending ||
+                                  _addingAttachment ||
+                                  hasPreparingAttachments
+                              ? null
+                              : _handleSendDraft,
+                          showSendBlockerMessage: showSendBlockerMessage,
+                          sendBlockerMessage: sendBlocker,
+                          sendErrorMessage: sendBlocker == null
+                              ? sendErrorMessage
+                              : null,
+                          showSendingStatus: isSending,
+                          showAutosaveHint: showAutosaveHint,
+                          canDiscard: canDiscard,
+                          canSave: canSave,
+                          onDiscardPressed: _handleDiscard,
+                          onSavePressed: _handleSaveDraft,
+                          onTaskDropped: _handleTaskDrop,
                         );
                       },
                     ),
@@ -1002,31 +808,40 @@ class DraftFormState extends State<DraftForm> {
   Future<void> _saveDraft({required bool autoSave}) async {
     final int saveEpoch = _saveEpoch;
     final bool wasNewDraft = id == null;
-    final List<String> attachmentIds = _pendingAttachments
+    final List<PendingAttachment> pendingAttachments = List.of(
+      _pendingAttachments,
+    );
+    final List<String> attachmentIds = pendingAttachments
         .map((pending) => pending.id)
         .toList();
     final List<String> recipients = _recipientStrings();
+    final String body = _bodyTextController.text;
+    final String subject = _subjectTextController.text;
+    final DraftQuoteTarget? quoteTarget = widget.quoteTarget;
+    final List<Attachment> attachments = pendingAttachments
+        .map((pending) => pending.attachment)
+        .toList();
+    final int signature = _draftSignature(
+      recipients: recipients,
+      body: body,
+      subject: subject,
+      quoteTarget: quoteTarget,
+      pendingAttachments: pendingAttachments,
+    );
     final draftCubit = context.read<DraftCubit>();
     final draft = await draftCubit.saveDraft(
       id: id,
       jids: recipients,
-      body: _bodyTextController.text,
-      subject: _subjectTextController.text,
-      quoteTarget: widget.quoteTarget,
-      attachments: _currentAttachments(),
+      body: body,
+      subject: subject,
+      quoteTarget: quoteTarget,
+      attachments: attachments,
       autoSave: autoSave,
     );
     final draftCount = !autoSave && wasNewDraft
         ? await draftCubit.countDrafts()
         : null;
     if (!mounted || saveEpoch != _saveEpoch) return;
-    final int signature = _draftSignature(
-      recipients: recipients,
-      body: _bodyTextController.text,
-      subject: _subjectTextController.text,
-      quoteTarget: widget.quoteTarget,
-      pendingAttachments: _pendingAttachments,
-    );
     setState(() {
       id = draft.id;
       _lastSavedSignature = signature;
@@ -1166,6 +981,10 @@ class DraftFormState extends State<DraftForm> {
     if (!mounted || _autosaveInFlight) {
       return;
     }
+    if (!_hasDraftableContent()) {
+      await _deleteEmptyDraftIfNeeded();
+      return;
+    }
     if (!_shouldAutosave()) {
       return;
     }
@@ -1174,6 +993,7 @@ class DraftFormState extends State<DraftForm> {
       return;
     }
     _autosaveInFlight = true;
+    final int attemptedSignature = signature;
     final operation = _saveDraft(autoSave: true);
     _autosaveOperation = operation;
     try {
@@ -1186,6 +1006,9 @@ class DraftFormState extends State<DraftForm> {
       }
       _autosaveInFlight = false;
     }
+    if (mounted && _currentDraftSignature() != attemptedSignature) {
+      _scheduleAutosave();
+    }
   }
 
   bool _shouldAutosave() {
@@ -1193,6 +1016,29 @@ class DraftFormState extends State<DraftForm> {
       return false;
     }
     return _hasDraftableContent();
+  }
+
+  Future<void> _deleteEmptyDraftIfNeeded() async {
+    final draftId = id;
+    if (draftId == null || _hasDraftableContent()) {
+      return;
+    }
+    try {
+      await context.read<DraftCubit>().deleteDraft(id: draftId);
+    } on Exception {
+      return;
+    }
+    if (!mounted || id != draftId) {
+      return;
+    }
+    setState(() {
+      id = null;
+      _lastSavedSignature = null;
+      _lastAutosaveAt = null;
+    });
+    if (_hasDraftableContent()) {
+      _scheduleAutosave();
+    }
   }
 
   bool _hasDraftableContent() {
@@ -1331,6 +1177,10 @@ class DraftFormState extends State<DraftForm> {
     }
     _autosaveTimer?.cancel();
     if (!_shouldPromptBeforeClose()) {
+      await _deleteEmptyDraftIfNeeded();
+      if (!mounted) {
+        return false;
+      }
       _closeComposer();
       return true;
     }
@@ -1576,7 +1426,7 @@ class DraftFormState extends State<DraftForm> {
         quoteTarget: widget.quoteTarget,
         attachments: _currentAttachments(),
       );
-    } catch (_) {
+    } on Exception {
       if (!mounted) return;
       setState(() {
         _sendingDraft = false;
@@ -1788,497 +1638,6 @@ class DraftFormState extends State<DraftForm> {
           ],
         );
       },
-    );
-  }
-}
-
-class _DraftTaskDropRegion extends StatefulWidget {
-  const _DraftTaskDropRegion({required this.child, this.onTaskDropped});
-
-  final Widget child;
-  final ValueChanged<CalendarDragPayload>? onTaskDropped;
-
-  @override
-  State<_DraftTaskDropRegion> createState() => _DraftTaskDropRegionState();
-}
-
-class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
-  CalendarDragPayload? _hoverPayload;
-  Offset? _localPosition;
-  final Object _composeTaskDragHoverToken = Object();
-  CalendarTaskOffGridDragController? _offGridDragController;
-
-  RenderBox? get _box => context.findRenderObject() as RenderBox?;
-
-  void _setComposeTaskDragHover(bool isHovering) {
-    final CalendarTaskOffGridDragController? offGridDragController =
-        _offGridDragController;
-    if (offGridDragController == null) {
-      return;
-    }
-    offGridDragController.setRegionActive(
-      region: CalendarTaskOffGridDragRegion.composeWindow,
-      token: _composeTaskDragHoverToken,
-      isActive: isHovering,
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final CalendarTaskOffGridDragController offGridDragController = context
-        .read<CalendarTaskOffGridDragController>();
-    if (_offGridDragController == offGridDragController) {
-      return;
-    }
-    _offGridDragController?.setRegionActive(
-      region: CalendarTaskOffGridDragRegion.composeWindow,
-      token: _composeTaskDragHoverToken,
-      isActive: false,
-    );
-    _offGridDragController = offGridDragController;
-    if (_hoverPayload != null) {
-      _offGridDragController?.setRegionActive(
-        region: CalendarTaskOffGridDragRegion.composeWindow,
-        token: _composeTaskDragHoverToken,
-        isActive: true,
-      );
-    }
-  }
-
-  void _updateHover(DragTargetDetails<CalendarDragPayload> details) {
-    final RenderBox? box = _box;
-    final Offset local = box != null
-        ? box.globalToLocal(details.offset)
-        : details.offset;
-    _setComposeTaskDragHover(true);
-    setState(() {
-      _hoverPayload = details.data;
-      _localPosition = local;
-    });
-  }
-
-  void _handleLeave(CalendarDragPayload? payload) {
-    if (_hoverPayload == null) {
-      return;
-    }
-    _setComposeTaskDragHover(false);
-    setState(() {
-      _hoverPayload = null;
-      _localPosition = null;
-    });
-  }
-
-  void _handleDrop(DragTargetDetails<CalendarDragPayload> details) {
-    widget.onTaskDropped?.call(details.data);
-    _handleLeave(details.data);
-  }
-
-  @override
-  void dispose() {
-    _setComposeTaskDragHover(false);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.onTaskDropped == null) {
-      return widget.child;
-    }
-    final colors = context.colorScheme;
-    final borderRadius = context.radius;
-    final borderWidth = context.borderSide.width;
-    final hoverAlpha = context.motion.tapHoverAlpha;
-    return DragTarget<CalendarDragPayload>(
-      hitTestBehavior: HitTestBehavior.translucent,
-      onWillAcceptWithDetails: (details) {
-        _updateHover(details);
-        return true;
-      },
-      onMove: _updateHover,
-      onAcceptWithDetails: _handleDrop,
-      onLeave: _handleLeave,
-      builder: (context, candidates, _) {
-        final hovering = candidates.isNotEmpty || _hoverPayload != null;
-        final payload = _hoverPayload;
-        final Offset? anchor = _localPosition;
-        final RenderBox? box = _box;
-        final Size? regionSize = box?.size;
-        final Widget highlight = AnimatedContainer(
-          duration: baseAnimationDuration,
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: hovering ? colors.primary : Colors.transparent,
-              width: borderWidth,
-            ),
-            borderRadius: borderRadius,
-            color: hovering
-                ? colors.primary.withValues(alpha: hoverAlpha)
-                : null,
-          ),
-          child: widget.child,
-        );
-        if (payload == null || anchor == null || regionSize == null) {
-          return highlight;
-        }
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            highlight,
-            _TaskDragGhostOverlay(
-              payload: payload,
-              anchor: anchor,
-              regionSize: regionSize,
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _TaskDragGhostOverlay extends StatelessWidget {
-  const _TaskDragGhostOverlay({
-    required this.payload,
-    required this.anchor,
-    required this.regionSize,
-  });
-
-  final CalendarDragPayload payload;
-  final Offset anchor;
-  final Size regionSize;
-
-  Size _ghostSize(BuildContext context) {
-    final sizing = context.sizing;
-    final spacing = context.spacing;
-    final double defaultGhostWidth = sizing.menuMaxWidth;
-    final double defaultGhostHeight = sizing.listButtonHeight + spacing.s;
-    final double minGhostWidth = sizing.menuMaxWidth - spacing.l;
-    final double maxGhostWidth = sizing.dialogMaxWidth;
-    final double minGhostHeight = sizing.listButtonHeight + spacing.xs;
-    final double maxGhostHeight = sizing.listButtonHeight * 4;
-    final double width = payload.sourceBounds?.width ?? defaultGhostWidth;
-    final double height = payload.sourceBounds?.height ?? defaultGhostHeight;
-    return Size(
-      width.clamp(minGhostWidth, maxGhostWidth),
-      height.clamp(minGhostHeight, maxGhostHeight),
-    );
-  }
-
-  Offset _ghostOffset(BuildContext context, Size ghostSize) {
-    const double pointerClampPadding = 0.125;
-    const double centerFraction = 0.5;
-    final double pointerFraction =
-        (payload.pointerNormalizedX ?? centerFraction)
-            .clamp(0.0, 1.0)
-            .toDouble();
-    final double pointerOffsetY =
-        (payload.pointerOffsetY ?? (ghostSize.height / 2))
-            .clamp(0.0, ghostSize.height)
-            .toDouble();
-    double left = anchor.dx - (ghostSize.width * pointerFraction);
-    double top = anchor.dy - pointerOffsetY;
-    final double minLeft = -ghostSize.width * pointerClampPadding;
-    final double maxLeft =
-        regionSize.width - (ghostSize.width * (1 - pointerClampPadding));
-    final double minTop = -ghostSize.height * pointerClampPadding;
-    final double maxTop =
-        regionSize.height - (ghostSize.height * pointerClampPadding);
-    left = left.clamp(minLeft, maxLeft);
-    top = top.clamp(minTop, maxTop);
-    return Offset(left, top);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Size ghostSize = _ghostSize(context);
-    final Offset offset = _ghostOffset(context, ghostSize);
-    return Positioned(
-      left: offset.dx,
-      top: offset.dy,
-      child: IgnorePointer(
-        child: _DraftTaskDragGhost(payload: payload, size: ghostSize),
-      ),
-    );
-  }
-}
-
-class _DraftTaskDragGhost extends StatelessWidget {
-  const _DraftTaskDragGhost({required this.payload, required this.size});
-
-  final CalendarDragPayload payload;
-  final Size size;
-
-  String _timingLabel(BuildContext context) {
-    final CalendarTask task = payload.snapshot;
-    final DateTime? start = task.scheduledTime;
-    final DateTime? deadline = task.deadline;
-    if (start != null) {
-      return TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-    }
-    if (deadline != null) {
-      return context.l10n.draftTaskDue(
-        TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
-      );
-    }
-    return context.l10n.draftTaskNoSchedule;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final CalendarTask task = payload.snapshot;
-    final colors = context.colorScheme;
-    final textTheme = context.textTheme;
-    final spacing = context.spacing;
-    final l10n = context.l10n;
-    final String title = task.title.trim().isEmpty
-        ? l10n.draftTaskUntitled
-        : task.title.trim();
-    final String? description = task.description?.trim().isNotEmpty == true
-        ? task.description!.trim()
-        : null;
-    final borderRadius = context.radius;
-    final shadowColor = colors.foreground.withValues(
-      alpha: context.motion.tapSplashAlpha,
-    );
-    return Material(
-      color: Colors.transparent,
-      elevation: 0,
-      borderRadius: borderRadius,
-      child: Container(
-        width: size.width,
-        constraints: BoxConstraints(minHeight: size.height),
-        padding: EdgeInsets.all(spacing.m),
-        decoration: BoxDecoration(
-          color: colors.card,
-          borderRadius: borderRadius,
-          border: Border.all(
-            color: colors.primary,
-            width: context.borderSide.width,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: shadowColor,
-              blurRadius: context.sizing.modalShadowBlur,
-              offset: Offset(0, context.sizing.modalShadowOffsetY),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.small.copyWith(color: colors.foreground),
-            ),
-            SizedBox(height: spacing.s),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  LucideIcons.calendarClock,
-                  size: context.sizing.menuItemIconSize,
-                  color: colors.primary,
-                ),
-                SizedBox(width: spacing.s),
-                Flexible(
-                  child: Text(
-                    _timingLabel(context),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.muted.copyWith(
-                      color: colors.mutedForeground,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (description != null) ...[
-              SizedBox(height: spacing.s),
-              Text(
-                description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.muted.copyWith(color: colors.mutedForeground),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DraftSendIconButton extends StatelessWidget {
-  const _DraftSendIconButton({
-    required this.readyToSend,
-    required this.sending,
-    this.disabledReason,
-    required this.onPressed,
-  });
-
-  final bool readyToSend;
-  final bool sending;
-  final String? disabledReason;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final l10n = context.l10n;
-    final disabledColor = colors.mutedForeground;
-    final iconColor = readyToSend && !sending ? colors.primary : disabledColor;
-    final borderColor = sending || !readyToSend
-        ? colors.border
-        : colors.primary;
-    final tooltip = sending
-        ? l10n.draftSendingEllipsis
-        : disabledReason ?? l10n.draftSend;
-    final interactive = onPressed != null && !sending;
-    return _DraftComposerIconButton(
-      tooltip: tooltip,
-      icon: LucideIcons.send,
-      onPressed: interactive ? onPressed : null,
-      loading: sending,
-      iconColorOverride: iconColor,
-      borderColorOverride: borderColor,
-    );
-  }
-}
-
-class _DraftAttachmentsSection extends StatelessWidget {
-  const _DraftAttachmentsSection({
-    required this.enabled,
-    required this.loading,
-    required this.attachments,
-    required this.addingAttachment,
-    required this.onAddAttachment,
-    required this.onRetry,
-    required this.onRemove,
-    required this.onAttachmentPressed,
-    required this.onAttachmentLongPressed,
-    required this.onPreview,
-  });
-
-  final bool enabled;
-  final bool loading;
-  final bool addingAttachment;
-  final List<PendingAttachment> attachments;
-  final Future<void> Function()? onAddAttachment;
-  final ValueChanged<PendingAttachment> onRetry;
-  final ValueChanged<String> onRemove;
-  final ValueChanged<PendingAttachment> onAttachmentPressed;
-  final ValueChanged<PendingAttachment> onAttachmentLongPressed;
-  final Future<void> Function(PendingAttachment) onPreview;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final canSelectAttachment = enabled && !addingAttachment;
-    final commandSurface =
-        EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
-    final useDesktopMenu = commandSurface == CommandSurface.menu;
-
-    List<Widget> menuItems(PendingAttachment pending) {
-      final actions = <AxiMenuAction>[
-        AxiMenuAction(
-          label: l10n.draftAttachmentPreview,
-          icon: LucideIcons.eye,
-          onPressed: () => onPreview(pending),
-        ),
-        AxiMenuAction(
-          label: l10n.draftRemoveAttachment,
-          icon: LucideIcons.trash2,
-          destructive: true,
-          onPressed: () => onRemove(pending.id),
-        ),
-      ];
-      return [AxiMenu(actions: actions)];
-    }
-
-    Widget body;
-    if (loading) {
-      body = Center(
-        child: AxiProgressIndicator(color: context.colorScheme.foreground),
-      );
-    } else if (attachments.isEmpty) {
-      body = Text(l10n.draftNoAttachments, style: context.textTheme.muted);
-    } else {
-      body = PendingAttachmentList(
-        attachments: attachments,
-        onRetry: onRetry,
-        onRemove: onRemove,
-        onPressed: onAttachmentPressed,
-        onLongPress: useDesktopMenu ? null : onAttachmentLongPressed,
-        contextMenuBuilder: useDesktopMenu ? menuItems : null,
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(l10n.draftAttachmentsLabel),
-            const Spacer(),
-            _DraftComposerIconButton(
-              tooltip: l10n.draftAddAttachment,
-              icon: LucideIcons.paperclip,
-              onPressed: canSelectAttachment ? onAddAttachment : null,
-            ),
-          ],
-        ),
-        SizedBox(height: context.spacing.s),
-        body,
-      ],
-    );
-  }
-}
-
-class _DraftComposerIconButton extends StatelessWidget {
-  const _DraftComposerIconButton({
-    required this.tooltip,
-    required this.icon,
-    this.onPressed,
-    this.loading = false,
-    this.iconColorOverride,
-    this.borderColorOverride,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool loading;
-  final Color? iconColorOverride;
-  final Color? borderColorOverride;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final sizing = context.sizing;
-    final enabled = onPressed != null;
-    final iconColor =
-        iconColorOverride ??
-        (enabled ? colors.foreground : colors.mutedForeground);
-    final borderColor = borderColorOverride ?? colors.border;
-    return AxiIconButton(
-      iconData: icon,
-      tooltip: tooltip,
-      semanticLabel: tooltip,
-      onPressed: onPressed,
-      loading: loading,
-      color: iconColor,
-      backgroundColor: colors.card,
-      borderColor: borderColor,
-      borderWidth: context.borderSide.width,
-      cornerRadius: context.radii.squircle,
-      buttonSize: sizing.iconButtonSize,
-      tapTargetSize: sizing.iconButtonTapTarget,
-      iconSize: sizing.iconButtonIconSize,
     );
   }
 }

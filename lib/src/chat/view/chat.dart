@@ -78,10 +78,8 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
-import 'package:axichat/src/draft/view/compose_draft_content.dart';
-import 'package:axichat/src/draft/view/draft_form.dart';
+import 'package:axichat/src/draft/view/draft_composer_view.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/models/share_context.dart';
@@ -279,11 +277,10 @@ class _ChatState extends State<Chat> {
   bool _collapseLongEmailMessages = false;
   List<ComposerRecipient> _recipients = const [];
   String? _recipientsChatJid;
+  bool _composerExpanded = false;
   int? _expandedComposerDraftId;
-  bool _expandingComposerDraft = false;
-  ComposeDraftSeed? _expandedComposerSeed;
-  final GlobalKey<DraftFormState> _expandedDraftFormKey =
-      GlobalKey<DraftFormState>();
+  bool _savingInlineDraft = false;
+  bool _discardingInlineDraft = false;
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
@@ -3886,7 +3883,7 @@ class _ChatState extends State<Chat> {
       });
       _showSnackbar(l10n.chatDraftSaved);
       return true;
-    } catch (_) {
+    } on Exception {
       if (!mounted) {
         return false;
       }
@@ -3895,82 +3892,60 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  Future<void> _expandEmailComposerToDraft(ChatState chatState) async {
-    if (_expandingComposerDraft) return;
-    final chat = chatState.chat;
-    if (chat == null) {
-      _showSnackbar(context.l10n.chatDraftUnavailable);
-      return;
-    }
-    final recipients = _resolveDraftRecipients(
-      chat: chat,
-      recipients: _recipients,
-    );
-    final attachments = _pendingAttachments
-        .map((pending) => pending.attachment)
-        .toList(growable: false);
-    final quotedReference = _quotedDraft?.replyReference(
-      isGroupChat: chat.type == ChatType.groupChat,
-    );
-    final quoteTarget = DraftQuoteTarget.fromDraft(
-      stanzaId: quotedReference?.value,
-      referenceKind: quotedReference?.kind,
-    );
-    final body = _normalizedInlineDraftBody(
-      text: _inlineComposerController.text,
-      chatState: chatState,
-    );
-    final subject = _inlineComposerController.subject;
-    final trimmedSubject = subject.trim();
-    if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
-      _dismissTextInputFocus();
-      setState(() {
-        _expandedComposerSeed = ComposeDraftSeed(
-          id: _expandedComposerDraftId,
-          jids: recipients,
-          body: body,
-          subject: subject,
-          quoteTarget: quoteTarget,
-          attachmentMetadataIds: const <String>[],
-        );
-      });
+  Future<void> _handleInlineComposerSavePressed() async {
+    if (_savingInlineDraft) {
       return;
     }
     setState(() {
-      _expandingComposerDraft = true;
+      _savingInlineDraft = true;
     });
     try {
-      final draft = await context.read<DraftCubit>().saveDraft(
-        id: _expandedComposerDraftId,
-        jids: recipients,
-        body: body,
-        subject: trimmedSubject.isEmpty ? null : subject,
-        quoteTarget: quoteTarget,
-        attachments: attachments,
-      );
-      if (!mounted) return;
-      _dismissTextInputFocus();
-      setState(() {
-        _expandedComposerDraftId = draft.id;
-        _expandedComposerSeed = ComposeDraftSeed(
-          id: draft.id,
-          jids: recipients,
-          body: body,
-          subject: subject,
-          quoteTarget: quoteTarget,
-          attachmentMetadataIds: draft.attachmentMetadata.values,
-        );
-      });
-    } on Exception {
-      if (!mounted) return;
-      _showSnackbar(context.l10n.chatDraftSaveFailed);
+      await _saveComposerAsDraft();
     } finally {
       if (mounted) {
         setState(() {
-          _expandingComposerDraft = false;
+          _savingInlineDraft = false;
         });
       }
     }
+  }
+
+  Future<void> _handleInlineComposerDiscardPressed() async {
+    if (_discardingInlineDraft) {
+      return;
+    }
+    setState(() {
+      _discardingInlineDraft = true;
+    });
+    try {
+      await _discardInlineComposer();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _discardingInlineDraft = false;
+        });
+      }
+    }
+  }
+
+  void _expandEmailComposer() {
+    if (!mounted || _composerExpanded) {
+      return;
+    }
+    _dismissTextInputFocus();
+    setState(() {
+      _composerExpanded = true;
+    });
+  }
+
+  void _minimizeEmailComposer() {
+    if (!mounted || !_composerExpanded) {
+      return;
+    }
+    setState(() {
+      _composerExpanded = false;
+    });
+    _inlineComposerController.requestTextFocus();
   }
 
   void _clearInlineComposerControllers() {
@@ -3987,11 +3962,12 @@ class _ChatState extends State<Chat> {
     _pendingAttachments = const [];
     _pendingCalendarTaskIcs = null;
     _pendingCalendarSeedText = null;
+    _composerExpanded = false;
+    _savingInlineDraft = false;
+    _discardingInlineDraft = false;
     if (clearExpandedComposerDraftId) {
       _expandedComposerDraftId = null;
     }
-    _expandingComposerDraft = false;
-    _expandedComposerSeed = null;
   }
 
   void _resetInlineComposer({
@@ -4012,22 +3988,6 @@ class _ChatState extends State<Chat> {
     if (requestFocus) {
       _inlineComposerController.requestTextFocus();
     }
-  }
-
-  void _collapseExpandedDraftComposer({required bool clearInlineComposer}) {
-    if (!mounted) return;
-    setState(() {
-      _expandedComposerSeed = null;
-      _expandingComposerDraft = false;
-      if (clearInlineComposer) {
-        _expandedComposerDraftId = null;
-      }
-    });
-    if (!clearInlineComposer) {
-      _inlineComposerController.requestTextFocus();
-      return;
-    }
-    _resetInlineComposer(clearExpandedComposerDraftId: true);
   }
 
   List<String> _resolveDraftRecipients({
@@ -4055,6 +4015,40 @@ class _ChatState extends State<Chat> {
         _quotedDraft != null ||
         _pendingAttachments.isNotEmpty ||
         _pendingCalendarTaskIcs != null;
+  }
+
+  String? _inlineComposerSendBlocker({
+    required ChatState chatState,
+    required SettingsState settings,
+  }) {
+    final activeRecipients = _recipients.includedRecipients;
+    final emailRecipientsUnavailable =
+        !settings.endpointConfig.smtpEnabled &&
+        activeRecipients.emailRecipients().isNotEmpty;
+    if (emailRecipientsUnavailable) {
+      return context.l10n.chatComposerEmailRecipientUnavailable;
+    }
+    if (activeRecipients.isEmpty) {
+      return context.l10n.draftNoRecipients;
+    }
+    final body = _normalizedInlineDraftBody(
+      text: _inlineComposerController.text,
+      chatState: chatState,
+    );
+    final subject = _inlineComposerController.subject.trim();
+    final hasQueuedAttachments = _pendingAttachments.any(
+      (pending) =>
+          pending.status == PendingAttachmentStatus.queued &&
+          !pending.isPreparing,
+    );
+    if (body.trim().isEmpty &&
+        subject.isEmpty &&
+        !hasQueuedAttachments &&
+        _quotedDraft == null &&
+        _pendingCalendarTaskIcs == null) {
+      return context.l10n.draftValidationNoContent;
+    }
+    return null;
   }
 
   Future<_InlineComposerCloseAction?> _confirmInlineComposerClose() {
@@ -4122,14 +4116,8 @@ class _ChatState extends State<Chat> {
   }
 
   Future<bool> _handleInlineComposerCloseRequest(ChatState chatState) async {
-    if (_expandedComposerSeed != null) {
-      final draftFormState = _expandedDraftFormKey.currentState;
-      if (draftFormState == null) {
-        return false;
-      }
-      return draftFormState.handleCloseRequest();
-    }
     if (!_hasInlineComposerDraftContent(chatState)) {
+      await _deleteEmptyInlineDraftIfNeeded(chatState);
       return true;
     }
     final action = await _confirmInlineComposerClose();
@@ -4144,6 +4132,24 @@ class _ChatState extends State<Chat> {
     }
     _resetInlineComposer(clearExpandedComposerDraftId: true);
     return true;
+  }
+
+  Future<void> _deleteEmptyInlineDraftIfNeeded(ChatState chatState) async {
+    final draftId = _expandedComposerDraftId;
+    if (draftId == null || _hasInlineComposerDraftContent(chatState)) {
+      return;
+    }
+    try {
+      await context.read<DraftCubit>().deleteDraft(id: draftId);
+    } on Exception {
+      return;
+    }
+    if (!mounted || _expandedComposerDraftId != draftId) {
+      return;
+    }
+    setState(() {
+      _expandedComposerDraftId = null;
+    });
   }
 
   Future<void> _discardInlineComposer() async {
@@ -5975,17 +5981,6 @@ class _ChatState extends State<Chat> {
                 onToggleCollapseLongEmails: () {
                   setState(() {
                     _collapseLongEmailMessages = !_collapseLongEmailMessages;
-                  });
-                },
-                onExpandedComposerDraftSaved: (draftId) {
-                  if (!mounted) return;
-                  setState(() {
-                    _expandedComposerDraftId = draftId;
-                    final current = _expandedComposerSeed;
-                    if (current == null) {
-                      return;
-                    }
-                    _expandedComposerSeed = current.copyWith(id: draftId);
                   });
                 },
                 onClearQuote: _quotedDraft == null

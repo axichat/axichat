@@ -55,44 +55,6 @@ class ComposeDraftContent extends StatelessWidget {
   }
 }
 
-class EmbeddedComposeDraftContent extends StatelessWidget {
-  const EmbeddedComposeDraftContent({
-    super.key,
-    required this.seed,
-    required this.locate,
-    this.draftFormKey,
-    this.recipientCountAdjustment = 0,
-    this.subjectTrailing,
-    this.onClosed,
-    this.onDiscarded,
-    this.onDraftSaved,
-  });
-
-  final ComposeDraftSeed seed;
-  final T Function<T>() locate;
-  final GlobalKey<DraftFormState>? draftFormKey;
-  final int recipientCountAdjustment;
-  final Widget? subjectTrailing;
-  final VoidCallback? onClosed;
-  final VoidCallback? onDiscarded;
-  final ValueChanged<int>? onDraftSaved;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ComposeDraftFormContent(
-      seed: seed,
-      locate: locate,
-      draftFormKey: draftFormKey,
-      recipientCountAdjustment: recipientCountAdjustment,
-      subjectTrailing: subjectTrailing,
-      onClosed: onClosed,
-      onDiscarded: onDiscarded,
-      onDraftSaved: onDraftSaved,
-      showQuoteBanner: false,
-    );
-  }
-}
-
 class _ComposeDraftFormContent extends StatefulWidget {
   const _ComposeDraftFormContent({
     required this.seed,
@@ -173,6 +135,9 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
           EndpointConfig.defaultDomain,
           ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
         };
+        final quoteTarget = widget.showQuoteBanner
+            ? _effectiveQuoteTarget
+            : null;
         return DraftForm(
           key: widget.draftFormKey,
           id: widget.seed.id,
@@ -186,7 +151,13 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
           locate: widget.locate,
           recipientCountAdjustment: widget.recipientCountAdjustment,
           subjectTrailing: widget.subjectTrailing,
-          banner: _buildQuoteBanner(selfJid: myJid),
+          banner: quoteTarget == null
+              ? null
+              : _DraftQuoteBanner(
+                  quotedMessage: _quotedMessage,
+                  selfJid: myJid,
+                  onClear: _handleQuoteCleared,
+                ),
           onRecipientAddressesChanged: _handleRecipientAddressesChanged,
           onClosed: widget.onClosed,
           onDiscarded: widget.onDiscarded,
@@ -196,47 +167,12 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
     );
   }
 
-  Widget? _buildQuoteBanner({required String? selfJid}) {
-    if (!widget.showQuoteBanner) {
-      return null;
-    }
-    final quoteTarget = _effectiveQuoteTarget;
-    if (quoteTarget == null) {
-      return null;
-    }
-    final senderJid = _quotedMessage?.senderJid.trim();
-    final normalizedSelfJid = selfJid?.normalizedJidKey;
-    final senderLabel = senderJid == null || senderJid.isEmpty
-        ? null
-        : senderJid.normalizedJidKey == normalizedSelfJid
-        ? context.l10n.chatSenderYou
-        : (displaySafeAddress(senderJid) ?? senderJid);
-    final previewText = switch (_quotedMessage) {
-      final message? => () {
-        final body = message.body?.trim();
-        if (body != null && body.isNotEmpty) {
-          return body;
-        }
-        final subject = message.subject?.trim();
-        if (subject != null && subject.isNotEmpty) {
-          return subject;
-        }
-        return context.l10n.chatQuotedNoContent;
-      }(),
-      _ => context.l10n.chatQuotedNoContent,
-    };
-    return ComposerQuoteBanner(
-      senderLabel: senderLabel,
-      previewText: previewText,
-      isSelf: senderJid?.normalizedJidKey == normalizedSelfJid,
-      onClear: () {
-        setState(() {
-          _quoteDismissed = true;
-          _quotedMessageLookupId = null;
-          _quotedMessage = null;
-        });
-      },
-    );
+  void _handleQuoteCleared() {
+    setState(() {
+      _quoteDismissed = true;
+      _quotedMessageLookupId = null;
+      _quotedMessage = null;
+    });
   }
 
   void _handleRecipientAddressesChanged(List<String> recipients) {
@@ -320,4 +256,49 @@ String? _domainFromAddress(String? value) {
     return null;
   }
   return domain;
+}
+
+class _DraftQuoteBanner extends StatelessWidget {
+  const _DraftQuoteBanner({
+    required this.quotedMessage,
+    required this.selfJid,
+    required this.onClear,
+  });
+
+  final Message? quotedMessage;
+  final String? selfJid;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final senderJid = quotedMessage?.senderJid.trim();
+    final normalizedSelfJid = selfJid?.normalizedJidKey;
+    final senderLabel = senderJid == null || senderJid.isEmpty
+        ? null
+        : senderJid.normalizedJidKey == normalizedSelfJid
+        ? context.l10n.chatSenderYou
+        : (displaySafeAddress(senderJid) ?? senderJid);
+    return ComposerQuoteBanner(
+      senderLabel: senderLabel,
+      previewText: _previewText(context),
+      isSelf: senderJid?.normalizedJidKey == normalizedSelfJid,
+      onClear: onClear,
+    );
+  }
+
+  String _previewText(BuildContext context) {
+    final message = quotedMessage;
+    if (message == null) {
+      return context.l10n.chatQuotedNoContent;
+    }
+    final body = message.body?.trim();
+    if (body != null && body.isNotEmpty) {
+      return body;
+    }
+    final subject = message.subject?.trim();
+    if (subject != null && subject.isNotEmpty) {
+      return subject;
+    }
+    return context.l10n.chatQuotedNoContent;
+  }
 }

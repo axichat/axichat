@@ -272,7 +272,6 @@ class _ChatScaffoldBody extends StatelessWidget {
     required this.profileJid,
     required this.avatarPathForBareJid,
     required this.avatarPathForTypingParticipant,
-    required this.onExpandedComposerDraftSaved,
     required this.onClearQuote,
   });
 
@@ -328,7 +327,6 @@ class _ChatScaffoldBody extends StatelessWidget {
   final String? profileJid;
   final String? Function(String bareJid) avatarPathForBareJid;
   final String? Function(String participant) avatarPathForTypingParticipant;
-  final ValueChanged<int> onExpandedComposerDraftSaved;
   final VoidCallback onClearQuote;
 
   @override
@@ -737,27 +735,80 @@ class _ChatScaffoldBody extends StatelessWidget {
                         chat: state.chat,
                         recipients: recipients,
                       );
-                      final expandedComposerSeed = owner._expandedComposerSeed;
                       final Widget composerChild;
-                      if (expandedComposerSeed != null) {
-                        final locate = context.read;
+                      if (owner._composerExpanded && isEmailComposer) {
+                        final sendBlocker = owner._inlineComposerSendBlocker(
+                          chatState: state,
+                          settings: settingsState,
+                        );
                         composerChild = _InlineExpandedDraftComposerSection(
                           key: const ValueKey<String>('expanded-composer'),
-                          seed: expandedComposerSeed,
-                          locate: locate,
-                          draftFormKey: owner._expandedDraftFormKey,
-                          onUnexpand: () =>
-                              owner._collapseExpandedDraftComposer(
-                                clearInlineComposer: false,
-                              ),
-                          onClosed: () => owner._collapseExpandedDraftComposer(
-                            clearInlineComposer: true,
+                          enabled: !roomBootstrapInProgress && !roomJoinFailed,
+                          controller: owner._inlineComposerController,
+                          recipients: recipients,
+                          availableChats: availableChats,
+                          latestStatuses: latestStatuses,
+                          visibilityLabel: visibilityLabel,
+                          pendingAttachments: pendingAttachments,
+                          selfJid: selfXmppJid,
+                          selfIdentity: selfIdentity,
+                          tapRegionGroup: owner._composerTapRegionGroup,
+                          hasDraftContent: owner._hasInlineComposerDraftContent(
+                            state,
                           ),
-                          onDiscarded: () =>
-                              owner._collapseExpandedDraftComposer(
-                                clearInlineComposer: true,
+                          hasTrackedDraft:
+                              owner._expandedComposerDraftId != null,
+                          sendBlocker: sendBlocker,
+                          actionsEnabled:
+                              !owner._savingInlineDraft &&
+                              !owner._discardingInlineDraft,
+                          addingAttachment: owner._sendingAttachment,
+                          onTextChanged: owner._handleComposerTextChanged,
+                          onSubjectChanged: owner._handleSubjectChanged,
+                          onMinimize: owner._minimizeEmailComposer,
+                          onRecipientAdded: owner._handleRecipientAdded,
+                          onRecipientRemoved: owner._handleRecipientRemoved,
+                          onAddAttachment:
+                              attachmentsEnabled && !owner._sendingAttachment
+                              ? () => owner._handleAttachmentPressed(state)
+                              : null,
+                          onAttachmentRetry: (pending) {
+                            final chat = chatEntity;
+                            if (chat == null) {
+                              return;
+                            }
+                            unawaited(
+                              owner._retryPendingAttachment(
+                                pending,
+                                chat: chat,
+                                quotedDraft: owner._quotedDraft,
+                                supportsHttpFileUpload:
+                                    state.supportsHttpFileUpload,
+                                settingsSnapshot: settingsSnapshot,
                               ),
-                          onDraftSaved: onExpandedComposerDraftSaved,
+                            );
+                          },
+                          onAttachmentRemove: owner._removePendingAttachment,
+                          onPendingAttachmentPressed:
+                              owner._handlePendingAttachmentPressed,
+                          onPendingAttachmentLongPressed:
+                              owner._handlePendingAttachmentLongPressed,
+                          pendingAttachmentMenuBuilder: (pending) =>
+                              owner._pendingAttachmentMenuItems(
+                                pending,
+                                chat: chatEntity,
+                                quotedDraft: owner._quotedDraft,
+                                supportsHttpFileUpload:
+                                    state.supportsHttpFileUpload,
+                                settingsSnapshot: settingsSnapshot,
+                              ),
+                          onSend: () => owner._handleSendMessage(
+                            chatState: state,
+                            settingsSnapshot: settingsSnapshot,
+                          ),
+                          onSave: owner._handleInlineComposerSavePressed,
+                          onDiscard: owner._handleInlineComposerDiscardPressed,
+                          onTaskDropped: owner._handleTaskDrop,
                         );
                         bottomContent = _ComposerModeTransition(
                           duration: overlayAnimationDuration,
@@ -792,9 +843,10 @@ class _ChatScaffoldBody extends StatelessWidget {
                               ._inlineComposerController
                               .requestTextFocus(),
                           showExpandDraftAction: isEmailComposer,
-                          expandDraftEnabled: !owner._expandingComposerDraft,
-                          onExpandDraftPressed: () =>
-                              owner._expandEmailComposerToDraft(state),
+                          expandDraftEnabled: !pendingAttachments.any(
+                            (pending) => pending.isPreparing,
+                          ),
+                          onExpandDraftPressed: owner._expandEmailComposer,
                           onRecipientAdded: owner._handleRecipientAdded,
                           onRecipientRemoved: owner._handleRecipientRemoved,
                           onAttachmentRetry: (pending) {

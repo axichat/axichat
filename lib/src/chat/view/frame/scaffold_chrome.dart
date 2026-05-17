@@ -280,7 +280,6 @@ class _ChatScaffoldLayout extends StatelessWidget {
     required this.avatarPathForBareJid,
     required this.avatarPathForTypingParticipant,
     required this.onToggleCollapseLongEmails,
-    required this.onExpandedComposerDraftSaved,
     required this.onClearQuote,
     required this.storageManager,
   });
@@ -347,7 +346,6 @@ class _ChatScaffoldLayout extends StatelessWidget {
   final String? Function(String bareJid) avatarPathForBareJid;
   final String? Function(String participant) avatarPathForTypingParticipant;
   final VoidCallback onToggleCollapseLongEmails;
-  final ValueChanged<int> onExpandedComposerDraftSaved;
   final VoidCallback onClearQuote;
   final CalendarStorageManager storageManager;
 
@@ -557,7 +555,6 @@ class _ChatScaffoldLayout extends StatelessWidget {
             profileJid: profileJid,
             avatarPathForBareJid: avatarPathForBareJid,
             avatarPathForTypingParticipant: avatarPathForTypingParticipant,
-            onExpandedComposerDraftSaved: onExpandedComposerDraftSaved,
             onClearQuote: onClearQuote,
           ),
         );
