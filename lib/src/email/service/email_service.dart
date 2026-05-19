@@ -9,7 +9,6 @@ import 'dart:ui';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
@@ -62,7 +61,6 @@ enum _EmailSyncSource {
   connectivityChangedEvent,
   backgroundFetchDone,
   networkAvailable,
-  reconnectRestart,
   channelOverflow,
   channelOverflowFailure,
   channelOverflowComplete,
@@ -339,7 +337,6 @@ class EmailService {
   static const Duration _imapPollIntervalNoIdle = Duration(seconds: 30);
   static const Duration _imapSyncFetchTimeout = Duration(seconds: 25);
   static const Duration _imapCapabilityRefreshInterval = Duration(minutes: 10);
-  static const Duration _reconnectRestartDelay = Duration(seconds: 2);
   static const int _imapConnectionLimitSingle = 1;
   static const int _imapConnectionLimitMulti = 2;
   static const Set<String> _imapConfigBoolTrueValues = {
@@ -459,7 +456,6 @@ class EmailService {
   bool _foregroundKeepaliveServiceAcquired = false;
   final EmailAsyncQueue _foregroundKeepaliveQueue = EmailAsyncQueue();
   int _foregroundKeepaliveOperationId = 0;
-  final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   Timer? _contactsSyncTimer;
   String? _pendingPushToken;
   final _syncStateController = StreamController<EmailSyncState>.broadcast(
@@ -1270,7 +1266,6 @@ class EmailService {
     _chatlistSyncQueue.reset();
     _imapSyncQueue.reset();
     _reconnectCatchUpQueue.reset();
-    _reconnectRestartQueue.reset();
     _channelOverflowRecoveryQueue.reset();
     _credentialSession.invalidateBootstrapOperations();
     await _deltaOperationQueue;
@@ -2252,10 +2247,6 @@ class EmailService {
     await _bootstrapActiveAccountIfNeeded();
     await _runReconnectCatchUp();
     await _refreshConnectivityState(source: _EmailSyncSource.networkAvailable);
-    fireAndForget(
-      _scheduleReconnectRestartIfOffline,
-      operationName: 'EmailService.reconnectRestartIfOffline',
-    );
   }
 
   Future<void> handleNetworkLost() async {
@@ -2371,10 +2362,6 @@ class EmailService {
       await ensureEventChannelActive();
       await _transport.notifyNetworkAvailable();
       await _bootstrapActiveAccountIfNeeded();
-      fireAndForget(
-        _scheduleReconnectRestartIfOffline,
-        operationName: 'EmailService.reconnectRestartIfOffline',
-      );
       return !_blocksRuntimeReentry;
     } on Exception {
       _log.fine('Email transport recovery failed.');
@@ -2913,7 +2900,7 @@ class EmailService {
         final connectivity = await _refreshConnectivityState(
           source: _EmailSyncSource.connectivityChangedEvent,
         );
-        if (connectivity == null || connectivity < _connectivityConnectingMin) {
+        if (connectivity == null || connectivity < _connectivityWorkingMin) {
           break;
         }
         await _bootstrapActiveAccountIfNeeded();
@@ -3371,7 +3358,7 @@ class EmailService {
       final connectivity = await _transport.connectivity();
       if (connectivity == null) return null;
       _recordConnectivitySample(connectivity: connectivity, source: source);
-      if (recoveryCompleted && connectivity >= _connectivityConnectingMin) {
+      if (recoveryCompleted && connectivity >= _connectivityWorkingMin) {
         _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready(), source: source);
         return connectivity;
@@ -3441,9 +3428,6 @@ class EmailService {
         return;
       }
       if (connectivityLevel >= _connectivityWorkingMin) {
-        return;
-      }
-      if (connectivityLevel >= _connectivityConnectingMin) {
         return;
       }
       _applyConnectivityState(
@@ -3973,64 +3957,6 @@ class EmailService {
         source: _EmailSyncSource.reconnectCatchUp,
         recoveryCompleted: true,
       );
-    });
-  }
-
-  Future<void> _scheduleReconnectRestartIfOffline() async {
-    await _reconnectRestartQueue.run(() async {
-      if (!_acceptsRuntimeWork) {
-        return;
-      }
-      var restartAttempted = false;
-      try {
-        await Future.delayed(_reconnectRestartDelay);
-        if (!_acceptsRuntimeWork) {
-          return;
-        }
-        final connectivity = await _refreshConnectivityState(
-          source: _EmailSyncSource.reconnectRestart,
-          recoveryCompleted: true,
-        );
-        if (connectivity == null ||
-            connectivity >= _connectivityConnectingMin) {
-          return;
-        }
-        _log.warning(
-          'Email transport still offline after network available; '
-          'restarting. connectivity=$connectivity',
-        );
-        restartAttempted = true;
-        await stop();
-        var backgroundFetchCompleted = false;
-        try {
-          backgroundFetchCompleted = await performBackgroundFetch(
-            timeout: _imapSyncFetchTimeout,
-          );
-        } on Exception catch (error, stackTrace) {
-          _log.warning(
-            'Email stopped background fetch failed; continuing restart recovery',
-            error,
-            stackTrace,
-          );
-        } finally {
-          await start();
-        }
-        final postRestartConnectivity = await _transport.connectivity();
-        _log.warning(
-          'Email transport restart completed. '
-          'backgroundFetchCompleted=$backgroundFetchCompleted '
-          'connectivity=${postRestartConnectivity ?? _emailLogUnknownValue}',
-        );
-        await _transport.notifyNetworkAvailable();
-        await _bootstrapActiveAccountIfNeeded();
-        await _runReconnectCatchUp();
-      } finally {
-        if (restartAttempted && _acceptsRuntimeWork) {
-          await _refreshConnectivityState(
-            source: _EmailSyncSource.reconnectRestart,
-          );
-        }
-      }
     });
   }
 
