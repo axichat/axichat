@@ -313,16 +313,6 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         ? destroyReason
         : null;
 
-    if (isAvailable) {
-      final mucManager = getAttributes().getManagerById<MUCManager>(
-        mox.mucManager,
-      );
-      final roomState = await mucManager?.getRoomState(roomBare);
-      if (roomState != null && !roomState.joined) {
-        roomState.joined = true;
-      }
-    }
-
     getAttributes().sendEvent(
       MucSelfPresenceEvent(
         roomJid: roomJid,

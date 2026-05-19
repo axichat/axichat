@@ -274,7 +274,7 @@ class Occupant {
   }
 
   String? nextRealJid(String? realJid, {Occupant? fallback}) =>
-      realJid ?? (isPresent ? this.realJid : null) ?? fallback?.realJid;
+      realJid ?? this.realJid ?? fallback?.realJid;
 
   OccupantAffiliation nextAffiliation(
     OccupantAffiliation? affiliation, {

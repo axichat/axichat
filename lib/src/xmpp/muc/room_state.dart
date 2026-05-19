@@ -829,7 +829,7 @@ extension RoomStatePresence on RoomState {
   bool get isBootstrapPending =>
       !hasJoinError &&
       !hasTerminalExit &&
-      (!isReadyForMessaging || roomCreated || postJoinRefreshPending);
+      (!isReadyForMessaging || roomCreated);
 }
 
 enum MucModerationAction {
@@ -906,6 +906,9 @@ class _RoomOccupantDirectory {
     }
     final resource = parsed.resource.trim();
     if (resource.isEmpty) {
+      return false;
+    }
+    if (resource.startsWith('~')) {
       return false;
     }
     return parsed.toBare().toString() == roomJid;
@@ -1021,6 +1024,13 @@ class _RoomOccupantDirectory {
     }
     final trimmedNick = nick?.trim();
     if (trimmedNick != null && trimmedNick.isNotEmpty) {
+      if (trimmedRealJid != null && trimmedRealJid.isNotEmpty) {
+        final byUnresolvedNick = occupantForUnresolvedNick(trimmedNick);
+        if (byUnresolvedNick != null) {
+          return byUnresolvedNick.occupantId;
+        }
+        return null;
+      }
       final byNick = occupantForNick(
         trimmedNick,
         preferPresent: true,
@@ -1031,5 +1041,23 @@ class _RoomOccupantDirectory {
       }
     }
     return null;
+  }
+
+  Occupant? occupantForUnresolvedNick(String nick) {
+    final trimmedNick = nick.trim();
+    if (trimmedNick.isEmpty) {
+      return null;
+    }
+    Occupant? fallback;
+    for (final occupant in occupants.values) {
+      if (!occupant.matchesNick(trimmedNick) || occupant.hasRealJid) {
+        continue;
+      }
+      if (occupant.isPresent) {
+        return occupant;
+      }
+      fallback ??= occupant;
+    }
+    return fallback;
   }
 }
