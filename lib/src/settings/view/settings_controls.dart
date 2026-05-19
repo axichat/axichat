@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
@@ -19,6 +20,7 @@ import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:axichat/src/profile/view/contact_export_sheet.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -72,7 +74,13 @@ class SettingsControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SettingsCubit, SettingsState>(
+    return BlocConsumer<SettingsCubit, SettingsState>(
+      listenWhen: _settingsSyncPublishFailed,
+      listener: (context, state) {
+        ShadToaster.maybeOf(context)?.show(
+          FeedbackToast.error(message: context.l10n.settingsSyncFailureMessage),
+        );
+      },
       builder: (context, state) {
         final spacing = context.spacing;
         final sizing = context.sizing;
@@ -93,6 +101,9 @@ class SettingsControls extends StatelessWidget {
         );
         final canForegroundService = context.select<SettingsCubit, bool>(
           (cubit) => cubit.canForegroundService,
+        );
+        final chatItems = context.select<ChatsCubit, List<Chat>>(
+          (cubit) => cubit.state.items ?? const <Chat>[],
         );
         final emailEnabled = context
             .watch<SettingsCubit>()
@@ -263,136 +274,143 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
-            ListItemPadding(
-              child: AxiListTile(
-                title: context.l10n.settingsMessageTextSize,
-                actions: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-                    child: AxiSelect<MessageTextSize>(
-                      initialValue: state.messageTextSize,
-                      onChanged: (messageTextSize) {
-                        if (messageTextSize == null) {
-                          return;
-                        }
-                        context.read<SettingsCubit>().updateMessageTextSize(
-                          messageTextSize,
-                        );
-                      },
-                      options: MessageTextSize.values
-                          .map(
-                            (messageTextSize) => ShadOption<MessageTextSize>(
-                              value: messageTextSize,
-                              child: _MessageTextSizeOptionLabel(
-                                value: messageTextSize,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      selectedOptionBuilder:
-                          (BuildContext context, MessageTextSize value) =>
-                              _MessageTextSizeOptionLabel(value: value),
-                    ),
+            _SettingsControlRow(
+              title: context.l10n.settingsMessageTextSize,
+              state: state,
+              settingId: GlobalSettingId.messageTextSize,
+              chats: chatItems,
+              minTileHeight: sizing.listButtonHeight,
+              contentPadding: compactTilePadding,
+              trailing: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+                child: AxiSelect<MessageTextSize>(
+                  initialValue: state.messageTextSize,
+                  enabled: !state.isGlobalSettingLoading(
+                    GlobalSettingId.messageTextSize,
                   ),
-                ],
-                minTileHeight: sizing.listButtonHeight,
-                contentPadding: compactTilePadding,
+                  onChanged: (messageTextSize) {
+                    if (messageTextSize == null) {
+                      return;
+                    }
+                    context.read<SettingsCubit>().updateMessageTextSize(
+                      messageTextSize,
+                    );
+                  },
+                  options: MessageTextSize.values
+                      .map(
+                        (messageTextSize) => ShadOption<MessageTextSize>(
+                          value: messageTextSize,
+                          child: _MessageTextSizeOptionLabel(
+                            value: messageTextSize,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  selectedOptionBuilder:
+                      (BuildContext context, MessageTextSize value) =>
+                          _MessageTextSizeOptionLabel(value: value),
+                ),
               ),
             ),
-            ListItemPadding(
-              child: AxiListTile(
-                title: context.l10n.settingsLanguage,
-                actions: const [LanguageSelector()],
-                minTileHeight: sizing.listButtonHeight,
-                contentPadding: compactTilePadding,
-              ),
+            _SettingsControlRow(
+              title: context.l10n.settingsLanguage,
+              state: state,
+              settingId: GlobalSettingId.language,
+              chats: chatItems,
+              minTileHeight: sizing.listButtonHeight,
+              contentPadding: compactTilePadding,
+              trailing: const LanguageSelector(),
             ),
-            ListItemPadding(
-              child: AxiListTile(
-                title: context.l10n.settingsThemeMode,
-                actions: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-                    child: AxiSelect<ThemeMode>(
-                      initialValue: state.themeMode,
-                      onChanged: (themeMode) => context
-                          .read<SettingsCubit>()
-                          .updateThemeMode(themeMode),
-                      options: ThemeMode.values
-                          .map(
-                            (themeMode) => ShadOption<ThemeMode>(
-                              value: themeMode,
-                              child: Text(
-                                themeMode.label(context.l10n),
-                                style: context.textTheme.small,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      selectedOptionBuilder: (BuildContext context, mode) =>
-                          Text(
-                            mode.label(context.l10n),
+            _SettingsControlRow(
+              title: context.l10n.settingsThemeMode,
+              state: state,
+              settingId: GlobalSettingId.themeMode,
+              chats: chatItems,
+              minTileHeight: sizing.listButtonHeight,
+              contentPadding: compactTilePadding,
+              trailing: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+                child: AxiSelect<ThemeMode>(
+                  initialValue: state.themeMode,
+                  enabled: !state.isGlobalSettingLoading(
+                    GlobalSettingId.themeMode,
+                  ),
+                  onChanged: (themeMode) =>
+                      context.read<SettingsCubit>().updateThemeMode(themeMode),
+                  options: ThemeMode.values
+                      .map(
+                        (themeMode) => ShadOption<ThemeMode>(
+                          value: themeMode,
+                          child: Text(
+                            themeMode.label(context.l10n),
                             style: context.textTheme.small,
                           ),
-                    ),
+                        ),
+                      )
+                      .toList(),
+                  selectedOptionBuilder: (BuildContext context, mode) => Text(
+                    mode.label(context.l10n),
+                    style: context.textTheme.small,
                   ),
-                ],
-                minTileHeight: sizing.listButtonHeight,
-                contentPadding: compactTilePadding,
+                ),
               ),
             ),
-            ListItemPadding(
-              child: AxiListTile(
-                title: context.l10n.settingsColorScheme,
-                actions: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-                    child: AxiSelect<ShadColor>(
-                      initialValue: state.shadColor,
-                      onChanged: (colorScheme) => context
-                          .read<SettingsCubit>()
-                          .updateColorScheme(colorScheme),
-                      options: ShadColor.values
-                          .map(
-                            (colorScheme) => ShadOption<ShadColor>(
-                              value: colorScheme,
-                              child: Text(
-                                colorScheme.name,
-                                style: context.textTheme.small,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      selectedOptionBuilder:
-                          (BuildContext context, ShadColor value) =>
-                              Text(value.name, style: context.textTheme.small),
-                    ),
+            _SettingsControlRow(
+              title: context.l10n.settingsColorScheme,
+              state: state,
+              settingId: GlobalSettingId.colorScheme,
+              chats: chatItems,
+              minTileHeight: sizing.listButtonHeight,
+              contentPadding: compactTilePadding,
+              trailing: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+                child: AxiSelect<ShadColor>(
+                  initialValue: state.shadColor,
+                  enabled: !state.isGlobalSettingLoading(
+                    GlobalSettingId.colorScheme,
                   ),
-                ],
-                minTileHeight: sizing.listButtonHeight,
-                contentPadding: compactTilePadding,
+                  onChanged: (colorScheme) => context
+                      .read<SettingsCubit>()
+                      .updateColorScheme(colorScheme),
+                  options: ShadColor.values
+                      .map(
+                        (colorScheme) => ShadOption<ShadColor>(
+                          value: colorScheme,
+                          child: Text(
+                            colorScheme.name,
+                            style: context.textTheme.small,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  selectedOptionBuilder:
+                      (BuildContext context, ShadColor value) =>
+                          Text(value.name, style: context.textTheme.small),
+                ),
               ),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsColorfulAvatars),
-                sublabel: Text(context.l10n.settingsColorfulAvatarsDescription),
-                value: state.colorfulAvatars,
-                onChanged: (colorfulAvatars) => context
-                    .read<SettingsCubit>()
-                    .toggleColorfulAvatars(colorfulAvatars),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsColorfulAvatars,
+              subtitle: context.l10n.settingsColorfulAvatarsDescription,
+              state: state,
+              settingId: GlobalSettingId.colorfulAvatars,
+              value: state.colorfulAvatars,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (colorfulAvatars) => context
+                  .read<SettingsCubit>()
+                  .toggleColorfulAvatars(colorfulAvatars),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsLowMotion),
-                sublabel: Text(context.l10n.settingsLowMotionDescription),
-                value: state.lowMotion,
-                onChanged: (lowMotion) =>
-                    context.read<SettingsCubit>().toggleLowMotion(lowMotion),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsLowMotion,
+              subtitle: context.l10n.settingsLowMotionDescription,
+              state: state,
+              settingId: GlobalSettingId.lowMotion,
+              value: state.lowMotion,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (lowMotion) =>
+                  context.read<SettingsCubit>().toggleLowMotion(lowMotion),
             ),
             anchors?.securityKey == null
                 ? _SettingsSectionHeader(
@@ -408,105 +426,98 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsNotificationPreviews),
-                sublabel: Text(
-                  context.l10n.settingsNotificationPreviewsDescription,
-                ),
-                value: state.notificationPreviewsEnabled,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleNotificationPreviews(enabled),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsNotificationPreviews,
+              subtitle: context.l10n.settingsNotificationPreviewsDescription,
+              state: state,
+              settingId: GlobalSettingId.notificationPreviews,
+              value: state.notificationPreviewsEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleNotificationPreviews(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsAutoLoadEmailImages),
-                sublabel: Text(
-                  context.l10n.settingsAutoLoadEmailImagesDescription,
-                ),
-                value: state.autoLoadEmailImages,
-                onChanged: emailEnabled
-                    ? (enabled) => context
-                          .read<SettingsCubit>()
-                          .toggleAutoLoadEmailImages(enabled)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsAutoLoadEmailImages,
+              subtitle: context.l10n.settingsAutoLoadEmailImagesDescription,
+              state: state,
+              settingId: GlobalSettingId.emailImageAutoload,
+              value: state.autoLoadEmailImages,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleAutoLoadEmailImages(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsAutoDownloadImages),
-                sublabel: Text(
-                  context.l10n.settingsAutoDownloadImagesDescription,
-                ),
-                value: state.autoDownloadImages,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .setAttachmentAutoDownloadSettings(
-                      imagesEnabled: enabled,
-                      videosEnabled: state.autoDownloadVideos,
-                      documentsEnabled: state.autoDownloadDocuments,
-                      archivesEnabled: state.autoDownloadArchives,
-                    ),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsAutoDownloadImages,
+              subtitle: context.l10n.settingsAutoDownloadImagesDescription,
+              state: state,
+              settingId: GlobalSettingId.attachmentAutoDownloadImages,
+              value: state.autoDownloadImages,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .setAttachmentAutoDownloadSettings(
+                    imagesEnabled: enabled,
+                    videosEnabled: state.autoDownloadVideos,
+                    documentsEnabled: state.autoDownloadDocuments,
+                    archivesEnabled: state.autoDownloadArchives,
+                  ),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsAutoDownloadVideos),
-                sublabel: Text(
-                  context.l10n.settingsAutoDownloadVideosDescription,
-                ),
-                value: state.autoDownloadVideos,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .setAttachmentAutoDownloadSettings(
-                      imagesEnabled: state.autoDownloadImages,
-                      videosEnabled: enabled,
-                      documentsEnabled: state.autoDownloadDocuments,
-                      archivesEnabled: state.autoDownloadArchives,
-                    ),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsAutoDownloadVideos,
+              subtitle: context.l10n.settingsAutoDownloadVideosDescription,
+              state: state,
+              settingId: GlobalSettingId.attachmentAutoDownloadVideos,
+              value: state.autoDownloadVideos,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .setAttachmentAutoDownloadSettings(
+                    imagesEnabled: state.autoDownloadImages,
+                    videosEnabled: enabled,
+                    documentsEnabled: state.autoDownloadDocuments,
+                    archivesEnabled: state.autoDownloadArchives,
+                  ),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsAutoDownloadDocuments),
-                sublabel: Text(
-                  context.l10n.settingsAutoDownloadDocumentsDescription,
-                ),
-                value: state.autoDownloadDocuments,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .setAttachmentAutoDownloadSettings(
-                      imagesEnabled: state.autoDownloadImages,
-                      videosEnabled: state.autoDownloadVideos,
-                      documentsEnabled: enabled,
-                      archivesEnabled: state.autoDownloadArchives,
-                    ),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsAutoDownloadDocuments,
+              subtitle: context.l10n.settingsAutoDownloadDocumentsDescription,
+              state: state,
+              settingId: GlobalSettingId.attachmentAutoDownloadDocuments,
+              value: state.autoDownloadDocuments,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .setAttachmentAutoDownloadSettings(
+                    imagesEnabled: state.autoDownloadImages,
+                    videosEnabled: state.autoDownloadVideos,
+                    documentsEnabled: enabled,
+                    archivesEnabled: state.autoDownloadArchives,
+                  ),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsAutoDownloadArchives),
-                sublabel: Text(
-                  context.l10n.settingsAutoDownloadArchivesDescription,
-                ),
-                value: state.autoDownloadArchives,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .setAttachmentAutoDownloadSettings(
-                      imagesEnabled: state.autoDownloadImages,
-                      videosEnabled: state.autoDownloadVideos,
-                      documentsEnabled: state.autoDownloadDocuments,
-                      archivesEnabled: enabled,
-                    ),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsAutoDownloadArchives,
+              subtitle: context.l10n.settingsAutoDownloadArchivesDescription,
+              state: state,
+              settingId: GlobalSettingId.attachmentAutoDownloadArchives,
+              value: state.autoDownloadArchives,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .setAttachmentAutoDownloadSettings(
+                    imagesEnabled: state.autoDownloadImages,
+                    videosEnabled: state.autoDownloadVideos,
+                    documentsEnabled: state.autoDownloadDocuments,
+                    archivesEnabled: enabled,
+                  ),
             ),
             anchors?.chatPreferencesKey == null
                 ? _SettingsSectionHeader(
@@ -522,52 +533,51 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsMuteNotifications),
-                sublabel: Text(
-                  context.l10n.settingsMuteNotificationsDescription,
-                ),
-                value: state.chatNotificationsMuted,
-                onChanged: (muted) => context
-                    .read<SettingsCubit>()
-                    .toggleChatNotificationsMuted(muted),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsMuteNotifications,
+              subtitle: context.l10n.settingsMuteNotificationsDescription,
+              state: state,
+              settingId: GlobalSettingId.chatNotificationsMuted,
+              value: state.chatNotificationsMuted,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (muted) => context
+                  .read<SettingsCubit>()
+                  .toggleChatNotificationsMuted(muted),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsChatReadReceipts),
-                value: state.chatReadReceipts,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleChatReadReceipts(enabled),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsChatReadReceipts,
+              subtitle: context.l10n.settingsChatReadReceiptsDescription,
+              state: state,
+              settingId: GlobalSettingId.chatReadReceipts,
+              value: state.chatReadReceipts,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) =>
+                  context.read<SettingsCubit>().toggleChatReadReceipts(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsTypingIndicators),
-                sublabel: Text(
-                  context.l10n.settingsTypingIndicatorsDescription,
-                ),
-                value: state.indicateTyping,
-                onChanged: (indicateTyping) => context
-                    .read<SettingsCubit>()
-                    .toggleIndicateTyping(indicateTyping),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsTypingIndicators,
+              subtitle: context.l10n.settingsTypingIndicatorsDescription,
+              state: state,
+              settingId: GlobalSettingId.typingIndicators,
+              value: state.indicateTyping,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (indicateTyping) => context
+                  .read<SettingsCubit>()
+                  .toggleIndicateTyping(indicateTyping),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsChatSendOnEnter),
-                sublabel: Text(context.l10n.settingsChatSendOnEnterDescription),
-                value: state.chatSendOnEnter,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleChatSendOnEnter(enabled),
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsChatSendOnEnter,
+              subtitle: context.l10n.settingsChatSendOnEnterDescription,
+              state: state,
+              settingId: GlobalSettingId.chatSendOnEnter,
+              value: state.chatSendOnEnter,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) =>
+                  context.read<SettingsCubit>().toggleChatSendOnEnter(enabled),
             ),
             anchors?.emailPreferencesKey == null
                 ? _SettingsSectionHeader(
@@ -583,92 +593,82 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsMuteNotifications),
-                sublabel: Text(
-                  context.l10n.settingsMuteNotificationsDescription,
-                ),
-                value: state.emailNotificationsMuted,
-                onChanged: emailEnabled
-                    ? (muted) => context
-                          .read<SettingsCubit>()
-                          .toggleEmailNotificationsMuted(muted)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsMuteNotifications,
+              subtitle: context.l10n.settingsMuteNotificationsDescription,
+              state: state,
+              settingId: GlobalSettingId.emailNotificationsMuted,
+              value: state.emailNotificationsMuted,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (muted) => context
+                  .read<SettingsCubit>()
+                  .toggleEmailNotificationsMuted(muted),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsEmailReadReceipts),
-                value: state.emailReadReceipts,
-                onChanged: emailEnabled
-                    ? (enabled) => context
-                          .read<SettingsCubit>()
-                          .toggleEmailReadReceipts(enabled)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsEmailReadReceipts,
+              subtitle: context.l10n.settingsEmailReadReceiptsDescription,
+              state: state,
+              settingId: GlobalSettingId.emailReadReceipts,
+              value: state.emailReadReceipts,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleEmailReadReceipts(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsShareTokenFooter),
-                sublabel: Text(
-                  context.l10n.settingsShareTokenFooterDescription,
-                ),
-                value: state.shareTokenSignatureEnabled,
-                onChanged: emailEnabled
-                    ? (enabled) => context
-                          .read<SettingsCubit>()
-                          .toggleShareTokenSignature(enabled)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsShareTokenFooter,
+              subtitle: context.l10n.settingsShareTokenFooterDescription,
+              state: state,
+              settingId: GlobalSettingId.shareSignature,
+              value: state.shareTokenSignatureEnabled,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleShareTokenSignature(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsEmailComposerWatermark),
-                sublabel: Text(
-                  context.l10n.settingsEmailComposerWatermarkDescription,
-                ),
-                value: state.emailComposerWatermarkEnabled,
-                onChanged: emailEnabled
-                    ? (enabled) => context
-                          .read<SettingsCubit>()
-                          .toggleEmailComposerWatermark(enabled)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsEmailComposerWatermark,
+              subtitle: context.l10n.settingsEmailComposerWatermarkDescription,
+              state: state,
+              settingId: GlobalSettingId.emailComposerWatermark,
+              value: state.emailComposerWatermarkEnabled,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleEmailComposerWatermark(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsEmailSendOnEnter),
-                sublabel: Text(
-                  context.l10n.settingsEmailSendOnEnterDescription,
-                ),
-                value: state.emailSendOnEnter,
-                onChanged: emailEnabled
-                    ? (enabled) => context
-                          .read<SettingsCubit>()
-                          .toggleEmailSendOnEnter(enabled)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsEmailSendOnEnter,
+              subtitle: context.l10n.settingsEmailSendOnEnterDescription,
+              state: state,
+              settingId: GlobalSettingId.emailSendOnEnter,
+              value: state.emailSendOnEnter,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) =>
+                  context.read<SettingsCubit>().toggleEmailSendOnEnter(enabled),
             ),
-            Padding(
-              padding: switchPadding,
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsEmailSendConfirmation),
-                sublabel: Text(
-                  context.l10n.settingsEmailSendConfirmationDescription,
-                ),
-                value: state.emailSendConfirmationEnabled,
-                onChanged: emailEnabled
-                    ? (enabled) => context
-                          .read<SettingsCubit>()
-                          .toggleEmailSendConfirmation(enabled)
-                    : null,
-              ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsEmailSendConfirmation,
+              subtitle: context.l10n.settingsEmailSendConfirmationDescription,
+              state: state,
+              settingId: GlobalSettingId.emailSendConfirmation,
+              value: state.emailSendConfirmationEnabled,
+              enabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleEmailSendConfirmation(enabled),
             ),
             anchors?.aboutKey == null
                 ? _SettingsSectionHeader(
@@ -936,6 +936,348 @@ class SettingsControls extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _settingsSyncPublishFailed(SettingsState previous, SettingsState current) {
+  for (final settingId in GlobalSettingId.syncedSettings) {
+    if (previous.isGlobalSettingLoading(settingId) &&
+        !current.isGlobalSettingLoading(settingId) &&
+        current.isGlobalSettingNotSynced(settingId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+enum _SettingsStatusKind { syncing, notSynced, deviceOnly }
+
+class _SettingsControlRow extends StatelessWidget {
+  const _SettingsControlRow({
+    required this.title,
+    required this.state,
+    required this.settingId,
+    required this.trailing,
+    required this.chats,
+    this.subtitle,
+    this.contentPadding,
+    this.minTileHeight,
+  });
+
+  final String title;
+  final SettingsState state;
+  final GlobalSettingId settingId;
+  final Widget trailing;
+  final List<Chat> chats;
+  final String? subtitle;
+  final EdgeInsetsGeometry? contentPadding;
+  final double? minTileHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final chatSettingId = _chatOverrideSettingFor(settingId);
+    final overrideChats = chatSettingId == null
+        ? const <Chat>[]
+        : _chatOverridesFor(chatSettingId, chats);
+    final statusKind = _settingsStatusKind(state, settingId);
+    return ListItemPadding(
+      child: AxiListTile(
+        titleWidget: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: _SettingsControlText(
+                    title: title,
+                    subtitle: subtitle,
+                    statusKind: statusKind,
+                  ),
+                ),
+                SizedBox(width: spacing.m),
+                _SettingsTrailingControl(
+                  loading: state.isGlobalSettingLoading(settingId),
+                  child: trailing,
+                ),
+              ],
+            ),
+            if (overrideChats.isNotEmpty) ...[
+              SizedBox(height: spacing.s),
+              _SettingsOverrideSummary(
+                chats: overrideChats,
+                resetSettingId: chatSettingId,
+              ),
+            ],
+          ],
+        ),
+        minTileHeight: minTileHeight ?? context.sizing.listButtonHeight,
+        contentPadding: contentPadding,
+      ),
+    );
+  }
+}
+
+class _SettingsControlText extends StatelessWidget {
+  const _SettingsControlText({
+    required this.title,
+    required this.statusKind,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final _SettingsStatusKind? statusKind;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final trimmedSubtitle = subtitle?.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.small.copyWith(
+            color: context.colorScheme.foreground,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (trimmedSubtitle != null && trimmedSubtitle.isNotEmpty) ...[
+          SizedBox(height: spacing.xs),
+          Text(
+            trimmedSubtitle,
+            style: context.textTheme.muted.copyWith(
+              color: context.colorScheme.mutedForeground,
+            ),
+          ),
+        ],
+        if (statusKind != null) ...[
+          SizedBox(height: spacing.s),
+          _SettingsStatusChip(kind: statusKind!),
+        ],
+      ],
+    );
+  }
+}
+
+class _SettingsOverrideSummary extends StatefulWidget {
+  const _SettingsOverrideSummary({
+    required this.chats,
+    required this.resetSettingId,
+  });
+
+  final List<Chat> chats;
+  final ChatSettingId? resetSettingId;
+
+  @override
+  State<_SettingsOverrideSummary> createState() =>
+      _SettingsOverrideSummaryState();
+}
+
+class _SettingsOverrideSummaryState extends State<_SettingsOverrideSummary> {
+  bool _resetting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final chatNames = widget.chats.map(_chatOverrideLabel).join(', ');
+    return Wrap(
+      spacing: spacing.s,
+      runSpacing: spacing.s,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          context.l10n.settingsOverridesList(chatNames),
+          style: context.textTheme.muted.copyWith(
+            color: context.colorScheme.mutedForeground,
+          ),
+        ),
+        if (widget.resetSettingId != null)
+          AxiButton.outline(
+            size: AxiButtonSize.sm,
+            loading: _resetting,
+            onPressed: _resetting ? null : _resetOverrides,
+            child: Text(context.l10n.settingsOverridesResetAll),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _resetOverrides() async {
+    final settingId = widget.resetSettingId;
+    if (settingId == null) {
+      return;
+    }
+    setState(() {
+      _resetting = true;
+    });
+    try {
+      final published = await context
+          .read<ChatsCubit>()
+          .resetChatSettingOverrides(settingId);
+      if (!published && mounted) {
+        ShadToaster.maybeOf(context)?.show(
+          FeedbackToast.error(message: context.l10n.settingsSyncFailureMessage),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _resetting = false;
+        });
+      }
+    }
+  }
+}
+
+class _SettingsTrailingControl extends StatelessWidget {
+  const _SettingsTrailingControl({required this.loading, required this.child});
+
+  final bool loading;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!loading) {
+      return child;
+    }
+    return SizedBox.square(
+      dimension: context.sizing.iconButtonSize,
+      child: Center(
+        child: AxiProgressIndicator(
+          semanticsLabel: context.l10n.settingsSyncStatusSyncing,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsStatusChip extends StatelessWidget {
+  const _SettingsStatusChip({required this.kind});
+
+  final _SettingsStatusKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiStatusChip(
+      label: switch (kind) {
+        _SettingsStatusKind.syncing => context.l10n.settingsSyncStatusSyncing,
+        _SettingsStatusKind.notSynced =>
+          context.l10n.settingsSyncStatusNotSynced,
+        _SettingsStatusKind.deviceOnly =>
+          context.l10n.settingsSyncStatusDeviceOnly,
+      },
+      tone: switch (kind) {
+        _SettingsStatusKind.syncing => AxiStatusChipTone.info,
+        _SettingsStatusKind.notSynced => AxiStatusChipTone.warning,
+        _SettingsStatusKind.deviceOnly => AxiStatusChipTone.neutral,
+      },
+    );
+  }
+}
+
+class _SettingsSwitchRow extends StatelessWidget {
+  const _SettingsSwitchRow({
+    required this.title,
+    required this.state,
+    required this.settingId,
+    required this.value,
+    required this.onChanged,
+    required this.chats,
+    this.subtitle,
+    this.enabled = true,
+    this.contentPadding,
+  });
+
+  final String title;
+  final SettingsState state;
+  final GlobalSettingId settingId;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final List<Chat> chats;
+  final String? subtitle;
+  final bool enabled;
+  final EdgeInsetsGeometry? contentPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final loading = state.isGlobalSettingLoading(settingId);
+    return _SettingsControlRow(
+      title: title,
+      subtitle: subtitle,
+      state: state,
+      settingId: settingId,
+      chats: chats,
+      contentPadding: contentPadding,
+      trailing: ShadSwitch(
+        value: value,
+        onChanged: enabled && !loading ? onChanged : null,
+      ),
+    );
+  }
+}
+
+_SettingsStatusKind? _settingsStatusKind(
+  SettingsState state,
+  GlobalSettingId settingId,
+) {
+  if (state.isGlobalSettingLoading(settingId)) {
+    return _SettingsStatusKind.syncing;
+  }
+  if (settingId.isDeviceOnly) {
+    return _SettingsStatusKind.deviceOnly;
+  }
+  if (state.isGlobalSettingNotSynced(settingId)) {
+    return _SettingsStatusKind.notSynced;
+  }
+  return null;
+}
+
+ChatSettingId? _chatOverrideSettingFor(GlobalSettingId settingId) {
+  return switch (settingId) {
+    GlobalSettingId.chatReadReceipts => ChatSettingId.readReceipts,
+    GlobalSettingId.typingIndicators => ChatSettingId.typingIndicators,
+    GlobalSettingId.emailImageAutoload => ChatSettingId.emailImageAutoload,
+    GlobalSettingId.emailReadReceipts => ChatSettingId.emailReadReceipts,
+    GlobalSettingId.emailSendConfirmation =>
+      ChatSettingId.emailSendConfirmation,
+    GlobalSettingId.emailComposerWatermark =>
+      ChatSettingId.emailComposerWatermark,
+    GlobalSettingId.shareSignature => ChatSettingId.shareSignature,
+    GlobalSettingId.attachmentAutoDownloadImages ||
+    GlobalSettingId.attachmentAutoDownloadVideos ||
+    GlobalSettingId.attachmentAutoDownloadDocuments ||
+    GlobalSettingId.attachmentAutoDownloadArchives =>
+      ChatSettingId.attachmentAutoDownload,
+    GlobalSettingId.notificationPreviews => ChatSettingId.notificationPreview,
+    GlobalSettingId.chatNotificationsMuted ||
+    GlobalSettingId.emailNotificationsMuted =>
+      ChatSettingId.notificationBehavior,
+    _ => null,
+  };
+}
+
+List<Chat> _chatOverridesFor(ChatSettingId settingId, List<Chat> chats) {
+  final overrides = chats
+      .where((chat) {
+        if (settingId == ChatSettingId.notificationBehavior) {
+          return chat.effectiveNotificationBehavior != null;
+        }
+        return settingId.syncValueFrom(chat) != null;
+      })
+      .toList(growable: false);
+  return overrides;
+}
+
+String _chatOverrideLabel(Chat chat) {
+  final displayName = chat.displayName.trim();
+  if (displayName.isNotEmpty) {
+    return displayName;
+  }
+  return chat.jid;
 }
 
 class _DonationRequestBanner extends StatelessWidget {

@@ -46,6 +46,114 @@ enum CalendarTaskListSortMode {
   bool get allowsManualReorder => this == CalendarTaskListSortMode.manual;
 }
 
+enum GlobalSettingId {
+  language,
+  themeMode,
+  colorScheme,
+  endpointConfig,
+  backgroundMessaging,
+  chatNotificationsMuted,
+  emailNotificationsMuted,
+  notificationPreviews,
+  chatReadReceipts,
+  emailReadReceipts,
+  chatSendOnEnter,
+  emailSendOnEnter,
+  emailSendConfirmation,
+  typingIndicators,
+  lowMotion,
+  colorfulAvatars,
+  emailForwardingGuideSeen,
+  shareSignature,
+  hideCompletedScheduled,
+  hideCompletedUnscheduled,
+  hideCompletedReminders,
+  unscheduledSidebarOrder,
+  reminderSidebarOrder,
+  calendarTaskListSortMode,
+  messageTextSize,
+  emailImageAutoload,
+  emailComposerWatermark,
+  donationPromptTracking,
+  attachmentAutoDownloadImages,
+  attachmentAutoDownloadVideos,
+  attachmentAutoDownloadDocuments,
+  attachmentAutoDownloadArchives;
+
+  static const Set<GlobalSettingId> syncedSettings = {
+    language,
+    themeMode,
+    colorScheme,
+    chatReadReceipts,
+    emailReadReceipts,
+    chatSendOnEnter,
+    emailSendOnEnter,
+    emailSendConfirmation,
+    typingIndicators,
+    lowMotion,
+    colorfulAvatars,
+    shareSignature,
+    hideCompletedScheduled,
+    hideCompletedUnscheduled,
+    hideCompletedReminders,
+    unscheduledSidebarOrder,
+    reminderSidebarOrder,
+    calendarTaskListSortMode,
+    messageTextSize,
+    emailImageAutoload,
+    emailComposerWatermark,
+    attachmentAutoDownloadImages,
+    attachmentAutoDownloadVideos,
+    attachmentAutoDownloadDocuments,
+    attachmentAutoDownloadArchives,
+  };
+
+  static const Set<GlobalSettingId> deviceOnlySettings = {
+    endpointConfig,
+    backgroundMessaging,
+    chatNotificationsMuted,
+    emailNotificationsMuted,
+    notificationPreviews,
+    emailForwardingGuideSeen,
+    donationPromptTracking,
+  };
+
+  bool get isSynced => syncedSettings.contains(this);
+
+  bool get isDeviceOnly => deviceOnlySettings.contains(this);
+
+  String? get jsonKey => switch (this) {
+    GlobalSettingId.language => 'language',
+    GlobalSettingId.themeMode => 'theme_mode',
+    GlobalSettingId.colorScheme => 'shad_color',
+    GlobalSettingId.chatReadReceipts => 'chat_read_receipts',
+    GlobalSettingId.emailReadReceipts => 'email_read_receipts',
+    GlobalSettingId.chatSendOnEnter => 'chat_send_on_enter',
+    GlobalSettingId.emailSendOnEnter => 'email_send_on_enter',
+    GlobalSettingId.emailSendConfirmation => 'email_send_confirmation_enabled',
+    GlobalSettingId.typingIndicators => 'indicate_typing',
+    GlobalSettingId.lowMotion => 'low_motion',
+    GlobalSettingId.colorfulAvatars => 'colorful_avatars',
+    GlobalSettingId.shareSignature => 'share_token_signature_enabled',
+    GlobalSettingId.hideCompletedScheduled => 'hide_completed_scheduled',
+    GlobalSettingId.hideCompletedUnscheduled => 'hide_completed_unscheduled',
+    GlobalSettingId.hideCompletedReminders => 'hide_completed_reminders',
+    GlobalSettingId.unscheduledSidebarOrder => 'unscheduled_sidebar_order',
+    GlobalSettingId.reminderSidebarOrder => 'reminder_sidebar_order',
+    GlobalSettingId.calendarTaskListSortMode => 'calendar_task_list_sort_mode',
+    GlobalSettingId.messageTextSize => 'message_text_size',
+    GlobalSettingId.emailImageAutoload => 'auto_load_email_images',
+    GlobalSettingId.emailComposerWatermark =>
+      'email_composer_watermark_enabled',
+    GlobalSettingId.attachmentAutoDownloadImages => 'auto_download_images',
+    GlobalSettingId.attachmentAutoDownloadVideos => 'auto_download_videos',
+    GlobalSettingId.attachmentAutoDownloadDocuments =>
+      'auto_download_documents',
+    GlobalSettingId.attachmentAutoDownloadArchives => 'auto_download_archives',
+    _ => null,
+  };
+}
+
 const List<String> _syncedSettingsKeys = <String>[
   'language',
   'theme_mode',
@@ -110,10 +218,17 @@ abstract class SettingsState with _$SettingsState {
     @Default(false) bool donationPromptTrackingInitialized,
     @Default(0) int donationPromptTrackedMessageCount,
     @Default(0) int donationPromptLastObservedStoredMessageCount,
-    @Default(true) bool autoDownloadImages,
+    @Default(false) bool autoDownloadImages,
     @Default(false) bool autoDownloadVideos,
     @Default(false) bool autoDownloadDocuments,
     @Default(false) bool autoDownloadArchives,
+    // ignore: invalid_annotation_target
+    @JsonKey(includeFromJson: false, includeToJson: false)
+    @Default(<GlobalSettingId, RequestStatus>{})
+    Map<GlobalSettingId, RequestStatus> globalSettingStatuses,
+    @Default(false) bool settingsSyncHasConfirmedSnapshot,
+    @Default(<String, dynamic>{})
+    Map<String, dynamic> settingsSyncConfirmedJson,
   }) = _SettingsState;
 
   factory SettingsState.fromJson(Map<String, Object?> json) =>
@@ -121,13 +236,11 @@ abstract class SettingsState with _$SettingsState {
 }
 
 extension SettingsStateAttachmentDefaults on SettingsState {
-  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
+  bool get anyAttachmentAutoDownloadEnabled =>
       autoDownloadImages ||
-          autoDownloadVideos ||
-          autoDownloadDocuments ||
-          autoDownloadArchives
-      ? AttachmentAutoDownload.allowed
-      : AttachmentAutoDownload.blocked;
+      autoDownloadVideos ||
+      autoDownloadDocuments ||
+      autoDownloadArchives;
 }
 
 extension SettingsStateSync on SettingsState {
@@ -151,6 +264,97 @@ extension SettingsStateSync on SettingsState {
     } catch (_) {
       return this;
     }
+  }
+
+  Set<GlobalSettingId> get unsyncedGlobalSettingIds {
+    return GlobalSettingId.syncedSettings
+        .where(isGlobalSettingNotSynced)
+        .toSet();
+  }
+
+  bool isGlobalSettingLoading(GlobalSettingId settingId) {
+    return globalSettingStatuses[settingId]?.isLoading ?? false;
+  }
+
+  bool isGlobalSettingNotSynced(GlobalSettingId settingId) {
+    final key = settingId.jsonKey;
+    if (!settingId.isSynced ||
+        key == null ||
+        isGlobalSettingLoading(settingId) ||
+        !settingsSyncHasConfirmedSnapshot) {
+      return false;
+    }
+    return !const DeepCollectionEquality().equals(
+      syncedSettingsJson[key],
+      settingsSyncConfirmedJson[key],
+    );
+  }
+
+  Set<GlobalSettingId> changedGlobalSettingIds(
+    SettingsState nextState, {
+    Iterable<GlobalSettingId> hints = const {},
+  }) {
+    final hinted = hints.toSet();
+    if (hinted.isNotEmpty) {
+      return hinted.where((settingId) {
+        final key = settingId.jsonKey;
+        if (key == null) return true;
+        return !const DeepCollectionEquality().equals(
+          syncedSettingsJson[key],
+          nextState.syncedSettingsJson[key],
+        );
+      }).toSet();
+    }
+    return GlobalSettingId.syncedSettings.where((settingId) {
+      final key = settingId.jsonKey;
+      if (key == null) return false;
+      return !const DeepCollectionEquality().equals(
+        syncedSettingsJson[key],
+        nextState.syncedSettingsJson[key],
+      );
+    }).toSet();
+  }
+
+  SettingsState markGlobalSettingsLoading(
+    Iterable<GlobalSettingId> settingIds, {
+    Map<String, dynamic>? confirmedBaseline,
+  }) {
+    final nextStatuses = Map<GlobalSettingId, RequestStatus>.from(
+      globalSettingStatuses,
+    );
+    for (final settingId in settingIds) {
+      if (settingId.isSynced) {
+        nextStatuses[settingId] = RequestStatus.loading;
+      }
+    }
+    return copyWith(
+      globalSettingStatuses: Map<GlobalSettingId, RequestStatus>.unmodifiable(
+        nextStatuses,
+      ),
+      settingsSyncHasConfirmedSnapshot:
+          settingsSyncHasConfirmedSnapshot || confirmedBaseline != null,
+      settingsSyncConfirmedJson: confirmedBaseline ?? settingsSyncConfirmedJson,
+    );
+  }
+
+  SettingsState clearGlobalSettingsLoading(
+    Iterable<GlobalSettingId> settingIds, {
+    Map<String, dynamic>? confirmedSnapshot,
+  }) {
+    final nextStatuses = Map<GlobalSettingId, RequestStatus>.from(
+      globalSettingStatuses,
+    );
+    for (final settingId in settingIds) {
+      nextStatuses.remove(settingId);
+    }
+    return copyWith(
+      globalSettingStatuses: Map<GlobalSettingId, RequestStatus>.unmodifiable(
+        nextStatuses,
+      ),
+      settingsSyncHasConfirmedSnapshot:
+          settingsSyncHasConfirmedSnapshot || confirmedSnapshot != null,
+      settingsSyncConfirmedJson: confirmedSnapshot ?? settingsSyncConfirmedJson,
+    );
   }
 }
 

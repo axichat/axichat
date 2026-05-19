@@ -1,4 +1,5 @@
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +24,17 @@ void main() {
       expect(state.autoDownloadArchives, expectAutoDownloadArchives);
     });
 
+    test('keeps attachment image auto-download disabled by default', () {
+      expect(state.autoDownloadImages, isFalse);
+    });
+
+    test(
+      'keeps restored attachment image auto-download disabled by default',
+      () {
+        expect(SettingsState.fromJson(const {}).autoDownloadImages, isFalse);
+      },
+    );
+
     test('enables send on enter for XMPP by default only', () {
       expect(state.chatSendOnEnter, isTrue);
       expect(state.emailSendOnEnter, isFalse);
@@ -41,7 +53,27 @@ void main() {
       expect(synced.containsKey('background_messaging_enabled'), isFalse);
       expect(synced.containsKey('endpoint_config'), isFalse);
       expect(synced['chat_read_receipts'], isTrue);
-      expect(synced['auto_download_images'], isTrue);
+      expect(synced['auto_download_images'], isFalse);
+    });
+
+    test('does not mark loading settings as not synced', () {
+      final changed = state.copyWith(
+        chatReadReceipts: false,
+        globalSettingStatuses: const {
+          GlobalSettingId.chatReadReceipts: RequestStatus.loading,
+        },
+        settingsSyncHasConfirmedSnapshot: true,
+        settingsSyncConfirmedJson: state.syncedSettingsJson,
+      );
+
+      expect(
+        changed.isGlobalSettingNotSynced(GlobalSettingId.chatReadReceipts),
+        isFalse,
+      );
+      expect(
+        changed.unsyncedGlobalSettingIds,
+        isNot(contains(GlobalSettingId.chatReadReceipts)),
+      );
     });
 
     test('mergeSyncedSettingsJson preserves local-only settings', () {

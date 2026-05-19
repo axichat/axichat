@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:convert';
+
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
@@ -298,6 +300,172 @@ enum NotificationPreviewSetting {
   }
 }
 
+enum ChatNotificationBehavior {
+  muted,
+  alwaysNotify;
+
+  bool get isMuted => this == muted;
+
+  bool get isAlwaysNotify => this == alwaysNotify;
+}
+
+enum ChatSettingId {
+  readReceipts,
+  typingIndicators,
+  emailImageAutoload,
+  emailReadReceipts,
+  emailSendConfirmation,
+  emailComposerWatermark,
+  shareSignature,
+  attachmentAutoDownload,
+  notificationPreview,
+  notificationBehavior;
+
+  static const Set<ChatSettingId> syncedSettings = {
+    readReceipts,
+    typingIndicators,
+    emailImageAutoload,
+    emailReadReceipts,
+    emailSendConfirmation,
+    emailComposerWatermark,
+    shareSignature,
+    attachmentAutoDownload,
+    notificationPreview,
+    notificationBehavior,
+  };
+
+  String get syncKey => switch (this) {
+    ChatSettingId.readReceipts => 'read_receipts',
+    ChatSettingId.typingIndicators => 'typing_indicators',
+    ChatSettingId.emailImageAutoload => 'email_image_autoload',
+    ChatSettingId.emailReadReceipts => 'email_read_receipts',
+    ChatSettingId.emailSendConfirmation => 'email_send_confirmation',
+    ChatSettingId.emailComposerWatermark => 'email_composer_watermark',
+    ChatSettingId.shareSignature => 'share_signature',
+    ChatSettingId.attachmentAutoDownload => 'attachment_auto_download',
+    ChatSettingId.notificationPreview => 'notification_preview',
+    ChatSettingId.notificationBehavior => 'notification_behavior',
+  };
+
+  Object? syncValueFrom(Chat chat) => switch (this) {
+    ChatSettingId.readReceipts => chat.markerResponsive,
+    ChatSettingId.typingIndicators => chat.typingIndicatorsEnabled,
+    ChatSettingId.emailImageAutoload => chat.emailRemoteImagesEnabled,
+    ChatSettingId.emailReadReceipts => chat.emailReadReceiptsEnabled,
+    ChatSettingId.emailSendConfirmation => chat.emailSendConfirmationEnabled,
+    ChatSettingId.emailComposerWatermark => chat.emailComposerWatermarkEnabled,
+    ChatSettingId.shareSignature => chat.shareSignatureEnabled,
+    ChatSettingId.attachmentAutoDownload => chat.attachmentAutoDownload?.name,
+    ChatSettingId.notificationPreview => chat.notificationPreviewSetting?.name,
+    ChatSettingId.notificationBehavior =>
+      chat.notificationBehaviorSyncValue?.name,
+  };
+
+  Chat applySyncedValue(
+    Chat chat,
+    Object? value, {
+    required DateTime updatedAt,
+    required String sourceId,
+  }) {
+    final normalizedValue = value?.toString().trim();
+    return switch (this) {
+      ChatSettingId.readReceipts => chat.copyWith(
+        markerResponsive: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.typingIndicators => chat.copyWith(
+        typingIndicatorsEnabled: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.emailImageAutoload => chat.copyWith(
+        emailRemoteImagesEnabled: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.emailReadReceipts => chat.copyWith(
+        emailReadReceiptsEnabled: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.emailSendConfirmation => chat.copyWith(
+        emailSendConfirmationEnabled: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.emailComposerWatermark => chat.copyWith(
+        emailComposerWatermarkEnabled: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.shareSignature => chat.copyWith(
+        shareSignatureEnabled: value is bool ? value : null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.attachmentAutoDownload => chat.copyWith(
+        attachmentAutoDownload: switch (normalizedValue) {
+          'allowed' => AttachmentAutoDownload.allowed,
+          'blocked' => AttachmentAutoDownload.blocked,
+          _ => null,
+        },
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.notificationPreview => chat.copyWith(
+        notificationPreviewSetting: switch (normalizedValue) {
+          'show' => NotificationPreviewSetting.show,
+          'hide' => NotificationPreviewSetting.hide,
+          _ => null,
+        },
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+      ChatSettingId.notificationBehavior => chat.copyWith(
+        notificationBehavior: switch (normalizedValue) {
+          'muted' => ChatNotificationBehavior.muted,
+          'alwaysNotify' => ChatNotificationBehavior.alwaysNotify,
+          _ => null,
+        },
+        muted: normalizedValue == ChatNotificationBehavior.muted.name,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: sourceId,
+      ),
+    };
+  }
+
+  Chat clearOverrideValue(Chat chat) => switch (this) {
+    ChatSettingId.readReceipts => chat.copyWith(markerResponsive: null),
+    ChatSettingId.typingIndicators => chat.copyWith(
+      typingIndicatorsEnabled: null,
+    ),
+    ChatSettingId.emailImageAutoload => chat.copyWith(
+      emailRemoteImagesEnabled: null,
+    ),
+    ChatSettingId.emailReadReceipts => chat.copyWith(
+      emailReadReceiptsEnabled: null,
+    ),
+    ChatSettingId.emailSendConfirmation => chat.copyWith(
+      emailSendConfirmationEnabled: null,
+    ),
+    ChatSettingId.emailComposerWatermark => chat.copyWith(
+      emailComposerWatermarkEnabled: null,
+    ),
+    ChatSettingId.shareSignature => chat.copyWith(shareSignatureEnabled: null),
+    ChatSettingId.attachmentAutoDownload => chat.copyWith(
+      attachmentAutoDownload: null,
+    ),
+    ChatSettingId.notificationPreview => chat.copyWith(
+      notificationPreviewSetting: null,
+    ),
+    ChatSettingId.notificationBehavior => chat.copyWith(
+      notificationBehavior: null,
+      muted: false,
+    ),
+  };
+}
+
 @Freezed(toJson: false, fromJson: false)
 abstract class Chat with _$Chat implements Insertable<Chat> {
   const factory Chat({
@@ -316,6 +484,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
     @Default(false) bool open,
     @Default(false) bool muted,
     NotificationPreviewSetting? notificationPreviewSetting,
+    ChatNotificationBehavior? notificationBehavior,
     @Default(false) bool favorited,
     @Default(false) bool archived,
     @Default(false) bool hidden,
@@ -324,6 +493,16 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
     bool? markerResponsive,
     bool? shareSignatureEnabled,
     AttachmentAutoDownload? attachmentAutoDownload,
+    bool? emailRemoteImagesEnabled,
+    bool? typingIndicatorsEnabled,
+    bool? emailReadReceiptsEnabled,
+    bool? emailSendConfirmationEnabled,
+    bool? emailComposerWatermarkEnabled,
+    DateTime? chatSettingsUpdatedAt,
+    String? chatSettingsSourceId,
+    String? chatSettingsConfirmedJson,
+    DateTime? chatSettingsConfirmedUpdatedAt,
+    String? chatSettingsConfirmedSourceId,
     @Default(EncryptionProtocol.none) EncryptionProtocol encryptionProtocol,
     String? contactID,
     String? contactDisplayName,
@@ -352,6 +531,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
     required bool open,
     required bool muted,
     required NotificationPreviewSetting? notificationPreviewSetting,
+    required ChatNotificationBehavior? notificationBehavior,
     required bool favorited,
     required bool archived,
     required bool hidden,
@@ -360,6 +540,16 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
     required bool? markerResponsive,
     required bool? shareSignatureEnabled,
     required AttachmentAutoDownload? attachmentAutoDownload,
+    required bool? emailRemoteImagesEnabled,
+    required bool? typingIndicatorsEnabled,
+    required bool? emailReadReceiptsEnabled,
+    required bool? emailSendConfirmationEnabled,
+    required bool? emailComposerWatermarkEnabled,
+    required DateTime? chatSettingsUpdatedAt,
+    required String? chatSettingsSourceId,
+    required String? chatSettingsConfirmedJson,
+    required DateTime? chatSettingsConfirmedUpdatedAt,
+    required String? chatSettingsConfirmedSourceId,
     required EncryptionProtocol encryptionProtocol,
     required String? contactID,
     required String? contactDisplayName,
@@ -404,6 +594,8 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
         'notification_preview_setting': Variable<int>(
           notificationPreviewSetting!.index,
         ),
+      if (notificationBehavior != null)
+        'notification_behavior': Variable<int>(notificationBehavior!.index),
       if (markerResponsive != null)
         'marker_responsive': Variable<bool>(markerResponsive!),
       if (shareSignatureEnabled != null)
@@ -411,6 +603,40 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
       if (attachmentAutoDownload != null)
         'attachment_auto_download': Variable<int>(
           attachmentAutoDownload!.index,
+        ),
+      if (emailRemoteImagesEnabled != null)
+        'email_remote_images_enabled': Variable<bool>(
+          emailRemoteImagesEnabled!,
+        ),
+      if (typingIndicatorsEnabled != null)
+        'typing_indicators_enabled': Variable<bool>(typingIndicatorsEnabled!),
+      if (emailReadReceiptsEnabled != null)
+        'email_read_receipts_enabled': Variable<bool>(
+          emailReadReceiptsEnabled!,
+        ),
+      if (emailSendConfirmationEnabled != null)
+        'email_send_confirmation_enabled': Variable<bool>(
+          emailSendConfirmationEnabled!,
+        ),
+      if (emailComposerWatermarkEnabled != null)
+        'email_composer_watermark_enabled': Variable<bool>(
+          emailComposerWatermarkEnabled!,
+        ),
+      if (chatSettingsUpdatedAt != null)
+        'chat_settings_updated_at': Variable<DateTime>(chatSettingsUpdatedAt!),
+      if (chatSettingsSourceId != null)
+        'chat_settings_source_id': Variable<String>(chatSettingsSourceId!),
+      if (chatSettingsConfirmedJson != null)
+        'chat_settings_confirmed_json': Variable<String>(
+          chatSettingsConfirmedJson!,
+        ),
+      if (chatSettingsConfirmedUpdatedAt != null)
+        'chat_settings_confirmed_updated_at': Variable<DateTime>(
+          chatSettingsConfirmedUpdatedAt!,
+        ),
+      if (chatSettingsConfirmedSourceId != null)
+        'chat_settings_confirmed_source_id': Variable<String>(
+          chatSettingsConfirmedSourceId!,
         ),
       'encryption_protocol': Variable<int>(encryptionProtocol.index),
     };
@@ -497,6 +723,9 @@ class Chats extends Table {
   IntColumn get notificationPreviewSetting =>
       intEnum<NotificationPreviewSetting>().nullable()();
 
+  IntColumn get notificationBehavior =>
+      intEnum<ChatNotificationBehavior>().nullable()();
+
   BoolColumn get favorited => boolean().withDefault(const Constant(false))();
 
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
@@ -513,6 +742,26 @@ class Chats extends Table {
 
   IntColumn get attachmentAutoDownload =>
       intEnum<AttachmentAutoDownload>().nullable()();
+
+  BoolColumn get emailRemoteImagesEnabled => boolean().nullable()();
+
+  BoolColumn get typingIndicatorsEnabled => boolean().nullable()();
+
+  BoolColumn get emailReadReceiptsEnabled => boolean().nullable()();
+
+  BoolColumn get emailSendConfirmationEnabled => boolean().nullable()();
+
+  BoolColumn get emailComposerWatermarkEnabled => boolean().nullable()();
+
+  DateTimeColumn get chatSettingsUpdatedAt => dateTime().nullable()();
+
+  TextColumn get chatSettingsSourceId => text().nullable()();
+
+  TextColumn get chatSettingsConfirmedJson => text().nullable()();
+
+  DateTimeColumn get chatSettingsConfirmedUpdatedAt => dateTime().nullable()();
+
+  TextColumn get chatSettingsConfirmedSourceId => text().nullable()();
 
   IntColumn get encryptionProtocol =>
       intEnum<EncryptionProtocol>().withDefault(const Constant(1))();
@@ -541,6 +790,72 @@ class Chats extends Table {
   List<Index> get indexes => [
     Index('idx_chats_last_change', 'last_change_timestamp'),
   ];
+}
+
+extension ChatSettingsSyncModel on Chat {
+  ChatNotificationBehavior? get effectiveNotificationBehavior =>
+      notificationBehavior ?? (muted ? ChatNotificationBehavior.muted : null);
+
+  ChatNotificationBehavior? get notificationBehaviorSyncValue =>
+      effectiveNotificationBehavior;
+
+  Map<String, dynamic> get chatSettingsSyncJson {
+    final values = <String, dynamic>{};
+    for (final settingId in ChatSettingId.syncedSettings) {
+      final value = settingId.syncValueFrom(this);
+      if (value != null) {
+        values[settingId.syncKey] = value;
+      }
+    }
+    return Map<String, dynamic>.unmodifiable(values);
+  }
+
+  bool get hasChatSettingsSyncOverrides => chatSettingsSyncJson.isNotEmpty;
+
+  bool get hasChatSettingsSyncPayload {
+    final sourceId = chatSettingsSourceId?.trim();
+    return hasChatSettingsSyncOverrides ||
+        (chatSettingsUpdatedAt != null &&
+            sourceId != null &&
+            sourceId.isNotEmpty);
+  }
+
+  Chat markChatSettingsSyncConfirmed() {
+    return copyWith(
+      chatSettingsConfirmedJson: jsonEncode(chatSettingsSyncJson),
+      chatSettingsConfirmedUpdatedAt: chatSettingsUpdatedAt,
+      chatSettingsConfirmedSourceId: chatSettingsSourceId,
+    );
+  }
+
+  bool isChatSettingNotSynced(ChatSettingId settingId) {
+    final confirmed = chatSettingsConfirmedJson?.trim();
+    if (confirmed == null || confirmed.isEmpty) {
+      return hasChatSettingsSyncOverrides &&
+          settingId.syncValueFrom(this) != null;
+    }
+    final confirmedValue = _decodeConfirmedChatSettingsValue(
+      confirmed,
+      settingId.syncKey,
+    );
+    return confirmedValue != settingId.syncValueFrom(this);
+  }
+
+  Set<ChatSettingId> get unsyncedChatSettingIds {
+    return ChatSettingId.syncedSettings.where(isChatSettingNotSynced).toSet();
+  }
+
+  Object? _decodeConfirmedChatSettingsValue(String raw, String key) {
+    try {
+      final value = jsonDecode(raw);
+      if (value is! Map) {
+        return null;
+      }
+      return value[key];
+    } on FormatException {
+      return null;
+    }
+  }
 }
 
 @DataClassName('RecipientAddress')

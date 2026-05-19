@@ -765,8 +765,37 @@ class ChatsCubit extends Cubit<ChatsState> {
   }) async {
     await _chatsService.toggleChatAttachmentAutoDownload(
       jid: jid,
-      enabled: enabled,
+      value: enabled
+          ? AttachmentAutoDownload.allowed
+          : AttachmentAutoDownload.blocked,
     );
+  }
+
+  Future<bool> resetChatSettingOverrides(ChatSettingId settingId) async {
+    final result = await _chatsService.resetChatSettingOverrides(settingId);
+    final items = state.items;
+    if (items == null) {
+      return result.published;
+    }
+    if (!result.localApplied && !result.published) {
+      return result.published;
+    }
+    final updatedItems = items
+        .map((chat) {
+          final hasOverride = settingId == ChatSettingId.notificationBehavior
+              ? chat.effectiveNotificationBehavior != null
+              : settingId.syncValueFrom(chat) != null;
+          if (!hasOverride) {
+            return chat;
+          }
+          final next = settingId.clearOverrideValue(chat);
+          return result.published ? next.markChatSettingsSyncConfirmed() : next;
+        })
+        .toList(growable: false);
+    if (!listEquals(items, updatedItems)) {
+      _updateChats(updatedItems);
+    }
+    return result.published;
   }
 
   Future<void> toggleArchived({
