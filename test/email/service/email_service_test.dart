@@ -2051,7 +2051,7 @@ void main() {
   );
 
   test(
-    'handleNetworkAvailable does not restart transport while Delta stays offline',
+    'handleNetworkAvailable restarts transport when Delta stays offline',
     () async {
       final service = EmailService(
         credentialStore: credentialStore,
@@ -2078,11 +2078,11 @@ void main() {
         await pumpMicrotasks();
 
         expect(service.syncState.status, EmailSyncStatus.offline);
-        verify(() => transport.notifyNetworkAvailable()).called(1);
-        verifyNever(() => transport.removeEventListener(any()));
-        verifyNever(() => transport.stop());
-        verifyNever(() => transport.addEventListener(any()));
-        verifyNever(() => transport.start());
+        verify(() => transport.notifyNetworkAvailable()).called(2);
+        verify(() => transport.removeEventListener(any())).called(1);
+        verify(() => transport.stop()).called(1);
+        verify(() => transport.addEventListener(any())).called(1);
+        verify(() => transport.start()).called(1);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -2132,47 +2132,92 @@ void main() {
     },
   );
 
-  test('home refresh recovery does not schedule a restart probe', () async {
-    final service = EmailService(
-      credentialStore: credentialStore,
-      databaseBuilder: () async => database,
-      transport: transport,
-      notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
+  for (final connectivity in const [3000, 4000]) {
+    test(
+      'handleNetworkAvailable does not restart transport at connectivity $connectivity',
+      () async {
+        final service = EmailService(
+          credentialStore: credentialStore,
+          databaseBuilder: () async => database,
+          transport: transport,
+          notificationService: notificationService,
+          foregroundBridge: foregroundBridge,
+        );
+
+        try {
+          await service.ensureProvisioned(
+            displayName: 'Bob',
+            databasePrefix: 'bob',
+            databasePassphrase: 'secret',
+            jid: 'bob@axi.im',
+            passwordOverride: 'password',
+          );
+
+          clearInteractions(transport);
+          when(() => transport.connectivity()).thenAnswer((_) async {
+            return connectivity;
+          });
+
+          await service.handleNetworkAvailable();
+          await Future<void>.delayed(const Duration(milliseconds: 2200));
+          await pumpMicrotasks();
+
+          verify(() => transport.notifyNetworkAvailable()).called(1);
+          verifyNever(() => transport.removeEventListener(any()));
+          verifyNever(() => transport.stop());
+          verifyNever(() => transport.addEventListener(any()));
+          verifyNever(() => transport.start());
+        } finally {
+          await service.shutdown(jid: 'bob@axi.im');
+        }
+      },
     );
+  }
 
-    try {
-      await service.ensureProvisioned(
-        displayName: 'Bob',
-        databasePrefix: 'bob',
-        databasePassphrase: 'secret',
-        jid: 'bob@axi.im',
-        passwordOverride: 'password',
+  test(
+    'home refresh recovery leaves Delta connecting without restart',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
       );
-      emitNetworkError();
-      await pumpMicrotasks();
-      expect(service.syncState.status, EmailSyncStatus.offline);
 
-      clearInteractions(transport);
-      when(() => transport.isConfigured()).thenAnswer((_) async => true);
-      when(() => transport.connectivity()).thenAnswer((_) async => 2000);
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+        emitNetworkError();
+        await pumpMicrotasks();
+        expect(service.syncState.status, EmailSyncStatus.offline);
 
-      expect(await service.recoverForHomeRefresh(), isTrue);
-      expect(service.syncState.status, EmailSyncStatus.offline);
+        clearInteractions(transport);
+        when(() => transport.isConfigured()).thenAnswer((_) async => true);
+        when(() => transport.connectivity()).thenAnswer((_) async => 2000);
 
-      await Future<void>.delayed(const Duration(milliseconds: 2200));
-      await pumpMicrotasks();
+        expect(await service.recoverForHomeRefresh(), isTrue);
+        expect(service.syncState.status, EmailSyncStatus.recovering);
 
-      expect(service.syncState.status, EmailSyncStatus.offline);
-      verify(() => transport.notifyNetworkAvailable()).called(1);
-      verifyNever(() => transport.removeEventListener(any()));
-      verifyNever(() => transport.stop());
-      verifyNever(() => transport.addEventListener(any()));
-      verifyNever(() => transport.start());
-    } finally {
-      await service.shutdown(jid: 'bob@axi.im');
-    }
-  });
+        await Future<void>.delayed(const Duration(milliseconds: 2200));
+        await pumpMicrotasks();
+
+        expect(service.syncState.status, EmailSyncStatus.recovering);
+        verify(() => transport.notifyNetworkAvailable()).called(1);
+        verifyNever(() => transport.removeEventListener(any()));
+        verifyNever(() => transport.stop());
+        verifyNever(() => transport.addEventListener(any()));
+        verifyNever(() => transport.start());
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
 
   test(
     'handleNetworkLost notifies transport while provisioned but stopped',
