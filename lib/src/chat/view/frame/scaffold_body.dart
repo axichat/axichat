@@ -694,6 +694,9 @@ class _ChatScaffoldBody extends StatelessWidget {
                         growable: false,
                       );
                       final canReact = !isEmailChat;
+                      final canForward =
+                          targets.length == 1 &&
+                          targets.single.pseudoMessageType == null;
                       composerOverlayBanner = _MessageSelectionToolbar(
                         count: targets.length,
                         onClear: owner._clearMultiSelection,
@@ -704,9 +707,11 @@ class _ChatScaffoldBody extends StatelessWidget {
                           List<Message>.of(targets),
                         ),
                         shareStatus: owner._shareRequestStatus,
-                        onForward: () => owner._forwardSelectedMessages(
-                          List<Message>.of(targets),
-                        ),
+                        onForward: canForward
+                            ? () => owner._forwardSelectedMessages(
+                                List<Message>.of(targets),
+                              )
+                            : null,
                         onAddToCalendar: () => owner._addSelectedToCalendar(
                           List<Message>.of(targets),
                         ),

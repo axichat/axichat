@@ -2,9 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
+import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/draft_forwarded_content.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
-import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
@@ -14,6 +17,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:path/path.dart' as p;
 
 part 'draft_state.dart';
 
@@ -80,6 +84,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   static const String itemsCacheKey = 'items';
   static const String visibleItemsCacheKey = 'visibleItems';
   static const int _emailAttachmentBundleMinimumCount = 2;
+  static const String _calendarTaskIcsAttachmentMimeType = 'text/calendar';
 
   DraftCubit({
     required MessageService messageService,
@@ -149,6 +154,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     await _messageService.deleteFileMetadata(metadataId);
   }
 
+  Future<List<String>> cloneDraftAttachmentMetadata(
+    Iterable<String> sourceMetadataIds,
+  ) {
+    return _messageService.cloneDraftAttachmentMetadata(sourceMetadataIds);
+  }
+
   Future<Message?> loadMessageByReferenceId(
     String messageId, {
     String? chatJid,
@@ -168,6 +179,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     String? subject,
     DraftQuoteTarget? quoteTarget,
     List<Attachment> attachments = const [],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
   }) async {
     emit(DraftSending(items: _items, visibleItems: _visibleItems));
     try {
@@ -178,6 +191,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           subject: subject,
           quoteTarget: quoteTarget,
           attachments: attachments,
+          calendarTaskIcsMessage: calendarTaskIcsMessage,
+          forwardedBlocks: forwardedBlocks,
           shareTokenSignatureEnabled: shareTokenSignatureEnabled,
         );
       }
@@ -187,6 +202,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           body: body,
           quoteTarget: quoteTarget,
           attachments: attachments,
+          calendarTaskIcsMessage: calendarTaskIcsMessage,
+          forwardedBlocks: forwardedBlocks,
         );
       }
     } on DraftSendValidationException catch (error) {
@@ -244,6 +261,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     String? subject,
     DraftQuoteTarget? quoteTarget,
     List<Attachment> attachments = const [],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     bool autoSave = false,
   }) async {
     final draft = await _messageService.saveDraft(
@@ -254,11 +273,16 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       quotingStanzaId: quoteTarget?.stanzaId,
       quotingReferenceKind: quoteTarget?.referenceKind,
       attachments: attachments,
+      calendarTaskIcsMessage: calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks,
     );
     try {
       await _emailService?.mirrorDraftForFallback(
         jids: jids,
-        text: body,
+        text: DraftForwardedContent.compose(
+          introText: body,
+          forwardedBlocks: forwardedBlocks,
+        ).plainText,
         subject: subject,
         attachments: attachments,
       );
@@ -301,6 +325,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     String? subject,
     DraftQuoteTarget? quoteTarget,
     required List<Attachment> attachments,
+    required CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    required List<DraftForwardedBlock> forwardedBlocks,
     required bool shareTokenSignatureEnabled,
   }) async {
     final emailService = _emailService;
@@ -310,15 +336,28 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (targets.isEmpty) {
       throw const DraftSendNoRecipientsException();
     }
-    final trimmedBody = body.trim();
+    final assembled = DraftForwardedContent.compose(
+      introText: body,
+      forwardedBlocks: forwardedBlocks,
+    );
+    final trimmedBody = assembled.plainText.trim();
     final hasSubject = subject?.trim().isNotEmpty == true;
-    final hasAttachments = attachments.isNotEmpty;
-    if (!hasSubject && trimmedBody.isEmpty && attachments.isEmpty) {
+    final hasCalendarTask = calendarTaskIcsMessage != null;
+    if (!hasSubject &&
+        trimmedBody.isEmpty &&
+        attachments.isEmpty &&
+        !hasCalendarTask) {
       throw const DraftSendNoContentException();
     }
-    final htmlBody = trimmedBody.isNotEmpty
-        ? HtmlContentCodec.fromPlainText(trimmedBody)
-        : null;
+    final calendarTaskAttachment = calendarTaskIcsMessage == null
+        ? null
+        : await _buildCalendarTaskEmailAttachment(calendarTaskIcsMessage);
+    if (hasCalendarTask && calendarTaskAttachment == null) {
+      throw const DraftSendFailedException();
+    }
+    final hasAttachments =
+        attachments.isNotEmpty || calendarTaskAttachment != null;
+    final htmlBody = assembled.htmlBody;
     final includeSignatureToken =
         shareTokenSignatureEnabled &&
         targets.every((target) => target.shareSignatureEnabled);
@@ -338,9 +377,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       );
       _throwIfFanOutFailed(report);
     }
-    if (hasAttachments) {
-      final caption = trimmedBody.isNotEmpty ? trimmedBody : null;
-      final htmlCaption = caption == null ? null : htmlBody;
+    final caption = trimmedBody.isNotEmpty ? trimmedBody : null;
+    final htmlCaption = caption == null ? null : htmlBody;
+    if (attachments.isNotEmpty) {
       final bool shouldBundle =
           attachments.length >= _emailAttachmentBundleMinimumCount;
       final attachmentsToSend = await _bundleEmailAttachments(
@@ -373,6 +412,21 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         }
       }
     }
+    if (calendarTaskAttachment != null) {
+      final report = await emailService.fanOutSend(
+        targets: targets,
+        attachment: caption == null
+            ? calendarTaskAttachment
+            : calendarTaskAttachment.copyWith(caption: caption),
+        htmlCaption: htmlCaption,
+        subject: subject,
+        quotedStanzaId: quoteTarget?.stanzaId,
+        shareId: shareId,
+        useSubjectToken: includeSignatureToken,
+        tokenAsSignature: includeSignatureToken,
+      );
+      _throwIfFanOutFailed(report);
+    }
   }
 
   Future<void> _sendXmppDraft({
@@ -380,11 +434,19 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required String body,
     DraftQuoteTarget? quoteTarget,
     required List<Attachment> attachments,
+    required CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    required List<DraftForwardedBlock> forwardedBlocks,
   }) async {
-    final trimmedBody = body.trim();
+    final assembled = DraftForwardedContent.compose(
+      introText: body,
+      forwardedBlocks: forwardedBlocks,
+    );
+    final trimmedBody = assembled.plainText.trim();
+    final htmlBody = assembled.htmlBody;
     final hasBody = trimmedBody.isNotEmpty;
     final hasAttachments = attachments.isNotEmpty;
-    if (!hasBody && !hasAttachments) {
+    final hasCalendarTask = calendarTaskIcsMessage != null;
+    if (!hasBody && !hasAttachments && !hasCalendarTask) {
       throw const DraftSendNoContentException();
     }
     if (targets.isEmpty) {
@@ -405,19 +467,26 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       final jid = target.jid;
       final encryption = target.encryptionProtocol;
       final chatType = target.chatType;
-      if (hasBody && !hasAttachments) {
+      if (!hasAttachments || hasCalendarTask) {
         await _messageService.sendMessage(
           jid: jid,
           text: trimmedBody,
+          htmlBody: htmlBody,
           encryptionProtocol: encryption,
           quotedReference: quoteTarget?.messageReference,
           chatType: chatType,
+          calendarTaskIcs: calendarTaskIcsMessage?.task,
+          calendarTaskIcsReadOnly:
+              calendarTaskIcsMessage?.readOnly ??
+              CalendarTaskIcsMessage.defaultReadOnly,
         );
-        return;
+        if (!hasAttachments) {
+          return;
+        }
       }
       for (var index = 0; index < attachments.length; index += 1) {
         final attachment = attachments[index];
-        final shouldApplyCaption = hasBody && index == 0;
+        final shouldApplyCaption = hasBody && !hasCalendarTask && index == 0;
         final resolvedAttachment = shouldApplyCaption
             ? attachment.copyWith(caption: trimmedBody)
             : attachment;
@@ -430,6 +499,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           quotedReference: shouldApplyCaption
               ? quoteTarget?.messageReference
               : null,
+          htmlCaption: shouldApplyCaption ? htmlBody : null,
           transportGroupId: attachmentGroupId,
           attachmentOrder: index,
           upload: upload,
@@ -468,6 +538,24 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       caption: caption,
     );
     return [bundled];
+  }
+
+  Future<Attachment?> _buildCalendarTaskEmailAttachment(
+    CalendarTaskIcsMessage message,
+  ) async {
+    try {
+      const transferService = CalendarTransferService();
+      final file = await transferService.exportTaskIcs(task: message.task);
+      CalendarTransferService.scheduleCleanup(file);
+      return Attachment(
+        path: file.path,
+        fileName: p.basename(file.path),
+        sizeBytes: await File(file.path).length(),
+        mimeType: _calendarTaskIcsAttachmentMimeType,
+      );
+    } on Exception {
+      return null;
+    }
   }
 
   void _throwIfFanOutFailed(FanOutSendReport report) {

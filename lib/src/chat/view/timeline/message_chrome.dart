@@ -1835,7 +1835,7 @@ _resolveTimelineMessageActionCallbacks({
   }
 
   VoidCallback? onForward;
-  if (!(isInviteMessage || inviteRevoked || isInviteRevocationMessage)) {
+  if (messageModel.pseudoMessageType == null && !inviteRevoked) {
     onForward = () => unawaited(onForwardRequested(messageModel));
   }
 

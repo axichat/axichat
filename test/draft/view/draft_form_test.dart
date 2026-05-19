@@ -19,6 +19,10 @@ import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(<DraftForwardedBlock>[]);
+  });
+
   testWidgets('deletes tracked draft when autosaved form becomes empty', (
     tester,
   ) async {
@@ -126,6 +130,102 @@ void main() {
     expect(closeResult, isTrue);
     verify(() => harness.draftCubit.deleteDraft(id: 7)).called(1);
     expect(closed, isTrue);
+  });
+
+  testWidgets('converting a forwarded block autosaves editable text', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final savedBlocks = <List<DraftForwardedBlock>>[];
+    when(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+      ),
+    ).thenAnswer((invocation) async {
+      savedBlocks.add(
+        List<DraftForwardedBlock>.from(
+          invocation.namedArguments[#forwardedBlocks]
+              as List<DraftForwardedBlock>,
+        ),
+      );
+      return _draft(id: 8);
+    });
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'Intro note',
+          forwardedBlocks: [_forwardedHtmlBlock()],
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Convert to editable text'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    verify(
+      () => harness.draftCubit.saveDraft(
+        id: null,
+        jids: any(named: 'jids'),
+        body: 'Intro note',
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: true,
+      ),
+    ).called(1);
+    expect(savedBlocks.single.single.isConverted, isTrue);
+    expect(
+      savedBlocks.single.single.convertedText,
+      contains('-------- Forwarded message --------'),
+    );
+    expect(savedBlocks.single.single.convertedText, contains('Forwarded body'));
+  });
+
+  testWidgets('text-only forwarded blocks open as normal body text', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'Intro note',
+          forwardedBlocks: [_forwardedBlock()],
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final field = tester.widget<AxiTextFormField>(_bodyField());
+    expect(
+      field.controller?.text,
+      allOf(
+        contains('Intro note'),
+        contains('-------- Forwarded message --------'),
+        contains('Forwarded body'),
+      ),
+    );
+    expect(find.text('Convert to editable text'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
   });
 }
 
@@ -243,6 +343,23 @@ Draft _draft({required int id, List<String> attachmentMetadataIds = const []}) {
     draftUpdatedAt: DateTime.utc(2026),
     draftSourceId: 'source',
     attachmentMetadataIds: attachmentMetadataIds,
+  );
+}
+
+DraftForwardedBlock _forwardedBlock() {
+  return const DraftForwardedBlock(
+    blockId: 'forward-block',
+    sourceMessageId: 'source-message',
+    senderJid: 'sender@example.com',
+    senderLabel: 'Sender',
+    originalSubject: 'Original subject',
+    originalPlainText: 'Forwarded body',
+  );
+}
+
+DraftForwardedBlock _forwardedHtmlBlock() {
+  return _forwardedBlock().copyWith(
+    originalHtml: '<p><strong>Forwarded body</strong></p>',
   );
 }
 

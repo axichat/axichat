@@ -7,8 +7,8 @@ class _MessageSelectionToolbar extends StatelessWidget {
     required this.onCopy,
     required this.onShare,
     required this.shareStatus,
-    required this.onForward,
     required this.onAddToCalendar,
+    this.onForward,
     this.showReactions = false,
     this.onReactionSelected,
     this.onReactionPicker,
@@ -19,7 +19,7 @@ class _MessageSelectionToolbar extends StatelessWidget {
   final VoidCallback onCopy;
   final VoidCallback onShare;
   final RequestStatus shareStatus;
-  final VoidCallback onForward;
+  final VoidCallback? onForward;
   final VoidCallback onAddToCalendar;
   final bool showReactions;
   final ValueChanged<String>? onReactionSelected;
@@ -54,11 +54,12 @@ class _MessageSelectionToolbar extends StatelessWidget {
             runSpacing: scaled(spacing.s),
             alignment: WrapAlignment.center,
             children: [
-              ContextActionButton(
-                icon: Icon(LucideIcons.reply, size: iconSize),
-                label: l10n.chatActionForward,
-                onPressed: onForward,
-              ),
+              if (onForward != null)
+                ContextActionButton(
+                  icon: Icon(LucideIcons.reply, size: iconSize),
+                  label: l10n.chatActionForward,
+                  onPressed: onForward,
+                ),
               ContextActionButton(
                 icon: Icon(LucideIcons.copy, size: iconSize),
                 label: l10n.chatActionCopy,

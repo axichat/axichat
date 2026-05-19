@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:async/async.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/task/task_share_formatter.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
@@ -15,11 +16,13 @@ import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/draft_forwarded_content.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -35,6 +38,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -45,6 +49,9 @@ class DraftForm extends StatefulWidget {
     this.subject = '',
     this.quoteTarget,
     this.attachmentMetadataIds = const [],
+    this.calendarTaskIcsMessage,
+    this.forwardedBlocks = const <DraftForwardedBlock>[],
+    this.forwardedSourceAttachmentMetadataIds = const <String>[],
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
     required this.locate,
@@ -63,6 +70,9 @@ class DraftForm extends StatefulWidget {
   final String subject;
   final DraftQuoteTarget? quoteTarget;
   final List<String> attachmentMetadataIds;
+  final CalendarTaskIcsMessage? calendarTaskIcsMessage;
+  final List<DraftForwardedBlock> forwardedBlocks;
+  final List<String> forwardedSourceAttachmentMetadataIds;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
   final T Function<T>() locate;
@@ -80,6 +90,21 @@ class DraftForm extends StatefulWidget {
 
 enum _DraftFormCloseAction { save, discard, cancel }
 
+final class _ConvertedForwardRange {
+  const _ConvertedForwardRange({required this.start, required this.end});
+
+  final int start;
+  final int end;
+
+  _ConvertedForwardRange shift(int delta) {
+    return _ConvertedForwardRange(start: start + delta, end: end + delta);
+  }
+
+  _ConvertedForwardRange replace({required int start, required int end}) {
+    return _ConvertedForwardRange(start: start, end: end);
+  }
+}
+
 class DraftFormState extends State<DraftForm> {
   final _formKey = GlobalKey<FormState>();
   bool _showValidationMessages = false;
@@ -90,8 +115,17 @@ class DraftFormState extends State<DraftForm> {
   late final FocusNode _subjectFocusNode;
   late List<ComposerRecipient> _recipients;
   late List<PendingAttachment> _pendingAttachments;
+  late List<DraftForwardedBlock> _forwardedBlocks;
+  late List<String> _seedAttachmentMetadataIds;
+  late String _lastBodyText;
+  CalendarTaskIcsMessage? _pendingCalendarTaskIcsMessage;
+  final Map<String, _ConvertedForwardRange> _convertedForwardRanges =
+      <String, _ConvertedForwardRange>{};
+  final Map<String, bool> _forwardPreviewShowImages = <String, bool>{};
+  final Map<String, bool> _forwardPreviewUnblockedOriginal = <String, bool>{};
   bool _recipientsInitialized = false;
   bool _hydrationScheduled = false;
+  bool _forwardAttachmentCloneScheduled = false;
 
   late var id = widget.id;
   bool _loadingAttachments = false;
@@ -116,13 +150,26 @@ class DraftFormState extends State<DraftForm> {
   @override
   void initState() {
     super.initState();
-    _bodyTextController = TextEditingController(text: widget.body)
+    _forwardedBlocks = List<DraftForwardedBlock>.from(
+      widget.forwardedBlocks,
+      growable: false,
+    );
+    _seedAttachmentMetadataIds = List<String>.from(
+      widget.attachmentMetadataIds,
+      growable: false,
+    );
+    final initialBodyText = _initialBodyTextWithConvertedForwards(
+      _initialBodyTextWithPlainForwards(widget.body),
+    );
+    _lastBodyText = initialBodyText;
+    _bodyTextController = TextEditingController(text: initialBodyText)
       ..addListener(_bodyListener);
     _subjectTextController = TextEditingController(text: widget.subject)
       ..addListener(_subjectListener);
     _bodyFocusNode = FocusNode();
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
+    _pendingCalendarTaskIcsMessage = widget.calendarTaskIcsMessage;
     _recipients = const [];
     _lastSavedSignature = _savedSignatureFromSeed();
   }
@@ -136,6 +183,11 @@ class DraftFormState extends State<DraftForm> {
     }
     if (oldWidget.id == widget.id &&
         oldWidget.quoteTarget != widget.quoteTarget) {
+      _scheduleAutosave();
+    }
+    if (oldWidget.id == widget.id &&
+        oldWidget.calendarTaskIcsMessage != widget.calendarTaskIcsMessage) {
+      _pendingCalendarTaskIcsMessage = widget.calendarTaskIcsMessage;
       _scheduleAutosave();
     }
   }
@@ -158,14 +210,135 @@ class DraftFormState extends State<DraftForm> {
   bool get _shouldCleanupSeedAttachments =>
       !_seedAttachmentCleanupHandled &&
       id == null &&
-      widget.attachmentMetadataIds.isNotEmpty;
+      _seedAttachmentMetadataIds.isNotEmpty;
+
+  String _initialBodyTextWithConvertedForwards(String introText) {
+    var bodyText = introText;
+    _convertedForwardRanges.clear();
+    for (final block in _forwardedBlocks) {
+      if (!block.isConverted) {
+        continue;
+      }
+      final convertedText = block.convertedText ?? '';
+      if (convertedText.trim().isEmpty) {
+        continue;
+      }
+      final separator = bodyText.trim().isEmpty ? '' : '\n\n';
+      final start = bodyText.length + separator.length;
+      bodyText = '$bodyText$separator$convertedText';
+      _convertedForwardRanges[block.blockId] = _ConvertedForwardRange(
+        start: start,
+        end: bodyText.length,
+      );
+    }
+    return bodyText;
+  }
+
+  String _initialBodyTextWithPlainForwards(String introText) {
+    if (_forwardedBlocks.isEmpty) {
+      return introText;
+    }
+    final retainedBlocks = <DraftForwardedBlock>[];
+    var bodyText = introText;
+    for (final block in _forwardedBlocks) {
+      if (block.originalHtml?.trim().isNotEmpty == true) {
+        retainedBlocks.add(block);
+        continue;
+      }
+      final forwardedText = block.isConverted
+          ? block.activePlainText
+          : DraftForwardedContent.plainForwardedBlock(block);
+      if (forwardedText.trim().isEmpty) {
+        continue;
+      }
+      final separator = bodyText.trim().isEmpty ? '' : '\n\n';
+      bodyText = '$bodyText$separator$forwardedText';
+    }
+    _forwardedBlocks = retainedBlocks;
+    return bodyText;
+  }
 
   void _bodyListener() {
     if (!mounted) {
       return;
     }
+    _updateConvertedForwardRanges(
+      previousText: _lastBodyText,
+      nextText: _bodyTextController.text,
+    );
+    _lastBodyText = _bodyTextController.text;
+    _syncConvertedForwardBlocksFromBody();
     setState(() => _sendErrorMessage = null);
     _scheduleAutosave();
+  }
+
+  void _updateConvertedForwardRanges({
+    required String previousText,
+    required String nextText,
+  }) {
+    if (_convertedForwardRanges.isEmpty || previousText == nextText) {
+      return;
+    }
+    var prefixLength = 0;
+    final shortestLength = previousText.length < nextText.length
+        ? previousText.length
+        : nextText.length;
+    while (prefixLength < shortestLength &&
+        previousText.codeUnitAt(prefixLength) ==
+            nextText.codeUnitAt(prefixLength)) {
+      prefixLength += 1;
+    }
+    var previousSuffix = previousText.length;
+    var nextSuffix = nextText.length;
+    while (previousSuffix > prefixLength &&
+        nextSuffix > prefixLength &&
+        previousText.codeUnitAt(previousSuffix - 1) ==
+            nextText.codeUnitAt(nextSuffix - 1)) {
+      previousSuffix -= 1;
+      nextSuffix -= 1;
+    }
+    final delta = nextText.length - previousText.length;
+    final updated = <String, _ConvertedForwardRange>{};
+    for (final entry in _convertedForwardRanges.entries) {
+      final range = entry.value;
+      if (previousSuffix <= range.start) {
+        updated[entry.key] = range.shift(delta);
+        continue;
+      }
+      if (prefixLength >= range.end) {
+        updated[entry.key] = range;
+        continue;
+      }
+      final nextStart = range.start < prefixLength ? range.start : prefixLength;
+      final nextEnd = (range.end + delta)
+          .clamp(nextStart, nextText.length)
+          .toInt();
+      updated[entry.key] = range.replace(start: nextStart, end: nextEnd);
+    }
+    _convertedForwardRanges
+      ..clear()
+      ..addAll(updated);
+  }
+
+  void _syncConvertedForwardBlocksFromBody() {
+    if (_convertedForwardRanges.isEmpty) {
+      return;
+    }
+    final bodyText = _bodyTextController.text;
+    _forwardedBlocks = _forwardedBlocks
+        .map((block) {
+          if (!block.isConverted) {
+            return block;
+          }
+          final range = _convertedForwardRanges[block.blockId];
+          if (range == null) {
+            return block;
+          }
+          final start = range.start.clamp(0, bodyText.length).toInt();
+          final end = range.end.clamp(start, bodyText.length).toInt();
+          return block.copyWith(convertedText: bodyText.substring(start, end));
+        })
+        .toList(growable: false);
   }
 
   void _subjectListener() {
@@ -192,7 +365,9 @@ class DraftFormState extends State<DraftForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_hydrationScheduled || widget.attachmentMetadataIds.isEmpty) {
+    if (_hydrationScheduled ||
+        (_seedAttachmentMetadataIds.isEmpty &&
+            widget.forwardedSourceAttachmentMetadataIds.isEmpty)) {
       return;
     }
     _hydrationScheduled = true;
@@ -203,7 +378,202 @@ class DraftFormState extends State<DraftForm> {
   }
 
   void _handleTaskDrop(CalendarDragPayload payload) {
+    setState(() {
+      _pendingCalendarTaskIcsMessage = CalendarTaskIcsMessage(
+        task: payload.snapshot,
+      );
+    });
     _appendTaskShareText(payload.snapshot);
+    _scheduleAutosave();
+  }
+
+  Widget? _composerBanner(Widget? baseBanner) {
+    final calendarTaskIcsMessage = _pendingCalendarTaskIcsMessage;
+    if (calendarTaskIcsMessage == null) {
+      return baseBanner;
+    }
+    final taskBanner = _DraftCalendarTaskBanner(
+      message: calendarTaskIcsMessage,
+      onRemove: _handleCalendarTaskRemoved,
+    );
+    if (baseBanner == null) {
+      return taskBanner;
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [baseBanner, taskBanner],
+    );
+  }
+
+  void _handleCalendarTaskRemoved() {
+    setState(() {
+      _pendingCalendarTaskIcsMessage = null;
+    });
+    _scheduleAutosave();
+  }
+
+  Widget? _forwardedPreview() {
+    if (_forwardedBlocks.isEmpty) {
+      return null;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final block in _forwardedBlocks)
+          _DraftForwardedBlockPreview(
+            block: block,
+            showImages: _forwardPreviewShowImages[block.blockId] == true,
+            originalContentUnblocked:
+                _forwardPreviewUnblockedOriginal[block.blockId] == true,
+            onShowImages: () => _handleForwardShowImages(block.blockId),
+            onUnblockOriginal: () =>
+                _handleForwardUnblockOriginal(block.blockId),
+            onConvert: () => _handleForwardConvert(block),
+            onRestore: () => _handleForwardRestore(block),
+            onLinkTap: (url) => unawaited(_handleForwardPreviewLinkTap(url)),
+          ),
+      ],
+    );
+  }
+
+  void _handleForwardShowImages(String blockId) {
+    setState(() {
+      _forwardPreviewShowImages[blockId] = true;
+    });
+  }
+
+  Future<void> _handleForwardUnblockOriginal(String blockId) async {
+    setState(() {
+      _forwardPreviewUnblockedOriginal[blockId] = true;
+    });
+  }
+
+  void _handleForwardConvert(DraftForwardedBlock block) {
+    if (block.isConverted) {
+      return;
+    }
+    final text = DraftForwardedContent.plainForwardedBlock(block);
+    final separator = _bodyTextController.text.trim().isEmpty ? '' : '\n\n';
+    final start = _bodyTextController.text.length + separator.length;
+    final nextText = '${_bodyTextController.text}$separator$text';
+    _convertedForwardRanges[block.blockId] = _ConvertedForwardRange(
+      start: start,
+      end: nextText.length,
+    );
+    _replaceForwardedBlock(block.asConverted(text));
+    _lastBodyText = nextText;
+    _bodyTextController.value = _bodyTextController.value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+      composing: TextRange.empty,
+    );
+    _bodyFocusNode.requestFocus();
+    _scheduleAutosave();
+  }
+
+  Future<void> _handleForwardRestore(DraftForwardedBlock block) async {
+    if (!block.isConverted) {
+      return;
+    }
+    final restore = await showFadeScaleDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final pop = Navigator.of(dialogContext).pop;
+        return AxiDialog(
+          constraints: BoxConstraints(
+            maxWidth: dialogContext.sizing.dialogMaxWidth,
+          ),
+          title: Text(
+            dialogContext.l10n.draftForwardRestoreTitle,
+            style: dialogContext.modalHeaderTextStyle,
+          ),
+          description: Text(dialogContext.l10n.draftForwardRestoreMessage),
+          actions: [
+            AxiButton.outline(
+              onPressed: () => pop(false),
+              child: Text(dialogContext.l10n.commonCancel),
+            ),
+            AxiButton.primary(
+              onPressed: () => pop(true),
+              child: Text(dialogContext.l10n.draftForwardRestoreAction),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || restore != true) {
+      return;
+    }
+    _removeConvertedForwardText(block.blockId);
+    _replaceForwardedBlock(block.restoredOriginal());
+    _scheduleAutosave();
+  }
+
+  void _removeConvertedForwardText(String blockId) {
+    final range = _convertedForwardRanges.remove(blockId);
+    if (range == null) {
+      return;
+    }
+    final bodyText = _bodyTextController.text;
+    final removal = _convertedForwardRemovalRange(range, bodyText);
+    var nextText = bodyText.replaceRange(removal.start, removal.end, '');
+    nextText = _collapseTrailingForwardSeparators(nextText);
+    _bodyTextController.value = _bodyTextController.value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(
+        offset: removal.start.clamp(0, nextText.length).toInt(),
+      ),
+      composing: TextRange.empty,
+    );
+    _lastBodyText = nextText;
+  }
+
+  void _replaceForwardedBlock(DraftForwardedBlock replacement) {
+    setState(() {
+      _forwardedBlocks = _forwardedBlocks
+          .map(
+            (block) =>
+                block.blockId == replacement.blockId ? replacement : block,
+          )
+          .toList(growable: false);
+    });
+  }
+
+  Future<void> _handleForwardPreviewLinkTap(String url) async {
+    if (!mounted) return;
+    final l10n = context.l10n;
+    final report = assessLinkSafety(raw: url, kind: LinkSafetyKind.message);
+    if (report == null || !report.isSafe) {
+      _showToast(l10n.chatInvalidLink(url.trim()));
+      return;
+    }
+    final hostLabel = formatLinkSchemeHostLabel(report);
+    final baseMessage = report.needsWarning
+        ? l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel)
+        : l10n.chatOpenLinkMessage(report.displayUri, hostLabel);
+    final warningBlock = formatLinkWarningText(report.warnings);
+    final action = await showLinkActionDialog(
+      context,
+      title: l10n.chatOpenLinkTitle,
+      message: '$baseMessage$warningBlock',
+      openLabel: l10n.chatOpenLinkConfirm,
+      copyLabel: l10n.chatActionCopy,
+      cancelLabel: l10n.commonCancel,
+    );
+    if (action == null) return;
+    if (action == LinkAction.copy) {
+      await Clipboard.setData(ClipboardData(text: report.displayUri));
+      return;
+    }
+    final launched = await launchUrl(
+      report.uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched) {
+      _showToast(l10n.chatUnableToOpenHost(report.displayHost));
+    }
   }
 
   @override
@@ -307,6 +677,9 @@ class DraftFormState extends State<DraftForm> {
                         final subjectText = _subjectTextController.text.trim();
                         final pendingAttachments = _pendingAttachments;
                         final hasAttachments = pendingAttachments.isNotEmpty;
+                        final hasCalendarTask =
+                            _pendingCalendarTaskIcsMessage != null;
+                        final hasForwardedBlocks = _forwardedBlocks.isNotEmpty;
                         final hasQuoteTarget = widget.quoteTarget != null;
                         final hasPreparingAttachments = pendingAttachments.any(
                           (pending) => pending.isPreparing,
@@ -331,7 +704,9 @@ class DraftFormState extends State<DraftForm> {
                                 _hasMeaningfulBodyText(bodyText) ||
                                 subjectText.isNotEmpty ||
                                 hasQuoteTarget ||
-                                hasAttachments);
+                                hasAttachments ||
+                                hasCalendarTask ||
+                                hasForwardedBlocks);
                         final canDiscard =
                             enabled &&
                             (id != null ||
@@ -339,7 +714,9 @@ class DraftFormState extends State<DraftForm> {
                                 _hasMeaningfulBodyText(bodyText) ||
                                 subjectText.isNotEmpty ||
                                 hasQuoteTarget ||
-                                hasAttachments);
+                                hasAttachments ||
+                                hasCalendarTask ||
+                                hasForwardedBlocks);
                         final sendBlocker = _sendValidationMessage(
                           hasActiveRecipients: hasActiveRecipients,
                           hasContent: hasContent,
@@ -380,7 +757,8 @@ class DraftFormState extends State<DraftForm> {
                           bodyController: _bodyTextController,
                           bodyFocusNode: _bodyFocusNode,
                           onSubjectSubmitted: _bodyFocusNode.requestFocus,
-                          banner: widget.banner,
+                          forwardedPreview: _forwardedPreview(),
+                          banner: _composerBanner(widget.banner),
                           subjectTrailing: widget.subjectTrailing,
                           loadingAttachments: _loadingAttachments,
                           attachments: _pendingAttachments,
@@ -502,13 +880,37 @@ class DraftFormState extends State<DraftForm> {
   Future<void> _performAttachmentHydration({
     required CancelableCompleter<void> cancellation,
   }) async {
-    if (widget.attachmentMetadataIds.isEmpty) {
+    if (_seedAttachmentMetadataIds.isEmpty &&
+        widget.forwardedSourceAttachmentMetadataIds.isEmpty) {
       return;
     }
     setState(() => _loadingAttachments = true);
     try {
+      if (!_forwardAttachmentCloneScheduled &&
+          widget.forwardedSourceAttachmentMetadataIds.isNotEmpty) {
+        _forwardAttachmentCloneScheduled = true;
+        final clonedIds = await context
+            .read<DraftCubit>()
+            .cloneDraftAttachmentMetadata(
+              widget.forwardedSourceAttachmentMetadataIds,
+            );
+        if (!mounted || cancellation.isCanceled) {
+          await _deleteAttachmentMetadataIds(
+            widget.locate<DraftCubit>(),
+            clonedIds,
+          );
+          return;
+        }
+        _seedAttachmentMetadataIds = [
+          ..._seedAttachmentMetadataIds,
+          ...clonedIds,
+        ];
+      }
+      if (_seedAttachmentMetadataIds.isEmpty) {
+        return;
+      }
       final pending = await _pendingAttachmentsFromMetadata(
-        widget.attachmentMetadataIds,
+        _seedAttachmentMetadataIds,
       );
       if (!mounted || cancellation.isCanceled) return;
       setState(() => _pendingAttachments = pending);
@@ -815,7 +1217,8 @@ class DraftFormState extends State<DraftForm> {
         .map((pending) => pending.id)
         .toList();
     final List<String> recipients = _recipientStrings();
-    final String body = _bodyTextController.text;
+    _syncConvertedForwardBlocksFromBody();
+    final String body = _draftIntroText();
     final String subject = _subjectTextController.text;
     final DraftQuoteTarget? quoteTarget = widget.quoteTarget;
     final List<Attachment> attachments = pendingAttachments
@@ -827,6 +1230,8 @@ class DraftFormState extends State<DraftForm> {
       subject: subject,
       quoteTarget: quoteTarget,
       pendingAttachments: pendingAttachments,
+      calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+      forwardedBlocks: _forwardedBlocks,
     );
     final draftCubit = context.read<DraftCubit>();
     final draft = await draftCubit.saveDraft(
@@ -836,6 +1241,8 @@ class DraftFormState extends State<DraftForm> {
       subject: subject,
       quoteTarget: quoteTarget,
       attachments: attachments,
+      calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+      forwardedBlocks: _forwardedBlocks,
       autoSave: autoSave,
     );
     final draftCount = !autoSave && wasNewDraft
@@ -866,10 +1273,10 @@ class DraftFormState extends State<DraftForm> {
       expectedAttachmentIds: attachmentIds,
     );
     if (!mounted) return;
-    if (wasNewDraft && widget.attachmentMetadataIds.isNotEmpty) {
+    if (wasNewDraft && _seedAttachmentMetadataIds.isNotEmpty) {
       final Set<String> retainedMetadataIds = draft.attachmentMetadata.values
           .toSet();
-      final List<String> staleMetadataIds = widget.attachmentMetadataIds
+      final List<String> staleMetadataIds = _seedAttachmentMetadataIds
           .where((metadataId) => !retainedMetadataIds.contains(metadataId))
           .toList();
       if (staleMetadataIds.isNotEmpty) {
@@ -928,7 +1335,7 @@ class DraftFormState extends State<DraftForm> {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
-    final attachmentIds = widget.attachmentMetadataIds
+    final attachmentIds = _seedAttachmentMetadataIds
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
@@ -939,6 +1346,8 @@ class DraftFormState extends State<DraftForm> {
       widget.quoteTarget?.referenceKind,
       ...recipients,
       ...attachmentIds,
+      _calendarTaskSignature(widget.calendarTaskIcsMessage),
+      _forwardedBlocksSignature(_forwardedBlocks),
     ]);
   }
 
@@ -1056,18 +1465,64 @@ class DraftFormState extends State<DraftForm> {
         _hasMeaningfulBodyText(body) ||
         subject.isNotEmpty ||
         widget.quoteTarget != null ||
-        hasAttachments;
+        hasAttachments ||
+        _pendingCalendarTaskIcsMessage != null ||
+        _forwardedBlocks.isNotEmpty;
   }
 
   int _currentDraftSignature() {
     final recipients = _recipientStrings();
+    _syncConvertedForwardBlocksFromBody();
     return _draftSignature(
       recipients: recipients,
-      body: _bodyTextController.text,
+      body: _draftIntroText(),
       subject: _subjectTextController.text,
       quoteTarget: widget.quoteTarget,
       pendingAttachments: _pendingAttachments,
+      calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+      forwardedBlocks: _forwardedBlocks,
     );
+  }
+
+  String _draftIntroText() {
+    if (_convertedForwardRanges.isEmpty) {
+      return _bodyTextController.text;
+    }
+    final bodyText = _bodyTextController.text;
+    final ranges = _convertedForwardRanges.values.toList()
+      ..sort((a, b) => b.start.compareTo(a.start));
+    var introText = bodyText;
+    for (final range in ranges) {
+      final removal = _convertedForwardRemovalRange(range, introText);
+      introText = introText.replaceRange(removal.start, removal.end, '');
+    }
+    return _collapseTrailingForwardSeparators(introText);
+  }
+
+  String _outgoingPreviewText() {
+    return DraftForwardedContent.compose(
+      introText: _draftIntroText(),
+      forwardedBlocks: _forwardedBlocks,
+    ).plainText;
+  }
+
+  String _collapseTrailingForwardSeparators(String value) {
+    return value.replaceFirst(RegExp(r'\n{3,}$'), '\n\n');
+  }
+
+  ({int start, int end}) _convertedForwardRemovalRange(
+    _ConvertedForwardRange range,
+    String bodyText,
+  ) {
+    var start = range.start.clamp(0, bodyText.length).toInt();
+    final end = range.end.clamp(start, bodyText.length).toInt();
+    if (start >= 2 && bodyText.substring(start - 2, start) == '\n\n') {
+      final before = bodyText.substring(0, start - 2);
+      if (before.trim().isNotEmpty) {
+        start -= 2;
+      }
+    }
+    return (start: start, end: end);
   }
 
   int _draftSignature({
@@ -1076,6 +1531,8 @@ class DraftFormState extends State<DraftForm> {
     required String subject,
     required DraftQuoteTarget? quoteTarget,
     required List<PendingAttachment> pendingAttachments,
+    required CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    required List<DraftForwardedBlock> forwardedBlocks,
   }) {
     final List<Object?> values = <Object?>[
       body,
@@ -1086,8 +1543,36 @@ class DraftFormState extends State<DraftForm> {
       ...pendingAttachments.map(
         (pending) => _attachmentSignature(pending.attachment),
       ),
+      _calendarTaskSignature(calendarTaskIcsMessage),
+      _forwardedBlocksSignature(forwardedBlocks),
     ];
     return Object.hashAll(values);
+  }
+
+  Object? _calendarTaskSignature(CalendarTaskIcsMessage? message) {
+    if (message == null) {
+      return null;
+    }
+    return Object.hash(message.task, message.readOnly);
+  }
+
+  Object _forwardedBlocksSignature(List<DraftForwardedBlock> blocks) {
+    return Object.hashAll(
+      blocks.map(
+        (block) => Object.hash(
+          block.blockId,
+          block.sourceMessageId,
+          block.senderJid,
+          block.senderLabel,
+          block.timestamp,
+          block.originalSubject,
+          block.originalPlainText,
+          block.originalHtml,
+          block.conversionState,
+          block.convertedText,
+        ),
+      ),
+    );
   }
 
   Object _attachmentSignature(Attachment attachment) {
@@ -1294,7 +1779,7 @@ class DraftFormState extends State<DraftForm> {
       return;
     }
     _seedAttachmentCleanupHandled = true;
-    final List<String> metadataIds = widget.attachmentMetadataIds;
+    final List<String> metadataIds = _seedAttachmentMetadataIds;
     if (metadataIds.isEmpty) {
       return;
     }
@@ -1303,6 +1788,19 @@ class DraftFormState extends State<DraftForm> {
         await draftCubit.deleteDraftAttachmentMetadata(metadataId);
       } on Exception {
         // Best-effort cleanup for share intent attachment metadata.
+      }
+    }
+  }
+
+  Future<void> _deleteAttachmentMetadataIds(
+    DraftCubit draftCubit,
+    Iterable<String> metadataIds,
+  ) async {
+    for (final metadataId in metadataIds) {
+      try {
+        await draftCubit.deleteDraftAttachmentMetadata(metadataId);
+      } on Exception {
+        // Best-effort cleanup for abandoned compose attachment metadata.
       }
     }
   }
@@ -1388,10 +1886,11 @@ class DraftFormState extends State<DraftForm> {
     final formValid = _formKey.currentState?.validate() ?? false;
     if (validationMessage != null || !formValid) return;
     if (emailTargets.isNotEmpty) {
+      _syncConvertedForwardBlocksFromBody();
       final shouldSend = await _confirmEmailSendIfNeeded(
         settingsCubit: settingsCubit,
         recipients: _recipientStrings(),
-        body: _bodyTextController.text,
+        body: _outgoingPreviewText(),
         attachmentNames: _currentAttachments()
             .map((attachment) => attachment.fileName)
             .toList(growable: false),
@@ -1420,11 +1919,13 @@ class DraftFormState extends State<DraftForm> {
         id: id,
         xmppTargets: xmppTargets,
         emailTargets: emailTargets,
-        body: _bodyTextController.text,
+        body: _draftIntroText(),
         shareTokenSignatureEnabled: shareTokenSignatureEnabled,
         subject: _subjectTextController.text,
         quoteTarget: widget.quoteTarget,
         attachments: _currentAttachments(),
+        calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+        forwardedBlocks: _forwardedBlocks,
       );
     } on Exception {
       if (!mounted) return;
@@ -1457,20 +1958,18 @@ class DraftFormState extends State<DraftForm> {
     }
     _sendCompletionHandled = true;
     if (!mounted) return;
-    final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     setState(() {
       _sendingDraft = false;
       _pendingAttachments = const [];
+      _pendingCalendarTaskIcsMessage = null;
       _pendingAttachmentSeed = 0;
       _lastAutosaveAt = null;
       _lastSavedSignature = null;
+      _seedAttachmentCleanupHandled = true;
     });
     ShadToaster.maybeOf(
       context,
     )?.show(FeedbackToast.success(title: context.l10n.draftSent));
-    if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
-    }
     if (!mounted) {
       return;
     }
@@ -1500,9 +1999,11 @@ class DraftFormState extends State<DraftForm> {
       'draft-pending-${_pendingAttachmentSeed++}';
 
   bool _hasContent() {
-    return _hasMeaningfulBodyText(_bodyTextController.text.trim()) ||
+    return _hasMeaningfulBodyText(_outgoingPreviewText().trim()) ||
         _subjectTextController.text.trim().isNotEmpty ||
         widget.quoteTarget != null ||
+        _pendingCalendarTaskIcsMessage != null ||
+        _forwardedBlocks.isNotEmpty ||
         _pendingAttachments.isNotEmpty ||
         _pendingAttachments.any(
           (attachment) => attachment.status == PendingAttachmentStatus.queued,
@@ -1638,6 +2139,147 @@ class DraftFormState extends State<DraftForm> {
           ],
         );
       },
+    );
+  }
+}
+
+class _DraftForwardedBlockPreview extends StatelessWidget {
+  const _DraftForwardedBlockPreview({
+    required this.block,
+    required this.showImages,
+    required this.originalContentUnblocked,
+    required this.onShowImages,
+    required this.onUnblockOriginal,
+    required this.onConvert,
+    required this.onRestore,
+    required this.onLinkTap,
+  });
+
+  final DraftForwardedBlock block;
+  final bool showImages;
+  final bool originalContentUnblocked;
+  final VoidCallback onShowImages;
+  final Future<void> Function() onUnblockOriginal;
+  final VoidCallback onConvert;
+  final Future<void> Function() onRestore;
+  final ValueChanged<String> onLinkTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final originalHtml = block.originalHtml?.trim();
+    final originalSubject = block.originalSubject?.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                originalSubject?.isNotEmpty == true
+                    ? originalSubject!
+                    : context.l10n.chatForwardedMessageHeader,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small,
+              ),
+            ),
+            SizedBox(width: spacing.s),
+            if (block.isConverted)
+              AxiButton.outline(
+                size: AxiButtonSize.sm,
+                onPressed: () => unawaited(onRestore()),
+                child: Text(context.l10n.draftForwardRestoreAction),
+              )
+            else
+              AxiButton.outline(
+                size: AxiButtonSize.sm,
+                onPressed: onConvert,
+                child: Text(context.l10n.draftForwardConvertAction),
+              ),
+          ],
+        ),
+        if (!block.isConverted) ...[
+          SizedBox(height: spacing.s),
+          if (originalHtml != null && originalHtml.isNotEmpty)
+            AxiEmailHtmlPreview(
+              html: originalHtml,
+              shouldLoadSafeRemoteImages: showImages,
+              originalContentUnblocked: originalContentUnblocked,
+              onRemoteImagesApproved: onShowImages,
+              onOriginalContentUnblocked: onUnblockOriginal,
+              onLinkTap: onLinkTap,
+            )
+          else
+            SelectableText(block.originalPlainText, style: context.textTheme.p),
+        ],
+      ],
+    );
+  }
+}
+
+class _DraftCalendarTaskBanner extends StatelessWidget {
+  const _DraftCalendarTaskBanner({
+    required this.message,
+    required this.onRemove,
+  });
+
+  final CalendarTaskIcsMessage message;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final title = message.task.title.trim();
+    return SizedBox(
+      width: double.infinity,
+      child: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        bottom: false,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.card,
+            border: Border(top: context.borderSide),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(spacing.m),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.calendarCheck2,
+                  color: colors.primary,
+                  size: context.sizing.menuItemIconSize,
+                ),
+                SizedBox(width: spacing.s),
+                Expanded(
+                  child: Text(
+                    title.isEmpty ? context.l10n.calendarTaskShareTitle : title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.textTheme.p,
+                  ),
+                ),
+                SizedBox(width: spacing.s),
+                AxiIconButton.ghost(
+                  iconData: LucideIcons.x,
+                  tooltip: context.l10n.commonRemove,
+                  semanticLabel: context.l10n.commonRemove,
+                  onPressed: onRemove,
+                  color: colors.mutedForeground,
+                  backgroundColor: Colors.transparent,
+                  iconSize: context.sizing.menuItemIconSize,
+                  buttonSize: context.sizing.menuItemHeight,
+                  tapTargetSize: context.sizing.menuItemHeight,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

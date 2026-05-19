@@ -1382,6 +1382,36 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     return List.unmodifiable(metadataIds);
   }
 
+  Future<List<String>> cloneDraftAttachmentMetadata(
+    Iterable<String> sourceMetadataIds,
+  ) async {
+    final sourceIds = <String>[];
+    final seen = <String>{};
+    for (final sourceMetadataId in sourceMetadataIds) {
+      final normalized = sourceMetadataId.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
+      }
+      sourceIds.add(normalized);
+    }
+    if (sourceIds.isEmpty) {
+      return const <String>[];
+    }
+    final clonedIds = <String>[];
+    await _dbOp<XmppDatabase>((db) async {
+      for (final sourceId in sourceIds) {
+        final source = await db.getFileMetadata(sourceId);
+        if (source == null) {
+          continue;
+        }
+        final clone = source.copyWith(id: uuid.v4());
+        await db.saveFileMetadata(clone);
+        clonedIds.add(clone.id);
+      }
+    });
+    return List<String>.unmodifiable(clonedIds);
+  }
+
   Future<Draft> saveDraft({
     int? id,
     required List<String> jids,
@@ -1390,6 +1420,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<Attachment> attachments = const <Attachment>[],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
   }) async {
     final Draft? existingDraft = id == null
         ? null
@@ -1436,6 +1468,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         quotingStanzaId: quoteTarget?.stanzaId,
         quotingReferenceKind: quoteTarget?.referenceKind,
         attachmentMetadataIds: attachmentMetadata.values,
+        calendarTaskIcsMessage: calendarTaskIcsMessage,
+        forwardedBlocks: forwardedBlocks,
       ),
     );
     final staleMetadataIds =
@@ -1465,6 +1499,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
           quotingStanzaId: quoteTarget?.stanzaId,
           quotingReferenceKind: quoteTarget?.referenceKind,
           attachmentMetadataIds: attachmentMetadata.values,
+          calendarTaskIcsMessage: calendarTaskIcsMessage,
+          forwardedBlocks: forwardedBlocks,
         );
     if (savedDraft != null) {
       await publishDraftSync(savedDraft);
@@ -1986,6 +2022,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         quotingStanzaId: payload.quotingStanzaId,
         quotingReferenceKind: payload.quotingReferenceKind,
         attachmentMetadataIds: attachmentMetadata.values,
+        calendarTaskIcsMessage: payload.calendarTaskIcsMessage,
+        forwardedBlocks: payload.forwardedBlocks,
         draftUpdatedAt: payload.updatedAt.toUtc(),
         draftSourceId: payload.sourceId,
         draftRecipients: recipientRecords,
@@ -2018,6 +2056,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       quotingStanzaId: quoteTarget?.stanzaId,
       quotingReferenceKind: quoteTarget?.referenceKind,
       attachments: attachments,
+      calendarTaskIcsMessage: draft.calendarTaskIcsMessage,
+      forwardedBlocks: draft.forwardedBlocks,
     );
   }
 

@@ -6,50 +6,6 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
 import 'package:axichat/src/common/url_safety.dart';
 
-enum EmailRecoveredContentKind {
-  verificationCode,
-  actionLink,
-  reference,
-  additionalText;
-
-  int get _sortPriority => switch (this) {
-    EmailRecoveredContentKind.verificationCode => 0,
-    EmailRecoveredContentKind.actionLink => 1,
-    EmailRecoveredContentKind.reference => 2,
-    EmailRecoveredContentKind.additionalText => 3,
-  };
-}
-
-class EmailRecoveredContent {
-  const EmailRecoveredContent({
-    required this.kind,
-    required this.text,
-    this.href,
-  });
-
-  final EmailRecoveredContentKind kind;
-  final String text;
-  final String? href;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is EmailRecoveredContent &&
-          other.kind == kind &&
-          other.text == text &&
-          other.href == href;
-
-  @override
-  int get hashCode => Object.hash(kind, text, href);
-}
-
-class _EmailRecoveryCandidate {
-  const _EmailRecoveryCandidate({required this.text, this.href});
-
-  final String text;
-  final String? href;
-}
-
 class HtmlContentCodec {
   static const String _htmlNamespaceUri = 'http://www.w3.org/1999/xhtml';
   static const Set<String> _flutterTableWrapperTags = <String>{
@@ -96,6 +52,8 @@ class HtmlContentCodec {
       'display:block; padding:0; margin:0 0 4px 0;';
   static const String _standardWebViewViewportContent =
       'width=device-width, initial-scale=1.0, viewport-fit=cover';
+  static const String _standardWebViewStyleElementId =
+      'axichat-email-webview-style';
   static const String _standardWebViewBaseStyle = '''
 html, body {
   margin: 0 !important;
@@ -103,21 +61,20 @@ html, body {
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
-  overflow-x: hidden !important;
   -webkit-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
   font-size: 16px !important;
   line-height: 1.5 !important;
 }
 body {
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
 }
 body * {
   box-sizing: border-box !important;
   font-size: inherit !important;
   line-height: inherit !important;
   max-width: 100% !important;
-  min-width: 0 !important;
 }
 img {
   max-width: 100% !important;
@@ -125,32 +82,24 @@ img {
 }
 table {
   max-width: 100% !important;
-  width: 100% !important;
-  table-layout: fixed !important;
   border-collapse: collapse !important;
 }
-tbody, thead, tfoot, tr {
-  width: 100% !important;
-  max-width: 100% !important;
-}
 td, th {
-  width: auto !important;
   max-width: 100% !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
   white-space: normal !important;
 }
-div, p, span, a, li, td, th {
+div, p, a, li {
   max-width: 100% !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
   white-space: normal !important;
   font-size: inherit !important;
   line-height: inherit !important;
 }
 pre, code {
   white-space: pre-wrap !important;
-  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
   font-size: 0.95em !important;
 }
 *[width], *[style*="width"], *[style*="min-width"], *[style*="max-width"] {
@@ -395,6 +344,13 @@ pre, code {
     'select',
     'textarea',
   };
+  static const Set<String> _emailRecoveryStaticReplacementTags = <String>{
+    'button',
+    'input',
+    'option',
+    'select',
+    'textarea',
+  };
   static const Set<String> _emailRecoveryExcludedTextTags = <String>{
     'audio',
     'base',
@@ -453,6 +409,14 @@ pre, code {
   );
   static final RegExp _emailRecoveryReferencePattern = RegExp(
     r'\b(?:booking|confirmation|invoice|order|receipt|reference|ticket)\b.{0,40}\b(?:id|no|number|#)?\s*[A-Z0-9][A-Z0-9-]{3,}\b',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoveryActionLabelPattern = RegExp(
+    r'\b(?:activate|approve|authenticate|authorize|complete|confirm|continue|log[-\s]?in|open|reset|sign[-\s]?in|unlock|verify|view)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _emailRecoveryPreheaderLabelPattern = RegExp(
+    r'\b(?:manage preferences|unsubscribe|view(?: this)? (?:email|message|in browser|online)|view in browser)\b',
     caseSensitive: false,
   );
   static final RegExp _emailRecoveryUrlLikeLabelPattern = RegExp(
@@ -627,45 +591,6 @@ pre, code {
     }
   }
 
-  static List<EmailRecoveredContent> recoverSanitizedEmailContent(
-    String html, {
-    String? visibleSanitizedText,
-  }) {
-    final trimmed = html.trim();
-    if (trimmed.isEmpty) {
-      return const <EmailRecoveredContent>[];
-    }
-    try {
-      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
-      final budget = _HtmlNodeBudget(
-        maxNodes: _maxHtmlNodeCount,
-        maxDepth: _maxHtmlDepth,
-        maxDuration: _maxHtmlParseDuration,
-      );
-      final candidates = <_EmailRecoveryCandidate>[];
-      _collectEmailRecoveryCandidates(fragment.nodes, candidates, budget, 0);
-      if (candidates.isEmpty) {
-        return const <EmailRecoveredContent>[];
-      }
-      final visibleKeys = _emailRecoveryVisibleKeys(visibleSanitizedText ?? '');
-      final recovered = <EmailRecoveredContent>[];
-      final byTextKey = <String, int>{};
-      for (final candidate in candidates) {
-        _addEmailRecoveredContent(candidate, recovered, byTextKey, visibleKeys);
-      }
-      recovered.sort((a, b) {
-        final kindOrder = a.kind._sortPriority.compareTo(b.kind._sortPriority);
-        if (kindOrder != 0) {
-          return kindOrder;
-        }
-        return a.text.compareTo(b.text);
-      });
-      return List<EmailRecoveredContent>.unmodifiable(recovered);
-    } on Exception {
-      return const <EmailRecoveredContent>[];
-    }
-  }
-
   static bool shouldRenderRichEmailHtml({
     required String? normalizedHtmlBody,
     required String? normalizedHtmlText,
@@ -707,9 +632,38 @@ pre, code {
 
   static bool containsRemoteImages(String html) {
     for (final source in imageSources(html)) {
-      final uri = Uri.tryParse(source);
-      final scheme = uri?.scheme.trim().toLowerCase();
-      if (_remoteImageSchemes.contains(scheme)) return true;
+      if (_isRemoteImageSource(source)) return true;
+    }
+    return false;
+  }
+
+  static bool containsRenderableRemoteImages(String html) {
+    if (!containsRemoteImages(html)) {
+      return false;
+    }
+    try {
+      final document = _prepareEmailHtmlDocument(
+        html,
+        allowRemoteImages: true,
+        includeWebViewChrome: false,
+      );
+      final sources = <String>[];
+      _collectImageSources(
+        document.nodes,
+        sources,
+        <String>{},
+        _HtmlNodeBudget(
+          maxNodes: _maxHtmlNodeCount,
+          maxDepth: _maxHtmlDepth,
+          maxDuration: _maxHtmlParseDuration,
+        ),
+        0,
+      );
+      for (final source in sources) {
+        if (_isRemoteImageSource(source)) return true;
+      }
+    } on Exception {
+      return false;
     }
     return false;
   }
@@ -721,6 +675,12 @@ pre, code {
       if (scheme == 'cid') return true;
     }
     return false;
+  }
+
+  static bool _isRemoteImageSource(String source) {
+    final uri = Uri.tryParse(source);
+    final scheme = uri?.scheme.trim().toLowerCase();
+    return _remoteImageSchemes.contains(scheme);
   }
 
   static bool containsBlockedWebViewContent(String html) {
@@ -799,7 +759,15 @@ pre, code {
     required bool includeWebViewChrome,
   }) {
     final document = html_parser.parse(_truncateHtmlInput(html));
-    _removeRecoveredEmailNodes(document.nodes);
+    _restoreRecoverableEmailContentNodes(
+      document.nodes,
+      _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      ),
+      0,
+    );
     if (includeWebViewChrome) {
       final head =
           document.head ??
@@ -828,7 +796,7 @@ pre, code {
           ..attributes['content'] = _standardWebViewViewportContent,
       );
       final styleElement = document.createElement('style')
-        ..id = 'axichat-email-webview-style'
+        ..id = _standardWebViewStyleElementId
         ..text = _standardWebViewBaseStyle;
       head.append(styleElement);
     }
@@ -845,7 +813,15 @@ pre, code {
     required bool allowRemoteImages,
   }) {
     final document = html_parser.parse(_truncateHtmlInput(html));
-    _removeRecoveredEmailNodes(document.nodes);
+    _restoreRecoverableEmailContentNodes(
+      document.nodes,
+      _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      ),
+      0,
+    );
     _normalizeFlutterHtmlNodes(
       document.nodes,
       allowRemoteImages: allowRemoteImages,
@@ -853,6 +829,273 @@ pre, code {
     _flattenFlutterTableLayout(document.nodes);
     _trimEmptyFlutterHtmlNodes(document.nodes);
     return document;
+  }
+
+  static void _restoreRecoverableEmailContentNodes(
+    List<dom.Node> nodes,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    var index = 0;
+    while (index < nodes.length) {
+      if (!budget.allow(depth)) {
+        return;
+      }
+      final node = nodes[index];
+      if (node is! dom.Element) {
+        index++;
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'a' &&
+          node.attributes.containsKey(_hrefAttribute) &&
+          _sanitizeUriValue(
+                node.attributes[_hrefAttribute] ?? '',
+                _sanitizedLinkSchemes,
+              ) ==
+              null &&
+          (_isHiddenEmailElement(node) ||
+              _hasRecoverableEmailHidingStyle(node.attributes['style']))) {
+        node.remove();
+        continue;
+      }
+      if (tag == 'form') {
+        final replacement = _formEmailRecoveryReplacement(node);
+        if (replacement == null) {
+          index++;
+          continue;
+        }
+        nodes[index] = replacement;
+        _restoreRecoverableEmailContentNodes(
+          replacement.nodes,
+          budget,
+          depth + 1,
+        );
+        index++;
+        continue;
+      }
+      if (_emailRecoveryStaticReplacementTags.contains(tag)) {
+        final replacement = _staticEmailRecoveryReplacement(node);
+        if (replacement == null) {
+          index++;
+          continue;
+        }
+        nodes[index] = replacement;
+        index++;
+        continue;
+      }
+      if (_shouldRestoreEmailElementVisibility(node)) {
+        _removeUnsafeEmailRecoveryDescendants(node);
+        _restoreEmailElementVisibility(node);
+        if (tag == 'a') {
+          _ensureVisibleEmailRecoveryLinkLabel(node);
+        }
+      } else if (_isHiddenEmailElement(node) ||
+          _hasRecoverableEmailHidingStyle(node.attributes['style'])) {
+        node.remove();
+        continue;
+      }
+      if (node.nodes.isNotEmpty) {
+        _restoreRecoverableEmailContentNodes(node.nodes, budget, depth + 1);
+      }
+      index++;
+    }
+  }
+
+  static dom.Element? _formEmailRecoveryReplacement(dom.Element element) {
+    if (!_hasUsefulFormEmailRecoveryContent(element)) {
+      return null;
+    }
+    final replacement = dom.Element.tag(
+      _emailRecoveryReplacementTagFor(element),
+    );
+    _restoreEmailElementVisibility(element);
+    replacement.nodes.addAll(element.nodes.toList());
+    return replacement;
+  }
+
+  static bool _hasUsefulFormEmailRecoveryContent(dom.Element element) {
+    if (_isUsefulEmailRecoveryLabel(_safeEmailRecoveryText(element))) {
+      return true;
+    }
+    for (final descendant in element.querySelectorAll(
+      'button, input, option, select, textarea',
+    )) {
+      final tag = (descendant.localName ?? '').toLowerCase();
+      final label = tag == 'input'
+          ? _emailRecoveryInputLabel(descendant)
+          : _emailRecoveryLabelForElement(descendant);
+      if (_isUsefulEmailRecoveryLabel(label ?? '')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static dom.Element? _staticEmailRecoveryReplacement(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    final label = tag == 'input'
+        ? _emailRecoveryInputLabel(element)
+        : _emailRecoveryLabelForElement(element);
+    final normalizedLabel = _normalizePlainText(label ?? '');
+    if (!_isUsefulEmailRecoveryLabel(normalizedLabel)) {
+      return null;
+    }
+    return dom.Element.tag(_emailRecoveryReplacementTagFor(element))
+      ..text = normalizedLabel;
+  }
+
+  static String _emailRecoveryReplacementTagFor(dom.Element element) {
+    final parentTag = (element.parent?.localName ?? '').toLowerCase();
+    if (parentTag == 'tr') {
+      return 'td';
+    }
+    if (const <String>{
+      'a',
+      'b',
+      'code',
+      'em',
+      'i',
+      'label',
+      'p',
+      'small',
+      'span',
+      'strong',
+      'sub',
+      'sup',
+      'u',
+    }.contains(parentTag)) {
+      return 'span';
+    }
+    return 'div';
+  }
+
+  static bool _shouldRestoreEmailElementVisibility(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (tag == 'img' && _isTrackerOrSpacerEmailImage(element)) {
+      return false;
+    }
+    if (tag == 'a' && element.attributes.containsKey(_hrefAttribute)) {
+      if (!_isHiddenEmailElement(element) &&
+          !_hasRecoverableEmailHidingStyle(element.attributes['style'])) {
+        return false;
+      }
+      return _sanitizeUriValue(
+                element.attributes[_hrefAttribute] ?? '',
+                _sanitizedLinkSchemes,
+              ) !=
+              null &&
+          _isUsefulEmailRecoveryLabel(_emailRecoveryLabelForElement(element));
+    }
+    return _isRecoverableEmailContentRoot(element);
+  }
+
+  static void _restoreEmailElementVisibility(dom.Element element) {
+    element.attributes.remove('hidden');
+    final ariaHidden = element.attributes['aria-hidden']?.trim().toLowerCase();
+    if (ariaHidden == 'true') {
+      element.attributes.remove('aria-hidden');
+    }
+    final style = element.attributes['style'];
+    if (style == null || style.trim().isEmpty) {
+      return;
+    }
+    final restoredStyle = _stripRecoverableEmailHidingStyle(style);
+    if (restoredStyle == null) {
+      element.attributes.remove('style');
+    } else {
+      element.attributes['style'] = restoredStyle;
+    }
+  }
+
+  static String? _stripRecoverableEmailHidingStyle(String style) {
+    final rawDeclarations = style.trim();
+    if (rawDeclarations.isEmpty) {
+      return null;
+    }
+    final stripOverflowHidden = _containsZeroBoxHidingDeclaration(
+      rawDeclarations,
+    );
+    final declarations = <String>[];
+    for (final declaration in rawDeclarations.split(';')) {
+      final parts = _parseCssDeclaration(declaration);
+      if (parts == null) {
+        continue;
+      }
+      if (_isRecoverableHidingStyleDeclaration(
+        parts.property,
+        parts.value,
+        stripOverflowHidden: stripOverflowHidden,
+      )) {
+        continue;
+      }
+      declarations.add('${parts.property}: ${parts.value}');
+    }
+    if (declarations.isEmpty) {
+      return null;
+    }
+    return declarations.join('; ');
+  }
+
+  static void _removeUnsafeEmailRecoveryDescendants(dom.Element element) {
+    for (final descendant in element.querySelectorAll('a').toList()) {
+      final href = descendant.attributes[_hrefAttribute];
+      if (href == null) {
+        continue;
+      }
+      final safeHref = _sanitizeUriValue(href, _sanitizedLinkSchemes);
+      if (safeHref == null) {
+        descendant.remove();
+      } else {
+        descendant.attributes[_hrefAttribute] = safeHref;
+      }
+    }
+    for (final descendant in element.querySelectorAll('img').toList()) {
+      if (_isTrackerOrSpacerEmailImage(descendant)) {
+        descendant.remove();
+      }
+    }
+  }
+
+  static void _ensureVisibleEmailRecoveryLinkLabel(dom.Element element) {
+    if (_safeEmailRecoveryText(element).isNotEmpty) {
+      return;
+    }
+    final label = _emailRecoveryLabelForElement(element);
+    final normalizedLabel = _normalizePlainText(label);
+    if (normalizedLabel.isEmpty) {
+      return;
+    }
+    element.nodes.clear();
+    element.append(dom.Text(normalizedLabel));
+  }
+
+  static String? _emailRecoveryInputLabel(dom.Element element) {
+    for (final attribute in const <String>[
+      'aria-label',
+      _titleAttribute,
+      'value',
+      'placeholder',
+    ]) {
+      final value = element.attributes[attribute]?.trim();
+      if (value == null || value.isEmpty) {
+        continue;
+      }
+      if (attribute == 'value' && !_isUsefulEmailRecoveryInputValue(value)) {
+        continue;
+      }
+      return value;
+    }
+    return null;
+  }
+
+  static bool _isUsefulEmailRecoveryInputValue(String value) {
+    final normalized = _normalizePlainText(value);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return _isLikelyEmailVerificationCode(normalized) ||
+        _emailRecoveryReferencePattern.hasMatch(normalized);
   }
 
   static void _flattenFlutterTableLayout(List<dom.Node> nodes) {
@@ -914,14 +1157,17 @@ pre, code {
         }
         final tag = (node.localName ?? '').toLowerCase();
         if (tag == 'style') {
-          final sanitizedStyleText = _sanitizeWebViewStyleElementText(
-            node.text,
-          );
-          if (sanitizedStyleText == null) {
-            node.remove();
-            continue;
+          if (node.id != _standardWebViewStyleElementId ||
+              node.text != _standardWebViewBaseStyle) {
+            final sanitizedStyleText = _sanitizeWebViewStyleElementText(
+              node.text,
+            );
+            if (sanitizedStyleText == null) {
+              node.remove();
+              continue;
+            }
+            node.text = sanitizedStyleText;
           }
-          node.text = sanitizedStyleText;
         }
         var removeNode = false;
         final attributeNames = node.attributes.keys
@@ -997,94 +1243,18 @@ pre, code {
     }
   }
 
-  static void _collectEmailRecoveryCandidates(
-    List<dom.Node> nodes,
-    List<_EmailRecoveryCandidate> candidates,
-    _HtmlNodeBudget budget,
-    int depth,
-  ) {
-    for (final node in nodes) {
-      if (!budget.allow(depth)) {
-        return;
-      }
-      if (node is! dom.Element) {
-        continue;
-      }
-      final tag = (node.localName ?? '').toLowerCase();
-      if (_emailRecoveryExcludedTextTags.contains(tag)) {
-        continue;
-      }
-      if (_isRecoverableEmailContentRoot(node)) {
-        _collectEmailRecoveryRootCandidates(node, candidates);
-        continue;
-      }
-      if (node.nodes.isNotEmpty) {
-        _collectEmailRecoveryCandidates(
-          node.nodes,
-          candidates,
-          budget,
-          depth + 1,
-        );
-      }
-    }
-  }
-
-  static void _collectEmailRecoveryRootCandidates(
-    dom.Element element,
-    List<_EmailRecoveryCandidate> candidates,
-  ) {
-    final tag = (element.localName ?? '').toLowerCase();
-    if (tag == 'a') {
-      final href = _sanitizeUriValue(
-        element.attributes[_hrefAttribute] ?? '',
-        _sanitizedLinkSchemes,
-      );
-      if (href != null) {
-        _addEmailRecoveryTextCandidate(
-          _emailRecoveryLabelForElement(element),
-          candidates,
-          href: href,
-        );
-      }
-    }
-    if (_emailRecoveryContainerTags.contains(tag)) {
-      _addEmailRecoveryTextCandidate(
-        _emailRecoveryLabelForElement(element),
-        candidates,
-      );
-    }
-    for (final descendant in element.querySelectorAll(
-      'button, option, select, textarea',
-    )) {
-      _addEmailRecoveryTextCandidate(
-        _emailRecoveryLabelForElement(descendant),
-        candidates,
-      );
-    }
-    for (final descendant in element.querySelectorAll('a')) {
-      if (_isBlockedWebViewElement(descendant)) {
-        continue;
-      }
-      final href = _sanitizeUriValue(
-        descendant.attributes[_hrefAttribute] ?? '',
-        _sanitizedLinkSchemes,
-      );
-      if (href == null) {
-        continue;
-      }
-      _addEmailRecoveryTextCandidate(
-        _emailRecoveryLabelForElement(descendant),
-        candidates,
-        href: href,
-      );
-    }
-    _addEmailRecoveryTextCandidate(_safeEmailRecoveryText(element), candidates);
-  }
-
   static bool _isRecoverableEmailContentRoot(dom.Element element) {
     final tag = (element.localName ?? '').toLowerCase();
-    if (_emailRecoveryContainerTags.contains(tag)) {
-      return true;
+    final isRecoverablyHidden =
+        _isHiddenEmailElement(element) ||
+        _hasRecoverableEmailHidingStyle(element.attributes['style']);
+    if (!isRecoverablyHidden) {
+      return false;
+    }
+    if (tag == 'input') {
+      return _isUsefulEmailRecoveryLabel(
+        _emailRecoveryInputLabel(element) ?? '',
+      );
     }
     if (tag == 'a' &&
         _sanitizeUriValue(
@@ -1092,11 +1262,60 @@ pre, code {
               _sanitizedLinkSchemes,
             ) !=
             null) {
-      return _isHiddenEmailElement(element) ||
-          _hasRecoverableEmailHidingStyle(element.attributes['style']);
+      return _isUsefulEmailRecoveryLabel(
+        _emailRecoveryLabelForElement(element),
+      );
     }
-    return _isHiddenEmailElement(element) ||
-        _hasRecoverableEmailHidingStyle(element.attributes['style']);
+    return _hasUsefulEmailRecoveryContent(element);
+  }
+
+  static bool _hasUsefulEmailRecoveryContent(dom.Element element) {
+    if (_isEmailRecoveryCodeOrReferenceLabel(
+      _emailRecoveryLabelForElement(element),
+    )) {
+      return true;
+    }
+    for (final descendant in element.querySelectorAll(
+      'a, button, input, option, select, textarea',
+    )) {
+      final tag = (descendant.localName ?? '').toLowerCase();
+      if (tag == 'a' &&
+          _sanitizeUriValue(
+                descendant.attributes[_hrefAttribute] ?? '',
+                _sanitizedLinkSchemes,
+              ) ==
+              null) {
+        continue;
+      }
+      final label = tag == 'input'
+          ? _emailRecoveryInputLabel(descendant)
+          : _emailRecoveryLabelForElement(descendant);
+      if (_isUsefulEmailRecoveryLabel(label ?? '')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _isUsefulEmailRecoveryLabel(String label) {
+    final normalized = _normalizePlainText(label);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (_emailRecoveryPreheaderLabelPattern.hasMatch(normalized)) {
+      return false;
+    }
+    return _isEmailRecoveryCodeOrReferenceLabel(normalized) ||
+        _emailRecoveryActionLabelPattern.hasMatch(normalized);
+  }
+
+  static bool _isEmailRecoveryCodeOrReferenceLabel(String label) {
+    final normalized = _normalizePlainText(label);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return _isLikelyEmailVerificationCode(normalized) ||
+        _emailRecoveryReferencePattern.hasMatch(normalized);
   }
 
   static String _emailRecoveryLabelForElement(dom.Element element) {
@@ -1198,93 +1417,6 @@ pre, code {
     if (_blockTags.contains(tag)) {
       buffer.write(_lineBreak);
     }
-  }
-
-  static void _addEmailRecoveryTextCandidate(
-    String text,
-    List<_EmailRecoveryCandidate> candidates, {
-    String? href,
-  }) {
-    final normalized = _normalizePlainText(text);
-    if (normalized.isEmpty) {
-      return;
-    }
-    candidates.add(_EmailRecoveryCandidate(text: normalized, href: href));
-  }
-
-  static ({Set<String> items, Set<String> lines}) _emailRecoveryVisibleKeys(
-    String visibleText,
-  ) {
-    final normalized = _normalizePlainText(visibleText);
-    if (normalized.isEmpty) {
-      return (items: const <String>{}, lines: const <String>{});
-    }
-    final items = <String>{_emailRecoveryDedupeKey(normalized)};
-    final lines = <String>{};
-    for (final line in normalized.split(_lineBreak)) {
-      final key = _emailRecoveryDedupeKey(line);
-      if (key.isNotEmpty) {
-        lines.add(key);
-      }
-    }
-    return (items: items, lines: lines);
-  }
-
-  static void _addEmailRecoveredContent(
-    _EmailRecoveryCandidate candidate,
-    List<EmailRecoveredContent> recovered,
-    Map<String, int> byTextKey,
-    ({Set<String> items, Set<String> lines}) visibleKeys,
-  ) {
-    final text = _normalizePlainText(candidate.text);
-    final textKey = _emailRecoveryDedupeKey(text);
-    if (textKey.isEmpty) {
-      return;
-    }
-    final lineKeys = text
-        .split(_lineBreak)
-        .map(_emailRecoveryDedupeKey)
-        .where((key) => key.isNotEmpty)
-        .toList();
-    if (visibleKeys.items.contains(textKey) ||
-        (lineKeys.isNotEmpty &&
-            lineKeys.every((key) => visibleKeys.lines.contains(key)))) {
-      return;
-    }
-    final href = candidate.href;
-    final item = EmailRecoveredContent(
-      kind: _classifyEmailRecoveredContent(text, href: href),
-      text: text,
-      href: href,
-    );
-    final existingIndex = byTextKey[textKey];
-    if (existingIndex == null) {
-      byTextKey[textKey] = recovered.length;
-      recovered.add(item);
-      return;
-    }
-    if (recovered[existingIndex].href == null && item.href != null) {
-      recovered[existingIndex] = item;
-    }
-  }
-
-  static String _emailRecoveryDedupeKey(String text) =>
-      _normalizePlainText(text).toLowerCase();
-
-  static EmailRecoveredContentKind _classifyEmailRecoveredContent(
-    String text, {
-    String? href,
-  }) {
-    if (href != null) {
-      return EmailRecoveredContentKind.actionLink;
-    }
-    if (_isLikelyEmailVerificationCode(text)) {
-      return EmailRecoveredContentKind.verificationCode;
-    }
-    if (_emailRecoveryReferencePattern.hasMatch(text)) {
-      return EmailRecoveredContentKind.reference;
-    }
-    return EmailRecoveredContentKind.additionalText;
   }
 
   static bool _isLikelyEmailVerificationCode(String text) {
@@ -1968,7 +2100,9 @@ pre, code {
     }
     final uri = Uri.tryParse(trimmed);
     final scheme = uri?.scheme.trim().toLowerCase();
-    if (_remoteImageSchemes.contains(scheme) || scheme == 'data') {
+    if (_remoteImageSchemes.contains(scheme) ||
+        scheme == 'data' ||
+        scheme == 'cid') {
       return false;
     }
     return _sanitizeUriValue(trimmed, _sanitizedImageSchemes) == null;
@@ -2395,22 +2529,13 @@ pre, code {
         containsSuspiciousUriText(normalized);
   }
 
-  static void _removeRecoveredEmailNodes(List<dom.Node> nodes) {
-    for (final node in nodes.toList()) {
-      if (node is dom.Element) {
-        if (_isRecoverableEmailContentRoot(node)) {
-          node.remove();
-          continue;
-        }
-      }
-      if (node.nodes.isNotEmpty) {
-        _removeRecoveredEmailNodes(node.nodes);
-      }
-    }
-  }
-
   static bool _isHiddenEmailElement(dom.Element element) {
     if (element.attributes.containsKey('hidden')) {
+      return true;
+    }
+    final tag = (element.localName ?? '').toLowerCase();
+    final inputType = element.attributes['type']?.trim().toLowerCase();
+    if (tag == 'input' && inputType == 'hidden') {
       return true;
     }
     final ariaHidden = element.attributes['aria-hidden']?.trim().toLowerCase();

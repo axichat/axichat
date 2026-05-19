@@ -16,5 +16,6 @@ const int draftSyncMaxAttachmentSizeBytes = 50 * 1024 * 1024;
 const int draftSyncMaxSubjectBytes = 998;
 const int draftSyncMaxBodyBytes = maxMessageTextBytes;
 const int draftSyncMaxHtmlBytes = maxMessageHtmlBytes;
+const int draftSyncMaxCalendarTaskIcsBytes = maxMessageTextBytes;
 const Set<String> draftSyncAllowedRecipientRoles = <String>{'to', 'cc', 'bcc'};
 const Set<String> draftSyncAllowedAttachmentSchemes = <String>{'http', 'https'};

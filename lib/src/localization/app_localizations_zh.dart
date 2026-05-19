@@ -597,7 +597,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatShowingDirectOnly => '仅显示直接消息';
 
   @override
-  String get chatShowingAll => '显示全部';
+  String get chatShowingAll => '显示所有消息';
 
   @override
   String get chatMuteNotifications => '静音通知';
@@ -893,22 +893,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatForwardInviteForbidden => '邀请无法转发。';
 
   @override
+  String get chatForwardedMessageHeader => '转发的消息';
+
+  @override
+  String get chatForwardedFromLabel => '发件人';
+
+  @override
+  String get chatForwardedDateLabel => '日期';
+
+  @override
+  String get chatForwardedSubjectLabel => '主题';
+
+  @override
   String get chatAddToCalendarNoText => '选中的消息没有可添加到日历的文本。';
-
-  @override
-  String get chatForwardDialogTitle => '转发到...';
-
-  @override
-  String get chatForwardEmailWarningTitle => '转发邮件？';
-
-  @override
-  String get chatForwardEmailWarningMessage => '转发邮件可能包含原始邮件头和外部图片链接。请选择发送方式。';
-
-  @override
-  String get chatForwardEmailOptionSafe => '作为新消息转发';
-
-  @override
-  String get chatForwardEmailOptionOriginal => '转发原文';
 
   @override
   String get chatComposerAttachmentWarning => '大附件会分别发送给每个收件人，可能需要更长时间送达。';
@@ -1222,6 +1219,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get draftRestoreAction => '从草稿还原';
+
+  @override
+  String get draftForwardConvertAction => '转换为可编辑文本';
+
+  @override
+  String get draftForwardRestoreTitle => '还原原始 HTML？';
+
+  @override
+  String get draftForwardRestoreMessage => '还原原始 HTML 将丢弃对已转换转发文本所做的编辑。';
+
+  @override
+  String get draftForwardRestoreAction => '还原原始 HTML';
 
   @override
   String get draftMinimize => '最小化';
@@ -2104,6 +2113,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionSecurity => '安全';
 
   @override
+  String get settingsSyncStatusNotSynced => '未同步';
+
+  @override
+  String get settingsSyncStatusDeviceOnly => '仅此设备';
+
+  @override
+  String get settingsSyncStatusSyncing => '正在同步';
+
+  @override
+  String settingsOverridesList(Object chats) {
+    return '已在 $chats 中覆盖';
+  }
+
+  @override
+  String get settingsOverridesResetAll => '全部重置';
+
+  @override
+  String get settingsSyncFailureMessage => '设置已保存到本机，但同步失败。';
+
+  @override
   String get settingsLanguage => '语言';
 
   @override
@@ -2355,7 +2384,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEmailInteractiveContentBlockedLabel => '为安全起见，互动内容已被屏蔽';
 
   @override
-  String get chatEmailRecoveredContentLabel => '其他邮件内容';
+  String get chatEmailUnblockInteractiveContentButton => '解除屏蔽';
+
+  @override
+  String get chatEmailOriginalContentConfirmTitle => '查看原始邮件？';
+
+  @override
+  String get chatEmailOriginalContentConfirmMessage =>
+      '原始邮件内容可能会联系远程服务器，并且可能不安全。继续？';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel => '部分内嵌邮件图片无法显示。';
@@ -2434,6 +2470,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatNotificationPreviewOptionHide => '始终隐藏预览';
+
+  @override
+  String get chatNotificationBehaviorOptionInherit => '继承全局';
+
+  @override
+  String get chatNotificationBehaviorOptionMute => '静音此聊天';
+
+  @override
+  String get chatNotificationBehaviorOptionAlwaysNotify => '始终通知此聊天';
 
   @override
   String get chatAttachmentUnavailableDevice => '此设备上已无法获取该附件';
@@ -2717,9 +2762,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatMessageViewHtmlAction => '显示 HTML';
-
-  @override
-  String get chatMessageViewFullAction => '查看完整内容';
 
   @override
   String get chatMessageShowTextAction => '显示文本';
@@ -5902,6 +5944,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatInviteRevokedLabel => '邀请已撤销';
 
   @override
+  String get chatInviteAcceptedLabel => '邀请已接受';
+
+  @override
   String chatInviteActionLabel(String roomName) {
     return '加入“$roomName”';
   }
@@ -6900,7 +6945,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatShowingDirectOnly => '僅顯示直接訊息';
 
   @override
-  String get chatShowingAll => '顯示全部';
+  String get chatShowingAll => '顯示所有訊息';
 
   @override
   String get chatMuteNotifications => '靜音通知';
@@ -7196,22 +7241,19 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatForwardInviteForbidden => '無法轉寄邀請。';
 
   @override
+  String get chatForwardedMessageHeader => '轉寄的訊息';
+
+  @override
+  String get chatForwardedFromLabel => '寄件者';
+
+  @override
+  String get chatForwardedDateLabel => '日期';
+
+  @override
+  String get chatForwardedSubjectLabel => '主旨';
+
+  @override
   String get chatAddToCalendarNoText => '已選訊息沒有可加入行事曆的文字。';
-
-  @override
-  String get chatForwardDialogTitle => '轉寄到...';
-
-  @override
-  String get chatForwardEmailWarningTitle => '轉發電郵？';
-
-  @override
-  String get chatForwardEmailWarningMessage => '轉發電郵可能包含原始標頭與外部圖片連結。請選擇傳送方式。';
-
-  @override
-  String get chatForwardEmailOptionSafe => '以新訊息轉發';
-
-  @override
-  String get chatForwardEmailOptionOriginal => '轉發原文';
 
   @override
   String get chatComposerAttachmentWarning => '大型附件會分別傳送給每位收件者，可能需要更長時間。';
@@ -7526,6 +7568,18 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get draftRestoreAction => '從草稿還原';
+
+  @override
+  String get draftForwardConvertAction => '轉換為可編輯文字';
+
+  @override
+  String get draftForwardRestoreTitle => '還原原始 HTML？';
+
+  @override
+  String get draftForwardRestoreMessage => '還原原始 HTML 會捨棄對已轉換轉寄文字所做的編輯。';
+
+  @override
+  String get draftForwardRestoreAction => '還原原始 HTML';
 
   @override
   String get draftMinimize => '最小化';
@@ -8408,6 +8462,26 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsSectionSecurity => '安全性';
 
   @override
+  String get settingsSyncStatusNotSynced => '未同步';
+
+  @override
+  String get settingsSyncStatusDeviceOnly => '僅此裝置';
+
+  @override
+  String get settingsSyncStatusSyncing => '正在同步';
+
+  @override
+  String settingsOverridesList(Object chats) {
+    return '已在 $chats 中覆寫';
+  }
+
+  @override
+  String get settingsOverridesResetAll => '全部重設';
+
+  @override
+  String get settingsSyncFailureMessage => '設定已儲存在本機，但同步失敗。';
+
+  @override
   String get settingsLanguage => '語言';
 
   @override
@@ -8659,7 +8733,14 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatEmailInteractiveContentBlockedLabel => '為安全起見，互動內容已被封鎖';
 
   @override
-  String get chatEmailRecoveredContentLabel => '其他電郵內容';
+  String get chatEmailUnblockInteractiveContentButton => '解除封鎖';
+
+  @override
+  String get chatEmailOriginalContentConfirmTitle => '查看原始電郵？';
+
+  @override
+  String get chatEmailOriginalContentConfirmMessage =>
+      '原始電郵內容可能會聯絡遠端伺服器，且可能不安全。要繼續嗎？';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel => '部分內嵌電郵圖片無法顯示。';
@@ -8738,6 +8819,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatNotificationPreviewOptionHide => '一律隱藏預覽';
+
+  @override
+  String get chatNotificationBehaviorOptionInherit => '繼承全域';
+
+  @override
+  String get chatNotificationBehaviorOptionMute => '靜音此聊天';
+
+  @override
+  String get chatNotificationBehaviorOptionAlwaysNotify => '一律通知此聊天';
 
   @override
   String get chatAttachmentUnavailableDevice => '此裝置上已無法取得該附件';
@@ -9022,9 +9112,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatMessageViewHtmlAction => '顯示 HTML';
-
-  @override
-  String get chatMessageViewFullAction => '檢視完整內容';
 
   @override
   String get chatMessageShowTextAction => '顯示文字';
@@ -12206,6 +12293,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatInviteRevokedLabel => '邀請已撤銷';
+
+  @override
+  String get chatInviteAcceptedLabel => '邀請已接受';
 
   @override
   String chatInviteActionLabel(String roomName) {

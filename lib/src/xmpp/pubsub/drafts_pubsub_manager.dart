@@ -2,7 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
@@ -29,6 +31,19 @@ const String _recipientRoleDefault = 'to';
 const String _subjectTag = 'subject';
 const String _bodyTag = 'body';
 const String _htmlTag = 'html';
+const String _calendarTaskIcsTag = 'calendar_task_ics';
+const String _forwardedBlocksTag = 'forwarded_blocks';
+const String _forwardedBlockTag = 'forwarded_block';
+const String _forwardedBlockIdAttr = 'id';
+const String _forwardedSourceMessageIdAttr = 'source_message_id';
+const String _forwardedSenderJidAttr = 'sender_jid';
+const String _forwardedSenderLabelAttr = 'sender_label';
+const String _forwardedTimestampAttr = 'timestamp';
+const String _forwardedConversionStateAttr = 'conversion_state';
+const String _forwardedSubjectTag = 'subject';
+const String _forwardedPlainTextTag = 'plain';
+const String _forwardedHtmlTag = 'html';
+const String _forwardedConvertedTextTag = 'converted_text';
 const String _quoteIdAttr = 'quote_id';
 const String _quoteKindAttr = 'quote_kind';
 const String _attachmentsTag = 'attachments';
@@ -42,6 +57,7 @@ const String _attachmentWidthAttr = 'width';
 const String _attachmentHeightAttr = 'height';
 const String _defaultMaxItems = '$draftSyncMaxItems';
 const String _draftSourceIdFallback = DraftDefaults.sourceLegacyId;
+const int _draftSyncMaxForwardedBlocks = 4;
 const Duration _ensureNodeBackoff = Duration(minutes: 5);
 const String _draftsPubSubBootstrapOperationName =
     'DraftsPubSubManager.bootstrapOnNegotiations';
@@ -274,6 +290,8 @@ final class DraftSyncPayload {
     this.quotingStanzaId,
     this.quotingReferenceKind,
     this.attachments = const <DraftAttachmentRef>[],
+    this.calendarTaskIcsMessage,
+    this.forwardedBlocks = const <DraftForwardedBlock>[],
   });
 
   final String syncId;
@@ -286,6 +304,8 @@ final class DraftSyncPayload {
   final String? quotingStanzaId;
   final MessageReferenceKind? quotingReferenceKind;
   final List<DraftAttachmentRef> attachments;
+  final CalendarTaskIcsMessage? calendarTaskIcsMessage;
+  final List<DraftForwardedBlock> forwardedBlocks;
 
   List<String> get recipientJids =>
       recipients.map((recipient) => recipient.jid).toList(growable: false);
@@ -304,6 +324,8 @@ final class DraftSyncPayload {
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<DraftAttachmentRef>? attachments,
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock>? forwardedBlocks,
   }) {
     return DraftSyncPayload(
       syncId: syncId ?? this.syncId,
@@ -316,6 +338,9 @@ final class DraftSyncPayload {
       quotingStanzaId: quotingStanzaId ?? this.quotingStanzaId,
       quotingReferenceKind: quotingReferenceKind ?? this.quotingReferenceKind,
       attachments: attachments ?? this.attachments,
+      calendarTaskIcsMessage:
+          calendarTaskIcsMessage ?? this.calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks ?? this.forwardedBlocks,
     );
   }
 
@@ -366,6 +391,17 @@ final class DraftSyncPayload {
       node.firstTag(_htmlTag)?.innerText(),
       maxBytes: draftSyncMaxHtmlBytes,
     );
+    final calendarTaskIcsMessage = _parseCalendarTaskIcsMessage(
+      node.firstTag(_calendarTaskIcsTag)?.innerText(),
+    );
+    final forwardedBlocksNode = node.firstTag(_forwardedBlocksTag);
+    final forwardedBlocks =
+        forwardedBlocksNode
+            ?.findTags(_forwardedBlockTag)
+            .map(_parseForwardedBlock)
+            .whereType<DraftForwardedBlock>()
+            .toList(growable: false) ??
+        const <DraftForwardedBlock>[];
     final quotingStanzaId = _normalizeText(
       node.attributes[_quoteIdAttr]?.toString(),
       maxBytes: draftSyncMaxIdBytes,
@@ -384,6 +420,7 @@ final class DraftSyncPayload {
         const <DraftAttachmentRef>[];
     if (recipients.length > draftSyncMaxRecipients) return null;
     if (attachments.length > draftSyncMaxAttachments) return null;
+    if (forwardedBlocks.length > _draftSyncMaxForwardedBlocks) return null;
 
     return DraftSyncPayload(
       syncId: resolvedSyncId,
@@ -396,6 +433,8 @@ final class DraftSyncPayload {
       quotingStanzaId: quotingStanzaId,
       quotingReferenceKind: quotingReferenceKind,
       attachments: attachments,
+      calendarTaskIcsMessage: calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks,
     );
   }
 
@@ -417,6 +456,15 @@ final class DraftSyncPayload {
       html,
       maxBytes: draftSyncMaxHtmlBytes,
     );
+    final normalizedCalendarTaskIcs = _calendarTaskIcsJson(
+      calendarTaskIcsMessage,
+    );
+    final limitedForwardedBlocks =
+        forwardedBlocks.length > _draftSyncMaxForwardedBlocks
+        ? forwardedBlocks
+              .take(_draftSyncMaxForwardedBlocks)
+              .toList(growable: false)
+        : forwardedBlocks;
     final normalizedQuoteId = _normalizeText(
       quotingStanzaId,
       maxBytes: draftSyncMaxIdBytes,
@@ -452,6 +500,16 @@ final class DraftSyncPayload {
           mox.XMLNode(tag: _bodyTag, text: value),
         if (normalizedHtml case final value?)
           mox.XMLNode(tag: _htmlTag, text: value),
+        if (normalizedCalendarTaskIcs case final value?)
+          mox.XMLNode(tag: _calendarTaskIcsTag, text: value),
+        if (limitedForwardedBlocks.isNotEmpty)
+          mox.XMLNode(
+            tag: _forwardedBlocksTag,
+            children: limitedForwardedBlocks
+                .map(_forwardedBlockToXml)
+                .whereType<mox.XMLNode>()
+                .toList(growable: false),
+          ),
         if (limitedAttachments.isNotEmpty)
           mox.XMLNode(
             tag: _attachmentsTag,
@@ -473,6 +531,167 @@ final class DraftSyncPayload {
       return null;
     }
     return clamped;
+  }
+
+  static CalendarTaskIcsMessage? _parseCalendarTaskIcsMessage(String? value) {
+    final normalized = _normalizeText(
+      value,
+      maxBytes: draftSyncMaxCalendarTaskIcsBytes,
+    );
+    if (normalized == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) {
+        return null;
+      }
+      return CalendarTaskIcsMessage.tryParse(
+        Map<String, dynamic>.from(decoded),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static DraftForwardedBlock? _parseForwardedBlock(mox.XMLNode node) {
+    if (node.tag != _forwardedBlockTag) {
+      return null;
+    }
+    final blockId = _normalizeText(
+      node.attributes[_forwardedBlockIdAttr]?.toString(),
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final sourceMessageId = _normalizeText(
+      node.attributes[_forwardedSourceMessageIdAttr]?.toString(),
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final senderJid = node.attributes[_forwardedSenderJidAttr]
+        ?.toString()
+        .toBareJidOrNull(maxBytes: draftSyncMaxRecipientBytes);
+    final senderLabel = _normalizeText(
+      node.attributes[_forwardedSenderLabelAttr]?.toString(),
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final originalPlainText = _normalizeText(
+      node.firstTag(_forwardedPlainTextTag)?.innerText(),
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    if (blockId == null ||
+        sourceMessageId == null ||
+        senderJid == null ||
+        senderLabel == null ||
+        originalPlainText == null) {
+      return null;
+    }
+    final rawTimestamp = node.attributes[_forwardedTimestampAttr]
+        ?.toString()
+        .trim();
+    final timestamp = rawTimestamp == null || rawTimestamp.isEmpty
+        ? null
+        : DateTime.tryParse(rawTimestamp)?.toUtc();
+    final originalSubject = _normalizeText(
+      node.firstTag(_forwardedSubjectTag)?.innerText(),
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final originalHtml = _normalizeText(
+      node.firstTag(_forwardedHtmlTag)?.innerText(),
+      maxBytes: draftSyncMaxHtmlBytes,
+    );
+    final convertedText = _normalizeText(
+      node.firstTag(_forwardedConvertedTextTag)?.innerText(),
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    return DraftForwardedBlock(
+      blockId: blockId,
+      sourceMessageId: sourceMessageId,
+      senderJid: senderJid,
+      senderLabel: senderLabel,
+      timestamp: timestamp,
+      originalSubject: originalSubject,
+      originalPlainText: originalPlainText,
+      originalHtml: originalHtml,
+      conversionState: DraftForwardedBlockConversionState.fromName(
+        node.attributes[_forwardedConversionStateAttr]?.toString(),
+      ),
+      convertedText: convertedText,
+    );
+  }
+
+  static mox.XMLNode? _forwardedBlockToXml(DraftForwardedBlock block) {
+    final blockId = _normalizeText(
+      block.blockId,
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final sourceMessageId = _normalizeText(
+      block.sourceMessageId,
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final senderJid = block.senderJid.toBareJidOrNull(
+      maxBytes: draftSyncMaxRecipientBytes,
+    );
+    final senderLabel = _normalizeText(
+      block.senderLabel,
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final originalPlainText = _normalizeText(
+      block.originalPlainText,
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    if (blockId == null ||
+        sourceMessageId == null ||
+        senderJid == null ||
+        senderLabel == null ||
+        originalPlainText == null) {
+      return null;
+    }
+    final originalSubject = _normalizeText(
+      block.originalSubject,
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final originalHtml = _normalizeText(
+      block.originalHtml,
+      maxBytes: draftSyncMaxHtmlBytes,
+    );
+    final convertedText = _normalizeText(
+      block.convertedText,
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    return mox.XMLNode(
+      tag: _forwardedBlockTag,
+      attributes: {
+        _forwardedBlockIdAttr: blockId,
+        _forwardedSourceMessageIdAttr: sourceMessageId,
+        _forwardedSenderJidAttr: senderJid,
+        _forwardedSenderLabelAttr: senderLabel,
+        if (block.timestamp != null)
+          _forwardedTimestampAttr: block.timestamp!.toUtc().toIso8601String(),
+        _forwardedConversionStateAttr: block.conversionState.name,
+      },
+      children: [
+        if (originalSubject case final value?)
+          mox.XMLNode(tag: _forwardedSubjectTag, text: value),
+        mox.XMLNode(tag: _forwardedPlainTextTag, text: originalPlainText),
+        if (originalHtml case final value?)
+          mox.XMLNode(tag: _forwardedHtmlTag, text: value),
+        if (convertedText case final value?)
+          mox.XMLNode(tag: _forwardedConvertedTextTag, text: value),
+      ],
+    );
+  }
+
+  static String? _calendarTaskIcsJson(CalendarTaskIcsMessage? message) {
+    if (message == null) {
+      return null;
+    }
+    final encoded = jsonEncode(message.toJson());
+    if (!isWithinUtf8ByteLimit(
+      encoded,
+      maxBytes: draftSyncMaxCalendarTaskIcsBytes,
+    )) {
+      return null;
+    }
+    return encoded;
   }
 
   static MessageReferenceKind? _parseReferenceKind(String? value) {

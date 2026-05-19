@@ -529,16 +529,19 @@ final class ChatMessageReactionToggled extends ChatEvent {
 }
 
 final class ChatMessageForwardRequested extends ChatEvent {
-  const ChatMessageForwardRequested({
-    required this.message,
-    required this.target,
-  });
+  const ChatMessageForwardRequested({required this.message});
 
   final Message message;
-  final Contact target;
 
   @override
-  List<Object?> get props => [message, target];
+  List<Object?> get props => [message];
+}
+
+final class ChatForwardDraftConsumed extends ChatEvent {
+  const ChatForwardDraftConsumed();
+
+  @override
+  List<Object?> get props => const [];
 }
 
 final class ChatMessageResendRequested extends ChatEvent {

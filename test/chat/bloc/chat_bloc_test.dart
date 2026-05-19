@@ -10,7 +10,6 @@ import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
-import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
@@ -19,7 +18,6 @@ import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
@@ -1442,31 +1440,19 @@ void main() {
     await syncController.close();
   });
 
-  test('forwarding supports a raw XMPP address target', () async {
-    final syntheticForwardSubject = markSyntheticForwardSubject(
-      'FWD: peer@axi.im',
-    );
+  test('single forward emits a pending draft without sending', () async {
+    final timestamp = DateTime.utc(2024, 1, 2, 3, 4);
     final message = Message(
       stanzaID: 'forward-xmpp',
       senderJid: initialChat.jid,
       chatJid: initialChat.jid,
-      body: 'Forward me',
-      timestamp: DateTime.now(),
-    );
-    when(
-      () => messageService.sendMessage(
-        jid: any(named: 'jid'),
-        text: any(named: 'text'),
-        encryptionProtocol: EncryptionProtocol.none,
-        htmlBody: any(named: 'htmlBody'),
-        forwarded: true,
-        forwardedFromJid: any(named: 'forwardedFromJid'),
-        forwardedOriginalSenderLabel: any(
-          named: 'forwardedOriginalSenderLabel',
-        ),
-        chatType: ChatType.chat,
+      body: ChatSubjectCodec.composeXmppBody(
+        body: 'Forward me',
+        subject: 'Original subject',
       ),
-    ).thenAnswer((_) async {});
+      timestamp: timestamp,
+      fileMetadataID: 'forward-meta',
+    );
 
     final bloc = ChatBloc(
       jid: initialChat.jid,
@@ -1481,34 +1467,32 @@ void main() {
     messageStreamController.add(const <Message>[]);
     await _pumpBloc();
 
-    bloc.add(
-      ChatMessageForwardRequested(
-        message: message,
-        target: Contact.address(
-          address: 'fresh@axi.im',
-          shareSignatureEnabled: true,
-          transport: MessageTransport.xmpp,
-        ),
-      ),
-    );
+    bloc.add(ChatMessageForwardRequested(message: message));
     await _pumpBloc();
 
-    verify(
+    final draft = bloc.state.pendingForwardDraft;
+    expect(draft, isNotNull);
+    expect(draft!.attachmentMetadataIds, ['forward-meta']);
+    expect(draft.sources, hasLength(1));
+    expect(draft.sources.single.sourceMessageId, 'forward-xmpp');
+    expect(draft.sources.single.senderJid, initialChat.jid);
+    expect(draft.sources.single.resolvedSenderLabel, 'peer@axi.im');
+    expect(draft.sources.single.timestamp, timestamp);
+    expect(draft.sources.single.originalSubject, 'Original subject');
+    expect(draft.sources.single.originalPlainTextBody, 'Forward me');
+    expect(draft.sources.single.originalHtmlBody, isNull);
+    expect(draft.sources.single.attachmentMetadataIds, ['forward-meta']);
+    verifyNever(
       () => messageService.sendMessage(
-        jid: 'fresh@axi.im',
-        text: ChatSubjectCodec.composeXmppBody(
-          body: 'Forward me',
-          subject: syntheticForwardSubject,
-        ),
-        encryptionProtocol: EncryptionProtocol.none,
-        htmlBody:
-            '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\nForward me',
-        forwarded: true,
-        forwardedFromJid: initialChat.jid,
-        forwardedOriginalSenderLabel: 'peer@axi.im',
-        chatType: ChatType.chat,
+        jid: any(named: 'jid'),
+        text: any(named: 'text'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
       ),
-    ).called(1);
+    );
+
+    bloc.add(const ChatForwardDraftConsumed());
+    await _pumpBloc();
+    expect(bloc.state.pendingForwardDraft, isNull);
 
     await bloc.close();
   });
@@ -1646,16 +1630,22 @@ void main() {
     await bloc.close();
   });
 
-  test('forwarding welcome text uses the local-only message path', () async {
-    final syntheticForwardSubject = markSyntheticForwardSubject(
-      'FWD: peer@axi.im',
-    );
-    final message = Message(
-      stanzaID: 'forward-welcome-text',
+  test('single forward emits only the requested message draft', () async {
+    final first = Message(
+      stanzaID: 'forward-first',
       senderJid: initialChat.jid,
       chatJid: initialChat.jid,
-      body: 'Forward locally',
-      timestamp: DateTime.now(),
+      body: 'First',
+      timestamp: DateTime.utc(2024),
+      fileMetadataID: 'first-meta',
+    );
+    final second = Message(
+      stanzaID: 'forward-second',
+      senderJid: 'other@axi.im',
+      chatJid: initialChat.jid,
+      body: 'Second',
+      timestamp: DateTime.utc(2024, 1, 1, 0, 1),
+      fileMetadataID: 'second-meta',
     );
 
     final bloc = ChatBloc(
@@ -1668,45 +1658,24 @@ void main() {
     );
 
     chatStreamController.add(initialChat);
-    messageStreamController.add(const <Message>[]);
+    messageStreamController.add([first, second]);
+    await _pumpBloc();
     await _pumpBloc();
 
-    bloc.add(
-      ChatMessageForwardRequested(
-        message: message,
-        target: Contact.chat(chat: welcomeChat, shareSignatureEnabled: false),
-      ),
-    );
+    bloc.add(ChatMessageForwardRequested(message: second));
     await _pumpBloc();
 
-    verify(
-      () => messageService.sendLocalOnlyMessage(
-        jid: welcomeChat.jid,
-        text: ChatSubjectCodec.composeXmppBody(
-          body: 'Forward locally',
-          subject: syntheticForwardSubject,
-        ),
-        encryptionProtocol: EncryptionProtocol.none,
-        htmlBody:
-            '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\nForward locally',
-        forwarded: true,
-        forwardedFromJid: initialChat.jid,
-        forwardedOriginalSenderLabel: 'peer@axi.im',
-        chatType: ChatType.chat,
-      ),
-    ).called(1);
+    final draft = bloc.state.pendingForwardDraft;
+    expect(draft, isNotNull);
+    expect(draft!.sources.map((source) => source.sourceMessageId), [
+      'forward-second',
+    ]);
+    expect(draft.attachmentMetadataIds, ['second-meta']);
     verifyNever(
-      () => messageService.sendMessage(
-        jid: welcomeChat.jid,
+      () => messageService.sendLocalOnlyMessage(
+        jid: any(named: 'jid'),
         text: any(named: 'text'),
         encryptionProtocol: any(named: 'encryptionProtocol'),
-        htmlBody: any(named: 'htmlBody'),
-        forwarded: any(named: 'forwarded'),
-        forwardedFromJid: any(named: 'forwardedFromJid'),
-        forwardedOriginalSenderLabel: any(
-          named: 'forwardedOriginalSenderLabel',
-        ),
-        chatType: any(named: 'chatType'),
       ),
     );
 
@@ -1714,35 +1683,15 @@ void main() {
   });
 
   test(
-    'forwarding welcome attachments uses the local-only attachment path',
+    'invite-only forward shows forbidden feedback and emits no draft',
     () async {
-      final file = File(
-        '${Directory.systemTemp.path}/axichat-forward-welcome-attachment.txt',
-      );
-      await file.writeAsString('forward welcome attachment');
-      addTearDown(() async {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      });
-      when(
-        () => messageService.loadFileMetadata('forward-welcome-meta'),
-      ).thenAnswer(
-        (_) async => FileMetadataData(
-          id: 'forward-welcome-meta',
-          filename: 'forward.txt',
-          mimeType: 'text/plain',
-          path: file.path,
-          sizeBytes: await file.length(),
-        ),
-      );
       final message = Message(
-        stanzaID: 'forward-welcome-attachment',
+        stanzaID: 'forward-invite',
         senderJid: initialChat.jid,
         chatJid: initialChat.jid,
-        body: 'Attachment caption',
-        fileMetadataID: 'forward-welcome-meta',
+        body: 'Invite',
         timestamp: DateTime.now(),
+        pseudoMessageType: PseudoMessageType.mucInvite,
       );
 
       final bloc = ChatBloc(
@@ -1758,45 +1707,58 @@ void main() {
       messageStreamController.add(const <Message>[]);
       await _pumpBloc();
 
-      bloc.add(
-        ChatMessageForwardRequested(
-          message: message,
-          target: Contact.chat(chat: welcomeChat, shareSignatureEnabled: false),
-        ),
-      );
-      await bloc.stream.firstWhere(
-        (state) => state.toast?.message == ChatMessageKey.chatMessageForwarded,
-      );
+      bloc.add(ChatMessageForwardRequested(message: message));
+      await _pumpBloc();
 
-      verify(
-        () => messageService.sendLocalOnlyAttachment(
-          jid: welcomeChat.jid,
-          attachment: any(named: 'attachment'),
-          encryptionProtocol: EncryptionProtocol.none,
-          htmlCaption: any(named: 'htmlCaption'),
-          forwarded: true,
-          forwardedFromJid: initialChat.jid,
-          forwardedOriginalSenderLabel: 'peer@axi.im',
-          transportGroupId: any(named: 'transportGroupId'),
-          attachmentOrder: any(named: 'attachmentOrder'),
-          chatType: ChatType.chat,
-        ),
-      ).called(1);
+      expect(bloc.state.pendingForwardDraft, isNull);
+      expect(
+        bloc.state.toast?.message,
+        ChatMessageKey.chatForwardInviteForbidden,
+      );
       verifyNever(
         () => messageService.sendAttachment(
-          jid: welcomeChat.jid,
+          jid: any(named: 'jid'),
           attachment: any(named: 'attachment'),
           encryptionProtocol: any(named: 'encryptionProtocol'),
-          htmlCaption: any(named: 'htmlCaption'),
-          forwarded: any(named: 'forwarded'),
-          forwardedFromJid: any(named: 'forwardedFromJid'),
-          forwardedOriginalSenderLabel: any(
-            named: 'forwardedOriginalSenderLabel',
-          ),
-          transportGroupId: any(named: 'transportGroupId'),
-          attachmentOrder: any(named: 'attachmentOrder'),
-          chatType: any(named: 'chatType'),
         ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'non-invite pseudo-message forward shows forbidden feedback and emits no draft',
+    () async {
+      final message = Message(
+        stanzaID: 'forward-calendar-pseudo',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Calendar payload',
+        timestamp: DateTime.now(),
+        pseudoMessageType: PseudoMessageType.calendarTaskIcs,
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(ChatMessageForwardRequested(message: message));
+      await _pumpBloc();
+
+      expect(bloc.state.pendingForwardDraft, isNull);
+      expect(
+        bloc.state.toast?.message,
+        ChatMessageKey.chatForwardInviteForbidden,
       );
 
       await bloc.close();
@@ -2733,91 +2695,122 @@ void main() {
     },
   );
 
-  test('forwarding supports a raw email address target', () async {
-    const syntheticForwardSubject = 'FWD: peer@axi.im';
-    final emailService = MockEmailService();
-    _mockEmailSync(emailService);
-    final message = Message(
-      stanzaID: 'forward-email',
-      senderJid: initialChat.jid,
-      chatJid: initialChat.jid,
-      body: 'Forward me by email',
-      timestamp: DateTime.now(),
-    );
-    final resolvedEmailChat = Chat(
-      jid: 'dc-fresh@delta.chat',
-      title: 'fresh@example.com',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.now(),
-      deltaChatId: 10,
-      emailAddress: 'fresh@example.com',
-    );
-    when(
-      () => emailService.resolveForwardTarget(any()),
-    ).thenAnswer((_) async => resolvedEmailChat);
-    when(
-      () => emailService.sendMessage(
-        chat: any(named: 'chat'),
-        body: any(named: 'body'),
-        subject: any(named: 'subject'),
-        htmlBody: any(named: 'htmlBody'),
-        forwarded: any(named: 'forwarded'),
-        forwardedFromJid: any(named: 'forwardedFromJid'),
-        forwardedOriginalSenderLabel: any(
-          named: 'forwardedOriginalSenderLabel',
+  test(
+    'email resend fallback preserves forwarded metadata for attachments',
+    () async {
+      final file = File(
+        '${Directory.systemTemp.path}/axichat-email-resend-forwarded.txt',
+      );
+      await file.writeAsString('email resend forwarded attachment');
+      addTearDown(() async {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      });
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(
+        () => emailService.resendMessages(any()),
+      ).thenAnswer((_) async => false);
+      when(
+        () => emailService.sendAttachment(
+          chat: any(named: 'chat'),
+          attachment: any(named: 'attachment'),
+          subject: any(named: 'subject'),
+          htmlCaption: any(named: 'htmlCaption'),
+          forwarded: any(named: 'forwarded'),
+          forwardedFromJid: any(named: 'forwardedFromJid'),
+          forwardedOriginalSenderLabel: any(
+            named: 'forwardedOriginalSenderLabel',
+          ),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
         ),
-      ),
-    ).thenAnswer((_) async => 1);
-
-    final bloc = ChatBloc(
-      jid: initialChat.jid,
-      messageService: messageService,
-      chatsService: chatsService,
-      mucService: mucService,
-      notificationService: notificationService,
-      emailService: emailService,
-      settings: _defaultChatSettings(),
-    );
-
-    chatStreamController.add(initialChat);
-    messageStreamController.add(const <Message>[]);
-    await _pumpBloc();
-
-    bloc.add(
-      ChatMessageForwardRequested(
-        message: message,
-        target: Contact.address(
-          address: 'fresh@example.com',
-          shareSignatureEnabled: true,
-          transport: MessageTransport.email,
+      ).thenAnswer((_) async => 1);
+      when(
+        () => messageService.loadFileMetadata('email-forwarded-meta'),
+      ).thenAnswer(
+        (_) async => FileMetadataData(
+          id: 'email-forwarded-meta',
+          filename: 'email-forwarded.txt',
+          mimeType: 'text/plain',
+          path: file.path,
+          sizeBytes: await file.length(),
         ),
-      ),
-    );
-    await _pumpBloc();
+      );
+      final emailChat = Chat(
+        jid: 'peer@delta.chat',
+        title: 'peer@example.com',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 11,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'failed-email-forward-attachment',
+        senderJid: 'self@example.com',
+        chatJid: emailChat.jid,
+        body: 'Retry forwarded attachment',
+        fileMetadataID: 'email-forwarded-meta',
+        timestamp: DateTime.now(),
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 45,
+        deltaAccountId: 1,
+        pseudoMessageData: const <String, dynamic>{
+          'forwarded': true,
+          'forwardedFromJid': 'forwarder@example.com',
+          'forwardedOriginalSenderLabel': 'Forwarder',
+        },
+      );
 
-    verify(
-      () => emailService.resolveForwardTarget(
-        Contact.address(
-          address: 'fresh@example.com',
-          shareSignatureEnabled: true,
-          transport: MessageTransport.email,
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await untilCalled(
+        () => emailService.sendAttachment(
+          chat: any(named: 'chat'),
+          attachment: any(named: 'attachment'),
+          subject: any(named: 'subject'),
+          htmlCaption: any(named: 'htmlCaption'),
+          forwarded: any(named: 'forwarded'),
+          forwardedFromJid: any(named: 'forwardedFromJid'),
+          forwardedOriginalSenderLabel: any(
+            named: 'forwardedOriginalSenderLabel',
+          ),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
         ),
-      ),
-    ).called(1);
-    verify(
-      () => emailService.sendMessage(
-        chat: resolvedEmailChat,
-        body: 'Forward me by email',
-        subject: syntheticForwardSubject,
-        htmlBody: injectSyntheticForwardHtmlMarker('Forward me by email'),
-        forwarded: true,
-        forwardedFromJid: initialChat.jid,
-        forwardedOriginalSenderLabel: 'peer@axi.im',
-      ),
-    ).called(1);
+      );
 
-    await bloc.close();
-  });
+      verify(() => emailService.resendMessages([message])).called(1);
+      verify(
+        () => emailService.sendAttachment(
+          chat: emailChat,
+          attachment: any(named: 'attachment'),
+          subject: any(named: 'subject'),
+          htmlCaption: any(named: 'htmlCaption'),
+          forwarded: true,
+          forwardedFromJid: 'forwarder@example.com',
+          forwardedOriginalSenderLabel: 'Forwarder',
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
 
   test(
     'raw email reply fan-out synthesizes a visible reply envelope',
@@ -3001,35 +2994,15 @@ void main() {
     },
   );
 
-  test('synthetic XMPP forwarding preserves original subject and HTML', () async {
-    final syntheticForwardSubject = markSyntheticForwardSubject(
-      'FWD: peer@axi.im',
-    );
+  test('forward draft falls back to plain text from HTML', () async {
     final message = Message(
       stanzaID: 'forward-xmpp-html',
       senderJid: initialChat.jid,
       chatJid: initialChat.jid,
-      body: ChatSubjectCodec.composeXmppBody(
-        body: 'Bold body',
-        subject: 'Original subject',
-      ),
+      body: null,
       htmlBody: '<p><strong>Bold body</strong></p>',
       timestamp: DateTime.now(),
     );
-    when(
-      () => messageService.sendMessage(
-        jid: any(named: 'jid'),
-        text: any(named: 'text'),
-        encryptionProtocol: EncryptionProtocol.none,
-        htmlBody: any(named: 'htmlBody'),
-        forwarded: true,
-        forwardedFromJid: any(named: 'forwardedFromJid'),
-        forwardedOriginalSenderLabel: any(
-          named: 'forwardedOriginalSenderLabel',
-        ),
-        chatType: ChatType.chat,
-      ),
-    ).thenAnswer((_) async {});
 
     final bloc = ChatBloc(
       jid: initialChat.jid,
@@ -3044,36 +3017,17 @@ void main() {
     messageStreamController.add(const <Message>[]);
     await _pumpBloc();
 
-    bloc.add(
-      ChatMessageForwardRequested(
-        message: message,
-        target: Contact.address(
-          address: 'fresh@axi.im',
-          shareSignatureEnabled: true,
-          transport: MessageTransport.xmpp,
-        ),
-      ),
-    );
+    bloc.add(ChatMessageForwardRequested(message: message));
     await _pumpBloc();
 
-    verify(
-      () => messageService.sendMessage(
-        jid: 'fresh@axi.im',
-        text: ChatSubjectCodec.composeXmppBody(
-          body: 'Subject: Original subject\n\nBold body',
-          subject: syntheticForwardSubject,
-        ),
-        encryptionProtocol: EncryptionProtocol.none,
-        htmlBody:
-            '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\n'
-            '${HtmlContentCodec.fromPlainText('Subject: Original subject')}<br />\n<br />\n'
-            '<p><strong>Bold body</strong></p>',
-        forwarded: true,
-        forwardedFromJid: initialChat.jid,
-        forwardedOriginalSenderLabel: 'peer@axi.im',
-        chatType: ChatType.chat,
-      ),
-    ).called(1);
+    expect(
+      bloc.state.pendingForwardDraft?.sources.single.originalPlainTextBody,
+      'Bold body',
+    );
+    expect(
+      bloc.state.pendingForwardDraft?.sources.single.originalHtmlBody,
+      '<p><strong>Bold body</strong></p>',
+    );
 
     await bloc.close();
   });

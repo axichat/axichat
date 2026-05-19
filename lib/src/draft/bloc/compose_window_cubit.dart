@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:bloc/bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,9 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
     String subject = '',
     DraftQuoteTarget? quoteTarget,
     List<String> attachmentMetadataIds = const <String>[],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
+    List<String> forwardedSourceAttachmentMetadataIds = const <String>[],
   }) {
     final entry = ComposeWindowEntry(
       id: _nextId++,
@@ -32,6 +36,10 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
         subject: subject,
         quoteTarget: quoteTarget,
         attachmentMetadataIds: attachmentMetadataIds,
+        calendarTaskIcsMessage: calendarTaskIcsMessage,
+        forwardedBlocks: forwardedBlocks,
+        forwardedSourceAttachmentMetadataIds:
+            forwardedSourceAttachmentMetadataIds,
       ),
       session: _nextSession++,
     );

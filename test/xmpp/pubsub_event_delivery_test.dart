@@ -1,10 +1,12 @@
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
-import 'package:axichat/src/storage/models/message_models.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -333,5 +335,83 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed?.quotingStanzaId, 'quoted-origin-id');
     expect(parsed?.quotingReferenceKind, MessageReferenceKind.originId);
+  });
+
+  test('DraftSyncPayload round-trips calendar task payload', () {
+    final task = CalendarTask(
+      id: 'task-1',
+      title: 'Review launch notes',
+      createdAt: DateTime.utc(2026, 3, 11, 8),
+      modifiedAt: DateTime.utc(2026, 3, 11, 9),
+    );
+    final payload = DraftSyncPayload(
+      syncId: 'draft-sync-id',
+      updatedAt: DateTime.utc(2026, 3, 11, 12),
+      sourceId: 'device-a',
+      recipients: const [DraftRecipient(jid: _peerBareJid, role: 'to')],
+      body: 'hello',
+      calendarTaskIcsMessage: CalendarTaskIcsMessage(
+        task: task,
+        readOnly: false,
+      ),
+    );
+
+    final parsed = DraftSyncPayload.fromXml(payload.toXml());
+
+    expect(parsed, isNotNull);
+    expect(parsed?.body, 'hello');
+    expect(parsed?.calendarTaskIcsMessage?.task, task);
+    expect(parsed?.calendarTaskIcsMessage?.readOnly, isFalse);
+  });
+
+  test('DraftSyncPayload round-trips forwarded blocks', () {
+    final block = DraftForwardedBlock(
+      blockId: 'forward-block-1',
+      sourceMessageId: 'source-message-1',
+      senderJid: _peerBareJid,
+      senderLabel: 'Peer',
+      timestamp: DateTime.utc(2026, 3, 11, 8),
+      originalSubject: 'Original subject',
+      originalPlainText: 'Original text',
+      originalHtml: '<p>Original <strong>HTML</strong></p>',
+      conversionState: DraftForwardedBlockConversionState.convertedText,
+      convertedText: 'Edited forwarded text',
+    );
+    final payload = DraftSyncPayload(
+      syncId: 'draft-sync-id',
+      updatedAt: DateTime.utc(2026, 3, 11, 12),
+      sourceId: 'device-a',
+      recipients: const [DraftRecipient(jid: _peerBareJid, role: 'to')],
+      body: 'hello',
+      forwardedBlocks: [block],
+    );
+
+    final parsed = DraftSyncPayload.fromXml(payload.toXml());
+
+    expect(parsed, isNotNull);
+    expect(parsed?.forwardedBlocks, [block]);
+  });
+
+  test('DraftSyncPayload ignores invalid calendar task payload only', () {
+    final updatedAt = DateTime.utc(2026, 3, 11, 12);
+    final payload = mox.XMLNode.xmlns(
+      tag: 'draft',
+      xmlns: draftsPubSubNode,
+      attributes: {
+        'id': 'draft-sync-id',
+        'updated_at': updatedAt.toIso8601String(),
+        'source_id': 'device-a',
+      },
+      children: [
+        mox.XMLNode(tag: 'body', text: 'hello'),
+        mox.XMLNode(tag: 'calendar_task_ics', text: '{not json'),
+      ],
+    );
+
+    final parsed = DraftSyncPayload.fromXml(payload);
+
+    expect(parsed, isNotNull);
+    expect(parsed?.body, 'hello');
+    expect(parsed?.calendarTaskIcsMessage, isNull);
   });
 }

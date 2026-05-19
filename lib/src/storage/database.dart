@@ -6,6 +6,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/interop/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
@@ -476,6 +477,8 @@ abstract interface class XmppDatabase implements Database {
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const [],
   });
 
   Future<void> updateDraftSyncMetadata({
@@ -496,6 +499,8 @@ abstract interface class XmppDatabase implements Database {
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const [],
   });
 
   Future<void> removeDraft(int id);
@@ -1839,7 +1844,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 45;
+  int get schemaVersion => 50;
 
   @override
   MigrationStrategy get migration {
@@ -2166,6 +2171,20 @@ WHERE transport IS NULL
               'sender_real_jid',
             )) {
           await m.addColumn(messages, messages.senderRealJid);
+        }
+        if (from < 47 &&
+            !await _tableHasColumn(
+              drafts.actualTableName,
+              'calendar_task_ics',
+            )) {
+          await m.addColumn(drafts, drafts.calendarTaskIcsMessage);
+        }
+        if (from < 50 &&
+            !await _tableHasColumn(
+              drafts.actualTableName,
+              'forwarded_blocks',
+            )) {
+          await m.addColumn(drafts, drafts.forwardedBlocks);
         }
       },
       beforeOpen: (_) async {
@@ -4566,6 +4585,8 @@ WHERE stanza_i_d = ?
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const [],
   }) async {
     return transaction(() async {
       final draftId = await draftsAccessor.insertOrUpdateOne(
@@ -4577,10 +4598,12 @@ WHERE stanza_i_d = ?
           draftUpdatedAt: Value(draftUpdatedAt),
           draftSourceId: Value(draftSourceId),
           draftRecipients: Value(draftRecipients),
-          subject: Value.absentIfNull(subject),
-          quotingStanzaId: Value.absentIfNull(quotingStanzaId),
-          quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
+          subject: Value(subject),
+          quotingStanzaId: Value(quotingStanzaId),
+          quotingReferenceKind: Value(quotingReferenceKind),
           attachmentMetadataIds: Value(attachmentMetadataIds),
+          calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
+          forwardedBlocks: Value(forwardedBlocks),
         ),
       );
       await _replaceDraftAttachmentRefs(
@@ -4620,6 +4643,8 @@ WHERE stanza_i_d = ?
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock> forwardedBlocks = const [],
   }) async {
     final normalized = draftSyncId.trim();
     if (normalized.isEmpty) return 0;
@@ -4635,9 +4660,11 @@ WHERE stanza_i_d = ?
             draftRecipients: Value(draftRecipients),
             body: Value(body),
             subject: Value(subject),
-            quotingStanzaId: Value.absentIfNull(quotingStanzaId),
-            quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
+            quotingStanzaId: Value(quotingStanzaId),
+            quotingReferenceKind: Value(quotingReferenceKind),
             attachmentMetadataIds: Value(attachmentMetadataIds),
+            calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
+            forwardedBlocks: Value(forwardedBlocks),
           ),
         );
         await _replaceDraftAttachmentRefs(
@@ -4658,9 +4685,11 @@ WHERE stanza_i_d = ?
           draftRecipients: Value(draftRecipients),
           body: Value(body),
           subject: Value(subject),
-          quotingStanzaId: Value.absentIfNull(quotingStanzaId),
-          quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
+          quotingStanzaId: Value(quotingStanzaId),
+          quotingReferenceKind: Value(quotingReferenceKind),
           attachmentMetadataIds: Value(attachmentMetadataIds),
+          calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
+          forwardedBlocks: Value(forwardedBlocks),
         ),
       );
       await _replaceDraftAttachmentRefs(

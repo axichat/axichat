@@ -74,4 +74,14 @@ class CalendarTaskIcsMessage {
     }
     return defaultReadOnly;
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CalendarTaskIcsMessage &&
+          other.task == task &&
+          other.readOnly == readOnly;
+
+  @override
+  int get hashCode => Object.hash(task, readOnly);
 }

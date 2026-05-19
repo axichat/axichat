@@ -45,6 +45,7 @@ class DraftComposerView extends StatelessWidget {
     required this.bodyController,
     required this.bodyFocusNode,
     required this.onSubjectSubmitted,
+    this.forwardedPreview,
     required this.loadingAttachments,
     required this.attachments,
     required this.addingAttachment,
@@ -97,6 +98,7 @@ class DraftComposerView extends StatelessWidget {
   final TextEditingController bodyController;
   final FocusNode bodyFocusNode;
   final VoidCallback onSubjectSubmitted;
+  final Widget? forwardedPreview;
   final Widget? banner;
   final Widget? subjectTrailing;
   final bool loadingAttachments;
@@ -295,6 +297,10 @@ class DraftComposerView extends StatelessWidget {
               ),
             ),
           ),
+          if (forwardedPreview case final Widget preview) ...[
+            SizedBox(height: sectionSpacing),
+            Padding(padding: horizontalPadding, child: preview),
+          ],
           SizedBox(height: sectionSpacing),
           Padding(
             padding: horizontalPadding,

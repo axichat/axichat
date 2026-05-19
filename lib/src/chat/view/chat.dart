@@ -79,6 +79,7 @@ import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/url_safety.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_composer_view.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/email/models/fan_out_send_report.dart';
@@ -142,8 +143,6 @@ part 'overlays/chat_search.dart';
 part 'overlays/chat_settings.dart';
 
 part 'overlays/calendar_text_selection_dialog.dart';
-
-part 'overlays/forward_recipient_sheet.dart';
 
 part 'overlays/chat_overlay.dart';
 
@@ -5473,6 +5472,27 @@ class _ChatState extends State<Chat> {
             ),
             BlocListener<ChatBloc, ChatState>(
               listenWhen: (previous, current) =>
+                  previous.pendingForwardDraft != current.pendingForwardDraft &&
+                  current.pendingForwardDraft != null,
+              listener: (context, state) {
+                final draft = state.pendingForwardDraft;
+                if (draft == null) {
+                  return;
+                }
+                openComposeDraft(
+                  context,
+                  jids: const [''],
+                  subject: _forwardDraftSubject(context.l10n, draft),
+                  forwardedBlocks: draft.forwardedBlocks,
+                  forwardedSourceAttachmentMetadataIds:
+                      draft.attachmentMetadataIds,
+                );
+                _clearMultiSelection();
+                context.read<ChatBloc>().add(const ChatForwardDraftConsumed());
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
                   previous.openChatRequestId != current.openChatRequestId,
               listener: (context, state) {
                 final targetJid = state.openChatJid;
@@ -6115,11 +6135,7 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleForward(Message message) async {
-    final target = await _selectForwardTarget();
-    if (!mounted || target == null) return;
-    context.read<ChatBloc>().add(
-      ChatMessageForwardRequested(message: message, target: target),
-    );
+    context.read<ChatBloc>().add(ChatMessageForwardRequested(message: message));
   }
 
   Future<void> _handleInviteTap(
@@ -6363,6 +6379,18 @@ class _ChatState extends State<Chat> {
     return buffer.toString();
   }
 
+  String _forwardDraftSubject(AppLocalizations l10n, ChatForwardDraft draft) {
+    final prefix = l10n.chatForwardPrefix.trim();
+    if (draft.sources.length != 1) {
+      return prefix;
+    }
+    final originalSubject = draft.sources.single.originalSubject?.trim();
+    if (originalSubject == null || originalSubject.isEmpty) {
+      return prefix;
+    }
+    return '$prefix $originalSubject';
+  }
+
   Future<void> _copySelectedMessages(List<Message> messages) async {
     final l10n = context.l10n;
     final joined = joinedMessageText(messages);
@@ -6398,26 +6426,11 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  Future<void> _forwardSelectedMessages(List<Message> messages) async {
-    final l10n = context.l10n;
-    if (messages.isEmpty) return;
-    final forwardable = messages.where(
-      (message) =>
-          message.pseudoMessageType != PseudoMessageType.mucInvite &&
-          message.pseudoMessageType != PseudoMessageType.mucInviteRevocation,
+  void _forwardSelectedMessages(List<Message> messages) {
+    if (messages.length != 1) return;
+    context.read<ChatBloc>().add(
+      ChatMessageForwardRequested(message: messages.single),
     );
-    if (forwardable.isEmpty) {
-      _showSnackbar(l10n.chatForwardInviteForbidden);
-      return;
-    }
-    final candidates = forwardable.toList();
-    final target = await _selectForwardTarget();
-    if (!mounted || target == null) return;
-    for (final message in candidates) {
-      context.read<ChatBloc>().add(
-        ChatMessageForwardRequested(message: message, target: target),
-      );
-    }
   }
 
   Future<void> _addSelectedToCalendar(List<Message> messages) async {
@@ -6698,22 +6711,6 @@ class _ChatState extends State<Chat> {
     setState(() {
       _pinnedPanelVisible = false;
     });
-  }
-
-  Future<Contact?> _selectForwardTarget() async {
-    if (!mounted) return null;
-    final options =
-        (context.read<ChatsCubit>().state.items ?? const <chat_models.Chat>[])
-            .cast<chat_models.Chat>()
-            .toList(growable: false);
-    return showAdaptiveBottomSheet<Contact>(
-      context: context,
-      isScrollControlled: true,
-      preferDialogOnMobile: true,
-      surfacePadding: EdgeInsets.zero,
-      builder: (sheetContext) =>
-          _ForwardRecipientSheet(availableChats: options),
-    );
   }
 
   void _toggleQuickReaction(Message message, String emoji) {

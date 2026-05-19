@@ -14,6 +14,9 @@ class ComposeDraftSeed extends Equatable {
     this.subject = '',
     this.quoteTarget,
     this.attachmentMetadataIds = const <String>[],
+    this.calendarTaskIcsMessage,
+    this.forwardedBlocks = const <DraftForwardedBlock>[],
+    this.forwardedSourceAttachmentMetadataIds = const <String>[],
   });
 
   final int? id;
@@ -22,6 +25,9 @@ class ComposeDraftSeed extends Equatable {
   final String subject;
   final DraftQuoteTarget? quoteTarget;
   final List<String> attachmentMetadataIds;
+  final CalendarTaskIcsMessage? calendarTaskIcsMessage;
+  final List<DraftForwardedBlock> forwardedBlocks;
+  final List<String> forwardedSourceAttachmentMetadataIds;
 
   ComposeDraftSeed copyWith({
     int? id,
@@ -30,6 +36,9 @@ class ComposeDraftSeed extends Equatable {
     String? subject,
     DraftQuoteTarget? quoteTarget,
     List<String>? attachmentMetadataIds,
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    List<DraftForwardedBlock>? forwardedBlocks,
+    List<String>? forwardedSourceAttachmentMetadataIds,
   }) {
     return ComposeDraftSeed(
       id: id ?? this.id,
@@ -39,6 +48,12 @@ class ComposeDraftSeed extends Equatable {
       quoteTarget: quoteTarget ?? this.quoteTarget,
       attachmentMetadataIds:
           attachmentMetadataIds ?? this.attachmentMetadataIds,
+      calendarTaskIcsMessage:
+          calendarTaskIcsMessage ?? this.calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks ?? this.forwardedBlocks,
+      forwardedSourceAttachmentMetadataIds:
+          forwardedSourceAttachmentMetadataIds ??
+          this.forwardedSourceAttachmentMetadataIds,
     );
   }
 
@@ -50,6 +65,9 @@ class ComposeDraftSeed extends Equatable {
     subject,
     quoteTarget,
     attachmentMetadataIds,
+    calendarTaskIcsMessage,
+    forwardedBlocks,
+    forwardedSourceAttachmentMetadataIds,
   ];
 }
 

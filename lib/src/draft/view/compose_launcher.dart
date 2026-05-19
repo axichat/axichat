@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/compose_screen.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -21,6 +22,9 @@ void openComposeDraft(
   String subject = '',
   DraftQuoteTarget? quoteTarget,
   List<String> attachmentMetadataIds = const <String>[],
+  CalendarTaskIcsMessage? calendarTaskIcsMessage,
+  List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
+  List<String> forwardedSourceAttachmentMetadataIds = const <String>[],
   bool scaleFromBottom = false,
 }) {
   final env = EnvScope.maybeOf(context);
@@ -39,6 +43,10 @@ void openComposeDraft(
       subject: subject,
       quoteTarget: quoteTarget,
       attachmentMetadataIds: attachmentMetadataIds,
+      calendarTaskIcsMessage: calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks,
+      forwardedSourceAttachmentMetadataIds:
+          forwardedSourceAttachmentMetadataIds,
     );
     return;
   }
@@ -52,6 +60,10 @@ void openComposeDraft(
       subject: subject,
       quoteTarget: quoteTarget,
       attachmentMetadataIds: attachmentMetadataIds,
+      calendarTaskIcsMessage: calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks,
+      forwardedSourceAttachmentMetadataIds:
+          forwardedSourceAttachmentMetadataIds,
     );
     return;
   }
@@ -63,6 +75,9 @@ void openComposeDraft(
     subject: subject,
     quoteTarget: quoteTarget,
     attachmentMetadataIds: attachmentMetadataIds,
+    calendarTaskIcsMessage: calendarTaskIcsMessage,
+    forwardedBlocks: forwardedBlocks,
+    forwardedSourceAttachmentMetadataIds: forwardedSourceAttachmentMetadataIds,
   );
   T locate<T>() => context.read<T>();
   final Duration animationDuration = context

@@ -146,6 +146,10 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
           subject: widget.seed.subject,
           quoteTarget: _effectiveQuoteTarget,
           attachmentMetadataIds: widget.seed.attachmentMetadataIds,
+          calendarTaskIcsMessage: widget.seed.calendarTaskIcsMessage,
+          forwardedBlocks: widget.seed.forwardedBlocks,
+          forwardedSourceAttachmentMetadataIds:
+              widget.seed.forwardedSourceAttachmentMetadataIds,
           suggestionAddresses: suggestionAddresses,
           suggestionDomains: suggestionDomains,
           locate: widget.locate,

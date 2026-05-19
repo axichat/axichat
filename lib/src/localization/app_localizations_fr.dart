@@ -648,7 +648,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatShowingDirectOnly => 'Affichage direct uniquement';
 
   @override
-  String get chatShowingAll => 'Tout afficher';
+  String get chatShowingAll => 'Afficher tous les messages';
 
   @override
   String get chatMuteNotifications => 'Couper les notifications';
@@ -963,24 +963,20 @@ class AppLocalizationsFr extends AppLocalizations {
       'Les invitations ne peuvent pas être transférées.';
 
   @override
+  String get chatForwardedMessageHeader => 'Message transféré';
+
+  @override
+  String get chatForwardedFromLabel => 'De';
+
+  @override
+  String get chatForwardedDateLabel => 'Date';
+
+  @override
+  String get chatForwardedSubjectLabel => 'Objet';
+
+  @override
   String get chatAddToCalendarNoText =>
       'Les messages sélectionnés n\'ont pas de texte à ajouter au calendrier.';
-
-  @override
-  String get chatForwardDialogTitle => 'Transférer à...';
-
-  @override
-  String get chatForwardEmailWarningTitle => 'Transférer l’e-mail ?';
-
-  @override
-  String get chatForwardEmailWarningMessage =>
-      'Le transfert d’e-mails peut inclure les en-têtes d’origine et des liens d’images externes. Choisissez le mode d’envoi.';
-
-  @override
-  String get chatForwardEmailOptionSafe => 'Transférer comme nouveau message';
-
-  @override
-  String get chatForwardEmailOptionOriginal => 'Transférer l’original';
 
   @override
   String get chatComposerAttachmentWarning =>
@@ -1308,6 +1304,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get draftRestoreAction => 'Restaurer depuis le brouillon';
+
+  @override
+  String get draftForwardConvertAction => 'Convertir en texte modifiable';
+
+  @override
+  String get draftForwardRestoreTitle => 'Restaurer le HTML d’origine ?';
+
+  @override
+  String get draftForwardRestoreMessage =>
+      'La restauration du HTML d’origine supprimera les modifications apportées au texte transféré converti.';
+
+  @override
+  String get draftForwardRestoreAction => 'Restaurer le HTML d’origine';
 
   @override
   String get draftMinimize => 'Réduire';
@@ -2230,6 +2239,27 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsSectionSecurity => 'Sécurité';
 
   @override
+  String get settingsSyncStatusNotSynced => 'Non synchronisé';
+
+  @override
+  String get settingsSyncStatusDeviceOnly => 'Cet appareil uniquement';
+
+  @override
+  String get settingsSyncStatusSyncing => 'Synchronisation';
+
+  @override
+  String settingsOverridesList(Object chats) {
+    return 'Remplacé dans $chats';
+  }
+
+  @override
+  String get settingsOverridesResetAll => 'Tout réinitialiser';
+
+  @override
+  String get settingsSyncFailureMessage =>
+      'Réglage enregistré localement, mais la synchronisation a échoué.';
+
+  @override
   String get settingsLanguage => 'Langue';
 
   @override
@@ -2489,7 +2519,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentBlockedTitle => 'Pièce jointe bloquée';
 
   @override
-  String get chatEmailImageBlockedLabel => 'Image bloquée';
+  String get chatEmailImageBlockedLabel => 'Images bloquées';
 
   @override
   String get chatEmailImageFailedLabel => 'Image échouée';
@@ -2499,8 +2529,14 @@ class AppLocalizationsFr extends AppLocalizations {
       'Contenu interactif bloqué pour votre sécurité';
 
   @override
-  String get chatEmailRecoveredContentLabel =>
-      'Contenu supplémentaire de l’e-mail';
+  String get chatEmailUnblockInteractiveContentButton => 'Débloquer';
+
+  @override
+  String get chatEmailOriginalContentConfirmTitle => 'Voir l’e-mail original ?';
+
+  @override
+  String get chatEmailOriginalContentConfirmMessage =>
+      'Le contenu original de l’e-mail peut contacter des serveurs distants et être dangereux. Continuer ?';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel =>
@@ -2587,6 +2623,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get chatNotificationPreviewOptionHide =>
       'Toujours masquer les aperçus';
+
+  @override
+  String get chatNotificationBehaviorOptionInherit => 'Hériter du global';
+
+  @override
+  String get chatNotificationBehaviorOptionMute => 'Couper ce chat';
+
+  @override
+  String get chatNotificationBehaviorOptionAlwaysNotify =>
+      'Toujours notifier ce chat';
 
   @override
   String get chatAttachmentUnavailableDevice =>
@@ -2879,9 +2925,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatMessageViewHtmlAction => 'Afficher le HTML';
-
-  @override
-  String get chatMessageViewFullAction => 'Voir tout';
 
   @override
   String get chatMessageShowTextAction => 'Afficher le texte';
@@ -6270,6 +6313,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatInviteRevokedLabel => 'Invitation revoquee';
+
+  @override
+  String get chatInviteAcceptedLabel => 'Invitation acceptee';
 
   @override
   String chatInviteActionLabel(String roomName) {

@@ -5,6 +5,78 @@ part of 'chat_bloc.dart';
 
 enum ChatCollectionActionFailureReason { unsupported, updateFailed }
 
+final class ChatForwardDraft extends Equatable {
+  const ChatForwardDraft({required this.sources});
+
+  final List<ChatForwardDraftSource> sources;
+
+  List<DraftForwardedBlock> get forwardedBlocks => sources
+      .map(
+        (source) => DraftForwardedBlock(
+          blockId: uuid.v4(),
+          sourceMessageId: source.sourceMessageId,
+          senderJid: source.senderJid,
+          senderLabel: source.resolvedSenderLabel,
+          timestamp: source.timestamp,
+          originalSubject: source.originalSubject,
+          originalPlainText: source.originalPlainTextBody,
+          originalHtml: source.originalHtmlBody,
+        ),
+      )
+      .toList(growable: false);
+
+  List<String> get attachmentMetadataIds {
+    final ids = <String>{};
+    for (final source in sources) {
+      for (final id in source.attachmentMetadataIds) {
+        final trimmed = id.trim();
+        if (trimmed.isEmpty) {
+          continue;
+        }
+        ids.add(trimmed);
+      }
+    }
+    return ids.toList(growable: false);
+  }
+
+  @override
+  List<Object?> get props => [sources];
+}
+
+final class ChatForwardDraftSource extends Equatable {
+  const ChatForwardDraftSource({
+    required this.sourceMessageId,
+    required this.senderJid,
+    required this.resolvedSenderLabel,
+    required this.timestamp,
+    required this.originalSubject,
+    required this.originalPlainTextBody,
+    required this.originalHtmlBody,
+    required this.attachmentMetadataIds,
+  });
+
+  final String sourceMessageId;
+  final String senderJid;
+  final String resolvedSenderLabel;
+  final DateTime? timestamp;
+  final String? originalSubject;
+  final String originalPlainTextBody;
+  final String? originalHtmlBody;
+  final List<String> attachmentMetadataIds;
+
+  @override
+  List<Object?> get props => [
+    sourceMessageId,
+    senderJid,
+    resolvedSenderLabel,
+    timestamp,
+    originalSubject,
+    originalPlainTextBody,
+    originalHtmlBody,
+    attachmentMetadataIds,
+  ];
+}
+
 sealed class ChatCollectionActionState extends Equatable {
   const ChatCollectionActionState();
 }
@@ -120,6 +192,7 @@ abstract class ChatState with _$ChatState {
     @Default(0) int openChatRequestId,
     String? scrollTargetMessageId,
     @Default(0) int scrollTargetRequestId,
+    ChatForwardDraft? pendingForwardDraft,
     ChatToast? toast,
     @Default(0) int toastId,
     @Default(RequestStatus.none) RequestStatus roomAvatarUpdateStatus,

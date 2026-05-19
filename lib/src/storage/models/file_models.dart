@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:convert';
+
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
@@ -81,6 +84,29 @@ class DraftRecipientListConverter
         .toList(growable: false);
     return _listConverter.toSql(encoded);
   }
+}
+
+class CalendarTaskIcsMessageConverter
+    extends TypeConverter<CalendarTaskIcsMessage, String> {
+  const CalendarTaskIcsMessageConverter();
+
+  @override
+  CalendarTaskIcsMessage fromSql(String fromDb) {
+    final decoded = jsonDecode(fromDb);
+    if (decoded is! Map) {
+      throw const FormatException('Invalid calendar task draft payload.');
+    }
+    final parsed = CalendarTaskIcsMessage.tryParse(
+      Map<String, dynamic>.from(decoded),
+    );
+    if (parsed == null) {
+      throw const FormatException('Invalid calendar task draft payload.');
+    }
+    return parsed;
+  }
+
+  @override
+  String toSql(CalendarTaskIcsMessage value) => jsonEncode(value.toJson());
 }
 
 final class DraftSyncMetadata {
@@ -249,6 +275,235 @@ final class DraftRecipients {
     return recipientText.contains(lowerQuery) ||
         (body?.toLowerCase().contains(lowerQuery) ?? false) ||
         (subject?.toLowerCase().contains(lowerQuery) ?? false);
+  }
+}
+
+enum DraftForwardedBlockConversionState {
+  originalHtml,
+  convertedText;
+
+  bool get isConverted => this == convertedText;
+
+  static DraftForwardedBlockConversionState fromName(String? value) {
+    return switch (value?.trim()) {
+      'convertedText' => convertedText,
+      _ => originalHtml,
+    };
+  }
+}
+
+final class DraftForwardedBlock {
+  const DraftForwardedBlock({
+    required this.blockId,
+    required this.sourceMessageId,
+    required this.senderJid,
+    required this.senderLabel,
+    required this.originalPlainText,
+    this.timestamp,
+    this.originalSubject,
+    this.originalHtml,
+    this.conversionState = DraftForwardedBlockConversionState.originalHtml,
+    this.convertedText,
+  });
+
+  static const String _blockIdKey = 'blockId';
+  static const String _sourceMessageIdKey = 'sourceMessageId';
+  static const String _senderJidKey = 'senderJid';
+  static const String _senderLabelKey = 'senderLabel';
+  static const String _timestampKey = 'timestamp';
+  static const String _originalSubjectKey = 'originalSubject';
+  static const String _originalPlainTextKey = 'originalPlainText';
+  static const String _originalHtmlKey = 'originalHtml';
+  static const String _conversionStateKey = 'conversionState';
+  static const String _convertedTextKey = 'convertedText';
+
+  final String blockId;
+  final String sourceMessageId;
+  final String senderJid;
+  final String senderLabel;
+  final DateTime? timestamp;
+  final String? originalSubject;
+  final String originalPlainText;
+  final String? originalHtml;
+  final DraftForwardedBlockConversionState conversionState;
+  final String? convertedText;
+
+  bool get isConverted => conversionState.isConverted;
+
+  String get activePlainText {
+    if (isConverted) {
+      return convertedText ?? '';
+    }
+    return originalPlainText;
+  }
+
+  DraftForwardedBlock copyWith({
+    String? blockId,
+    String? sourceMessageId,
+    String? senderJid,
+    String? senderLabel,
+    DateTime? timestamp,
+    String? originalSubject,
+    String? originalPlainText,
+    String? originalHtml,
+    DraftForwardedBlockConversionState? conversionState,
+    String? convertedText,
+  }) {
+    return DraftForwardedBlock(
+      blockId: blockId ?? this.blockId,
+      sourceMessageId: sourceMessageId ?? this.sourceMessageId,
+      senderJid: senderJid ?? this.senderJid,
+      senderLabel: senderLabel ?? this.senderLabel,
+      timestamp: timestamp ?? this.timestamp,
+      originalSubject: originalSubject ?? this.originalSubject,
+      originalPlainText: originalPlainText ?? this.originalPlainText,
+      originalHtml: originalHtml ?? this.originalHtml,
+      conversionState: conversionState ?? this.conversionState,
+      convertedText: convertedText ?? this.convertedText,
+    );
+  }
+
+  DraftForwardedBlock asConverted(String text) {
+    return copyWith(
+      conversionState: DraftForwardedBlockConversionState.convertedText,
+      convertedText: text,
+    );
+  }
+
+  DraftForwardedBlock restoredOriginal() {
+    return DraftForwardedBlock(
+      blockId: blockId,
+      sourceMessageId: sourceMessageId,
+      senderJid: senderJid,
+      senderLabel: senderLabel,
+      timestamp: timestamp,
+      originalSubject: originalSubject,
+      originalPlainText: originalPlainText,
+      originalHtml: originalHtml,
+    );
+  }
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    _blockIdKey: blockId,
+    _sourceMessageIdKey: sourceMessageId,
+    _senderJidKey: senderJid,
+    _senderLabelKey: senderLabel,
+    if (timestamp != null) _timestampKey: timestamp!.toUtc().toIso8601String(),
+    if (originalSubject?.trim().isNotEmpty == true)
+      _originalSubjectKey: originalSubject,
+    _originalPlainTextKey: originalPlainText,
+    if (originalHtml?.trim().isNotEmpty == true) _originalHtmlKey: originalHtml,
+    _conversionStateKey: conversionState.name,
+    if (convertedText?.trim().isNotEmpty == true)
+      _convertedTextKey: convertedText,
+  };
+
+  static DraftForwardedBlock? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final rawBlockId = json[_blockIdKey];
+    final rawSourceMessageId = json[_sourceMessageIdKey];
+    final rawSenderJid = json[_senderJidKey];
+    final rawSenderLabel = json[_senderLabelKey];
+    final rawPlainText = json[_originalPlainTextKey];
+    if (rawBlockId is! String ||
+        rawSourceMessageId is! String ||
+        rawSenderJid is! String ||
+        rawSenderLabel is! String ||
+        rawPlainText is! String) {
+      return null;
+    }
+    final blockId = rawBlockId.trim();
+    final sourceMessageId = rawSourceMessageId.trim();
+    if (blockId.isEmpty || sourceMessageId.isEmpty) {
+      return null;
+    }
+    final rawTimestamp = json[_timestampKey];
+    final timestamp = rawTimestamp is String
+        ? DateTime.tryParse(rawTimestamp)?.toUtc()
+        : null;
+    final rawSubject = json[_originalSubjectKey];
+    final rawHtml = json[_originalHtmlKey];
+    final rawConvertedText = json[_convertedTextKey];
+    final rawConversionState = json[_conversionStateKey];
+    return DraftForwardedBlock(
+      blockId: blockId,
+      sourceMessageId: sourceMessageId,
+      senderJid: rawSenderJid.trim(),
+      senderLabel: rawSenderLabel.trim(),
+      timestamp: timestamp,
+      originalSubject: rawSubject is String && rawSubject.trim().isNotEmpty
+          ? rawSubject
+          : null,
+      originalPlainText: rawPlainText,
+      originalHtml: rawHtml is String && rawHtml.trim().isNotEmpty
+          ? rawHtml
+          : null,
+      conversionState: DraftForwardedBlockConversionState.fromName(
+        rawConversionState is String ? rawConversionState : null,
+      ),
+      convertedText:
+          rawConvertedText is String && rawConvertedText.trim().isNotEmpty
+          ? rawConvertedText
+          : null,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is DraftForwardedBlock &&
+            other.blockId == blockId &&
+            other.sourceMessageId == sourceMessageId &&
+            other.senderJid == senderJid &&
+            other.senderLabel == senderLabel &&
+            other.timestamp == timestamp &&
+            other.originalSubject == originalSubject &&
+            other.originalPlainText == originalPlainText &&
+            other.originalHtml == originalHtml &&
+            other.conversionState == conversionState &&
+            other.convertedText == convertedText;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    blockId,
+    sourceMessageId,
+    senderJid,
+    senderLabel,
+    timestamp,
+    originalSubject,
+    originalPlainText,
+    originalHtml,
+    conversionState,
+    convertedText,
+  );
+}
+
+class DraftForwardedBlockListConverter
+    extends TypeConverter<List<DraftForwardedBlock>, String> {
+  const DraftForwardedBlockListConverter();
+
+  static final ListConverter<Map<String, dynamic>> _listConverter =
+      ListConverter<Map<String, dynamic>>();
+
+  @override
+  List<DraftForwardedBlock> fromSql(String fromDb) {
+    final List<Map<String, dynamic>> decoded = _listConverter.fromSql(fromDb);
+    final blocks = <DraftForwardedBlock>[];
+    for (final entry in decoded) {
+      final block = DraftForwardedBlock.fromJson(entry);
+      if (block != null) {
+        blocks.add(block);
+      }
+    }
+    return List<DraftForwardedBlock>.unmodifiable(blocks);
+  }
+
+  @override
+  String toSql(List<DraftForwardedBlock> value) {
+    return jsonEncode(
+      value.map((block) => block.toJson()).toList(growable: false),
+    );
   }
 }
 
@@ -430,6 +685,8 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     @Default(<String>[]) List<String> attachmentMetadataIds,
+    CalendarTaskIcsMessage? calendarTaskIcsMessage,
+    @Default(<DraftForwardedBlock>[]) List<DraftForwardedBlock> forwardedBlocks,
   }) = _Draft;
 
   const Draft._();
@@ -455,12 +712,27 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
 
   bool get hasAttachments => attachmentMetadata.isNotEmpty;
 
+  bool get hasCalendarTaskIcs => calendarTaskIcsMessage != null;
+
+  bool get hasForwardedBlocks => forwardedBlocks.isNotEmpty;
+
   bool matchesSearchQuery(String lowerQuery) {
     return recipients.matchesSearchQuery(
       lowerQuery,
-      body: body,
+      body: _searchBody,
       subject: subject,
     );
+  }
+
+  String? get _searchBody {
+    final values = <String>[
+      if (body?.trim().isNotEmpty == true) body!,
+      for (final block in forwardedBlocks) block.activePlainText,
+    ];
+    if (values.isEmpty) {
+      return null;
+    }
+    return values.join('\n');
   }
 
   Draft copyWithSyncMetadata(DraftSyncMetadata metadata) {
@@ -499,6 +771,8 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
       quotingStanzaId: nullableValue(quotingStanzaId),
       quotingReferenceKind: nullableValue(quotingReferenceKind),
       attachmentMetadataIds: Value(attachmentMetadataIds),
+      calendarTaskIcsMessage: nullableValue(calendarTaskIcsMessage),
+      forwardedBlocks: Value(forwardedBlocks),
     ).toColumns(nullToAbsent);
   }
 }
@@ -532,6 +806,16 @@ class Drafts extends Table {
 
   TextColumn get attachmentMetadataIds =>
       text().map(ListConverter<String>()).withDefault(const Constant('[]'))();
+
+  TextColumn get calendarTaskIcsMessage => text()
+      .named('calendar_task_ics')
+      .map(const CalendarTaskIcsMessageConverter())
+      .nullable()();
+
+  TextColumn get forwardedBlocks => text()
+      .named('forwarded_blocks')
+      .map(const DraftForwardedBlockListConverter())
+      .withDefault(const Constant('[]'))();
 }
 
 @DataClassName('DraftAttachmentRef')

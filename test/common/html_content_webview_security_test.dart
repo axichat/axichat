@@ -24,7 +24,7 @@ void main() {
       expect(prepared.contains('@import'), isFalse);
       expect(prepared.contains('url('), isFalse);
       expect(prepared.contains('color: red'), isTrue);
-      expect(prepared.contains('width:'), isFalse);
+      expect(prepared.contains('width: 999px'), isFalse);
     });
 
     test('blocks remote images when disabled but keeps data images', () {
@@ -49,6 +49,20 @@ void main() {
       expect(RegExp(r'<img\b').allMatches(prepared), hasLength(2));
     });
 
+    test('keeps visible linked images as images', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<a href="https://example.com/dashboard">'
+        '<img src="https://example.com/logo.png" alt="Open dashboard" />'
+        '</a>',
+        allowRemoteImages: true,
+      );
+
+      expect(prepared.contains('href="https://example.com/dashboard"'), isTrue);
+      expect(prepared.contains('src="https://example.com/logo.png"'), isTrue);
+      expect(RegExp(r'<img\b').allMatches(prepared), hasLength(1));
+      expect(prepared.contains('>Open dashboard</a>'), isFalse);
+    });
+
     test('drops blocked css but keeps readable formatting', () {
       final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
         '<style>.note { position: absolute; top: 0; z-index: 9999; '
@@ -69,7 +83,43 @@ void main() {
       expect(prepared.contains('margin: 8px'), isTrue);
     });
 
-    test('standard mode removes hidden nodes', () {
+    test(
+      'injects readable WebView CSS without forcing footer table layout',
+      () {
+        final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+          '<table width="640"><tbody><tr>'
+          '<td width="320"><span>Footer</span></td>'
+          '<td><font>Legal</font></td>'
+          '</tr></tbody></table>',
+          allowRemoteImages: true,
+        );
+
+        expect(prepared.contains('axichat-email-webview-style'), isTrue);
+        expect(prepared.contains('font-size: 16px !important;'), isTrue);
+        expect(prepared.contains('line-height: 1.5 !important;'), isTrue);
+        expect(
+          prepared.contains('-webkit-text-size-adjust: 100% !important;'),
+          isTrue,
+        );
+        expect(prepared.contains('text-size-adjust: 100% !important;'), isTrue);
+        expect(
+          prepared.contains('overflow-wrap: break-word !important;'),
+          isTrue,
+        );
+        expect(
+          prepared.contains('overflow-wrap: anywhere !important;'),
+          isFalse,
+        );
+        expect(prepared.contains('table-layout: fixed !important;'), isFalse);
+        expect(prepared.contains('table[width]'), isFalse);
+        expect(prepared.contains('td[width], th[width]'), isFalse);
+        expect(prepared.contains('td, th {\n  width:'), isFalse);
+        expect(prepared.contains('span, a, li, td, th'), isFalse);
+        expect(prepared.contains('font, center'), isFalse);
+      },
+    );
+
+    test('standard mode restores hidden nodes in their original order', () {
       final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
         '<p style="display:none">123456</p>'
         '<p style="visibility:hidden">234567</p>'
@@ -82,14 +132,173 @@ void main() {
         '<p>visible</p>',
         allowRemoteImages: true,
       );
+      expect(prepared.contains('123456'), isTrue);
+      expect(prepared.contains('234567'), isTrue);
+      expect(prepared.contains('345678'), isTrue);
+      expect(prepared.contains('456789'), isTrue);
+      expect(prepared.contains('567890'), isTrue);
+      expect(prepared.contains('678901'), isTrue);
+      expect(prepared.contains('789012'), isTrue);
+      expect(prepared.contains('890123'), isTrue);
+      expect(prepared.contains('visible'), isTrue);
+      expect(prepared.indexOf('123456'), lessThan(prepared.indexOf('visible')));
+      expect(
+        prepared.contains('data-axichat-recovered-email-content'),
+        isFalse,
+      );
+      expect(prepared.contains('display:none'), isFalse);
+      expect(prepared.contains('visibility:hidden'), isFalse);
+      expect(prepared.contains('mso-hide'), isFalse);
+    });
+
+    test('keeps hidden OTPs in place without injecting a recovered block', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<table><tbody><tr><td>Before</td></tr>'
+        '<tr hidden><td>123456</td></tr>'
+        '<tr><td>After</td></tr></tbody></table>',
+        allowRemoteImages: true,
+      );
+
+      expect(
+        prepared.contains('data-axichat-recovered-email-content'),
+        isFalse,
+      );
+      expect(prepared.contains('Additional email content'), isFalse);
+      expect(prepared.contains('123456'), isTrue);
+      expect(prepared.indexOf('Before'), lessThan(prepared.indexOf('123456')));
+      expect(prepared.indexOf('123456'), lessThan(prepared.indexOf('After')));
+    });
+
+    test('keeps hidden content only once at its source position', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<p hidden>123456</p>'
+        '<p hidden>654321</p>'
+        '<p>123456</p>',
+        allowRemoteImages: true,
+      );
+
+      expect(
+        prepared.contains('data-axichat-recovered-email-content'),
+        isFalse,
+      );
+      expect(prepared.contains('654321'), isTrue);
+      expect('123456'.allMatches(prepared), hasLength(2));
+    });
+
+    test('restores safe hidden action links as sanitized anchors in place', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<p>Before</p><div hidden>'
+        '<a href="https://example.com/confirm" aria-label="Confirm account"></a>'
+        '<a href="javascript:alert(1)">Bad link</a>'
+        '</div><p>After</p>',
+        allowRemoteImages: true,
+      );
+
+      expect(
+        prepared.contains('data-axichat-recovered-email-content'),
+        isFalse,
+      );
+      expect(prepared.contains('href="https://example.com/confirm"'), isTrue);
+      expect(prepared.contains('Confirm account'), isTrue);
+      expect(prepared.contains('javascript:'), isFalse);
+      expect(prepared.contains('Bad link'), isFalse);
+      expect(
+        prepared.indexOf('Before'),
+        lessThan(prepared.indexOf('Confirm account')),
+      );
+      expect(
+        prepared.indexOf('Confirm account'),
+        lessThan(prepared.indexOf('After')),
+      );
+    });
+
+    test('restores useful image-only hidden link labels in place', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<p>Before</p>'
+        '<a hidden href="https://example.com/dashboard">'
+        '<img src="data:image/png;base64,AAAA" alt="Open dashboard" />'
+        '</a>'
+        '<p>After</p>',
+        allowRemoteImages: true,
+      );
+
+      expect(prepared.contains('href="https://example.com/dashboard"'), isTrue);
+      expect(prepared.contains('Open dashboard'), isTrue);
+      expect(
+        prepared.indexOf('Before'),
+        lessThan(prepared.indexOf('Open dashboard')),
+      );
+      expect(
+        prepared.indexOf('Open dashboard'),
+        lessThan(prepared.indexOf('After')),
+      );
+    });
+
+    test('converts useful hidden controls to static content in place', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<p>Before</p>'
+        '<form><button title="Approve sign in"></button></form>'
+        '<input type="hidden" value="567890" />'
+        '<select><option>Use code 246810</option></select>'
+        '<p>After</p>',
+        allowRemoteImages: true,
+      );
+
+      expect(prepared.contains('<form'), isFalse);
+      expect(prepared.contains('<button'), isFalse);
+      expect(prepared.contains('<input'), isFalse);
+      expect(prepared.contains('<select'), isFalse);
+      expect(prepared.contains('Approve sign in'), isTrue);
+      expect(prepared.contains('567890'), isTrue);
+      expect(prepared.contains('Use code 246810'), isTrue);
+      expect(
+        prepared.indexOf('Before'),
+        lessThan(prepared.indexOf('Approve sign in')),
+      );
+      expect(
+        prepared.indexOf('Use code 246810'),
+        lessThan(prepared.indexOf('After')),
+      );
+    });
+
+    test('does not restore unsafe hidden content', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<script>123456</script>'
+        '<style>.code::before { content: "234567"; }</style>'
+        '<svg><text>345678</text></svg>'
+        '<iframe>456789</iframe>'
+        '<input type="hidden" value="do-not-show" />'
+        '<a hidden href="javascript:alert(1)">678901</a>'
+        '<a hidden href="https://example.com/track">'
+        '<img width="1" height="1" alt="tracking pixel" />'
+        '</a>'
+        '<p>visible</p>',
+        allowRemoteImages: true,
+      );
+
       expect(prepared.contains('123456'), isFalse);
-      expect(prepared.contains('234567'), isFalse);
       expect(prepared.contains('345678'), isFalse);
       expect(prepared.contains('456789'), isFalse);
-      expect(prepared.contains('567890'), isFalse);
+      expect(prepared.contains('do-not-show'), isFalse);
       expect(prepared.contains('678901'), isFalse);
-      expect(prepared.contains('789012'), isFalse);
-      expect(prepared.contains('890123'), isFalse);
+      expect(prepared.contains('tracking pixel'), isFalse);
+      expect(prepared.contains('visible'), isTrue);
+    });
+
+    test('does not restore arbitrary hidden preheader content', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForWebView(
+        '<div style="display:none">'
+        'Preview text for the inbox. '
+        '<a href="https://example.com/browser">View in browser</a>'
+        '</div>'
+        '<p hidden>Here is our latest newsletter</p>'
+        '<p>visible</p>',
+        allowRemoteImages: true,
+      );
+
+      expect(prepared.contains('Preview text'), isFalse);
+      expect(prepared.contains('View in browser'), isFalse);
+      expect(prepared.contains('latest newsletter'), isFalse);
       expect(prepared.contains('visible'), isTrue);
     });
 
@@ -140,182 +349,40 @@ void main() {
       expect(prepared.contains('<p>ok</p>'), isTrue);
       expect(prepared.contains('src="https://example.com/x.png"'), isTrue);
     });
-  });
 
-  group('HtmlContentCodec.recoverSanitizedEmailContent', () {
-    test('recovers hidden and off-screen readable content', () {
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        '<p style="display:none">123456</p>'
-        '<p style="visibility:hidden">234567</p>'
-        '<p hidden>345678</p>'
-        '<p aria-hidden="true">456789</p>'
-        '<p style="mso-hide:all">567890</p>'
-        '<p style="opacity:0">678901</p>'
-        '<p style="font-size:0">789012</p>'
-        '<p style="height:0; overflow:hidden">890123</p>'
-        '<p style="text-indent:-9999px">901234</p>'
-        '<p style="position:absolute; left:-9999px">012345</p>'
-        '<p style="transform:translateX(-9999px)">135790</p>',
+    test('restores hidden content in Flutter HTML output', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+        '<p hidden>123456</p><p>visible</p>',
+        allowRemoteImages: true,
       );
 
       expect(
-        recovered.map((item) => item.text),
-        containsAll(const <String>[
-          '123456',
-          '234567',
-          '345678',
-          '456789',
-          '567890',
-          '678901',
-          '789012',
-          '890123',
-          '901234',
-          '012345',
-          '135790',
-        ]),
+        prepared.contains('data-axichat-recovered-email-content'),
+        isFalse,
       );
+      expect(prepared.contains('Additional email content'), isFalse);
+      expect(prepared.contains('123456'), isTrue);
+      expect(prepared.contains('visible'), isTrue);
     });
 
-    test('recovers unclassified hidden text without OTP classification', () {
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        '<div style="display:none">Use the backup phrase blue window</div>',
+    test('does not add WebView CSS chrome to Flutter HTML output', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+        '<table width="640"><tbody><tr>'
+        '<td width="320">Footer</td>'
+        '<td><span>Legal</span></td>'
+        '</tr></tbody></table>'
+        '<p>After</p>',
+        allowRemoteImages: true,
       );
 
-      expect(recovered, hasLength(1));
-      expect(recovered.single.text, 'Use the backup phrase blue window');
-      expect(recovered.single.kind, EmailRecoveredContentKind.additionalText);
-    });
-
-    test('recovers safe action labels and sanitized hrefs', () {
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        '<div hidden>'
-        '<a href="https://example.com/confirm" aria-label="Confirm account"></a>'
-        '<a href="javascript:alert(1)">Bad link</a>'
-        '<a href="https://example.com/image"><img alt="Open dashboard" /></a>'
-        '</div>'
-        '<form action="https://evil.test/post">'
-        '<button title="Approve sign in"></button>'
-        '<select><option>Use code 246810</option></select>'
-        '<input type="hidden" value="do-not-show" />'
-        '</form>',
-      );
-
-      expect(
-        recovered,
-        contains(
-          const EmailRecoveredContent(
-            kind: EmailRecoveredContentKind.actionLink,
-            text: 'Confirm account',
-            href: 'https://example.com/confirm',
-          ),
-        ),
-      );
-      expect(
-        recovered,
-        contains(
-          const EmailRecoveredContent(
-            kind: EmailRecoveredContentKind.actionLink,
-            text: 'Open dashboard',
-            href: 'https://example.com/image',
-          ),
-        ),
-      );
-      expect(recovered.map((item) => item.text), contains('Approve sign in'));
-      expect(recovered.map((item) => item.text), contains('Use code 246810'));
-      expect(recovered.map((item) => item.text), isNot(contains('Bad link')));
-      expect(
-        recovered.map((item) => item.text),
-        isNot(contains('do-not-show')),
-      );
-    });
-
-    test('recovers safe action links hidden by css hiding styles', () {
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        '<a href="https://example.com/confirm" style="opacity:0">'
-        'Confirm account'
-        '</a>'
-        '<a href="https://example.com/offscreen" '
-        'style="position:absolute; left:-9999px">'
-        'Approve login'
-        '</a>',
-      );
-
-      expect(
-        recovered,
-        contains(
-          const EmailRecoveredContent(
-            kind: EmailRecoveredContentKind.actionLink,
-            text: 'Confirm account',
-            href: 'https://example.com/confirm',
-          ),
-        ),
-      );
-      expect(
-        recovered,
-        contains(
-          const EmailRecoveredContent(
-            kind: EmailRecoveredContentKind.actionLink,
-            text: 'Approve login',
-            href: 'https://example.com/offscreen',
-          ),
-        ),
-      );
-    });
-
-    test('dedupes only exact visible lines', () {
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        '<p hidden>123456</p>'
-        '<p hidden>654321</p>'
-        '<p hidden>Your code is 777888</p>',
-        visibleSanitizedText: '123456\nYour code is 777888',
-      );
-
-      expect(recovered.map((item) => item.text), contains('654321'));
-      expect(recovered.map((item) => item.text), isNot(contains('123456')));
-      expect(
-        recovered.map((item) => item.text),
-        isNot(contains('Your code is 777888')),
-      );
-    });
-
-    test('does not dedupe against sanitized hidden text', () {
-      const html =
-          '<p style="opacity:0">123456</p>'
-          '<p style="position:absolute; left:-9999px">Use code 654321</p>'
-          '<p>visible</p>';
-      final visibleText = HtmlContentCodec.toPlainText(
-        HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-          html,
-          allowRemoteImages: false,
-        ),
-      );
-
-      expect(visibleText.contains('123456'), isFalse);
-      expect(visibleText.contains('654321'), isFalse);
-
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        html,
-        visibleSanitizedText: visibleText,
-      );
-
-      expect(recovered.map((item) => item.text), contains('123456'));
-      expect(recovered.map((item) => item.text), contains('Use code 654321'));
-    });
-
-    test('does not recover unsafe or non-readable content', () {
-      final recovered = HtmlContentCodec.recoverSanitizedEmailContent(
-        '<script>123456</script>'
-        '<style>.code::before { content: "234567"; }</style>'
-        '<svg><text>345678</text></svg>'
-        '<iframe>456789</iframe>'
-        '<input type="hidden" value="567890" />'
-        '<a hidden href="javascript:alert(1)">678901</a>'
-        '<a hidden href="https://example.com/track">'
-        '<img width="1" height="1" alt="tracking pixel" />'
-        '</a>',
-      );
-
-      expect(recovered, isEmpty);
+      expect(prepared.contains('Footer'), isTrue);
+      expect(prepared.contains('Legal'), isTrue);
+      expect(prepared.contains('After'), isTrue);
+      expect(prepared.contains('<table'), isFalse);
+      expect(prepared.contains('axichat-email-webview-style'), isFalse);
+      expect(prepared.contains('text-size-adjust: 100% !important;'), isFalse);
+      expect(prepared.contains('font-size: 16px !important;'), isFalse);
+      expect(prepared.contains('table-layout: fixed !important;'), isFalse);
     });
   });
 
@@ -333,6 +400,27 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+
+  group('HtmlContentCodec.containsRenderableRemoteImages', () {
+    test('detects remote images that survive safe email rendering', () {
+      expect(
+        HtmlContentCodec.containsRenderableRemoteImages(
+          '<p>Logo</p><img src="https://example.com/logo.png" />',
+        ),
+        isTrue,
+      );
+    });
+
+    test('ignores hidden tracker images removed from safe rendering', () {
+      const html =
+          '<div style="display:none">'
+          '<img src="https://tracker.example.com/pixel.png" />'
+          '</div><p>Hello</p>';
+
+      expect(HtmlContentCodec.containsRemoteImages(html), isTrue);
+      expect(HtmlContentCodec.containsRenderableRemoteImages(html), isFalse);
     });
   });
 
@@ -382,6 +470,12 @@ void main() {
       expect(
         HtmlContentCodec.containsBlockedWebViewContent(
           '<img src="https://example.com/x.png" />',
+        ),
+        isFalse,
+      );
+      expect(
+        HtmlContentCodec.containsBlockedWebViewContent(
+          '<img src="cid:abc123" />',
         ),
         isFalse,
       );

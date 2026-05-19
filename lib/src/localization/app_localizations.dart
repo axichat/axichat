@@ -1206,13 +1206,13 @@ abstract class AppLocalizations {
   /// No description provided for @chatShowingDirectOnly.
   ///
   /// In en, this message translates to:
-  /// **'Showing direct only'**
+  /// **'Showing direct messages only'**
   String get chatShowingDirectOnly;
 
   /// No description provided for @chatShowingAll.
   ///
   /// In en, this message translates to:
-  /// **'Showing all'**
+  /// **'Showing all messages'**
   String get chatShowingAll;
 
   /// No description provided for @chatMuteNotifications.
@@ -1785,41 +1785,35 @@ abstract class AppLocalizations {
   /// **'Invites cannot be forwarded.'**
   String get chatForwardInviteForbidden;
 
+  /// No description provided for @chatForwardedMessageHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Forwarded message'**
+  String get chatForwardedMessageHeader;
+
+  /// No description provided for @chatForwardedFromLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'From'**
+  String get chatForwardedFromLabel;
+
+  /// No description provided for @chatForwardedDateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Date'**
+  String get chatForwardedDateLabel;
+
+  /// No description provided for @chatForwardedSubjectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get chatForwardedSubjectLabel;
+
   /// No description provided for @chatAddToCalendarNoText.
   ///
   /// In en, this message translates to:
   /// **'Selected messages have no text to add to calendar'**
   String get chatAddToCalendarNoText;
-
-  /// No description provided for @chatForwardDialogTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Forward to...'**
-  String get chatForwardDialogTitle;
-
-  /// No description provided for @chatForwardEmailWarningTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Forward email?'**
-  String get chatForwardEmailWarningTitle;
-
-  /// No description provided for @chatForwardEmailWarningMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Forwarding email can include original headers and external image links. Choose how to send.'**
-  String get chatForwardEmailWarningMessage;
-
-  /// No description provided for @chatForwardEmailOptionSafe.
-  ///
-  /// In en, this message translates to:
-  /// **'Forward as new message'**
-  String get chatForwardEmailOptionSafe;
-
-  /// No description provided for @chatForwardEmailOptionOriginal.
-  ///
-  /// In en, this message translates to:
-  /// **'Forward original'**
-  String get chatForwardEmailOptionOriginal;
 
   /// No description provided for @chatComposerAttachmentWarning.
   ///
@@ -2370,6 +2364,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restore from draft'**
   String get draftRestoreAction;
+
+  /// No description provided for @draftForwardConvertAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert to editable text'**
+  String get draftForwardConvertAction;
+
+  /// No description provided for @draftForwardRestoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore original HTML?'**
+  String get draftForwardRestoreTitle;
+
+  /// No description provided for @draftForwardRestoreMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring the original HTML will discard edits made to the converted forwarded text.'**
+  String get draftForwardRestoreMessage;
+
+  /// No description provided for @draftForwardRestoreAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore original HTML'**
+  String get draftForwardRestoreAction;
 
   /// No description provided for @draftMinimize.
   ///
@@ -3960,6 +3978,42 @@ abstract class AppLocalizations {
   /// **'Security'**
   String get settingsSectionSecurity;
 
+  /// No description provided for @settingsSyncStatusNotSynced.
+  ///
+  /// In en, this message translates to:
+  /// **'Not synced'**
+  String get settingsSyncStatusNotSynced;
+
+  /// No description provided for @settingsSyncStatusDeviceOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This device only'**
+  String get settingsSyncStatusDeviceOnly;
+
+  /// No description provided for @settingsSyncStatusSyncing.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing'**
+  String get settingsSyncStatusSyncing;
+
+  /// No description provided for @settingsOverridesList.
+  ///
+  /// In en, this message translates to:
+  /// **'Overridden in {chats}'**
+  String settingsOverridesList(Object chats);
+
+  /// No description provided for @settingsOverridesResetAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset all'**
+  String get settingsOverridesResetAll;
+
+  /// No description provided for @settingsSyncFailureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Setting saved locally, but sync failed.'**
+  String get settingsSyncFailureMessage;
+
   /// No description provided for @settingsLanguage.
   ///
   /// In en, this message translates to:
@@ -4419,7 +4473,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatEmailImageBlockedLabel.
   ///
   /// In en, this message translates to:
-  /// **'Image blocked'**
+  /// **'Images blocked'**
   String get chatEmailImageBlockedLabel;
 
   /// No description provided for @chatEmailImageFailedLabel.
@@ -4434,11 +4488,23 @@ abstract class AppLocalizations {
   /// **'Interactive content blocked for safety'**
   String get chatEmailInteractiveContentBlockedLabel;
 
-  /// No description provided for @chatEmailRecoveredContentLabel.
+  /// No description provided for @chatEmailUnblockInteractiveContentButton.
   ///
   /// In en, this message translates to:
-  /// **'Additional email content'**
-  String get chatEmailRecoveredContentLabel;
+  /// **'Unblock'**
+  String get chatEmailUnblockInteractiveContentButton;
+
+  /// No description provided for @chatEmailOriginalContentConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View original email?'**
+  String get chatEmailOriginalContentConfirmTitle;
+
+  /// No description provided for @chatEmailOriginalContentConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Original email content can contact remote servers and may be unsafe. Continue?'**
+  String get chatEmailOriginalContentConfirmMessage;
 
   /// No description provided for @chatEmailInlineImagesUnsupportedLabel.
   ///
@@ -4589,6 +4655,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Always hide previews'**
   String get chatNotificationPreviewOptionHide;
+
+  /// No description provided for @chatNotificationBehaviorOptionInherit.
+  ///
+  /// In en, this message translates to:
+  /// **'Inherit global'**
+  String get chatNotificationBehaviorOptionInherit;
+
+  /// No description provided for @chatNotificationBehaviorOptionMute.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute this chat'**
+  String get chatNotificationBehaviorOptionMute;
+
+  /// No description provided for @chatNotificationBehaviorOptionAlwaysNotify.
+  ///
+  /// In en, this message translates to:
+  /// **'Always notify this chat'**
+  String get chatNotificationBehaviorOptionAlwaysNotify;
 
   /// No description provided for @chatAttachmentUnavailableDevice.
   ///
@@ -5117,12 +5201,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show HTML'**
   String get chatMessageViewHtmlAction;
-
-  /// No description provided for @chatMessageViewFullAction.
-  ///
-  /// In en, this message translates to:
-  /// **'View full'**
-  String get chatMessageViewFullAction;
 
   /// No description provided for @chatMessageShowTextAction.
   ///
@@ -10656,6 +10734,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Invite revoked'**
   String get chatInviteRevokedLabel;
+
+  /// No description provided for @chatInviteAcceptedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite accepted'**
+  String get chatInviteAcceptedLabel;
 
   /// No description provided for @chatInviteActionLabel.
   ///

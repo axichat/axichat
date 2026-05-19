@@ -19,6 +19,7 @@ class ChatMessageDetails extends StatefulWidget {
 class _ChatMessageDetailsState extends State<ChatMessageDetails> {
   Locale? _lastLocale;
   late intl.DateFormat _timestampFormat;
+  String? _unblockedEmailContentKey;
 
   @override
   void didChangeDependencies() {
@@ -39,6 +40,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
         final locate = context.read;
         final message = state.focused;
         if (message == null) return const SizedBox.shrink();
+        final emailContentKey = _emailContentKeyForMessage(message);
         return BlocSelector<ProfileCubit, ProfileState, String?>(
           selector: (profileState) => profileState.jid,
           builder: (context, profileJid) {
@@ -114,51 +116,14 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final normalizedHtmlBody = resolvedHtmlBody?.trim();
             final hasHtmlBody =
                 normalizedHtmlBody != null && normalizedHtmlBody.isNotEmpty;
-            final shouldLoadImages =
-                settings.autoLoadEmailImages ||
+            final shouldLoadSafeRemoteImages =
+                (state.chat?.emailRemoteImagesEnabled ??
+                    settings.autoLoadEmailImages) ||
                 (message.id != null &&
                     widget.loadedEmailImageMessageIds.contains(message.id));
-            final VoidCallback? onLoadRequested = message.id == null
+            final onRemoteImagesApproved = message.id == null
                 ? null
                 : () => widget.onEmailImagesApproved(message.id!);
-            final bool hasRemoteHtmlImages =
-                hasHtmlBody &&
-                !shouldLoadImages &&
-                HtmlContentCodec.containsRemoteImages(normalizedHtmlBody);
-            final bool hasBlockedHtmlContent =
-                hasHtmlBody &&
-                HtmlContentCodec.containsBlockedWebViewContent(
-                  normalizedHtmlBody,
-                );
-            final bool hasCidHtmlImages =
-                hasHtmlBody &&
-                HtmlContentCodec.containsCidImages(normalizedHtmlBody);
-            final String preparedHtmlBody = hasHtmlBody
-                ? HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-                    normalizedHtmlBody,
-                    allowRemoteImages: false,
-                  )
-                : '';
-            final visibleEmailHtmlText = hasHtmlBody
-                ? HtmlContentCodec.toPlainText(preparedHtmlBody).trim()
-                : '';
-            final recoveredEmailContent = hasHtmlBody
-                ? HtmlContentCodec.recoverSanitizedEmailContent(
-                    normalizedHtmlBody,
-                    visibleSanitizedText: visibleEmailHtmlText,
-                  )
-                : const <EmailRecoveredContent>[];
-            final Widget? emailHtmlLoadingFallback =
-                preparedHtmlBody.trim().isEmpty
-                ? null
-                : _MessageHtmlBody(
-                    html: preparedHtmlBody,
-                    textStyle: textTheme.lead,
-                    textColor: context.colorScheme.foreground,
-                    linkColor: context.colorScheme.primary,
-                    shouldLoadImages: false,
-                    onLinkTap: (url) => _handleLinkTap(context, url),
-                  );
             final String? fallbackBodyText = switch (message.body?.trim()) {
               final String text when text.isNotEmpty => text,
               _ => null,
@@ -172,7 +137,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   };
             final String? emailFallbackText =
                 fallbackBodyText ?? fallbackQuotedText;
-            final bool shouldShowImageGallery = hasRemoteHtmlImages;
             final xmppCapabilities = state.xmppCapabilities;
             final supportsXmppMarkers =
                 xmppCapabilities?.supportsMarkers == true;
@@ -263,50 +227,19 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   spacing: spacing.l,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    if (hasBlockedHtmlContent) const _EmailHtmlSafetyNotice(),
-                    if (hasCidHtmlImages) const _EmailHtmlCidNotice(),
-                    if (recoveredEmailContent.isNotEmpty)
-                      EmailRecoveredContentView(
-                        items: recoveredEmailContent,
-                        textStyle: textTheme.lead,
-                        onLinkTap: (url) => _handleLinkTap(context, url),
-                      ),
                     if (hasHtmlBody)
-                      DecoratedBox(
-                        decoration: ShapeDecoration(
-                          color: context.colorScheme.card,
-                          shape: RoundedSuperellipseBorder(
-                            borderRadius: BorderRadius.circular(
-                              context.radii.squircle,
+                      AxiEmailHtmlPreview(
+                        html: normalizedHtmlBody,
+                        shouldLoadSafeRemoteImages: shouldLoadSafeRemoteImages,
+                        originalContentUnblocked:
+                            _unblockedEmailContentKey == emailContentKey,
+                        onRemoteImagesApproved: onRemoteImagesApproved,
+                        onOriginalContentUnblocked: () =>
+                            _handleOriginalEmailUnblock(
+                              context,
+                              emailContentKey,
                             ),
-                            side: context.borderSide,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (shouldShowImageGallery &&
-                                !shouldLoadImages &&
-                                onLoadRequested != null)
-                              Padding(
-                                padding: EdgeInsets.all(spacing.s),
-                                child: EmailImagePlaceholder(
-                                  onTap: onLoadRequested,
-                                ),
-                              ),
-                            EmailHtmlWebView.embedded(
-                              html: normalizedHtmlBody,
-                              allowRemoteImages: shouldLoadImages,
-                              backgroundColor: context.colorScheme.card,
-                              textColor: context.colorScheme.foreground,
-                              linkColor: context.colorScheme.primary,
-                              loadingFallback: emailHtmlLoadingFallback,
-                              simplifyLayout: true,
-                              minHeight: sizing.attachmentPreviewExtent,
-                              onLinkTap: (url) => _handleLinkTap(context, url),
-                            ),
-                          ],
-                        ),
+                        onLinkTap: (url) => _handleLinkTap(context, url),
                       )
                     else if (emailFallbackText != null &&
                         emailFallbackText.isNotEmpty)
@@ -510,6 +443,26 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     );
   }
 
+  String _emailContentKeyForMessage(storage_models.Message message) {
+    final deltaMessageId = message.deltaMsgId;
+    if (deltaMessageId != null) {
+      return 'delta:$deltaMessageId';
+    }
+    final localId = message.id?.trim();
+    if (localId != null && localId.isNotEmpty) {
+      return 'id:$localId';
+    }
+    final stanzaId = message.stanzaID.trim();
+    if (stanzaId.isNotEmpty) {
+      return 'stanza:$stanzaId';
+    }
+    final originId = message.originID?.trim();
+    if (originId != null && originId.isNotEmpty) {
+      return 'origin:$originId';
+    }
+    return 'content:${Object.hash(message.senderJid, message.htmlBody, message.body)}';
+  }
+
   List<storage_models.Chat> _shareParticipants(
     List<storage_models.Chat> participants,
     String? chatJid,
@@ -663,6 +616,26 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     if (!launched && context.mounted) {
       _showSnackbar(context, l10n.chatUnableToOpenHost(report.displayHost));
     }
+  }
+
+  Future<void> _handleOriginalEmailUnblock(
+    BuildContext context,
+    String emailContentKey,
+  ) async {
+    final l10n = context.l10n;
+    final confirmed = await confirm(
+      context,
+      title: l10n.chatEmailOriginalContentConfirmTitle,
+      message: l10n.chatEmailOriginalContentConfirmMessage,
+      confirmLabel: l10n.chatEmailUnblockInteractiveContentButton,
+      destructiveConfirm: false,
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    setState(() {
+      _unblockedEmailContentKey = emailContentKey;
+    });
   }
 
   void _showSnackbar(BuildContext context, String message) {
@@ -994,62 +967,6 @@ class _MessageDetailsReactionChip extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _EmailHtmlStatusNotice extends StatelessWidget {
-  const _EmailHtmlStatusNotice({required this.iconData, required this.label});
-
-  final IconData iconData;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    return Wrap(
-      spacing: spacing.xs,
-      runSpacing: spacing.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      alignment: WrapAlignment.center,
-      children: [
-        Icon(
-          iconData,
-          size: sizing.menuItemIconSize,
-          color: colors.mutedForeground,
-        ),
-        Text(
-          label,
-          style: context.textTheme.muted,
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
-class _EmailHtmlSafetyNotice extends StatelessWidget {
-  const _EmailHtmlSafetyNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return _EmailHtmlStatusNotice(
-      iconData: LucideIcons.shieldAlert,
-      label: context.l10n.chatEmailInteractiveContentBlockedLabel,
-    );
-  }
-}
-
-class _EmailHtmlCidNotice extends StatelessWidget {
-  const _EmailHtmlCidNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return _EmailHtmlStatusNotice(
-      iconData: LucideIcons.imageOff,
-      label: context.l10n.chatEmailInlineImagesUnsupportedLabel,
     );
   }
 }

@@ -156,6 +156,8 @@ class _DraftsListBody extends StatelessWidget {
                 subject: item.subject ?? '',
                 quoteTarget: item.quoteTarget,
                 attachmentMetadataIds: item.attachmentMetadataIds,
+                calendarTaskIcsMessage: item.calendarTaskIcsMessage,
+                forwardedBlocks: item.forwardedBlocks,
               ),
               menuItems: [
                 AxiDeleteMenuItem(
@@ -182,9 +184,7 @@ class _DraftsListBody extends StatelessWidget {
                   '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
               minTileHeight: sizing.chatTileMinHeight,
               horizontalTitleGap: spacing.s,
-              subtitle: item.body?.isNotEmpty == true
-                  ? item.body
-                  : item.jids.join(', '),
+              subtitle: _subtitleLabel(item),
             ),
           );
         },
@@ -204,4 +204,22 @@ String _subjectLabel(BuildContext context, Draft draft) {
 String _recipientLabel(BuildContext context, Draft draft) {
   final count = draft.jids.length;
   return context.l10n.draftRecipientCount(count);
+}
+
+String _subtitleLabel(Draft draft) {
+  final body = draft.body?.trim();
+  if (body != null && body.isNotEmpty) {
+    return _oneLinePreview(body);
+  }
+  for (final block in draft.forwardedBlocks) {
+    final forwardedText = block.activePlainText.trim();
+    if (forwardedText.isNotEmpty) {
+      return _oneLinePreview(forwardedText);
+    }
+  }
+  return _oneLinePreview(draft.jids.join(', '));
+}
+
+String _oneLinePreview(String value) {
+  return value.trim().replaceAll(RegExp(r'\s+'), ' ');
 }

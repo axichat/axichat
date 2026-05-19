@@ -72,6 +72,7 @@ export 'cutout.dart';
 export 'display_fingerprint.dart';
 export 'display_time_since.dart';
 export 'dynamic_inline_text.dart';
+export 'email_html_preview.dart';
 export 'fade_scale_dialog.dart';
 export 'fade_scale_effect.dart';
 export 'feedback_toast.dart';

@@ -120,6 +120,8 @@ class AxiListTile extends StatelessWidget {
                     color: colors.foreground,
                     fontWeight: FontWeight.w700,
                   ),
+                  maxLines: 1,
+                  softWrap: false,
                   overflow: TextOverflow.ellipsis,
                 )),
       subtitle: subtitle == null
@@ -131,9 +133,14 @@ class AxiListTile extends StatelessWidget {
                       fontStyle: FontStyle.italic,
                       color: colors.mutedForeground,
                     ),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
                   )
           : Text(
               subtitle!,
+              maxLines: 1,
+              softWrap: false,
               overflow: TextOverflow.ellipsis,
               style: context.textTheme.muted.copyWith(
                 color: colors.mutedForeground,
