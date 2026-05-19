@@ -369,6 +369,7 @@ void main() {
       () => mockConnection.asBroadcastStream(),
     ).thenAnswer((_) => eventStreamController.stream);
     when(() => mockConnection.getManager<MUCManager>()).thenReturn(mucManager);
+    when(() => mucManager.getRoomState(any())).thenAnswer((_) async => null);
     when(
       () => mockConnection.getManager<mox.DiscoManager>(),
     ).thenReturn(discoManager);
@@ -985,7 +986,7 @@ void main() {
     );
 
     test(
-      'JOIN-015F [HP] self presence does not mutate moxxmpp room cache',
+      'JOIN-015F [HP] self presence marks moxxmpp room cache joined',
       () async {
         final managerRoomState = mox.RoomState(
           roomJid: mox.JID.fromString(_roomJidBare),
@@ -1012,8 +1013,60 @@ void main() {
         await pumpEventQueue();
 
         expect(xmppService.roomStateFor(_roomJid)?.isReadyForMessaging, isTrue);
-        expect(managerRoomState.joined, isFalse);
-        expect(managerRoomState.nick, 'cached-nick');
+        expect(managerRoomState.joined, isTrue);
+        expect(managerRoomState.nick, _roomNick);
+      },
+    );
+
+    test(
+      'JOIN-015F1 [HP] joinRoom completes from self presence while manager future is pending',
+      () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          joined: false,
+          nick: _roomNick,
+        );
+        final managerJoinCompleter =
+            Completer<moxlib.Result<bool, mox.MUCError>>();
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) => managerJoinCompleter.future);
+
+        final joinFuture = xmppService.joinRoom(
+          roomJid: _roomJid,
+          nickname: _roomNick,
+        );
+        await pumpEventQueue();
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: _roomNick,
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+        await pumpEventQueue();
+
+        await joinFuture.timeout(const Duration(seconds: 1));
+        expect(managerRoomState.joined, isTrue);
+
+        managerJoinCompleter.complete(
+          const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
+        );
+        await pumpEventQueue();
       },
     );
 
@@ -1135,6 +1188,8 @@ void main() {
               maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
             ),
           ).called(1);
+          async.elapse(const Duration(seconds: 15, milliseconds: 1));
+          async.flushMicrotasks();
         });
 
         eventStreamController.add(
@@ -1155,6 +1210,88 @@ void main() {
         final room = xmppService.roomStateFor(_roomJid);
         expect(room?.hasSelfPresence, isTrue);
         expect(room?.hasPresentSelfOccupant, isTrue);
+      },
+    );
+
+    test(
+      'JOIN-015I [HP] ensureJoined retries after late self presence wait expires',
+      () async {
+        var joinRequestCount = 0;
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          joinRequestCount++;
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        fakeAsync((async) {
+          Object? firstError;
+          var firstCompleted = false;
+          xmppService
+              .ensureJoined(roomJid: _roomJid, nickname: _roomNick)
+              .then<void>(
+                (_) {
+                  firstCompleted = true;
+                },
+                onError: (Object error, StackTrace _) {
+                  firstError = error;
+                },
+              );
+          async.flushMicrotasks();
+          async.elapse(const Duration(seconds: 15, milliseconds: 1));
+          async.flushMicrotasks();
+
+          Object? secondError;
+          var secondCompleted = false;
+          xmppService
+              .ensureJoined(roomJid: _roomJid, nickname: _roomNick)
+              .then<void>(
+                (_) {
+                  secondCompleted = true;
+                },
+                onError: (Object error, StackTrace _) {
+                  secondError = error;
+                },
+              );
+          async.flushMicrotasks();
+
+          expect(firstError, isNull);
+          expect(firstCompleted, isTrue);
+          expect(secondError, isNull);
+          expect(secondCompleted, isTrue);
+          expect(joinRequestCount, 1);
+
+          async.elapse(const Duration(seconds: 15, milliseconds: 1));
+          async.flushMicrotasks();
+
+          Object? thirdError;
+          var thirdCompleted = false;
+          xmppService
+              .ensureJoined(roomJid: _roomJid, nickname: _roomNick)
+              .then<void>(
+                (_) {
+                  thirdCompleted = true;
+                },
+                onError: (Object error, StackTrace _) {
+                  thirdError = error;
+                },
+              );
+          async.flushMicrotasks();
+          expect(joinRequestCount, 2);
+
+          async.elapse(const Duration(seconds: 15, milliseconds: 1));
+          async.flushMicrotasks();
+
+          expect(thirdError, isNull);
+          expect(thirdCompleted, isTrue);
+
+          async.elapse(const Duration(seconds: 15, milliseconds: 1));
+          async.flushMicrotasks();
+        });
       },
     );
 

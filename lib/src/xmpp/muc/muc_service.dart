@@ -216,6 +216,7 @@ final class _MucRoomSession {
   Completer<void>? repairCompleter;
   Timer? idleLeaveTimer;
   Future<void>? idleLeaveFuture;
+  Timer? lateSelfPresenceTimer;
   int? selfPresenceGeneration;
   int presenceRetainCount = 0;
   bool instantRoomConfigured = false;
@@ -256,6 +257,8 @@ final class _MucRoomSession {
   }
 
   void clearSelfPresenceReadiness() {
+    lateSelfPresenceTimer?.cancel();
+    lateSelfPresenceTimer = null;
     selfPresenceGeneration = null;
     waitingForLateSelfPresence = false;
   }
@@ -502,7 +505,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   void _markRoomCurrentSelfPresence(String roomJid) {
     if (connectionState != ConnectionState.connected) return;
     final session = _ensureRoomSessionForKey(_roomKey(roomJid));
+    session.lateSelfPresenceTimer?.cancel();
     session
+      ..lateSelfPresenceTimer = null
       ..selfPresenceGeneration = _selfPresenceGeneration
       ..waitingForLateSelfPresence = false;
   }
@@ -519,10 +524,18 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   void _markRoomWaitingForLateSelfPresence(String roomJid) {
-    final session = _ensureRoomSessionForKey(_roomKey(roomJid));
+    final key = _roomKey(roomJid);
+    final session = _ensureRoomSessionForKey(key);
+    session.lateSelfPresenceTimer?.cancel();
     session
       ..selfPresenceGeneration = null
-      ..waitingForLateSelfPresence = true;
+      ..waitingForLateSelfPresence = true
+      ..lateSelfPresenceTimer = Timer(_mucJoinTimeout, () {
+        if (!identical(_roomSessionForKey(key), session)) return;
+        session
+          ..lateSelfPresenceTimer = null
+          ..waitingForLateSelfPresence = false;
+      });
   }
 
   bool _roomWaitingForLateSelfPresence(String roomJid) =>
@@ -2701,6 +2714,24 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         room?.hasPresentSelfOccupant == true;
   }
 
+  Future<void> _syncMucManagerCacheFromSelfPresence({
+    required String roomJid,
+    required String nickname,
+  }) async {
+    final manager = _connection.getManager<MUCManager>();
+    if (manager == null) return;
+    final managerState = await manager.getRoomState(
+      mox.JID.fromString(roomJid).toBare(),
+    );
+    if (managerState == null) return;
+    // moxxmpp only marks a room joined after a subject stanza. Subjectless
+    // rooms would otherwise keep its MUC pre-handler dropping live groupchat
+    // messages as join history after Axichat has confirmed self-presence.
+    managerState
+      ..joined = true
+      ..nick = nickname;
+  }
+
   Future<void> _runJoinRoomRequest({
     required String roomJid,
     required MUCManager manager,
@@ -3251,7 +3282,11 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         joinAttemptId: joinAttemptId,
       );
       await joinCompleter.future.timeout(_mucJoinTimeout);
-      await joinRequestFuture;
+      if (_roomReadyFromSelfPresence(normalizedRoom)) {
+        unawaited(joinRequestFuture);
+      } else {
+        await joinRequestFuture;
+      }
     } on TimeoutException {
       final roomState = _roomStates[normalizedRoom];
       final hasSelfPresence = roomState?.hasSelfPresence == true;
@@ -5175,6 +5210,10 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       roomJid: roomJid,
       statusCodes: event.statusCodes,
       reason: event.reason,
+    );
+    await _syncMucManagerCacheFromSelfPresence(
+      roomJid: roomJid,
+      nickname: nextNick,
     );
     _markRoomCurrentSelfPresence(roomJid);
     _applyPendingOwnData(roomJid);
