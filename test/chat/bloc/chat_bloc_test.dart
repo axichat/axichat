@@ -293,6 +293,16 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
+      () => mucService.acceptRoomInvite(
+        roomJid: any(named: 'roomJid'),
+        roomName: any(named: 'roomName'),
+        inviteToken: any(named: 'inviteToken'),
+        inviterJid: any(named: 'inviterJid'),
+        inviteeJid: any(named: 'inviteeJid'),
+        password: any(named: 'password'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
       () => mucService.kickOccupant(
         roomJid: any(named: 'roomJid'),
         nick: any(named: 'nick'),
@@ -2380,6 +2390,57 @@ void main() {
           sendAgainStanzaID: 'manual-send-again-invite-copy',
         ),
       ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'accepting an invite passes acceptance metadata to the MUC service',
+    () async {
+      final message = Message(
+        stanzaID: 'invite-to-accept',
+        senderJid: 'peer@axi.im',
+        chatJid: initialChat.jid,
+        body: 'You have been invited to a group chat',
+        timestamp: DateTime(2024, 1, 1),
+        pseudoMessageType: PseudoMessageType.mucInvite,
+        pseudoMessageData: const <String, dynamic>{
+          'roomJid': 'room@conference.axi.im',
+          'roomName': 'Planning',
+          'inviter': 'peer@axi.im',
+          'invitee': 'self@axi.im',
+          'token': 'invite-token',
+          'password': 'secret',
+        },
+      );
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      bloc.add(ChatInviteJoinRequested(message));
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => mucService.acceptRoomInvite(
+          roomJid: 'room@conference.axi.im',
+          roomName: 'Planning',
+          inviteToken: 'invite-token',
+          inviterJid: 'peer@axi.im',
+          inviteeJid: 'self@axi.im',
+          password: 'secret',
+        ),
+      ).called(1);
+      expect(
+        bloc.state.toast,
+        const ChatToast(message: ChatMessageKey.chatInviteJoinSuccess),
+      );
 
       await bloc.close();
     },

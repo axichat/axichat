@@ -216,6 +216,7 @@ enum PseudoMessageType {
   calendarAvailabilityShare,
   calendarAvailabilityRequest,
   calendarAvailabilityResponse,
+  mucInviteAccepted,
 }
 
 extension PseudoMessageTypeX on PseudoMessageType {
@@ -1285,6 +1286,7 @@ class _ParsedInvite {
   static const _inviteRevokePrefix = 'axc-invite-revoke:';
   static const _inviteBodyLabel = 'You have been invited to a group chat';
   static const _inviteRevokedBodyLabel = 'Invite revoked';
+  static const _inviteAcceptedBodyLabel = 'Invite accepted';
   static const _messageTypeGroupChat = 'groupchat';
 
   static String? _firstNonEmpty(Iterable<String?> values) {
@@ -1296,19 +1298,11 @@ class _ParsedInvite {
   }
 
   static String? _normalizeBareJid(String? raw) {
-    final trimmed = raw?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    try {
-      return mox.JID.fromString(trimmed).toBare().toString();
-    } on Exception {
-      return trimmed;
-    }
+    return bareAddress(raw);
   }
 
   static bool _matchesBareJid(String candidate, String expectedBare) {
-    final normalized = _normalizeBareJid(candidate);
-    if (normalized == null) return false;
-    return normalized == expectedBare;
+    return sameBareAddress(candidate, expectedBare);
   }
 
   static _ParsedInvite? fromEvent(
@@ -1334,28 +1328,46 @@ class _ParsedInvite {
       return fromBody(event.text, to: recipientBare, sender: senderBare);
     }
 
+    final kind = axiInvite?.kind ?? AxiMucInvitePayloadKind.invite;
     final payloadInviter = _firstNonEmpty([axiInvite?.inviter]);
-    if (payloadInviter != null &&
-        !_matchesBareJid(payloadInviter, senderBare)) {
-      return null;
-    }
-
     final payloadInvitee = _firstNonEmpty([axiInvite?.invitee]);
-    if (payloadInvitee != null &&
-        !_matchesBareJid(payloadInvitee, recipientBare)) {
-      return null;
+    if (kind.isAcceptance) {
+      if (payloadInvitee == null ||
+          payloadInviter == null ||
+          !_matchesBareJid(payloadInvitee, senderBare)) {
+        return null;
+      }
+      if (!_matchesBareJid(payloadInviter, recipientBare)) {
+        return null;
+      }
+    } else {
+      if (payloadInviter != null &&
+          !_matchesBareJid(payloadInviter, senderBare)) {
+        return null;
+      }
+      if (payloadInvitee != null &&
+          !_matchesBareJid(payloadInvitee, recipientBare)) {
+        return null;
+      }
     }
 
-    final inviter = _firstNonEmpty([payloadInviter, senderBare]);
-    final invitee = _firstNonEmpty([payloadInvitee, recipientBare]);
+    final inviter = kind.isAcceptance
+        ? _firstNonEmpty([payloadInviter, recipientBare])
+        : _firstNonEmpty([payloadInviter, senderBare]);
+    final invitee = kind.isAcceptance
+        ? _firstNonEmpty([payloadInvitee, senderBare])
+        : _firstNonEmpty([payloadInvitee, recipientBare]);
     final roomName = _firstNonEmpty([axiInvite?.roomName]);
-    final reason = _firstNonEmpty([axiInvite?.reason, directInvite?.reason]);
-    final password = _firstNonEmpty([
-      axiInvite?.password,
-      directInvite?.password,
-    ]);
+    final reason = kind.isAcceptance
+        ? null
+        : _firstNonEmpty([axiInvite?.reason, directInvite?.reason]);
+    final password = kind.isAcceptance
+        ? null
+        : _firstNonEmpty([axiInvite?.password, directInvite?.password]);
     final token = _firstNonEmpty([axiInvite?.token]);
-    final isRevoked = axiInvite?.revoked == true;
+    if (kind.isAcceptance && token == null) {
+      return null;
+    }
 
     final payload = <String, dynamic>{
       'roomJid': roomJid,
@@ -1365,15 +1377,22 @@ class _ParsedInvite {
       'reason': ?reason,
       'password': ?password,
       'token': ?token,
-      if (isRevoked) 'revoked': true,
+      if (kind.isRevocation) 'revoked': true,
+      if (kind.isAcceptance) 'accepted': true,
     };
 
     return _ParsedInvite(
-      type: isRevoked
+      type: kind.isAcceptance
+          ? PseudoMessageType.mucInviteAccepted
+          : kind.isRevocation
           ? PseudoMessageType.mucInviteRevocation
           : PseudoMessageType.mucInvite,
       data: payload,
-      displayBody: isRevoked ? _inviteRevokedBodyLabel : _inviteBodyLabel,
+      displayBody: kind.isAcceptance
+          ? _inviteAcceptedBodyLabel
+          : kind.isRevocation
+          ? _inviteRevokedBodyLabel
+          : _inviteBodyLabel,
     );
   }
 

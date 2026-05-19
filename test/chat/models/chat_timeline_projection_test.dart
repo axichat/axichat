@@ -698,6 +698,139 @@ void main() {
     expect(timelineMessage.inviteAccepted, isTrue);
     expect(timelineMessage.inviteRevoked, isFalse);
     expect(timelineMessage.inviteLabel, equals('Invite accepted'));
+    expect(timelineMessage.inviteJoinActionEnabled, isTrue);
+    expect(timelineMessage.inviteRevokeActionEnabled, isTrue);
+  });
+
+  test('revoked invite marker disables join but keeps revoke available', () {
+    final chat = chat_models.Chat(
+      jid: 'invitee@example.com',
+      title: 'Invitee',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    final invite = Message(
+      stanzaID: 'invite-revoked-source',
+      senderJid: 'self@example.com',
+      chatJid: chat.jid,
+      body: 'Invite',
+      timestamp: DateTime.utc(2024, 1, 1, 10),
+      pseudoMessageType: PseudoMessageType.mucInvite,
+      pseudoMessageData: const {
+        'roomJid': 'room@conference.example.com',
+        'roomName': 'Room',
+        'token': 'token-revoked',
+      },
+    );
+    final revoked = Message(
+      stanzaID: 'invite-revoked-marker',
+      senderJid: 'self@example.com',
+      chatJid: chat.jid,
+      body: 'Invite revoked',
+      timestamp: DateTime.utc(2024, 1, 1, 11),
+      pseudoMessageType: PseudoMessageType.mucInviteRevocation,
+      pseudoMessageData: const {
+        'roomJid': 'room@conference.example.com',
+        'roomName': 'Room',
+        'token': 'token-revoked',
+        'revoked': true,
+      },
+    );
+
+    final lifecycle = resolveInviteLifecycleTokens([invite, revoked]);
+    final items = _projectMessages(
+      chat: chat,
+      messages: [invite, revoked],
+      revokedInviteTokens: lifecycle.revokedInviteTokens,
+      acceptedInviteTokens: lifecycle.acceptedInviteTokens,
+    );
+
+    final timelineMessage = items
+        .whereType<ChatTimelineMessageItem>()
+        .firstWhere((item) => item.messageModel.stanzaID == invite.stanzaID);
+    expect(timelineMessage.inviteRevoked, isTrue);
+    expect(timelineMessage.inviteJoinActionEnabled, isFalse);
+    expect(timelineMessage.inviteRevokeActionEnabled, isTrue);
+  });
+
+  test('search-only accepted marker updates visible invite result', () {
+    final chat = chat_models.Chat(
+      jid: 'invitee@example.com',
+      title: 'Invitee',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    final invite = Message(
+      stanzaID: 'invite-search-1',
+      senderJid: 'self@example.com',
+      chatJid: chat.jid,
+      body: 'Invite',
+      timestamp: DateTime.utc(2024, 1, 1, 10),
+      pseudoMessageType: PseudoMessageType.mucInvite,
+      pseudoMessageData: const {
+        'roomJid': 'room@conference.example.com',
+        'roomName': 'Room',
+        'token': 'token-search',
+      },
+    );
+    final accepted = Message(
+      stanzaID: 'invite-accepted-search-1',
+      senderJid: 'invitee@example.com',
+      chatJid: chat.jid,
+      body: 'Invite accepted',
+      timestamp: DateTime.utc(2024, 1, 1, 11),
+      pseudoMessageType: PseudoMessageType.mucInviteAccepted,
+      pseudoMessageData: const {
+        'roomJid': 'room@conference.example.com',
+        'roomName': 'Room',
+        'token': 'token-search',
+        'accepted': true,
+      },
+    );
+
+    final lifecycle = resolveActiveInviteLifecycleTokens(
+      messages: const <Message>[],
+      searchResults: [invite, accepted],
+      searchFiltering: true,
+    );
+    final items = _projectMessages(
+      chat: chat,
+      messages: [invite, accepted],
+      revokedInviteTokens: lifecycle.revokedInviteTokens,
+      acceptedInviteTokens: lifecycle.acceptedInviteTokens,
+    );
+
+    final timelineMessage = items.whereType<ChatTimelineMessageItem>().single;
+    expect(timelineMessage.messageModel.stanzaID, equals('invite-search-1'));
+    expect(timelineMessage.inviteAccepted, isTrue);
+    expect(timelineMessage.inviteLabel, equals('Invite accepted'));
+  });
+
+  test('hidden accepted markers alone render the empty state', () {
+    final chat = chat_models.Chat(
+      jid: 'invitee@example.com',
+      title: 'Invitee',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    final accepted = Message(
+      stanzaID: 'invite-accepted-only-1',
+      senderJid: 'invitee@example.com',
+      chatJid: chat.jid,
+      body: 'Invite accepted',
+      timestamp: DateTime.utc(2024, 1, 1, 11),
+      pseudoMessageType: PseudoMessageType.mucInviteAccepted,
+      pseudoMessageData: const {
+        'roomJid': 'room@conference.example.com',
+        'token': 'token-only',
+        'accepted': true,
+      },
+    );
+
+    final items = _projectMessages(chat: chat, messages: [accepted]);
+
+    final emptyState = items.single as ChatTimelineEmptyStateItem;
+    expect(emptyState.label, equals('Empty'));
   });
 
   test('invite lifecycle tokens use the latest successful marker', () {
@@ -746,4 +879,56 @@ void main() {
     expect(laterLifecycle.acceptedInviteTokens, isEmpty);
     expect(laterLifecycle.revokedInviteTokens, contains('token-1'));
   });
+}
+
+List<ChatTimelineItem> _projectMessages({
+  required chat_models.Chat chat,
+  required List<Message> messages,
+  Set<String> revokedInviteTokens = const {},
+  Set<String> acceptedInviteTokens = const {},
+}) {
+  return buildMainChatTimelineItems(
+    messages: messages,
+    loadingMessages: false,
+    unreadBoundaryStanzaId: null,
+    emptyStateCreatedAt: DateTime.utc(2024, 1, 1),
+    unreadDividerItemId: 'unread-divider',
+    unreadDividerLabel: 'Unread',
+    emptyStateItemId: 'empty-state',
+    emptyStateLabel: 'Empty',
+    isGroupChat: false,
+    isEmailChat: false,
+    profileJid: 'self@example.com',
+    resolvedEmailSelfJid: null,
+    currentUserId: 'self@example.com',
+    selfUserId: 'self@example.com',
+    selfDisplayName: 'Self',
+    selfAvatarPath: null,
+    myOccupantJid: null,
+    selfNick: 'self',
+    roomState: null,
+    roomMemberSections: const [],
+    chat: chat,
+    messageById: const {},
+    shareContexts: const {},
+    shareReplies: const {},
+    emailFullHtmlByDeltaId: const {},
+    revokedInviteTokens: revokedInviteTokens,
+    acceptedInviteTokens: acceptedInviteTokens,
+    inviteRoomFallbackLabel: 'Room',
+    inviteBodyLabel: 'Invite',
+    inviteRevokedBodyLabel: 'Invite revoked',
+    inviteAcceptedBodyLabel: 'Invite accepted',
+    unknownAuthorLabel: 'Unknown',
+    inviteActionLabel: (roomDisplayName) => 'Open $roomDisplayName',
+    supportsMarkers: false,
+    supportsReceipts: false,
+    attachmentsForMessage: (_) => const <String>[],
+    reactionPreviewsForMessage: (_) => const <ReactionPreview>[],
+    participantsForBanner: (_, _, _) => const <chat_models.Chat>[],
+    avatarPathForBareJid: (_) => null,
+    ownerJidForShare: (_) => null,
+    errorLabel: (_) => 'Error',
+    errorLabelWithBody: (_, body) => body,
+  );
 }

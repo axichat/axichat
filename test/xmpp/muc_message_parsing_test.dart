@@ -33,6 +33,7 @@ const String _directInviteContinueInvalid = 'maybe';
 const String _axiInviteXmlns = 'urn:axichat:invite:1';
 const String _axiInviteTag = 'invite';
 const String _axiInviteRevokeTag = 'invite-revoke';
+const String _axiInviteAcceptedTag = 'invite-accepted';
 const String _axiInviteRoomAttr = 'room';
 const String _axiInviteTokenAttr = 'token';
 const String _axiInviteInviterAttr = 'inviter';
@@ -234,6 +235,31 @@ void main() {
       expect(node.tag, equals(_axiInviteRevokeTag));
       expect(node.attributes[_xmlnsAttr], equals(_axiInviteXmlns));
     });
+
+    test('DINV-021 [HP] accepted Axi invites serialize as accepted tags', () {
+      const payload = AxiMucInvitePayload(
+        roomJid: _roomJid,
+        token: _inviteTokenTrimmed,
+        inviter: _inviterBareJid,
+        invitee: _inviteeBareJid,
+        roomName: _roomName,
+        reason: _inviteReasonRaw,
+        password: _invitePasswordRaw,
+        kind: AxiMucInvitePayloadKind.acceptance,
+      );
+
+      final node = payload.toXml();
+
+      expect(node.tag, equals(_axiInviteAcceptedTag));
+      expect(node.attributes[_xmlnsAttr], equals(_axiInviteXmlns));
+      expect(node.attributes[_axiInviteRoomAttr], equals(_roomJid));
+      expect(node.attributes[_axiInviteTokenAttr], equals(_inviteTokenTrimmed));
+      expect(node.attributes[_axiInviteInviterAttr], equals(_inviterBareJid));
+      expect(node.attributes[_axiInviteInviteeAttr], equals(_inviteeBareJid));
+      expect(node.attributes[_axiInviteRoomNameAttr], equals(_roomName));
+      expect(node.attributes.containsKey(_axiInviteReasonAttr), isFalse);
+      expect(node.attributes.containsKey(_axiInvitePasswordAttr), isFalse);
+    });
   });
 
   group('Invite parsing into message models', () {
@@ -350,6 +376,98 @@ void main() {
         expect(message.pseudoMessageData?['revoked'], isTrue);
       },
     );
+
+    test(
+      'DINV-021 [HP] accepted Axi invites become acceptance pseudo-messages',
+      () {
+        final event = _createMessageEvent(
+          from: mox.JID.fromString(_inviteeBareJid),
+          to: mox.JID.fromString(_inviterBareJid),
+          extensions: [
+            const AxiMucInvitePayload(
+              roomJid: _roomJid,
+              token: _inviteTokenRaw,
+              inviter: _inviterBareJid,
+              invitee: _inviteeBareJid,
+              roomName: _roomName,
+              kind: AxiMucInvitePayloadKind.acceptance,
+            ),
+          ],
+        );
+
+        final message = Message.fromMox(event, accountJid: _inviterBareJid);
+
+        expect(
+          message.pseudoMessageType,
+          equals(PseudoMessageType.mucInviteAccepted),
+        );
+        expect(
+          message.pseudoMessageData?['token'],
+          equals(_inviteTokenTrimmed),
+        );
+        expect(message.pseudoMessageData?['inviter'], equals(_inviterBareJid));
+        expect(message.pseudoMessageData?['invitee'], equals(_inviteeBareJid));
+        expect(message.pseudoMessageData?['accepted'], isTrue);
+      },
+    );
+
+    test('DINV-029 [SEC] accepted invite requires a token', () {
+      final event = _createMessageEvent(
+        from: mox.JID.fromString(_inviteeBareJid),
+        to: mox.JID.fromString(_inviterBareJid),
+        extensions: [
+          const AxiMucInvitePayload(
+            roomJid: _roomJid,
+            inviter: _inviterBareJid,
+            invitee: _inviteeBareJid,
+            kind: AxiMucInvitePayloadKind.acceptance,
+          ),
+        ],
+      );
+
+      final message = Message.fromMox(event, accountJid: _inviterBareJid);
+
+      expect(message.pseudoMessageType, isNull);
+    });
+
+    test('DINV-029B [SEC] accepted invite requires both actors', () {
+      final event = _createMessageEvent(
+        from: mox.JID.fromString(_inviteeBareJid),
+        to: mox.JID.fromString(_inviterBareJid),
+        extensions: [
+          const AxiMucInvitePayload(
+            roomJid: _roomJid,
+            token: _inviteTokenTrimmed,
+            invitee: _inviteeBareJid,
+            kind: AxiMucInvitePayloadKind.acceptance,
+          ),
+        ],
+      );
+
+      final message = Message.fromMox(event, accountJid: _inviterBareJid);
+
+      expect(message.pseudoMessageType, isNull);
+    });
+
+    test('DINV-030 [SEC] accepted invite rejects spoofed invitee sender', () {
+      final event = _createMessageEvent(
+        from: mox.JID.fromString(_inviterBareJid),
+        to: mox.JID.fromString(_accountBareJid),
+        extensions: [
+          const AxiMucInvitePayload(
+            roomJid: _roomJid,
+            token: _inviteTokenTrimmed,
+            inviter: _inviterBareJid,
+            invitee: _inviteeBareJid,
+            kind: AxiMucInvitePayloadKind.acceptance,
+          ),
+        ],
+      );
+
+      final message = Message.fromMox(event, accountJid: _accountBareJid);
+
+      expect(message.pseudoMessageType, isNull);
+    });
   });
 
   group('Occupant identifiers (XEP-0421)', () {

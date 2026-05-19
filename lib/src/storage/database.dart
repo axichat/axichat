@@ -3368,10 +3368,14 @@ WHERE transport IS NULL
     required Map<String, dynamic>? pseudoMessageData,
   }) async {
     if (pseudoMessageType == PseudoMessageType.mucInvite ||
-        pseudoMessageType == PseudoMessageType.mucInviteRevocation) {
-      return pseudoMessageType == PseudoMessageType.mucInvite
-          ? 'You have been invited to a group chat'
-          : 'Invite revoked';
+        pseudoMessageType == PseudoMessageType.mucInviteRevocation ||
+        pseudoMessageType == PseudoMessageType.mucInviteAccepted) {
+      return switch (pseudoMessageType) {
+        PseudoMessageType.mucInvite => 'You have been invited to a group chat',
+        PseudoMessageType.mucInviteRevocation => 'Invite revoked',
+        PseudoMessageType.mucInviteAccepted => 'Invite accepted',
+        _ => null,
+      };
     }
 
     final bool isEmailMessage = deltaChatId != null || deltaMsgId != null;

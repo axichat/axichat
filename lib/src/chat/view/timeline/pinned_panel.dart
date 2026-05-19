@@ -137,7 +137,14 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
             ),
           );
         }
-        if (widget.pinnedMessages.isEmpty) {
+        final visiblePinnedMessages = widget.pinnedMessages
+            .where(
+              (item) =>
+                  item.message?.pseudoMessageType !=
+                  PseudoMessageType.mucInviteAccepted,
+            )
+            .toList(growable: false);
+        if (visiblePinnedMessages.isEmpty) {
           return Padding(
             padding: EdgeInsets.symmetric(vertical: spacing.m),
             child: Row(
@@ -161,9 +168,9 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
           shrinkWrap: true,
           primary: false,
           physics: const ClampingScrollPhysics(),
-          itemCount: widget.pinnedMessages.length,
+          itemCount: visiblePinnedMessages.length,
           itemBuilder: (context, index) {
-            final item = widget.pinnedMessages[index];
+            final item = visiblePinnedMessages[index];
             return _PinnedMessageTile(
               item: item,
               chat: currentChat,

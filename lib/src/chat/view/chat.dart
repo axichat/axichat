@@ -1508,8 +1508,6 @@ class _ChatState extends State<Chat> {
     required BuildContext context,
     required ChatTimelineMessageItem timelineMessageItem,
     required bool isSelfBubble,
-    required bool inviteRevoked,
-    required bool isInviteRevocationMessage,
     required Message messageModel,
     required RoomState? roomState,
     required String? selfXmppJid,
@@ -1529,7 +1527,7 @@ class _ChatState extends State<Chat> {
         : inviteActionFallbackLabel;
     final inviteRoomName = timelineMessageItem.inviteRoomName?.trim() ?? '';
     final inviteRoom = timelineMessageItem.inviteRoom?.trim() ?? '';
-    final inviteActionEnabled = !inviteRevoked && !isInviteRevocationMessage;
+    final inviteActionEnabled = timelineMessageItem.inviteJoinActionEnabled;
     final inviteCardLabel = inviteRoomName.isNotEmpty
         ? inviteRoomName
         : inviteRoom.isNotEmpty
@@ -2718,8 +2716,6 @@ class _ChatState extends State<Chat> {
         context: context,
         timelineMessageItem: timelineMessageItem,
         isSelfBubble: self,
-        inviteRevoked: inviteRevoked,
-        isInviteRevocationMessage: isInviteRevocationMessage,
         messageModel: messageModel,
         roomState: state.roomState,
         selfXmppJid: selfXmppJid,

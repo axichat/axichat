@@ -40,6 +40,7 @@ const _directInviteContinueAttr = 'continue';
 const _axiInviteXmlns = 'urn:axichat:invite:1';
 const _axiInviteTag = 'invite';
 const _axiInviteRevokeTag = 'invite-revoke';
+const _axiInviteAcceptedTag = 'invite-accepted';
 const _axiInviteRoomAttr = 'room';
 const _axiInviteTokenAttr = 'token';
 const _axiInviteInviterAttr = 'inviter';
@@ -141,6 +142,22 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
   }
 }
 
+enum AxiMucInvitePayloadKind {
+  invite,
+  revocation,
+  acceptance;
+
+  String get tag => switch (this) {
+    AxiMucInvitePayloadKind.invite => _axiInviteTag,
+    AxiMucInvitePayloadKind.revocation => _axiInviteRevokeTag,
+    AxiMucInvitePayloadKind.acceptance => _axiInviteAcceptedTag,
+  };
+
+  bool get isRevocation => this == AxiMucInvitePayloadKind.revocation;
+
+  bool get isAcceptance => this == AxiMucInvitePayloadKind.acceptance;
+}
+
 final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
   const AxiMucInvitePayload({
     required this.roomJid,
@@ -150,8 +167,9 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
     this.roomName,
     this.reason,
     this.password,
-    this.revoked = false,
-  });
+    AxiMucInvitePayloadKind kind = AxiMucInvitePayloadKind.invite,
+    bool revoked = false,
+  }) : kind = revoked ? AxiMucInvitePayloadKind.revocation : kind;
 
   final String roomJid;
   final String? token;
@@ -160,7 +178,9 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
   final String? roomName;
   final String? reason;
   final String? password;
-  final bool revoked;
+  final AxiMucInvitePayloadKind kind;
+
+  bool get revoked => kind.isRevocation;
 
   mox.XMLNode toXml() {
     final trimmedToken = _normalizeInviteText(
@@ -188,7 +208,7 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
       maxLength: _inviteFieldMaxLength,
     );
     return mox.XMLNode.xmlns(
-      tag: revoked ? _axiInviteRevokeTag : _axiInviteTag,
+      tag: kind.tag,
       xmlns: _axiInviteXmlns,
       attributes: {
         _axiInviteRoomAttr: roomJid,
@@ -200,9 +220,9 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
           _axiInviteInviteeAttr: trimmedInvitee!,
         if (trimmedRoomName?.isNotEmpty == true)
           _axiInviteRoomNameAttr: trimmedRoomName!,
-        if (trimmedReason?.isNotEmpty == true)
+        if (!kind.isAcceptance && trimmedReason?.isNotEmpty == true)
           _axiInviteReasonAttr: trimmedReason!,
-        if (trimmedPassword?.isNotEmpty == true)
+        if (!kind.isAcceptance && trimmedPassword?.isNotEmpty == true)
           _axiInvitePasswordAttr: trimmedPassword!,
       },
     );
@@ -211,7 +231,11 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
   static AxiMucInvitePayload? fromStanza(mox.Stanza stanza) {
     final invite = stanza.firstTag(_axiInviteTag, xmlns: _axiInviteXmlns);
     final revoke = stanza.firstTag(_axiInviteRevokeTag, xmlns: _axiInviteXmlns);
-    final node = invite ?? revoke;
+    final accepted = stanza.firstTag(
+      _axiInviteAcceptedTag,
+      xmlns: _axiInviteXmlns,
+    );
+    final node = invite ?? revoke ?? accepted;
     if (node == null) return null;
     final roomJid = node.attributes[_axiInviteRoomAttr]?.toString().trim();
     if (roomJid == null ||
@@ -251,7 +275,11 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
       roomName: roomName,
       reason: reason,
       password: password,
-      revoked: revoke != null,
+      kind: revoke != null
+          ? AxiMucInvitePayloadKind.revocation
+          : accepted != null
+          ? AxiMucInvitePayloadKind.acceptance
+          : AxiMucInvitePayloadKind.invite,
     );
   }
 }

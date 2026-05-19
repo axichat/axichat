@@ -3230,6 +3230,107 @@ void main() {
     );
 
     test(
+      'DINV-013C [HP] acceptRoomInvite sends acceptance when already joined',
+      () async {
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenAnswer((_) async {});
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+          fromPresence: true,
+        );
+
+        await xmppService.acceptRoomInvite(
+          roomJid: _roomJid,
+          roomName: _roomName,
+          inviteToken: 'token-123',
+          inviterJid: _inviteeJid,
+          inviteeJid: _accountBareJid,
+          nickname: 'me',
+        );
+
+        verifyNever(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        );
+        final capturedMessage =
+            verify(
+                  () => mockConnection.sendMessage(captureAny()),
+                ).captured.single
+                as mox.MessageEvent;
+        final axiInvite = capturedMessage.get<AxiMucInvitePayload>();
+
+        expect(capturedMessage.to.toBare().toString(), _inviteeJid);
+        expect(axiInvite?.kind, AxiMucInvitePayloadKind.acceptance);
+        expect(axiInvite?.token, 'token-123');
+      },
+    );
+
+    test(
+      'DINV-013D [EC] acceptRoomInvite keeps join success when accepted marker save fails',
+      () async {
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenThrow(Exception('marker save failed'));
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: _iqTypeResult));
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: 'me',
+              affiliation: OccupantAffiliation.member.xmlValue,
+              role: OccupantRole.participant.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        await xmppService.acceptRoomInvite(
+          roomJid: _roomJid,
+          roomName: _roomName,
+          inviteToken: 'token-123',
+          inviterJid: _inviteeJid,
+          inviteeJid: _accountBareJid,
+          nickname: 'me',
+        );
+
+        verify(() => mockConnection.sendMessage(any())).called(1);
+      },
+    );
+
+    test(
       'DINV-014 [HP] inviteUserToRoom grants membership when local owner state is known even without disco members-only support',
       () async {
         xmppService.updateOccupantFromPresence(

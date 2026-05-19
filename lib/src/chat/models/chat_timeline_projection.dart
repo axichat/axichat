@@ -410,9 +410,11 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   required Map<String, List<chat_models.Chat>> shareReplies,
   required Map<int, String> emailFullHtmlByDeltaId,
   required Set<String> revokedInviteTokens,
+  required Set<String> acceptedInviteTokens,
   required String inviteRoomFallbackLabel,
   required String inviteBodyLabel,
   required String inviteRevokedBodyLabel,
+  required String inviteAcceptedBodyLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
   required bool supportsMarkers,
@@ -457,9 +459,11 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       shareReplies: shareReplies,
       emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
       revokedInviteTokens: revokedInviteTokens,
+      acceptedInviteTokens: acceptedInviteTokens,
       inviteRoomFallbackLabel: inviteRoomFallbackLabel,
       inviteBodyLabel: inviteBodyLabel,
       inviteRevokedBodyLabel: inviteRevokedBodyLabel,
+      inviteAcceptedBodyLabel: inviteAcceptedBodyLabel,
       unknownAuthorLabel: unknownAuthorLabel,
       inviteActionLabel: inviteActionLabel,
       supportsMarkers: supportsMarkers,
@@ -489,7 +493,7 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       );
     }
   }
-  if (!loadingMessages && messages.isEmpty) {
+  if (!loadingMessages && timelineItems.isEmpty) {
     timelineItems.add(
       ChatTimelineEmptyStateItem(
         id: emptyStateItemId,
@@ -499,6 +503,64 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     );
   }
   return List<ChatTimelineItem>.unmodifiable(timelineItems);
+}
+
+({Set<String> revokedInviteTokens, Set<String> acceptedInviteTokens})
+resolveInviteLifecycleTokens(Iterable<Message> messages) {
+  final lifecycleMessages =
+      <Message>[
+        for (final message in messages)
+          if (message.pseudoMessageType ==
+                  PseudoMessageType.mucInviteRevocation ||
+              message.pseudoMessageType == PseudoMessageType.mucInviteAccepted)
+            message,
+      ]..sort((a, b) {
+        final leftTimestamp = a.timestamp;
+        final rightTimestamp = b.timestamp;
+        if (leftTimestamp == null && rightTimestamp == null) return 0;
+        if (leftTimestamp == null) return -1;
+        if (rightTimestamp == null) return 1;
+        return leftTimestamp.compareTo(rightTimestamp);
+      });
+  final revokedInviteTokens = <String>{};
+  final acceptedInviteTokens = <String>{};
+  for (final message in lifecycleMessages) {
+    if (message.error.isNotNone) {
+      continue;
+    }
+    final token = (message.pseudoMessageData?['token'] as String?)?.trim();
+    if (token == null || token.isEmpty) {
+      continue;
+    }
+    if (message.pseudoMessageType == PseudoMessageType.mucInviteRevocation) {
+      revokedInviteTokens.add(token);
+      acceptedInviteTokens.remove(token);
+    } else if (message.pseudoMessageType ==
+        PseudoMessageType.mucInviteAccepted) {
+      acceptedInviteTokens.add(token);
+      revokedInviteTokens.remove(token);
+    }
+  }
+  return (
+    revokedInviteTokens: Set<String>.unmodifiable(revokedInviteTokens),
+    acceptedInviteTokens: Set<String>.unmodifiable(acceptedInviteTokens),
+  );
+}
+
+({Set<String> revokedInviteTokens, Set<String> acceptedInviteTokens})
+resolveActiveInviteLifecycleTokens({
+  required Iterable<Message> messages,
+  required Iterable<Message> searchResults,
+  required bool searchFiltering,
+}) {
+  Iterable<Message> activeLifecycleMessages() sync* {
+    yield* messages;
+    if (searchFiltering) {
+      yield* searchResults;
+    }
+  }
+
+  return resolveInviteLifecycleTokens(activeLifecycleMessages());
 }
 
 ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
@@ -523,9 +585,11 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   required Map<String, List<chat_models.Chat>> shareReplies,
   required Map<int, String> emailFullHtmlByDeltaId,
   required Set<String> revokedInviteTokens,
+  required Set<String> acceptedInviteTokens,
   required String inviteRoomFallbackLabel,
   required String inviteBodyLabel,
   required String inviteRevokedBodyLabel,
+  required String inviteAcceptedBodyLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
   required bool supportsMarkers,
@@ -544,6 +608,9 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   required String Function(MessageError error) errorLabel,
   required String Function(MessageError error, String body) errorLabelWithBody,
 }) {
+  if (message.pseudoMessageType == PseudoMessageType.mucInviteAccepted) {
+    return null;
+  }
   final timestamp = message.timestamp;
   if (timestamp == null) {
     return null;
@@ -597,10 +664,22 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final inviteRoomDisplayName = inviteRoomName?.isNotEmpty == true
       ? inviteRoomName!
       : inviteRoomFallbackLabel;
-  final inviteLabel = isInvite ? inviteBodyLabel : inviteRevokedBodyLabel;
   final inviteAction = inviteActionLabel(inviteRoomDisplayName);
+  final inviteAccepted =
+      isInvite &&
+      inviteToken != null &&
+      acceptedInviteTokens.contains(inviteToken);
   final inviteRevoked =
-      inviteToken != null && revokedInviteTokens.contains(inviteToken);
+      !inviteAccepted &&
+      inviteToken != null &&
+      revokedInviteTokens.contains(inviteToken);
+  final inviteLabel = inviteAccepted
+      ? inviteAcceptedBodyLabel
+      : inviteRevoked
+      ? inviteRevokedBodyLabel
+      : isInvite
+      ? inviteBodyLabel
+      : inviteRevokedBodyLabel;
   if (shareContext?.subject?.trim().isNotEmpty == true) {
     subjectLabel = shareContext!.subject!.trim();
     if (shownSubjectShares.add(shareContext.shareId)) {
@@ -739,6 +818,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     isInvite: isInvite,
     isInviteRevocation: isInviteRevocation,
     inviteRevoked: inviteRevoked,
+    inviteAccepted: inviteAccepted,
     inviteLabel: inviteLabel,
     inviteActionLabel: inviteAction,
     inviteRoom: inviteRoom,
@@ -770,9 +850,11 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
   required Map<String, List<chat_models.Chat>> shareReplies,
   required Map<int, String> emailFullHtmlByDeltaId,
   required Set<String> revokedInviteTokens,
+  required Set<String> acceptedInviteTokens,
   required String inviteRoomFallbackLabel,
   required String inviteBodyLabel,
   required String inviteRevokedBodyLabel,
+  required String inviteAcceptedBodyLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
   required bool supportsMarkers,
@@ -813,9 +895,11 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
     shareReplies: shareReplies,
     emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
     revokedInviteTokens: revokedInviteTokens,
+    acceptedInviteTokens: acceptedInviteTokens,
     inviteRoomFallbackLabel: inviteRoomFallbackLabel,
     inviteBodyLabel: inviteBodyLabel,
     inviteRevokedBodyLabel: inviteRevokedBodyLabel,
+    inviteAcceptedBodyLabel: inviteAcceptedBodyLabel,
     unknownAuthorLabel: unknownAuthorLabel,
     inviteActionLabel: inviteActionLabel,
     supportsMarkers: supportsMarkers,
@@ -888,6 +972,7 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
     isInvite: item.isInvite,
     isInviteRevocation: item.isInviteRevocation,
     inviteRevoked: item.inviteRevoked,
+    inviteAccepted: item.inviteAccepted,
     inviteLabel: item.inviteLabel,
     inviteActionLabel: item.inviteActionLabel,
     inviteRoom: item.inviteRoom,

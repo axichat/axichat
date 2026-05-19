@@ -3857,9 +3857,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
           selfJid: myBare,
         ),
       );
-    } on XmppMessageException catch (error, stackTrace) {
+    } on XmppException catch (error, stackTrace) {
       _mucLog.warning(
-        'Failed to send MUC invite acceptance',
+        'Failed to send or store MUC invite acceptance.',
         error,
         stackTrace,
       );

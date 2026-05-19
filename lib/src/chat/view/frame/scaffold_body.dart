@@ -483,16 +483,11 @@ class _ChatScaffoldBody extends StatelessWidget {
                       outboundClampedBubbleWidth + selectionOuterInset,
                     );
                     final messageRowMaxWidth = rawContentWidth;
-                    final revokedInviteTokens = <String>{
-                      for (final invite in filteredItems.where(
-                        (m) =>
-                            m.pseudoMessageType ==
-                            PseudoMessageType.mucInviteRevocation,
-                      ))
-                        if (invite.pseudoMessageData?.containsKey('token') ==
-                            true)
-                          invite.pseudoMessageData?['token'] as String,
-                    };
+                    final inviteLifecycle = resolveActiveInviteLifecycleTokens(
+                      messages: owner._cachedItems ?? const <Message>[],
+                      searchResults: searchResults ?? const <Message>[],
+                      searchFiltering: searchFiltering,
+                    );
                     const pinnedPreviewMessagePrefix = 'pinned-preview:';
                     final emptyStateLabel = searchFiltering
                         ? context.l10n.chatEmptySearch
@@ -533,12 +528,16 @@ class _ChatScaffoldBody extends StatelessWidget {
                       shareContexts: shareContexts,
                       shareReplies: shareReplies,
                       emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
-                      revokedInviteTokens: revokedInviteTokens,
+                      revokedInviteTokens: inviteLifecycle.revokedInviteTokens,
+                      acceptedInviteTokens:
+                          inviteLifecycle.acceptedInviteTokens,
                       inviteRoomFallbackLabel:
                           context.l10n.chatInviteRoomFallbackLabel,
                       inviteBodyLabel: context.l10n.chatInviteBodyLabel,
                       inviteRevokedBodyLabel:
                           context.l10n.chatInviteRevokedLabel,
+                      inviteAcceptedBodyLabel:
+                          context.l10n.chatInviteAcceptedLabel,
                       unknownAuthorLabel: context.l10n.commonUnknownLabel,
                       inviteActionLabel: context.l10n.chatInviteActionLabel,
                       supportsMarkers: supportsMarkers,
@@ -962,7 +961,9 @@ class _ChatScaffoldBody extends StatelessWidget {
                       messageById: messageById,
                       shareContexts: shareContexts,
                       shareReplies: shareReplies,
-                      revokedInviteTokens: revokedInviteTokens,
+                      revokedInviteTokens: inviteLifecycle.revokedInviteTokens,
+                      acceptedInviteTokens:
+                          inviteLifecycle.acceptedInviteTokens,
                       availabilityCoordinator: availabilityCoordinator,
                       availabilityShareOwnersById: availabilityShareOwnersById,
                       availabilityActorId: availabilityActorId,

@@ -65,6 +65,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
     required this.isInvite,
     required this.isInviteRevocation,
     required this.inviteRevoked,
+    required this.inviteAccepted,
     required this.inviteLabel,
     required this.inviteActionLabel,
     required this.inviteRoom,
@@ -106,11 +107,16 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
   final bool isInvite;
   final bool isInviteRevocation;
   final bool inviteRevoked;
+  final bool inviteAccepted;
   final String inviteLabel;
   final String inviteActionLabel;
   final String? inviteRoom;
   final String? inviteRoomName;
   final String? resolvedHtmlBody;
+
+  bool get inviteJoinActionEnabled => isInvite && !inviteRevoked;
+
+  bool get inviteRevokeActionEnabled => isInvite && isSelf;
 }
 
 final class ChatTimelineComposerOverlaySpacerItem

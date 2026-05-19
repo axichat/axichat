@@ -1889,7 +1889,7 @@ _resolveTimelineMessageActionCallbacks({
   }
 
   VoidCallback? onRevokeInvite;
-  if (isInviteMessage && self) {
+  if (timelineMessageItem.inviteRevokeActionEnabled) {
     onRevokeInvite = () => onRevokeInviteRequested(
       messageModel,
       inviteeJidFallback: chatEntity?.jid,

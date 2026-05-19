@@ -163,6 +163,7 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.shareContexts,
     required this.shareReplies,
     required this.revokedInviteTokens,
+    required this.acceptedInviteTokens,
     required this.availabilityCoordinator,
     required this.availabilityShareOwnersById,
     required this.availabilityActorId,
@@ -273,6 +274,7 @@ class _ChatMainConversationSection extends StatelessWidget {
   final Map<String, ShareContext> shareContexts;
   final Map<String, List<chat_models.Chat>> shareReplies;
   final Set<String> revokedInviteTokens;
+  final Set<String> acceptedInviteTokens;
   final CalendarAvailabilityShareCoordinator? availabilityCoordinator;
   final Map<String, String> availabilityShareOwnersById;
   final String? availabilityActorId;
@@ -546,6 +548,7 @@ class _ChatMainConversationSection extends StatelessWidget {
         emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
         emailQuotedTextByDeltaId: state.emailQuotedTextByDeltaId,
         revokedInviteTokens: revokedInviteTokens,
+        acceptedInviteTokens: acceptedInviteTokens,
         supportsMarkers: supportsMarkers,
         supportsReceipts: supportsReceipts,
         attachmentsForMessage: attachmentsForMessage,
@@ -695,6 +698,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
     required this.emailFullHtmlByDeltaId,
     required this.emailQuotedTextByDeltaId,
     required this.revokedInviteTokens,
+    required this.acceptedInviteTokens,
     required this.supportsMarkers,
     required this.supportsReceipts,
     required this.attachmentsForMessage,
@@ -760,6 +764,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
   final Map<int, String> emailFullHtmlByDeltaId;
   final Map<int, String> emailQuotedTextByDeltaId;
   final Set<String> revokedInviteTokens;
+  final Set<String> acceptedInviteTokens;
   final bool supportsMarkers;
   final bool supportsReceipts;
   final List<String> Function(Message message) attachmentsForMessage;
@@ -834,9 +839,11 @@ class _ChatPinnedPanelSection extends StatelessWidget {
           shareReplies: shareReplies,
           emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
           revokedInviteTokens: revokedInviteTokens,
+          acceptedInviteTokens: acceptedInviteTokens,
           inviteRoomFallbackLabel: l10n.chatInviteRoomFallbackLabel,
           inviteBodyLabel: l10n.chatInviteBodyLabel,
           inviteRevokedBodyLabel: l10n.chatInviteRevokedLabel,
+          inviteAcceptedBodyLabel: l10n.chatInviteAcceptedLabel,
           unknownAuthorLabel: l10n.commonUnknownLabel,
           inviteActionLabel: l10n.chatInviteActionLabel,
           supportsMarkers: supportsMarkers,
