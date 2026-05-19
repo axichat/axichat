@@ -111,12 +111,6 @@ const dmSansMinWeight = 400.0;
 const dmSansMaxWeight = 700.0;
 const interFontFamily = 'Inter';
 const interFontFallback = <String>[dmSansFontFamily, emojiFontFamily];
-const gabaritoFontFamily = 'Gabarito';
-const gabaritoFontFallback = <String>[
-  interFontFamily,
-  dmSansFontFamily,
-  emojiFontFamily,
-];
 
 extension ModalTypography on BuildContext {
   TextStyle get modalHeaderTextStyle {

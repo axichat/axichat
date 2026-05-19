@@ -12,6 +12,22 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  test('AppTheme keeps input text on the foreground color', () {
+    for (final brightness in Brightness.values) {
+      final theme = AppTheme.build(
+        shadColor: ShadColor.neutral,
+        brightness: brightness,
+        platform: TargetPlatform.android,
+      );
+
+      expect(theme.inputTheme.style?.color, theme.colorScheme.foreground);
+      expect(
+        theme.inputTheme.placeholderStyle?.color,
+        theme.colorScheme.mutedForeground,
+      );
+    }
+  });
+
   testWidgets('AxiTextField uses the settings typing animation duration', (
     tester,
   ) async {
@@ -54,6 +70,32 @@ void main() {
     );
 
     expect(editableText.typingAnimationDuration, typingAnimationDuration);
+  });
+
+  testWidgets('AxiTextInput keeps typed text on the foreground color', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      final controller = TextEditingController(text: 'Message');
+
+      await tester.pumpWidget(
+        _ComposerInputTestApp(
+          settingsCubit: _mockSettingsCubit(),
+          brightness: brightness,
+          child: AxiTextInput(controller: controller),
+        ),
+      );
+
+      final theme = ShadTheme.of(tester.element(find.byType(AxiTextInput)));
+      final editableText = tester.widget<axi.EditableText>(
+        find.byType(axi.EditableText),
+      );
+
+      expect(editableText.style.color, theme.colorScheme.foreground);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    }
   });
 
   testWidgets('AxiTextInput forwards configured cursor height', (tester) async {
@@ -412,10 +454,12 @@ class _ComposerInputTestApp extends StatelessWidget {
   const _ComposerInputTestApp({
     required this.settingsCubit,
     required this.child,
+    this.brightness = Brightness.light,
   });
 
   final SettingsCubit settingsCubit;
   final Widget child;
+  final Brightness brightness;
 
   @override
   Widget build(BuildContext context) {
@@ -433,8 +477,10 @@ class _ComposerInputTestApp extends StatelessWidget {
         ),
         home: ShadTheme(
           data: ShadThemeData(
-            colorScheme: const ShadSlateColorScheme.light(),
-            brightness: Brightness.light,
+            colorScheme: brightness == Brightness.light
+                ? const ShadSlateColorScheme.light()
+                : const ShadSlateColorScheme.dark(),
+            brightness: brightness,
           ),
           child: Scaffold(body: child),
         ),

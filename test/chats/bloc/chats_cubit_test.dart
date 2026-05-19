@@ -273,6 +273,20 @@ void main() {
   );
 
   test(
+    'stored settings route is preserved while the chat is still loading',
+    () {
+      expect(
+        resolveStoredChatRoute(
+          route: ChatRouteIndex.settings,
+          hasChat: false,
+          hasFocusedMessage: false,
+        ),
+        ChatRouteIndex.settings,
+      );
+    },
+  );
+
+  test(
     'opening an important message keeps the target reference in state',
     () async {
       when(() => xmppService.openChat(any())).thenAnswer((_) async {});

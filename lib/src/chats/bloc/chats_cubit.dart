@@ -58,7 +58,7 @@ ChatRouteIndex resolveStoredChatRoute({
   if (route.isCalendar && !hasChat) {
     return ChatRouteIndex.calendar;
   }
-  if ((route.isSettings || route.isImportant || route.isGallery) && !hasChat) {
+  if ((route.isImportant || route.isGallery) && !hasChat) {
     return ChatRouteIndex.main;
   }
   return route;

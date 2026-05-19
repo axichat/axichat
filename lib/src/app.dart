@@ -546,8 +546,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     fontWeight: appBarTitleFontWeight,
                   )
                 : shadTheme.textTheme.h3.copyWith(
-                    fontFamily: gabaritoFontFamily,
-                    fontFamilyFallback: gabaritoFontFallback,
+                    fontFamily: interFontFamily,
+                    fontFamilyFallback: interFontFallback,
                     color: materialColors.foreground,
                     fontWeight: appBarTitleFontWeight,
                   );

@@ -28,8 +28,8 @@ class AxiAppBar extends StatelessWidget {
     final titleStyle = platform.isApple
         ? baseTitleStyle.copyWith(fontWeight: appBarTitleFontWeight)
         : baseTitleStyle.copyWith(
-            fontFamily: gabaritoFontFamily,
-            fontFamilyFallback: gabaritoFontFallback,
+            fontFamily: interFontFamily,
+            fontFamilyFallback: interFontFallback,
             fontWeight: appBarTitleFontWeight,
           );
     final trailingContent = trailing == null

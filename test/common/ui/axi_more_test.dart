@@ -10,7 +10,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
-  testWidgets('AxiMore opens a scroll-controlled bottom sheet on mobile', (
+  testWidgets('AxiMore opens a dialog for short mobile action lists', (
     tester,
   ) async {
     final observer = _RouteObserver();
@@ -22,11 +22,7 @@ void main() {
     await tester.tap(find.byType(AxiIconButton));
     await tester.pumpAndSettle();
 
-    expect(observer.lastPushed, isA<ModalBottomSheetRoute<void>>());
-    expect(
-      (observer.lastPushed! as ModalBottomSheetRoute<void>).isScrollControlled,
-      isTrue,
-    );
+    expect(observer.lastPushed, isA<RawDialogRoute<void>>());
     expect(find.text('Chat settings'), findsOneWidget);
   });
 }

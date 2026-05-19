@@ -6,8 +6,6 @@ import 'package:axichat/src/common/ui/ui.dart'
         axiBorderRadius,
         axiBorders,
         emojiFontFallback,
-        gabaritoFontFallback,
-        gabaritoFontFamily,
         inputSubtextInsets,
         interFontFallback,
         interFontFamily;
@@ -157,7 +155,7 @@ class AppTheme {
       );
     }
 
-    TextStyle gabarito(TextStyle style, Color color) {
+    TextStyle heading(TextStyle style, Color color) {
       if (useAppleSystemTypography) {
         return style.copyWith(
           fontFamily: 'CupertinoSystemDisplay',
@@ -166,8 +164,8 @@ class AppTheme {
         );
       }
       return style.copyWith(
-        fontFamily: gabaritoFontFamily,
-        fontFamilyFallback: gabaritoFontFallback,
+        fontFamily: interFontFamily,
+        fontFamilyFallback: interFontFallback,
         color: color,
       );
     }
@@ -175,11 +173,11 @@ class AppTheme {
     final Color foreground = patchedScheme.foreground;
     final Color mutedForeground = patchedScheme.mutedForeground;
     final textTheme = baseTextTheme.copyWith(
-      h1Large: gabarito(baseTextTheme.h1Large, foreground),
-      h1: gabarito(baseTextTheme.h1, foreground),
-      h2: gabarito(baseTextTheme.h2, foreground),
-      h3: gabarito(baseTextTheme.h3, foreground),
-      h4: gabarito(baseTextTheme.h4, foreground),
+      h1Large: heading(baseTextTheme.h1Large, foreground),
+      h1: heading(baseTextTheme.h1, foreground),
+      h2: heading(baseTextTheme.h2, foreground),
+      h3: heading(baseTextTheme.h3, foreground),
+      h4: heading(baseTextTheme.h4, foreground),
       lead: inter(baseTextTheme.lead, foreground),
       large: inter(baseTextTheme.large, foreground),
       small: inter(baseTextTheme.small, foreground),
@@ -194,6 +192,10 @@ class AppTheme {
       brightness: brightness,
       colorScheme: patchedScheme,
       textTheme: textTheme,
+      inputTheme: ShadInputTheme(
+        style: textTheme.muted.copyWith(color: foreground),
+        placeholderStyle: textTheme.muted,
+      ),
       ghostButtonTheme: ShadButtonTheme(
         foregroundColor: patchedScheme.foreground,
         hoverForegroundColor: patchedScheme.primary,

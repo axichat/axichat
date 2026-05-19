@@ -3,6 +3,7 @@
 
 import 'dart:ui';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/fade_scale_effect.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -79,12 +80,23 @@ class AxiSelect<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolvedEffects = fadeScaleEffectsFor(context);
     final theme = ShadTheme.of(context);
+    final styledOptions = options
+        ?.map((option) => _styledOption(context, option))
+        .toList(growable: false);
     return ShadTheme(
       data: theme,
       child: ShadSelect<T>(
         selectedOptionBuilder: selectedOptionBuilder,
-        options: options,
-        optionsBuilder: optionsBuilder,
+        options: styledOptions,
+        optionsBuilder: optionsBuilder == null
+            ? null
+            : (context, index) {
+                final option = optionsBuilder?.call(context, index);
+                if (option is ShadOption<T>) {
+                  return _styledOption(context, option);
+                }
+                return option;
+              },
         popoverController: popoverController,
         enabled: enabled,
         placeholder: placeholder,
@@ -115,6 +127,43 @@ class AxiSelect<T> extends StatelessWidget {
         shrinkWrap: shrinkWrap,
         controller: controller,
       ),
+    );
+  }
+
+  ShadOption<T> _styledOption(BuildContext context, ShadOption<T> option) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return ShadOption<T>(
+      key: option.key,
+      value: option.value,
+      hoveredBackgroundColor: option.hoveredBackgroundColor ?? colors.accent,
+      padding:
+          option.padding ??
+          EdgeInsets.symmetric(horizontal: spacing.s, vertical: spacing.s),
+      selectedIcon:
+          option.selectedIcon ??
+          Padding(
+            padding: EdgeInsetsDirectional.only(start: spacing.s),
+            child: Icon(
+              LucideIcons.check,
+              size: sizing.menuItemIconSize,
+              color: colors.popoverForeground,
+            ),
+          ),
+      radius:
+          option.radius ??
+          BorderRadius.all(Radius.circular(context.radii.squircleSm)),
+      direction: option.direction,
+      backgroundColor: option.backgroundColor ?? colors.popover,
+      selectedBackgroundColor: option.selectedBackgroundColor ?? colors.accent,
+      textStyle:
+          option.textStyle ??
+          context.textTheme.small.copyWith(color: colors.popoverForeground),
+      selectedTextStyle:
+          option.selectedTextStyle ??
+          context.textTheme.small.copyWith(color: colors.popoverForeground),
+      child: option.child,
     );
   }
 }

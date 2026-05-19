@@ -16,6 +16,7 @@ Future<ContactExportFormat?> showContactExportFormatSheet(
   return showAdaptiveBottomSheet<ContactExportFormat>(
     context: context,
     useSafeArea: true,
+    preferDialogOnMobile: true,
     showDragHandle: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) {

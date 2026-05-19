@@ -193,7 +193,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       ),
                     )
                   : null,
-              title: Text(l10n.profileTitle),
+              title: Text(
+                l10n.profileTitle,
+                style: context.modalHeaderTextStyle,
+              ),
               centerTitle: false,
               backgroundColor: profileSidebarColor,
               surfaceTintColor: Colors.transparent,

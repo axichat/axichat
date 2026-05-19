@@ -498,8 +498,8 @@ class AxiInputState extends State<AxiInput>
   Widget build(BuildContext context) {
     final theme = ShadTheme.of(context);
     final effectiveTextStyle = theme.textTheme.muted
-        .copyWith(color: theme.colorScheme.foreground)
         .merge(theme.inputTheme.style)
+        .copyWith(color: theme.colorScheme.foreground)
         .merge(widget.style);
 
     final double borderWidth = context.borderSide.width;

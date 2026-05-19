@@ -31,13 +31,17 @@ Future<T?> showFadeScaleDialog<T>({
   final Duration resolvedDuration =
       transitionDuration ?? context.read<SettingsCubit>().animationDuration;
   final ShadThemeData shadTheme = ShadTheme.of(context, listen: false);
+  final settingsCubit = context.read<SettingsCubit>();
 
   return showGeneralDialog<T>(
     context: context,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final Widget child = ShadTheme(
-        data: shadTheme,
-        child: KeyboardPopScope(child: builder(dialogContext)),
+      final Widget child = BlocProvider<SettingsCubit>.value(
+        value: settingsCubit,
+        child: ShadTheme(
+          data: shadTheme,
+          child: KeyboardPopScope(child: builder(dialogContext)),
+        ),
       );
       if (!useSafeArea) return child;
       return SafeArea(child: child);

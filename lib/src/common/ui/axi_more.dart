@@ -50,6 +50,7 @@ class _AxiMoreState extends State<AxiMore> {
     await showAdaptiveBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      preferDialogOnMobile: true,
       showDragHandle: true,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {

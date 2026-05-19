@@ -244,7 +244,6 @@ void _registerThirdPartyLicenses() {
   const notoColorEmojiLicenseAsset = 'assets/licenses/noto_color_emoji_ofl.txt';
   const interLicenseAsset = 'assets/licenses/inter_ofl.txt';
   const dmSansLicenseAsset = 'assets/licenses/dmsans_ofl.txt';
-  const gabaritoLicenseAsset = 'assets/licenses/gabarito_ofl.txt';
   const flutterLicenseAsset = 'assets/licenses/flutter_bsd.txt';
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(deltaLicenseAsset);
@@ -261,10 +260,6 @@ void _registerThirdPartyLicenses() {
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(dmSansLicenseAsset);
     yield LicenseEntryWithLineBreaks(['DM Sans (OFL-1.1)'], text);
-  });
-  LicenseRegistry.addLicense(() async* {
-    final text = await rootBundle.loadString(gabaritoLicenseAsset);
-    yield LicenseEntryWithLineBreaks(['Gabarito (OFL-1.1)'], text);
   });
   LicenseRegistry.addLicense(() async* {
     final text = await rootBundle.loadString(flutterLicenseAsset);

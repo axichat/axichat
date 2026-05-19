@@ -1416,6 +1416,16 @@ class _ChatListTileState extends State<ChatListTile> {
           },
         ),
       AxiMenuAction(
+        icon: LucideIcons.settings,
+        label: l10n.chatSettings,
+        onPressed: () async {
+          await context.read<ChatsCubit>().openChat(
+            jid: chat.jid,
+            route: ChatRouteIndex.settings,
+          );
+        },
+      ),
+      AxiMenuAction(
         icon: LucideIcons.trash2,
         label: l10n.commonDelete,
         destructive: true,
@@ -1563,6 +1573,18 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
               widget.onClose();
             },
           ),
+        ContextActionButton(
+          icon: Icon(LucideIcons.settings, size: iconSize),
+          label: l10n.chatSettings,
+          onPressed: () async {
+            await context.read<ChatsCubit>().openChat(
+              jid: widget.chat.jid,
+              route: ChatRouteIndex.settings,
+            );
+            if (!mounted) return;
+            widget.onClose();
+          },
+        ),
         ContextActionButton(
           icon: Icon(LucideIcons.trash2, size: iconSize),
           label: l10n.commonDelete,
