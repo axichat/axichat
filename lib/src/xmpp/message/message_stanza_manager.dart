@@ -267,6 +267,15 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
       node.attributes[_axiInvitePasswordAttr]?.toString(),
       maxLength: _inviteFieldMaxLength,
     );
+    final kind = invite != null
+        ? AxiMucInvitePayloadKind.invite
+        : revoke != null
+        ? AxiMucInvitePayloadKind.revocation
+        : AxiMucInvitePayloadKind.acceptance;
+    if (kind.isAcceptance &&
+        (token == null || inviter == null || invitee == null)) {
+      return null;
+    }
     return AxiMucInvitePayload(
       roomJid: roomJid,
       token: token,
@@ -275,11 +284,7 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
       roomName: roomName,
       reason: reason,
       password: password,
-      kind: revoke != null
-          ? AxiMucInvitePayloadKind.revocation
-          : accepted != null
-          ? AxiMucInvitePayloadKind.acceptance
-          : AxiMucInvitePayloadKind.invite,
+      kind: kind,
     );
   }
 }

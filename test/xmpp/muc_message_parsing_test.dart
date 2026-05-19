@@ -260,6 +260,68 @@ void main() {
       expect(node.attributes.containsKey(_axiInviteReasonAttr), isFalse);
       expect(node.attributes.containsKey(_axiInvitePasswordAttr), isFalse);
     });
+
+    test(
+      'DINV-021B [SEC] accepted Axi invite stanzas require token and actors',
+      () {
+        const invalidAcceptedAttributes = [
+          {
+            _axiInviteRoomAttr: _roomJid,
+            _axiInviteInviterAttr: _inviterBareJid,
+            _axiInviteInviteeAttr: _inviteeBareJid,
+          },
+          {
+            _axiInviteRoomAttr: _roomJid,
+            _axiInviteTokenAttr: _inviteTokenTrimmed,
+            _axiInviteInviteeAttr: _inviteeBareJid,
+          },
+          {
+            _axiInviteRoomAttr: _roomJid,
+            _axiInviteTokenAttr: _inviteTokenTrimmed,
+            _axiInviteInviterAttr: _inviterBareJid,
+          },
+          {
+            _axiInviteRoomAttr: _roomJid,
+            _axiInviteTokenAttr: '   ',
+            _axiInviteInviterAttr: _inviterBareJid,
+            _axiInviteInviteeAttr: _inviteeBareJid,
+          },
+        ];
+
+        for (final attributes in invalidAcceptedAttributes) {
+          final stanza = mox.Stanza.message(
+            children: [
+              mox.XMLNode.xmlns(
+                tag: _axiInviteAcceptedTag,
+                xmlns: _axiInviteXmlns,
+                attributes: attributes,
+              ),
+            ],
+          );
+
+          expect(AxiMucInvitePayload.fromStanza(stanza), isNull);
+        }
+
+        final validStanza = mox.Stanza.message(
+          children: [
+            mox.XMLNode.xmlns(
+              tag: _axiInviteAcceptedTag,
+              xmlns: _axiInviteXmlns,
+              attributes: const {
+                _axiInviteRoomAttr: _roomJid,
+                _axiInviteTokenAttr: _inviteTokenTrimmed,
+                _axiInviteInviterAttr: _inviterBareJid,
+                _axiInviteInviteeAttr: _inviteeBareJid,
+              },
+            ),
+          ],
+        );
+
+        final parsed = AxiMucInvitePayload.fromStanza(validStanza);
+        expect(parsed?.kind, equals(AxiMucInvitePayloadKind.acceptance));
+        expect(parsed?.token, equals(_inviteTokenTrimmed));
+      },
+    );
   });
 
   group('Invite parsing into message models', () {
