@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/url_safety.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +73,228 @@ String _inlineJsonString(String value) => jsonEncode(value)
     .replaceAll('>', r'\u003E')
     .replaceAll('&', r'\u0026');
 
+String? _safeEmailLinkUrl(String value) {
+  final report = assessLinkSafety(raw: value, kind: LinkSafetyKind.message);
+  return report == null || !report.isSafe ? null : report.displayUri;
+}
+
+@visibleForTesting
+String? safeEmailLinkUrlForTesting(String value) => _safeEmailLinkUrl(value);
+
+({
+  double? measuredHeight,
+  double? scrollHeight,
+  double? viewportHeight,
+  double? contentWidth,
+  double? viewportWidth,
+  double? widthScale,
+  int pendingImages,
+  bool documentReady,
+  bool imagesReady,
+  bool fontsReady,
+  bool widthFitReady,
+  bool layoutStable,
+  int layoutSequence,
+})
+_emailDomContentHeightMetrics({
+  double? measuredHeight,
+  double? scrollHeight,
+  double? viewportHeight,
+  double? contentWidth,
+  double? viewportWidth,
+  double? widthScale,
+  int pendingImages = 0,
+  bool documentReady = false,
+  bool imagesReady = false,
+  bool fontsReady = false,
+  bool widthFitReady = false,
+  bool layoutStable = false,
+  int layoutSequence = 0,
+}) => (
+  measuredHeight: measuredHeight,
+  scrollHeight: scrollHeight,
+  viewportHeight: viewportHeight,
+  contentWidth: contentWidth,
+  viewportWidth: viewportWidth,
+  widthScale: widthScale,
+  pendingImages: pendingImages,
+  documentReady: documentReady,
+  imagesReady: imagesReady,
+  fontsReady: fontsReady,
+  widthFitReady: widthFitReady,
+  layoutStable: layoutStable,
+  layoutSequence: layoutSequence,
+);
+
+bool _emailHtmlHeightCanCommit({
+  required bool hasPositiveHeight,
+  required bool documentReady,
+  required bool imagesReady,
+  required bool widthFitReady,
+  required bool layoutStable,
+}) {
+  if (!hasPositiveHeight) {
+    return false;
+  }
+  return documentReady && imagesReady && widthFitReady && layoutStable;
+}
+
+@visibleForTesting
+bool emailHtmlHeightCanCommitForTesting({
+  required bool hasPositiveHeight,
+  required bool documentReady,
+  required bool imagesReady,
+  required bool widthFitReady,
+  required bool layoutStable,
+}) => _emailHtmlHeightCanCommit(
+  hasPositiveHeight: hasPositiveHeight,
+  documentReady: documentReady,
+  imagesReady: imagesReady,
+  widthFitReady: widthFitReady,
+  layoutStable: layoutStable,
+);
+
+enum _EmailHtmlWebViewLoadingPhase {
+  loading,
+  preservingFallback,
+  fixedHeight,
+  fixedPlaceholder,
+}
+
+_EmailHtmlWebViewLoadingPhase _resolveEmailHtmlWebViewLoadingPhase({
+  required bool hasLoadingFallback,
+  required bool hasPreparedHtmlData,
+  required bool hasContentHeight,
+  required bool isLoading,
+}) {
+  if (isLoading || !hasPreparedHtmlData) {
+    return _EmailHtmlWebViewLoadingPhase.loading;
+  }
+  if (hasContentHeight) {
+    return _EmailHtmlWebViewLoadingPhase.fixedHeight;
+  }
+  if (hasLoadingFallback) {
+    return _EmailHtmlWebViewLoadingPhase.preservingFallback;
+  }
+  return _EmailHtmlWebViewLoadingPhase.fixedPlaceholder;
+}
+
+({
+  String phase,
+  bool showLoadingOverlay,
+  bool paintLoadingFallback,
+  bool preserveLoadingFallback,
+  bool paintWebView,
+  bool preserveWebView,
+  bool useFixedHeight,
+  bool preserveMeasuredHeight,
+})
+_resolveEmailHtmlWebViewLoadingLayout({
+  required bool hasLoadingFallback,
+  required bool hasWebView,
+  required bool hasPreparedHtmlData,
+  required bool hasContentHeight,
+  required bool isLoading,
+}) {
+  final phase = _resolveEmailHtmlWebViewLoadingPhase(
+    hasLoadingFallback: hasLoadingFallback,
+    hasPreparedHtmlData: hasPreparedHtmlData,
+    hasContentHeight: hasContentHeight,
+    isLoading: isLoading,
+  );
+  final showLoadingOverlay = phase == _EmailHtmlWebViewLoadingPhase.loading;
+  return (
+    phase: phase.name,
+    showLoadingOverlay: showLoadingOverlay,
+    paintLoadingFallback: hasLoadingFallback && showLoadingOverlay,
+    preserveLoadingFallback:
+        hasLoadingFallback &&
+        phase == _EmailHtmlWebViewLoadingPhase.preservingFallback,
+    paintWebView: hasWebView && !showLoadingOverlay,
+    preserveWebView: hasWebView && showLoadingOverlay,
+    useFixedHeight:
+        !hasLoadingFallback ||
+        phase == _EmailHtmlWebViewLoadingPhase.fixedHeight,
+    preserveMeasuredHeight:
+        hasLoadingFallback && hasContentHeight && showLoadingOverlay,
+  );
+}
+
+@visibleForTesting
+({
+  String phase,
+  bool showLoadingOverlay,
+  bool paintLoadingFallback,
+  bool preserveLoadingFallback,
+  bool paintWebView,
+  bool preserveWebView,
+  bool useFixedHeight,
+  bool preserveMeasuredHeight,
+})
+emailHtmlWebViewLoadingLayoutForTesting({
+  required bool hasLoadingFallback,
+  required bool hasWebView,
+  required bool hasPreparedHtmlData,
+  required bool hasContentHeight,
+  required bool isLoading,
+}) => _resolveEmailHtmlWebViewLoadingLayout(
+  hasLoadingFallback: hasLoadingFallback,
+  hasWebView: hasWebView,
+  hasPreparedHtmlData: hasPreparedHtmlData,
+  hasContentHeight: hasContentHeight,
+  isLoading: isLoading,
+);
+
+({double? contentHeight, bool isLoading, bool committed})
+_resolveEmailHtmlContentHeightAfterReport({
+  required double? currentContentHeight,
+  required bool isLoading,
+  required bool usesHeightBridge,
+  required double reportedHeight,
+  required bool canCommitHeight,
+}) {
+  if (reportedHeight <= 0) {
+    return (
+      contentHeight: currentContentHeight,
+      isLoading: isLoading,
+      committed: false,
+    );
+  }
+  if (usesHeightBridge && !canCommitHeight) {
+    return (
+      contentHeight: currentContentHeight,
+      isLoading: isLoading,
+      committed: false,
+    );
+  }
+  final normalizedHeight = reportedHeight.ceilToDouble();
+  final heightChanged = currentContentHeight != normalizedHeight;
+  if (!heightChanged && !isLoading) {
+    return (
+      contentHeight: currentContentHeight,
+      isLoading: isLoading,
+      committed: false,
+    );
+  }
+  return (contentHeight: normalizedHeight, isLoading: false, committed: true);
+}
+
+@visibleForTesting
+({double? contentHeight, bool isLoading, bool committed})
+emailHtmlContentHeightAfterReportForTesting({
+  required double? currentContentHeight,
+  required bool isLoading,
+  required bool usesHeightBridge,
+  required double reportedHeight,
+  required bool canCommitHeight,
+}) => _resolveEmailHtmlContentHeightAfterReport(
+  currentContentHeight: currentContentHeight,
+  isLoading: isLoading,
+  usesHeightBridge: usesHeightBridge,
+  reportedHeight: reportedHeight,
+  canCommitHeight: canCommitHeight,
+);
+
 String _emailDomHeightMetricsExpression() => r'''(() => {
   const emptyMetrics = () => ({
     measuredHeight: 0,
@@ -80,6 +303,13 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     contentWidth: 0,
     viewportWidth: 0,
     widthScale: 1,
+    pendingImages: 0,
+    documentReady: false,
+    imagesReady: false,
+    fontsReady: false,
+    widthFitReady: false,
+    layoutStable: false,
+    layoutSequence: 0,
   });
   const frame = document.getElementById('axichat-original-email-frame');
   if (frame && (!frame.contentDocument || !frame.contentDocument.body)) {
@@ -95,9 +325,13 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     return emptyMetrics();
   }
   const root = sourceDocument.documentElement;
+  const layoutSequence = Math.ceil(
+    Number(sourceDocument.__axichatEmailLayoutSequence || 0),
+  );
   const widthFitRoot = frame && sourceDocument !== document
     ? sourceDocument.getElementById('axichat-original-email-scale-root')
     : null;
+  let widthFitReady = !frame || sourceDocument === document;
   if (frame && sourceDocument !== document) {
     frame.style.height = '';
     if (document.body) {
@@ -143,14 +377,26 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
       widthFitRoot.style.transform = 'scale(' + widthScale + ')';
       widthFitRoot.style.willChange = 'transform';
     }
+    sourceDocument.__axichatWidthFitApplied = true;
+    widthFitReady = true;
   }
   const activeWidthScale = Number.isFinite(widthScale) && widthScale > 0
     ? widthScale
     : 1;
+  let pendingImages = 0;
+  for (const image of sourceDocument.images) {
+    if (!image.complete) {
+      pendingImages += 1;
+    }
+  }
+  const documentReady = sourceDocument.readyState === 'complete';
+  const imagesReady = pendingImages === 0;
+  const fontsReady =
+    !sourceDocument.fonts || sourceDocument.fonts.status === 'loaded';
   const scrollY = sourceWindow ? sourceWindow.scrollY || 0 : 0;
   const bodyTop = body.getBoundingClientRect().top + scrollY;
   let maxBottom = 0;
-  let hasVisibleElementBounds = false;
+  let hasVisibleBounds = false;
   const getElementStyle = (element) =>
     sourceWindow && sourceWindow.getComputedStyle
       ? sourceWindow.getComputedStyle(element)
@@ -192,11 +438,49 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
       rect.bottom + scrollY - bodyTop +
         (Number.isFinite(marginBottom) ? marginBottom * activeWidthScale : 0),
     );
-    hasVisibleElementBounds = true;
+    hasVisibleBounds = true;
+  }
+
+  const textWalker = sourceDocument.createTreeWalker(
+    body,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node) =>
+        node.nodeValue && node.nodeValue.trim()
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    },
+  );
+  for (let textNode = textWalker.nextNode();
+       textNode;
+       textNode = textWalker.nextNode()) {
+    let hiddenByAncestor = false;
+    for (let current = textNode.parentElement;
+         current && current !== root;
+         current = current.parentElement) {
+      if (ignoresRenderedBounds(getElementStyle(current))) {
+        hiddenByAncestor = true;
+        break;
+      }
+    }
+    if (hiddenByAncestor) {
+      continue;
+    }
+    const range = sourceDocument.createRange();
+    range.selectNodeContents(textNode);
+    for (const rect of range.getClientRects()) {
+      if (!Number.isFinite(rect.bottom) ||
+          rect.width <= 0 ||
+          rect.height <= 0) {
+        continue;
+      }
+      maxBottom = Math.max(maxBottom, rect.bottom + scrollY - bodyTop);
+      hasVisibleBounds = true;
+    }
   }
 
   let fallbackHeight = 0;
-  if (!hasVisibleElementBounds) {
+  if (!hasVisibleBounds) {
     const range = sourceDocument.createRange();
     range.selectNodeContents(body);
     const rangeRect = range.getBoundingClientRect();
@@ -208,7 +492,7 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
   }
 
   const measuredHeight = Math.ceil(
-    hasVisibleElementBounds ? maxBottom : fallbackHeight,
+    hasVisibleBounds ? maxBottom : fallbackHeight,
   );
   if (frame && sourceDocument !== document && measuredHeight > 0) {
     frame.style.height = measuredHeight + 'px';
@@ -222,18 +506,51 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     root ? root.scrollHeight || 0 : 0,
     root ? root.offsetHeight || 0 : 0,
   );
+  const scaledScrollHeight = Math.ceil(rawScrollHeight * activeWidthScale);
+  const measuredViewportHeight = Math.ceil(
+    Math.max(
+      sourceWindow ? sourceWindow.innerHeight || 0 : 0,
+      root ? root.clientHeight || 0 : 0,
+    ),
+  );
+  const stabilityKey = [
+    measuredHeight,
+    scaledScrollHeight,
+    measuredViewportHeight,
+    contentWidth,
+    viewportWidth,
+    Math.round(widthScale * 100000),
+    pendingImages,
+    documentReady ? 1 : 0,
+    imagesReady ? 1 : 0,
+    fontsReady ? 1 : 0,
+    widthFitReady ? 1 : 0,
+  ].join(':');
+  const lastStabilityKey =
+    String(sourceDocument.__axichatEmailLastStabilityKey || '');
+  const lastStabilitySequence =
+    sourceDocument.__axichatEmailLastStabilitySequence === undefined
+      ? -1
+      : Math.ceil(Number(sourceDocument.__axichatEmailLastStabilitySequence));
+  const layoutStable =
+    stabilityKey === lastStabilityKey &&
+    layoutSequence === lastStabilitySequence;
+  sourceDocument.__axichatEmailLastStabilityKey = stabilityKey;
+  sourceDocument.__axichatEmailLastStabilitySequence = layoutSequence;
   return {
     measuredHeight: measuredHeight,
-    scrollHeight: Math.ceil(rawScrollHeight * activeWidthScale),
-    viewportHeight: Math.ceil(
-      Math.max(
-        sourceWindow ? sourceWindow.innerHeight || 0 : 0,
-        root ? root.clientHeight || 0 : 0,
-      ),
-    ),
+    scrollHeight: scaledScrollHeight,
+    viewportHeight: measuredViewportHeight,
     contentWidth: contentWidth,
     viewportWidth: viewportWidth,
     widthScale: widthScale,
+    pendingImages: pendingImages,
+    documentReady: documentReady,
+    imagesReady: imagesReady,
+    fontsReady: fontsReady,
+    widthFitReady: widthFitReady,
+    layoutStable: layoutStable,
+    layoutSequence: layoutSequence,
   };
 })()
 ''';
@@ -267,6 +584,13 @@ String _emailDocumentHeightObserverExpression() =>
         Math.ceil(metrics.contentWidth || 0),
         Math.ceil(metrics.viewportWidth || 0),
         Math.round((metrics.widthScale || 1) * 100000),
+        Math.ceil(metrics.pendingImages || 0),
+        metrics.documentReady ? 1 : 0,
+        metrics.imagesReady ? 1 : 0,
+        metrics.fontsReady ? 1 : 0,
+        metrics.widthFitReady ? 1 : 0,
+        metrics.layoutStable ? 1 : 0,
+        Math.ceil(metrics.layoutSequence || 0),
       ].join(':');
       if (metricsKey === lastReportedMetricsKey) {
         return metrics;
@@ -280,14 +604,23 @@ String _emailDocumentHeightObserverExpression() =>
   };
 
   let frame = 0;
+  const reportUntilStable = () => {
+    frame = 0;
+    const metrics = reportHeight();
+    if (metrics && !metrics.layoutStable) {
+      frame = window.requestAnimationFrame(reportUntilStable);
+    }
+  };
   const schedule = () => {
     if (frame) {
       return;
     }
-    frame = window.requestAnimationFrame(() => {
-      frame = 0;
-      reportHeight();
-    });
+    frame = window.requestAnimationFrame(reportUntilStable);
+  };
+  const noteLayoutChanged = () => {
+    document.__axichatEmailLayoutSequence =
+      Number(document.__axichatEmailLayoutSequence || 0) + 1;
+    schedule();
   };
 
   window.__axichatEmailHeightObserverInstalled = true;
@@ -303,14 +636,14 @@ String _emailDocumentHeightObserverExpression() =>
         continue;
       }
       image.__axichatEmailSizeHookInstalled = true;
-      image.addEventListener('load', schedule, { passive: true });
-      image.addEventListener('error', schedule, { passive: true });
+      image.addEventListener('load', noteLayoutChanged, { passive: true });
+      image.addEventListener('error', noteLayoutChanged, { passive: true });
     }
   };
 
   const mutationObserver = new MutationObserver(() => {
     observeImages();
-    schedule();
+    noteLayoutChanged();
   });
   mutationObserver.observe(document.documentElement, {
     childList: true,
@@ -427,6 +760,7 @@ String _buildOriginalPassiveEmailHtmlShell({
   required String html,
   required String themeStyle,
 }) {
+  const linkHandlerName = _EmailHtmlWebViewState._linkHandlerName;
   final encodedHtml = _inlineJsonString(
     _injectEmailThemeStyle(html, themeStyle),
   );
@@ -475,7 +809,7 @@ html, body {
     const metrics = measureMetrics();
     const height = metrics.measuredHeight || 0;
     if (height <= 0) {
-      return;
+      return metrics;
     }
     if (window.flutter_inappwebview &&
         typeof window.flutter_inappwebview.callHandler === 'function') {
@@ -486,26 +820,38 @@ html, body {
         Math.ceil(metrics.contentWidth || 0),
         Math.ceil(metrics.viewportWidth || 0),
         Math.round((metrics.widthScale || 1) * 100000),
+        Math.ceil(metrics.pendingImages || 0),
+        metrics.documentReady ? 1 : 0,
+        metrics.imagesReady ? 1 : 0,
+        metrics.fontsReady ? 1 : 0,
+        metrics.widthFitReady ? 1 : 0,
+        metrics.layoutStable ? 1 : 0,
+        Math.ceil(metrics.layoutSequence || 0),
       ].join(':');
       if (metricsKey === lastReportedMetricsKey) {
-        return;
+        return metrics;
       }
       lastReportedMetricsKey = metricsKey;
       Promise.resolve(
         window.flutter_inappwebview.callHandler('axichatEmailHeight', metrics),
       ).catch(() => {});
     }
+    return metrics;
   };
 
   let frameRequest = 0;
+  const reportUntilStable = () => {
+    frameRequest = 0;
+    const metrics = reportHeight();
+    if (metrics && !metrics.layoutStable) {
+      frameRequest = window.requestAnimationFrame(reportUntilStable);
+    }
+  };
   const scheduleHeight = () => {
     if (frameRequest) {
       return;
     }
-    frameRequest = window.requestAnimationFrame(() => {
-      frameRequest = 0;
-      reportHeight();
-    });
+    frameRequest = window.requestAnimationFrame(reportUntilStable);
   };
 
   const normalizeFrameDocument = () => {
@@ -544,6 +890,10 @@ html, body {
       doc.body.appendChild(scaleRoot);
     }
     doc.__axichatViewportNormalized = true;
+    doc.__axichatWidthFitApplied = false;
+    doc.__axichatEmailLayoutSequence = 0;
+    doc.__axichatEmailLastStabilityKey = '';
+    doc.__axichatEmailLastStabilitySequence = -1;
     return true;
   };
 
@@ -553,21 +903,51 @@ html, body {
       return;
     }
     doc.__axichatLinkRoutingInstalled = true;
+    const allowedLinkProtocols = new Set(['http:', 'https:', 'mailto:', 'xmpp:']);
+    const findAnchor = (target) => {
+      let current = target;
+      if (!current) {
+        return null;
+      }
+      if (current.nodeType !== Node.ELEMENT_NODE) {
+        current = current.parentElement;
+      }
+      if (!current ||
+          current.nodeType !== Node.ELEMENT_NODE ||
+          typeof current.closest !== 'function') {
+        return null;
+      }
+      return current.closest('a[href]');
+    };
+    const routeLink = (href) => {
+      let url = null;
+      try {
+        url = new URL(href, doc.baseURI || frame.src || window.location.href);
+      } catch (_) {
+        return;
+      }
+      if (!url || !allowedLinkProtocols.has(url.protocol)) {
+        return;
+      }
+      if (window.flutter_inappwebview &&
+          typeof window.flutter_inappwebview.callHandler === 'function') {
+        Promise.resolve(
+          window.flutter_inappwebview.callHandler('$linkHandlerName', url.href),
+        ).catch(() => {});
+      }
+    };
     doc.addEventListener('click', (event) => {
-      const target = event.target instanceof Element
-        ? event.target
-        : event.target?.parentElement;
-      const anchor = target ? target.closest('a[href]') : null;
+      const anchor = findAnchor(event.target);
       if (!anchor) {
         return;
       }
       const href = anchor.href;
+      event.preventDefault();
+      event.stopPropagation();
       if (!href) {
         return;
       }
-      event.preventDefault();
-      event.stopPropagation();
-      window.location.href = href;
+      routeLink(href);
     }, true);
     doc.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -587,21 +967,27 @@ html, body {
           continue;
         }
         image.__axichatEmailSizeHookInstalled = true;
-        image.addEventListener('load', scheduleHeight, { passive: true });
-        image.addEventListener('error', scheduleHeight, { passive: true });
+        image.addEventListener('load', noteLayoutChanged, { passive: true });
+        image.addEventListener('error', noteLayoutChanged, { passive: true });
       }
+    };
+    const noteLayoutChanged = () => {
+      doc.__axichatEmailLayoutSequence =
+        Number(doc.__axichatEmailLayoutSequence || 0) + 1;
+      scheduleHeight();
     };
     const isWidthFitStyleMutation = (mutation) =>
       mutation.type === 'attributes' &&
       mutation.attributeName === 'style' &&
-      mutation.target instanceof Element &&
+      mutation.target &&
+      mutation.target.nodeType === Node.ELEMENT_NODE &&
       mutation.target.id === 'axichat-original-email-scale-root';
     new MutationObserver((mutations) => {
       if (mutations.every(isWidthFitStyleMutation)) {
         return;
       }
       observeImages();
-      scheduleHeight();
+      noteLayoutChanged();
     }).observe(doc.documentElement, {
       childList: true,
       subtree: true,
@@ -772,6 +1158,9 @@ InAppWebViewSettings buildEmailHtmlWebViewSettings({
   required bool allowRemoteImages,
   required EmailHtmlContentMode contentMode,
 }) {
+  final effectiveAllowRemoteImages = contentMode.allowsRemoteImages(
+    shouldLoadSafeRemoteImages: allowRemoteImages,
+  );
   return InAppWebViewSettings(
     javaScriptEnabled: contentMode.usesWebViewJavaScript(defaultTargetPlatform),
     javaScriptCanOpenWindowsAutomatically: false,
@@ -785,10 +1174,8 @@ InAppWebViewSettings buildEmailHtmlWebViewSettings({
     transparentBackground: true,
     useShouldOverrideUrlLoading: true,
     useOnDownloadStart: true,
-    blockNetworkImage: !allowRemoteImages,
-    blockNetworkLoads:
-        contentMode == EmailHtmlContentMode.originalPassive &&
-        !allowRemoteImages,
+    blockNetworkImage: !effectiveAllowRemoteImages,
+    blockNetworkLoads: false,
     useHybridComposition: useHybridComposition,
     supportZoom: false,
     builtInZoomControls: false,
@@ -863,6 +1250,7 @@ class EmailHtmlWebView extends StatefulWidget {
 class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
   static const _heightHandlerName = 'axichatEmailHeight';
+  static const _linkHandlerName = 'axichatEmailLink';
   static bool get _debugTraceMeasurements => kDebugMode && false;
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _tapOnlyGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
@@ -898,6 +1286,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     double? contentWidth,
     double? viewportWidth,
     double? widthScale,
+    int? pendingImages,
+    bool? documentReady,
+    bool? imagesReady,
+    bool? fontsReady,
+    bool? widthFitReady,
+    bool? layoutStable,
+    int? layoutSequence,
     Size? contentSize,
   }) {
     if (!_debugTraceMeasurements) {
@@ -917,6 +1312,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       if (contentWidth != null) 'contentWidth=${contentWidth.ceil()}',
       if (viewportWidth != null) 'viewportWidth=${viewportWidth.ceil()}',
       if (widthScale != null) 'widthScale=${widthScale.toStringAsFixed(4)}',
+      if (pendingImages != null) 'pendingImages=$pendingImages',
+      if (documentReady != null) 'documentReady=$documentReady',
+      if (imagesReady != null) 'imagesReady=$imagesReady',
+      if (fontsReady != null) 'fontsReady=$fontsReady',
+      if (widthFitReady != null) 'widthFitReady=$widthFitReady',
+      if (layoutStable != null) 'layoutStable=$layoutStable',
+      if (layoutSequence != null) 'layoutSequence=$layoutSequence',
       if (contentSize != null)
         'contentSize=${contentSize.width.ceil()}x${contentSize.height.ceil()}',
     ];
@@ -1221,14 +1623,27 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           measuredHeight <= 0) {
         return;
       }
+      final canCommitHeight = _emailHtmlHeightCanCommit(
+        hasPositiveHeight: measuredHeight > 0,
+        documentReady: domMetrics.documentReady,
+        imagesReady: domMetrics.imagesReady,
+        widthFitReady: domMetrics.widthFitReady,
+        layoutStable: domMetrics.layoutStable,
+      );
       if (defaultTargetPlatform == TargetPlatform.linux) {
         _updateLinuxContentHeightMetrics(
           measuredHeight: measuredHeight,
           scrollHeight: domMetrics.scrollHeight,
           viewportHeight: domMetrics.viewportHeight,
+          canCommitHeight: canCommitHeight,
+          layoutSequence: domMetrics.layoutSequence,
         );
       } else {
-        _updateContentHeight(measuredHeight);
+        _updateContentHeight(
+          measuredHeight,
+          canCommitHeight: canCommitHeight,
+          layoutSequence: domMetrics.layoutSequence,
+        );
       }
       return;
     }
@@ -1333,11 +1748,11 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       return;
     }
     _traceMeasurement('finish-load', webViewGeneration: webViewGeneration);
-    _markLoaded();
     _scheduleContentHeightMeasurements(
       controller: controller,
       webViewGeneration: webViewGeneration,
     );
+    _markLoaded();
     if (defaultTargetPlatform == TargetPlatform.linux) {
       _scheduleLinuxPlatformViewResize();
     }
@@ -1475,6 +1890,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       double? contentWidth,
       double? viewportWidth,
       double? widthScale,
+      int pendingImages,
+      bool documentReady,
+      bool imagesReady,
+      bool fontsReady,
+      bool widthFitReady,
+      bool layoutStable,
+      int layoutSequence,
     })
   >
   _measureDomContentHeight(
@@ -1487,14 +1909,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       webViewGeneration,
       measurementEpoch,
     )) {
-      return (
-        measuredHeight: null,
-        scrollHeight: null,
-        viewportHeight: null,
-        contentWidth: null,
-        viewportWidth: null,
-        widthScale: null,
-      );
+      return _emailDomContentHeightMetrics();
     }
     try {
       final result = await controller.evaluateJavascript(
@@ -1505,14 +1920,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         webViewGeneration,
         measurementEpoch,
       )) {
-        return (
-          measuredHeight: null,
-          scrollHeight: null,
-          viewportHeight: null,
-          contentWidth: null,
-          viewportWidth: null,
-          widthScale: null,
-        );
+        return _emailDomContentHeightMetrics();
       }
       if (result is Map) {
         final measuredHeight = _parsePositiveDouble(result['measuredHeight']);
@@ -1521,6 +1929,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         final contentWidth = _parsePositiveDouble(result['contentWidth']);
         final viewportWidth = _parsePositiveDouble(result['viewportWidth']);
         final widthScale = _parsePositiveDouble(result['widthScale']);
+        final pendingImages = _parseNonNegativeInt(result['pendingImages']);
+        final documentReady = _parseBool(result['documentReady']);
+        final imagesReady = _parseBool(result['imagesReady']);
+        final fontsReady = _parseBool(result['fontsReady']);
+        final widthFitReady = _parseBool(result['widthFitReady']);
+        final layoutStable = _parseBool(result['layoutStable']);
+        final layoutSequence = _parseNonNegativeInt(result['layoutSequence']);
         _traceMeasurement(
           'dom-result',
           webViewGeneration: webViewGeneration,
@@ -1530,58 +1945,58 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           contentWidth: contentWidth,
           viewportWidth: viewportWidth,
           widthScale: widthScale,
+          pendingImages: pendingImages,
+          documentReady: documentReady,
+          imagesReady: imagesReady,
+          fontsReady: fontsReady,
+          widthFitReady: widthFitReady,
+          layoutStable: layoutStable,
+          layoutSequence: layoutSequence,
         );
-        return (
+        return _emailDomContentHeightMetrics(
           measuredHeight: measuredHeight,
           scrollHeight: scrollHeight,
           viewportHeight: viewportHeight,
           contentWidth: contentWidth,
           viewportWidth: viewportWidth,
           widthScale: widthScale,
+          pendingImages: pendingImages,
+          documentReady: documentReady,
+          imagesReady: imagesReady,
+          fontsReady: fontsReady,
+          widthFitReady: widthFitReady,
+          layoutStable: layoutStable,
+          layoutSequence: layoutSequence,
         );
       }
       if (result is num) {
         final parsed = result > 0 ? result.toDouble() : null;
-        return (
+        return _emailDomContentHeightMetrics(
           measuredHeight: parsed,
-          scrollHeight: null,
-          viewportHeight: null,
-          contentWidth: null,
-          viewportWidth: null,
-          widthScale: null,
+          documentReady: parsed != null,
+          imagesReady: parsed != null,
+          fontsReady: parsed != null,
+          widthFitReady: parsed != null,
+          layoutStable: parsed != null,
         );
       }
       if (result is String) {
         final parsed = double.tryParse(result.trim());
         if (parsed != null && parsed > 0) {
-          return (
+          return _emailDomContentHeightMetrics(
             measuredHeight: parsed,
-            scrollHeight: null,
-            viewportHeight: null,
-            contentWidth: null,
-            viewportWidth: null,
-            widthScale: null,
+            documentReady: true,
+            imagesReady: true,
+            fontsReady: true,
+            widthFitReady: true,
+            layoutStable: true,
           );
         }
       }
     } on Exception {
-      return (
-        measuredHeight: null,
-        scrollHeight: null,
-        viewportHeight: null,
-        contentWidth: null,
-        viewportWidth: null,
-        widthScale: null,
-      );
+      return _emailDomContentHeightMetrics();
     }
-    return (
-      measuredHeight: null,
-      scrollHeight: null,
-      viewportHeight: null,
-      contentWidth: null,
-      viewportWidth: null,
-      widthScale: null,
-    );
+    return _emailDomContentHeightMetrics();
   }
 
   Future<void> _installDocumentHeightObserver(
@@ -1695,19 +2110,34 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     }
   }
 
-  void _updateContentHeight(double height) {
+  void _updateContentHeight(
+    double height, {
+    bool canCommitHeight = true,
+    int layoutSequence = 0,
+  }) {
     if (!mounted || height <= 0) {
       return;
     }
-    final normalizedHeight = height.ceilToDouble();
-    if (_contentHeight == normalizedHeight) {
-      _traceMeasurement('height-unchanged', measuredHeight: normalizedHeight);
+    final resolved = _resolveEmailHtmlContentHeightAfterReport(
+      currentContentHeight: _contentHeight,
+      isLoading: _isLoading,
+      usesHeightBridge: _usesHeightBridge,
+      reportedHeight: height,
+      canCommitHeight: canCommitHeight,
+    );
+    if (!resolved.committed) {
+      _traceMeasurement(
+        'height-deferred',
+        measuredHeight: height.ceilToDouble(),
+        layoutSequence: layoutSequence,
+      );
       return;
     }
     setState(() {
-      _contentHeight = normalizedHeight;
+      _contentHeight = resolved.contentHeight;
+      _isLoading = resolved.isLoading;
     });
-    _traceMeasurement('height-updated', measuredHeight: normalizedHeight);
+    _traceMeasurement('height-updated', measuredHeight: resolved.contentHeight);
     _scheduleLinuxPlatformViewResize();
   }
 
@@ -1715,12 +2145,22 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     required double measuredHeight,
     double? scrollHeight,
     double? viewportHeight,
+    bool canCommitHeight = true,
+    int layoutSequence = 0,
   }) {
     if (!mounted || measuredHeight <= 0) {
       return;
     }
-    final normalizedHeight = measuredHeight.ceilToDouble();
+    var normalizedHeight = measuredHeight.ceilToDouble();
     final currentHeight = _contentHeight;
+    if (_usesHeightBridge && !canCommitHeight) {
+      _traceMeasurement(
+        'height-deferred',
+        measuredHeight: normalizedHeight,
+        layoutSequence: layoutSequence,
+      );
+      return;
+    }
     final normalizedScrollHeight = scrollHeight?.ceilToDouble();
     final normalizedViewportHeight = viewportHeight?.ceilToDouble();
     final documentFitsViewport =
@@ -1746,10 +2186,16 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       if (documentFitsViewport) {
         _linuxFitLockedHeight = normalizedHeight;
       }
+      if (_isLoading) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       return;
     }
     setState(() {
       _contentHeight = normalizedHeight;
+      _isLoading = false;
     });
     if (documentFitsViewport) {
       _linuxFitLockedHeight = normalizedHeight;
@@ -1766,6 +2212,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     double? contentWidth,
     double? viewportWidth,
     double? widthScale,
+    int pendingImages = 0,
+    bool documentReady = true,
+    bool imagesReady = true,
+    bool fontsReady = true,
+    bool widthFitReady = true,
+    bool layoutStable = true,
+    int layoutSequence = 0,
   }) async {
     if (!_canMeasureContentHeight(controller, webViewGeneration, null)) {
       return;
@@ -1779,12 +2232,28 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       contentWidth: contentWidth,
       viewportWidth: viewportWidth,
       widthScale: widthScale,
+      pendingImages: pendingImages,
+      documentReady: documentReady,
+      imagesReady: imagesReady,
+      fontsReady: fontsReady,
+      widthFitReady: widthFitReady,
+      layoutStable: layoutStable,
+      layoutSequence: layoutSequence,
+    );
+    final canCommitHeight = _emailHtmlHeightCanCommit(
+      hasPositiveHeight: measuredHeight > 0,
+      documentReady: documentReady,
+      imagesReady: imagesReady,
+      widthFitReady: widthFitReady,
+      layoutStable: layoutStable,
     );
     if (defaultTargetPlatform == TargetPlatform.linux) {
       _updateLinuxContentHeightMetrics(
         measuredHeight: measuredHeight,
         scrollHeight: scrollHeight,
         viewportHeight: viewportHeight,
+        canCommitHeight: canCommitHeight,
+        layoutSequence: layoutSequence,
       );
       return;
     }
@@ -1797,7 +2266,19 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         !_canMeasureContentHeight(controller, webViewGeneration, null)) {
       return;
     }
-    _updateContentHeight(scaledHeight);
+    _updateContentHeight(
+      scaledHeight,
+      canCommitHeight: canCommitHeight,
+      layoutSequence: layoutSequence,
+    );
+  }
+
+  void _handleOriginalEmailLink(String value) {
+    final safeUrl = _safeEmailLinkUrl(value);
+    if (safeUrl == null) {
+      return;
+    }
+    widget.onLinkTap(safeUrl);
   }
 
   double? _parsePositiveDouble(dynamic value) {
@@ -1805,6 +2286,26 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       num number when number > 0 => number.toDouble(),
       String text => double.tryParse(text.trim()),
       _ => null,
+    };
+  }
+
+  int _parseNonNegativeInt(dynamic value) {
+    return switch (value) {
+      num number when number >= 0 => number.floor(),
+      String text => math.max(int.tryParse(text.trim()) ?? 0, 0),
+      _ => 0,
+    };
+  }
+
+  bool _parseBool(dynamic value) {
+    return switch (value) {
+      bool flag => flag,
+      num number => number != 0,
+      String text => switch (text.trim().toLowerCase()) {
+        'true' || '1' => true,
+        _ => false,
+      },
+      _ => false,
     };
   }
 
@@ -1922,6 +2423,17 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                             widthScale: _parsePositiveDouble(
                               value['widthScale'],
                             ),
+                            pendingImages: _parseNonNegativeInt(
+                              value['pendingImages'],
+                            ),
+                            documentReady: _parseBool(value['documentReady']),
+                            imagesReady: _parseBool(value['imagesReady']),
+                            fontsReady: _parseBool(value['fontsReady']),
+                            widthFitReady: _parseBool(value['widthFitReady']),
+                            layoutStable: _parseBool(value['layoutStable']),
+                            layoutSequence: _parseNonNegativeInt(
+                              value['layoutSequence'],
+                            ),
                           ),
                         );
                       }
@@ -1936,6 +2448,24 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                           ),
                         );
                       }
+                    }
+                    return null;
+                  },
+                );
+              }
+              if (widget.contentMode == EmailHtmlContentMode.originalPassive) {
+                controller.addJavaScriptHandler(
+                  handlerName: _linkHandlerName,
+                  callback: (arguments) {
+                    if (!_canUseController(controller, webViewGeneration)) {
+                      return null;
+                    }
+                    if (arguments.isEmpty) {
+                      return null;
+                    }
+                    final value = arguments.first;
+                    if (value is String) {
+                      _handleOriginalEmailLink(value);
                     }
                     return null;
                   },
@@ -2067,64 +2597,55 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
             },
           );
 
-    final shouldUseFallbackLayout =
-        widget.loadingFallback != null &&
-        (_isLoading || _preparedHtmlData == null || _contentHeight == null);
-    final shouldPaintLoadingFallback = _isLoading || _preparedHtmlData == null;
-    if (shouldUseFallbackLayout) {
-      final fallbackStack = Stack(
-        children: [
-          shouldPaintLoadingFallback
-              ? widget.loadingFallback!
-              : Visibility(
-                  visible: false,
-                  maintainState: true,
-                  maintainAnimation: true,
-                  maintainSize: true,
-                  child: widget.loadingFallback!,
-                ),
-          if (webView != null)
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: shouldPaintLoadingFallback,
-                child: shouldPaintLoadingFallback
-                    ? Visibility(
-                        visible: false,
-                        maintainState: true,
-                        maintainAnimation: true,
-                        maintainSize: true,
-                        child: webView,
-                      )
-                    : webView,
-              ),
+    final loadingLayout = _resolveEmailHtmlWebViewLoadingLayout(
+      hasLoadingFallback: widget.loadingFallback != null,
+      hasWebView: webView != null,
+      hasPreparedHtmlData: _preparedHtmlData != null,
+      hasContentHeight: _contentHeight != null,
+      isLoading: _isLoading,
+    );
+
+    final webViewStack = Stack(
+      children: [
+        if (loadingLayout.paintLoadingFallback)
+          widget.loadingFallback!
+        else if (loadingLayout.preserveLoadingFallback)
+          Visibility(
+            visible: false,
+            maintainState: true,
+            maintainAnimation: true,
+            maintainSize: true,
+            child: widget.loadingFallback!,
+          ),
+        if (webView != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !loadingLayout.paintWebView,
+              child: loadingLayout.paintWebView
+                  ? webView
+                  : Visibility(
+                      visible: false,
+                      maintainState: true,
+                      maintainAnimation: true,
+                      maintainSize: true,
+                      child: webView,
+                    ),
             ),
-          if (shouldPaintLoadingFallback) loadingOverlay,
-        ],
-      );
-      final preservedHeight = webView == null || _contentHeight == null
-          ? null
-          : _resolvedHeight;
-      return SizedBox(
-        key: _platformViewSizeKey,
-        width: double.infinity,
-        child: preservedHeight == null
-            ? fallbackStack
-            : ConstrainedBox(
-                constraints: BoxConstraints(minHeight: preservedHeight),
-                child: fallbackStack,
-              ),
-      );
-    }
+          ),
+        if (loadingLayout.showLoadingOverlay) loadingOverlay,
+      ],
+    );
+    final preservedMinHeight = loadingLayout.preserveMeasuredHeight
+        ? _resolvedHeight
+        : widget.minHeight;
 
     return SizedBox(
       key: _platformViewSizeKey,
       width: double.infinity,
-      height: _resolvedHeight,
-      child: Stack(
-        children: [
-          ?webView,
-          if (_isLoading || _preparedHtmlData == null) loadingOverlay,
-        ],
+      height: loadingLayout.useFixedHeight ? _resolvedHeight : null,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: preservedMinHeight),
+        child: webViewStack,
       ),
     );
   }

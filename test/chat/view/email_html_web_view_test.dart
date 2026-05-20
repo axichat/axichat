@@ -59,6 +59,7 @@ void main() {
       expect(prepared.contains('sandbox="allow-same-origin"'), isTrue);
       expect(prepared.contains('allow-scripts'), isFalse);
       expect(prepared.contains("callHandler('axichatEmailHeight'"), isTrue);
+      expect(prepared.contains("callHandler('axichatEmailLink'"), isTrue);
       expect(prepared.contains('lastReportedMetricsKey'), isTrue);
       expect(
         prepared.contains('metricsKey === lastReportedMetricsKey'),
@@ -67,6 +68,70 @@ void main() {
       expect(prepared.contains('axichat-email-webview-theme'), isTrue);
       expect(prepared.contains('window.axichatTest = true'), isTrue);
       expect(prepared.contains('https://example.com/pixel.png'), isTrue);
+    });
+
+    test('original passive mode routes iframe links through a safe bridge', () {
+      const themeStyle =
+          '<meta name="viewport" content="width=device-width">'
+          '<style id="axichat-email-webview-theme">'
+          'img{max-width:100%}'
+          '</style>';
+
+      final prepared = prepareEmailHtmlDataForWebView(
+        html:
+            '<html><body>'
+            '<a href="https://example.com">outer <span>inner</span></a>'
+            '<a href="javascript:alert(1)">bad</a>'
+            '</body></html>',
+        allowRemoteImages: true,
+        themeStyle: themeStyle,
+        contentMode: EmailHtmlContentMode.originalPassive,
+      );
+
+      expect(prepared.contains('const findAnchor = (target) =>'), isTrue);
+      expect(
+        prepared.contains('current.nodeType !== Node.ELEMENT_NODE'),
+        isTrue,
+      );
+      expect(
+        prepared.contains("typeof current.closest !== 'function'"),
+        isTrue,
+      );
+      expect(prepared.contains('event.preventDefault();'), isTrue);
+      expect(prepared.contains('event.stopPropagation();'), isTrue);
+      expect(
+        prepared.contains("allowedLinkProtocols.has(url.protocol)"),
+        isTrue,
+      );
+      expect(
+        prepared.contains("callHandler('axichatEmailLink', url.href)"),
+        isTrue,
+      );
+      expect(prepared.contains('window.location.href = href'), isFalse);
+      expect(prepared.contains('event.target instanceof Element'), isFalse);
+      expect(prepared.contains('mutation.target instanceof Element'), isFalse);
+      expect(
+        prepared.contains('mutation.target.nodeType === Node.ELEMENT_NODE'),
+        isTrue,
+      );
+    });
+
+    test('original passive link bridge uses app link safety rules', () {
+      expect(
+        safeEmailLinkUrlForTesting('https://example.com/a'),
+        'https://example.com/a',
+      );
+      expect(
+        safeEmailLinkUrlForTesting('mailto:test@example.com'),
+        'mailto:test@example.com',
+      );
+      expect(
+        safeEmailLinkUrlForTesting('xmpp:test@example.com'),
+        'xmpp:test@example.com',
+      );
+      expect(safeEmailLinkUrlForTesting('javascript:alert(1)'), isNull);
+      expect(safeEmailLinkUrlForTesting('data:text/html,hi'), isNull);
+      expect(safeEmailLinkUrlForTesting('file:///tmp/message.html'), isNull);
     });
 
     test('original passive mode installs iframe width fitting', () {
@@ -137,6 +202,13 @@ void main() {
       expect(metricsKeyExpression.contains('metrics.contentWidth'), isTrue);
       expect(metricsKeyExpression.contains('metrics.viewportWidth'), isTrue);
       expect(metricsKeyExpression.contains('metrics.widthScale'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.pendingImages'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.documentReady'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.imagesReady'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.fontsReady'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.widthFitReady'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.layoutStable'), isTrue);
+      expect(metricsKeyExpression.contains('metrics.layoutSequence'), isTrue);
     });
 
     test(
@@ -194,11 +266,35 @@ void main() {
       expect(script.contains('contentWidth: contentWidth'), isTrue);
       expect(script.contains('viewportWidth: viewportWidth'), isTrue);
       expect(script.contains('widthScale: widthScale'), isTrue);
+      expect(script.contains('pendingImages: pendingImages'), isTrue);
+      expect(script.contains('documentReady: documentReady'), isTrue);
+      expect(script.contains('imagesReady: imagesReady'), isTrue);
+      expect(script.contains('fontsReady: fontsReady'), isTrue);
+      expect(script.contains('widthFitReady: widthFitReady'), isTrue);
+      expect(script.contains('layoutStable: layoutStable'), isTrue);
+      expect(script.contains('layoutSequence: layoutSequence'), isTrue);
+      expect(
+        script.contains("sourceDocument.readyState === 'complete'"),
+        isTrue,
+      );
+      expect(
+        script.contains("sourceDocument.readyState !== 'loading'"),
+        isFalse,
+      );
+      expect(script.contains('!image.complete'), isTrue);
+      expect(
+        script.contains("sourceDocument.fonts.status === 'loaded'"),
+        isTrue,
+      );
+      expect(script.contains('__axichatWidthFitApplied = true'), isTrue);
       expect(
         script.contains("widthFitRoot.style.transform = 'scale('"),
         isTrue,
       );
       expect(script.contains('range.selectNodeContents(body)'), isTrue);
+      expect(script.contains('sourceDocument.createTreeWalker'), isTrue);
+      expect(script.contains('NodeFilter.SHOW_TEXT'), isTrue);
+      expect(script.contains('range.getClientRects()'), isTrue);
       expect(script.contains("frame.style.height = '';"), isTrue);
       expect(script.contains("document.body.style.minHeight = '';"), isTrue);
       expect(script.contains('document.body.style.minHeight'), isTrue);
@@ -209,10 +305,20 @@ void main() {
       expect(script.contains('rect.width <= 0'), isTrue);
       expect(script.contains('rect.height <= 0'), isTrue);
       expect(
-        script.contains('hasVisibleElementBounds ? maxBottom : fallbackHeight'),
+        script.contains('hasVisibleBounds ? maxBottom : fallbackHeight'),
         isTrue,
       );
       expect(script.contains('style.marginBottom'), isTrue);
+      expect(script.contains('__axichatEmailLastStabilityKey'), isTrue);
+      expect(script.contains('__axichatEmailLastStabilitySequence'), isTrue);
+      expect(
+        script.contains('__axichatEmailLastStabilitySequence || -1'),
+        isFalse,
+      );
+      expect(
+        script.contains("__axichatEmailLastStabilitySequence === undefined"),
+        isTrue,
+      );
       expect(measuredHeightExpression.contains('scrollHeight'), isFalse);
       expect(measuredHeightExpression.contains('offsetHeight'), isFalse);
     });
@@ -228,6 +334,16 @@ void main() {
       expect(script.contains('metrics.contentWidth'), isTrue);
       expect(script.contains('metrics.viewportWidth'), isTrue);
       expect(script.contains('metrics.widthScale'), isTrue);
+      expect(script.contains('metrics.pendingImages'), isTrue);
+      expect(script.contains('metrics.documentReady'), isTrue);
+      expect(script.contains('metrics.imagesReady'), isTrue);
+      expect(script.contains('metrics.fontsReady'), isTrue);
+      expect(script.contains('metrics.widthFitReady'), isTrue);
+      expect(script.contains('metrics.layoutStable'), isTrue);
+      expect(script.contains('metrics.layoutSequence'), isTrue);
+      expect(script.contains('noteLayoutChanged'), isTrue);
+      expect(script.contains('document.__axichatEmailLayoutSequence'), isTrue);
+      expect(script.contains('reportUntilStable'), isTrue);
       expect(script.contains("window.addEventListener('load'"), isTrue);
       expect(script.contains("window.addEventListener('resize'"), isTrue);
       expect(script.contains('document.fonts.ready.then(schedule)'), isTrue);
@@ -317,6 +433,268 @@ void main() {
         ),
         isTrue,
       );
+    });
+  });
+
+  group('loading layout', () {
+    test('keeps fallback and spinner visible while WebView is loading', () {
+      final layout = emailHtmlWebViewLoadingLayoutForTesting(
+        hasLoadingFallback: true,
+        hasWebView: true,
+        hasPreparedHtmlData: true,
+        hasContentHeight: false,
+        isLoading: true,
+      );
+
+      expect(layout.phase, 'loading');
+      expect(layout.showLoadingOverlay, isTrue);
+      expect(layout.paintLoadingFallback, isTrue);
+      expect(layout.preserveLoadingFallback, isFalse);
+      expect(layout.paintWebView, isFalse);
+      expect(layout.preserveWebView, isTrue);
+      expect(layout.useFixedHeight, isFalse);
+      expect(layout.preserveMeasuredHeight, isFalse);
+    });
+
+    test('preserves measured height while reloading fallback', () {
+      final layout = emailHtmlWebViewLoadingLayoutForTesting(
+        hasLoadingFallback: true,
+        hasWebView: true,
+        hasPreparedHtmlData: true,
+        hasContentHeight: true,
+        isLoading: true,
+      );
+
+      expect(layout.phase, 'loading');
+      expect(layout.showLoadingOverlay, isTrue);
+      expect(layout.paintLoadingFallback, isTrue);
+      expect(layout.paintWebView, isFalse);
+      expect(layout.useFixedHeight, isFalse);
+      expect(layout.preserveMeasuredHeight, isTrue);
+    });
+
+    test('reveals WebView at fixed measured height without fallback', () {
+      final layout = emailHtmlWebViewLoadingLayoutForTesting(
+        hasLoadingFallback: true,
+        hasWebView: true,
+        hasPreparedHtmlData: true,
+        hasContentHeight: true,
+        isLoading: false,
+      );
+
+      expect(layout.phase, 'fixedHeight');
+      expect(layout.showLoadingOverlay, isFalse);
+      expect(layout.paintLoadingFallback, isFalse);
+      expect(layout.preserveLoadingFallback, isFalse);
+      expect(layout.paintWebView, isTrue);
+      expect(layout.preserveWebView, isFalse);
+      expect(layout.useFixedHeight, isTrue);
+      expect(layout.preserveMeasuredHeight, isFalse);
+    });
+
+    test('reveals WebView while preserving fallback size before height', () {
+      final layout = emailHtmlWebViewLoadingLayoutForTesting(
+        hasLoadingFallback: true,
+        hasWebView: true,
+        hasPreparedHtmlData: true,
+        hasContentHeight: false,
+        isLoading: false,
+      );
+
+      expect(layout.phase, 'preservingFallback');
+      expect(layout.showLoadingOverlay, isFalse);
+      expect(layout.paintLoadingFallback, isFalse);
+      expect(layout.preserveLoadingFallback, isTrue);
+      expect(layout.paintWebView, isTrue);
+      expect(layout.preserveWebView, isFalse);
+      expect(layout.useFixedHeight, isFalse);
+      expect(layout.preserveMeasuredHeight, isFalse);
+    });
+
+    test('keeps no-fallback original mode fixed and hidden while loading', () {
+      final layout = emailHtmlWebViewLoadingLayoutForTesting(
+        hasLoadingFallback: false,
+        hasWebView: true,
+        hasPreparedHtmlData: true,
+        hasContentHeight: false,
+        isLoading: true,
+      );
+
+      expect(layout.phase, 'loading');
+      expect(layout.showLoadingOverlay, isTrue);
+      expect(layout.paintLoadingFallback, isFalse);
+      expect(layout.preserveLoadingFallback, isFalse);
+      expect(layout.paintWebView, isFalse);
+      expect(layout.preserveWebView, isTrue);
+      expect(layout.useFixedHeight, isTrue);
+      expect(layout.preserveMeasuredHeight, isFalse);
+    });
+
+    test('keeps no-fallback loaded WebView fixed before height arrives', () {
+      final layout = emailHtmlWebViewLoadingLayoutForTesting(
+        hasLoadingFallback: false,
+        hasWebView: true,
+        hasPreparedHtmlData: true,
+        hasContentHeight: false,
+        isLoading: false,
+      );
+
+      expect(layout.phase, 'fixedPlaceholder');
+      expect(layout.showLoadingOverlay, isFalse);
+      expect(layout.paintLoadingFallback, isFalse);
+      expect(layout.preserveLoadingFallback, isFalse);
+      expect(layout.paintWebView, isTrue);
+      expect(layout.preserveWebView, isFalse);
+      expect(layout.useFixedHeight, isTrue);
+      expect(layout.preserveMeasuredHeight, isFalse);
+    });
+  });
+
+  group('height commit gate', () {
+    test('does not commit positive image-first height before readiness', () {
+      expect(
+        emailHtmlHeightCanCommitForTesting(
+          hasPositiveHeight: true,
+          documentReady: false,
+          imagesReady: false,
+          widthFitReady: true,
+          layoutStable: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('commits once document images width fit and layout are stable', () {
+      expect(
+        emailHtmlHeightCanCommitForTesting(
+          hasPositiveHeight: true,
+          documentReady: true,
+          imagesReady: true,
+          widthFitReady: true,
+          layoutStable: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not commit stable layout before document completes', () {
+      expect(
+        emailHtmlHeightCanCommitForTesting(
+          hasPositiveHeight: true,
+          documentReady: false,
+          imagesReady: true,
+          widthFitReady: true,
+          layoutStable: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not commit an unstable candidate height', () {
+      expect(
+        emailHtmlHeightCanCommitForTesting(
+          hasPositiveHeight: true,
+          documentReady: true,
+          imagesReady: true,
+          widthFitReady: true,
+          layoutStable: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('defers image and oversize reports until final stable height', () {
+      final imageOnly = emailHtmlContentHeightAfterReportForTesting(
+        currentContentHeight: null,
+        isLoading: true,
+        usesHeightBridge: true,
+        reportedHeight: 96,
+        canCommitHeight: false,
+      );
+      expect(imageOnly.contentHeight, isNull);
+      expect(imageOnly.isLoading, isTrue);
+      expect(imageOnly.committed, isFalse);
+
+      final oversized = emailHtmlContentHeightAfterReportForTesting(
+        currentContentHeight: imageOnly.contentHeight,
+        isLoading: imageOnly.isLoading,
+        usesHeightBridge: true,
+        reportedHeight: 3200,
+        canCommitHeight: false,
+      );
+      expect(oversized.contentHeight, isNull);
+      expect(oversized.isLoading, isTrue);
+      expect(oversized.committed, isFalse);
+
+      final finalStable = emailHtmlContentHeightAfterReportForTesting(
+        currentContentHeight: oversized.contentHeight,
+        isLoading: oversized.isLoading,
+        usesHeightBridge: true,
+        reportedHeight: 640,
+        canCommitHeight: true,
+      );
+      expect(finalStable.contentHeight, 640);
+      expect(finalStable.isLoading, isFalse);
+      expect(finalStable.committed, isTrue);
+    });
+
+    test(
+      'commits first stable initial height because bridge dedupes repeats',
+      () {
+        final firstStableReport = emailHtmlContentHeightAfterReportForTesting(
+          currentContentHeight: null,
+          isLoading: false,
+          usesHeightBridge: true,
+          reportedHeight: 640,
+          canCommitHeight: true,
+        );
+        final script = emailDocumentHeightObserverExpressionForTesting();
+
+        expect(firstStableReport.contentHeight, 640);
+        expect(firstStableReport.isLoading, isFalse);
+        expect(firstStableReport.committed, isTrue);
+        expect(
+          script.contains('metricsKey === lastReportedMetricsKey'),
+          isTrue,
+        );
+      },
+    );
+
+    test('does not commit invalid bridge report before first height', () {
+      final invalid = emailHtmlContentHeightAfterReportForTesting(
+        currentContentHeight: null,
+        isLoading: true,
+        usesHeightBridge: true,
+        reportedHeight: 3200,
+        canCommitHeight: false,
+      );
+      expect(invalid.contentHeight, isNull);
+      expect(invalid.isLoading, isTrue);
+      expect(invalid.committed, isFalse);
+    });
+
+    test('ignores unstable height changes after the first stable reveal', () {
+      final unstableSpike = emailHtmlContentHeightAfterReportForTesting(
+        currentContentHeight: 640,
+        isLoading: false,
+        usesHeightBridge: true,
+        reportedHeight: 3200,
+        canCommitHeight: false,
+      );
+      expect(unstableSpike.contentHeight, 640);
+      expect(unstableSpike.isLoading, isFalse);
+      expect(unstableSpike.committed, isFalse);
+
+      final stableCorrection = emailHtmlContentHeightAfterReportForTesting(
+        currentContentHeight: unstableSpike.contentHeight,
+        isLoading: unstableSpike.isLoading,
+        usesHeightBridge: true,
+        reportedHeight: 672,
+        canCommitHeight: true,
+      );
+      expect(stableCorrection.contentHeight, 672);
+      expect(stableCorrection.isLoading, isFalse);
+      expect(stableCorrection.committed, isTrue);
     });
   });
 
@@ -448,11 +826,11 @@ void main() {
       expect(safeSettings.blockNetworkImage, isTrue);
       expect(safeSettings.blockNetworkLoads, isFalse);
       expect(originalSettings.javaScriptEnabled, isTrue);
-      expect(originalSettings.blockNetworkImage, isTrue);
-      expect(originalSettings.blockNetworkLoads, isTrue);
+      expect(originalSettings.blockNetworkImage, isFalse);
+      expect(originalSettings.blockNetworkLoads, isFalse);
     });
 
-    test('blocks remote images and active original loads by policy', () {
+    test('treats original passive unblock as remote-load approval', () {
       final settings = buildEmailHtmlWebViewSettings(
         usesInternalScroll: false,
         useHybridComposition: true,
@@ -461,8 +839,8 @@ void main() {
         contentMode: EmailHtmlContentMode.originalPassive,
       );
 
-      expect(settings.blockNetworkImage, isTrue);
-      expect(settings.blockNetworkLoads, isTrue);
+      expect(settings.blockNetworkImage, isFalse);
+      expect(settings.blockNetworkLoads, isFalse);
       expect(settings.useShouldOverrideUrlLoading, isTrue);
       expect(settings.useOnDownloadStart, isTrue);
       expect(settings.disableVerticalScroll, isTrue);
