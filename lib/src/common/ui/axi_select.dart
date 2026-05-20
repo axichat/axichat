@@ -144,11 +144,11 @@ class AxiSelect<T> extends StatelessWidget {
       selectedIcon:
           option.selectedIcon ??
           Padding(
-            padding: EdgeInsetsDirectional.only(start: spacing.s),
+            padding: EdgeInsetsDirectional.only(start: spacing.m),
             child: Icon(
               LucideIcons.check,
               size: sizing.menuItemIconSize,
-              color: colors.popoverForeground,
+              color: colors.accentForeground,
             ),
           ),
       radius:
@@ -159,10 +159,10 @@ class AxiSelect<T> extends StatelessWidget {
       selectedBackgroundColor: option.selectedBackgroundColor ?? colors.accent,
       textStyle:
           option.textStyle ??
-          context.textTheme.small.copyWith(color: colors.popoverForeground),
+          context.textTheme.small.copyWith(color: colors.foreground),
       selectedTextStyle:
           option.selectedTextStyle ??
-          context.textTheme.small.copyWith(color: colors.popoverForeground),
+          context.textTheme.small.copyWith(color: colors.accentForeground),
       child: option.child,
     );
   }

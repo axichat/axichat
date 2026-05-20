@@ -241,6 +241,16 @@ extension SettingsStateAttachmentDefaults on SettingsState {
       autoDownloadVideos ||
       autoDownloadDocuments ||
       autoDownloadArchives;
+
+  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
+      anyAttachmentAutoDownloadEnabled
+      ? AttachmentAutoDownload.allowed
+      : AttachmentAutoDownload.blocked;
+}
+
+extension SettingsStateNotificationSettings on SettingsState {
+  bool get allNotificationsMuted =>
+      chatNotificationsMuted && emailNotificationsMuted;
 }
 
 extension SettingsStateSync on SettingsState {

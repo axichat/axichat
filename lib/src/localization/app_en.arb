@@ -940,6 +940,7 @@
   "settingsSectionData": "Data",
   "settingsSectionImportant": "Important",
   "settingsSectionAppearance": "Appearance",
+  "settingsSectionNotifications": "Notifications",
   "settingsSectionSecurity": "Security",
   "settingsSyncStatusNotSynced": "Not synced",
   "settingsSyncStatusDeviceOnly": "This device only",
@@ -979,6 +980,12 @@
   "settingsTermsLabel": "Terms",
   "settingsPrivacyLabel": "Privacy",
   "settingsLicenseAgpl": "AGPLv3",
+  "settingsMuteAllNotifications": "Mute all notifications",
+  "settingsMuteAllNotificationsDescription": "Turn off chat and email notifications on this device.",
+  "settingsMuteChatNotifications": "Mute chat notifications",
+  "settingsMuteChatNotificationsDescription": "Stop receiving chat message notifications on this device.",
+  "settingsMuteEmailNotifications": "Mute email notifications",
+  "settingsMuteEmailNotificationsDescription": "Stop receiving email message notifications on this device.",
   "settingsMuteNotifications": "Mute notifications",
   "settingsMuteNotificationsDescription": "Stop receiving message notifications.",
   "settingsNotificationPreviews": "Notification previews",
@@ -1074,6 +1081,14 @@
   "chatNotificationBehaviorOptionInherit": "Inherit global",
   "chatNotificationBehaviorOptionMute": "Mute this chat",
   "chatNotificationBehaviorOptionAlwaysNotify": "Always notify this chat",
+  "chatSettingInheritOption": "Inherit ({value})",
+  "@chatSettingInheritOption": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "chatSettingStateOn": "On",
+  "chatSettingStateOff": "Off",
   "chatAttachmentUnavailableDevice": "Attachment is no longer available on this device",
   "chatAttachmentInvalidLink": "Invalid attachment link",
   "chatAttachmentOpenFailed": "Could not open {target}",

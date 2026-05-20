@@ -34,7 +34,8 @@ abstract class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
   const factory AttachmentGalleryEvent.approvalGranted({
     required Message message,
     required Chat? chat,
-    required bool alwaysAllow,
+    required AttachmentAutoDownload? autoDownloadValue,
+    required bool updateAutoDownloadValue,
     required bool isEmailChat,
     required String stanzaId,
   }) = AttachmentGalleryApprovalGranted;

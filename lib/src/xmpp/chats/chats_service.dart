@@ -798,6 +798,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required NotificationPreviewSetting? setting,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.notificationPreview,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         notificationPreviewSetting: setting,
@@ -812,6 +813,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required ChatNotificationBehavior? behavior,
   }) async {
     final published = await _updateLocalChatSetting(
+      settingId: ChatSettingId.notificationBehavior,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         notificationBehavior: behavior,
@@ -829,6 +831,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? enabled,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.shareSignature,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         shareSignatureEnabled: enabled,
@@ -843,6 +846,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required AttachmentAutoDownload? value,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.attachmentAutoDownload,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         attachmentAutoDownload: value,
@@ -857,6 +861,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? enabled,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.emailImageAutoload,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         emailRemoteImagesEnabled: enabled,
@@ -871,6 +876,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? enabled,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.typingIndicators,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         typingIndicatorsEnabled: enabled,
@@ -885,6 +891,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? enabled,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.emailReadReceipts,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         emailReadReceiptsEnabled: enabled,
@@ -899,6 +906,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? enabled,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.emailSendConfirmation,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         emailSendConfirmationEnabled: enabled,
@@ -913,6 +921,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? enabled,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.emailComposerWatermark,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         emailComposerWatermarkEnabled: enabled,
@@ -932,17 +941,25 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       if (chat == null || !chat.hasChatSettingsSyncPayload) {
         return true;
       }
-      return _publishChatSettingsForChat(chat);
+      return _publishChatSettingsForChat(
+        chat,
+        clearedSettings: _clearedUnsyncedChatSettings(chat),
+      );
     } on XmppAbortedException {
       return false;
     }
   }
 
   Future<({bool localApplied, bool published})> resetChatSettingOverrides(
-    ChatSettingId settingId,
-  ) async {
+    ChatSettingId settingId, {
+    Iterable<String> chatJids = const <String>[],
+  }) async {
     var localApplied = false;
     try {
+      final targetJids = chatJids
+          .map(normalizedAddressKey)
+          .whereType<String>()
+          .toSet();
       final sourceId = await _ensureChatSettingsSourceId();
       final updatedAt = DateTime.timestamp().toUtc();
       final updatedChats = await _dbOpReturning<XmppDatabase, List<Chat>>((
@@ -951,37 +968,42 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         final existing = await db.getChats(start: 0, end: 0);
         final targets = existing
             .where((chat) {
+              if (targetJids.isNotEmpty) {
+                final chatKey = normalizedAddressKey(chat.jid);
+                if (chatKey == null || !targetJids.contains(chatKey)) {
+                  return false;
+                }
+              }
               if (settingId == ChatSettingId.notificationBehavior) {
                 return chat.effectiveNotificationBehavior != null;
               }
               return settingId.syncValueFrom(chat) != null;
             })
             .toList(growable: false);
+        final updated = <Chat>[];
         for (final chat in targets) {
-          await db.updateChat(
-            settingId.applySyncedValue(
-              chat,
-              null,
-              updatedAt: updatedAt,
-              sourceId: sourceId,
-            ),
+          final next = settingId.applySyncedValue(
+            chat,
+            null,
+            updatedAt: updatedAt,
+            sourceId: sourceId,
           );
+          await db.updateChatSettingsSyncState(next);
+          updated.add(next);
         }
-        return targets
-            .map(
-              (chat) => settingId.applySyncedValue(
-                chat,
-                null,
-                updatedAt: updatedAt,
-                sourceId: sourceId,
-              ),
-            )
-            .toList(growable: false);
+        return updated;
       });
       localApplied = updatedChats.isNotEmpty;
       var published = true;
       for (final chat in updatedChats) {
-        published = await _publishChatSettingsForChat(chat) && published;
+        final clearedSettings = _clearedUnsyncedChatSettings(chat)
+          ..add(settingId);
+        published =
+            await _publishChatSettingsForChat(
+              chat,
+              clearedSettings: clearedSettings,
+            ) &&
+            published;
         if (settingId == ChatSettingId.notificationBehavior) {
           await _syncConversationIndexMeta(jid: chat.jid);
         }
@@ -993,6 +1015,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<bool> _updateLocalChatSetting({
+    required ChatSettingId settingId,
     required String jid,
     required Chat Function(Chat chat, DateTime updatedAt, String sourceId)
     update,
@@ -1008,13 +1031,20 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
           return null;
         }
         final next = update(existing, updatedAt, sourceId);
-        await db.updateChat(next);
+        await db.updateChatSettingsSyncState(next);
         return next;
       });
       if (updatedChat == null) {
         return false;
       }
-      return _publishChatSettingsForChat(updatedChat);
+      final clearedSettings = _clearedUnsyncedChatSettings(updatedChat);
+      if (settingId.syncValueFrom(updatedChat) == null) {
+        clearedSettings.add(settingId);
+      }
+      return _publishChatSettingsForChat(
+        updatedChat,
+        clearedSettings: clearedSettings,
+      );
     } on XmppAbortedException {
       return false;
     }
@@ -1049,6 +1079,12 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     return generated;
   }
 
+  Set<ChatSettingId> _clearedUnsyncedChatSettings(Chat chat) {
+    return chat.unsyncedChatSettingIds
+        .where((settingId) => settingId.syncValueFrom(chat) == null)
+        .toSet();
+  }
+
   Future<ChatSettingsPubSubManager?> _chatSettingsManagerForSync() async {
     final support = await refreshPubSubSupport();
     final decision = decidePubSubSupport(
@@ -1061,12 +1097,16 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
   Future<bool> _publishChatSettingsForChat(
     Chat chat, {
+    Set<ChatSettingId> clearedSettings = const <ChatSettingId>{},
     ChatSettingsPubSubManager? managerOverride,
     bool managerReady = false,
   }) async {
     try {
       final readyChat = await _ensureChatSettingsPayloadIdentity(chat);
-      final payload = ChatSettingsSyncPayload.fromChat(readyChat);
+      final payload = ChatSettingsSyncPayload.fromChat(
+        readyChat,
+        clearedSettings: clearedSettings,
+      );
       if (payload == null) {
         return false;
       }
@@ -1103,7 +1143,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       chatSettingsUpdatedAt: DateTime.timestamp().toUtc(),
       chatSettingsSourceId: await _ensureChatSettingsSourceId(),
     );
-    await _dbOp<XmppDatabase>((db) => db.updateChat(next));
+    await _dbOp<XmppDatabase>((db) => db.updateChatSettingsSyncState(next));
     return next;
   }
 
@@ -1141,7 +1181,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       if (existing == null) {
         return;
       }
-      await db.updateChat(
+      await db.updateChatSettingsSyncState(
         existing.copyWith(
           chatSettingsConfirmedJson: encoded,
           chatSettingsConfirmedUpdatedAt: payload.updatedAt.toUtc(),
@@ -1220,17 +1260,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     if (encoded == null) {
       return;
     }
-    var next = local;
-    for (final settingId in ChatSettingId.syncedSettings) {
-      next = settingId.applySyncedValue(
-        next,
-        remote.settings[settingId.syncKey],
-        updatedAt: remote.updatedAt.toUtc(),
-        sourceId: remote.sourceId,
-      );
-    }
+    final next = remote.applyToChat(local);
     await _dbOp<XmppDatabase>(
-      (db) => db.updateChat(
+      (db) => db.updateChatSettingsSyncState(
         next.copyWith(
           chatSettingsConfirmedJson: encoded,
           chatSettingsConfirmedUpdatedAt: remote.updatedAt.toUtc(),
@@ -1338,6 +1370,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required bool? responsive,
   }) async {
     return _updateLocalChatSetting(
+      settingId: ChatSettingId.readReceipts,
       jid: jid,
       update: (chat, updatedAt, sourceId) => chat.copyWith(
         markerResponsive: responsive,

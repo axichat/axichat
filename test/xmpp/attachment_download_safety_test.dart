@@ -1,6 +1,7 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -19,9 +20,11 @@ void main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeMessageEvent());
+    registerFallbackValue(FakeStanzaDetails());
     registerFallbackValue(FakeUserAgent());
     registerOmemoFallbacks();
     registerFallbackValue(mox.ChatMarker.received);
+    registerFallbackValue(MessageNotificationChannel.chat);
     resetForegroundNotifier(value: false);
   });
 

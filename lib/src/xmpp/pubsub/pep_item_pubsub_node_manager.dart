@@ -190,6 +190,10 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
         (error) => error.indicatesMissingNode,
       );
       if (!shouldCreateNode) {
+        if (await _canReadExistingNode(pubsub, host)) {
+          nodeSession.markNodeUsableWithoutConfig();
+          success = true;
+        }
         return;
       }
 
@@ -422,6 +426,11 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
       return null;
     }
     return strippedResult.get<mox.PubSubError>();
+  }
+
+  Future<bool> _canReadExistingNode(PubSubManager pubsub, mox.JID host) async {
+    final result = await pubsub.getItems(host, nodeId, maxItems: 1);
+    return !result.isType<mox.PubSubError>();
   }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(

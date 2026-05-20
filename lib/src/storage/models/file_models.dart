@@ -302,6 +302,7 @@ final class DraftForwardedBlock {
     this.timestamp,
     this.originalSubject,
     this.originalHtml,
+    this.quotedContext,
     this.conversionState = DraftForwardedBlockConversionState.originalHtml,
     this.convertedText,
   });
@@ -314,6 +315,7 @@ final class DraftForwardedBlock {
   static const String _originalSubjectKey = 'originalSubject';
   static const String _originalPlainTextKey = 'originalPlainText';
   static const String _originalHtmlKey = 'originalHtml';
+  static const String _quotedContextKey = 'quotedContext';
   static const String _conversionStateKey = 'conversionState';
   static const String _convertedTextKey = 'convertedText';
 
@@ -325,6 +327,7 @@ final class DraftForwardedBlock {
   final String? originalSubject;
   final String originalPlainText;
   final String? originalHtml;
+  final DraftForwardedQuoteContext? quotedContext;
   final DraftForwardedBlockConversionState conversionState;
   final String? convertedText;
 
@@ -346,6 +349,7 @@ final class DraftForwardedBlock {
     String? originalSubject,
     String? originalPlainText,
     String? originalHtml,
+    DraftForwardedQuoteContext? quotedContext,
     DraftForwardedBlockConversionState? conversionState,
     String? convertedText,
   }) {
@@ -358,6 +362,7 @@ final class DraftForwardedBlock {
       originalSubject: originalSubject ?? this.originalSubject,
       originalPlainText: originalPlainText ?? this.originalPlainText,
       originalHtml: originalHtml ?? this.originalHtml,
+      quotedContext: quotedContext ?? this.quotedContext,
       conversionState: conversionState ?? this.conversionState,
       convertedText: convertedText ?? this.convertedText,
     );
@@ -380,6 +385,7 @@ final class DraftForwardedBlock {
       originalSubject: originalSubject,
       originalPlainText: originalPlainText,
       originalHtml: originalHtml,
+      quotedContext: quotedContext,
     );
   }
 
@@ -393,6 +399,7 @@ final class DraftForwardedBlock {
       _originalSubjectKey: originalSubject,
     _originalPlainTextKey: originalPlainText,
     if (originalHtml?.trim().isNotEmpty == true) _originalHtmlKey: originalHtml,
+    if (quotedContext != null) _quotedContextKey: quotedContext!.toJson(),
     _conversionStateKey: conversionState.name,
     if (convertedText?.trim().isNotEmpty == true)
       _convertedTextKey: convertedText,
@@ -423,6 +430,7 @@ final class DraftForwardedBlock {
         : null;
     final rawSubject = json[_originalSubjectKey];
     final rawHtml = json[_originalHtmlKey];
+    final rawQuotedContext = json[_quotedContextKey];
     final rawConvertedText = json[_convertedTextKey];
     final rawConversionState = json[_conversionStateKey];
     return DraftForwardedBlock(
@@ -437,6 +445,11 @@ final class DraftForwardedBlock {
       originalPlainText: rawPlainText,
       originalHtml: rawHtml is String && rawHtml.trim().isNotEmpty
           ? rawHtml
+          : null,
+      quotedContext: rawQuotedContext is Map
+          ? DraftForwardedQuoteContext.fromJson(
+              Map<String, dynamic>.from(rawQuotedContext),
+            )
           : null,
       conversionState: DraftForwardedBlockConversionState.fromName(
         rawConversionState is String ? rawConversionState : null,
@@ -460,6 +473,7 @@ final class DraftForwardedBlock {
             other.originalSubject == originalSubject &&
             other.originalPlainText == originalPlainText &&
             other.originalHtml == originalHtml &&
+            other.quotedContext == quotedContext &&
             other.conversionState == conversionState &&
             other.convertedText == convertedText;
   }
@@ -474,9 +488,57 @@ final class DraftForwardedBlock {
     originalSubject,
     originalPlainText,
     originalHtml,
+    quotedContext,
     conversionState,
     convertedText,
   );
+}
+
+final class DraftForwardedQuoteContext {
+  const DraftForwardedQuoteContext({
+    required this.senderLabel,
+    required this.plainText,
+  });
+
+  static const String _senderLabelKey = 'senderLabel';
+  static const String _plainTextKey = 'plainText';
+
+  final String senderLabel;
+  final String plainText;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    _senderLabelKey: senderLabel,
+    _plainTextKey: plainText,
+  };
+
+  static DraftForwardedQuoteContext? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final rawSenderLabel = json[_senderLabelKey];
+    final rawPlainText = json[_plainTextKey];
+    if (rawSenderLabel is! String || rawPlainText is! String) {
+      return null;
+    }
+    final senderLabel = rawSenderLabel.trim();
+    final plainText = rawPlainText.trim();
+    if (senderLabel.isEmpty || plainText.isEmpty) {
+      return null;
+    }
+    return DraftForwardedQuoteContext(
+      senderLabel: senderLabel,
+      plainText: plainText,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is DraftForwardedQuoteContext &&
+            other.senderLabel == senderLabel &&
+            other.plainText == plainText;
+  }
+
+  @override
+  int get hashCode => Object.hash(senderLabel, plainText);
 }
 
 class DraftForwardedBlockListConverter

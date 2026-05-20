@@ -12,7 +12,6 @@ import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_sheet_header.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
@@ -1449,8 +1448,8 @@ class _NicknameSheet extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        CalendarSheetHeader(
-          title: l10n.mucChangeNicknameTitle,
+        AxiSheetHeader(
+          title: Text(l10n.mucChangeNicknameTitle),
           onClose: onCancel,
         ),
         SizedBox(height: spacing.s),

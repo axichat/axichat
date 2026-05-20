@@ -4330,7 +4330,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   var _httpUploadSupport = const HttpUploadSupport(supported: false);
   final Map<String, Map<String, String>> _readOnlyTaskOwnersByChat =
       <String, Map<String, String>>{};
-  final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
+  final Map<
+    ({
+      String metadataId,
+      String? stanzaId,
+      bool? allowHttpOverride,
+      bool? allowInsecureHostsOverride,
+      int? maxBytesOverride,
+    }),
+    Future<String?>
+  >
+  _inboundAttachmentDownloads = {};
   final Set<String> _suppressedMessageNotificationIds = <String>{};
   final Set<String> _internalEnvelopeChats = <String>{};
   final Map<String, Map<String, _PendingOutboundMessageStatus>>
@@ -6185,6 +6195,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     int? attachmentOrder,
     Message? quotedMessage,
     MessageReference? quotedReference,
+    MessageReference? groupQuotedReference,
     ChatType chatType = ChatType.chat,
     XmppAttachmentUpload? upload,
     void Function(String stanzaId)? onLocalMessageStored,
@@ -6201,6 +6212,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       attachmentOrder: attachmentOrder,
       quotedMessage: quotedMessage,
       quotedReference: quotedReference,
+      groupQuotedReference: groupQuotedReference,
       chatType: chatType,
       upload: upload,
       onLocalMessageStored: onLocalMessageStored,
@@ -6220,6 +6232,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     int? attachmentOrder,
     Message? quotedMessage,
     MessageReference? quotedReference,
+    MessageReference? groupQuotedReference,
     ChatType chatType = ChatType.chat,
     XmppAttachmentUpload? upload,
     void Function(String stanzaId)? onLocalMessageStored,
@@ -6236,6 +6249,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       attachmentOrder: attachmentOrder,
       quotedMessage: quotedMessage,
       quotedReference: quotedReference,
+      groupQuotedReference: groupQuotedReference,
       chatType: chatType,
       upload: upload,
       onLocalMessageStored: onLocalMessageStored,
@@ -6256,6 +6270,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     int? attachmentOrder,
     Message? quotedMessage,
     MessageReference? quotedReference,
+    MessageReference? groupQuotedReference,
     ChatType chatType = ChatType.chat,
     XmppAttachmentUpload? upload,
     void Function(String stanzaId)? onLocalMessageStored,
@@ -6311,6 +6326,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
             message: quotedMessage,
             chatType: resolvedChatType,
           );
+    final resolvedGroupQuotedReference =
+        groupQuotedReference ??
+        (transportGroupId == null ? null : resolvedQuotedReference);
     var message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -6367,6 +6385,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
           fileMetadataId: metadata.id,
           transportGroupId: transportGroupId,
           sortOrder: attachmentOrder,
+          groupQuotedReference: resolvedGroupQuotedReference,
         );
       });
     }
@@ -11295,21 +11314,30 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     String? stanzaId,
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
+    int? maxBytesOverride,
   }) async {
-    final existing = _inboundAttachmentDownloads[metadataId];
+    final key = (
+      metadataId: metadataId,
+      stanzaId: stanzaId,
+      allowHttpOverride: allowHttpOverride,
+      allowInsecureHostsOverride: allowInsecureHostsOverride,
+      maxBytesOverride: maxBytesOverride,
+    );
+    final existing = _inboundAttachmentDownloads[key];
     if (existing != null) return await existing;
     final future = _downloadInboundAttachment(
       metadataId: metadataId,
       stanzaId: stanzaId,
       allowHttpOverride: allowHttpOverride,
       allowInsecureHostsOverride: allowInsecureHostsOverride,
+      maxBytesOverride: maxBytesOverride,
     );
-    _inboundAttachmentDownloads[metadataId] = future;
+    _inboundAttachmentDownloads[key] = future;
     try {
       return await future;
     } finally {
-      if (_inboundAttachmentDownloads[metadataId] == future) {
-        _inboundAttachmentDownloads.remove(metadataId);
+      if (_inboundAttachmentDownloads[key] == future) {
+        _inboundAttachmentDownloads.remove(key);
       }
     }
   }
@@ -11319,6 +11347,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     String? stanzaId,
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
+    int? maxBytesOverride,
   }) async {
     File? tmpFile;
     File? decryptedTmp;
@@ -11382,7 +11411,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       final safeFileName = _attachmentFileName(metadata);
       final finalFile = File(p.join(directory.path, safeFileName));
       tmpFile = File(p.join(directory.path, '.${metadata.id}.download'));
-      final maxBytes = _attachmentDownloadLimitBytes(metadata);
+      final maxBytes =
+          maxBytesOverride ?? _attachmentDownloadLimitBytes(metadata);
       final expectedSize = metadata.sizeBytes;
       if (expectedSize != null && expectedSize > 0 && expectedSize > maxBytes) {
         throw XmppFileTooBigException(maxBytes);
@@ -13146,30 +13176,37 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     try {
       final accountJid = myJid?.trim();
       final isSelf = message.isFromAccount(accountJid);
-      var isTrusted = isSelf;
-      if (!isTrusted) {
-        isTrusted = await _dbOpReturning<XmppDatabase, bool>((db) async {
-          final chat = await db.getChat(message.chatJid);
-          if (chat?.spam ?? false) {
-            return false;
-          }
-          if (chat == null) return false;
-          return (chat.attachmentAutoDownload ??
-                  defaultChatAttachmentAutoDownload)
-              .isAllowed;
-        });
-      }
-      if (!isTrusted) return;
       final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
         (db) => db.getFileMetadata(trimmedMetadataId),
       );
       if (metadata == null) return;
-      if (!allowsAutoDownloadMetadata(metadata)) {
-        return;
-      }
+      final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+        (db) => db.getChat(message.chatJid),
+      );
+      if (chat == null) return;
+      final blocked = await isJidBlocked(chat.jid);
+      final allowed = isSelf
+          ? !chat.spam &&
+                !blocked &&
+                !metadata.isHighRiskForAutoDownload &&
+                (metadata.sizeBytes == null ||
+                    metadata.sizeBytes! <= maxAttachmentAutoDownloadBytes)
+          : allowsAttachmentAutoDownload(
+              chat: chat,
+              metadata: metadata,
+              imagesEnabled: autoDownloadImages,
+              videosEnabled: autoDownloadVideos,
+              documentsEnabled: autoDownloadDocuments,
+              archivesEnabled: autoDownloadArchives,
+              chatBlocked: blocked,
+              requireKnownSize: false,
+              maxBytes: maxAttachmentAutoDownloadBytes,
+            );
+      if (!allowed) return;
       await downloadInboundAttachment(
         metadataId: trimmedMetadataId,
         stanzaId: stanzaId,
+        maxBytesOverride: maxAttachmentAutoDownloadBytes,
       );
     } on Exception {
       // Best-effort: errors are reflected on the message via fileDownloadFailure.

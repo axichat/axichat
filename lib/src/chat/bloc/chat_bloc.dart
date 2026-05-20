@@ -986,6 +986,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     isGroupChat: chat?.type == ChatType.groupChat,
   );
 
+  MessageReference? _storedQuotedReference(Message message) {
+    final value = message.quoting?.trim();
+    final kind = message.quotingReferenceKind;
+    if (value == null || value.isEmpty || kind == null) {
+      return null;
+    }
+    return MessageReference(kind: kind, value: value);
+  }
+
   void _emitScrollTargetRequest(Emitter<ChatState> emit, String messageId) {
     emit(
       state.copyWith(
@@ -2119,7 +2128,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachmentsByMessageId: attachmentMaps.attachmentsByMessageId,
       groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
     );
-    var filteredItems = filtered.messages;
+    var filteredItems = _messagesWithAttachmentGroupQuoteFallback(
+      messages: filtered.messages,
+      groupQuotedReferenceByMessageId:
+          attachmentMaps.groupQuotedReferenceByMessageId,
+    );
     final chat = state.chat;
     if (chat == null) {
       _preChatInitialMessages = filteredItems;
@@ -2130,6 +2143,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       filteredItems = await _verifyAndRefreshInitialStaleUnackedMessages(
         chat: chat,
         messages: filteredItems,
+      );
+      filteredItems = _messagesWithAttachmentGroupQuoteFallback(
+        messages: filteredItems,
+        groupQuotedReferenceByMessageId:
+            attachmentMaps.groupQuotedReferenceByMessageId,
       );
       if (emit.isDone) {
         return _syncReadStateLocallyIfAvailable(
@@ -5239,11 +5257,54 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               originalHtmlBody: content.htmlBody,
               attachmentMetadataIds:
                   await _attachmentMetadataIdsForForwardDraft(message),
+              quotedContext: _forwardedQuoteContext(message),
             ),
           ],
         ),
       ),
     );
+  }
+
+  DraftForwardedQuoteContext? _forwardedQuoteContext(Message message) {
+    final quotedReference = message.quoting?.trim();
+    if (quotedReference == null || quotedReference.isEmpty) {
+      return null;
+    }
+    final quotedMessage = state.quotedMessagesById[quotedReference];
+    if (quotedMessage == null) {
+      return null;
+    }
+    final plainText = quotedMessage.isEmailBacked
+        ? ChatSubjectCodec.previewEmailText(
+            body: quotedMessage.body,
+            subject: quotedMessage.subject,
+          )
+        : ChatSubjectCodec.previewText(
+            body: quotedMessage.body,
+            subject: quotedMessage.subject,
+          );
+    final normalizedPlainText = plainText?.trim();
+    if (normalizedPlainText == null || normalizedPlainText.isEmpty) {
+      return null;
+    }
+    final senderLabel = _forwardedQuoteSenderLabel(quotedMessage);
+    if (senderLabel.isEmpty) {
+      return null;
+    }
+    return DraftForwardedQuoteContext(
+      senderLabel: senderLabel,
+      plainText: normalizedPlainText,
+    );
+  }
+
+  String _forwardedQuoteSenderLabel(Message quotedMessage) {
+    if (state.chat?.type == ChatType.groupChat) {
+      final nick = state.roomState?.senderNick(quotedMessage.senderJid);
+      if (nick != null && nick.trim().isNotEmpty) {
+        return nick.trim();
+      }
+    }
+    return quotedMessage.senderJid.trim();
   }
 
   void _onChatForwardDraftConsumed(
@@ -5257,7 +5318,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ({String? subject, String body, String? htmlBody}) _forwardDraftContent(
     Message message,
   ) {
-    final display = message.deltaChatId != null || message.deltaMsgId != null
+    final isEmailMessage =
+        message.deltaChatId != null || message.deltaMsgId != null;
+    final display = isEmailMessage
         ? ChatSubjectCodec.splitEmailBody(
             body: message.body,
             subject: message.subject,
@@ -5266,8 +5329,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             body: message.body,
             subject: message.subject,
           );
+    final renderedText = display.body.trim();
     final originalSubject = display.subject?.trim();
-    var originalBody = display.body.trim();
+    var originalBody = renderedText;
     if (originalBody.isEmpty) {
       final normalizedHtml = message.normalizedHtmlBody;
       if (normalizedHtml != null) {
@@ -5286,12 +5350,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             state.emailFullHtmlByDeltaId[message.deltaMsgId] ??
                 message.htmlBody,
           );
+    final shouldForwardHtml =
+        isEmailMessage &&
+        HtmlContentCodec.shouldRenderRichEmailHtml(
+          normalizedHtmlBody: htmlBody,
+          normalizedHtmlText: htmlBody == null
+              ? null
+              : HtmlContentCodec.toPlainText(htmlBody).trim(),
+          renderedText: renderedText,
+        );
     return (
       subject: originalSubject == null || originalSubject.isEmpty
           ? null
           : originalSubject,
       body: originalBody,
-      htmlBody: htmlBody,
+      htmlBody: shouldForwardHtml ? htmlBody : null,
     );
   }
 
@@ -5383,16 +5456,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       final attachments = await _attachmentsForMessage(message);
       if (attachments.isNotEmpty) {
+        final storedQuotedReference = _storedQuotedReference(message);
         Message? quoted;
-        if (message.quoting != null) {
+        if (storedQuotedReference != null) {
           quoted = await _messageService.loadMessageByReferenceId(
-            message.quoting!,
+            storedQuotedReference.value,
             chatJid: message.chatJid,
           );
         }
         final caption = message.plainText.trim();
         final htmlCaption = message.normalizedHtmlBody;
         final attachmentGroupId = attachments.length > 1 ? uuid.v4() : null;
+        final resolvedQuotedReference = quoted == null
+            ? storedQuotedReference
+            : quoted.replyReference(
+                isGroupChat: chatType == ChatType.groupChat,
+              );
+        final groupQuotedReference =
+            attachmentGroupId == null || resolvedQuotedReference == null
+            ? null
+            : resolvedQuotedReference;
         for (var index = 0; index < attachments.length; index += 1) {
           final attachment = attachments[index];
           final shouldApplyCaption = caption.isNotEmpty && index == 0;
@@ -5405,6 +5488,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               attachment: resolvedAttachment,
               encryptionProtocol: message.encryptionProtocol,
               quotedMessage: index == 0 ? quoted : null,
+              quotedReference: index == 0 ? resolvedQuotedReference : null,
+              groupQuotedReference: groupQuotedReference,
               chatType: chatType,
               htmlCaption: shouldApplyCaption ? htmlCaption : null,
               forwarded: message.isForwarded,
@@ -5423,6 +5508,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               attachment: resolvedAttachment,
               encryptionProtocol: message.encryptionProtocol,
               quotedMessage: index == 0 ? quoted : null,
+              quotedReference: index == 0 ? resolvedQuotedReference : null,
+              groupQuotedReference: groupQuotedReference,
               chatType: chatType,
               htmlCaption: shouldApplyCaption ? htmlCaption : null,
               forwarded: message.isForwarded,
@@ -6379,13 +6466,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             jid: targetJid,
             target: target,
           );
-          final quote =
-              quotedDraft != null &&
-                  quotedDraft.chatJid == targetJid &&
-                  index == 0
+          final quotedReference =
+              quotedDraft != null && quotedDraft.chatJid == targetJid
+              ? quotedDraft.replyReference(
+                  isGroupChat: target.chatType == ChatType.groupChat,
+                )
+              : null;
+          final quote = quotedReference != null && index == 0
               ? quotedDraft
               : null;
           final groupId = attachmentGroupIds[targetJid];
+          final groupQuotedReference = groupId == null ? null : quotedReference;
           if (targetIsLocalOnly) {
             localUpload = await _messageService.sendLocalOnlyAttachment(
               jid: targetJid,
@@ -6393,6 +6484,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               encryptionProtocol: target.encryptionProtocol,
               chatType: target.chatType,
               quotedMessage: quote,
+              groupQuotedReference: groupQuotedReference,
               htmlCaption: shouldApplyCaption ? htmlCaption : null,
               transportGroupId: groupId,
               attachmentOrder: index,
@@ -6409,6 +6501,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               encryptionProtocol: target.encryptionProtocol,
               chatType: target.chatType,
               quotedMessage: quote,
+              groupQuotedReference: groupQuotedReference,
               htmlCaption: shouldApplyCaption ? htmlCaption : null,
               transportGroupId: groupId,
               attachmentOrder: index,
@@ -6851,6 +6944,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ({
       Map<String, List<String>> attachmentsByMessageId,
       Map<String, String> groupLeaderByMessageId,
+      Map<String, MessageReference> groupQuotedReferenceByMessageId,
     })
   >
   _loadAttachmentMaps(List<Message> messages) async {
@@ -6858,6 +6952,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return (
         attachmentsByMessageId: const <String, List<String>>{},
         groupLeaderByMessageId: const <String, String>{},
+        groupQuotedReferenceByMessageId: const <String, MessageReference>{},
       );
     }
     final messageIds = <String>[];
@@ -6873,6 +6968,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final attachmentByMessageId = <String, List<String>>{};
     final groupLeaderByMessageId = <String, String>{};
+    final groupQuotedReferenceByMessageId = <String, MessageReference>{};
     if (messageIds.isNotEmpty) {
       final attachments = await _messageService
           .loadMessageAttachmentsForMessages(messageIds);
@@ -6905,6 +7001,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           messageIndex: messageIndex,
         );
         if (leaderId == null) continue;
+        final groupQuotedReference = _attachmentGroupQuotedReference(
+          attachments: groupEntries,
+          messageById: messageById,
+        );
+        if (groupQuotedReference != null) {
+          groupQuotedReferenceByMessageId[leaderId] = groupQuotedReference;
+        }
         for (final messageId in messageIdsInGroup) {
           groupLeaderByMessageId[messageId] = leaderId;
           if (messageId != leaderId) {
@@ -6930,6 +7033,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return (
       attachmentsByMessageId: attachmentByMessageId,
       groupLeaderByMessageId: groupLeaderByMessageId,
+      groupQuotedReferenceByMessageId: groupQuotedReferenceByMessageId,
     );
   }
 
@@ -7075,6 +7179,59 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return indexA.compareTo(indexB);
     });
     return prioritized.first.id;
+  }
+
+  MessageReference? _attachmentGroupQuotedReference({
+    required Iterable<MessageAttachmentData> attachments,
+    required Map<String, Message> messageById,
+  }) {
+    for (final attachment in attachments) {
+      final value = attachment.groupQuotedReference?.trim();
+      final kind = attachment.groupQuotedReferenceKind;
+      if (value != null && value.isNotEmpty && kind != null) {
+        return MessageReference(kind: kind, value: value);
+      }
+    }
+    for (final attachment in attachments) {
+      final message = messageById[attachment.messageId];
+      final value = message?.quoting?.trim();
+      final kind = message?.quotingReferenceKind;
+      if (value != null && value.isNotEmpty && kind != null) {
+        return MessageReference(kind: kind, value: value);
+      }
+    }
+    return null;
+  }
+
+  List<Message> _messagesWithAttachmentGroupQuoteFallback({
+    required List<Message> messages,
+    required Map<String, MessageReference> groupQuotedReferenceByMessageId,
+  }) {
+    if (messages.isEmpty || groupQuotedReferenceByMessageId.isEmpty) {
+      return messages;
+    }
+    var changed = false;
+    final updated = messages
+        .map((message) {
+          if (message.quoting?.trim().isNotEmpty == true) {
+            return message;
+          }
+          final messageId = message.id;
+          if (messageId == null || messageId.isEmpty) {
+            return message;
+          }
+          final reference = groupQuotedReferenceByMessageId[messageId];
+          if (reference == null) {
+            return message;
+          }
+          changed = true;
+          return message.copyWith(
+            quoting: reference.value,
+            quotingReferenceKind: reference.kind,
+          );
+        })
+        .toList(growable: false);
+    return changed ? updated : messages;
   }
 
   ChatState _attachToast(ChatState base, ChatToast toast) =>

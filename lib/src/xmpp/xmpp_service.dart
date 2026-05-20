@@ -25,7 +25,6 @@ import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/defer.dart';
@@ -58,6 +57,7 @@ import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/chat_settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
@@ -479,14 +479,6 @@ abstract interface class XmppBase {
 
   bool get autoDownloadArchives;
 
-  AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
-      autoDownloadImages ||
-          autoDownloadVideos ||
-          autoDownloadDocuments ||
-          autoDownloadArchives
-      ? AttachmentAutoDownload.allowed
-      : AttachmentAutoDownload.blocked;
-
   void updateAttachmentAutoDownloadSettings({
     required bool imagesEnabled,
     required bool videosEnabled,
@@ -498,7 +490,7 @@ abstract interface class XmppBase {
 
   Future<void> seedSettingsSyncSnapshot(Map<String, dynamic> settings);
 
-  Future<void> updateSettingsSyncSnapshot(Map<String, dynamic> settings);
+  Future<bool> updateSettingsSyncSnapshot(Map<String, dynamic> settings);
 
   bool allowsAutoDownloadMetadata(FileMetadataData metadata);
 
@@ -783,7 +775,7 @@ class XmppService extends XmppBase
   final Capability _capability;
   final Duration _connectingWatchdogTimeout;
   AppLocalizations? _localizations;
-  var _autoDownloadImages = true;
+  var _autoDownloadImages = false;
   var _autoDownloadVideos = false;
   var _autoDownloadDocuments = false;
   var _autoDownloadArchives = false;
@@ -1924,7 +1916,8 @@ class XmppService extends XmppBase
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(
         (db) async => db.getChat(message.chatJid),
       );
-      if (chat?.muted ?? false) {
+      final notificationBehavior = chat?.effectiveNotificationBehavior;
+      if (notificationBehavior?.isMuted ?? false) {
         return;
       }
       final previewSetting = chat?.notificationPreviewSetting;
@@ -1951,6 +1944,7 @@ class XmppService extends XmppBase
         sentAt: message.timestamp,
         isGroupConversation: isGroupConversation,
         extraConditions: [message.senderJid != myJid],
+        ignoreChannelMute: notificationBehavior?.isAlwaysNotify ?? false,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,

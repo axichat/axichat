@@ -515,7 +515,9 @@ class PubSubManager extends mox.PubSubManager {
         final error = mox.getPubSubError(result);
         logger.fine(
           'PubSub configure failed. node=${_safeNodeLabel(node)} '
-          'error=${error.runtimeType} missingNode=${error.indicatesMissingNode}.',
+          'error=${error.runtimeType} '
+          'condition=${_stanzaErrorLabel(result)} '
+          'missingNode=${error.indicatesMissingNode}.',
         );
         return moxlib.Result(error);
       }
@@ -526,6 +528,29 @@ class PubSubManager extends mox.PubSubManager {
     } finally {
       attrs.sendEvent(_operationEndEvent(operationKind, isSuccess: success));
     }
+  }
+
+  String _stanzaErrorLabel(mox.XMLNode stanza) {
+    final error = stanza.firstTag('error');
+    if (error == null) {
+      return 'none';
+    }
+    final type = error.attributes['type']?.toString().trim();
+    final conditions = <String>[];
+    for (final child in error.children) {
+      if (child.tag == 'text') {
+        continue;
+      }
+      final tag = child.tag.trim();
+      if (tag.isNotEmpty) {
+        conditions.add(tag);
+      }
+    }
+    final condition = conditions.isEmpty ? 'unknown' : conditions.join(',');
+    if (type == null || type.isEmpty) {
+      return condition;
+    }
+    return '$type:$condition';
   }
 
   Future<String?> resolveSendLastPublishedItemForNode({

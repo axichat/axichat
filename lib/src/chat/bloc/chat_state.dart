@@ -21,6 +21,7 @@ final class ChatForwardDraft extends Equatable {
           originalSubject: source.originalSubject,
           originalPlainText: source.originalPlainTextBody,
           originalHtml: source.originalHtmlBody,
+          quotedContext: source.quotedContext,
         ),
       )
       .toList(growable: false);
@@ -53,6 +54,7 @@ final class ChatForwardDraftSource extends Equatable {
     required this.originalPlainTextBody,
     required this.originalHtmlBody,
     required this.attachmentMetadataIds,
+    this.quotedContext,
   });
 
   final String sourceMessageId;
@@ -63,6 +65,7 @@ final class ChatForwardDraftSource extends Equatable {
   final String originalPlainTextBody;
   final String? originalHtmlBody;
   final List<String> attachmentMetadataIds;
+  final DraftForwardedQuoteContext? quotedContext;
 
   @override
   List<Object?> get props => [
@@ -74,6 +77,7 @@ final class ChatForwardDraftSource extends Equatable {
     originalPlainTextBody,
     originalHtmlBody,
     attachmentMetadataIds,
+    quotedContext,
   ];
 }
 
@@ -176,6 +180,7 @@ abstract class ChatState with _$ChatState {
     ChatMessageKey? composerError,
     @Default(0) int composerHydrationId,
     String? composerHydrationText,
+    CalendarTaskIcsMessage? composerHydrationCalendarTaskIcsMessage,
     @Default(0) int composerClearId,
     String? emailSubject,
     @Default(true) bool emailSubjectAutofillEligible,
@@ -196,7 +201,35 @@ abstract class ChatState with _$ChatState {
     ChatToast? toast,
     @Default(0) int toastId,
     @Default(RequestStatus.none) RequestStatus roomAvatarUpdateStatus,
+    @Default(<ChatSettingId, RequestStatus>{})
+    Map<ChatSettingId, RequestStatus> chatSettingStatuses,
     @Default(ChatCollectionActionIdle())
     ChatCollectionActionState collectionActionState,
   }) = _ChatState;
+}
+
+extension ChatStateSettingsSync on ChatState {
+  bool isChatSettingLoading(ChatSettingId settingId) {
+    return chatSettingStatuses[settingId]?.isLoading ?? false;
+  }
+
+  ChatState markChatSettingLoading(ChatSettingId settingId) {
+    final statuses = Map<ChatSettingId, RequestStatus>.from(chatSettingStatuses)
+      ..[settingId] = RequestStatus.loading;
+    return copyWith(
+      chatSettingStatuses: Map<ChatSettingId, RequestStatus>.unmodifiable(
+        statuses,
+      ),
+    );
+  }
+
+  ChatState clearChatSettingLoading(ChatSettingId settingId) {
+    final statuses = Map<ChatSettingId, RequestStatus>.from(chatSettingStatuses)
+      ..remove(settingId);
+    return copyWith(
+      chatSettingStatuses: Map<ChatSettingId, RequestStatus>.unmodifiable(
+        statuses,
+      ),
+    );
+  }
 }

@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -45,98 +46,158 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   Duration get authCompletionDuration =>
       state.lowMotion ? baseAnimationDuration : authCompletionAnimationDuration;
 
-  void updateLanguage(AppLanguage language) {
-    _emitLocalSettingsState(state.copyWith(language: language));
+  Future<void> updateLanguage(AppLanguage language) async {
+    await _emitLocalSettingsState(
+      state.copyWith(language: language),
+      changedSettingIds: const {GlobalSettingId.language},
+    );
   }
 
-  void updateThemeMode(ThemeMode? themeMode) {
+  Future<void> updateThemeMode(ThemeMode? themeMode) async {
     if (themeMode == null) return;
-    _emitLocalSettingsState(state.copyWith(themeMode: themeMode));
+    await _emitLocalSettingsState(
+      state.copyWith(themeMode: themeMode),
+      changedSettingIds: const {GlobalSettingId.themeMode},
+    );
   }
 
-  void updateColorScheme(ShadColor? shadColor) {
+  Future<void> updateColorScheme(ShadColor? shadColor) async {
     if (shadColor == null) return;
-    _emitLocalSettingsState(state.copyWith(shadColor: shadColor));
+    await _emitLocalSettingsState(
+      state.copyWith(shadColor: shadColor),
+      changedSettingIds: const {GlobalSettingId.colorScheme},
+    );
   }
 
-  void updateEndpointConfig(EndpointConfig config) {
-    _emitLocalSettingsState(state.copyWith(endpointConfig: config));
+  Future<void> updateEndpointConfig(EndpointConfig config) async {
+    await _emitLocalSettingsState(
+      state.copyWith(endpointConfig: config),
+      changedSettingIds: const {GlobalSettingId.endpointConfig},
+    );
   }
 
-  void resetEndpointConfig() {
-    updateEndpointConfig(const EndpointConfig());
+  Future<void> resetEndpointConfig() async {
+    await updateEndpointConfig(const EndpointConfig());
   }
 
-  void toggleBackgroundMessaging(bool enabled) {
-    _emitLocalSettingsState(
+  Future<void> toggleBackgroundMessaging(bool enabled) async {
+    await _emitLocalSettingsState(
       state.copyWith(backgroundMessagingEnabled: enabled),
+      changedSettingIds: const {GlobalSettingId.backgroundMessaging},
     );
   }
 
-  void toggleChatNotificationsMuted(bool muted) {
-    _emitLocalSettingsState(state.copyWith(chatNotificationsMuted: muted));
+  Future<void> toggleChatNotificationsMuted(bool muted) async {
+    await _emitLocalSettingsState(
+      state.copyWith(chatNotificationsMuted: muted),
+      changedSettingIds: const {GlobalSettingId.chatNotificationsMuted},
+    );
   }
 
-  void toggleEmailNotificationsMuted(bool muted) {
-    _emitLocalSettingsState(state.copyWith(emailNotificationsMuted: muted));
+  Future<void> toggleEmailNotificationsMuted(bool muted) async {
+    await _emitLocalSettingsState(
+      state.copyWith(emailNotificationsMuted: muted),
+      changedSettingIds: const {GlobalSettingId.emailNotificationsMuted},
+    );
   }
 
-  void toggleNotificationPreviews(bool enabled) {
-    _emitLocalSettingsState(
+  Future<void> toggleAllNotificationsMuted(bool muted) async {
+    await _emitLocalSettingsState(
+      state.copyWith(
+        chatNotificationsMuted: muted,
+        emailNotificationsMuted: muted,
+      ),
+      changedSettingIds: const {
+        GlobalSettingId.chatNotificationsMuted,
+        GlobalSettingId.emailNotificationsMuted,
+      },
+    );
+  }
+
+  Future<void> toggleNotificationPreviews(bool enabled) async {
+    await _emitLocalSettingsState(
       state.copyWith(notificationPreviewsEnabled: enabled),
+      changedSettingIds: const {GlobalSettingId.notificationPreviews},
     );
   }
 
-  void toggleChatReadReceipts(bool enabled) {
-    _emitLocalSettingsState(state.copyWith(chatReadReceipts: enabled));
+  Future<void> toggleChatReadReceipts(bool enabled) async {
+    await _emitLocalSettingsState(
+      state.copyWith(chatReadReceipts: enabled),
+      changedSettingIds: const {GlobalSettingId.chatReadReceipts},
+    );
   }
 
-  void toggleEmailReadReceipts(bool enabled) {
-    _emitLocalSettingsState(state.copyWith(emailReadReceipts: enabled));
+  Future<void> toggleEmailReadReceipts(bool enabled) async {
+    await _emitLocalSettingsState(
+      state.copyWith(emailReadReceipts: enabled),
+      changedSettingIds: const {GlobalSettingId.emailReadReceipts},
+    );
   }
 
-  void toggleChatSendOnEnter(bool enabled) {
-    _emitLocalSettingsState(state.copyWith(chatSendOnEnter: enabled));
+  Future<void> toggleChatSendOnEnter(bool enabled) async {
+    await _emitLocalSettingsState(
+      state.copyWith(chatSendOnEnter: enabled),
+      changedSettingIds: const {GlobalSettingId.chatSendOnEnter},
+    );
   }
 
-  void toggleEmailSendOnEnter(bool enabled) {
-    _emitLocalSettingsState(state.copyWith(emailSendOnEnter: enabled));
+  Future<void> toggleEmailSendOnEnter(bool enabled) async {
+    await _emitLocalSettingsState(
+      state.copyWith(emailSendOnEnter: enabled),
+      changedSettingIds: const {GlobalSettingId.emailSendOnEnter},
+    );
   }
 
-  void toggleEmailSendConfirmation(bool enabled) {
-    _emitLocalSettingsState(
+  Future<void> toggleEmailSendConfirmation(bool enabled) async {
+    await _emitLocalSettingsState(
       state.copyWith(emailSendConfirmationEnabled: enabled),
+      changedSettingIds: const {GlobalSettingId.emailSendConfirmation},
     );
   }
 
-  void toggleColorfulAvatars(bool colorfulAvatars) {
-    _emitLocalSettingsState(state.copyWith(colorfulAvatars: colorfulAvatars));
+  Future<void> toggleColorfulAvatars(bool colorfulAvatars) async {
+    await _emitLocalSettingsState(
+      state.copyWith(colorfulAvatars: colorfulAvatars),
+      changedSettingIds: const {GlobalSettingId.colorfulAvatars},
+    );
   }
 
-  void markEmailForwardingGuideSeen() {
+  Future<void> markEmailForwardingGuideSeen() async {
     if (state.emailForwardingGuideSeen) {
       return;
     }
-    _emitLocalSettingsState(state.copyWith(emailForwardingGuideSeen: true));
-  }
-
-  void toggleLowMotion(bool lowMotion) {
-    _emitLocalSettingsState(state.copyWith(lowMotion: lowMotion));
-  }
-
-  void toggleIndicateTyping(bool indicateTyping) {
-    _emitLocalSettingsState(state.copyWith(indicateTyping: indicateTyping));
-  }
-
-  void toggleShareTokenSignature(bool enabled) {
-    _emitLocalSettingsState(
-      state.copyWith(shareTokenSignatureEnabled: enabled),
+    await _emitLocalSettingsState(
+      state.copyWith(emailForwardingGuideSeen: true),
+      changedSettingIds: const {GlobalSettingId.emailForwardingGuideSeen},
     );
   }
 
-  void toggleEmailComposerWatermark(bool enabled) {
-    _emitLocalSettingsState(
+  Future<void> toggleLowMotion(bool lowMotion) async {
+    await _emitLocalSettingsState(
+      state.copyWith(lowMotion: lowMotion),
+      changedSettingIds: const {GlobalSettingId.lowMotion},
+    );
+  }
+
+  Future<void> toggleIndicateTyping(bool indicateTyping) async {
+    await _emitLocalSettingsState(
+      state.copyWith(indicateTyping: indicateTyping),
+      changedSettingIds: const {GlobalSettingId.typingIndicators},
+    );
+  }
+
+  Future<void> toggleShareTokenSignature(bool enabled) async {
+    await _emitLocalSettingsState(
+      state.copyWith(shareTokenSignatureEnabled: enabled),
+      changedSettingIds: const {GlobalSettingId.shareSignature},
+    );
+  }
+
+  Future<void> toggleEmailComposerWatermark(bool enabled) async {
+    await _emitLocalSettingsState(
       state.copyWith(emailComposerWatermarkEnabled: enabled),
+      changedSettingIds: const {GlobalSettingId.emailComposerWatermark},
     );
   }
 
@@ -151,7 +212,12 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     if (syncedState == state) {
       return;
     }
-    _emitLocalSettingsState(syncedState);
+    unawaited(
+      _emitLocalSettingsState(
+        syncedState,
+        changedSettingIds: const {GlobalSettingId.donationPromptTracking},
+      ),
+    );
   }
 
   void hideDonationPrompt({
@@ -169,62 +235,91 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     if (nextState == state) {
       return;
     }
-    _emitLocalSettingsState(nextState);
+    unawaited(
+      _emitLocalSettingsState(
+        nextState,
+        changedSettingIds: const {GlobalSettingId.donationPromptTracking},
+      ),
+    );
   }
 
-  void toggleHideCompletedScheduled(bool hide) {
-    _emitLocalSettingsState(state.copyWith(hideCompletedScheduled: hide));
+  Future<void> toggleHideCompletedScheduled(bool hide) async {
+    await _emitLocalSettingsState(
+      state.copyWith(hideCompletedScheduled: hide),
+      changedSettingIds: const {GlobalSettingId.hideCompletedScheduled},
+    );
   }
 
-  void toggleHideCompletedUnscheduled(bool hide) {
-    _emitLocalSettingsState(state.copyWith(hideCompletedUnscheduled: hide));
+  Future<void> toggleHideCompletedUnscheduled(bool hide) async {
+    await _emitLocalSettingsState(
+      state.copyWith(hideCompletedUnscheduled: hide),
+      changedSettingIds: const {GlobalSettingId.hideCompletedUnscheduled},
+    );
   }
 
-  void toggleHideCompletedReminders(bool hide) {
-    _emitLocalSettingsState(state.copyWith(hideCompletedReminders: hide));
+  Future<void> toggleHideCompletedReminders(bool hide) async {
+    await _emitLocalSettingsState(
+      state.copyWith(hideCompletedReminders: hide),
+      changedSettingIds: const {GlobalSettingId.hideCompletedReminders},
+    );
   }
 
-  void saveUnscheduledSidebarOrder(List<String> order) {
-    _emitLocalSettingsState(
+  Future<void> saveUnscheduledSidebarOrder(List<String> order) async {
+    await _emitLocalSettingsState(
       state.copyWith(unscheduledSidebarOrder: List<String>.from(order)),
+      changedSettingIds: const {GlobalSettingId.unscheduledSidebarOrder},
     );
   }
 
-  void saveReminderSidebarOrder(List<String> order) {
-    _emitLocalSettingsState(
+  Future<void> saveReminderSidebarOrder(List<String> order) async {
+    await _emitLocalSettingsState(
       state.copyWith(reminderSidebarOrder: List<String>.from(order)),
+      changedSettingIds: const {GlobalSettingId.reminderSidebarOrder},
     );
   }
 
-  void updateCalendarTaskListSortMode(CalendarTaskListSortMode mode) {
-    _emitLocalSettingsState(state.copyWith(calendarTaskListSortMode: mode));
+  Future<void> updateCalendarTaskListSortMode(
+    CalendarTaskListSortMode mode,
+  ) async {
+    await _emitLocalSettingsState(
+      state.copyWith(calendarTaskListSortMode: mode),
+      changedSettingIds: const {GlobalSettingId.calendarTaskListSortMode},
+    );
   }
 
-  void updateMessageTextSize(MessageTextSize messageTextSize) {
-    _emitLocalSettingsState(state.copyWith(messageTextSize: messageTextSize));
+  Future<void> updateMessageTextSize(MessageTextSize messageTextSize) async {
+    await _emitLocalSettingsState(
+      state.copyWith(messageTextSize: messageTextSize),
+      changedSettingIds: const {GlobalSettingId.messageTextSize},
+    );
   }
 
-  void toggleAutoLoadEmailImages(bool enabled) {
-    _emitLocalSettingsState(state.copyWith(autoLoadEmailImages: enabled));
+  Future<void> toggleAutoLoadEmailImages(bool enabled) async {
+    await _emitLocalSettingsState(
+      state.copyWith(autoLoadEmailImages: enabled),
+      changedSettingIds: const {GlobalSettingId.emailImageAutoload},
+    );
   }
 
   void primeAttachmentAutoDownloadSettings() {
-    setAttachmentAutoDownloadSettings(
-      imagesEnabled: state.autoDownloadImages,
-      videosEnabled: state.autoDownloadVideos,
-      documentsEnabled: state.autoDownloadDocuments,
-      archivesEnabled: state.autoDownloadArchives,
-      force: true,
+    unawaited(
+      setAttachmentAutoDownloadSettings(
+        imagesEnabled: state.autoDownloadImages,
+        videosEnabled: state.autoDownloadVideos,
+        documentsEnabled: state.autoDownloadDocuments,
+        archivesEnabled: state.autoDownloadArchives,
+        force: true,
+      ),
     );
   }
 
-  void setAttachmentAutoDownloadSettings({
+  Future<void> setAttachmentAutoDownloadSettings({
     required bool imagesEnabled,
     required bool videosEnabled,
     required bool documentsEnabled,
     required bool archivesEnabled,
     bool force = false,
-  }) {
+  }) async {
     if (!force &&
         state.autoDownloadImages == imagesEnabled &&
         state.autoDownloadVideos == videosEnabled &&
@@ -238,31 +333,125 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       autoDownloadDocuments: documentsEnabled,
       autoDownloadArchives: archivesEnabled,
     );
-    _emitLocalSettingsState(nextState);
+    await _emitLocalSettingsState(
+      nextState,
+      changedSettingIds: const {
+        GlobalSettingId.attachmentAutoDownloadImages,
+        GlobalSettingId.attachmentAutoDownloadVideos,
+        GlobalSettingId.attachmentAutoDownloadDocuments,
+        GlobalSettingId.attachmentAutoDownloadArchives,
+      },
+    );
     _applyAttachmentAutoDownloadSettings(nextState);
   }
 
-  void _emitLocalSettingsState(SettingsState nextState) {
-    if (nextState == state) {
-      return;
-    }
-    final previousState = state;
-    emit(nextState);
-    if (const DeepCollectionEquality().equals(
-      previousState.syncedSettingsJson,
-      nextState.syncedSettingsJson,
-    )) {
-      return;
-    }
+  Future<void> retrySettingsSync() async {
     final service = _xmppService;
     if (service == null) {
       return;
     }
-    unawaited(service.updateSettingsSyncSnapshot(nextState.syncedSettingsJson));
+    final changedSettingIds = state.unsyncedGlobalSettingIds.toSet();
+    if (changedSettingIds.isEmpty) {
+      return;
+    }
+    await _publishSettingsSnapshot(
+      service: service,
+      snapshot: state.syncedSettingsJson,
+      changedSettingIds: changedSettingIds,
+    );
+  }
+
+  Future<void> retryGlobalSettingSync(GlobalSettingId settingId) async {
+    if (!state.isGlobalSettingNotSynced(settingId)) {
+      return;
+    }
+    await retrySettingsSync();
+  }
+
+  Future<void> _emitLocalSettingsState(
+    SettingsState nextState, {
+    Iterable<GlobalSettingId> changedSettingIds = const {},
+  }) async {
+    if (nextState == state) {
+      return;
+    }
+    final previousState = state;
+    final service = _xmppService;
+    final changedSyncedSettingIds = previousState
+        .changedGlobalSettingIds(nextState, hints: changedSettingIds)
+        .where((settingId) => settingId.isSynced)
+        .toSet();
+    final shouldPublish = !const DeepCollectionEquality().equals(
+      previousState.syncedSettingsJson,
+      nextState.syncedSettingsJson,
+    );
+    final emittedState = service == null || !shouldPublish
+        ? nextState
+        : nextState.markGlobalSettingsLoading(
+            changedSyncedSettingIds,
+            confirmedBaseline: previousState.settingsSyncHasConfirmedSnapshot
+                ? null
+                : previousState.syncedSettingsJson,
+          );
+    emit(emittedState);
+    if (!shouldPublish) {
+      return;
+    }
+    if (service == null) {
+      return;
+    }
+    await _publishSettingsSnapshot(
+      service: service,
+      snapshot: nextState.syncedSettingsJson,
+      changedSettingIds: changedSyncedSettingIds,
+    );
+  }
+
+  Future<void> _publishSettingsSnapshot({
+    required XmppService service,
+    required Map<String, dynamic> snapshot,
+    required Set<GlobalSettingId> changedSettingIds,
+  }) async {
+    if (changedSettingIds.isEmpty) {
+      return;
+    }
+    emit(state.markGlobalSettingsLoading(changedSettingIds));
+    final published = await service.updateSettingsSyncSnapshot(snapshot);
+    final currentState = state;
+    final stillCurrentSettingIds = changedSettingIds
+        .where(
+          (settingId) => const DeepCollectionEquality().equals(
+            currentState.syncedSettingsJson[settingId.jsonKey],
+            snapshot[settingId.jsonKey],
+          ),
+        )
+        .toSet();
+    if (stillCurrentSettingIds.isEmpty) {
+      if (published) {
+        emit(
+          currentState.copyWith(
+            settingsSyncHasConfirmedSnapshot: true,
+            settingsSyncConfirmedJson: snapshot,
+          ),
+        );
+      }
+      return;
+    }
+    emit(
+      currentState.clearGlobalSettingsLoading(
+        stillCurrentSettingIds,
+        confirmedSnapshot: published ? snapshot : null,
+      ),
+    );
   }
 
   void _handleRemoteSettingsSync(Map<String, dynamic> syncedSettings) {
-    final nextState = state.mergeSyncedSettingsJson(syncedSettings);
+    final nextState = state
+        .mergeSyncedSettingsJson(syncedSettings)
+        .clearGlobalSettingsLoading(
+          GlobalSettingId.syncedSettings,
+          confirmedSnapshot: syncedSettings,
+        );
     if (nextState == state) {
       return;
     }

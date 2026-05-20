@@ -844,7 +844,7 @@ void main() {
     );
 
     test(
-      'Repairs stale MUC manager joined state from ready self presence before sending.',
+      'Sends with current MUC self presence when manager state is stale.',
       () async {
         const roomJid = 'room@conference.axi.im';
         const roomNick = 'me';

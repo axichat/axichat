@@ -209,6 +209,7 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.metadataPendingFor,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
+    required this.onConfirmAttachmentDownload,
     required this.onApproveAttachment,
     required this.attachmentsForMessage,
     required this.reactionPreviewsForMessage,
@@ -319,8 +320,19 @@ class _ChatMainConversationSection extends StatelessWidget {
   final FileMetadataData? Function(String metadataId) metadataFor;
   final bool Function(String metadataId) metadataPendingFor;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({required bool isSelf, required chat_models.Chat? chat})
+  final bool Function({
+    required bool isSelf,
+    required chat_models.Chat? chat,
+    required FileMetadataData? metadata,
+    required bool chatBlocked,
+  })
   shouldAllowAttachment;
+  final Future<bool> Function({
+    required String senderJid,
+    required bool isSelf,
+    String? senderEmail,
+  })
+  onConfirmAttachmentDownload;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -529,6 +541,7 @@ class _ChatMainConversationSection extends StatelessWidget {
         attachmentsBlocked: attachmentsBlockedForChat,
         isOneTimeAttachmentAllowed: isOneTimeAttachmentAllowed,
         shouldAllowAttachment: shouldAllowAttachment,
+        onConfirmAttachmentDownload: onConfirmAttachmentDownload,
         onApproveAttachment: onApproveAttachment,
         previewMessageIdPrefix: pinnedPreviewMessagePrefix,
         isGroupChat: isGroupChat,
@@ -679,6 +692,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
     required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
+    required this.onConfirmAttachmentDownload,
     required this.onApproveAttachment,
     required this.previewMessageIdPrefix,
     required this.isGroupChat,
@@ -735,8 +749,19 @@ class _ChatPinnedPanelSection extends StatelessWidget {
   final bool Function(String metadataId) metadataPendingFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({required bool isSelf, required chat_models.Chat? chat})
+  final bool Function({
+    required bool isSelf,
+    required chat_models.Chat? chat,
+    required FileMetadataData? metadata,
+    required bool chatBlocked,
+  })
   shouldAllowAttachment;
+  final Future<bool> Function({
+    required String senderJid,
+    required bool isSelf,
+    String? senderEmail,
+  })
+  onConfirmAttachmentDownload;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -811,6 +836,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
       attachmentsBlocked: attachmentsBlocked,
       isOneTimeAttachmentAllowed: isOneTimeAttachmentAllowed,
       shouldAllowAttachment: shouldAllowAttachment,
+      onConfirmAttachmentDownload: onConfirmAttachmentDownload,
       onApproveAttachment: onApproveAttachment,
       previewTimelineItemForItem: (item) {
         final message = item.message;

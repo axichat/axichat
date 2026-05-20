@@ -3972,6 +3972,12 @@ abstract class AppLocalizations {
   /// **'Appearance'**
   String get settingsSectionAppearance;
 
+  /// No description provided for @settingsSectionNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get settingsSectionNotifications;
+
   /// No description provided for @settingsSectionSecurity.
   ///
   /// In en, this message translates to:
@@ -4133,6 +4139,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'AGPLv3'**
   String get settingsLicenseAgpl;
+
+  /// No description provided for @settingsMuteAllNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute all notifications'**
+  String get settingsMuteAllNotifications;
+
+  /// No description provided for @settingsMuteAllNotificationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off chat and email notifications on this device.'**
+  String get settingsMuteAllNotificationsDescription;
+
+  /// No description provided for @settingsMuteChatNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute chat notifications'**
+  String get settingsMuteChatNotifications;
+
+  /// No description provided for @settingsMuteChatNotificationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop receiving chat message notifications on this device.'**
+  String get settingsMuteChatNotificationsDescription;
+
+  /// No description provided for @settingsMuteEmailNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute email notifications'**
+  String get settingsMuteEmailNotifications;
+
+  /// No description provided for @settingsMuteEmailNotificationsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop receiving email message notifications on this device.'**
+  String get settingsMuteEmailNotificationsDescription;
 
   /// No description provided for @settingsMuteNotifications.
   ///
@@ -4673,6 +4715,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Always notify this chat'**
   String get chatNotificationBehaviorOptionAlwaysNotify;
+
+  /// No description provided for @chatSettingInheritOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Inherit ({value})'**
+  String chatSettingInheritOption(Object value);
+
+  /// No description provided for @chatSettingStateOn.
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get chatSettingStateOn;
+
+  /// No description provided for @chatSettingStateOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get chatSettingStateOff;
 
   /// No description provided for @chatAttachmentUnavailableDevice.
   ///

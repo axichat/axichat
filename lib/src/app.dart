@@ -182,16 +182,20 @@ class _AxichatState extends State<Axichat> {
         child: Builder(
           builder: (context) {
             return RepositoryProvider<EmailService>(
-              create: (context) => EmailService(
-                credentialStore: context.read<CredentialStore>(),
-                databaseBuilder: () => context.read<XmppService>().database,
-                notificationService: context.read<NotificationService>(),
-                pinnedMessages: context.read<XmppService>(),
-                emailReadReceiptsEnabled: context
-                    .read<SettingsCubit>()
-                    .state
-                    .emailReadReceipts,
-              ),
+              create: (context) {
+                final settingsState = context.read<SettingsCubit>().state;
+                return EmailService(
+                  credentialStore: context.read<CredentialStore>(),
+                  databaseBuilder: () => context.read<XmppService>().database,
+                  notificationService: context.read<NotificationService>(),
+                  pinnedMessages: context.read<XmppService>(),
+                  emailReadReceiptsEnabled: settingsState.emailReadReceipts,
+                  autoDownloadImages: settingsState.autoDownloadImages,
+                  autoDownloadVideos: settingsState.autoDownloadVideos,
+                  autoDownloadDocuments: settingsState.autoDownloadDocuments,
+                  autoDownloadArchives: settingsState.autoDownloadArchives,
+                );
+              },
               child: MultiBlocProvider(
                 providers: [
                   BlocProvider(
@@ -455,8 +459,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           ..chatNotificationsMuted = state.chatNotificationsMuted
           ..emailNotificationsMuted = state.emailNotificationsMuted
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
-        emailService?.updateDefaultChatAttachmentAutoDownload(
-          state.defaultChatAttachmentAutoDownload,
+        emailService?.updateAttachmentAutoDownloadSettings(
+          imagesEnabled: state.autoDownloadImages,
+          videosEnabled: state.autoDownloadVideos,
+          documentsEnabled: state.autoDownloadDocuments,
+          archivesEnabled: state.autoDownloadArchives,
         );
       },
       builder: (context, state) {

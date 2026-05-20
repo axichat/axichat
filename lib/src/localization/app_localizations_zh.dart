@@ -2110,6 +2110,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionAppearance => '外观';
 
   @override
+  String get settingsSectionNotifications => '通知';
+
+  @override
   String get settingsSectionSecurity => '安全';
 
   @override
@@ -2194,6 +2197,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
+
+  @override
+  String get settingsMuteAllNotifications => '静音所有通知';
+
+  @override
+  String get settingsMuteAllNotificationsDescription => '在此设备上关闭聊天和邮件通知。';
+
+  @override
+  String get settingsMuteChatNotifications => '静音聊天通知';
+
+  @override
+  String get settingsMuteChatNotificationsDescription => '在此设备上停止接收聊天消息通知。';
+
+  @override
+  String get settingsMuteEmailNotifications => '静音邮件通知';
+
+  @override
+  String get settingsMuteEmailNotificationsDescription => '在此设备上停止接收邮件消息通知。';
 
   @override
   String get settingsMuteNotifications => '静音通知';
@@ -2479,6 +2500,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatNotificationBehaviorOptionAlwaysNotify => '始终通知此聊天';
+
+  @override
+  String chatSettingInheritOption(Object value) {
+    return '继承（$value）';
+  }
+
+  @override
+  String get chatSettingStateOn => '开';
+
+  @override
+  String get chatSettingStateOff => '关';
 
   @override
   String get chatAttachmentUnavailableDevice => '此设备上已无法获取该附件';
@@ -8459,6 +8491,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsSectionAppearance => '外觀';
 
   @override
+  String get settingsSectionNotifications => '通知';
+
+  @override
   String get settingsSectionSecurity => '安全性';
 
   @override
@@ -8543,6 +8578,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
+
+  @override
+  String get settingsMuteAllNotifications => '靜音所有通知';
+
+  @override
+  String get settingsMuteAllNotificationsDescription => '在此裝置上關閉聊天和電郵通知。';
+
+  @override
+  String get settingsMuteChatNotifications => '靜音聊天通知';
+
+  @override
+  String get settingsMuteChatNotificationsDescription => '在此裝置上停止接收聊天訊息通知。';
+
+  @override
+  String get settingsMuteEmailNotifications => '靜音電郵通知';
+
+  @override
+  String get settingsMuteEmailNotificationsDescription => '在此裝置上停止接收電郵訊息通知。';
 
   @override
   String get settingsMuteNotifications => '靜音通知';
@@ -8828,6 +8881,17 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatNotificationBehaviorOptionAlwaysNotify => '一律通知此聊天';
+
+  @override
+  String chatSettingInheritOption(Object value) {
+    return '繼承（$value）';
+  }
+
+  @override
+  String get chatSettingStateOn => '開';
+
+  @override
+  String get chatSettingStateOff => '關';
 
   @override
   String get chatAttachmentUnavailableDevice => '此裝置上已無法取得該附件';

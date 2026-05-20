@@ -1552,6 +1552,11 @@ class MessageAttachments extends Table {
 
   TextColumn get transportGroupId => text().nullable()();
 
+  TextColumn get groupQuotedReference => text().nullable()();
+
+  IntColumn get groupQuotedReferenceKind =>
+      intEnum<MessageReferenceKind>().nullable()();
+
   @override
   List<String> get customConstraints => const [
     'UNIQUE(message_id, file_metadata_id)',

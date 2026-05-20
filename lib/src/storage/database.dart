@@ -238,12 +238,14 @@ abstract interface class XmppDatabase implements Database {
     required String fileMetadataId,
     String? transportGroupId,
     int? sortOrder,
+    MessageReference? groupQuotedReference,
   });
 
   Future<void> replaceMessageAttachments({
     required String messageId,
     required List<String> fileMetadataIds,
     String? transportGroupId,
+    MessageReference? groupQuotedReference,
   });
 
   Future<List<MessageAttachmentData>> getMessageAttachments(String messageId);
@@ -606,6 +608,8 @@ abstract interface class XmppDatabase implements Database {
   Future<void> createChat(Chat chat);
 
   Future<void> updateChat(Chat chat);
+
+  Future<void> updateChatSettingsSyncState(Chat chat);
 
   Future<void> updateConversationIndexChatMeta({
     required String jid,
@@ -1844,7 +1848,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 50;
+  int get schemaVersion => 52;
 
   @override
   MigrationStrategy get migration {
@@ -2185,6 +2189,97 @@ WHERE transport IS NULL
               'forwarded_blocks',
             )) {
           await m.addColumn(drafts, drafts.forwardedBlocks);
+        }
+        if (from < 51) {
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'email_remote_images_enabled',
+          )) {
+            await m.addColumn(chats, chats.emailRemoteImagesEnabled);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'typing_indicators_enabled',
+          )) {
+            await m.addColumn(chats, chats.typingIndicatorsEnabled);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'email_read_receipts_enabled',
+          )) {
+            await m.addColumn(chats, chats.emailReadReceiptsEnabled);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'email_send_confirmation_enabled',
+          )) {
+            await m.addColumn(chats, chats.emailSendConfirmationEnabled);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'email_composer_watermark_enabled',
+          )) {
+            await m.addColumn(chats, chats.emailComposerWatermarkEnabled);
+          }
+        }
+        if (from < 51) {
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'chat_settings_updated_at',
+          )) {
+            await m.addColumn(chats, chats.chatSettingsUpdatedAt);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'chat_settings_source_id',
+          )) {
+            await m.addColumn(chats, chats.chatSettingsSourceId);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'chat_settings_confirmed_json',
+          )) {
+            await m.addColumn(chats, chats.chatSettingsConfirmedJson);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'chat_settings_confirmed_updated_at',
+          )) {
+            await m.addColumn(chats, chats.chatSettingsConfirmedUpdatedAt);
+          }
+          if (!await _tableHasColumn(
+            chats.actualTableName,
+            'chat_settings_confirmed_source_id',
+          )) {
+            await m.addColumn(chats, chats.chatSettingsConfirmedSourceId);
+          }
+        }
+        if (from < 51 &&
+            !await _tableHasColumn(
+              chats.actualTableName,
+              'notification_behavior',
+            )) {
+          await m.addColumn(chats, chats.notificationBehavior);
+        }
+        if (from < 52) {
+          if (!await _tableHasColumn(
+            messageAttachments.actualTableName,
+            'group_quoted_reference',
+          )) {
+            await m.addColumn(
+              messageAttachments,
+              messageAttachments.groupQuotedReference,
+            );
+          }
+          if (!await _tableHasColumn(
+            messageAttachments.actualTableName,
+            'group_quoted_reference_kind',
+          )) {
+            await m.addColumn(
+              messageAttachments,
+              messageAttachments.groupQuotedReferenceKind,
+            );
+          }
         }
       },
       beforeOpen: (_) async {
@@ -5062,6 +5157,7 @@ WHERE stanza_i_d = ?
     required String fileMetadataId,
     String? transportGroupId,
     int? sortOrder,
+    MessageReference? groupQuotedReference,
   }) async {
     final existing =
         await (select(messageAttachments)..where(
@@ -5076,7 +5172,11 @@ WHERE stanza_i_d = ?
           existing.transportGroupId != transportGroupId;
       final shouldUpdateOrder =
           sortOrder != null && existing.sortOrder != sortOrder;
-      if (shouldUpdateGroup || shouldUpdateOrder) {
+      final shouldUpdateGroupQuote =
+          groupQuotedReference != null &&
+          (existing.groupQuotedReference != groupQuotedReference.value ||
+              existing.groupQuotedReferenceKind != groupQuotedReference.kind);
+      if (shouldUpdateGroup || shouldUpdateOrder || shouldUpdateGroupQuote) {
         await (update(
           messageAttachments,
         )..where((tbl) => tbl.id.equals(existing.id))).write(
@@ -5086,6 +5186,12 @@ WHERE stanza_i_d = ?
                 : const Value.absent(),
             sortOrder: shouldUpdateOrder
                 ? Value(sortOrder)
+                : const Value.absent(),
+            groupQuotedReference: shouldUpdateGroupQuote
+                ? Value(groupQuotedReference.value)
+                : const Value.absent(),
+            groupQuotedReferenceKind: shouldUpdateGroupQuote
+                ? Value(groupQuotedReference.kind)
                 : const Value.absent(),
           ),
         );
@@ -5104,6 +5210,10 @@ WHERE stanza_i_d = ?
         fileMetadataId: fileMetadataId,
         sortOrder: Value(nextOrder),
         transportGroupId: Value.absentIfNull(transportGroupId),
+        groupQuotedReference: Value.absentIfNull(groupQuotedReference?.value),
+        groupQuotedReferenceKind: Value.absentIfNull(
+          groupQuotedReference?.kind,
+        ),
       ),
       mode: InsertMode.insertOrIgnore,
     );
@@ -5114,6 +5224,7 @@ WHERE stanza_i_d = ?
     required String messageId,
     required List<String> fileMetadataIds,
     String? transportGroupId,
+    MessageReference? groupQuotedReference,
   }) async {
     final trimmedIds = fileMetadataIds.length > _messageAttachmentMaxCount
         ? fileMetadataIds
@@ -5136,6 +5247,12 @@ WHERE stanza_i_d = ?
             fileMetadataId: metadataId,
             sortOrder: Value(order),
             transportGroupId: Value.absentIfNull(transportGroupId),
+            groupQuotedReference: Value.absentIfNull(
+              groupQuotedReference?.value,
+            ),
+            groupQuotedReferenceKind: Value.absentIfNull(
+              groupQuotedReference?.kind,
+            ),
           ),
           mode: InsertMode.insertOrIgnore,
         );
@@ -6180,6 +6297,36 @@ WHERE stanza_i_d = ?
 
   @override
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
+
+  @override
+  Future<void> updateChatSettingsSyncState(Chat chat) {
+    return (update(chats)..where((row) => row.jid.equals(chat.jid))).write(
+      ChatsCompanion(
+        muted: Value(chat.muted),
+        notificationPreviewSetting: Value(chat.notificationPreviewSetting),
+        notificationBehavior: Value(chat.notificationBehavior),
+        markerResponsive: Value(chat.markerResponsive),
+        shareSignatureEnabled: Value(chat.shareSignatureEnabled),
+        attachmentAutoDownload: Value(chat.attachmentAutoDownload),
+        emailRemoteImagesEnabled: Value(chat.emailRemoteImagesEnabled),
+        typingIndicatorsEnabled: Value(chat.typingIndicatorsEnabled),
+        emailReadReceiptsEnabled: Value(chat.emailReadReceiptsEnabled),
+        emailSendConfirmationEnabled: Value(chat.emailSendConfirmationEnabled),
+        emailComposerWatermarkEnabled: Value(
+          chat.emailComposerWatermarkEnabled,
+        ),
+        chatSettingsUpdatedAt: Value(chat.chatSettingsUpdatedAt),
+        chatSettingsSourceId: Value(chat.chatSettingsSourceId),
+        chatSettingsConfirmedJson: Value(chat.chatSettingsConfirmedJson),
+        chatSettingsConfirmedUpdatedAt: Value(
+          chat.chatSettingsConfirmedUpdatedAt,
+        ),
+        chatSettingsConfirmedSourceId: Value(
+          chat.chatSettingsConfirmedSourceId,
+        ),
+      ),
+    );
+  }
 
   @override
   Future<void> updateConversationIndexChatMeta({

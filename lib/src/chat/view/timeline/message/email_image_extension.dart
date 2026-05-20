@@ -636,7 +636,7 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
               AxiButton.outline(
                 size: AxiButtonSize.sm,
                 onPressed: widget.onTap,
-                child: Text(context.l10n.commonShow),
+                child: Text(context.l10n.chatAttachmentConfirmButton),
               ),
           ],
         ),

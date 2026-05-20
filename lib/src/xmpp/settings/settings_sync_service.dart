@@ -60,19 +60,23 @@ mixin SettingsSyncService on XmppBase, BaseStreamService {
   }
 
   @override
-  Future<void> updateSettingsSyncSnapshot(Map<String, dynamic> settings) async {
-    final encoded = SettingsSyncPayload.encodeSettingsData(settings);
-    if (encoded == null) {
-      return;
+  Future<bool> updateSettingsSyncSnapshot(Map<String, dynamic> settings) async {
+    try {
+      final encoded = SettingsSyncPayload.encodeSettingsData(settings);
+      if (encoded == null) {
+        return false;
+      }
+      _settingsSnapshotJson = encoded;
+      _settingsSnapshotUpdatedAt = DateTime.timestamp().toUtc();
+      _settingsSnapshotSourceId = await _ensureSettingsDeviceSourceId();
+      await _persistSettingsSyncStateIfAvailable();
+      if (!_hasInitializedConnection || !_connection.hasConnectionSettings) {
+        return false;
+      }
+      return await _publishCurrentSettingsSnapshot();
+    } on XmppAbortedException {
+      return false;
     }
-    _settingsSnapshotJson = encoded;
-    _settingsSnapshotUpdatedAt = DateTime.timestamp().toUtc();
-    _settingsSnapshotSourceId = await _ensureSettingsDeviceSourceId();
-    await _persistSettingsSyncStateIfAvailable();
-    if (!_hasInitializedConnection || !_connection.hasConnectionSettings) {
-      return;
-    }
-    await _publishCurrentSettingsSnapshot();
   }
 
   Future<bool> syncSettingsSnapshot() async {
@@ -281,14 +285,18 @@ mixin SettingsSyncService on XmppBase, BaseStreamService {
     if (manager == null) {
       return false;
     }
-    await manager.ensureNode();
-    return await manager.publishSettings(
-      SettingsSyncPayload(
-        settings: decoded,
-        updatedAt: updatedAt,
-        sourceId: sourceId,
-      ),
-    );
+    try {
+      await manager.ensureNode();
+      return await manager.publishSettings(
+        SettingsSyncPayload(
+          settings: decoded,
+          updatedAt: updatedAt,
+          sourceId: sourceId,
+        ),
+      );
+    } on XmppAbortedException {
+      return false;
+    }
   }
 
   Future<String> _ensureSettingsDeviceSourceId() async {

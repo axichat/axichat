@@ -332,6 +332,19 @@ final class ChatNotificationPreviewSettingChanged extends ChatEvent {
   List<Object?> get props => [chat, setting];
 }
 
+final class ChatNotificationBehaviorChanged extends ChatEvent {
+  const ChatNotificationBehaviorChanged({
+    required this.chat,
+    required this.behavior,
+  });
+
+  final Chat chat;
+  final ChatNotificationBehavior? behavior;
+
+  @override
+  List<Object?> get props => [chat, behavior];
+}
+
 final class ChatLoadEarlier extends ChatEvent {
   const ChatLoadEarlier({this.completer});
 
@@ -345,7 +358,7 @@ final class ChatShareSignatureToggled extends ChatEvent {
   const ChatShareSignatureToggled({required this.chat, required this.enabled});
 
   final Chat chat;
-  final bool enabled;
+  final bool? enabled;
 
   @override
   List<Object?> get props => [chat, enabled];
@@ -354,14 +367,14 @@ final class ChatShareSignatureToggled extends ChatEvent {
 final class ChatAttachmentAutoDownloadToggled extends ChatEvent {
   const ChatAttachmentAutoDownloadToggled({
     required this.chat,
-    required this.enabled,
+    required this.value,
   });
 
   final Chat chat;
-  final bool enabled;
+  final AttachmentAutoDownload? value;
 
   @override
-  List<Object?> get props => [chat, enabled];
+  List<Object?> get props => [chat, value];
 }
 
 final class ChatAttachmentAutoDownloadRequested extends ChatEvent {
@@ -380,10 +393,84 @@ final class ChatResponsivityChanged extends ChatEvent {
   });
 
   final String chatJid;
-  final bool responsive;
+  final bool? responsive;
 
   @override
   List<Object?> get props => [chatJid, responsive];
+}
+
+final class ChatTypingIndicatorsChanged extends ChatEvent {
+  const ChatTypingIndicatorsChanged({
+    required this.chatJid,
+    required this.enabled,
+  });
+
+  final String chatJid;
+  final bool? enabled;
+
+  @override
+  List<Object?> get props => [chatJid, enabled];
+}
+
+final class ChatEmailRemoteImagesChanged extends ChatEvent {
+  const ChatEmailRemoteImagesChanged({
+    required this.chatJid,
+    required this.enabled,
+  });
+
+  final String chatJid;
+  final bool? enabled;
+
+  @override
+  List<Object?> get props => [chatJid, enabled];
+}
+
+final class ChatEmailReadReceiptsChanged extends ChatEvent {
+  const ChatEmailReadReceiptsChanged({
+    required this.chatJid,
+    required this.enabled,
+  });
+
+  final String chatJid;
+  final bool? enabled;
+
+  @override
+  List<Object?> get props => [chatJid, enabled];
+}
+
+final class ChatEmailSendConfirmationChanged extends ChatEvent {
+  const ChatEmailSendConfirmationChanged({
+    required this.chatJid,
+    required this.enabled,
+  });
+
+  final String chatJid;
+  final bool? enabled;
+
+  @override
+  List<Object?> get props => [chatJid, enabled];
+}
+
+final class ChatEmailComposerWatermarkChanged extends ChatEvent {
+  const ChatEmailComposerWatermarkChanged({
+    required this.chatJid,
+    required this.enabled,
+  });
+
+  final String chatJid;
+  final bool? enabled;
+
+  @override
+  List<Object?> get props => [chatJid, enabled];
+}
+
+final class ChatSettingSyncRetried extends ChatEvent {
+  const ChatSettingSyncRetried(this.settingId);
+
+  final ChatSettingId settingId;
+
+  @override
+  List<Object?> get props => [settingId];
 }
 
 final class ChatEncryptionChanged extends ChatEvent {

@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -771,8 +772,18 @@ class ChatsCubit extends Cubit<ChatsState> {
     );
   }
 
-  Future<bool> resetChatSettingOverrides(ChatSettingId settingId) async {
-    final result = await _chatsService.resetChatSettingOverrides(settingId);
+  Future<bool> resetChatSettingOverrides(
+    ChatSettingId settingId, {
+    Iterable<String> chatJids = const <String>[],
+  }) async {
+    final targetJids = chatJids
+        .map(normalizedAddressKey)
+        .whereType<String>()
+        .toSet();
+    final result = await _chatsService.resetChatSettingOverrides(
+      settingId,
+      chatJids: targetJids,
+    );
     final items = state.items;
     if (items == null) {
       return result.published;
@@ -782,6 +793,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
     final updatedItems = items
         .map((chat) {
+          final chatKey = normalizedAddressKey(chat.jid);
+          if (targetJids.isNotEmpty &&
+              (chatKey == null || !targetJids.contains(chatKey))) {
+            return chat;
+          }
           final hasOverride = settingId == ChatSettingId.notificationBehavior
               ? chat.effectiveNotificationBehavior != null
               : settingId.syncValueFrom(chat) != null;

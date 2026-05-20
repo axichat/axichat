@@ -8,18 +8,19 @@ final class PubSubNodeSession {
   bool _ensureInFlight = false;
   bool _ensurePending = false;
   bool _nodeReady = false;
+  bool _nodeUsableWithoutConfig = false;
   bool _subscriptionReady = false;
   Completer<void>? _ensureCompleter;
   Completer<void>? _subscribeCompleter;
 
-  bool get nodeReady => _nodeReady;
+  bool get nodeReady => _nodeReady || _nodeUsableWithoutConfig;
   bool get subscriptionReady => _subscriptionReady;
   bool get ensureInFlight => _ensureInFlight;
   Future<void>? get activeEnsure => _ensureCompleter?.future;
   Future<void>? get activeSubscribe => _subscribeCompleter?.future;
 
   bool shouldAttemptEnsure(Duration backoff) {
-    if (_ensureInFlight || _nodeReady) {
+    if (_ensureInFlight || nodeReady) {
       return false;
     }
     final lastAttempt = _lastEnsureAttempt;
@@ -46,7 +47,7 @@ final class PubSubNodeSession {
   }
 
   bool takePendingRetry() {
-    final shouldRetry = _ensurePending && !_nodeReady;
+    final shouldRetry = _ensurePending && !nodeReady;
     _ensurePending = false;
     return shouldRetry;
   }
@@ -66,6 +67,11 @@ final class PubSubNodeSession {
 
   void markNodeReady() {
     _nodeReady = true;
+    _nodeUsableWithoutConfig = false;
+  }
+
+  void markNodeUsableWithoutConfig() {
+    _nodeUsableWithoutConfig = true;
   }
 
   void markSubscriptionReady() {
@@ -78,6 +84,7 @@ final class PubSubNodeSession {
 
   void resetForNodeRebuild() {
     _nodeReady = false;
+    _nodeUsableWithoutConfig = false;
     _subscriptionReady = false;
     _lastEnsureAttempt = null;
     _ensurePending = true;

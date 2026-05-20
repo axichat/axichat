@@ -143,6 +143,49 @@ void main() {
     );
   });
 
+  test(
+    'resetChatSettingOverrides scopes optimistic reset to target chats',
+    () async {
+      final now = DateTime(2026, 5, 19);
+      final target = _chat(
+        jid: 'Target@Example.com',
+        title: 'Target',
+        timestamp: now,
+      ).copyWith(markerResponsive: true, emailReadReceiptsEnabled: false);
+      final other = _chat(
+        jid: 'other@example.com',
+        title: 'Other',
+        timestamp: now,
+      ).copyWith(markerResponsive: true, emailReadReceiptsEnabled: false);
+      when(() => xmppService.cachedChatList).thenReturn([target, other]);
+      when(
+        () => xmppService.resetChatSettingOverrides(
+          ChatSettingId.emailReadReceipts,
+          chatJids: any(named: 'chatJids'),
+        ),
+      ).thenAnswer((_) async => (localApplied: true, published: true));
+
+      final cubit = ChatsCubit(xmppService: xmppService);
+      addTearDown(cubit.close);
+
+      await cubit.resetChatSettingOverrides(
+        ChatSettingId.emailReadReceipts,
+        chatJids: const ['target@example.com'],
+      );
+
+      final updatedTarget = cubit.state.items?.firstWhere(
+        (chat) => chat.jid == target.jid,
+      );
+      final unchangedOther = cubit.state.items?.firstWhere(
+        (chat) => chat.jid == other.jid,
+      );
+      expect(updatedTarget?.emailReadReceiptsEnabled, isNull);
+      expect(updatedTarget?.markerResponsive, isTrue);
+      expect(unchangedOther?.emailReadReceiptsEnabled, isFalse);
+      expect(unchangedOther?.markerResponsive, isTrue);
+    },
+  );
+
   test('spam list uses spamUpdatedAt for sorting', () async {
     final now = DateTime(2024, 1, 1, 12, 0);
     final older = DateTime(2024, 1, 1, 10, 0);

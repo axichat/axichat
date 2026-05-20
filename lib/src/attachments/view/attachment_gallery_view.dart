@@ -152,7 +152,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     );
   }
 
-  Future<void> _approveAttachment({
+  Future<bool> _approveAttachment({
     required Message message,
     required String senderJid,
     required String stanzaId,
@@ -160,11 +160,16 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     required bool isEmailChat,
     required bool isSelf,
   }) async {
-    if (!mounted) return;
+    if (!mounted) return false;
     final senderEmail = chat?.emailAddress;
     final displaySender = senderEmail?.trim().isNotEmpty == true
         ? senderEmail!
         : senderJid;
+    final canTrustChat = !isSelf && chat != null;
+    final inheritedAutoDownloadEnabled = context
+        .read<SettingsCubit>()
+        .state
+        .anyAttachmentAutoDownloadEnabled;
     final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -174,24 +179,28 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
           message: context.l10n.chatAttachmentConfirmMessage(displaySender),
           confirmLabel: context.l10n.chatAttachmentConfirmButton,
           cancelLabel: context.l10n.commonCancel,
-          showAutoTrustToggle: !isSelf && chat != null,
+          showAutoTrustToggle: canTrustChat,
+          autoDownloadValue: chat?.attachmentAutoDownload,
+          inheritedAutoDownloadEnabled: inheritedAutoDownloadEnabled,
           autoTrustLabel: context.l10n.attachmentGalleryChatTrustLabel,
           autoTrustHint: context.l10n.attachmentGalleryChatTrustHint,
         );
       },
     );
-    if (!mounted) return;
-    if (decision == null || !decision.approved) return;
+    if (!mounted) return false;
+    if (decision == null || !decision.approved) return false;
 
     context.read<AttachmentGalleryBloc>().add(
       AttachmentGalleryApprovalGranted(
         message: message,
         chat: chat,
-        alwaysAllow: decision.alwaysAllow,
+        autoDownloadValue: decision.autoDownloadValue,
+        updateAutoDownloadValue: decision.updateAutoDownloadValue,
         isEmailChat: isEmailChat,
         stanzaId: stanzaId,
       ),
     );
+    return true;
   }
 
   void _handleSearchChanged() {
@@ -642,7 +651,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
   final bool showChatLabel;
   final AttachmentGalleryEntryData entry;
   final AttachmentGalleryLayout layout;
-  final Future<void> Function({
+  final Future<bool> Function({
     required Message message,
     required String senderJid,
     required String stanzaId,
@@ -670,6 +679,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
         metadataPending: !state.fileMetadataById.containsKey(metadataId),
       ),
       builder: (context, metadataState) {
+        final locate = context.read;
         final metadata = metadataState.metadata;
         final metadataPending = metadataState.metadataPending;
         final chat = entry.chat;
@@ -679,9 +689,18 @@ class AttachmentGalleryEntry extends StatelessWidget {
             message.deltaChatId != null;
         final allowAttachment = entry.allowByTrust || entry.allowOnce;
         final downloadDelegate = isEmailChat
-            ? AttachmentDownloadDelegate(() {
+            ? AttachmentDownloadDelegate(() async {
+                final approved = await onApproveAttachment(
+                  message: message,
+                  senderJid: message.senderJid,
+                  stanzaId: message.stanzaID,
+                  chat: chat,
+                  isEmailChat: false,
+                  isSelf: entry.isSelf,
+                );
+                if (!approved) return false;
                 final completer = Completer<bool>();
-                context.read<AttachmentGalleryBloc>().add(
+                locate<AttachmentGalleryBloc>().add(
                   AttachmentGalleryEmailDownloadRequested(
                     message: message,
                     completer: completer,
@@ -689,13 +708,31 @@ class AttachmentGalleryEntry extends StatelessWidget {
                 );
                 return completer.future;
               })
-            : AttachmentDownloadDelegate(
-                () => context
-                    .read<AttachmentGalleryBloc>()
+            : AttachmentDownloadDelegate(() async {
+                final approved = await onApproveAttachment(
+                  message: message,
+                  senderJid: message.senderJid,
+                  stanzaId: message.stanzaID,
+                  chat: chat,
+                  isEmailChat: isEmailChat,
+                  isSelf: entry.isSelf,
+                );
+                if (!approved) return false;
+                return locate<AttachmentGalleryBloc>()
                     .downloadInboundAttachment(
                       metadataId: initialMetadata.id,
                       stanzaId: message.stanzaID,
-                    ),
+                    );
+              });
+        final allowPressed = allowAttachment
+            ? null
+            : () => onApproveAttachment(
+                message: message,
+                senderJid: message.senderJid,
+                stanzaId: message.stanzaID,
+                chat: chat,
+                isEmailChat: isEmailChat,
+                isSelf: entry.isSelf,
               );
         final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
           () => context.read<AttachmentGalleryBloc>().reloadFileMetadata(
@@ -707,16 +744,6 @@ class AttachmentGalleryEntry extends StatelessWidget {
           showChatLabel: showChatLabel,
           separator: metaSeparator,
         );
-        final allowPressed = allowAttachment
-            ? null
-            : () => onApproveAttachment(
-                message: message,
-                senderJid: message.senderJid,
-                stanzaId: message.stanzaID,
-                chat: chat,
-                isEmailChat: isEmailChat,
-                isSelf: entry.isSelf,
-              );
         return layout == AttachmentGalleryLayout.list
             ? AttachmentGalleryListItem(
                 metadata: metadata,

@@ -56,6 +56,23 @@ void main() {
       expect(synced['auto_download_images'], isFalse);
     });
 
+    test('all notifications muted is derived from transport mutes', () {
+      expect(state.allNotificationsMuted, isFalse);
+      expect(
+        state.copyWith(chatNotificationsMuted: true).allNotificationsMuted,
+        isFalse,
+      );
+      expect(
+        state
+            .copyWith(
+              chatNotificationsMuted: true,
+              emailNotificationsMuted: true,
+            )
+            .allNotificationsMuted,
+        isTrue,
+      );
+    });
+
     test('does not mark loading settings as not synced', () {
       final changed = state.copyWith(
         chatReadReceipts: false,

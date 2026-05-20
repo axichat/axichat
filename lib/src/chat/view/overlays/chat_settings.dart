@@ -4,7 +4,7 @@ class _ChatSettingsButtons extends StatelessWidget {
   const _ChatSettingsButtons({
     required this.state,
     required this.onViewFilterChanged,
-    required this.onToggleNotifications,
+    required this.onNotificationBehaviorChanged,
     required this.onSpamToggle,
     required this.onRenameContact,
     required this.isChatBlocked,
@@ -14,7 +14,7 @@ class _ChatSettingsButtons extends StatelessWidget {
 
   final ChatState state;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
-  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
   final ValueChanged<bool> onSpamToggle;
   final VoidCallback? onRenameContact;
   final bool isChatBlocked;
@@ -31,21 +31,16 @@ class _ChatSettingsButtons extends StatelessWidget {
     final colors = context.colorScheme;
     final destructiveColor = colors.destructive;
     final BlocklistState blocklistState = context.watch<BlocklistCubit>().state;
-    final bool globalSignatureEnabled = context
-        .watch<SettingsCubit>()
-        .state
-        .shareTokenSignatureEnabled;
-    final bool chatSignatureEnabled =
-        chat.shareSignatureEnabled ?? globalSignatureEnabled;
-    final bool signatureActive = globalSignatureEnabled && chatSignatureEnabled;
-    final String signatureHint = globalSignatureEnabled
+    final settingsState = context.watch<SettingsCubit>().state;
+    final bool signatureActive =
+        chat.shareSignatureEnabled ?? settingsState.shareTokenSignatureEnabled;
+    final String signatureHint = signatureActive
         ? l10n.chatSignatureHintEnabled
         : l10n.chatSignatureHintDisabled;
     final String signatureWarning = l10n.chatSignatureHintWarning;
     final bool showAttachmentToggle = chat.type != ChatType.note;
     final bool canRenameContact =
         chat.type == ChatType.chat && !chat.isAxichatWelcomeThread;
-    final bool notificationsMuted = chat.muted;
     final bool isSpamChat = chat.spam;
     final String spamLabel = l10n.chatReportSpam;
     final String? resolvedBlockAddress = blockAddress?.trim();
@@ -93,7 +88,103 @@ class _ChatSettingsButtons extends StatelessWidget {
       if (showAttachmentToggle)
         Padding(
           padding: itemPadding,
-          child: _ChatAttachmentTrustToggle(chat: chat),
+          child: _ChatAttachmentTrustToggle(state: state, chat: chat),
+        ),
+      if (chat.defaultTransport.isXmpp)
+        Padding(
+          padding: itemPadding,
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.readReceipts,
+            title: l10n.settingsChatReadReceipts,
+            subtitle: l10n.settingsChatReadReceiptsDescription,
+            inheritedValue: settingsState.chatReadReceipts,
+            value: chat.markerResponsive,
+            onChanged: (value) => context.read<ChatBloc>().add(
+              ChatResponsivityChanged(chatJid: chat.jid, responsive: value),
+            ),
+          ),
+        ),
+      if (chat.defaultTransport.isXmpp)
+        Padding(
+          padding: itemPadding,
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.typingIndicators,
+            title: l10n.settingsTypingIndicators,
+            subtitle: l10n.settingsTypingIndicatorsDescription,
+            inheritedValue: settingsState.indicateTyping,
+            value: chat.typingIndicatorsEnabled,
+            onChanged: (value) => context.read<ChatBloc>().add(
+              ChatTypingIndicatorsChanged(chatJid: chat.jid, enabled: value),
+            ),
+          ),
+        ),
+      if (chat.supportsEmail)
+        Padding(
+          padding: itemPadding,
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.emailImageAutoload,
+            title: l10n.settingsAutoLoadEmailImages,
+            subtitle: l10n.settingsAutoLoadEmailImagesDescription,
+            inheritedValue: settingsState.autoLoadEmailImages,
+            value: chat.emailRemoteImagesEnabled,
+            onChanged: (value) => context.read<ChatBloc>().add(
+              ChatEmailRemoteImagesChanged(chatJid: chat.jid, enabled: value),
+            ),
+          ),
+        ),
+      if (chat.supportsEmail)
+        Padding(
+          padding: itemPadding,
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.emailSendConfirmation,
+            title: l10n.settingsEmailSendConfirmation,
+            subtitle: l10n.settingsEmailSendConfirmationDescription,
+            inheritedValue: settingsState.emailSendConfirmationEnabled,
+            value: chat.emailSendConfirmationEnabled,
+            onChanged: (value) => context.read<ChatBloc>().add(
+              ChatEmailSendConfirmationChanged(
+                chatJid: chat.jid,
+                enabled: value,
+              ),
+            ),
+          ),
+        ),
+      if (chat.supportsEmail)
+        Padding(
+          padding: itemPadding,
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.emailComposerWatermark,
+            title: l10n.settingsEmailComposerWatermark,
+            subtitle: l10n.settingsEmailComposerWatermarkDescription,
+            inheritedValue: settingsState.emailComposerWatermarkEnabled,
+            value: chat.emailComposerWatermarkEnabled,
+            onChanged: (value) => context.read<ChatBloc>().add(
+              ChatEmailComposerWatermarkChanged(
+                chatJid: chat.jid,
+                enabled: value,
+              ),
+            ),
+          ),
+        ),
+      if (chat.supportsEmail)
+        Padding(
+          padding: itemPadding,
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.emailReadReceipts,
+            title: l10n.settingsEmailReadReceipts,
+            subtitle: l10n.settingsEmailReadReceiptsDescription,
+            inheritedValue: settingsState.emailReadReceipts,
+            value: chat.emailReadReceiptsEnabled,
+            onChanged: (value) => context.read<ChatBloc>().add(
+              ChatEmailReadReceiptsChanged(chatJid: chat.jid, enabled: value),
+            ),
+          ),
         ),
       Padding(
         padding: itemPadding,
@@ -104,16 +195,21 @@ class _ChatSettingsButtons extends StatelessWidget {
       ),
       Padding(
         padding: itemPadding,
-        child: _ChatSettingsSwitchRow(
-          title: l10n.chatMuteNotifications,
-          value: notificationsMuted,
-          onChanged: (muted) => onToggleNotifications(!muted),
+        child: _ChatNotificationBehaviorControl(
+          state: state,
+          behavior: chat.effectiveNotificationBehavior,
+          inheritedMuted: blockTransport.isEmail
+              ? settingsState.emailNotificationsMuted
+              : settingsState.chatNotificationsMuted,
+          onChanged: onNotificationBehaviorChanged,
         ),
       ),
       Padding(
         padding: itemPadding,
         child: _ChatNotificationPreviewControl(
+          state: state,
           setting: chat.notificationPreviewSetting,
+          inheritedPreviewsEnabled: settingsState.notificationPreviewsEnabled,
           onChanged: (setting) => context.read<ChatBloc>().add(
             ChatNotificationPreviewSettingChanged(chat: chat, setting: setting),
           ),
@@ -122,15 +218,16 @@ class _ChatSettingsButtons extends StatelessWidget {
       if (chat.supportsEmail)
         Padding(
           padding: itemPadding,
-          child: _ChatSettingsSwitchRow(
+          child: _ChatInheritedBoolControl(
+            state: state,
+            settingId: ChatSettingId.shareSignature,
             title: l10n.chatSignatureToggleLabel,
             subtitle: '$signatureHint $signatureWarning',
-            value: signatureActive,
-            onChanged: globalSignatureEnabled
-                ? (enabled) => context.read<ChatBloc>().add(
-                    ChatShareSignatureToggled(chat: chat, enabled: enabled),
-                  )
-                : null,
+            inheritedValue: settingsState.shareTokenSignatureEnabled,
+            value: chat.shareSignatureEnabled,
+            onChanged: (enabled) => context.read<ChatBloc>().add(
+              ChatShareSignatureToggled(chat: chat, enabled: enabled),
+            ),
           ),
         ),
       Padding(
@@ -352,12 +449,18 @@ class _ChatSettingsRow extends StatelessWidget {
     this.subtitle,
     this.titleColor,
     required this.trailing,
+    this.statusKind,
+    this.retrySettingId,
+    this.loading = false,
   });
 
   final String title;
   final String? subtitle;
   final Color? titleColor;
   final Widget trailing;
+  final _ChatSettingStatusKind? statusKind;
+  final ChatSettingId? retrySettingId;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -369,14 +472,23 @@ class _ChatSettingsRow extends StatelessWidget {
     final List<Widget> textChildren = [
       Text(
         title,
-        style: resolvedTitleColor == null
-            ? null
-            : TextStyle(color: resolvedTitleColor),
+        style: context.textTheme.small.copyWith(
+          color: resolvedTitleColor ?? context.colorScheme.foreground,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       if (resolvedSubtitle != null)
         Padding(
           padding: EdgeInsets.only(top: spacing.xs),
           child: Text(resolvedSubtitle, style: subtitleStyle),
+        ),
+      if (statusKind != null)
+        Padding(
+          padding: EdgeInsets.only(top: spacing.s),
+          child: _ChatSettingStatusControl(
+            kind: statusKind!,
+            retrySettingId: retrySettingId,
+          ),
         ),
     ];
     return Row(
@@ -389,8 +501,82 @@ class _ChatSettingsRow extends StatelessWidget {
           ),
         ),
         SizedBox(width: spacing.s),
-        trailing,
+        _ChatSettingTrailingControl(loading: loading, child: trailing),
       ],
+    );
+  }
+}
+
+enum _ChatSettingStatusKind { notSynced }
+
+class _ChatSettingStatusChip extends StatelessWidget {
+  const _ChatSettingStatusChip({required this.kind});
+
+  final _ChatSettingStatusKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiStatusChip(
+      label: switch (kind) {
+        _ChatSettingStatusKind.notSynced =>
+          context.l10n.settingsSyncStatusNotSynced,
+      },
+      tone: switch (kind) {
+        _ChatSettingStatusKind.notSynced => AxiStatusChipTone.warning,
+      },
+    );
+  }
+}
+
+class _ChatSettingStatusControl extends StatelessWidget {
+  const _ChatSettingStatusControl({
+    required this.kind,
+    required this.retrySettingId,
+  });
+
+  final _ChatSettingStatusKind kind;
+  final ChatSettingId? retrySettingId;
+
+  @override
+  Widget build(BuildContext context) {
+    final settingId = retrySettingId;
+    return Wrap(
+      spacing: context.spacing.s,
+      runSpacing: context.spacing.s,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _ChatSettingStatusChip(kind: kind),
+        if (settingId != null)
+          AxiButton.outline(
+            size: AxiButtonSize.sm,
+            onPressed: () =>
+                context.read<ChatBloc>().add(ChatSettingSyncRetried(settingId)),
+            child: Text(context.l10n.commonRetry),
+          ),
+      ],
+    );
+  }
+}
+
+class _ChatSettingTrailingControl extends StatelessWidget {
+  const _ChatSettingTrailingControl({
+    required this.loading,
+    required this.child,
+  });
+
+  final bool loading;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!loading) return child;
+    return SizedBox.square(
+      dimension: context.sizing.iconButtonSize,
+      child: Center(
+        child: AxiProgressIndicator(
+          semanticsLabel: context.l10n.settingsSyncStatusSyncing,
+        ),
+      ),
     );
   }
 }
@@ -398,7 +584,6 @@ class _ChatSettingsRow extends StatelessWidget {
 class _ChatSettingsSwitchRow extends StatelessWidget {
   const _ChatSettingsSwitchRow({
     required this.title,
-    this.subtitle,
     this.titleColor,
     this.checkedTrackColor,
     required this.value,
@@ -406,7 +591,6 @@ class _ChatSettingsSwitchRow extends StatelessWidget {
   });
 
   final String title;
-  final String? subtitle;
   final Color? titleColor;
   final Color? checkedTrackColor;
   final bool value;
@@ -416,7 +600,6 @@ class _ChatSettingsSwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ChatSettingsRow(
       title: title,
-      subtitle: subtitle,
       titleColor: titleColor,
       trailing: ShadSwitch(
         value: value,
@@ -439,7 +622,8 @@ class _ChatViewFilterControl extends StatelessWidget {
     final sizing = context.sizing;
     final messageFilterOptions = _messageFilterOptions(l10n);
     return _ChatSettingsRow(
-      title: filter.statusLabel(l10n),
+      title: l10n.chatFilterTitle,
+      subtitle: filter.statusLabel(l10n),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
         child: AxiSelect<MessageTimelineFilter>(
@@ -474,24 +658,34 @@ class _ChatViewFilterControl extends StatelessWidget {
 
 class _ChatNotificationPreviewControl extends StatelessWidget {
   const _ChatNotificationPreviewControl({
+    required this.state,
     required this.setting,
+    required this.inheritedPreviewsEnabled,
     required this.onChanged,
   });
 
+  final ChatState state;
   final NotificationPreviewSetting? setting;
+  final bool inheritedPreviewsEnabled;
   final ValueChanged<NotificationPreviewSetting?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final sizing = context.sizing;
+    final settingId = ChatSettingId.notificationPreview;
     return _ChatSettingsRow(
       title: l10n.settingsNotificationPreviews,
+      subtitle: l10n.settingsNotificationPreviewsDescription,
+      statusKind: _chatSettingStatusKind(state, settingId),
+      retrySettingId: settingId,
+      loading: state.isChatSettingLoading(settingId),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
         child: AxiSelect<NotificationPreviewSetting?>(
           maxWidth: sizing.menuMaxWidth,
           initialValue: setting,
+          enabled: !state.isChatSettingLoading(settingId),
           onChanged: (value) {
             onChanged(value);
           },
@@ -505,7 +699,7 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
                       value: option,
                       child: Text(
                         option == null
-                            ? l10n.chatNotificationPreviewOptionInherit
+                            ? _inheritedPreviewLabel(l10n)
                             : option.label(
                                 showLabel:
                                     l10n.chatNotificationPreviewOptionShow,
@@ -520,7 +714,7 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
                   .toList(),
           selectedOptionBuilder: (_, value) => Text(
             value == null
-                ? l10n.chatNotificationPreviewOptionInherit
+                ? _inheritedPreviewLabel(l10n)
                 : value.label(
                     showLabel: l10n.chatNotificationPreviewOptionShow,
                     hideLabel: l10n.chatNotificationPreviewOptionHide,
@@ -532,33 +726,274 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
       ),
     );
   }
+
+  String _inheritedPreviewLabel(AppLocalizations l10n) {
+    return l10n.chatSettingInheritOption(
+      inheritedPreviewsEnabled
+          ? l10n.chatSettingStateOn
+          : l10n.chatSettingStateOff,
+    );
+  }
+}
+
+class _ChatInheritedBoolControl extends StatelessWidget {
+  const _ChatInheritedBoolControl({
+    required this.state,
+    required this.settingId,
+    required this.title,
+    required this.subtitle,
+    required this.inheritedValue,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final ChatState state;
+  final ChatSettingId settingId;
+  final String title;
+  final String subtitle;
+  final bool inheritedValue;
+  final bool? value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final sizing = context.sizing;
+    return _ChatSettingsRow(
+      title: title,
+      subtitle: subtitle,
+      statusKind: _chatSettingStatusKind(state, settingId),
+      retrySettingId: settingId,
+      loading: state.isChatSettingLoading(settingId),
+      trailing: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+        child: AxiSelect<bool?>(
+          maxWidth: sizing.menuMaxWidth,
+          initialValue: value,
+          enabled: !state.isChatSettingLoading(settingId),
+          onChanged: onChanged,
+          options: <bool?>[null, true, false]
+              .map(
+                (option) => ShadOption<bool?>(
+                  value: option,
+                  child: Text(
+                    _boolOptionLabel(l10n, option),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          selectedOptionBuilder: (_, option) => Text(
+            _boolOptionLabel(l10n, option),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _boolOptionLabel(AppLocalizations l10n, bool? option) {
+    return switch (option) {
+      null => l10n.chatSettingInheritOption(
+        inheritedValue ? l10n.chatSettingStateOn : l10n.chatSettingStateOff,
+      ),
+      true => l10n.chatSettingStateOn,
+      false => l10n.chatSettingStateOff,
+    };
+  }
+}
+
+class _ChatNotificationBehaviorControl extends StatelessWidget {
+  const _ChatNotificationBehaviorControl({
+    required this.state,
+    required this.behavior,
+    required this.inheritedMuted,
+    required this.onChanged,
+  });
+
+  final ChatState state;
+  final ChatNotificationBehavior? behavior;
+  final bool inheritedMuted;
+  final ValueChanged<ChatNotificationBehavior?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final sizing = context.sizing;
+    const settingId = ChatSettingId.notificationBehavior;
+    return _ChatSettingsRow(
+      title: l10n.chatMuteNotifications,
+      subtitle: l10n.settingsMuteNotificationsDescription,
+      statusKind: _chatSettingStatusKind(state, settingId),
+      retrySettingId: settingId,
+      loading: state.isChatSettingLoading(settingId),
+      trailing: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+        child: AxiSelect<ChatNotificationBehavior?>(
+          maxWidth: sizing.menuMaxWidth,
+          initialValue: behavior,
+          enabled: !state.isChatSettingLoading(settingId),
+          onChanged: onChanged,
+          options:
+              <ChatNotificationBehavior?>[
+                    null,
+                    ChatNotificationBehavior.muted,
+                    ChatNotificationBehavior.alwaysNotify,
+                  ]
+                  .map(
+                    (option) => ShadOption<ChatNotificationBehavior?>(
+                      value: option,
+                      child: Text(
+                        _notificationBehaviorLabel(l10n, option),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+          selectedOptionBuilder: (_, option) => Text(
+            _notificationBehaviorLabel(l10n, option),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _notificationBehaviorLabel(
+    AppLocalizations l10n,
+    ChatNotificationBehavior? option,
+  ) {
+    return switch (option) {
+      null => l10n.chatSettingInheritOption(
+        inheritedMuted ? l10n.chatSettingStateOn : l10n.chatSettingStateOff,
+      ),
+      ChatNotificationBehavior.muted => l10n.chatNotificationBehaviorOptionMute,
+      ChatNotificationBehavior.alwaysNotify =>
+        l10n.chatNotificationBehaviorOptionAlwaysNotify,
+    };
+  }
 }
 
 class _ChatAttachmentTrustToggle extends StatelessWidget {
-  const _ChatAttachmentTrustToggle({required this.chat});
+  const _ChatAttachmentTrustToggle({required this.state, required this.chat});
 
+  final ChatState state;
   final chat_models.Chat chat;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final enabled =
-        (chat.attachmentAutoDownload ??
-                context
-                    .watch<SettingsCubit>()
-                    .state
-                    .defaultChatAttachmentAutoDownload)
-            .isAllowed;
-    final hint = enabled
+    final settings = context.watch<SettingsCubit>().state;
+    final effectiveEnabled = switch (chat.attachmentAutoDownload) {
+      AttachmentAutoDownload.allowed => true,
+      AttachmentAutoDownload.blocked => false,
+      null => settings.anyAttachmentAutoDownloadEnabled,
+    };
+    final hint = effectiveEnabled
         ? l10n.chatAttachmentAutoDownloadHintOn
         : l10n.chatAttachmentAutoDownloadHintOff;
-    return _ChatSettingsSwitchRow(
+    return _ChatInheritedAttachmentAutoDownloadControl(
+      state: state,
       title: l10n.chatAttachmentAutoDownloadLabel,
       subtitle: hint,
-      value: enabled,
+      inheritedEnabled: settings.anyAttachmentAutoDownloadEnabled,
+      value: chat.attachmentAutoDownload,
       onChanged: (value) => context.read<ChatBloc>().add(
-        ChatAttachmentAutoDownloadToggled(chat: chat, enabled: value),
+        ChatAttachmentAutoDownloadToggled(chat: chat, value: value),
       ),
     );
   }
+}
+
+class _ChatInheritedAttachmentAutoDownloadControl extends StatelessWidget {
+  const _ChatInheritedAttachmentAutoDownloadControl({
+    required this.state,
+    required this.title,
+    required this.subtitle,
+    required this.inheritedEnabled,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final ChatState state;
+  final String title;
+  final String subtitle;
+  final bool inheritedEnabled;
+  final AttachmentAutoDownload? value;
+  final ValueChanged<AttachmentAutoDownload?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final sizing = context.sizing;
+    const settingId = ChatSettingId.attachmentAutoDownload;
+    return _ChatSettingsRow(
+      title: title,
+      subtitle: subtitle,
+      statusKind: _chatSettingStatusKind(state, settingId),
+      retrySettingId: settingId,
+      loading: state.isChatSettingLoading(settingId),
+      trailing: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+        child: AxiSelect<AttachmentAutoDownload?>(
+          maxWidth: sizing.menuMaxWidth,
+          initialValue: value,
+          enabled: !state.isChatSettingLoading(settingId),
+          onChanged: onChanged,
+          options:
+              <AttachmentAutoDownload?>[
+                    null,
+                    AttachmentAutoDownload.allowed,
+                    AttachmentAutoDownload.blocked,
+                  ]
+                  .map(
+                    (option) => ShadOption<AttachmentAutoDownload?>(
+                      value: option,
+                      child: Text(
+                        _attachmentAutoDownloadOptionLabel(l10n, option),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+          selectedOptionBuilder: (_, option) => Text(
+            _attachmentAutoDownloadOptionLabel(l10n, option),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _attachmentAutoDownloadOptionLabel(
+    AppLocalizations l10n,
+    AttachmentAutoDownload? option,
+  ) {
+    return switch (option) {
+      null => l10n.chatSettingInheritOption(
+        inheritedEnabled ? l10n.chatSettingStateOn : l10n.chatSettingStateOff,
+      ),
+      AttachmentAutoDownload.allowed => l10n.settingsAutoDownloadScopeAlways,
+      AttachmentAutoDownload.blocked => l10n.sessionCapabilityStatusOff,
+    };
+  }
+}
+
+_ChatSettingStatusKind? _chatSettingStatusKind(
+  ChatState state,
+  ChatSettingId settingId,
+) {
+  if (state.isChatSettingLoading(settingId)) {
+    return null;
+  }
+  if (state.chat?.isChatSettingNotSynced(settingId) ?? false) {
+    return _ChatSettingStatusKind.notSynced;
+  }
+  return null;
 }

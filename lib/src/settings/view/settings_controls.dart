@@ -36,6 +36,7 @@ class SettingsSectionAnchors {
     this.accountKey,
     this.dataKey,
     this.appearanceKey,
+    this.notificationsKey,
     this.securityKey,
     this.chatPreferencesKey,
     this.emailPreferencesKey,
@@ -46,6 +47,7 @@ class SettingsSectionAnchors {
   final GlobalKey? accountKey;
   final GlobalKey? dataKey;
   final GlobalKey? appearanceKey;
+  final GlobalKey? notificationsKey;
   final GlobalKey? securityKey;
   final GlobalKey? chatPreferencesKey;
   final GlobalKey? emailPreferencesKey;
@@ -412,6 +414,42 @@ class SettingsControls extends StatelessWidget {
               onChanged: (lowMotion) =>
                   context.read<SettingsCubit>().toggleLowMotion(lowMotion),
             ),
+            anchors?.notificationsKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionNotifications,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.notificationsKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionNotifications,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
+                    ),
+                  ),
+            _SettingsShortcutSwitchRow(
+              title: context.l10n.settingsMuteAllNotifications,
+              subtitle: context.l10n.settingsMuteAllNotificationsDescription,
+              value: state.allNotificationsMuted,
+              statusKind: _SettingsStatusKind.deviceOnly,
+              contentPadding: switchPadding,
+              onChanged: (muted) => context
+                  .read<SettingsCubit>()
+                  .toggleAllNotificationsMuted(muted),
+            ),
+            _SettingsSwitchRow(
+              title: context.l10n.settingsNotificationPreviews,
+              subtitle: context.l10n.settingsNotificationPreviewsDescription,
+              state: state,
+              settingId: GlobalSettingId.notificationPreviews,
+              value: state.notificationPreviewsEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+              onChanged: (enabled) => context
+                  .read<SettingsCubit>()
+                  .toggleNotificationPreviews(enabled),
+            ),
             anchors?.securityKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionSecurity,
@@ -426,18 +464,6 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
-            _SettingsSwitchRow(
-              title: context.l10n.settingsNotificationPreviews,
-              subtitle: context.l10n.settingsNotificationPreviewsDescription,
-              state: state,
-              settingId: GlobalSettingId.notificationPreviews,
-              value: state.notificationPreviewsEnabled,
-              chats: chatItems,
-              contentPadding: switchPadding,
-              onChanged: (enabled) => context
-                  .read<SettingsCubit>()
-                  .toggleNotificationPreviews(enabled),
-            ),
             _SettingsSwitchRow(
               title: context.l10n.settingsAutoLoadEmailImages,
               subtitle: context.l10n.settingsAutoLoadEmailImagesDescription,
@@ -534,8 +560,8 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
             _SettingsSwitchRow(
-              title: context.l10n.settingsMuteNotifications,
-              subtitle: context.l10n.settingsMuteNotificationsDescription,
+              title: context.l10n.settingsMuteChatNotifications,
+              subtitle: context.l10n.settingsMuteChatNotificationsDescription,
               state: state,
               settingId: GlobalSettingId.chatNotificationsMuted,
               value: state.chatNotificationsMuted,
@@ -594,8 +620,8 @@ class SettingsControls extends StatelessWidget {
                     ),
                   ),
             _SettingsSwitchRow(
-              title: context.l10n.settingsMuteNotifications,
-              subtitle: context.l10n.settingsMuteNotificationsDescription,
+              title: context.l10n.settingsMuteEmailNotifications,
+              subtitle: context.l10n.settingsMuteEmailNotificationsDescription,
               state: state,
               settingId: GlobalSettingId.emailNotificationsMuted,
               value: state.emailNotificationsMuted,
@@ -949,7 +975,7 @@ bool _settingsSyncPublishFailed(SettingsState previous, SettingsState current) {
   return false;
 }
 
-enum _SettingsStatusKind { syncing, notSynced, deviceOnly }
+enum _SettingsStatusKind { notSynced, deviceOnly }
 
 class _SettingsControlRow extends StatelessWidget {
   const _SettingsControlRow({
@@ -1117,7 +1143,10 @@ class _SettingsOverrideSummaryState extends State<_SettingsOverrideSummary> {
     try {
       final published = await context
           .read<ChatsCubit>()
-          .resetChatSettingOverrides(settingId);
+          .resetChatSettingOverrides(
+            settingId,
+            chatJids: widget.chats.map((chat) => chat.jid),
+          );
       if (!published && mounted) {
         ShadToaster.maybeOf(context)?.show(
           FeedbackToast.error(message: context.l10n.settingsSyncFailureMessage),
@@ -1164,17 +1193,57 @@ class _SettingsStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiStatusChip(
       label: switch (kind) {
-        _SettingsStatusKind.syncing => context.l10n.settingsSyncStatusSyncing,
         _SettingsStatusKind.notSynced =>
           context.l10n.settingsSyncStatusNotSynced,
         _SettingsStatusKind.deviceOnly =>
           context.l10n.settingsSyncStatusDeviceOnly,
       },
       tone: switch (kind) {
-        _SettingsStatusKind.syncing => AxiStatusChipTone.info,
         _SettingsStatusKind.notSynced => AxiStatusChipTone.warning,
         _SettingsStatusKind.deviceOnly => AxiStatusChipTone.neutral,
       },
+    );
+  }
+}
+
+class _SettingsShortcutSwitchRow extends StatelessWidget {
+  const _SettingsShortcutSwitchRow({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+    this.statusKind,
+    this.contentPadding,
+  });
+
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String? subtitle;
+  final _SettingsStatusKind? statusKind;
+  final EdgeInsetsGeometry? contentPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListItemPadding(
+      child: AxiListTile(
+        titleWidget: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: _SettingsControlText(
+                title: title,
+                subtitle: subtitle,
+                statusKind: statusKind,
+              ),
+            ),
+            SizedBox(width: context.spacing.m),
+            ShadSwitch(value: value, onChanged: onChanged),
+          ],
+        ),
+        minTileHeight: context.sizing.listButtonHeight,
+        contentPadding: contentPadding,
+      ),
     );
   }
 }
@@ -1225,7 +1294,7 @@ _SettingsStatusKind? _settingsStatusKind(
   GlobalSettingId settingId,
 ) {
   if (state.isGlobalSettingLoading(settingId)) {
-    return _SettingsStatusKind.syncing;
+    return null;
   }
   if (settingId.isDeviceOnly) {
     return _SettingsStatusKind.deviceOnly;

@@ -44,6 +44,9 @@ const String _forwardedSubjectTag = 'subject';
 const String _forwardedPlainTextTag = 'plain';
 const String _forwardedHtmlTag = 'html';
 const String _forwardedConvertedTextTag = 'converted_text';
+const String _forwardedQuotedContextTag = 'quoted_context';
+const String _forwardedQuotedSenderLabelAttr = 'sender_label';
+const String _forwardedQuotedPlainTextTag = 'plain';
 const String _quoteIdAttr = 'quote_id';
 const String _quoteKindAttr = 'quote_kind';
 const String _attachmentsTag = 'attachments';
@@ -598,6 +601,9 @@ final class DraftSyncPayload {
       node.firstTag(_forwardedHtmlTag)?.innerText(),
       maxBytes: draftSyncMaxHtmlBytes,
     );
+    final quotedContext = _forwardedQuoteContextFromXml(
+      node.firstTag(_forwardedQuotedContextTag),
+    );
     final convertedText = _normalizeText(
       node.firstTag(_forwardedConvertedTextTag)?.innerText(),
       maxBytes: draftSyncMaxBodyBytes,
@@ -611,6 +617,7 @@ final class DraftSyncPayload {
       originalSubject: originalSubject,
       originalPlainText: originalPlainText,
       originalHtml: originalHtml,
+      quotedContext: quotedContext,
       conversionState: DraftForwardedBlockConversionState.fromName(
         node.attributes[_forwardedConversionStateAttr]?.toString(),
       ),
@@ -653,6 +660,7 @@ final class DraftSyncPayload {
       block.originalHtml,
       maxBytes: draftSyncMaxHtmlBytes,
     );
+    final quotedContext = _forwardedQuoteContextToXml(block.quotedContext);
     final convertedText = _normalizeText(
       block.convertedText,
       maxBytes: draftSyncMaxBodyBytes,
@@ -674,8 +682,58 @@ final class DraftSyncPayload {
         mox.XMLNode(tag: _forwardedPlainTextTag, text: originalPlainText),
         if (originalHtml case final value?)
           mox.XMLNode(tag: _forwardedHtmlTag, text: value),
+        ?quotedContext,
         if (convertedText case final value?)
           mox.XMLNode(tag: _forwardedConvertedTextTag, text: value),
+      ],
+    );
+  }
+
+  static DraftForwardedQuoteContext? _forwardedQuoteContextFromXml(
+    mox.XMLNode? node,
+  ) {
+    if (node == null) {
+      return null;
+    }
+    final senderLabel = _normalizeText(
+      node.attributes[_forwardedQuotedSenderLabelAttr]?.toString(),
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final plainText = _normalizeText(
+      node.firstTag(_forwardedQuotedPlainTextTag)?.innerText(),
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    if (senderLabel == null || plainText == null) {
+      return null;
+    }
+    return DraftForwardedQuoteContext(
+      senderLabel: senderLabel,
+      plainText: plainText,
+    );
+  }
+
+  static mox.XMLNode? _forwardedQuoteContextToXml(
+    DraftForwardedQuoteContext? context,
+  ) {
+    if (context == null) {
+      return null;
+    }
+    final senderLabel = _normalizeText(
+      context.senderLabel,
+      maxBytes: draftSyncMaxSubjectBytes,
+    );
+    final plainText = _normalizeText(
+      context.plainText,
+      maxBytes: draftSyncMaxBodyBytes,
+    );
+    if (senderLabel == null || plainText == null) {
+      return null;
+    }
+    return mox.XMLNode(
+      tag: _forwardedQuotedContextTag,
+      attributes: {_forwardedQuotedSenderLabelAttr: senderLabel},
+      children: [
+        mox.XMLNode(tag: _forwardedQuotedPlainTextTag, text: plainText),
       ],
     );
   }

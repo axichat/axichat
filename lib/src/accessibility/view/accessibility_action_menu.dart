@@ -6,6 +6,7 @@ import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/accessibility_flow.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chat/view/composer/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -1524,6 +1525,7 @@ class _AccessibilityChatScope extends StatelessWidget {
         return AccessibilityChatBloc(
           jid: chatJid,
           messageService: context.read<XmppService>(),
+          chatsService: context.read<XmppService>(),
           emailService: emailService,
           contacts: state.contacts,
           myJid: state.myJid,
@@ -2961,6 +2963,48 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     }
   }
 
+  Future<bool> _confirmAttachmentDownload({
+    required Message message,
+    required String senderLabel,
+  }) async {
+    final locate = context.read;
+    final accessibilityChat = locate<AccessibilityChatBloc>();
+    final chat = await accessibilityChat.loadChat();
+    if (!mounted) return false;
+    final canTrustChat =
+        !accessibilityChat.isSelfMessage(message) && chat != null && !chat.spam;
+    final displaySender = senderLabel.trim().isNotEmpty
+        ? senderLabel
+        : message.senderJid;
+    final inheritedAutoDownloadEnabled =
+        locate<SettingsCubit>().state.anyAttachmentAutoDownloadEnabled;
+    final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final l10n = dialogContext.l10n;
+        return AttachmentApprovalDialog(
+          title: l10n.chatAttachmentConfirmTitle,
+          message: l10n.chatAttachmentConfirmMessage(displaySender),
+          confirmLabel: l10n.chatAttachmentConfirmButton,
+          cancelLabel: l10n.commonCancel,
+          showAutoTrustToggle: canTrustChat,
+          autoDownloadValue: chat?.attachmentAutoDownload,
+          inheritedAutoDownloadEnabled: inheritedAutoDownloadEnabled,
+          autoTrustLabel: l10n.attachmentGalleryChatTrustLabel,
+          autoTrustHint: l10n.attachmentGalleryChatTrustHint,
+        );
+      },
+    );
+    if (!mounted || decision == null || !decision.approved) return false;
+    if (decision.updateAutoDownloadValue && canTrustChat) {
+      await locate<AccessibilityChatBloc>().setAttachmentAutoDownload(
+        decision.autoDownloadValue,
+      );
+    }
+    return true;
+  }
+
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final logicalKey = event.logicalKey;
@@ -3103,13 +3147,20 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                         stanzaId: currentMessage?.stanzaID ?? '',
                         metadata: attachment,
                         allowed: true,
-                        downloadDelegate: AttachmentDownloadDelegate(
-                          () => locate<AccessibilityChatBloc>()
+                        downloadDelegate: AttachmentDownloadDelegate(() async {
+                          final message = currentMessage;
+                          if (message == null) return false;
+                          final approved = await _confirmAttachmentDownload(
+                            message: message,
+                            senderLabel: senderLabel,
+                          );
+                          if (!approved || !mounted) return false;
+                          return locate<AccessibilityChatBloc>()
                               .downloadInboundAttachment(
                                 metadataId: attachment.id,
-                                stanzaId: currentMessage?.stanzaID ?? '',
-                              ),
-                        ),
+                                stanzaId: message.stanzaID,
+                              );
+                        }),
                         metadataReloadDelegate:
                             AttachmentMetadataReloadDelegate(
                               () => locate<AccessibilityChatBloc>()

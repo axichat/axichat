@@ -44,6 +44,7 @@ enum ChatMessageKey {
   chatComposerAttachmentBundleFailed,
   chatComposerEmailAttachmentRecipientRequired,
   chatEmailOfflineRetryMessage,
+  settingsSyncFailure,
   chatAttachmentSendFailed,
   chatComposerSendFailed,
   chatEmailResendFailedDetails,
@@ -66,6 +67,7 @@ enum ChatMessageKey {
   chatRoomAvatarUpdated,
   chatRoomAvatarUpdateFailed,
   chatPinPermissionDenied,
+  chatForwardInviteForbidden,
   chatMessageForwarded,
   chatMessageForwardFailed,
   chatMessageAddedToFolder,
@@ -155,6 +157,7 @@ extension ChatMessageKeyL10n on ChatMessageKey {
       l10n.chatComposerEmailAttachmentRecipientRequired,
     ChatMessageKey.chatEmailOfflineRetryMessage =>
       l10n.chatEmailOfflineRetryMessage,
+    ChatMessageKey.settingsSyncFailure => l10n.settingsSyncFailureMessage,
     ChatMessageKey.chatAttachmentSendFailed => l10n.chatAttachmentSendFailed,
     ChatMessageKey.chatComposerSendFailed => l10n.chatComposerSendFailed,
     ChatMessageKey.chatEmailResendFailedDetails =>
@@ -182,6 +185,8 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.chatRoomAvatarUpdateFailed =>
       l10n.chatRoomAvatarUpdateFailed,
     ChatMessageKey.chatPinPermissionDenied => l10n.chatPinPermissionDenied,
+    ChatMessageKey.chatForwardInviteForbidden =>
+      l10n.chatForwardInviteForbidden,
     ChatMessageKey.chatMessageForwarded => l10n.chatMessageForwarded,
     ChatMessageKey.chatMessageForwardFailed => l10n.chatMessageForwardFailed,
     ChatMessageKey.chatMessageAddedToFolder => l10n.chatMessageAddedToFolder,

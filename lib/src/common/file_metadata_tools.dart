@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:path/path.dart' as p;
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/storage/models.dart';
 
 class Attachment {
@@ -191,6 +192,49 @@ extension FileMetadataTools on FileMetadataData {
   }
 
   String get normalizedFilename => filename.trim().toLowerCase();
+
+  bool get isHighRiskForAutoDownload {
+    final report = buildDeclaredFileTypeReport(
+      declaredMimeType: mimeType,
+      fileName: filename,
+      path: path,
+    );
+    final risk = assessFileOpenRisk(report: report, fileName: filename);
+    return risk.isWarning;
+  }
+}
+
+bool allowsAttachmentAutoDownload({
+  required Chat chat,
+  required FileMetadataData metadata,
+  required bool imagesEnabled,
+  required bool videosEnabled,
+  required bool documentsEnabled,
+  required bool archivesEnabled,
+  required bool chatBlocked,
+  required bool requireKnownSize,
+  required int maxBytes,
+}) {
+  if (chat.spam || chatBlocked || metadata.isHighRiskForAutoDownload) {
+    return false;
+  }
+  final sizeBytes = metadata.sizeBytes;
+  if (sizeBytes != null && sizeBytes > maxBytes) {
+    return false;
+  }
+  if (requireKnownSize && sizeBytes == null) {
+    return false;
+  }
+  return switch (chat.attachmentAutoDownload) {
+    AttachmentAutoDownload.allowed => true,
+    AttachmentAutoDownload.blocked => false,
+    null => metadata.downloadCategory.isAutoDownloadAllowed(
+      imagesEnabled: imagesEnabled,
+      videosEnabled: videosEnabled,
+      documentsEnabled: documentsEnabled,
+      archivesEnabled: archivesEnabled,
+    ),
+  };
 }
 
 String deltaFileMetadataId(int messageId) => 'dc-file-$messageId';

@@ -69,6 +69,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -277,7 +278,8 @@ class _ChatState extends State<Chat> {
   List<ComposerRecipient> _recipients = const [];
   String? _recipientsChatJid;
   bool _composerExpanded = false;
-  int? _expandedComposerDraftId;
+  int? _inlineComposerDraftId;
+  int? _lastSavedInlineDraftSignature;
   bool _savingInlineDraft = false;
   bool _discardingInlineDraft = false;
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
@@ -336,6 +338,7 @@ class _ChatState extends State<Chat> {
   static const CalendarChatSupport _calendarFragmentPolicy =
       CalendarChatSupport();
   CalendarTask? _pendingCalendarTaskIcs;
+  bool _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
   String? _pendingCalendarSeedText;
   Completer<Object?>? _pendingCalendarImportCompleter;
   Message? _quotedDraft;
@@ -436,10 +439,13 @@ class _ChatState extends State<Chat> {
       });
     }
     _maybeClearPendingCalendarTaskIcs(text);
-    if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
     final chat = context.read<ChatBloc>().state.chat;
     if (chat == null) return;
+    if (!(chat.typingIndicatorsEnabled ??
+        context.read<SettingsCubit>().state.indicateTyping)) {
+      return;
+    }
     context.read<ChatBloc>().add(ChatTypingStarted(chat: chat));
   }
 
@@ -578,12 +584,13 @@ class _ChatState extends State<Chat> {
     if (_pendingCalendarTaskIcs == null || seedText == null) {
       return;
     }
-    if (text.trim() == seedText) {
+    if (text.trim().contains(seedText)) {
       return;
     }
     if (!mounted) return;
     setState(() {
       _pendingCalendarTaskIcs = null;
+      _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
       _pendingCalendarSeedText = null;
     });
   }
@@ -726,6 +733,7 @@ class _ChatState extends State<Chat> {
         if (!mounted) return;
         setState(() {
           _pendingCalendarTaskIcs = null;
+          _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
           _pendingCalendarSeedText = null;
         });
       }
@@ -735,6 +743,7 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     setState(() {
       _pendingCalendarTaskIcs = share.task;
+      _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
       _pendingCalendarSeedText = share.text;
     });
     _appendTaskShareText(payload.snapshot, shareText: share.text);
@@ -1581,34 +1590,50 @@ class _ChatState extends State<Chat> {
     required Object bubbleContentKey,
     required _MessageBubbleExtraAdder addExtra,
   }) {
-    final allowAttachmentByTrust = _shouldAllowAttachment(
-      isSelf: isSelfBubble,
-      chat: state.chat,
-    );
+    final settings = context.watch<SettingsCubit>().state;
     final allowAttachmentOnce = attachmentsBlockedForChat
         ? false
         : _isOneTimeAttachmentAllowed(messageModel.stanzaID);
-    final allowAttachment =
-        !attachmentsBlockedForChat &&
-        (allowAttachmentByTrust || allowAttachmentOnce);
+    final locate = context.read;
     final emailDownloadDelegate = isEmailChat
         ? AttachmentDownloadDelegate(() async {
-            await context.read<ChatBloc>().downloadFullEmailMessage(
-              messageModel,
+            final approved = await _confirmManualAttachmentDownload(
+              senderJid: messageModel.senderJid,
+              isSelf: isSelfBubble,
+              senderEmail: state.chat?.emailAddress,
             );
+            if (!approved || !mounted) return false;
+            await locate<ChatBloc>().downloadFullEmailMessage(messageModel);
             return true;
           })
         : null;
     for (var index = 0; index < attachmentIds.length; index += 1) {
       final attachmentId = attachmentIds[index];
+      final metadata = _metadataFor(state: state, metadataId: attachmentId);
+      final allowAttachmentByTrust = _shouldAllowAttachment(
+        isSelf: isSelfBubble,
+        chat: state.chat,
+        settings: settings,
+        metadata: metadata,
+        chatBlocked: attachmentsBlockedForChat,
+      );
+      final allowAttachment =
+          !attachmentsBlockedForChat &&
+          (allowAttachmentByTrust || allowAttachmentOnce);
       final downloadDelegate = isEmailChat
           ? emailDownloadDelegate
-          : AttachmentDownloadDelegate(
-              () => context.read<ChatBloc>().downloadInboundAttachment(
+          : AttachmentDownloadDelegate(() async {
+              final approved = await _confirmManualAttachmentDownload(
+                senderJid: messageModel.senderJid,
+                isSelf: isSelfBubble,
+                senderEmail: state.chat?.emailAddress,
+              );
+              if (!approved || !mounted) return false;
+              return locate<ChatBloc>().downloadInboundAttachment(
                 metadataId: attachmentId,
                 stanzaId: messageModel.stanzaID,
-              ),
-            );
+              );
+            });
       final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
         () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
       );
@@ -1628,7 +1653,7 @@ class _ChatState extends State<Chat> {
             '$bubbleContentKey-attachment-preview-$attachmentId',
           ),
           stanzaId: messageModel.stanzaID,
-          metadata: _metadataFor(state: state, metadataId: attachmentId),
+          metadata: metadata,
           metadataPending: _metadataPending(
             state: state,
             metadataId: attachmentId,
@@ -2242,31 +2267,9 @@ class _ChatState extends State<Chat> {
         shouldRenderTextContent &&
         !hasAttachmentCaption &&
         (defaultShowsInlineEmailHtmlBody || isSingleSelection);
-    final recoveredEmailContent =
-        isEmailMessage && normalizedHtmlBody != null && shouldRenderTextContent
-        ? HtmlContentCodec.recoverSanitizedEmailContent(
-            normalizedHtmlBody,
-            visibleSanitizedText: [
-              if (trimmedDisplayMessageText.isNotEmpty)
-                trimmedDisplayMessageText,
-              if (visibleSanitizedHtmlText?.isNotEmpty == true)
-                visibleSanitizedHtmlText!,
-            ].join('\n'),
-          )
-        : const <EmailRecoveredContent>[];
-    final autoLoadEmailImages = context
-        .watch<SettingsCubit>()
-        .state
-        .autoLoadEmailImages;
-    if (recoveredEmailContent.isNotEmpty) {
-      bubbleTextChildren.add(
-        EmailRecoveredContentView(
-          items: recoveredEmailContent,
-          textStyle: baseTextStyle,
-          onLinkTap: _handleLinkTap,
-        ),
-      );
-    }
+    final autoLoadEmailImages =
+        state.chat?.emailRemoteImagesEnabled ??
+        context.watch<SettingsCubit>().state.autoLoadEmailImages;
     if (hasAttachmentCaption) {
       _appendAttachmentCaptionBubbleContent(
         context: context,
@@ -2289,9 +2292,8 @@ class _ChatState extends State<Chat> {
         bubbleTextChildren: bubbleTextChildren,
       );
     } else if (shouldRenderInlineEmailHtmlBody) {
-      final hasRemoteHtmlImages = HtmlContentCodec.containsRemoteImages(
-        normalizedHtmlBody,
-      );
+      final hasRemoteHtmlImages =
+          HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody);
       _appendInlineEmailHtmlBubbleContent(
         context: context,
         isSelfBubble: isSelfBubble,
@@ -2910,12 +2912,14 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  void _toggleNotifications(bool enable) {
+  void _setNotificationBehavior(ChatNotificationBehavior? behavior) {
     final chat = context.read<ChatBloc>().state.chat;
     if (chat == null) {
       return;
     }
-    context.read<ChatBloc>().add(ChatMuted(chatJid: chat.jid, muted: !enable));
+    context.read<ChatBloc>().add(
+      ChatNotificationBehaviorChanged(chat: chat, behavior: behavior),
+    );
   }
 
   Future<void> _showMembers({bool refreshMembership = true}) async {
@@ -3276,7 +3280,10 @@ class _ChatState extends State<Chat> {
   }) {
     final settingsState = settings ?? context.read<SettingsCubit>().state;
     final isEmailComposer = _isEmailComposerActive(chatState: chatState);
-    if (!isEmailComposer || !settingsState.emailComposerWatermarkEnabled) {
+    final watermarkEnabled =
+        chatState.chat?.emailComposerWatermarkEnabled ??
+        settingsState.emailComposerWatermarkEnabled;
+    if (!isEmailComposer || !watermarkEnabled) {
       return false;
     }
     final watermarkLabel = _emailComposerWatermarkLabel();
@@ -3308,10 +3315,13 @@ class _ChatState extends State<Chat> {
     final watermarkSuffix = _emailComposerWatermarkSuffix();
     final legacyWatermarkSuffix = _legacyEmailComposerWatermarkSuffix();
     final isEmailComposer = _isEmailComposerActive(chatState: chatState);
+    final watermarkEnabled =
+        chatState.chat?.emailComposerWatermarkEnabled ??
+        settingsState.emailComposerWatermarkEnabled;
     if (_isDemoModeActive()) {
       return;
     }
-    if (!isEmailComposer || !settingsState.emailComposerWatermarkEnabled) {
+    if (!isEmailComposer || !watermarkEnabled) {
       if (currentText == watermarkLabel ||
           currentText == watermarkSuffix ||
           currentText == legacyWatermarkSuffix) {
@@ -3483,15 +3493,23 @@ class _ChatState extends State<Chat> {
   bool _shouldAllowAttachment({
     required bool isSelf,
     required chat_models.Chat? chat,
+    required SettingsState settings,
+    required FileMetadataData? metadata,
+    required bool chatBlocked,
   }) {
     if (isSelf) return true;
-    if (chat == null) return false;
-    return (chat.attachmentAutoDownload ??
-            context
-                .watch<SettingsCubit>()
-                .state
-                .defaultChatAttachmentAutoDownload)
-        .isAllowed;
+    if (chat == null || metadata == null) return false;
+    return allowsAttachmentAutoDownload(
+      chat: chat,
+      metadata: metadata,
+      imagesEnabled: settings.autoDownloadImages,
+      videosEnabled: settings.autoDownloadVideos,
+      documentsEnabled: settings.autoDownloadDocuments,
+      archivesEnabled: settings.autoDownloadArchives,
+      chatBlocked: chatBlocked,
+      requireKnownSize: false,
+      maxBytes: maxAttachmentAutoDownloadBytes,
+    );
   }
 
   bool _isOneTimeAttachmentAllowed(String stanzaId) {
@@ -3500,23 +3518,25 @@ class _ChatState extends State<Chat> {
     return _oneTimeAllowedAttachmentStanzaIds.contains(trimmed);
   }
 
-  Future<void> _approveAttachment({
-    required Message message,
+  Future<bool> _confirmManualAttachmentDownload({
     required String senderJid,
-    required String stanzaId,
     required bool isSelf,
-    required bool isEmailChat,
     String? senderEmail,
   }) async {
-    if (!mounted) return;
+    if (!mounted) return false;
     final l10n = context.l10n;
     final displaySender = senderEmail?.isNotEmpty == true
         ? senderEmail!
         : senderJid;
-    final canTrustChat = !isSelf && context.read<ChatBloc>().state.chat != null;
+    final chat = context.read<ChatBloc>().state.chat;
+    final canTrustChat = !isSelf && chat != null;
     final showAutoTrustToggle = canTrustChat;
     final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
     final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
+    final inheritedAutoDownloadEnabled = context
+        .read<SettingsCubit>()
+        .state
+        .anyAttachmentAutoDownloadEnabled;
     final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -3527,22 +3547,44 @@ class _ChatState extends State<Chat> {
           confirmLabel: l10n.chatAttachmentConfirmButton,
           cancelLabel: l10n.commonCancel,
           showAutoTrustToggle: showAutoTrustToggle,
+          autoDownloadValue: chat?.attachmentAutoDownload,
+          inheritedAutoDownloadEnabled: inheritedAutoDownloadEnabled,
           autoTrustLabel: autoTrustLabel,
           autoTrustHint: autoTrustHint,
         );
       },
     );
-    if (!mounted) return;
-    if (decision == null || !decision.approved) return;
+    if (!mounted) return false;
+    if (decision == null || !decision.approved) return false;
 
-    if (decision.alwaysAllow && canTrustChat) {
+    if (decision.updateAutoDownloadValue && canTrustChat) {
       final chat = context.read<ChatBloc>().state.chat;
       if (chat != null) {
         context.read<ChatBloc>().add(
-          ChatAttachmentAutoDownloadToggled(chat: chat, enabled: true),
+          ChatAttachmentAutoDownloadToggled(
+            chat: chat,
+            value: decision.autoDownloadValue,
+          ),
         );
       }
     }
+    return true;
+  }
+
+  Future<void> _approveAttachment({
+    required Message message,
+    required String senderJid,
+    required String stanzaId,
+    required bool isSelf,
+    required bool isEmailChat,
+    String? senderEmail,
+  }) async {
+    final approved = await _confirmManualAttachmentDownload(
+      senderJid: senderJid,
+      isSelf: isSelf,
+      senderEmail: senderEmail,
+    );
+    if (!approved || !mounted) return;
 
     if (mounted) {
       setState(() {
@@ -3745,7 +3787,7 @@ class _ChatState extends State<Chat> {
         quotedDraft: _quotedDraft,
         roomState: chatState.roomState,
         calendarTaskIcs: _pendingCalendarTaskIcs,
-        calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
+        calendarTaskIcsReadOnly: _pendingCalendarTaskIcsReadOnly,
         calendarTaskShareText: calendarTaskShareText,
         completer: completer,
       ),
@@ -3776,7 +3818,10 @@ class _ChatState extends State<Chat> {
       return true;
     }
     final settingsCubit = context.read<SettingsCubit>();
-    if (!settingsCubit.state.emailSendConfirmationEnabled) {
+    final sendConfirmationEnabled =
+        chat.emailSendConfirmationEnabled ??
+        settingsCubit.state.emailSendConfirmationEnabled;
+    if (!sendConfirmationEnabled) {
       return true;
     }
     final recipients = _resolveDraftRecipients(
@@ -3793,7 +3838,9 @@ class _ChatState extends State<Chat> {
       return false;
     }
     if (decision.dontShowAgain) {
-      settingsCubit.toggleEmailSendConfirmation(false);
+      context.read<ChatBloc>().add(
+        ChatEmailSendConfirmationChanged(chatJid: chat.jid, enabled: false),
+      );
     }
     return true;
   }
@@ -3830,10 +3877,16 @@ class _ChatState extends State<Chat> {
     );
     final subject = _inlineComposerController.subject;
     final trimmedSubject = subject.trim();
-    final attachments = _pendingAttachments
+    final pendingAttachments = List<PendingAttachment>.from(
+      _pendingAttachments,
+    );
+    final attachmentIds = pendingAttachments
+        .map((pending) => pending.id)
+        .toList(growable: false);
+    final attachments = pendingAttachments
         .map((pending) => pending.attachment)
         .toList();
-    if (_pendingAttachments.any((pending) => pending.isPreparing)) {
+    if (pendingAttachments.any((pending) => pending.isPreparing)) {
       _showSnackbar(l10n.chatAttachmentFailed);
       return false;
     }
@@ -3852,26 +3905,51 @@ class _ChatState extends State<Chat> {
     if (body.trim().isEmpty &&
         trimmedSubject.isEmpty &&
         attachments.isEmpty &&
-        quoteTarget == null) {
+        quoteTarget == null &&
+        _pendingCalendarTaskIcs == null) {
       if (!allowRecipientOnlyDraft) {
         _showSnackbar(l10n.chatDraftMissingContent);
         return false;
       }
     }
+    final attemptedSignature = _currentInlineDraftSignature(chatState);
     try {
       final draft = await context.read<DraftCubit>().saveDraft(
-        id: _expandedComposerDraftId,
+        id: _inlineComposerDraftId,
         jids: recipients,
         body: body,
         subject: trimmedSubject.isEmpty ? null : subject,
         quoteTarget: quoteTarget,
         attachments: attachments,
+        calendarTaskIcsMessage: _pendingCalendarTaskIcs == null
+            ? null
+            : CalendarTaskIcsMessage(
+                task: _pendingCalendarTaskIcs!,
+                readOnly: _pendingCalendarTaskIcsReadOnly,
+              ),
       );
       if (!mounted) {
         return false;
       }
+      final currentChatState = context.read<ChatBloc>().state;
+      final signatureStillCurrent =
+          _currentInlineDraftSignature(currentChatState) == attemptedSignature;
+      final reconciledAttachments = _inlineAttachmentsWithMetadataIds(
+        metadataIds: draft.attachmentMetadata.values,
+        expectedAttachmentIds: attachmentIds,
+      );
+      final savedSignature = signatureStillCurrent
+          ? _currentInlineDraftSignature(
+              currentChatState,
+              pendingAttachments: reconciledAttachments,
+            )
+          : null;
       setState(() {
-        _expandedComposerDraftId = draft.id;
+        _inlineComposerDraftId = draft.id;
+        _pendingAttachments = reconciledAttachments;
+        if (savedSignature != null) {
+          _lastSavedInlineDraftSignature = savedSignature;
+        }
       });
       _showSnackbar(l10n.chatDraftSaved);
       return true;
@@ -3947,30 +4025,32 @@ class _ChatState extends State<Chat> {
     _subjectChangeSuppressed = false;
   }
 
-  void _clearInlineComposerState({required bool clearExpandedComposerDraftId}) {
+  void _clearInlineComposerState({required bool clearInlineComposerDraftId}) {
     _cancelInlineAttachmentPreparation();
     _composerHasText = false;
     _quotedDraft = null;
     _pendingAttachments = const [];
     _pendingCalendarTaskIcs = null;
+    _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
     _pendingCalendarSeedText = null;
     _composerExpanded = false;
     _savingInlineDraft = false;
     _discardingInlineDraft = false;
-    if (clearExpandedComposerDraftId) {
-      _expandedComposerDraftId = null;
+    if (clearInlineComposerDraftId) {
+      _inlineComposerDraftId = null;
+      _lastSavedInlineDraftSignature = null;
     }
   }
 
   void _resetInlineComposer({
-    required bool clearExpandedComposerDraftId,
+    required bool clearInlineComposerDraftId,
     bool requestFocus = false,
   }) {
     _clearInlineComposerControllers();
     if (!mounted) return;
     setState(() {
       _clearInlineComposerState(
-        clearExpandedComposerDraftId: clearExpandedComposerDraftId,
+        clearInlineComposerDraftId: clearInlineComposerDraftId,
       );
     });
     _syncEmailComposerWatermark(
@@ -3986,6 +4066,85 @@ class _ChatState extends State<Chat> {
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
   }) => recipients.recipientIds(fallbackJid: chat.jid);
+
+  int _currentInlineDraftSignature(
+    ChatState chatState, {
+    List<PendingAttachment>? pendingAttachments,
+  }) {
+    final chat = chatState.chat;
+    final resolvedRecipients = chat == null
+        ? const <String>[]
+        : _resolveDraftRecipients(chat: chat, recipients: _recipients);
+    final visibleRecipients = _recipients.includedRecipients
+        .map((recipient) => recipient.target.key)
+        .toList(growable: false);
+    final quotedReference = _quotedDraft?.replyReference(
+      isGroupChat: chat?.type == ChatType.groupChat,
+    );
+    final attachments = pendingAttachments ?? _pendingAttachments;
+    return Object.hashAll(<Object?>[
+      _normalizedInlineDraftBody(
+        text: _inlineComposerController.text,
+        chatState: chatState,
+      ),
+      _inlineComposerController.subject,
+      quotedReference?.value,
+      quotedReference?.kind,
+      ...visibleRecipients,
+      ...resolvedRecipients,
+      ...attachments.map(_inlineAttachmentSignature),
+      _pendingCalendarTaskIcs == null
+          ? null
+          : Object.hash(
+              _pendingCalendarTaskIcs,
+              _pendingCalendarTaskIcsReadOnly,
+            ),
+    ]);
+  }
+
+  Object _inlineAttachmentSignature(PendingAttachment pending) {
+    final attachment = pending.attachment;
+    final metadataId = attachment.metadataId;
+    if (metadataId != null && metadataId.isNotEmpty) {
+      return metadataId;
+    }
+    return Object.hash(
+      attachment.path,
+      attachment.fileName,
+      attachment.sizeBytes,
+      attachment.mimeType,
+    );
+  }
+
+  List<PendingAttachment> _inlineAttachmentsWithMetadataIds({
+    required List<String> metadataIds,
+    required List<String> expectedAttachmentIds,
+  }) {
+    if (metadataIds.isEmpty ||
+        metadataIds.length != expectedAttachmentIds.length) {
+      return _pendingAttachments;
+    }
+    final idToMetadata = <String, String>{};
+    for (var index = 0; index < expectedAttachmentIds.length; index += 1) {
+      idToMetadata[expectedAttachmentIds[index]] = metadataIds[index];
+    }
+    var changed = false;
+    final updated = <PendingAttachment>[];
+    for (final pending in _pendingAttachments) {
+      final metadataId = idToMetadata[pending.id];
+      if (metadataId == null || pending.attachment.metadataId == metadataId) {
+        updated.add(pending);
+        continue;
+      }
+      changed = true;
+      updated.add(
+        pending.copyWith(
+          attachment: pending.attachment.copyWith(metadataId: metadataId),
+        ),
+      );
+    }
+    return changed ? updated : _pendingAttachments;
+  }
 
   bool _hasInlineComposerDraftContent(ChatState chatState) {
     final chat = chatState.chat;
@@ -4112,6 +4271,12 @@ class _ChatState extends State<Chat> {
       await _deleteEmptyInlineDraftIfNeeded(chatState);
       return true;
     }
+    final savedSignature = _lastSavedInlineDraftSignature;
+    if (savedSignature != null &&
+        savedSignature == _currentInlineDraftSignature(chatState)) {
+      _resetInlineComposer(clearInlineComposerDraftId: true);
+      return true;
+    }
     final action = await _confirmInlineComposerClose();
     if (!mounted ||
         action == null ||
@@ -4122,12 +4287,12 @@ class _ChatState extends State<Chat> {
       await _discardInlineComposer();
       return true;
     }
-    _resetInlineComposer(clearExpandedComposerDraftId: true);
+    _resetInlineComposer(clearInlineComposerDraftId: true);
     return true;
   }
 
   Future<void> _deleteEmptyInlineDraftIfNeeded(ChatState chatState) async {
-    final draftId = _expandedComposerDraftId;
+    final draftId = _inlineComposerDraftId;
     if (draftId == null || _hasInlineComposerDraftContent(chatState)) {
       return;
     }
@@ -4136,17 +4301,18 @@ class _ChatState extends State<Chat> {
     } on Exception {
       return;
     }
-    if (!mounted || _expandedComposerDraftId != draftId) {
+    if (!mounted || _inlineComposerDraftId != draftId) {
       return;
     }
     setState(() {
-      _expandedComposerDraftId = null;
+      _inlineComposerDraftId = null;
+      _lastSavedInlineDraftSignature = null;
     });
   }
 
   Future<void> _discardInlineComposer() async {
-    final draftId = _expandedComposerDraftId;
-    _resetInlineComposer(clearExpandedComposerDraftId: true);
+    final draftId = _inlineComposerDraftId;
+    _resetInlineComposer(clearInlineComposerDraftId: true);
     if (draftId == null) {
       return;
     }
@@ -4158,9 +4324,9 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleInlineComposerSendComplete() async {
-    final draftId = _expandedComposerDraftId;
+    final draftId = _inlineComposerDraftId;
     setState(() {
-      _clearInlineComposerState(clearExpandedComposerDraftId: true);
+      _clearInlineComposerState(clearInlineComposerDraftId: true);
       _recreateInlineComposer();
     });
     _syncEmailComposerWatermark(
@@ -5539,7 +5705,7 @@ class _ChatState extends State<Chat> {
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
                 _clearInlineComposerControllers();
-                _clearInlineComposerState(clearExpandedComposerDraftId: true);
+                _clearInlineComposerState(clearInlineComposerDraftId: true);
                 _resetRecipientsForChat(state.chat);
                 _syncEmailComposerWatermark(chatState: state);
                 _queueShareComposerSeedConsumption();
@@ -5630,6 +5796,15 @@ class _ChatState extends State<Chat> {
                   _isEmailComposerWatermarkOnly(text: text, chatState: state)
                   ? false
                   : text.trim().isNotEmpty;
+              final calendarTaskIcsMessage =
+                  state.composerHydrationCalendarTaskIcsMessage;
+              _pendingCalendarTaskIcs = calendarTaskIcsMessage?.task;
+              _pendingCalendarTaskIcsReadOnly =
+                  calendarTaskIcsMessage?.readOnly ??
+                  _calendarTaskIcsReadOnlyFallback;
+              _pendingCalendarSeedText = calendarTaskIcsMessage?.task
+                  .toShareText(context.l10n)
+                  .trim();
               _syncEmailComposerWatermark(chatState: state, forceInsert: true);
               if (!_inlineComposerController.hasTextFocus) {
                 _inlineComposerController.requestTextFocus();

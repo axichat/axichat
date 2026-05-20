@@ -1,13 +1,17 @@
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/chat_settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const _userFullJid = 'user@example.com/resource';
@@ -34,6 +38,11 @@ const _contactFolderRuleAddress = 'contact@example.com';
 const _messageReferenceId = 'important-message-id';
 const _messageChatJid = 'chat@example.com';
 const _settingsNode = 'urn:axi:settings';
+const _chatSettingsTag = 'chat-settings';
+const _chatSettingsAddressAttr = 'address';
+const _chatSettingsUpdatedAtAttr = 'updated_at';
+const _chatSettingsSourceIdAttr = 'source_id';
+const _chatSettingsDataTag = 'data';
 
 const _peerBareJid = 'peer@example.com';
 const _convTag = 'conv';
@@ -73,8 +82,84 @@ mox.XmppManagerAttributes _testAttributes({
   );
 }
 
+mox.XmppManagerAttributes _testAttributesWithPubSub({
+  required PubSubManager pubSubManager,
+}) {
+  final fullJid = mox.JID.fromString(_userFullJid);
+  return mox.XmppManagerAttributes(
+    sendStanza: (_) async => _noStanza,
+    sendNonza: (_) {},
+    getManagerById: <T extends mox.XmppManagerBase>(id) {
+      if (id == mox.pubsubManager) {
+        return pubSubManager as T;
+      }
+      return null;
+    },
+    sendEvent: (_) {},
+    getConnectionSettings: () =>
+        mox.ConnectionSettings(jid: fullJid, password: _authPassword),
+    getFullJID: () => fullJid,
+    getSocket: () => throw UnimplementedError(),
+    getConnection: () => throw UnimplementedError(),
+    getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(String _) =>
+        null,
+  );
+}
+
+final class _ReadableFailingConfigurePubSubManager extends PubSubManager {
+  int configureCount = 0;
+  int getItemsCount = 0;
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> configureNode(
+    mox.JID jid,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async {
+    configureCount += 1;
+    return moxlib.Result(mox.UnknownPubSubError());
+  }
+
+  @override
+  Future<String?> resolveSendLastPublishedItemForNode({
+    required mox.JID host,
+    required String node,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>> getItems(
+    mox.JID jid,
+    String node, {
+    int? maxItems,
+    String? subId,
+  }) async {
+    getItemsCount += 1;
+    return const moxlib.Result(<mox.PubSubItem>[]);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'PEP manager does not repeat configure when readable node exists',
+    () async {
+      final pubSubManager = _ReadableFailingConfigurePubSubManager();
+      final manager = ChatSettingsPubSubManager()
+        ..register(_testAttributesWithPubSub(pubSubManager: pubSubManager));
+
+      await manager.ensureNode();
+      await manager.ensureNode();
+
+      expect(
+        pubSubManager.configureCount,
+        manager.candidateAccessModels.length,
+      );
+      expect(pubSubManager.getItemsCount, 1);
+    },
+  );
 
   test(
     'ConversationIndexManager emits update from pubsub notification',
@@ -307,6 +392,83 @@ void main() {
     expect(update.payload.sourceId, 'device-a');
   });
 
+  test('ChatSettingsPubSubManager ignores malformed settings data', () async {
+    final sentEvents = <mox.XmppEvent>[];
+    final manager = ChatSettingsPubSubManager()
+      ..register(_testAttributes(sentEvents: sentEvents));
+    final updatedAt = DateTime.utc(2026, 3, 12, 11, 15);
+    final payload = mox.XMLNode.xmlns(
+      tag: _chatSettingsTag,
+      xmlns: chatSettingsPubSubNode,
+      attributes: {
+        _chatSettingsAddressAttr: _peerBareJid,
+        _chatSettingsUpdatedAtAttr: updatedAt.toIso8601String(),
+        _chatSettingsSourceIdAttr: 'device-a',
+      },
+      children: [mox.XMLNode(tag: _chatSettingsDataTag, text: '{not json')],
+    );
+    final item = mox.PubSubItem(
+      id: ChatSettingsSyncPayload.itemIdFor(addressKey: _peerBareJid),
+      node: chatSettingsPubSubNode,
+      payload: payload,
+    );
+    final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
+
+    await manager.onXmppEvent(event);
+    await pumpEventQueue();
+
+    expect(sentEvents, isEmpty);
+  });
+
+  test(
+    'ChatSettingsSyncPayload applies explicit null without clearing absent keys',
+    () {
+      final updatedAt = DateTime.utc(2026, 3, 12, 11, 20);
+      final local = Chat.fromJid(_peerBareJid).copyWith(
+        markerResponsive: true,
+        emailRemoteImagesEnabled: true,
+        emailReadReceiptsEnabled: true,
+      );
+      final payload = ChatSettingsSyncPayload(
+        addressKey: _peerBareJid,
+        settings: {ChatSettingId.emailReadReceipts.syncKey: null},
+        updatedAt: updatedAt,
+        sourceId: 'device-a',
+      );
+
+      final parsed = ChatSettingsSyncPayload.fromXml(payload.toXml());
+      final applied = parsed?.applyToChat(local);
+
+      expect(parsed?.settings, containsPair('email_read_receipts', isNull));
+      expect(applied?.emailReadReceiptsEnabled, isNull);
+      expect(applied?.markerResponsive, isTrue);
+      expect(applied?.emailRemoteImagesEnabled, isTrue);
+      expect(applied?.chatSettingsUpdatedAt, updatedAt);
+      expect(applied?.chatSettingsSourceId, 'device-a');
+    },
+  );
+
+  test(
+    'ChatSettingsSyncPayload includes targeted clears beside remaining overrides',
+    () {
+      final updatedAt = DateTime.utc(2026, 3, 12, 11, 25);
+      final chat = Chat.fromJid(_peerBareJid).copyWith(
+        markerResponsive: true,
+        emailReadReceiptsEnabled: null,
+        chatSettingsUpdatedAt: updatedAt,
+        chatSettingsSourceId: 'device-a',
+      );
+
+      final payload = ChatSettingsSyncPayload.fromChat(
+        chat,
+        clearedSettings: {ChatSettingId.emailReadReceipts},
+      );
+
+      expect(payload?.settings, containsPair('read_receipts', isTrue));
+      expect(payload?.settings, containsPair('email_read_receipts', isNull));
+    },
+  );
+
   test('MucBookmark parses id-only pubsub items', () {
     final item = mox.PubSubItem(id: _roomJid, node: _bookmarksNode);
 
@@ -374,6 +536,10 @@ void main() {
       originalSubject: 'Original subject',
       originalPlainText: 'Original text',
       originalHtml: '<p>Original <strong>HTML</strong></p>',
+      quotedContext: const DraftForwardedQuoteContext(
+        senderLabel: 'Original sender',
+        plainText: 'Quoted text',
+      ),
       conversionState: DraftForwardedBlockConversionState.convertedText,
       convertedText: 'Edited forwarded text',
     );

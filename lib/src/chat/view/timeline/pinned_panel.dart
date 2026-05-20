@@ -26,6 +26,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
+    required this.onConfirmAttachmentDownload,
     required this.onApproveAttachment,
     required this.previewTimelineItemForItem,
     required this.resolvedHtmlBodyFor,
@@ -59,8 +60,19 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final bool Function(String) metadataPendingFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({required bool isSelf, required chat_models.Chat? chat})
+  final bool Function({
+    required bool isSelf,
+    required chat_models.Chat? chat,
+    required FileMetadataData? metadata,
+    required bool chatBlocked,
+  })
   shouldAllowAttachment;
+  final Future<bool> Function({
+    required String senderJid,
+    required bool isSelf,
+    String? senderEmail,
+  })
+  onConfirmAttachmentDownload;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -190,6 +202,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               attachmentsBlocked: widget.attachmentsBlocked,
               isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
               shouldAllowAttachment: widget.shouldAllowAttachment,
+              onConfirmAttachmentDownload: widget.onConfirmAttachmentDownload,
               onApproveAttachment: widget.onApproveAttachment,
               previewTimelineItemForItem: widget.previewTimelineItemForItem,
               resolvedHtmlBodyFor: widget.resolvedHtmlBodyFor,
@@ -249,6 +262,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
+    required this.onConfirmAttachmentDownload,
     required this.onApproveAttachment,
     required this.previewTimelineItemForItem,
     required this.resolvedHtmlBodyFor,
@@ -278,8 +292,19 @@ class _PinnedMessageTile extends StatelessWidget {
   final bool Function(String) metadataPendingFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
-  final bool Function({required bool isSelf, required chat_models.Chat? chat})
+  final bool Function({
+    required bool isSelf,
+    required chat_models.Chat? chat,
+    required FileMetadataData? metadata,
+    required bool chatBlocked,
+  })
   shouldAllowAttachment;
+  final Future<bool> Function({
+    required String senderJid,
+    required bool isSelf,
+    String? senderEmail,
+  })
+  onConfirmAttachmentDownload;
   final Future<void> Function({
     required Message message,
     required String senderJid,
@@ -648,14 +673,6 @@ class _PinnedMessageTile extends StatelessWidget {
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
         : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
-    final visibleSanitizedHtmlText = normalizedHtmlBody == null
-        ? null
-        : HtmlContentCodec.toPlainText(
-            HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-              normalizedHtmlBody,
-              allowRemoteImages: false,
-            ),
-          ).trim();
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
     final messageText = renderedText;
@@ -682,20 +699,6 @@ class _PinnedMessageTile extends StatelessWidget {
         !hasAttachmentCaption &&
         normalizedHtmlBody != null &&
         (!hasVisibleEmailText || shouldPreferRichEmailHtml);
-    final recoveredEmailContent =
-        isEmailMessage &&
-            normalizedHtmlBody != null &&
-            shouldRenderTextContent &&
-            effectiveMessage != null
-        ? HtmlContentCodec.recoverSanitizedEmailContent(
-            normalizedHtmlBody,
-            visibleSanitizedText: [
-              if (messageText.trim().isNotEmpty) messageText.trim(),
-              if (visibleSanitizedHtmlText?.isNotEmpty == true)
-                visibleSanitizedHtmlText!,
-            ].join('\n'),
-          )
-        : const <EmailRecoveredContent>[];
     final contentChildren = <Widget>[];
     final extraChildren = <Widget>[];
     void addExtra(Widget child) {
@@ -803,16 +806,6 @@ class _PinnedMessageTile extends StatelessWidget {
             onPressed: () {},
           ),
         );
-      } else {
-        if (recoveredEmailContent.isNotEmpty) {
-          contentChildren.add(
-            EmailRecoveredContentView(
-              items: recoveredEmailContent,
-              textStyle: baseTextStyle,
-              onLinkTap: onMessageLinkTap,
-            ),
-          );
-        }
       }
       if (messageError.isNone &&
           !isInviteMessage &&
@@ -845,7 +838,8 @@ class _PinnedMessageTile extends StatelessWidget {
         final preparedHtmlBody =
             HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
               normalizedHtmlBody,
-              allowRemoteImages: settings.autoLoadEmailImages,
+              allowRemoteImages:
+                  chat.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages,
             );
         if (preparedHtmlBody.trim().isNotEmpty) {
           contentChildren.add(
@@ -855,7 +849,8 @@ class _PinnedMessageTile extends StatelessWidget {
               textStyle: baseTextStyle,
               textColor: textColor,
               linkColor: isSelf ? colors.primaryForeground : colors.primary,
-              shouldLoadImages: settings.autoLoadEmailImages,
+              shouldLoadImages:
+                  chat.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages,
               onLinkTap: onMessageLinkTap,
             ),
           );
@@ -889,7 +884,6 @@ class _PinnedMessageTile extends StatelessWidget {
       } else if (messageError.isNone &&
           !isInviteMessage &&
           !isInviteRevocationMessage &&
-          recoveredEmailContent.isEmpty &&
           attachmentIds.isEmpty &&
           calendarTask == null &&
           calendarFragment == null &&
@@ -966,19 +960,18 @@ class _PinnedMessageTile extends StatelessWidget {
     if (effectiveMessage != null && attachmentIds.isNotEmpty) {
       final isEmailBacked = chat.isEmailBacked;
       final bool attachmentsBlockedForPin = attachmentsBlocked;
-      final allowAttachmentByTrust = shouldAllowAttachment(
-        isSelf: isSelf,
-        chat: chat,
-      );
       final allowAttachmentOnce = attachmentsBlockedForPin
           ? false
           : isOneTimeAttachmentAllowed(effectiveMessage.stanzaID);
-      final allowAttachment =
-          !attachmentsBlockedForPin &&
-          (allowAttachmentByTrust || allowAttachmentOnce);
       final emailDownloadDelegate = isEmailBacked
           ? AttachmentDownloadDelegate(() async {
-              await context.read<ChatBloc>().downloadFullEmailMessage(
+              final approved = await onConfirmAttachmentDownload(
+                senderJid: effectiveMessage.senderJid,
+                isSelf: isSelf,
+                senderEmail: chat.emailAddress,
+              );
+              if (!approved) return false;
+              await locate<ChatBloc>().downloadFullEmailMessage(
                 effectiveMessage,
               );
               return true;
@@ -986,14 +979,30 @@ class _PinnedMessageTile extends StatelessWidget {
           : null;
       for (var index = 0; index < attachmentIds.length; index += 1) {
         final attachmentId = attachmentIds[index];
+        final metadata = metadataFor(attachmentId);
+        final allowAttachmentByTrust = shouldAllowAttachment(
+          isSelf: isSelf,
+          chat: chat,
+          metadata: metadata,
+          chatBlocked: attachmentsBlockedForPin,
+        );
+        final allowAttachment =
+            !attachmentsBlockedForPin &&
+            (allowAttachmentByTrust || allowAttachmentOnce);
         final downloadDelegate = isEmailBacked
             ? emailDownloadDelegate
-            : AttachmentDownloadDelegate(
-                () => context.read<ChatBloc>().downloadInboundAttachment(
+            : AttachmentDownloadDelegate(() async {
+                final approved = await onConfirmAttachmentDownload(
+                  senderJid: effectiveMessage.senderJid,
+                  isSelf: isSelf,
+                  senderEmail: chat.emailAddress,
+                );
+                if (!approved) return false;
+                return locate<ChatBloc>().downloadInboundAttachment(
                   metadataId: attachmentId,
                   stanzaId: effectiveMessage.stanzaID,
-                ),
-              );
+                );
+              });
         final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
           () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
         );
@@ -1002,7 +1011,7 @@ class _PinnedMessageTile extends StatelessWidget {
         addExtra(
           ChatAttachmentPreview(
             stanzaId: effectiveMessage.stanzaID,
-            metadata: metadataFor(attachmentId),
+            metadata: metadata,
             metadataPending: metadataPendingFor(attachmentId),
             allowed: allowAttachment,
             downloadDelegate: downloadDelegate,

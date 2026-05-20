@@ -28,9 +28,11 @@ class AccessibilityChatBloc
     required String? myJid,
     required int initialUnreadCount,
     required int? draftId,
+    ChatsService? chatsService,
     EmailService? emailService,
   }) : _jid = jid,
        _messageService = messageService,
+       _chatsService = chatsService,
        _emailService = emailService,
        _contacts = contacts,
        _myJid = myJid,
@@ -48,6 +50,7 @@ class AccessibilityChatBloc
 
   final String _jid;
   final MessageService _messageService;
+  final ChatsService? _chatsService;
   EmailService? _emailService;
   final Logger _log;
 
@@ -101,6 +104,38 @@ class AccessibilityChatBloc
         stackTrace,
       );
       return null;
+    }
+  }
+
+  bool isSelfMessage(Message message) => message.isFromAccount(_myJid);
+
+  Future<Chat?> loadChat() async {
+    try {
+      return await _messageService.loadChat(_jid);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to load accessibility chat $_jid',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> setAttachmentAutoDownload(AttachmentAutoDownload? value) async {
+    final chatsService = _chatsService;
+    if (chatsService == null) return;
+    try {
+      await chatsService.toggleChatAttachmentAutoDownload(
+        jid: _jid,
+        value: value,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to update accessibility chat attachment auto-download $_jid',
+        error,
+        stackTrace,
+      );
     }
   }
 

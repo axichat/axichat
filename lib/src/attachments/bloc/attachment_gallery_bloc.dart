@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -221,13 +220,10 @@ class AttachmentGalleryBloc
   }
 
   bool _isSelfMessage(Message message) {
-    if (sameNormalizedAddressValue(message.senderJid, _xmppService.myJid)) {
+    if (message.isFromAccount(_xmppService.myJid)) {
       return true;
     }
-    return sameNormalizedAddressValue(
-      message.senderJid,
-      _emailService?.selfSenderJid,
-    );
+    return message.isFromAccount(_emailService?.selfSenderJid);
   }
 
   Future<bool> downloadEmailMessage(Message message) async {
@@ -394,10 +390,10 @@ class AttachmentGalleryBloc
         ),
       ),
     );
-    if (event.alwaysAllow && event.chat != null) {
+    if (event.updateAutoDownloadValue && event.chat != null) {
       await _xmppService.toggleChatAttachmentAutoDownload(
         jid: event.chat!.jid,
-        enabled: true,
+        value: event.autoDownloadValue,
       );
     }
     if (event.isEmailChat) {
@@ -473,8 +469,6 @@ class AttachmentGalleryBloc
           }
         }
       }
-      final defaultAutoDownload =
-          _xmppService.defaultChatAttachmentAutoDownload;
       filtered.add(
         AttachmentGalleryEntryData(
           item: item,
@@ -483,9 +477,7 @@ class AttachmentGalleryBloc
           allowOnce: allowedOnceStanzaIds.contains(
             _normalizeStanzaId(item.message.stanzaID),
           ),
-          allowByTrust:
-              isSelf ||
-              (chat?.attachmentAutoDownload ?? defaultAutoDownload).isAllowed,
+          allowByTrust: isSelf || _chatAllowsAutoDownload(chat),
         ),
       );
     }
@@ -495,6 +487,18 @@ class AttachmentGalleryBloc
 
   String _metadataIdForItem(AttachmentGalleryItem item) {
     return item.metadata.id.trim();
+  }
+
+  bool _chatAllowsAutoDownload(Chat? chat) {
+    return switch (chat?.attachmentAutoDownload) {
+      AttachmentAutoDownload.allowed => true,
+      AttachmentAutoDownload.blocked => false,
+      null =>
+        _xmppService.autoDownloadImages ||
+            _xmppService.autoDownloadVideos ||
+            _xmppService.autoDownloadDocuments ||
+            _xmppService.autoDownloadArchives,
+    };
   }
 
   Map<String, FileMetadataData?> _pruneFileMetadataById({

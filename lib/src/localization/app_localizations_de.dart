@@ -2235,6 +2235,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsSectionAppearance => 'Erscheinungsbild';
 
   @override
+  String get settingsSectionNotifications => 'Benachrichtigungen';
+
+  @override
   String get settingsSectionSecurity => 'Sicherheit';
 
   @override
@@ -2322,6 +2325,30 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
+
+  @override
+  String get settingsMuteAllNotifications =>
+      'Alle Benachrichtigungen stummschalten';
+
+  @override
+  String get settingsMuteAllNotificationsDescription =>
+      'Chat- und E-Mail-Benachrichtigungen auf diesem Gerät ausschalten.';
+
+  @override
+  String get settingsMuteChatNotifications =>
+      'Chat-Benachrichtigungen stummschalten';
+
+  @override
+  String get settingsMuteChatNotificationsDescription =>
+      'Keine Chatnachrichten-Benachrichtigungen auf diesem Gerät mehr erhalten.';
+
+  @override
+  String get settingsMuteEmailNotifications =>
+      'E-Mail-Benachrichtigungen stummschalten';
+
+  @override
+  String get settingsMuteEmailNotificationsDescription =>
+      'Keine E-Mail-Nachrichtenbenachrichtigungen auf diesem Gerät mehr erhalten.';
 
   @override
   String get settingsMuteNotifications => 'Benachrichtigungen stummschalten';
@@ -2628,6 +2655,17 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get chatNotificationBehaviorOptionAlwaysNotify =>
       'Diesen Chat immer benachrichtigen';
+
+  @override
+  String chatSettingInheritOption(Object value) {
+    return 'Übernehmen ($value)';
+  }
+
+  @override
+  String get chatSettingStateOn => 'An';
+
+  @override
+  String get chatSettingStateOff => 'Aus';
 
   @override
   String get chatAttachmentUnavailableDevice =>

@@ -510,9 +510,11 @@ class _ChatScaffoldBody extends StatelessWidget {
                       emptyStateLabel: emptyStateLabel,
                       isGroupChat: isGroupChat,
                       isEmailChat: isEmailChat,
-                      staleUnackedCutoff: DateTime.timestamp().subtract(
-                        XmppStreamManagementManager.ackTimeoutDuration,
-                      ),
+                      staleUnackedCutoff: state.messagesLoaded
+                          ? DateTime.timestamp().subtract(
+                              XmppStreamManagementManager.ackTimeoutDuration,
+                            )
+                          : null,
                       profileJid: profileJid,
                       resolvedEmailSelfJid: resolvedEmailSelfJid,
                       currentUserId: currentUserId,
@@ -758,8 +760,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                           hasDraftContent: owner._hasInlineComposerDraftContent(
                             state,
                           ),
-                          hasTrackedDraft:
-                              owner._expandedComposerDraftId != null,
+                          hasTrackedDraft: owner._inlineComposerDraftId != null,
                           sendBlocker: sendBlocker,
                           actionsEnabled:
                               !owner._savingInlineDraft &&
@@ -1017,7 +1018,21 @@ class _ChatScaffoldBody extends StatelessWidget {
                           ),
                       isOneTimeAttachmentAllowed:
                           owner._isOneTimeAttachmentAllowed,
-                      shouldAllowAttachment: owner._shouldAllowAttachment,
+                      shouldAllowAttachment:
+                          ({
+                            required chat,
+                            required chatBlocked,
+                            required isSelf,
+                            required metadata,
+                          }) => owner._shouldAllowAttachment(
+                            isSelf: isSelf,
+                            chat: chat,
+                            settings: settingsState,
+                            metadata: metadata,
+                            chatBlocked: chatBlocked,
+                          ),
+                      onConfirmAttachmentDownload:
+                          owner._confirmManualAttachmentDownload,
                       onApproveAttachment: owner._approveAttachment,
                       attachmentsForMessage: attachmentsForMessage,
                       reactionPreviewsForMessage:
@@ -1089,7 +1104,7 @@ class _ChatScaffoldBody extends StatelessWidget {
           onEmailImagesApproved: owner._handleEmailImagesApproved,
           onAddRecipientFromChat: owner._handleRecipientAddedFromChat,
           onViewFilterChanged: owner._setViewFilter,
-          onToggleNotifications: owner._toggleNotifications,
+          onNotificationBehaviorChanged: owner._setNotificationBehavior,
           onSpamToggle: ({required bool sendToSpam}) =>
               owner._handleSpamToggle(sendToSpam: sendToSpam),
           onRenameContact: canRenameContact ? owner._promptContactRename : null,

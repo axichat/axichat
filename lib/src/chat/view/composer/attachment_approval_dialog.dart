@@ -3,16 +3,22 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 final class AttachmentApprovalDecision {
   const AttachmentApprovalDecision({
     required this.approved,
-    required this.alwaysAllow,
+    required this.autoDownloadValue,
+    required this.updateAutoDownloadValue,
   });
 
   final bool approved;
-  final bool alwaysAllow;
+  final AttachmentAutoDownload? autoDownloadValue;
+  final bool updateAutoDownloadValue;
 }
 
 class AttachmentApprovalDialog extends StatefulWidget {
@@ -23,6 +29,8 @@ class AttachmentApprovalDialog extends StatefulWidget {
     required this.confirmLabel,
     required this.cancelLabel,
     required this.showAutoTrustToggle,
+    required this.autoDownloadValue,
+    required this.inheritedAutoDownloadEnabled,
     required this.autoTrustLabel,
     required this.autoTrustHint,
   });
@@ -32,6 +40,8 @@ class AttachmentApprovalDialog extends StatefulWidget {
   final String confirmLabel;
   final String cancelLabel;
   final bool showAutoTrustToggle;
+  final AttachmentAutoDownload? autoDownloadValue;
+  final bool inheritedAutoDownloadEnabled;
   final String autoTrustLabel;
   final String autoTrustHint;
 
@@ -41,7 +51,7 @@ class AttachmentApprovalDialog extends StatefulWidget {
 }
 
 class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
-  var _alwaysAllow = false;
+  late var _autoDownloadValue = widget.autoDownloadValue;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +65,8 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
           onPressed: () => pop(
             const AttachmentApprovalDecision(
               approved: false,
-              alwaysAllow: false,
+              autoDownloadValue: null,
+              updateAutoDownloadValue: false,
             ),
           ),
           variant: AxiButtonVariant.outline,
@@ -65,7 +76,10 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
           onPressed: () => pop(
             AttachmentApprovalDecision(
               approved: true,
-              alwaysAllow: _alwaysAllow,
+              autoDownloadValue: _autoDownloadValue,
+              updateAutoDownloadValue:
+                  widget.showAutoTrustToggle &&
+                  _autoDownloadValue != widget.autoDownloadValue,
             ),
           ),
           variant: AxiButtonVariant.secondary,
@@ -79,18 +93,80 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
         children: [
           Text(widget.message, style: context.textTheme.muted),
           if (widget.showAutoTrustToggle)
-            AxiCheckboxFormField(
-              initialValue: _alwaysAllow,
-              inputLabel: Text(widget.autoTrustLabel),
-              inputSublabel: Text(widget.autoTrustHint),
-              onChanged: (value) {
-                setState(() {
-                  _alwaysAllow = value;
-                });
-              },
+            _AttachmentAutoDownloadSelect(
+              label: widget.autoTrustLabel,
+              hint: widget.autoTrustHint,
+              inheritedEnabled: widget.inheritedAutoDownloadEnabled,
+              value: _autoDownloadValue,
+              onChanged: (value) => setState(() {
+                _autoDownloadValue = value;
+              }),
             ),
         ],
       ),
     );
+  }
+}
+
+class _AttachmentAutoDownloadSelect extends StatelessWidget {
+  const _AttachmentAutoDownloadSelect({
+    required this.label,
+    required this.hint,
+    required this.inheritedEnabled,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String hint;
+  final bool inheritedEnabled;
+  final AttachmentAutoDownload? value;
+  final ValueChanged<AttachmentAutoDownload?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: spacing.xs,
+      children: [
+        Text(label, style: context.textTheme.small),
+        Text(hint, style: context.textTheme.muted),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+          child: AxiSelect<AttachmentAutoDownload?>(
+            maxWidth: sizing.menuMaxWidth,
+            initialValue: value,
+            onChanged: onChanged,
+            options:
+                <AttachmentAutoDownload?>[
+                      null,
+                      AttachmentAutoDownload.allowed,
+                      AttachmentAutoDownload.blocked,
+                    ]
+                    .map(
+                      (option) => ShadOption<AttachmentAutoDownload?>(
+                        value: option,
+                        child: Text(_label(l10n, option)),
+                      ),
+                    )
+                    .toList(),
+            selectedOptionBuilder: (_, option) => Text(_label(l10n, option)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _label(AppLocalizations l10n, AttachmentAutoDownload? option) {
+    return switch (option) {
+      null => l10n.chatSettingInheritOption(
+        inheritedEnabled ? l10n.chatSettingStateOn : l10n.chatSettingStateOff,
+      ),
+      AttachmentAutoDownload.allowed => l10n.settingsAutoDownloadScopeAlways,
+      AttachmentAutoDownload.blocked => l10n.sessionCapabilityStatusOff,
+    };
   }
 }

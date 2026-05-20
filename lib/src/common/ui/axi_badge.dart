@@ -3,7 +3,57 @@
 
 import 'package:flutter/material.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/status_colors.dart';
 import 'package:axichat/src/common/ui/squircle_border.dart';
+
+enum AxiStatusChipTone { info, warning, neutral }
+
+class AxiStatusChip extends StatelessWidget {
+  const AxiStatusChip({
+    super.key,
+    required this.label,
+    this.tone = AxiStatusChipTone.neutral,
+  });
+
+  final String label;
+  final AxiStatusChipTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final Color foreground = switch (tone) {
+      AxiStatusChipTone.info => colors.primary,
+      AxiStatusChipTone.warning => colors.warning,
+      AxiStatusChipTone.neutral => colors.mutedForeground,
+    };
+    final background = Color.alphaBlend(
+      foreground.withValues(alpha: context.motion.tapHoverAlpha),
+      colors.card,
+    );
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        color: background,
+        shape: SquircleBorder(
+          cornerRadius: context.radii.squircleSm,
+          side: BorderSide(color: foreground, width: context.borderSide.width),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.small.copyWith(color: foreground),
+        ),
+      ),
+    );
+  }
+}
 
 class AxiCountBadge extends StatelessWidget {
   const AxiCountBadge({

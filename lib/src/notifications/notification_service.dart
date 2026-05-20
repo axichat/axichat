@@ -403,8 +403,9 @@ class NotificationService {
     String? threadKey,
     bool? showPreviewOverride,
     MessageNotificationChannel channel = MessageNotificationChannel.chat,
+    bool ignoreChannelMute = false,
   }) async {
-    if (mute || _isChannelMuted(channel)) return;
+    if (mute || (!ignoreChannelMute && _isChannelMuted(channel))) return;
     if (!await hasAllNotificationPermissions()) return;
     final bool appInForeground = await _isAppOnForeground();
     if (!allowForeground && appInForeground) {

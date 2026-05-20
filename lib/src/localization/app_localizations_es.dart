@@ -2225,6 +2225,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsSectionAppearance => 'Apariencia';
 
   @override
+  String get settingsSectionNotifications => 'Notificaciones';
+
+  @override
   String get settingsSectionSecurity => 'Seguridad';
 
   @override
@@ -2312,6 +2315,30 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
+
+  @override
+  String get settingsMuteAllNotifications =>
+      'Silenciar todas las notificaciones';
+
+  @override
+  String get settingsMuteAllNotificationsDescription =>
+      'Desactiva las notificaciones de chat y correo en este dispositivo.';
+
+  @override
+  String get settingsMuteChatNotifications =>
+      'Silenciar notificaciones de chat';
+
+  @override
+  String get settingsMuteChatNotificationsDescription =>
+      'Deja de recibir notificaciones de mensajes de chat en este dispositivo.';
+
+  @override
+  String get settingsMuteEmailNotifications =>
+      'Silenciar notificaciones de correo';
+
+  @override
+  String get settingsMuteEmailNotificationsDescription =>
+      'Deja de recibir notificaciones de mensajes de correo en este dispositivo.';
 
   @override
   String get settingsMuteNotifications => 'Silenciar notificaciones';
@@ -2621,6 +2648,17 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get chatNotificationBehaviorOptionAlwaysNotify =>
       'Notificar siempre este chat';
+
+  @override
+  String chatSettingInheritOption(Object value) {
+    return 'Heredar ($value)';
+  }
+
+  @override
+  String get chatSettingStateOn => 'Activado';
+
+  @override
+  String get chatSettingStateOff => 'Desactivado';
 
   @override
   String get chatAttachmentUnavailableDevice =>

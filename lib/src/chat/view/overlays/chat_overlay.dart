@@ -158,25 +158,28 @@ class _ChatIndexedHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    return Padding(
-      padding: padding ?? EdgeInsets.all(spacing.m),
-      child: Row(
-        children: [
-          AxiIconButton.ghost(
-            iconData: LucideIcons.x,
-            tooltip: context.l10n.commonClose,
-            onPressed: onClose,
-          ),
-          SizedBox(width: spacing.s),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.textTheme.large,
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border(bottom: context.borderSide)),
+      child: Padding(
+        padding: padding ?? EdgeInsets.all(spacing.m),
+        child: Row(
+          children: [
+            AxiIconButton.ghost(
+              iconData: LucideIcons.x,
+              tooltip: context.l10n.commonClose,
+              onPressed: onClose,
             ),
-          ),
-        ],
+            SizedBox(width: spacing.s),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.large,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -186,7 +189,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
   const _ChatSettingsOverlay({
     required this.state,
     required this.onViewFilterChanged,
-    required this.onToggleNotifications,
+    required this.onNotificationBehaviorChanged,
     required this.onSpamToggle,
     required this.onRenameContact,
     required this.isChatBlocked,
@@ -196,7 +199,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
 
   final ChatState state;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
-  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
   final ValueChanged<bool> onSpamToggle;
   final VoidCallback? onRenameContact;
   final bool isChatBlocked;
@@ -214,7 +217,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
           child: _ChatSettingsButtons(
             state: state,
             onViewFilterChanged: onViewFilterChanged,
-            onToggleNotifications: onToggleNotifications,
+            onNotificationBehaviorChanged: onNotificationBehaviorChanged,
             onSpamToggle: onSpamToggle,
             onRenameContact: onRenameContact,
             isChatBlocked: isChatBlocked,
@@ -451,7 +454,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
     required this.onEmailImagesApproved,
     required this.onAddRecipientFromChat,
     required this.onViewFilterChanged,
-    required this.onToggleNotifications,
+    required this.onNotificationBehaviorChanged,
     required this.onSpamToggle,
     required this.onRenameContact,
     required this.onImportantMessageSelected,
@@ -472,7 +475,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
   final ValueChanged<String> onEmailImagesApproved;
   final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
-  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;
   final Future<void> Function()? onRenameContact;
   final ValueChanged<String> onImportantMessageSelected;
@@ -507,7 +510,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
           onEmailImagesApproved: onEmailImagesApproved,
           onAddRecipientFromChat: onAddRecipientFromChat,
           onViewFilterChanged: onViewFilterChanged,
-          onToggleNotifications: onToggleNotifications,
+          onNotificationBehaviorChanged: onNotificationBehaviorChanged,
           onSpamToggle: onSpamToggle,
           onRenameContact: onRenameContact,
           onImportantMessageSelected: onImportantMessageSelected,
@@ -551,7 +554,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
     required this.onEmailImagesApproved,
     required this.onAddRecipientFromChat,
     required this.onViewFilterChanged,
-    required this.onToggleNotifications,
+    required this.onNotificationBehaviorChanged,
     required this.onSpamToggle,
     required this.onRenameContact,
     required this.onImportantMessageSelected,
@@ -568,7 +571,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
   final ValueChanged<String> onEmailImagesApproved;
   final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
-  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;
   final Future<void> Function()? onRenameContact;
   final ValueChanged<String> onImportantMessageSelected;
@@ -586,7 +589,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
       ChatRouteIndex.settings => _ChatSettingsOverlay(
         state: state,
         onViewFilterChanged: onViewFilterChanged,
-        onToggleNotifications: onToggleNotifications,
+        onNotificationBehaviorChanged: onNotificationBehaviorChanged,
         onSpamToggle: (sendToSpam) => onSpamToggle(sendToSpam: sendToSpam),
         onRenameContact: canRenameContact ? onRenameContact : null,
         isChatBlocked: isChatBlocked,
@@ -615,7 +618,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
     required this.onEmailImagesApproved,
     required this.onAddRecipientFromChat,
     required this.onViewFilterChanged,
-    required this.onToggleNotifications,
+    required this.onNotificationBehaviorChanged,
     required this.onSpamToggle,
     required this.onRenameContact,
     required this.onImportantMessageSelected,
@@ -638,7 +641,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
   final ValueChanged<String> onEmailImagesApproved;
   final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
-  final ValueChanged<bool> onToggleNotifications;
+  final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
   final Future<void> Function({required bool sendToSpam}) onSpamToggle;
   final Future<void> Function()? onRenameContact;
   final ValueChanged<String> onImportantMessageSelected;
@@ -681,7 +684,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
           onEmailImagesApproved: onEmailImagesApproved,
           onAddRecipientFromChat: onAddRecipientFromChat,
           onViewFilterChanged: onViewFilterChanged,
-          onToggleNotifications: onToggleNotifications,
+          onNotificationBehaviorChanged: onNotificationBehaviorChanged,
           onSpamToggle: onSpamToggle,
           onRenameContact: onRenameContact,
           onImportantMessageSelected: onImportantMessageSelected,
