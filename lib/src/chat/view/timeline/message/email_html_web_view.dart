@@ -411,8 +411,13 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
   for (const image of sourceDocument.images) {
     if (!image.complete) {
       pendingImages += 1;
-      if (String(image.getAttribute('loading') || '').toLowerCase() !== 'lazy' &&
-          !hasReservedImageLayout(image)) {
+      const reservesLayout = hasReservedImageLayout(image);
+      const isLazy =
+        String(image.getAttribute('loading') || '').toLowerCase() === 'lazy';
+      if (isLazy && !reservesLayout) {
+        image.setAttribute('loading', 'eager');
+      }
+      if (!reservesLayout) {
         layoutBlockingPendingImages += 1;
       }
     }

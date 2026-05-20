@@ -285,7 +285,8 @@ void main() {
       expect(script.contains('layoutBlockingPendingImages'), isTrue);
       expect(script.contains('hasReservedImageLayout'), isTrue);
       expect(script.contains("getAttribute('loading') || ''"), isTrue);
-      expect(script.contains("toLowerCase() !== 'lazy'"), isTrue);
+      expect(script.contains("toLowerCase() === 'lazy'"), isTrue);
+      expect(script.contains("image.setAttribute('loading', 'eager')"), isTrue);
       expect(
         script.contains("sourceDocument.fonts.status === 'loaded'"),
         isTrue,
@@ -358,7 +359,7 @@ void main() {
       expect(script.contains("window.setTimeout(schedule, 1000)"), isTrue);
     });
 
-    test('height script ignores nonblocking pending images', () {
+    test('height script only ignores pending images with reserved layout', () {
       final script = emailDomHeightMetricsExpressionForTesting();
 
       expect(
@@ -367,8 +368,13 @@ void main() {
         ),
         isTrue,
       );
-      expect(script.contains("toLowerCase() !== 'lazy'"), isTrue);
-      expect(script.contains('!hasReservedImageLayout(image)'), isTrue);
+      expect(
+        script.contains('const reservesLayout = hasReservedImageLayout(image)'),
+        isTrue,
+      );
+      expect(script.contains("toLowerCase() === 'lazy'"), isTrue);
+      expect(script.contains("image.setAttribute('loading', 'eager')"), isTrue);
+      expect(script.contains('if (!reservesLayout)'), isTrue);
       expect(script.contains("image.getAttribute('width')"), isTrue);
       expect(script.contains("image.getAttribute('height')"), isTrue);
       expect(script.contains('rect.width > 0'), isTrue);
