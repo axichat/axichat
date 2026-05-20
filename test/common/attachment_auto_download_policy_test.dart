@@ -63,6 +63,34 @@ void main() {
     });
 
     test(
+      'self-equivalent downloads still honor inherited global categories',
+      () {
+        expect(policyAllows(), isFalse);
+        expect(policyAllows(imagesEnabled: true), isTrue);
+      },
+    );
+
+    test('self-equivalent downloads still honor per-chat override', () {
+      expect(
+        policyAllows(
+          policyChat: chat.copyWith(
+            attachmentAutoDownload: AttachmentAutoDownload.allowed,
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        policyAllows(
+          policyChat: chat.copyWith(
+            attachmentAutoDownload: AttachmentAutoDownload.blocked,
+          ),
+          imagesEnabled: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test(
       'never allows spam, blocked, high-risk, oversized, or unknown email',
       () {
         const executable = FileMetadataData(

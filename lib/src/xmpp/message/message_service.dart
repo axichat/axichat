@@ -13174,8 +13174,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     final stanzaId = message.stanzaID.trim();
     if (stanzaId.isEmpty) return;
     try {
-      final accountJid = myJid?.trim();
-      final isSelf = message.isFromAccount(accountJid);
       final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
         (db) => db.getFileMetadata(trimmedMetadataId),
       );
@@ -13185,23 +13183,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       );
       if (chat == null) return;
       final blocked = await isJidBlocked(chat.jid);
-      final allowed = isSelf
-          ? !chat.spam &&
-                !blocked &&
-                !metadata.isHighRiskForAutoDownload &&
-                (metadata.sizeBytes == null ||
-                    metadata.sizeBytes! <= maxAttachmentAutoDownloadBytes)
-          : allowsAttachmentAutoDownload(
-              chat: chat,
-              metadata: metadata,
-              imagesEnabled: autoDownloadImages,
-              videosEnabled: autoDownloadVideos,
-              documentsEnabled: autoDownloadDocuments,
-              archivesEnabled: autoDownloadArchives,
-              chatBlocked: blocked,
-              requireKnownSize: false,
-              maxBytes: maxAttachmentAutoDownloadBytes,
-            );
+      final allowed = allowsAttachmentAutoDownload(
+        chat: chat,
+        metadata: metadata,
+        imagesEnabled: autoDownloadImages,
+        videosEnabled: autoDownloadVideos,
+        documentsEnabled: autoDownloadDocuments,
+        archivesEnabled: autoDownloadArchives,
+        chatBlocked: blocked,
+        requireKnownSize: false,
+        maxBytes: maxAttachmentAutoDownloadBytes,
+      );
       if (!allowed) return;
       await downloadInboundAttachment(
         metadataId: trimmedMetadataId,

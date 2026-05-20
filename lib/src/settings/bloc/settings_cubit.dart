@@ -333,6 +333,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       autoDownloadDocuments: documentsEnabled,
       autoDownloadArchives: archivesEnabled,
     );
+    _applyAttachmentAutoDownloadSettings(nextState);
     await _emitLocalSettingsState(
       nextState,
       changedSettingIds: const {
@@ -342,7 +343,6 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         GlobalSettingId.attachmentAutoDownloadArchives,
       },
     );
-    _applyAttachmentAutoDownloadSettings(nextState);
   }
 
   Future<void> retrySettingsSync() async {
