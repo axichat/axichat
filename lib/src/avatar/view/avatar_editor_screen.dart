@@ -729,7 +729,8 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
     final templates = widget.templates;
     if (templates.isEmpty) return const SizedBox.shrink();
     final canNavigate = templates.length > 1;
-    final cardWidth = sizing.buttonHeightLg * 2.5;
+    final visibleItemCount = templates.length >= 3 ? 3 : templates.length;
+    final viewportFraction = canNavigate ? 1 / visibleItemCount : 1.0;
     final carouselHeight = sizing.buttonHeightLg * 3;
     return ShadCard(
       padding: EdgeInsets.all(spacing.m),
@@ -770,40 +771,30 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
               ),
             ],
           ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final availableWidth = constraints.maxWidth > 0
-                  ? constraints.maxWidth
-                  : cardWidth;
-              final viewportFraction = canNavigate
-                  ? (cardWidth / availableWidth).clamp(0.56, 0.78).toDouble()
-                  : 1.0;
-              return CarouselSlider.builder(
-                carouselController: _carouselController,
-                itemCount: templates.length,
-                itemBuilder: (context, index, _) {
-                  final template = templates[index];
-                  return Padding(
-                    padding: EdgeInsets.symmetric(horizontal: spacing.xs),
-                    child: _TemplatePreviewCard(
-                      template: template,
-                      isSelected: template.id == widget.selectedId,
-                      backgroundColor: widget.backgroundColor,
-                      onTap: () => widget.onSelect(template),
-                    ),
-                  );
-                },
-                options: CarouselOptions(
-                  height: carouselHeight,
-                  viewportFraction: viewportFraction,
-                  enlargeCenterPage: canNavigate,
-                  enlargeFactor: 0.22,
-                  enableInfiniteScroll: canNavigate,
-                  clipBehavior: Clip.none,
-                  padEnds: false,
+          CarouselSlider.builder(
+            carouselController: _carouselController,
+            itemCount: templates.length,
+            itemBuilder: (context, index, _) {
+              final template = templates[index];
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: spacing.xs),
+                child: _TemplatePreviewCard(
+                  template: template,
+                  isSelected: template.id == widget.selectedId,
+                  backgroundColor: widget.backgroundColor,
+                  onTap: () => widget.onSelect(template),
                 ),
               );
             },
+            options: CarouselOptions(
+              height: carouselHeight,
+              viewportFraction: viewportFraction,
+              enlargeCenterPage: canNavigate,
+              enlargeFactor: 0.22,
+              enableInfiniteScroll: canNavigate,
+              clipBehavior: Clip.none,
+              padEnds: true,
+            ),
           ),
         ],
       ),
@@ -850,7 +841,6 @@ class _TemplatePreviewCard extends StatelessWidget {
         width: borderWidth,
       ),
     );
-    final cardWidth = sizing.buttonHeightLg * 2.5;
     final overlayShape = RoundedSuperellipseBorder(
       borderRadius: BorderRadius.circular(context.radii.squircle),
       side: BorderSide.none,
@@ -871,7 +861,7 @@ class _TemplatePreviewCard extends StatelessWidget {
             onTap: onTap,
             child: AnimatedContainer(
               duration: animationDuration,
-              width: cardWidth,
+              width: double.infinity,
               decoration: BoxDecoration(
                 color: Colors.transparent,
                 borderRadius: context.radius,
