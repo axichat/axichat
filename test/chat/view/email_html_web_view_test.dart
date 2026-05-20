@@ -282,6 +282,10 @@ void main() {
         isFalse,
       );
       expect(script.contains('!image.complete'), isTrue);
+      expect(script.contains('layoutBlockingPendingImages'), isTrue);
+      expect(script.contains('hasReservedImageLayout'), isTrue);
+      expect(script.contains("getAttribute('loading') || ''"), isTrue);
+      expect(script.contains("toLowerCase() !== 'lazy'"), isTrue);
       expect(
         script.contains("sourceDocument.fonts.status === 'loaded'"),
         isTrue,
@@ -352,6 +356,23 @@ void main() {
       expect(script.contains("window.setTimeout(schedule, 100)"), isTrue);
       expect(script.contains("window.setTimeout(schedule, 300)"), isTrue);
       expect(script.contains("window.setTimeout(schedule, 1000)"), isTrue);
+    });
+
+    test('height script ignores nonblocking pending images', () {
+      final script = emailDomHeightMetricsExpressionForTesting();
+
+      expect(
+        script.contains(
+          'const imagesReady = layoutBlockingPendingImages === 0',
+        ),
+        isTrue,
+      );
+      expect(script.contains("toLowerCase() !== 'lazy'"), isTrue);
+      expect(script.contains('!hasReservedImageLayout(image)'), isTrue);
+      expect(script.contains("image.getAttribute('width')"), isTrue);
+      expect(script.contains("image.getAttribute('height')"), isTrue);
+      expect(script.contains('rect.width > 0'), isTrue);
+      expect(script.contains('rect.height > 0'), isTrue);
     });
 
     test('email theme css is injected after raw head styles', () {
@@ -555,6 +576,7 @@ void main() {
       expect(
         emailHtmlHeightCanCommitForTesting(
           hasPositiveHeight: true,
+          usesPlatformFallback: false,
           documentReady: false,
           imagesReady: false,
           widthFitReady: true,
@@ -568,6 +590,7 @@ void main() {
       expect(
         emailHtmlHeightCanCommitForTesting(
           hasPositiveHeight: true,
+          usesPlatformFallback: false,
           documentReady: true,
           imagesReady: true,
           widthFitReady: true,
@@ -581,6 +604,7 @@ void main() {
       expect(
         emailHtmlHeightCanCommitForTesting(
           hasPositiveHeight: true,
+          usesPlatformFallback: false,
           documentReady: false,
           imagesReady: true,
           widthFitReady: true,
@@ -594,9 +618,38 @@ void main() {
       expect(
         emailHtmlHeightCanCommitForTesting(
           hasPositiveHeight: true,
+          usesPlatformFallback: false,
           documentReady: true,
           imagesReady: true,
           widthFitReady: true,
+          layoutStable: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('commits platform fallback height when DOM readiness failed', () {
+      expect(
+        emailHtmlHeightCanCommitForTesting(
+          hasPositiveHeight: true,
+          usesPlatformFallback: true,
+          documentReady: false,
+          imagesReady: false,
+          widthFitReady: false,
+          layoutStable: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not commit invalid platform fallback height', () {
+      expect(
+        emailHtmlHeightCanCommitForTesting(
+          hasPositiveHeight: false,
+          usesPlatformFallback: true,
+          documentReady: false,
+          imagesReady: false,
+          widthFitReady: false,
           layoutStable: false,
         ),
         isFalse,

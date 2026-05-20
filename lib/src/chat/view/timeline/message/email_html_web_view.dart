@@ -128,6 +128,7 @@ _emailDomContentHeightMetrics({
 
 bool _emailHtmlHeightCanCommit({
   required bool hasPositiveHeight,
+  required bool usesPlatformFallback,
   required bool documentReady,
   required bool imagesReady,
   required bool widthFitReady,
@@ -136,18 +137,23 @@ bool _emailHtmlHeightCanCommit({
   if (!hasPositiveHeight) {
     return false;
   }
+  if (usesPlatformFallback) {
+    return true;
+  }
   return documentReady && imagesReady && widthFitReady && layoutStable;
 }
 
 @visibleForTesting
 bool emailHtmlHeightCanCommitForTesting({
   required bool hasPositiveHeight,
+  required bool usesPlatformFallback,
   required bool documentReady,
   required bool imagesReady,
   required bool widthFitReady,
   required bool layoutStable,
 }) => _emailHtmlHeightCanCommit(
   hasPositiveHeight: hasPositiveHeight,
+  usesPlatformFallback: usesPlatformFallback,
   documentReady: documentReady,
   imagesReady: imagesReady,
   widthFitReady: widthFitReady,
@@ -384,13 +390,35 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     ? widthScale
     : 1;
   let pendingImages = 0;
+  let layoutBlockingPendingImages = 0;
+  const hasReservedImageLayout = (image) => {
+    if (image.getBoundingClientRect) {
+      const rect = image.getBoundingClientRect();
+      if (Number.isFinite(rect.width) &&
+          Number.isFinite(rect.height) &&
+          rect.width > 0 &&
+          rect.height > 0) {
+        return true;
+      }
+    }
+    const width = Number.parseFloat(image.getAttribute('width') || '0');
+    const height = Number.parseFloat(image.getAttribute('height') || '0');
+    return Number.isFinite(width) &&
+      Number.isFinite(height) &&
+      width > 0 &&
+      height > 0;
+  };
   for (const image of sourceDocument.images) {
     if (!image.complete) {
       pendingImages += 1;
+      if (String(image.getAttribute('loading') || '').toLowerCase() !== 'lazy' &&
+          !hasReservedImageLayout(image)) {
+        layoutBlockingPendingImages += 1;
+      }
     }
   }
   const documentReady = sourceDocument.readyState === 'complete';
-  const imagesReady = pendingImages === 0;
+  const imagesReady = layoutBlockingPendingImages === 0;
   const fontsReady =
     !sourceDocument.fonts || sourceDocument.fonts.status === 'loaded';
   const scrollY = sourceWindow ? sourceWindow.scrollY || 0 : 0;
@@ -1625,6 +1653,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       }
       final canCommitHeight = _emailHtmlHeightCanCommit(
         hasPositiveHeight: measuredHeight > 0,
+        usesPlatformFallback: domMeasuredHeight == null,
         documentReady: domMetrics.documentReady,
         imagesReady: domMetrics.imagesReady,
         widthFitReady: domMetrics.widthFitReady,
@@ -2242,6 +2271,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     );
     final canCommitHeight = _emailHtmlHeightCanCommit(
       hasPositiveHeight: measuredHeight > 0,
+      usesPlatformFallback: false,
       documentReady: documentReady,
       imagesReady: imagesReady,
       widthFitReady: widthFitReady,
