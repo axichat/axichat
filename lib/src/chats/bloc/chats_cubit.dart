@@ -100,6 +100,28 @@ enum ChatsCreateRoomFailure {
   };
 }
 
+bool chatMatchesContactFolderRule({
+  required Chat chat,
+  required Map<String, String> contactFolderRules,
+  required String collectionId,
+}) {
+  if (chat.type == ChatType.groupChat) {
+    return false;
+  }
+  for (final address in <String?>[
+    chat.jid,
+    chat.emailAddress,
+    chat.remoteJid,
+    chat.emailFromAddress,
+  ]) {
+    final key = contactDirectoryAddressKey(address);
+    if (key.isNotEmpty && contactFolderRules[key] == collectionId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class ChatsCubit extends Cubit<ChatsState> {
   ChatsCubit({required XmppService xmppService, EmailService? emailService})
     : _chatsService = xmppService,
@@ -347,31 +369,31 @@ class ChatsCubit extends Cubit<ChatsState> {
         SearchFilterId.email => !chat.hidden && chat.transport.isEmail,
         SearchFilterId.contactFolderImportant =>
           !chat.hidden &&
-              _chatHasContactFolderRule(
-                chat,
-                contactFolderRules,
-                SystemMessageCollection.important.id,
+              chatMatchesContactFolderRule(
+                chat: chat,
+                contactFolderRules: contactFolderRules,
+                collectionId: SystemMessageCollection.important.id,
               ),
         SearchFilterId.contactFolderReceipts =>
           !chat.hidden &&
-              _chatHasContactFolderRule(
-                chat,
-                contactFolderRules,
-                SystemMessageCollection.receipts.id,
+              chatMatchesContactFolderRule(
+                chat: chat,
+                contactFolderRules: contactFolderRules,
+                collectionId: SystemMessageCollection.receipts.id,
               ),
         SearchFilterId.contactFolderMarketing =>
           !chat.hidden &&
-              _chatHasContactFolderRule(
-                chat,
-                contactFolderRules,
-                SystemMessageCollection.marketing.id,
+              chatMatchesContactFolderRule(
+                chat: chat,
+                contactFolderRules: contactFolderRules,
+                collectionId: SystemMessageCollection.marketing.id,
               ),
         SearchFilterId.contactFolderNewsletters =>
           !chat.hidden &&
-              _chatHasContactFolderRule(
-                chat,
-                contactFolderRules,
-                SystemMessageCollection.newsletters.id,
+              chatMatchesContactFolderRule(
+                chat: chat,
+                contactFolderRules: contactFolderRules,
+                collectionId: SystemMessageCollection.newsletters.id,
               ),
         SearchFilterId.hidden => chat.hidden,
         SearchFilterId.all => !chat.hidden,
@@ -415,28 +437,6 @@ class ChatsCubit extends Cubit<ChatsState> {
       archivedItems: archivedItems,
       selectedChats: selectedChats,
     );
-  }
-
-  static bool _chatHasContactFolderRule(
-    Chat chat,
-    Map<String, String> contactFolderRules,
-    String collectionId,
-  ) {
-    if (chat.type == ChatType.groupChat) {
-      return false;
-    }
-    for (final address in <String?>[
-      chat.jid,
-      chat.emailAddress,
-      chat.remoteJid,
-      chat.emailFromAddress,
-    ]) {
-      final key = contactDirectoryAddressKey(address);
-      if (key.isNotEmpty && contactFolderRules[key] == collectionId) {
-        return true;
-      }
-    }
-    return false;
   }
 
   static List<Chat> _deriveSpamItems({

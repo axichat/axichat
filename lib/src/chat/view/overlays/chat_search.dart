@@ -43,27 +43,6 @@ String _sortLabel(SearchSortOrder order, AppLocalizations l10n) =>
       SearchSortOrder.oldestFirst => l10n.chatSearchSortOldestFirst,
     };
 
-String _collapsedEmailPreviewText(String text) {
-  final normalized = text.trim();
-  if (normalized.isEmpty) {
-    return normalized;
-  }
-  final lines = normalized
-      .split(RegExp(r'\r?\n'))
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .toList(growable: false);
-  if (lines.isEmpty) {
-    return normalized;
-  }
-  final preview = lines.take(2).join('\n');
-  const maxChars = 280;
-  if (preview.length > maxChars) {
-    return preview.substring(0, maxChars).trimRight();
-  }
-  return preview;
-}
-
 class _ChatSearchPanel extends StatefulWidget {
   const _ChatSearchPanel();
 

@@ -189,6 +189,83 @@ resolveHomeBadgeCountsForTesting({required int chatsUnreadCount}) {
   );
 }
 
+({Map<String, int> collections, int spam}) _resolveFolderUnreadBadgeCounts({
+  required List<m.Chat> chats,
+  required List<db.MessageCollectionEntry> collections,
+  required List<db.MessageCollectionMembershipEntry> memberships,
+  required Map<String, String> contactFolderRules,
+}) {
+  final activeCollectionIds = collections
+      .where((collection) => collection.active)
+      .map((collection) => collection.id)
+      .toSet();
+  final explicitCollectionIdsByChat = <String, Set<String>>{};
+  for (final membership in memberships) {
+    if (!membership.active ||
+        !activeCollectionIds.contains(membership.collectionId)) {
+      continue;
+    }
+    final chatJid = membership.chatJid.trim();
+    if (chatJid.isEmpty) {
+      continue;
+    }
+    (explicitCollectionIdsByChat[chatJid] ??= <String>{}).add(
+      membership.collectionId,
+    );
+  }
+  final collectionCounts = <String, int>{
+    for (final collectionId in activeCollectionIds) collectionId: 0,
+  };
+  var spamCount = 0;
+  for (final chat in chats) {
+    final unreadCount = math.max(0, chat.unreadCount);
+    if (unreadCount == 0) {
+      continue;
+    }
+    if (chat.spam) {
+      spamCount += unreadCount;
+      continue;
+    }
+    if (chat.archived || chat.hidden) {
+      continue;
+    }
+    final collectionIds = <String>{...?explicitCollectionIdsByChat[chat.jid]};
+    for (final collectionId in activeCollectionIds) {
+      if (chatMatchesContactFolderRule(
+        chat: chat,
+        contactFolderRules: contactFolderRules,
+        collectionId: collectionId,
+      )) {
+        collectionIds.add(collectionId);
+      }
+    }
+    for (final collectionId in collectionIds) {
+      collectionCounts[collectionId] =
+          (collectionCounts[collectionId] ?? 0) + unreadCount;
+    }
+  }
+  return (
+    collections: Map<String, int>.unmodifiable(collectionCounts),
+    spam: spamCount,
+  );
+}
+
+@visibleForTesting
+({Map<String, int> collections, int spam})
+resolveFolderUnreadBadgeCountsForTesting({
+  required List<m.Chat> chats,
+  required List<db.MessageCollectionEntry> collections,
+  required List<db.MessageCollectionMembershipEntry> memberships,
+  required Map<String, String> contactFolderRules,
+}) {
+  return _resolveFolderUnreadBadgeCounts(
+    chats: chats,
+    collections: collections,
+    memberships: memberships,
+    contactFolderRules: contactFolderRules,
+  );
+}
+
 typedef _HomeSearchPresentation = ({
   bool available,
   List<HomeSearchFilter> filters,
@@ -329,10 +406,12 @@ class _HomeFolderMessagesTab extends StatefulWidget {
   const _HomeFolderMessagesTab({
     required this.folder,
     required this.searchSlot,
+    required this.collapseLongEmails,
   });
 
   final FolderHomeSection folder;
   final HomeSearchSlot searchSlot;
+  final bool collapseLongEmails;
 
   @override
   State<_HomeFolderMessagesTab> createState() => _HomeFolderMessagesTabState();
@@ -375,6 +454,7 @@ class _HomeFolderMessagesTabState extends State<_HomeFolderMessagesTab> {
             : context.l10n.folderMessagesEmpty,
         showChatLabel: true,
         showImportantMarker: widget.folder.isImportant,
+        collapseLongEmails: widget.collapseLongEmails,
         onPressed: (item) {
           unawaited(_openItem(item));
         },
@@ -570,8 +650,7 @@ class _FoldersOverviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final counts = _HomeShellScope.maybeOf(context)?.badgeCounts;
-    if (counts == null) {
+    if (_HomeShellScope.maybeOf(context) == null) {
       return const SizedBox.shrink();
     }
     final folderState = context.watch<FoldersCubit>().state;
@@ -582,6 +661,14 @@ class _FoldersOverviewPage extends StatelessWidget {
         child: AxiProgressIndicator(color: context.colorScheme.foreground),
       );
     }
+    final folderUnreadCounts = _resolveFolderUnreadBadgeCounts(
+      chats: context.watch<ChatsCubit>().state.items ?? const <m.Chat>[],
+      collections: collections,
+      memberships:
+          folderState.memberships ??
+          const <db.MessageCollectionMembershipEntry>[],
+      contactFolderRules: folderState.contactFolderRules,
+    );
     final messageCollectionRows = collections
         .where((collection) => collection.active)
         .map((collection) {
@@ -589,12 +676,10 @@ class _FoldersOverviewPage extends StatelessWidget {
           final section = systemCollection == null
               ? FolderHomeSection.custom(collection)
               : FolderHomeSection.system(systemCollection);
-          final membershipCount = folderState.memberships
-              ?.where((entry) => entry.collectionId == collection.id)
-              .length;
-          final badgeCount =
-              membershipCount ?? (section.isImportant ? counts.important : 0);
-          return _FoldersListItem(folder: section, badgeCount: badgeCount);
+          return _FoldersListItem(
+            folder: section,
+            badgeCount: folderUnreadCounts.collections[collection.id] ?? 0,
+          );
         })
         .toList(growable: false);
     return ColoredBox(
@@ -608,7 +693,7 @@ class _FoldersOverviewPage extends StatelessWidget {
           ],
           _FoldersListItem(
             folder: FolderHomeSection.spam,
-            badgeCount: counts.spam,
+            badgeCount: folderUnreadCounts.spam,
           ),
           SizedBox(height: spacing.s),
           const _FoldersCreateListItem(),
@@ -688,25 +773,47 @@ class _FoldersListItem extends StatelessWidget {
                 ),
               ),
           ],
-          child: _FoldersDetailPage(folder: folder, onClose: closeContainer),
+          child: _FoldersDetailPage(
+            folder: folder,
+            initialBadgeCount: badgeCount,
+            onClose: closeContainer,
+          ),
         ),
       ),
     );
   }
 }
 
-class _FoldersDetailPage extends StatelessWidget {
-  const _FoldersDetailPage({required this.folder, required this.onClose});
+class _FoldersDetailPage extends StatefulWidget {
+  const _FoldersDetailPage({
+    required this.folder,
+    required this.initialBadgeCount,
+    required this.onClose,
+  });
 
   final FolderHomeSection folder;
+  final int initialBadgeCount;
   final VoidCallback onClose;
 
   @override
+  State<_FoldersDetailPage> createState() => _FoldersDetailPageState();
+}
+
+class _FoldersDetailPageState extends State<_FoldersDetailPage> {
+  var _collapseLongEmails = true;
+
+  void _toggleCollapseLongEmails() {
+    setState(() {
+      _collapseLongEmails = !_collapseLongEmails;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final counts = _HomeShellScope.maybeOf(context)?.badgeCounts;
-    if (counts == null) {
+    if (_HomeShellScope.maybeOf(context) == null) {
       return const SizedBox.shrink();
     }
+    final folder = widget.folder;
     final content = folder.isSpam
         ? const SpamList(searchSlot: HomeSearchSlot.foldersSpam)
         : _HomeFolderMessagesTab(
@@ -714,14 +821,29 @@ class _FoldersDetailPage extends StatelessWidget {
             searchSlot: folder.isImportant
                 ? HomeSearchSlot.foldersImportant
                 : HomeSearchSlot.foldersCollection,
+            collapseLongEmails: _collapseLongEmails,
           );
     final folderState = folder.isMessageCollection
         ? context.watch<FoldersCubit>().state
         : null;
+    final folderUnreadCounts = _resolveFolderUnreadBadgeCounts(
+      chats: context.watch<ChatsCubit>().state.items ?? const <m.Chat>[],
+      collections:
+          folderState?.collections ?? const <db.MessageCollectionEntry>[],
+      memberships:
+          folderState?.memberships ??
+          const <db.MessageCollectionMembershipEntry>[],
+      contactFolderRules:
+          folderState?.contactFolderRules ?? const <String, String>{},
+    );
+    final collectionId = folder.collectionId;
     final badgeCount = folder.isSpam
-        ? counts.spam
-        : folderState?.items?.length ??
-              (folder.isImportant ? counts.important : 0);
+        ? folderUnreadCounts.spam
+        : folderState?.collections == null || folderState?.memberships == null
+        ? widget.initialBadgeCount
+        : collectionId == null
+        ? 0
+        : folderUnreadCounts.collections[collectionId] ?? 0;
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, _) {
@@ -738,9 +860,15 @@ class _FoldersDetailPage extends StatelessWidget {
               folder: folder,
               badgeCount: badgeCount,
               expanded: true,
+              trailingAction: folder.isMessageCollection
+                  ? _FolderLongEmailCollapseButton(
+                      collapsed: _collapseLongEmails,
+                      onPressed: _toggleCollapseLongEmails,
+                    )
+                  : null,
               onPressed: () {
                 _setFoldersSection(context, null);
-                onClose();
+                widget.onClose();
               },
             ),
             Expanded(child: content),
@@ -751,18 +879,49 @@ class _FoldersDetailPage extends StatelessWidget {
   }
 }
 
+class _FolderLongEmailCollapseButton extends StatelessWidget {
+  const _FolderLongEmailCollapseButton({
+    required this.collapsed,
+    required this.onPressed,
+  });
+
+  final bool collapsed;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final label = collapsed
+        ? context.l10n.chatExpandLongEmails
+        : context.l10n.chatCollapseLongEmails;
+    return AxiIconButton.ghost(
+      key: const ValueKey<String>('home-folders-long-email-collapse'),
+      iconData: collapsed ? LucideIcons.maximize2 : LucideIcons.minimize2,
+      tooltip: label,
+      semanticLabel: label,
+      iconSize: sizing.menuItemIconSize,
+      buttonSize: sizing.iconButtonSize,
+      tapTargetSize: sizing.iconButtonTapTarget,
+      selected: collapsed,
+      onPressed: onPressed,
+    );
+  }
+}
+
 class _FolderListRow extends StatelessWidget {
   const _FolderListRow({
     required this.folder,
     required this.badgeCount,
     required this.expanded,
     required this.onPressed,
+    this.trailingAction,
   });
 
   final FolderHomeSection folder;
   final int badgeCount;
   final bool expanded;
   final VoidCallback onPressed;
+  final Widget? trailingAction;
 
   @override
   Widget build(BuildContext context) {
@@ -781,6 +940,10 @@ class _FolderListRow extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (trailingAction != null) ...[
+              trailingAction!,
+              SizedBox(width: spacing.xs),
+            ],
             if (badgeCount > 0)
               AxiCountBadge(
                 key: ValueKey<String>('home-folders-badge-${folder.key}'),

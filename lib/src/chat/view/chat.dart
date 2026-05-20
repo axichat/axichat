@@ -2238,9 +2238,8 @@ class _ChatState extends State<Chat> {
     final fullEmailPreviewText = displayMessageText.trim().isNotEmpty
         ? displayMessageText.trim()
         : (visibleSanitizedHtmlText?.trim() ?? _emptyText);
-    final collapsedEmailPreviewText = _collapsedEmailPreviewText(
-      fullEmailPreviewText,
-    );
+    final collapsedEmailPreviewText =
+        ChatSubjectCodec.collapsedEmailPreviewText(fullEmailPreviewText);
     final shouldCollapseEmailPreview =
         _collapseLongEmailMessages &&
         isEmailMessage &&

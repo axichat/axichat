@@ -22,6 +22,7 @@ class FolderMessagesList extends StatelessWidget {
     required this.emptyLabel,
     this.showChatLabel = false,
     this.showImportantMarker = false,
+    this.collapseLongEmails = false,
     this.onPressed,
     this.onRemovePressed,
   });
@@ -29,6 +30,7 @@ class FolderMessagesList extends StatelessWidget {
   final String emptyLabel;
   final bool showChatLabel;
   final bool showImportantMarker;
+  final bool collapseLongEmails;
   final ValueChanged<FolderMessageItem>? onPressed;
   final Future<bool> Function(FolderMessageItem item)? onRemovePressed;
 
@@ -83,6 +85,7 @@ class FolderMessagesList extends StatelessWidget {
                 item: item,
                 showChatLabel: showChatLabel,
                 showImportantMarker: showImportantMarker,
+                collapseLongEmails: collapseLongEmails,
                 timestampLabel: _folderTimestampLabel(
                   context,
                   item.markedAt.toLocal(),
@@ -107,21 +110,34 @@ class FolderMessagesList extends StatelessWidget {
   }
 }
 
-String _folderMessagePreviewText(BuildContext context, FolderMessageItem item) {
+bool _folderMessageItemIsEmail(FolderMessageItem item) {
+  final message = item.message;
+  return message?.deltaChatId != null ||
+      message?.deltaMsgId != null ||
+      item.chat?.defaultTransport == MessageTransport.email;
+}
+
+String _folderMessagePreviewText(
+  BuildContext context,
+  FolderMessageItem item, {
+  required bool isEmailMessage,
+  required bool collapseLongEmails,
+}) {
   final message = item.message;
   if (message == null) {
     return context.l10n.chatPinnedMissingMessage;
   }
   final body = message.body;
   final subject = message.subject;
-  final isEmailMessage =
-      message.deltaChatId != null || message.deltaMsgId != null;
   final preview = isEmailMessage
       ? ChatSubjectCodec.previewEmailText(body: body, subject: subject)
       : ChatSubjectCodec.previewText(body: body, subject: subject);
   final normalized = preview?.trim();
   if (normalized == null || normalized.isEmpty) {
     return context.l10n.chatPinnedMissingMessage;
+  }
+  if (collapseLongEmails && isEmailMessage) {
+    return ChatSubjectCodec.collapsedEmailPreviewText(normalized);
   }
   return normalized;
 }
@@ -140,6 +156,7 @@ class _FolderMessageTile extends StatefulWidget {
     required this.item,
     required this.showChatLabel,
     required this.showImportantMarker,
+    required this.collapseLongEmails,
     required this.timestampLabel,
     required this.removing,
     this.onPressed,
@@ -149,6 +166,7 @@ class _FolderMessageTile extends StatefulWidget {
   final FolderMessageItem item;
   final bool showChatLabel;
   final bool showImportantMarker;
+  final bool collapseLongEmails;
   final String timestampLabel;
   final bool removing;
   final VoidCallback? onPressed;
@@ -159,6 +177,9 @@ class _FolderMessageTile extends StatefulWidget {
 }
 
 class _FolderMessageTileState extends State<_FolderMessageTile> {
+  static const int _collapsedEmailPreviewMaxLines = 2;
+  static const int _expandedPreviewMaxLines = 5;
+
   var _hovered = false;
   var _focused = false;
 
@@ -178,16 +199,18 @@ class _FolderMessageTileState extends State<_FolderMessageTile> {
     final chatTheme = context.chatTheme;
     final enabled = widget.onPressed != null;
     final highlighted = _hovered || _focused;
-    final preview = _folderMessagePreviewText(context, widget.item);
+    final isEmailMessage = _folderMessageItemIsEmail(widget.item);
+    final preview = _folderMessagePreviewText(
+      context,
+      widget.item,
+      isEmailMessage: isEmailMessage,
+      collapseLongEmails: widget.collapseLongEmails,
+    );
     final message = widget.item.message;
     final trusted = message?.trusted;
     final chatLabel = widget.item.chat?.title.trim().isNotEmpty == true
         ? widget.item.chat!.title
         : widget.item.chatJid;
-    final isEmailMessage =
-        message?.deltaChatId != null ||
-        message?.deltaMsgId != null ||
-        widget.item.chat?.defaultTransport == MessageTransport.email;
     final previewStyle = context.textTheme.small.copyWith(
       color: message == null ? colors.mutedForeground : colors.foreground,
     );
@@ -220,7 +243,9 @@ class _FolderMessageTileState extends State<_FolderMessageTile> {
     final previewText = Text(
       preview,
       style: previewStyle,
-      maxLines: 5,
+      maxLines: widget.collapseLongEmails && isEmailMessage
+          ? _collapsedEmailPreviewMaxLines
+          : _expandedPreviewMaxLines,
       overflow: TextOverflow.ellipsis,
     );
     final body = widget.onRemovePressed == null
