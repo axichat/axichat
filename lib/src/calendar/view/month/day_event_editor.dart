@@ -76,11 +76,9 @@ Future<DayEventEditorResult?> showDayEventEditor({
   return showAdaptiveBottomSheet<DayEventEditorResult>(
     context: modalContext,
     isScrollControlled: true,
-    dialogMaxWidth: 720,
-    surfacePadding: EdgeInsets.symmetric(
-      horizontal: context.spacing.s,
-      vertical: context.spacing.xxs,
-    ),
+    useBottomSafeArea: false,
+    dialogMaxWidth: context.sizing.dialogMaxWidth,
+    surfacePadding: EdgeInsets.zero,
     showCloseButton: false,
     builder: (BuildContext sheetContext) {
       return _DayEventEditorForm(initialDate: normalized, existing: existing);
@@ -167,17 +165,6 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final l10n = context.l10n;
     final bool isEditing = widget.existing != null;
     final colors = context.colorScheme;
-    final TextStyle titleStyle = context.textTheme.h4.copyWith(
-      color: calendarTitleColor,
-    );
-    final bool isSheetRoute = ModalRoute.of(context) is ModalBottomSheetRoute;
-    final double keyboardInset = isSheetRoute
-        ? MediaQuery.viewInsetsOf(context).bottom
-        : 0;
-    final double safeBottom = isSheetRoute
-        ? MediaQuery.viewPaddingOf(context).bottom
-        : 0;
-    final bool keyboardOpen = isSheetRoute && keyboardInset > safeBottom;
     final CalendarIcsMeta? icsMeta = widget.existing?.icsMeta;
     final List<CalendarRawProperty> rawProperties =
         icsMeta?.rawProperties ?? _emptyRawProperties;
@@ -188,22 +175,13 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       rawProperties: rawProperties,
     );
     final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
-    final double scrollBottomPadding = context.spacing.m + keyboardInset;
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: _titleController,
       builder: (context, value, _) {
         final bool canSubmit = value.text.trim().isNotEmpty;
-        return TaskFormActionsRow(
-          includeTopBorder: true,
+        return AxiSheetActions(
           gap: context.spacing.s,
-          padding: EdgeInsets.fromLTRB(
-            context.spacing.m,
-            context.spacing.m,
-            context.spacing.m,
-            context.spacing.m,
-          ),
           children: [
-            const Spacer(),
             if (isEditing)
               TaskDestructiveButton(
                 label: context.l10n.commonDelete,
@@ -237,178 +215,136 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
         key: _formKey,
         autovalidateMode: ShadAutovalidateMode.disabled,
         fieldIdSeparator: null,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: context.spacing.m,
-                vertical: context.spacing.xxs,
-              ),
-              child: Row(
+        child: AxiSheetScaffold.sections(
+          header: AxiSheetHeader(
+            title: Text(
+              isEditing
+                  ? l10n.calendarEditDayEventTitle
+                  : l10n.calendarNewDayEventTitle,
+            ),
+            onClose: () => Navigator.of(context).maybePop(),
+          ),
+          footer: actions,
+          bodyPadding: EdgeInsets.symmetric(horizontal: context.spacing.m),
+          sections: [
+            AxiSheetSection(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    isEditing
-                        ? l10n.calendarEditDayEventTitle
-                        : l10n.calendarNewDayEventTitle,
-                    style: titleStyle,
+                  TaskTitleField(
+                    controller: _titleController,
+                    autofocus: false,
+                    labelText: l10n.commonTitle,
+                    hintText: context.l10n.calendarDayEventHint,
+                    focusNode: _titleFocusNode,
+                    onChanged: _handleTitleChanged,
+                    validator: (value) => (value?.trim().isEmpty ?? true)
+                        ? context.l10n.calendarErrorTitleEmptyFriendly
+                        : null,
+                    autovalidateMode: AutovalidateMode.disabled,
                   ),
-                  const Spacer(),
-                  AxiIconButton.ghost(
-                    iconData: Icons.close,
-                    color: colors.mutedForeground,
-                    onPressed: () => Navigator.of(context).maybePop(),
+                  SizedBox(height: context.spacing.m),
+                  TaskDescriptionField(
+                    controller: _descriptionController,
+                    hintText: context.l10n.calendarOptionalDetails,
+                    minLines: 3,
+                    maxLines: 3,
                   ),
                 ],
               ),
             ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  context.spacing.m,
-                  context.spacing.s,
-                  context.spacing.m,
-                  scrollBottomPadding,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TaskTitleField(
-                      controller: _titleController,
-                      autofocus: false,
-                      labelText: l10n.commonTitle,
-                      hintText: context.l10n.calendarDayEventHint,
-                      focusNode: _titleFocusNode,
-                      onChanged: _handleTitleChanged,
-                      validator: (value) => (value?.trim().isEmpty ?? true)
-                          ? context.l10n.calendarErrorTitleEmptyFriendly
-                          : null,
-                      autovalidateMode: AutovalidateMode.disabled,
-                    ),
-                    SizedBox(height: context.spacing.m),
-                    TaskDescriptionField(
-                      controller: _descriptionController,
-                      hintText: context.l10n.calendarOptionalDetails,
-                      minLines: 3,
-                      maxLines: 3,
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: context.spacing.m,
-                    ),
-                    TaskSectionHeader(title: context.l10n.calendarDates),
-                    SizedBox(height: context.spacing.s),
-                    ScheduleRangeFields(
-                      start: _startDate,
-                      end: _endDate,
-                      showTimeSelectors: false,
-                      onStartChanged: (DateTime? date) {
-                        if (date == null) {
-                          return;
+            AxiSheetSection(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TaskSectionHeader(title: context.l10n.calendarDates),
+                  SizedBox(height: context.spacing.s),
+                  ScheduleRangeFields(
+                    start: _startDate,
+                    end: _endDate,
+                    showTimeSelectors: false,
+                    onStartChanged: (DateTime? date) {
+                      if (date == null) {
+                        return;
+                      }
+                      setState(() {
+                        _startDate = date;
+                        if (_endDate.isBefore(date)) {
+                          _endDate = date;
                         }
-                        setState(() {
-                          _startDate = date;
-                          if (_endDate.isBefore(date)) {
-                            _endDate = date;
-                          }
-                        });
-                      },
-                      onEndChanged: (DateTime? date) {
-                        if (date == null) {
-                          return;
-                        }
-                        setState(() {
-                          _endDate = date.isBefore(_startDate)
-                              ? _startDate
-                              : date;
-                        });
-                      },
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: context.spacing.m,
-                    ),
-                    ReminderPreferencesField(
-                      value: _reminders,
-                      onChanged: (ReminderPreferences next) {
-                        setState(() {
-                          _reminders = next;
-                        });
-                      },
-                      advancedAlarms: _advancedAlarms,
-                      onAdvancedAlarmsChanged: (value) =>
-                          setState(() => _advancedAlarms = value),
-                      referenceStart: _startDate,
-                      title: l10n.calendarReminderLabel,
-                      anchor: ReminderAnchor.start,
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: context.spacing.m,
-                    ),
-                    CalendarCategoriesField(
-                      categories: _categories,
-                      onChanged: (value) => setState(() => _categories = value),
-                      surfaceColor: colors.background,
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: context.spacing.m,
-                    ),
-                    CalendarLinkGeoFields(
-                      url: _url,
-                      geo: _geo,
-                      onUrlChanged: (value) => setState(() => _url = value),
-                      onGeoChanged: (value) => setState(() => _geo = value),
-                    ),
-                    TaskSectionDivider(
-                      color: colors.border,
-                      verticalPadding: context.spacing.m,
-                    ),
-                    CalendarParticipantsField(
-                      organizer: _organizer,
-                      attendees: _attendees,
-                      onOrganizerChanged: (value) =>
-                          setState(() => _organizer = value),
-                      onAttendeesChanged: (value) =>
-                          setState(() => _attendees = value),
-                    ),
-                    if (showInvitationStatus) ...[
-                      TaskSectionDivider(
-                        color: colors.border,
-                        verticalPadding: context.spacing.m,
-                      ),
-                      CalendarInvitationStatusField(
-                        method: null,
-                        sequence: sequence,
-                        rawProperties: rawProperties,
-                      ),
-                    ],
-                    if (_attachments.isNotEmpty) ...[
-                      TaskSectionDivider(
-                        color: colors.border,
-                        verticalPadding: context.spacing.m,
-                      ),
-                      CalendarAttachmentsField(attachments: _attachments),
-                    ],
-                    if (showDiagnostics) ...[
-                      TaskSectionDivider(
-                        color: colors.border,
-                        verticalPadding: context.spacing.m,
-                      ),
-                      CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
-                    ],
-                    if (keyboardOpen) ...[
-                      SizedBox(height: context.spacing.m),
-                      actions,
-                    ],
-                  ],
-                ),
+                      });
+                    },
+                    onEndChanged: (DateTime? date) {
+                      if (date == null) {
+                        return;
+                      }
+                      setState(() {
+                        _endDate = date.isBefore(_startDate)
+                            ? _startDate
+                            : date;
+                      });
+                    },
+                  ),
+                ],
               ),
             ),
-            if (!keyboardOpen)
-              SafeArea(top: false, bottom: true, child: actions),
+            AxiSheetSection(
+              child: ReminderPreferencesField(
+                value: _reminders,
+                onChanged: (ReminderPreferences next) {
+                  setState(() {
+                    _reminders = next;
+                  });
+                },
+                advancedAlarms: _advancedAlarms,
+                onAdvancedAlarmsChanged: (value) =>
+                    setState(() => _advancedAlarms = value),
+                referenceStart: _startDate,
+                title: l10n.calendarReminderLabel,
+                anchor: ReminderAnchor.start,
+              ),
+            ),
+            AxiSheetSection(
+              child: CalendarCategoriesField(
+                categories: _categories,
+                onChanged: (value) => setState(() => _categories = value),
+                surfaceColor: colors.background,
+              ),
+            ),
+            AxiSheetSection(
+              child: CalendarLinkGeoFields(
+                url: _url,
+                geo: _geo,
+                onUrlChanged: (value) => setState(() => _url = value),
+                onGeoChanged: (value) => setState(() => _geo = value),
+              ),
+            ),
+            AxiSheetSection(
+              child: CalendarParticipantsField(
+                organizer: _organizer,
+                attendees: _attendees,
+                onOrganizerChanged: (value) =>
+                    setState(() => _organizer = value),
+                onAttendeesChanged: (value) =>
+                    setState(() => _attendees = value),
+              ),
+            ),
+            if (showInvitationStatus)
+              AxiSheetSection(
+                child: CalendarInvitationStatusField(
+                  method: null,
+                  sequence: sequence,
+                  rawProperties: rawProperties,
+                ),
+              ),
+            if (_attachments.isNotEmpty)
+              AxiSheetSection(
+                child: CalendarAttachmentsField(attachments: _attachments),
+              ),
+            if (showDiagnostics)
+              AxiSheetSection(
+                child: CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
+              ),
           ],
         ),
       ),

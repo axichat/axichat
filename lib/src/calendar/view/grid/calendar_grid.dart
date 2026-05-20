@@ -1253,6 +1253,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final DateTime? picked = await showAdaptiveBottomSheet<DateTime>(
       context: modalContext,
       isScrollControlled: true,
+      useBottomSafeArea: false,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         return _SplitTaskPickerSheet(
@@ -3734,9 +3735,6 @@ class DayEventsStrip extends StatelessWidget {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
     final bool hasEvents = events.isNotEmpty;
-    final double iconSize = context.sizing.inputSuffixIconSize;
-    final double iconButtonSize = context.sizing.inputSuffixButtonSize;
-    final double iconTapTarget = context.sizing.menuItemHeight;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
@@ -3758,18 +3756,15 @@ class DayEventsStrip extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              AxiIconButton(
+              AxiIconButton.ghost(
                 iconData: Icons.add,
-                iconSize: iconSize,
-                buttonSize: iconButtonSize,
-                tapTargetSize: iconTapTarget,
-                borderColor: Colors.transparent,
-                borderWidth: context.borderSide.width * 0,
-                backgroundColor: colors.primary.withValues(alpha: 0.08),
+                backgroundColor: colors.primary.withValues(
+                  alpha: context.motion.tapHoverAlpha,
+                ),
                 color: colors.primary,
                 tooltip: context.l10n.calendarAddDayEvent,
                 onPressed: onAdd,
-              ).withTapBounce(),
+              ),
             ],
           ),
           SizedBox(height: context.spacing.xxs),
@@ -4405,21 +4400,21 @@ class _HeaderNavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final Widget button = ShadButton.ghost(
-      size: ShadButtonSize.sm,
+    final Widget button = AxiIconButton.ghost(
+      iconData: icon,
       onPressed: onPressed,
-      foregroundColor: colors.primary,
-      hoverForegroundColor: colors.primary,
-      hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
-      child: Icon(icon, size: context.sizing.menuItemIconSize),
+      color: colors.primary,
+      backgroundColor: Colors.transparent,
+      hoverBackgroundColor: colors.primary.withValues(
+        alpha: context.motion.tapHoverAlpha,
+      ),
+      tooltip: tooltip,
     );
 
     return SizedBox(
       width: _headerNavButtonExtent,
       height: calendarWeekHeaderHeight,
-      child: Center(
-        child: AxiTooltip(builder: (_) => Text(tooltip), child: button),
-      ),
+      child: Center(child: button),
     );
   }
 }
@@ -4596,7 +4591,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
   Widget build(BuildContext context) {
     final EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
       context.spacing.m,
-      0,
+      context.spacing.s,
       context.spacing.m,
       context.spacing.m,
     );
@@ -4612,6 +4607,22 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
         ),
       ),
       bodyPadding: sheetPadding,
+      footer: AxiSheetActions(
+        children: [
+          Expanded(
+            child: TaskSecondaryButton(
+              label: context.l10n.commonCancel,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+          ),
+          Expanded(
+            child: TaskPrimaryButton(
+              label: context.l10n.calendarSplitTask,
+              onPressed: _handleSubmit,
+            ),
+          ),
+        ],
+      ),
       children: [
         CalendarDateTimeField(
           value: _selected,
@@ -4627,25 +4638,6 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
           showStatusColors: false,
           minDate: widget.minTime,
           maxDate: widget.maxTime,
-        ),
-        SizedBox(height: context.spacing.m),
-        TaskFormActionsRow(
-          padding: EdgeInsets.zero,
-          gap: 12,
-          children: [
-            Expanded(
-              child: TaskSecondaryButton(
-                label: context.l10n.commonCancel,
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-            ),
-            Expanded(
-              child: TaskPrimaryButton(
-                label: context.l10n.calendarSplitTask,
-                onPressed: _handleSubmit,
-              ),
-            ),
-          ],
         ),
       ],
     );

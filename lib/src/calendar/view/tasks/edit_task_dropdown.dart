@@ -32,10 +32,10 @@ import 'package:axichat/src/calendar/view/tasks/task_title_validation.dart';
 import 'package:axichat/src/calendar/view/tasks/task_checklist_controller.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
-import 'calendar_invitation_status_field.dart';
-import 'calendar_ics_diagnostics_section.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_invitation_status_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_ics_diagnostics_section.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_categories_field.dart';
-import 'calendar_attachments_field.dart';
+import 'package:axichat/src/calendar/view/tasks/calendar_attachments_field.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_link_geo_fields.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_participants_field.dart';
 import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
@@ -480,9 +480,30 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         final bool canSave = editMode.isChecklistOnly
             ? true
             : TaskTitleValidation.validate(value.text, context.l10n) == null;
-        return _EditTaskHeader(
+        return AxiSheetHeader(
+          title: Text(context.l10n.calendarEditTaskTitle),
           onClose: _dismiss,
-          onSave: allowsAnyEdits && canSave ? _handleSave : null,
+          showCloseButton: false,
+          padding: EdgeInsets.fromLTRB(
+            context.spacing.m,
+            context.spacing.s,
+            context.spacing.m,
+            context.spacing.s,
+          ),
+          actions: [
+            AxiIconButton.outline(
+              iconData: Icons.check,
+              tooltip: context.l10n.commonSave,
+              onPressed: allowsAnyEdits && canSave ? _handleSave : null,
+              color: calendarPrimaryColor,
+            ),
+            AxiIconButton.outline(
+              iconData: Icons.close,
+              tooltip: context.l10n.calendarCloseTooltip,
+              onPressed: _dismiss,
+              color: calendarSubtitleColor,
+            ),
+          ],
         );
       },
     );
@@ -504,19 +525,15 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     );
     final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
     final List<TaskContextAction> inlineActions = widget.inlineActions;
-    Widget buildBody({
-      required double keyboardInset,
-      required double safeBottom,
-    }) {
-      final bool keyboardOpen = keyboardInset > safeBottom;
-      final bool footerPinned = !keyboardOpen && allowsAnyEdits;
+    Widget buildBody({required double keyboardInset}) {
+      final bool footerVisible = allowsAnyEdits;
       final double scrollTopPadding = isSheet
           ? context.spacing.s
           : context.spacing.m;
       final bool showInlineActions = isSheet && inlineActions.isNotEmpty;
       final bool showOccurrenceScope =
           widget.task.isOccurrence && widget.onOccurrenceUpdated != null;
-      Widget? actionRow({required bool includeTopBorder}) {
+      Widget? actionRow() {
         if (!allowsAnyEdits) {
           return null;
         }
@@ -534,74 +551,53 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               onCancel: _handleCancel,
               onSave: _handleSave,
               canSave: canSave,
-              includeTopBorder: includeTopBorder,
-              isSheet: isSheet,
               showDelete: allowsFullEdits,
             );
           },
         );
       }
 
-      final Widget? keyboardActionRow = actionRow(includeTopBorder: true);
-      final Widget? footerActionRow = actionRow(includeTopBorder: true);
-      final double scrollBottomPadding = footerPinned
-          ? 0
-          : (isSheet && keyboardOpen ? keyboardInset : context.spacing.m);
-
-      final Widget form = ShadForm(
-        key: _formKey,
-        autovalidateMode: ShadAutovalidateMode.disabled,
-        fieldIdSeparator: null,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            popoverHeader,
-            Flexible(
-              fit: FlexFit.loose,
-              child: _EditTaskScrollBridge(
-                scrollController: _contentScrollController,
-                parentScrollController: widget.parentScrollController,
-                child: SingleChildScrollView(
-                  controller: _contentScrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    context.spacing.m,
-                    scrollTopPadding,
-                    context.spacing.m,
-                    scrollBottomPadding,
+      final Widget? footerActionRow = actionRow();
+      if (isSheet) {
+        return ShadForm(
+          key: _formKey,
+          autovalidateMode: ShadAutovalidateMode.disabled,
+          fieldIdSeparator: null,
+          child: AxiSheetScaffold.sections(
+            header: popoverHeader,
+            footer: footerVisible ? footerActionRow : null,
+            sections: [
+              if (showInlineActions)
+                AxiSheetSection.topActions(
+                  child: _EditTaskInlineActionsSection(
+                    inlineActions: inlineActions,
                   ),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.manual,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (showInlineActions) ...[
-                        _EditTaskInlineActionsSection(
-                          inlineActions: inlineActions,
-                        ),
-                        SizedBox(height: context.spacing.m),
-                      ],
-                      _EditTaskTitleField(
-                        controller: _titleController,
-                        validator: (value) => TaskTitleValidation.validate(
-                          value ?? '',
-                          context.l10n,
-                        ),
-                        onChanged: _handleTitleChanged,
-                        focusNode: _titleFocusNode,
-                        autovalidateMode: AutovalidateMode.disabled,
-                        enabled: allowsFullEdits,
+                ),
+              AxiSheetSection(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _EditTaskTitleField(
+                      controller: _titleController,
+                      validator: (value) => TaskTitleValidation.validate(
+                        value ?? '',
+                        context.l10n,
                       ),
-                      if (showOccurrenceScope) ...[
-                        SizedBox(height: context.spacing.m),
-                        _EditTaskOccurrenceScopeSection(
-                          scope: _occurrenceScope,
-                          enabled: allowsAnyEdits,
-                          onChanged: (scope) =>
-                              setState(() => _occurrenceScope = scope),
-                        ),
-                        TaskSectionDivider(verticalPadding: context.spacing.m),
-                      ] else
-                        SizedBox(height: context.spacing.s),
+                      onChanged: _handleTitleChanged,
+                      focusNode: _titleFocusNode,
+                      autovalidateMode: AutovalidateMode.disabled,
+                      enabled: allowsFullEdits,
+                    ),
+                    if (showOccurrenceScope) ...[
+                      SizedBox(height: context.spacing.m),
+                      _EditTaskOccurrenceScopeSection(
+                        scope: _occurrenceScope,
+                        enabled: allowsAnyEdits,
+                        onChanged: (scope) =>
+                            setState(() => _occurrenceScope = scope),
+                      ),
+                    ] else ...[
+                      SizedBox(height: context.spacing.s),
                       _EditTaskPriorityRow(
                         isImportant: _isImportant,
                         isUrgent: _isUrgent,
@@ -637,135 +633,438 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                         onChanged: _handleLocationChanged,
                         enabled: allowsFullEdits,
                       ),
-                      SizedBox(height: context.spacing.s),
-                      TaskChecklist(
-                        controller: _checklistController,
-                        enabled: allowsChecklistEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      _EditTaskScheduleSection(
-                        start: _startTime,
-                        end: _endTime,
-                        onStartChanged: _handleStartChanged,
-                        onEndChanged: _handleEndChanged,
-                        enabled: allowsFullEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      _EditTaskDeadlineField(
-                        deadline: _deadline,
-                        onChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.deadline);
-                          _deadline = value;
-                        }),
-                        enabled: allowsFullEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      _EditTaskReminderSection(
-                        reminders: _reminders,
-                        deadline: _deadline,
-                        referenceStart: _startTime,
-                        advancedAlarms: _advancedAlarms,
-                        onChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.reminders);
-                          _reminders = value;
-                        }),
-                        onAdvancedAlarmsChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.advancedAlarms);
-                          _advancedAlarms = value;
-                        }),
-                        enabled: allowsFullEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      _EditTaskRecurrenceSection(
-                        value: _recurrence,
-                        fallbackWeekday: _recurrenceFallbackWeekday,
-                        referenceStart: _startTime,
-                        onChanged: _handleRecurrenceChanged,
-                        enabled: allowsFullEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      CalendarCategoriesField(
-                        categories: _categories,
-                        onChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.categories);
-                          _categories = value;
-                        }),
-                        surfaceColor: background,
-                        enabled: allowsFullEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      CalendarLinkGeoFields(
-                        url: _url,
-                        geo: _geo,
-                        onUrlChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.url);
-                          _url = value;
-                        }),
-                        onGeoChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.geo);
-                          _geo = value;
-                        }),
-                        enabled: allowsFullEdits,
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      CalendarParticipantsField(
-                        organizer: _organizer,
-                        attendees: _attendees,
-                        onOrganizerChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.organizer);
-                          _organizer = value;
-                        }),
-                        onAttendeesChanged: (value) => _updateDraft(() {
-                          _markTouched(_TaskEditField.attendees);
-                          _attendees = value;
-                        }),
-                        enabled: allowsFullEdits,
-                      ),
-                      if (showInvitationStatus) ...[
-                        TaskSectionDivider(verticalPadding: context.spacing.m),
-                        CalendarInvitationStatusField(
-                          method: method,
-                          sequence: sequence,
-                          rawProperties: rawProperties,
-                        ),
-                      ],
-                      if (_attachments.isNotEmpty) ...[
-                        TaskSectionDivider(verticalPadding: context.spacing.m),
-                        CalendarAttachmentsField(attachments: _attachments),
-                      ],
-                      if (showDiagnostics) ...[
-                        TaskSectionDivider(verticalPadding: context.spacing.m),
-                        CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
-                      ],
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                      if (!allowsFullEdits)
-                        IgnorePointer(
-                          child: _TaskCriticalPathMembership<B>(
-                            task: widget.task,
-                          ),
-                        )
-                      else
-                        _TaskCriticalPathMembership<B>(task: widget.task),
-                      if (keyboardOpen && keyboardActionRow != null) ...[
-                        SizedBox(height: context.spacing.s),
-                        keyboardActionRow,
-                      ],
                     ],
+                  ],
+                ),
+              ),
+              if (showOccurrenceScope)
+                AxiSheetSection(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _EditTaskPriorityRow(
+                        isImportant: _isImportant,
+                        isUrgent: _isUrgent,
+                        enabled: allowsFullEdits,
+                        onImportantChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.priority);
+                          _isImportant = value;
+                        }),
+                        onUrgentChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.priority);
+                          _isUrgent = value;
+                        }),
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      _EditTaskCompletionToggle(
+                        value: _isCompleted,
+                        enabled: allowsFullEdits,
+                        onChanged: (value) => _updateDraft(() {
+                          _markTouched(_TaskEditField.completion);
+                          _isCompleted = value;
+                        }),
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      _EditTaskDescriptionField(
+                        controller: _descriptionController,
+                        onChanged: _handleDescriptionChanged,
+                        enabled: allowsFullEdits,
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      _EditTaskLocationField(
+                        controller: _locationController,
+                        locationHelper: widget.locationHelper,
+                        onChanged: _handleLocationChanged,
+                        enabled: allowsFullEdits,
+                      ),
+                    ],
+                  ),
+                ),
+              AxiSheetSection(
+                child: TaskChecklist(
+                  controller: _checklistController,
+                  enabled: allowsChecklistEdits,
+                  showDivider: false,
+                ),
+              ),
+              AxiSheetSection(
+                child: _EditTaskScheduleSection(
+                  start: _startTime,
+                  end: _endTime,
+                  onStartChanged: _handleStartChanged,
+                  onEndChanged: _handleEndChanged,
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              AxiSheetSection(
+                child: _EditTaskDeadlineField(
+                  deadline: _deadline,
+                  onChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.deadline);
+                    _deadline = value;
+                  }),
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              AxiSheetSection(
+                child: TaskReminderRepeatSection(
+                  reminders: _reminders,
+                  onRemindersChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.reminders);
+                    _reminders = value;
+                  }),
+                  recurrence: _recurrence,
+                  onRecurrenceChanged: _handleRecurrenceChanged,
+                  deadline: _deadline,
+                  referenceStart: _startTime,
+                  advancedAlarms: _advancedAlarms,
+                  onAdvancedAlarmsChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.advancedAlarms);
+                    _advancedAlarms = value;
+                  }),
+                  fallbackWeekday: _recurrenceFallbackWeekday,
+                  recurrenceSpacing: context.spacing.xs,
+                  recurrenceChipSpacing: context.spacing.xs,
+                  recurrenceChipRunSpacing: context.spacing.xs,
+                  recurrenceWeekdaySpacing: context.spacing.s,
+                  recurrenceAdvancedSectionSpacing: context.spacing.m,
+                  recurrenceEndSpacing: context.spacing.m,
+                  recurrenceFieldGap: context.spacing.m,
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              AxiSheetSection(
+                child: CalendarCategoriesField(
+                  categories: _categories,
+                  onChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.categories);
+                    _categories = value;
+                  }),
+                  surfaceColor: background,
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              AxiSheetSection(
+                child: CalendarLinkGeoFields(
+                  url: _url,
+                  geo: _geo,
+                  onUrlChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.url);
+                    _url = value;
+                  }),
+                  onGeoChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.geo);
+                    _geo = value;
+                  }),
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              AxiSheetSection(
+                child: CalendarParticipantsField(
+                  organizer: _organizer,
+                  attendees: _attendees,
+                  onOrganizerChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.organizer);
+                    _organizer = value;
+                  }),
+                  onAttendeesChanged: (value) => _updateDraft(() {
+                    _markTouched(_TaskEditField.attendees);
+                    _attendees = value;
+                  }),
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              if (showInvitationStatus)
+                AxiSheetSection(
+                  child: CalendarInvitationStatusField(
+                    method: method,
+                    sequence: sequence,
+                    rawProperties: rawProperties,
+                  ),
+                ),
+              if (_attachments.isNotEmpty)
+                AxiSheetSection(
+                  child: CalendarAttachmentsField(attachments: _attachments),
+                ),
+              if (showDiagnostics)
+                AxiSheetSection(
+                  child: CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
+                ),
+              AxiSheetSection(
+                child: !allowsFullEdits
+                    ? IgnorePointer(
+                        child: _TaskCriticalPathMembership<B>(
+                          task: widget.task,
+                        ),
+                      )
+                    : _TaskCriticalPathMembership<B>(task: widget.task),
+              ),
+            ],
+          ),
+        );
+      }
+      final double scrollBottomPadding = footerVisible
+          ? 0
+          : context.spacing.m + keyboardInset;
+      final EdgeInsets bodyHorizontalPadding = EdgeInsets.symmetric(
+        horizontal: context.spacing.m,
+      );
+
+      final Widget form = ShadForm(
+        key: _formKey,
+        autovalidateMode: ShadAutovalidateMode.disabled,
+        fieldIdSeparator: null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            popoverHeader,
+            Flexible(
+              fit: FlexFit.loose,
+              child: ClipRect(
+                child: ScrollNotificationObserver(
+                  child: _EditTaskScrollBridge(
+                    scrollController: _contentScrollController,
+                    parentScrollController: widget.parentScrollController,
+                    child: SingleChildScrollView(
+                      controller: _contentScrollController,
+                      padding: EdgeInsets.only(
+                        top: scrollTopPadding,
+                        bottom: scrollBottomPadding,
+                      ),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.manual,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final child in <Widget>[
+                            if (showInlineActions) ...[
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  top: context.spacing.s,
+                                ),
+                                child: _EditTaskInlineActionsSection(
+                                  inlineActions: inlineActions,
+                                ),
+                              ),
+                              SizedBox(height: context.spacing.m),
+                              const AxiSheetSectionDivider(),
+                              SizedBox(height: context.spacing.m),
+                            ],
+                            _EditTaskTitleField(
+                              controller: _titleController,
+                              validator: (value) =>
+                                  TaskTitleValidation.validate(
+                                    value ?? '',
+                                    context.l10n,
+                                  ),
+                              onChanged: _handleTitleChanged,
+                              focusNode: _titleFocusNode,
+                              autovalidateMode: AutovalidateMode.disabled,
+                              enabled: allowsFullEdits,
+                            ),
+                            if (showOccurrenceScope) ...[
+                              SizedBox(height: context.spacing.m),
+                              _EditTaskOccurrenceScopeSection(
+                                scope: _occurrenceScope,
+                                enabled: allowsAnyEdits,
+                                onChanged: (scope) =>
+                                    setState(() => _occurrenceScope = scope),
+                              ),
+                              SizedBox(height: context.spacing.m),
+                              const AxiSheetSectionDivider(),
+                              SizedBox(height: context.spacing.m),
+                            ] else
+                              SizedBox(height: context.spacing.s),
+                            _EditTaskPriorityRow(
+                              isImportant: _isImportant,
+                              isUrgent: _isUrgent,
+                              enabled: allowsFullEdits,
+                              onImportantChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.priority);
+                                _isImportant = value;
+                              }),
+                              onUrgentChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.priority);
+                                _isUrgent = value;
+                              }),
+                            ),
+                            SizedBox(height: context.spacing.s),
+                            _EditTaskCompletionToggle(
+                              value: _isCompleted,
+                              enabled: allowsFullEdits,
+                              onChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.completion);
+                                _isCompleted = value;
+                              }),
+                            ),
+                            SizedBox(height: context.spacing.s),
+                            _EditTaskDescriptionField(
+                              controller: _descriptionController,
+                              onChanged: _handleDescriptionChanged,
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.s),
+                            _EditTaskLocationField(
+                              controller: _locationController,
+                              locationHelper: widget.locationHelper,
+                              onChanged: _handleLocationChanged,
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            TaskChecklist(
+                              controller: _checklistController,
+                              enabled: allowsChecklistEdits,
+                              showDivider: false,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            _EditTaskScheduleSection(
+                              start: _startTime,
+                              end: _endTime,
+                              onStartChanged: _handleStartChanged,
+                              onEndChanged: _handleEndChanged,
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            _EditTaskDeadlineField(
+                              deadline: _deadline,
+                              onChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.deadline);
+                                _deadline = value;
+                              }),
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            TaskReminderRepeatSection(
+                              reminders: _reminders,
+                              onRemindersChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.reminders);
+                                _reminders = value;
+                              }),
+                              recurrence: _recurrence,
+                              onRecurrenceChanged: _handleRecurrenceChanged,
+                              deadline: _deadline,
+                              referenceStart: _startTime,
+                              advancedAlarms: _advancedAlarms,
+                              onAdvancedAlarmsChanged: (value) =>
+                                  _updateDraft(() {
+                                    _markTouched(_TaskEditField.advancedAlarms);
+                                    _advancedAlarms = value;
+                                  }),
+                              fallbackWeekday: _recurrenceFallbackWeekday,
+                              recurrenceSpacing: context.spacing.xs,
+                              recurrenceChipSpacing: context.spacing.xs,
+                              recurrenceChipRunSpacing: context.spacing.xs,
+                              recurrenceWeekdaySpacing: context.spacing.s,
+                              recurrenceAdvancedSectionSpacing:
+                                  context.spacing.m,
+                              recurrenceEndSpacing: context.spacing.m,
+                              recurrenceFieldGap: context.spacing.m,
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            CalendarCategoriesField(
+                              categories: _categories,
+                              onChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.categories);
+                                _categories = value;
+                              }),
+                              surfaceColor: background,
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            CalendarLinkGeoFields(
+                              url: _url,
+                              geo: _geo,
+                              onUrlChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.url);
+                                _url = value;
+                              }),
+                              onGeoChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.geo);
+                                _geo = value;
+                              }),
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            CalendarParticipantsField(
+                              organizer: _organizer,
+                              attendees: _attendees,
+                              onOrganizerChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.organizer);
+                                _organizer = value;
+                              }),
+                              onAttendeesChanged: (value) => _updateDraft(() {
+                                _markTouched(_TaskEditField.attendees);
+                                _attendees = value;
+                              }),
+                              enabled: allowsFullEdits,
+                            ),
+                            if (showInvitationStatus) ...[
+                              SizedBox(height: context.spacing.m),
+                              const AxiSheetSectionDivider(),
+                              SizedBox(height: context.spacing.m),
+                              CalendarInvitationStatusField(
+                                method: method,
+                                sequence: sequence,
+                                rawProperties: rawProperties,
+                              ),
+                            ],
+                            if (_attachments.isNotEmpty) ...[
+                              SizedBox(height: context.spacing.m),
+                              const AxiSheetSectionDivider(),
+                              SizedBox(height: context.spacing.m),
+                              CalendarAttachmentsField(
+                                attachments: _attachments,
+                              ),
+                            ],
+                            if (showDiagnostics) ...[
+                              SizedBox(height: context.spacing.m),
+                              const AxiSheetSectionDivider(),
+                              SizedBox(height: context.spacing.m),
+                              CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
+                            ],
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            if (!allowsFullEdits)
+                              IgnorePointer(
+                                child: _TaskCriticalPathMembership<B>(
+                                  task: widget.task,
+                                ),
+                              )
+                            else
+                              _TaskCriticalPathMembership<B>(task: widget.task),
+                          ])
+                            AxiSheetBodyItem(
+                              horizontalPadding: bodyHorizontalPadding,
+                              child: child,
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-            if (footerPinned && footerActionRow != null)
-              isSheet
-                  ? AnimatedPadding(
-                      duration: baseAnimationDuration,
-                      curve: Curves.easeOutCubic,
-                      padding: EdgeInsets.only(
-                        bottom: _sheetFooterActionInset(context),
-                      ),
-                      child: footerActionRow,
-                    )
-                  : footerActionRow,
+            if (footerVisible && footerActionRow != null)
+              Padding(
+                padding: EdgeInsets.only(bottom: isSheet ? keyboardInset : 0),
+                child: footerActionRow,
+              ),
           ],
         ),
       );
@@ -787,17 +1086,15 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             : widget.maxHeight;
         final mediaQuery = MediaQuery.of(context);
         final double keyboardInset = mediaQuery.viewInsets.bottom;
-        final double safeBottom = mediaQuery.viewPadding.bottom;
         final BoxBorder? popoverBorder = isSheet
             ? null
-            : Border.all(color: calendarBorderColor);
+            : Border.fromBorderSide(
+                context.borderSide.copyWith(color: calendarBorderColor),
+              );
         final Widget surfaceBody = ValueListenableBuilder<int>(
           valueListenable: _popoverBodyRevision,
           builder: (context, _, _) {
-            return buildBody(
-              keyboardInset: keyboardInset,
-              safeBottom: safeBottom,
-            );
+            return buildBody(keyboardInset: keyboardInset);
           },
         );
         final Widget surfaced = _TaskPopoverSurface(
@@ -826,16 +1123,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   void _handleTitleChanged(String value) {
     _markTouched(_TaskEditField.title);
-  }
-
-  double _sheetFooterActionInset(BuildContext context) {
-    final MediaQueryData mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double safeBottom = mediaQuery.viewPadding.bottom;
-    if (keyboardInset <= safeBottom) {
-      return 0;
-    }
-    return context.spacing.s + (keyboardInset - safeBottom);
   }
 
   void _handleDescriptionChanged(String value) {
@@ -1280,53 +1567,6 @@ class _TaskPopoverSurface extends StatelessWidget {
   }
 }
 
-class _EditTaskHeader extends StatelessWidget {
-  const _EditTaskHeader({required this.onClose, required this.onSave});
-
-  final VoidCallback onClose;
-  final VoidCallback? onSave;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.m,
-        vertical: context.spacing.m,
-      ),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: context.borderSide.color,
-            width: context.borderSide.width,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Text(
-            context.l10n.calendarEditTaskTitle,
-            style: context.textTheme.h4.copyWith(color: calendarTitleColor),
-          ),
-          const Spacer(),
-          AxiIconButton.outline(
-            iconData: Icons.check,
-            tooltip: context.l10n.commonSave,
-            onPressed: onSave,
-            color: calendarPrimaryColor,
-          ),
-          SizedBox(width: context.spacing.s),
-          AxiIconButton.outline(
-            iconData: Icons.close,
-            tooltip: context.l10n.calendarCloseTooltip,
-            onPressed: onClose,
-            color: calendarSubtitleColor,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EditTaskInlineActionsSection extends StatelessWidget {
   const _EditTaskInlineActionsSection({required this.inlineActions});
 
@@ -1347,7 +1587,6 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
               .map((action) => _EditTaskInlineActionChip(action: action))
               .toList(growable: false),
         ),
-        TaskSectionDivider(verticalPadding: context.spacing.m),
       ],
     );
   }
@@ -1594,74 +1833,6 @@ class _EditTaskDeadlineField extends StatelessWidget {
   }
 }
 
-class _EditTaskReminderSection extends StatelessWidget {
-  const _EditTaskReminderSection({
-    required this.reminders,
-    required this.deadline,
-    required this.referenceStart,
-    required this.advancedAlarms,
-    required this.onChanged,
-    required this.onAdvancedAlarmsChanged,
-    required this.enabled,
-  });
-
-  final ReminderPreferences reminders;
-  final DateTime? deadline;
-  final DateTime? referenceStart;
-  final List<CalendarAlarm> advancedAlarms;
-  final ValueChanged<ReminderPreferences> onChanged;
-  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return ReminderPreferencesField(
-      value: reminders,
-      onChanged: onChanged,
-      advancedAlarms: advancedAlarms,
-      onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
-      referenceStart: referenceStart,
-      anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
-      showBothAnchors: deadline != null,
-      enabled: enabled,
-    );
-  }
-}
-
-class _EditTaskRecurrenceSection extends StatelessWidget {
-  const _EditTaskRecurrenceSection({
-    required this.value,
-    required this.fallbackWeekday,
-    required this.referenceStart,
-    required this.onChanged,
-    required this.enabled,
-  });
-
-  final RecurrenceFormValue value;
-  final int fallbackWeekday;
-  final DateTime? referenceStart;
-  final ValueChanged<RecurrenceFormValue> onChanged;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return TaskRecurrenceSection(
-      spacing: context.spacing.xs,
-      value: value,
-      fallbackWeekday: fallbackWeekday,
-      referenceStart: referenceStart,
-      chipSpacing: 6,
-      chipRunSpacing: 6,
-      weekdaySpacing: 10,
-      advancedSectionSpacing: 12,
-      endSpacing: 14,
-      fieldGap: 12,
-      onChanged: onChanged,
-      enabled: enabled,
-    );
-  }
-}
-
 class _EditTaskPriorityRow extends StatelessWidget {
   const _EditTaskPriorityRow({
     required this.isImportant,
@@ -1757,8 +1928,6 @@ class _EditTaskActionsRow extends StatelessWidget {
     required this.onCancel,
     required this.onSave,
     required this.canSave,
-    required this.includeTopBorder,
-    required this.isSheet,
     required this.showDelete,
   });
 
@@ -1767,20 +1936,11 @@ class _EditTaskActionsRow extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback onSave;
   final bool canSave;
-  final bool includeTopBorder;
-  final bool isSheet;
   final bool showDelete;
 
   @override
   Widget build(BuildContext context) {
-    return TaskFormActionsRow(
-      includeTopBorder: includeTopBorder,
-      padding: EdgeInsets.fromLTRB(
-        context.spacing.m,
-        context.spacing.m,
-        context.spacing.m,
-        context.spacing.m,
-      ),
+    return AxiSheetActions(
       gap: context.spacing.s,
       children: [
         if (showDelete)
@@ -1788,7 +1948,6 @@ class _EditTaskActionsRow extends StatelessWidget {
             label: context.l10n.commonDelete,
             onPressed: onDelete,
           ),
-        const Spacer(),
         TaskSecondaryButton(
           label: context.l10n.commonCancel,
           onPressed: onCancel,

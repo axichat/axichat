@@ -302,6 +302,76 @@ void main() {
     focusNode.dispose();
   });
 
+  testWidgets('typing caret hides when parent viewport scrolls it out', (
+    tester,
+  ) async {
+    final controller = TypingTextEditingController(
+      initialValue: const TextEditingValue(
+        text: 'message',
+        selection: TextSelection.collapsed(offset: 7),
+      ),
+    );
+    final focusNode = FocusNode();
+    final scrollController = ScrollController();
+
+    await tester.pumpWidget(
+      _ComposerInputTestApp(
+        settingsCubit: _mockSettingsCubit(),
+        child: Center(
+          child: SizedBox(
+            width: 320,
+            height: 80,
+            child: ScrollNotificationObserver(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 48,
+                      child: axi.EditableText(
+                        controller: controller,
+                        focusNode: focusNode,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.black,
+                        ),
+                        cursorColor: Colors.blue,
+                        backgroundCursorColor: Colors.grey,
+                        typingAnimationDuration: Duration.zero,
+                      ),
+                    ),
+                    const SizedBox(height: 320),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    focusNode.requestFocus();
+    await tester.pump();
+
+    final TypingCaretPainter painter = _typingCaretPainter(tester);
+    expect(painter.showCaret, isTrue);
+
+    scrollController.jumpTo(96);
+    await tester.pump();
+
+    expect(painter.showCaret, isFalse);
+
+    scrollController.jumpTo(0);
+    await tester.pump();
+
+    expect(painter.showCaret, isTrue);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    focusNode.dispose();
+    scrollController.dispose();
+  });
+
   testWidgets(
     'typing caret has advanced before the glyph animation completes',
     (tester) async {

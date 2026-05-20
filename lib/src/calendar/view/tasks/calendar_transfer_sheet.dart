@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -14,10 +13,10 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   String? title,
 }) {
   final resolvedTitle = title ?? context.l10n.calendarExportChooseFormat;
-  final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<CalendarExportFormat>(
-    context: modalContext,
+    context: context,
     useSafeArea: true,
+    preferDialogOnMobile: true,
     showDragHandle: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) {
@@ -65,7 +64,9 @@ class _CalendarTransferOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final colors = context.colorScheme;
-    final iconBackground = colors.muted.withValues(alpha: 0.12);
+    final iconBackground = colors.muted.withValues(
+      alpha: context.motion.tapHoverAlpha,
+    );
     return Padding(
       padding: EdgeInsets.symmetric(vertical: spacing.xxs),
       child: AxiListTile(
@@ -73,7 +74,9 @@ class _CalendarTransferOption extends StatelessWidget {
           decoration: BoxDecoration(
             color: iconBackground,
             borderRadius: context.radius,
-            border: Border.all(color: colors.border),
+            border: Border.fromBorderSide(
+              context.borderSide.copyWith(color: colors.border),
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.all(spacing.s),

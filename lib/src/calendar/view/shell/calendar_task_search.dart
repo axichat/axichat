@@ -25,7 +25,6 @@ import 'package:axichat/src/calendar/view/tasks/task_tile_surface.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_sheet_header.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 
@@ -199,7 +198,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
     context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 760,
-    surfacePadding: EdgeInsets.all(context.spacing.m),
+    surfacePadding: EdgeInsets.zero,
     showCloseButton: false,
     builder: (sheetContext) {
       final B resolvedBloc = resolveBloc();
@@ -284,103 +283,111 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
           return LayoutBuilder(
             builder: (context, constraints) {
               final mediaQuery = MediaQuery.of(context);
-              final bool isSheetRoute =
-                  ModalRoute.of(context) is ModalBottomSheetRoute;
-              final double keyboardInset = isSheetRoute
-                  ? mediaQuery.viewInsets.bottom
-                  : 0;
               final double maxHeight = constraints.hasBoundedHeight
                   ? constraints.maxHeight
                   : mediaQuery.size.height;
               return ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: maxHeight),
-                child: CustomScrollView(
-                  shrinkWrap: true,
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          CalendarSheetHeader(
-                            title: title,
-                            subtitle: subtitle,
-                            onClose: () => Navigator.of(context).maybePop(),
-                          ),
-                          SizedBox(height: spacing.s),
-                          TaskTextField(
-                            controller: _queryController,
-                            focusNode: _queryFocusNode,
-                            hintText: l10n.calendarTaskSearchHint,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: _handleSubmitted,
-                            onChanged: (_) => setState(() {}),
-                            prefix: Icon(
-                              Icons.search,
-                              color: calendarSubtitleColor,
-                            ),
-                          ),
-                          SizedBox(height: spacing.xxs),
-                          _FilterRow(
-                            filters: _filters,
-                            onFilterToggled: _toggleFilter,
-                          ),
-                          SizedBox(height: spacing.xxs),
-                        ],
-                      ),
-                    ),
-                    if (results.isEmpty)
+                child: AxiSheetScaffold(
+                  header: AxiSheetHeader(
+                    title: Text(title),
+                    subtitle: Text(subtitle),
+                    onClose: () => Navigator.of(context).maybePop(),
+                  ),
+                  body: CustomScrollView(
+                    shrinkWrap: true,
+                    slivers: [
                       SliverPadding(
-                        padding: EdgeInsets.only(
-                          top: spacing.xxs,
-                          bottom: spacing.xs + keyboardInset,
+                        padding: EdgeInsets.fromLTRB(
+                          spacing.m,
+                          spacing.s,
+                          spacing.m,
+                          0,
                         ),
                         sliver: SliverToBoxAdapter(
-                          child: _EmptySearchState(
-                            key: const ValueKey('empty-search'),
-                            showHint: query.isEmpty,
-                            isCompact: isCompact,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              TaskTextField(
+                                controller: _queryController,
+                                focusNode: _queryFocusNode,
+                                hintText: l10n.calendarTaskSearchHint,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: _handleSubmitted,
+                                onChanged: (_) => setState(() {}),
+                                prefix: Icon(
+                                  Icons.search,
+                                  color: calendarSubtitleColor,
+                                ),
+                              ),
+                              SizedBox(height: spacing.xxs),
+                              _FilterRow(
+                                filters: _filters,
+                                onFilterToggled: _toggleFilter,
+                              ),
+                              SizedBox(height: spacing.xxs),
+                            ],
                           ),
                         ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: EdgeInsets.only(
-                          top: spacing.xxs,
-                          bottom: spacing.xs + keyboardInset,
-                        ),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate((
-                            context,
-                            index,
-                          ) {
-                            if (index.isOdd) {
-                              return SizedBox(height: spacing.xxs);
-                            }
-                            final CalendarTask task = results[index ~/ 2];
-                            final Widget trailing = _ResultMetadata(task);
-                            final bool useCustomTile =
-                                widget.taskTileBuilder != null;
-                            final Widget tile = useCustomTile
-                                ? widget.taskTileBuilder!.call(
-                                    task,
-                                    trailing: trailing,
-                                    requiresLongPress:
-                                        widget.requiresLongPressForDrag,
-                                    onTap: () => _handleTaskSelected(task),
-                                    onDragStart: () =>
-                                        Navigator.of(context).maybePop(),
-                                    allowContextMenu: false,
-                                  )
-                                : _SearchResultTile(
-                                    task: task,
-                                    trailing: trailing,
-                                    onTap: () => _handleTaskSelected(task),
-                                  );
-                            return tile;
-                          }, childCount: (results.length * 2) - 1),
-                        ),
                       ),
-                  ],
+                      if (results.isEmpty)
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            spacing.m,
+                            spacing.xxs,
+                            spacing.m,
+                            spacing.xs,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: _EmptySearchState(
+                              key: const ValueKey('empty-search'),
+                              showHint: query.isEmpty,
+                              isCompact: isCompact,
+                            ),
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(
+                            spacing.m,
+                            spacing.xxs,
+                            spacing.m,
+                            spacing.xs,
+                          ),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              if (index.isOdd) {
+                                return SizedBox(height: spacing.xxs);
+                              }
+                              final CalendarTask task = results[index ~/ 2];
+                              final Widget trailing = _ResultMetadata(task);
+                              final bool useCustomTile =
+                                  widget.taskTileBuilder != null;
+                              final Widget tile = useCustomTile
+                                  ? widget.taskTileBuilder!.call(
+                                      task,
+                                      trailing: trailing,
+                                      requiresLongPress:
+                                          widget.requiresLongPressForDrag,
+                                      onTap: () => _handleTaskSelected(task),
+                                      onDragStart: () =>
+                                          Navigator.of(context).maybePop(),
+                                      allowContextMenu: false,
+                                    )
+                                  : _SearchResultTile(
+                                      task: task,
+                                      trailing: trailing,
+                                      onTap: () => _handleTaskSelected(task),
+                                    );
+                              return tile;
+                            }, childCount: (results.length * 2) - 1),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               );
             },

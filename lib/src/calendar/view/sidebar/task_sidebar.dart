@@ -2853,6 +2853,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     await showCriticalPathPicker(
       context: context,
       paths: locate<B>().state.criticalPaths,
+      bloc: locate<B>(),
       stayOpen: true,
       onPathSelected: (path) async {
         _addQueuedCriticalPath(path.id);
@@ -3356,20 +3357,16 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 onChanged: onCompletionChanged,
               ),
               TaskSectionDivider(verticalPadding: context.spacing.m),
-              _SelectionReminderSection(
+              _SelectionReminderRepeatSection(
                 hasTasks: hasTasks,
                 remindersListenable: remindersNotifier,
-                mixedListenable: remindersMixedNotifier,
+                remindersMixedListenable: remindersMixedNotifier,
                 anchorListenable: reminderAnchorNotifier,
                 onChanged: onRemindersChanged,
-              ),
-              TaskSectionDivider(verticalPadding: context.spacing.m),
-              _SelectionRecurrenceSection(
-                hasTasks: hasTasks,
                 fallbackWeekday: fallbackWeekday,
                 recurrenceListenable: recurrenceNotifier,
-                mixedListenable: recurrenceMixedNotifier,
-                onChanged: onRecurrenceChanged,
+                recurrenceMixedListenable: recurrenceMixedNotifier,
+                onRecurrenceChanged: onRecurrenceChanged,
               ),
             ],
           ),
@@ -3751,20 +3748,28 @@ class _SelectionCompletionToggle extends StatelessWidget {
   }
 }
 
-class _SelectionReminderSection extends StatelessWidget {
-  const _SelectionReminderSection({
+class _SelectionReminderRepeatSection extends StatelessWidget {
+  const _SelectionReminderRepeatSection({
     required this.hasTasks,
     required this.remindersListenable,
-    required this.mixedListenable,
+    required this.remindersMixedListenable,
     required this.anchorListenable,
     required this.onChanged,
+    required this.fallbackWeekday,
+    required this.recurrenceListenable,
+    required this.recurrenceMixedListenable,
+    required this.onRecurrenceChanged,
   });
 
   final bool hasTasks;
   final ValueListenable<ReminderPreferences> remindersListenable;
-  final ValueListenable<bool> mixedListenable;
+  final ValueListenable<bool> remindersMixedListenable;
   final ValueListenable<ReminderAnchor> anchorListenable;
   final ValueChanged<ReminderPreferences> onChanged;
+  final int fallbackWeekday;
+  final ValueListenable<RecurrenceFormValue> recurrenceListenable;
+  final ValueListenable<bool> recurrenceMixedListenable;
+  final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -3782,13 +3787,38 @@ class _SelectionReminderSection extends StatelessWidget {
           valueListenable: remindersListenable,
           builder: (context, reminders, _) {
             return ValueListenableBuilder<bool>(
-              valueListenable: mixedListenable,
-              builder: (context, mixed, _) {
-                return ReminderPreferencesField(
-                  value: reminders,
-                  onChanged: onChanged,
-                  mixed: mixed,
-                  anchor: anchor,
+              valueListenable: remindersMixedListenable,
+              builder: (context, remindersMixed, _) {
+                return ValueListenableBuilder<RecurrenceFormValue>(
+                  valueListenable: recurrenceListenable,
+                  builder: (context, recurrence, _) {
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: recurrenceMixedListenable,
+                      builder: (context, recurrenceMixed, _) {
+                        return TaskReminderRepeatSection(
+                          reminders: reminders,
+                          onRemindersChanged: onChanged,
+                          recurrence: recurrence,
+                          onRecurrenceChanged: onRecurrenceChanged,
+                          remindersMixed: remindersMixed,
+                          reminderAnchor: anchor,
+                          fallbackWeekday: fallbackWeekday,
+                          recurrencePrefix: recurrenceMixed
+                              ? const _SelectionMixedRecurrenceNotice()
+                              : null,
+                          recurrenceChipSpacing: context.spacing.s,
+                          recurrenceChipRunSpacing: context.spacing.s,
+                          recurrenceWeekdaySpacing: context.spacing.m,
+                          recurrenceAdvancedSectionSpacing: context.spacing.m,
+                          recurrenceEndSpacing: context.spacing.m,
+                          recurrenceFieldGap: context.spacing.m,
+                          recurrenceIntervalSelectWidth:
+                              calendarCompactDayColumnWidth,
+                          enabled: hasTasks,
+                        );
+                      },
+                    );
+                  },
                 );
               },
             );
@@ -3799,85 +3829,32 @@ class _SelectionReminderSection extends StatelessWidget {
   }
 }
 
-class _SelectionRecurrenceSection extends StatelessWidget {
-  const _SelectionRecurrenceSection({
-    required this.hasTasks,
-    required this.fallbackWeekday,
-    required this.recurrenceListenable,
-    required this.mixedListenable,
-    required this.onChanged,
-  });
-
-  final bool hasTasks;
-  final int fallbackWeekday;
-  final ValueListenable<RecurrenceFormValue> recurrenceListenable;
-  final ValueListenable<bool> mixedListenable;
-  final ValueChanged<RecurrenceFormValue> onChanged;
+class _SelectionMixedRecurrenceNotice extends StatelessWidget {
+  const _SelectionMixedRecurrenceNotice();
 
   @override
   Widget build(BuildContext context) {
-    if (!hasTasks) {
-      return Text(
-        context.l10n.calendarSelectionNoneShort,
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.m,
+        vertical: context.spacing.s,
+      ),
+      decoration: BoxDecoration(
+        color: calendarWarningColor.withValues(
+          alpha: context.motion.tapHoverAlpha,
+        ),
+        borderRadius: context.radius,
+        border: Border.all(
+          color: calendarWarningColor.withValues(
+            alpha: context.motion.tapFocusAlpha,
+          ),
+          width: context.borderSide.width,
+        ),
+      ),
+      child: Text(
+        context.l10n.calendarSelectionMixedRecurrence,
         style: context.textTheme.label.copyWith(color: calendarSubtitleColor),
-      );
-    }
-
-    return ValueListenableBuilder<RecurrenceFormValue>(
-      valueListenable: recurrenceListenable,
-      builder: (context, recurrence, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: mixedListenable,
-          builder: (context, isMixed, _) {
-            final children = <Widget>[];
-            if (isMixed) {
-              children.add(
-                Container(
-                  margin: EdgeInsets.only(bottom: context.spacing.s),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: context.spacing.m,
-                    vertical: context.spacing.s,
-                  ),
-                  decoration: BoxDecoration(
-                    color: calendarWarningColor.withValues(alpha: 0.08),
-                    borderRadius: context.radius,
-                    border: Border.all(
-                      color: calendarWarningColor.withValues(alpha: 0.4),
-                    ),
-                  ),
-                  child: Text(
-                    context.l10n.calendarSelectionMixedRecurrence,
-                    style: context.textTheme.label.copyWith(
-                      color: calendarSubtitleColor,
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            children.add(
-              TaskRecurrenceSection(
-                value: recurrence,
-                enabled: hasTasks,
-                fallbackWeekday: fallbackWeekday,
-                chipSpacing: context.spacing.s,
-                chipRunSpacing: context.spacing.s,
-                weekdaySpacing: context.spacing.m,
-                advancedSectionSpacing: context.spacing.m,
-                endSpacing: context.spacing.m,
-                fieldGap: context.spacing.m,
-                intervalSelectWidth: 118,
-                onChanged: onChanged,
-              ),
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
-            );
-          },
-        );
-      },
+      ),
     );
   }
 }
@@ -6105,31 +6082,31 @@ class _AdvancedOptions extends StatelessWidget {
         ),
         _AdvancedOptionsSection(
           label: l10n.calendarRemindersSection,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AnimatedBuilder(
-                animation: draftController,
-                builder: (context, _) {
-                  return ReminderPreferencesField(
-                    value: draftController.reminders,
-                    showHeader: false,
-                    onChanged: onRemindersChanged,
-                    referenceStart: draftController.startTime,
-                    anchor: draftController.deadline == null
-                        ? ReminderAnchor.start
-                        : ReminderAnchor.deadline,
-                    showBothAnchors: draftController.deadline != null,
-                    showAdvancedAlarms: false,
-                  );
-                },
-              ),
-              SizedBox(height: context.spacing.m),
-              _AdvancedRecurrenceSection(
-                draftController: draftController,
-                onChanged: onRecurrenceChanged,
-              ),
-            ],
+          child: AnimatedBuilder(
+            animation: draftController,
+            builder: (context, _) {
+              final referenceStart = draftController.startTime;
+              return TaskReminderRepeatSection(
+                reminders: draftController.reminders,
+                onRemindersChanged: onRemindersChanged,
+                recurrence: draftController.recurrence,
+                onRecurrenceChanged: onRecurrenceChanged,
+                deadline: draftController.deadline,
+                referenceStart: referenceStart,
+                showReminderHeader: false,
+                fallbackWeekday:
+                    referenceStart?.weekday ?? DateTime.now().weekday,
+                recurrenceShowAdvancedToggle: false,
+                recurrenceForceAdvanced: true,
+                recurrenceChipSpacing: context.spacing.s,
+                recurrenceChipRunSpacing: context.spacing.s,
+                recurrenceWeekdaySpacing: context.spacing.m,
+                recurrenceAdvancedSectionSpacing: context.spacing.m,
+                recurrenceEndSpacing: context.spacing.m,
+                recurrenceFieldGap: context.spacing.m,
+                recurrenceIntervalSelectWidth: calendarCompactDayColumnWidth,
+              );
+            },
           ),
         ),
         _AdvancedOptionsSection(
@@ -6234,47 +6211,6 @@ class _AdvancedScheduleSection extends StatelessWidget {
           onStartChanged: onStartChanged,
           onEndChanged: onEndChanged,
           onClear: onClear,
-        );
-      },
-    );
-  }
-}
-
-class _AdvancedRecurrenceSection extends StatelessWidget {
-  const _AdvancedRecurrenceSection({
-    required this.draftController,
-    required this.onChanged,
-  });
-
-  final TaskDraftController draftController;
-  final ValueChanged<RecurrenceFormValue> onChanged;
-  final TaskSectionLabelSize headerSize = TaskSectionLabelSize.small;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: draftController,
-      builder: (context, _) {
-        final referenceStart = draftController.startTime;
-        final fallbackWeekday =
-            referenceStart?.weekday ?? DateTime.now().weekday;
-
-        return TaskRecurrenceSection(
-          spacing: context.spacing.s,
-          headerSize: headerSize,
-          value: draftController.recurrence,
-          fallbackWeekday: fallbackWeekday,
-          referenceStart: referenceStart,
-          showAdvancedToggle: false,
-          forceAdvanced: true,
-          chipSpacing: context.spacing.s,
-          chipRunSpacing: context.spacing.s,
-          weekdaySpacing: context.spacing.m,
-          advancedSectionSpacing: context.spacing.m,
-          endSpacing: context.spacing.m,
-          fieldGap: context.spacing.m,
-          intervalSelectWidth: calendarCompactDayColumnWidth,
-          onChanged: onChanged,
         );
       },
     );

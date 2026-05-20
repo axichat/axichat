@@ -11,6 +11,8 @@ import 'package:axichat/src/common/ui/modal_close_button.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+enum AxiSheetBottomSafeAreaBehavior { none, insideSurface, outsideSurface }
+
 /// Shows a bottom sheet on mobile form factors and a dialog on desktop/tablet.
 ///
 /// Keeps the builder API identical to `showModalBottomSheet` so existing sheet
@@ -33,6 +35,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   double? dialogMaxWidth,
   double? dialogMaxHeightFraction,
   EdgeInsetsGeometry? surfacePadding,
+  AxiSheetBottomSafeAreaBehavior? bottomSafeAreaBehavior,
 }) {
   final commandSurface = preferDialogOnMobile
       ? CommandSurface.menu
@@ -75,20 +78,38 @@ Future<T?> showAdaptiveBottomSheet<T>({
         final double topInset = useSafeArea
             ? viewMediaQuery.viewPadding.top
             : zeroInset;
-        final double bottomSafeInset = useSafeArea && useBottomSafeArea
+        final EdgeInsets baseSurfacePadding = resolvedSurfacePadding.resolve(
+          Directionality.of(sheetContext),
+        );
+        final AxiSheetBottomSafeAreaBehavior resolvedBottomSafeAreaBehavior =
+            bottomSafeAreaBehavior ??
+            (useBottomSafeArea
+                ? AxiSheetBottomSafeAreaBehavior.insideSurface
+                : AxiSheetBottomSafeAreaBehavior.none);
+        final double bottomSafeInset =
+            useSafeArea &&
+                resolvedBottomSafeAreaBehavior !=
+                    AxiSheetBottomSafeAreaBehavior.none
             ? math.max(
                 viewMediaQuery.viewPadding.bottom -
                     mediaQuery.viewInsets.bottom,
                 zeroInset,
               )
             : zeroInset;
-        final EdgeInsets baseSurfacePadding = resolvedSurfacePadding.resolve(
-          Directionality.of(sheetContext),
-        );
+        final double surfaceBottomSafeInset =
+            resolvedBottomSafeAreaBehavior ==
+                AxiSheetBottomSafeAreaBehavior.insideSurface
+            ? bottomSafeInset
+            : zeroInset;
+        final double externalBottomSafeInset =
+            resolvedBottomSafeAreaBehavior ==
+                AxiSheetBottomSafeAreaBehavior.outsideSurface
+            ? bottomSafeInset
+            : zeroInset;
         final EdgeInsets resolvedSheetSurfacePadding = transparentSurface
             ? EdgeInsets.zero
             : baseSurfacePadding.copyWith(
-                bottom: baseSurfacePadding.bottom + bottomSafeInset,
+                bottom: baseSurfacePadding.bottom + surfaceBottomSafeInset,
               );
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,
@@ -109,10 +130,14 @@ Future<T?> showAdaptiveBottomSheet<T>({
         );
         final Widget scopedSurface = KeyboardPopScope(child: surface);
         return Padding(
-          padding: EdgeInsets.only(top: topInset),
+          padding: EdgeInsets.only(
+            top: topInset,
+            bottom: externalBottomSafeInset,
+          ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: mediaQuery.size.height - topInset,
+              maxHeight:
+                  mediaQuery.size.height - topInset - externalBottomSafeInset,
             ),
             child: scopedSurface,
           ),
@@ -243,28 +268,39 @@ class AxiModalSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final BorderRadiusGeometry resolvedRadius = borderRadius ?? context.radius;
-    final Widget paddedChild = Padding(padding: padding, child: child);
-    final ShadDecoration decoration = ShadDecoration(
-      color: backgroundColor ?? ShadTheme.of(context).colorScheme.card,
-      border: ShadBorder.all(
-        color: borderColor ?? context.borderSide.color,
-        width: context.borderSide.width,
-        radius: resolvedRadius,
-      ),
-      shadows: shadows ?? const <BoxShadow>[],
-    );
-    return ClipRRect(
+    final BorderRadiusGeometry resolvedRadius =
+        borderRadius ??
+        (cornerRadius == null
+            ? context.radius
+            : BorderRadius.circular(cornerRadius!));
+    final Color resolvedBackground =
+        backgroundColor ?? ShadTheme.of(context).colorScheme.card;
+    final BorderSide resolvedBorderSide = switch (borderColor) {
+      final Color color when color.a == 0 => BorderSide.none,
+      final Color color => context.borderSide.copyWith(color: color),
+      null => context.borderSide,
+    };
+    final RoundedRectangleBorder shape = RoundedRectangleBorder(
       borderRadius: resolvedRadius,
-      child: ShadDecorator(
-        decoration: decoration,
-        child: Material(
-          type: MaterialType.transparency,
-          shape: RoundedRectangleBorder(borderRadius: resolvedRadius),
-          clipBehavior: Clip.antiAlias,
-          child: paddedChild,
-        ),
+      side: resolvedBorderSide,
+    );
+    final Widget surface = Material(
+      color: resolvedBackground,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    );
+
+    final List<BoxShadow> resolvedShadows = shadows ?? const <BoxShadow>[];
+    if (resolvedShadows.isEmpty) {
+      return surface;
+    }
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        shadows: resolvedShadows,
+        shape: RoundedRectangleBorder(borderRadius: resolvedRadius),
       ),
+      child: surface,
     );
   }
 }

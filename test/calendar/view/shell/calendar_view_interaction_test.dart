@@ -1,8 +1,23 @@
+import 'dart:async';
+
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/view/month/day_event_editor.dart';
+import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
+import 'package:axichat/src/calendar/view/tasks/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/tasks/quick_add_modal.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
+import 'package:axichat/src/calendar/view/tasks/reminder_preferences_field.dart';
+import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
+import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
+import 'package:axichat/src/common/ui/axi_sheet_scaffold.dart';
+import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/buttons/axi_button.dart';
+import 'package:axichat/src/common/ui/axi_text_input.dart';
+import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_surface.dart';
@@ -13,6 +28,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
@@ -28,39 +44,447 @@ void main() {
     tester,
   ) async {
     final slotTime = DateTime(2024, 1, 15, 10, 30);
+    ensureCalendarTestStorage();
+    final SettingsCubit settingsCubit = SettingsCubit();
+    addTearDown(settingsCubit.close);
     CalendarTask? submitted;
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: ShadTheme(
           data: ShadThemeData(
             colorScheme: const ShadSlateColorScheme.light(),
             brightness: Brightness.light,
           ),
-          child: QuickAddModal(
-            prefilledDateTime: slotTime,
-            onTaskAdded: (task, _) => submitted = task,
-            locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
+          child: BlocProvider<SettingsCubit>.value(
+            value: settingsCubit,
+            child: QuickAddModal(
+              prefilledDateTime: slotTime,
+              onTaskAdded: (task, _) => submitted = task,
+              locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    final titleField = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField && widget.decoration?.labelText == 'Task name *',
-    );
-    await tester.enterText(titleField, 'Modal Submit Test');
+    final titleField = find.byType(AxiTextInput).first;
+    await tester.tap(titleField, warnIfMissed: false);
+    tester.testTextInput.enterText('Modal Submit Test');
     await tester.pump();
 
-    await tester.tap(find.widgetWithText(ShadButton, 'Add Task'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
 
     expect(submitted, isNotNull);
     expect(submitted!.title, 'Modal Submit Test');
     expect(submitted!.scheduledTime, slotTime);
-  }, skip: true);
+  });
+
+  testWidgets('QuickAddModal keeps repeat inside reminders section', (
+    tester,
+  ) async {
+    ensureCalendarTestStorage();
+    final SettingsCubit settingsCubit = SettingsCubit();
+    addTearDown(settingsCubit.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: ShadTheme(
+          data: ShadThemeData(
+            colorScheme: const ShadSlateColorScheme.light(),
+            brightness: Brightness.light,
+          ),
+          child: BlocProvider<SettingsCubit>.value(
+            value: settingsCubit,
+            child: QuickAddModal(
+              onTaskAdded: (_, _) {},
+              locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _expectReminderRepeatGrouping(tester);
+  });
+
+  testWidgets('EditTaskDropdown keeps repeat inside reminders section', (
+    tester,
+  ) async {
+    ensureCalendarTestStorage();
+    final SettingsCubit settingsCubit = SettingsCubit();
+    addTearDown(settingsCubit.close);
+
+    final bloc = MockCalendarBloc();
+    final state = CalendarTestData.baseState();
+    when(() => bloc.state).thenReturn(state);
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: ShadTheme(
+          data: ShadThemeData(
+            colorScheme: const ShadSlateColorScheme.light(),
+            brightness: Brightness.light,
+          ),
+          child: BlocProvider<SettingsCubit>.value(
+            value: settingsCubit,
+            child: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 760,
+                  height: 560,
+                  child: BlocProvider<CalendarBloc>.value(
+                    value: bloc,
+                    child: EditTaskDropdown<CalendarBloc>(
+                      task: state.model.tasks['task-unscheduled']!,
+                      onClose: () {},
+                      onTaskUpdated: (_) {},
+                      onTaskDeleted: (_) {},
+                      locationHelper: LocationAutocompleteHelper.fromSeeds(
+                        const [],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _expectReminderRepeatGrouping(tester);
+  });
+
+  testWidgets('QuickAddModal keeps text focus when keyboard insets change', (
+    tester,
+  ) async {
+    await _pumpMobileSheetHarness(
+      tester,
+      Builder(
+        builder: (context) {
+          return Center(
+            child: ElevatedButton(
+              onPressed: () {
+                showQuickAddModal(
+                  context: context,
+                  onTaskAdded: (_, _) {},
+                  locationHelper: LocationAutocompleteHelper.fromSeeds(
+                    const [],
+                  ),
+                );
+              },
+              child: const Text('Open quick add'),
+            ),
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Open quick add'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(AxiTextInput).first, warnIfMissed: false);
+    await tester.pump();
+    expect(FocusManager.instance.isTextInputFocused, isTrue);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(FocusManager.instance.isTextInputFocused, isTrue);
+    expect(find.text('Add Task'), findsOneWidget);
+    expect(find.text('Add'), findsOneWidget);
+    expect(
+      tester.getRect(find.text('Add').last).bottom,
+      lessThanOrEqualTo(
+        tester.view.physicalSize.height / tester.view.devicePixelRatio - 320,
+      ),
+    );
+  });
+
+  testWidgets('day event editor keeps text focus when keyboard insets change', (
+    tester,
+  ) async {
+    await _pumpMobileSheetHarness(
+      tester,
+      Builder(
+        builder: (context) {
+          return Center(
+            child: ElevatedButton(
+              onPressed: () {
+                showDayEventEditor(
+                  context: context,
+                  initialDate: DateTime(2024, 1, 15),
+                );
+              },
+              child: const Text('Open day event'),
+            ),
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Open day event'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(AxiTextInput).first, warnIfMissed: false);
+    await tester.pump();
+    expect(FocusManager.instance.isTextInputFocused, isTrue);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(FocusManager.instance.isTextInputFocused, isTrue);
+    expect(find.text('New day event'), findsOneWidget);
+    expect(find.text('Add'), findsOneWidget);
+    expect(
+      tester.getRect(find.text('Add').last).bottom,
+      lessThanOrEqualTo(
+        tester.view.physicalSize.height / tester.view.devicePixelRatio - 320,
+      ),
+    );
+  });
+
+  testWidgets('edit task sheet keeps footer actions above keyboard', (
+    tester,
+  ) async {
+    final bloc = MockCalendarBloc();
+    final state = CalendarTestData.baseState();
+    when(() => bloc.state).thenReturn(state);
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+
+    await _pumpMobileSheetHarness(
+      tester,
+      BlocProvider<CalendarBloc>.value(
+        value: bloc,
+        child: Builder(
+          builder: (context) {
+            return Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  showAdaptiveBottomSheet<void>(
+                    context: context,
+                    isScrollControlled: true,
+                    useBottomSafeArea: false,
+                    surfacePadding: EdgeInsets.zero,
+                    builder: (sheetContext) {
+                      final mediaQuery = MediaQuery.of(sheetContext);
+                      return BlocProvider<CalendarBloc>.value(
+                        value: bloc,
+                        child: EditTaskDropdown<CalendarBloc>(
+                          task: state.model.tasks['task-unscheduled']!,
+                          maxHeight:
+                              mediaQuery.size.height -
+                              mediaQuery.viewPadding.vertical,
+                          isSheet: true,
+                          onClose: () => Navigator.of(sheetContext).maybePop(),
+                          onTaskUpdated: (_) {},
+                          onTaskDeleted: (_) {},
+                          locationHelper: LocationAutocompleteHelper.fromSeeds(
+                            const [],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+                child: const Text('Open edit task'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open edit task'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(AxiTextInput).first, warnIfMissed: false);
+    await tester.pump();
+    expect(FocusManager.instance.isTextInputFocused, isTrue);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(FocusManager.instance.isTextInputFocused, isTrue);
+    expect(find.text('Save'), findsWidgets);
+    expect(
+      tester.getRect(find.text('Save').last).bottom,
+      lessThanOrEqualTo(
+        tester.view.physicalSize.height / tester.view.devicePixelRatio - 320,
+      ),
+    );
+  });
+
+  testWidgets(
+    'QuickAddModal submit action reflects disabled and loading state',
+    (tester) async {
+      ensureCalendarTestStorage();
+      final SettingsCubit settingsCubit = SettingsCubit();
+      addTearDown(settingsCubit.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: ShadTheme(
+            data: ShadThemeData(
+              colorScheme: const ShadSlateColorScheme.light(),
+              brightness: Brightness.light,
+            ),
+            child: BlocProvider<SettingsCubit>.value(
+              value: settingsCubit,
+              child: QuickAddModal(
+                onTaskAdded: (_, _) {},
+                locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder disabledSubmitFinder = find.ancestor(
+        of: find.text('Add'),
+        matching: find.byType(AxiButton),
+      );
+      expect(disabledSubmitFinder, findsOneWidget);
+      expect(tester.widget<AxiButton>(disabledSubmitFinder).onPressed, isNull);
+
+      final bloc = MockCalendarBloc();
+      final state = CalendarTestData.baseState().copyWith(
+        isTaskCreationSubmitting: true,
+      );
+      when(() => bloc.state).thenReturn(state);
+      when(
+        () => bloc.stream,
+      ).thenAnswer((_) => const Stream<CalendarState>.empty());
+      when(() => bloc.close()).thenAnswer((_) async {});
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: ShadTheme(
+            data: ShadThemeData(
+              colorScheme: const ShadSlateColorScheme.light(),
+              brightness: Brightness.light,
+            ),
+            child: BlocProvider<SettingsCubit>.value(
+              value: settingsCubit,
+              child: QuickAddModal(
+                prefilledText: 'Busy task',
+                onTaskAdded: (_, _) {},
+                locationHelper: LocationAutocompleteHelper.fromSeeds(const []),
+                locateCalendarBloc: () => bloc,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final Finder loadingSubmitFinder = find.ancestor(
+        of: find.text('Add'),
+        matching: find.byType(AxiButton),
+      );
+      expect(loadingSubmitFinder, findsOneWidget);
+      final AxiButton loadingSubmit = tester.widget<AxiButton>(
+        loadingSubmitFinder,
+      );
+      expect(loadingSubmit.loading, isTrue);
+      expect(loadingSubmit.onPressed, isNull);
+    },
+  );
+
+  testWidgets('critical path picker shows paths created while open', (
+    tester,
+  ) async {
+    final controller = StreamController<CalendarState>.broadcast();
+    addTearDown(controller.close);
+
+    final bloc = MockCalendarBloc();
+    var state = CalendarTestData.baseState();
+    when(() => bloc.state).thenAnswer((_) => state);
+    when(() => bloc.stream).thenAnswer((_) => controller.stream);
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+
+    final createdPath = CalendarCriticalPath(
+      id: 'created-path',
+      name: 'Created path',
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+
+    await _pumpMobileSheetHarness(
+      tester,
+      Builder(
+        builder: (context) {
+          return Center(
+            child: ElevatedButton(
+              onPressed: () {
+                showCriticalPathPicker(
+                  context: context,
+                  paths: const <CalendarCriticalPath>[],
+                  bloc: bloc,
+                  stayOpen: true,
+                  onCreateNewPath: () async {
+                    state = state.copyWith(
+                      model: state.model.addCriticalPath(createdPath),
+                    );
+                    controller.add(state);
+                    return null;
+                  },
+                );
+              },
+              child: const Text('Open critical path picker'),
+            ),
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Open critical path picker'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create a critical path to get started'), findsOneWidget);
+
+    await tester.tap(find.text('New critical path'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Created path'), findsOneWidget);
+  });
 
   testWidgets('CalendarWidget week view renders day headers', (tester) async {
     final harness = await CalendarWidgetHarness.pump(
@@ -628,6 +1052,41 @@ void main() {
   });
 }
 
+Future<void> _expectReminderRepeatGrouping(WidgetTester tester) async {
+  for (var attempt = 0; attempt < 8; attempt++) {
+    if (tester.any(find.byType(TaskReminderRepeatSection))) {
+      break;
+    }
+    final Finder scrollable = find.byType(Scrollable).first;
+    await tester.drag(scrollable, const Offset(0, -600));
+    await tester.pump();
+  }
+
+  final Finder groupFinder = find.byType(TaskReminderRepeatSection);
+  expect(groupFinder, findsOneWidget);
+  expect(
+    find.descendant(
+      of: groupFinder,
+      matching: find.byType(ReminderPreferencesField),
+    ),
+    findsOneWidget,
+  );
+  expect(
+    find.descendant(
+      of: groupFinder,
+      matching: find.byType(TaskRecurrenceSection),
+    ),
+    findsOneWidget,
+  );
+  expect(
+    find.descendant(
+      of: groupFinder,
+      matching: find.byType(AxiSheetSectionDivider),
+    ),
+    findsNothing,
+  );
+}
+
 Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
   final task = CalendarTestData.scheduled(
     'task-context-menu',
@@ -899,6 +1358,49 @@ Future<void> _pumpUntilMenuVisible(
     findsOneWidget,
     reason: 'Context menu should appear after secondary tap.',
   );
+}
+
+Future<void> _pumpMobileSheetHarness(WidgetTester tester, Widget child) async {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.viewInsets = FakeViewPadding.zero;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+    tester.view.resetViewInsets();
+  });
+
+  ensureCalendarTestStorage();
+  final SettingsCubit settingsCubit = SettingsCubit();
+  addTearDown(settingsCubit.close);
+
+  await tester.pumpWidget(
+    BlocProvider<SettingsCubit>.value(
+      value: settingsCubit,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          platform: TargetPlatform.android,
+          useMaterial3: true,
+          colorSchemeSeed: const Color(0xFF0F172A),
+          brightness: Brightness.light,
+        ),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: EnvScope(
+          child: ShadTheme(
+            data: ShadThemeData(
+              colorScheme: const ShadSlateColorScheme.light(),
+              brightness: Brightness.light,
+            ),
+            child: Scaffold(body: child),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
 }
 
 Widget _contextMenuTestApp({required Widget child}) {

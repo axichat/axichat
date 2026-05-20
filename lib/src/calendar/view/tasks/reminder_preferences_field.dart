@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_alarms_field.dart';
+import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -68,6 +69,127 @@ class ReminderPreferencesField extends StatefulWidget {
   @override
   State<ReminderPreferencesField> createState() =>
       _ReminderPreferencesFieldState();
+}
+
+class TaskReminderRepeatSection extends StatelessWidget {
+  const TaskReminderRepeatSection({
+    super.key,
+    required this.reminders,
+    required this.onRemindersChanged,
+    required this.recurrence,
+    required this.onRecurrenceChanged,
+    this.deadline,
+    this.referenceStart,
+    this.advancedAlarms,
+    this.onAdvancedAlarmsChanged,
+    this.reminderTitle,
+    this.showReminderHeader = true,
+    this.reminderHeaderSize = TaskSectionLabelSize.medium,
+    this.remindersMixed = false,
+    this.reminderAnchor,
+    this.showBothReminderAnchors,
+    this.recurrenceTitle,
+    this.recurrenceHeaderSize = TaskSectionLabelSize.small,
+    this.recurrencePrefix,
+    this.recurrenceSpacing,
+    this.spacing,
+    this.fallbackWeekday,
+    this.showAdvancedAlarms = false,
+    this.enabled = true,
+    this.recurrenceChipSpacing,
+    this.recurrenceChipRunSpacing,
+    this.recurrenceWeekdaySpacing,
+    this.recurrenceAdvancedSectionSpacing,
+    this.recurrenceEndSpacing,
+    this.recurrenceFieldGap,
+    this.recurrenceShowAdvancedToggle = true,
+    this.recurrenceForceAdvanced = false,
+    this.recurrenceIntervalSelectWidth,
+  });
+
+  final ReminderPreferences reminders;
+  final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final RecurrenceFormValue recurrence;
+  final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
+  final DateTime? deadline;
+  final DateTime? referenceStart;
+  final List<CalendarAlarm>? advancedAlarms;
+  final ValueChanged<List<CalendarAlarm>>? onAdvancedAlarmsChanged;
+  final String? reminderTitle;
+  final bool showReminderHeader;
+  final TaskSectionLabelSize reminderHeaderSize;
+  final bool remindersMixed;
+  final ReminderAnchor? reminderAnchor;
+  final bool? showBothReminderAnchors;
+  final String? recurrenceTitle;
+  final TaskSectionLabelSize recurrenceHeaderSize;
+  final Widget? recurrencePrefix;
+  final double? recurrenceSpacing;
+  final double? spacing;
+  final int? fallbackWeekday;
+  final bool showAdvancedAlarms;
+  final bool enabled;
+  final double? recurrenceChipSpacing;
+  final double? recurrenceChipRunSpacing;
+  final double? recurrenceWeekdaySpacing;
+  final double? recurrenceAdvancedSectionSpacing;
+  final double? recurrenceEndSpacing;
+  final double? recurrenceFieldGap;
+  final bool recurrenceShowAdvancedToggle;
+  final bool recurrenceForceAdvanced;
+  final double? recurrenceIntervalSelectWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final ReminderAnchor resolvedAnchor =
+        reminderAnchor ??
+        (deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ReminderPreferencesField(
+          value: reminders,
+          onChanged: onRemindersChanged,
+          advancedAlarms: advancedAlarms,
+          onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
+          referenceStart: referenceStart,
+          title: reminderTitle ?? l10n.calendarRemindersSection,
+          headerSize: reminderHeaderSize,
+          showHeader: showReminderHeader,
+          anchor: resolvedAnchor,
+          mixed: remindersMixed,
+          showBothAnchors: showBothReminderAnchors ?? deadline != null,
+          showAdvancedAlarms: showAdvancedAlarms,
+          enabled: enabled,
+        ),
+        SizedBox(height: spacing ?? context.spacing.m),
+        if (recurrencePrefix != null) ...[
+          recurrencePrefix!,
+          SizedBox(height: context.spacing.s),
+        ],
+        TaskRecurrenceSection(
+          title: recurrenceTitle ?? l10n.calendarRepeatLabel,
+          spacing: recurrenceSpacing ?? context.spacing.s,
+          headerSize: recurrenceHeaderSize,
+          value: recurrence,
+          fallbackWeekday: fallbackWeekday ?? referenceStart?.weekday,
+          referenceStart: referenceStart,
+          chipSpacing: recurrenceChipSpacing,
+          chipRunSpacing: recurrenceChipRunSpacing,
+          weekdaySpacing: recurrenceWeekdaySpacing,
+          advancedSectionSpacing: recurrenceAdvancedSectionSpacing,
+          endSpacing: recurrenceEndSpacing,
+          fieldGap: recurrenceFieldGap,
+          showAdvancedToggle: recurrenceShowAdvancedToggle,
+          forceAdvanced: recurrenceForceAdvanced,
+          intervalSelectWidth: recurrenceIntervalSelectWidth,
+          onChanged: onRecurrenceChanged,
+          enabled: enabled,
+        ),
+      ],
+    );
+  }
 }
 
 class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {

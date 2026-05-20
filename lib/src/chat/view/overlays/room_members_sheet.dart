@@ -270,6 +270,7 @@ class RoomMembersSheet extends StatelessWidget {
       useRootNavigator: false,
       showCloseButton: false,
       dialogMaxWidth: dialogMaxWidth,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final pop = Navigator.of(sheetContext).pop;
         return _NicknameSheet(
@@ -1004,9 +1005,11 @@ class RoomAvatarEditorSheet extends StatefulWidget {
     return showAdaptiveBottomSheet<AvatarUploadPayload>(
       context: context,
       isScrollControlled: true,
+      preferDialogOnMobile: true,
       useRootNavigator: false,
       showCloseButton: false,
       dialogMaxWidth: dialogMaxWidth,
+      surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         final pop = Navigator.of(sheetContext).pop;
         final colors = sheetContext.colorScheme;
@@ -1043,138 +1046,82 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final headerPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      spacing.m,
-      spacing.m,
-      spacing.s,
-    );
-    final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);
-    final actionsPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      0,
-      spacing.m,
-      spacing.m,
-    );
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
         final errorText = avatarState.errorType?.resolve(l10n);
         final saveEnabled =
             !avatarState.isBusy && avatarState.draftAvatar != null;
         final useActionEnabled = avatarState.canUseCarouselAvatar;
-        final Widget actions = Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+        final Widget actions = AxiDialogActions(
           children: [
             AxiButton.outline(
               onPressed: widget.onCancel,
               child: Text(l10n.commonCancel),
             ),
-            SizedBox(width: spacing.s),
             AxiButton.primary(
               onPressed: saveEnabled ? _handleSave : null,
               child: Text(l10n.avatarSaveAvatar),
             ),
           ],
         );
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                fit: FlexFit.loose,
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: headerPadding,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                l10n.mucEditAvatar,
-                                style: titleStyle,
-                              ),
-                            ),
-                            AxiIconButton(
-                              iconData: LucideIcons.x,
-                              tooltip: l10n.commonClose,
-                              onPressed: widget.onCancel,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: contentPadding,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SignupAvatarEditorPanel(
-                              mode: avatarState.editorMode,
-                              avatarBytes: avatarState.previewBytes,
-                              animationDuration: animationDuration,
-                              showRotationTimer: avatarState.carouselRunning,
-                              rotationStartedAt: avatarState.carouselStartedAt,
-                              rotationDuration:
-                                  AvatarEditorCubit.avatarCarouselInterval,
-                              cropBytes: avatarState.draftAvatar?.sourceBytes,
-                              cropRect: avatarState.draftAvatar?.cropRect,
-                              imageWidth: avatarState.draftAvatar?.sourceWidth
-                                  ?.toDouble(),
-                              imageHeight: avatarState.draftAvatar?.sourceHeight
-                                  ?.toDouble(),
-                              onCropChanged: (rect) => context
-                                  .read<AvatarEditorCubit>()
-                                  .updateCropRect(rect),
-                              onCropReset: () =>
-                                  context.read<AvatarEditorCubit>().resetCrop(),
-                              onCropCommitted: (rect) => context
-                                  .read<AvatarEditorCubit>()
-                                  .commitCrop(rect),
-                              onShuffle: () => context
-                                  .read<AvatarEditorCubit>()
-                                  .pauseOnPreviewAvatar(context.colorScheme),
-                              onUpload: () =>
-                                  context.read<AvatarEditorCubit>().pickImage(),
-                              onUseCurrent: () => context
-                                  .read<AvatarEditorCubit>()
-                                  .selectCarouselAvatar(),
-                              useActionEnabled: useActionEnabled,
-                              canShuffleBackground:
-                                  avatarState.canShuffleBackground,
-                              onShuffleBackground:
-                                  avatarState.canShuffleBackground
-                                  ? () => context
-                                        .read<AvatarEditorCubit>()
-                                        .shuffleBackground(context.colorScheme)
-                                  : null,
-                            ),
-                            if (errorText != null) ...[
-                              SizedBox(height: spacing.s),
-                              Text(
-                                errorText,
-                                style: context.textTheme.small.copyWith(
-                                  color: context.colorScheme.destructive,
-                                ),
-                              ),
-                            ],
-                            SizedBox(height: spacing.s),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                bottom: true,
-                child: Padding(padding: actionsPadding, child: actions),
-              ),
-            ],
+        return AxiDialogScaffold.scroll(
+          header: AxiDialogHeader(
+            title: Text(l10n.mucEditAvatar, style: titleStyle),
+            onClose: widget.onCancel,
           ),
+          bodyPadding: EdgeInsets.symmetric(
+            horizontal: spacing.m,
+            vertical: spacing.s,
+          ),
+          footer: actions,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SignupAvatarEditorPanel(
+                  mode: avatarState.editorMode,
+                  avatarBytes: avatarState.previewBytes,
+                  animationDuration: animationDuration,
+                  showRotationTimer: avatarState.carouselRunning,
+                  rotationStartedAt: avatarState.carouselStartedAt,
+                  rotationDuration: AvatarEditorCubit.avatarCarouselInterval,
+                  cropBytes: avatarState.draftAvatar?.sourceBytes,
+                  cropRect: avatarState.draftAvatar?.cropRect,
+                  imageWidth: avatarState.draftAvatar?.sourceWidth?.toDouble(),
+                  imageHeight: avatarState.draftAvatar?.sourceHeight
+                      ?.toDouble(),
+                  onCropChanged: (rect) =>
+                      context.read<AvatarEditorCubit>().updateCropRect(rect),
+                  onCropReset: () =>
+                      context.read<AvatarEditorCubit>().resetCrop(),
+                  onCropCommitted: (rect) =>
+                      context.read<AvatarEditorCubit>().commitCrop(rect),
+                  onShuffle: () => context
+                      .read<AvatarEditorCubit>()
+                      .pauseOnPreviewAvatar(context.colorScheme),
+                  onUpload: () => context.read<AvatarEditorCubit>().pickImage(),
+                  onUseCurrent: () =>
+                      context.read<AvatarEditorCubit>().selectCarouselAvatar(),
+                  useActionEnabled: useActionEnabled,
+                  canShuffleBackground: avatarState.canShuffleBackground,
+                  onShuffleBackground: avatarState.canShuffleBackground
+                      ? () => context
+                            .read<AvatarEditorCubit>()
+                            .shuffleBackground(context.colorScheme)
+                      : null,
+                ),
+                if (errorText != null) ...[
+                  SizedBox(height: spacing.s),
+                  Text(
+                    errorText,
+                    style: context.textTheme.small.copyWith(
+                      color: context.colorScheme.destructive,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         );
       },
     );
@@ -1286,14 +1233,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       ),
       hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
-    final actionsPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      0,
-      spacing.m,
-      spacing.m,
-    );
-    final Widget actions = Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    final Widget actions = AxiSheetActions(
       children: [
         AxiButton.outline(
           onPressed: () =>
@@ -1338,56 +1278,56 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         ),
       ],
     );
-    return AxiSheetScaffold.scroll(
+    return AxiSheetScaffold.sections(
       header: AxiSheetHeader(
         title: Text(l10n.mucInviteUsers),
         onClose: widget.onClose,
       ),
-      bodyPadding: EdgeInsets.zero,
-      children: [
-        BlocSelector<ChatsCubit, ChatsState, List<String>>(
-          bloc: locate<ChatsCubit>(),
-          selector: (state) => state.recipientAddressSuggestions,
-          builder: (context, suggestions) {
-            final filteredSuggestions = suggestions
-                .where(
-                  (address) => _isMucInviteEligibleAddress(
-                    address,
+      footer: actions,
+      sections: [
+        AxiSheetSection.edge(
+          padding: EdgeInsets.zero,
+          child: BlocSelector<ChatsCubit, ChatsState, List<String>>(
+            bloc: locate<ChatsCubit>(),
+            selector: (state) => state.recipientAddressSuggestions,
+            builder: (context, suggestions) {
+              final filteredSuggestions = suggestions
+                  .where(
+                    (address) => _isMucInviteEligibleAddress(
+                      address,
+                      domain: accountDomain,
+                    ),
+                  )
+                  .toList(growable: false);
+              return RecipientChipsBar(
+                recipients: _recipients,
+                availableChats: availableChats,
+                rosterItems: rosterItems,
+                databaseSuggestionAddresses: filteredSuggestions,
+                selfJid: selfJid,
+                selfIdentity: selfIdentity,
+                latestStatuses: const {},
+                onRecipientAdded: (target) {
+                  if (!_isMucInviteEligibleTarget(
+                    target,
                     domain: accountDomain,
-                  ),
-                )
-                .toList(growable: false);
-            return RecipientChipsBar(
-              recipients: _recipients,
-              availableChats: availableChats,
-              rosterItems: rosterItems,
-              databaseSuggestionAddresses: filteredSuggestions,
-              selfJid: selfJid,
-              selfIdentity: selfIdentity,
-              latestStatuses: const {},
-              onRecipientAdded: (target) {
-                if (!_isMucInviteEligibleTarget(
-                  target,
-                  domain: accountDomain,
-                )) {
-                  FeedbackSystem.showInfo(
-                    context,
-                    context.l10n.mucInviteEligibleRecipientsOnly,
-                  );
-                  return false;
-                }
-                _addRecipient(target);
-                return true;
-              },
-              onRecipientRemoved: _removeRecipient,
-              collapsedByDefault: false,
-              horizontalPadding: 0,
-            );
-          },
+                  )) {
+                    FeedbackSystem.showInfo(
+                      context,
+                      context.l10n.mucInviteEligibleRecipientsOnly,
+                    );
+                    return false;
+                  }
+                  _addRecipient(target);
+                  return true;
+                },
+                onRecipientRemoved: _removeRecipient,
+                collapsedByDefault: false,
+                horizontalPadding: 0,
+              );
+            },
+          ),
         ),
-        SizedBox(height: spacing.m),
-        Padding(padding: actionsPadding, child: actions),
-        SizedBox(height: spacing.m),
       ],
     );
   }
@@ -1430,42 +1370,35 @@ class _NicknameSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final Widget actions = Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    final Widget actions = AxiDialogActions(
       children: [
         AxiButton.outline(
           onPressed: () => closeSheetWithKeyboardDismiss(context, onCancel),
           child: Text(l10n.commonCancel),
         ),
-        SizedBox(width: spacing.s),
         AxiButton.primary(
           onPressed: () => onSubmit(controller.text.trim()),
           child: Text(l10n.mucUpdateNickname),
         ),
       ],
     );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return AxiDialogScaffold.scroll(
+      header: AxiDialogHeader(
+        title: Text(l10n.mucChangeNicknameTitle),
+        onClose: onCancel,
+      ),
+      bodyPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
+      footer: actions,
       children: [
-        AxiSheetHeader(
-          title: Text(l10n.mucChangeNicknameTitle),
-          onClose: onCancel,
+        AxiTextFormField(
+          controller: controller,
+          autofocus: true,
+          placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+          onSubmitted: onSubmit,
         ),
-        SizedBox(height: spacing.s),
-        Flexible(
-          fit: FlexFit.loose,
-          child: SingleChildScrollView(
-            child: AxiTextFormField(
-              controller: controller,
-              autofocus: true,
-              placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-              onSubmitted: onSubmit,
-            ),
-          ),
-        ),
-        SizedBox(height: spacing.m),
-        actions,
       ],
     );
   }

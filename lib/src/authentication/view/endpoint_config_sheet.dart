@@ -21,7 +21,6 @@ class EndpointConfigSheet extends StatefulWidget {
   static Future<void> show(BuildContext context) {
     final commandSurface = resolveCommandSurface(context);
     final bool compact = commandSurface == CommandSurface.sheet;
-    final spacing = context.spacing;
     final sizing = context.sizing;
     return showAdaptiveBottomSheet<void>(
       context: context,
@@ -29,7 +28,7 @@ class EndpointConfigSheet extends StatefulWidget {
       useSafeArea: true,
       showDragHandle: compact,
       dialogMaxWidth: sizing.dialogMaxWidth,
-      surfacePadding: EdgeInsets.all(spacing.xxs),
+      surfacePadding: EdgeInsets.zero,
       builder: (_) => EndpointConfigSheet(compact: compact),
     );
   }

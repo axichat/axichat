@@ -25,6 +25,7 @@ targets:
         options:
           ignore_for_file:
             - implicit_dynamic_parameter
+            - unnecessary_import
       json_serializable:
         options:
           field_rename: snake

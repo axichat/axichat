@@ -12,12 +12,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _criticalPathCopySheetSpacing = 16.0;
-const double _criticalPathCopySheetGap = 8.0;
-const double _criticalPathCopySectionGap = 12.0;
-const double _criticalPathCopyHeaderIconSize = 18.0;
-const double _criticalPathCopyLabelLetterSpacing = 0.4;
-
 const IconData _criticalPathCopyConfirmIcon = LucideIcons.copy;
 
 class CalendarCriticalPathCopyDecision {
@@ -40,6 +34,8 @@ Future<CalendarCriticalPathCopyDecision?> showCalendarCriticalPathCopySheet({
   return showAdaptiveBottomSheet<CalendarCriticalPathCopyDecision>(
     context: context,
     isScrollControlled: true,
+    preferDialogOnMobile: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarCriticalPathCopyDecisionSheet(
       path: path,
       tasks: tasks,
@@ -90,6 +86,18 @@ class _CalendarCriticalPathCopyDecisionSheetState
     );
     return AxiSheetScaffold.scroll(
       header: header,
+      footer: AxiSheetActions(
+        children: [
+          AxiButton.primary(
+            onPressed: _handleConfirmPressed,
+            leading: Icon(
+              _criticalPathCopyConfirmIcon,
+              size: context.sizing.menuItemIconSize,
+            ),
+            child: Text(l10n.chatCriticalPathCopyConfirmLabel),
+          ),
+        ],
+      ),
       children: [
         _CriticalPathCopySectionLabel(
           text: l10n.chatCriticalPathCopyPreviewLabel,
@@ -100,7 +108,7 @@ class _CalendarCriticalPathCopyDecisionSheetState
             tasks: widget.tasks,
           ),
         ),
-        const SizedBox(height: _criticalPathCopySheetSpacing),
+        SizedBox(height: context.spacing.m),
         _CriticalPathCopySectionLabel(
           text: l10n.chatCriticalPathCopyCalendarsLabel,
         ),
@@ -113,7 +121,7 @@ class _CalendarCriticalPathCopyDecisionSheetState
             }),
           ),
         if (widget.canAddToChat) ...[
-          const SizedBox(height: _criticalPathCopySectionGap),
+          SizedBox(height: context.spacing.s),
           _CriticalPathCopyToggle(
             label: l10n.chatCriticalPathCopyChatLabel,
             value: _addToChat,
@@ -122,12 +130,6 @@ class _CalendarCriticalPathCopyDecisionSheetState
             }),
           ),
         ],
-        const SizedBox(height: _criticalPathCopySheetSpacing),
-        _CriticalPathCopyActionRow(
-          onPressed: _handleConfirmPressed,
-          label: l10n.chatCriticalPathCopyConfirmLabel,
-          iconData: _criticalPathCopyConfirmIcon,
-        ),
       ],
     );
   }
@@ -157,15 +159,8 @@ class _CriticalPathCopySectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: _criticalPathCopySheetGap),
-      child: Text(
-        text,
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-          color: context.colorScheme.mutedForeground,
-          letterSpacing: _criticalPathCopyLabelLetterSpacing,
-        ),
-      ),
+      padding: EdgeInsets.only(bottom: context.spacing.s),
+      child: Text(text, style: context.textTheme.sectionLabelM),
     );
   }
 }
@@ -184,30 +179,5 @@ class _CriticalPathCopyToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShadSwitch(label: Text(label), value: value, onChanged: onChanged);
-  }
-}
-
-class _CriticalPathCopyActionRow extends StatelessWidget {
-  const _CriticalPathCopyActionRow({
-    required this.onPressed,
-    required this.label,
-    required this.iconData,
-  });
-
-  final VoidCallback onPressed;
-  final String label;
-  final IconData iconData;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: AxiButton.primary(
-        size: AxiButtonSize.sm,
-        onPressed: onPressed,
-        leading: Icon(iconData, size: _criticalPathCopyHeaderIconSize),
-        child: Text(label),
-      ),
-    );
   }
 }

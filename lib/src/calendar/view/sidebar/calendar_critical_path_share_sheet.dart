@@ -129,7 +129,6 @@ class _CalendarCriticalPathShareSheetState
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
     final l10n = context.l10n;
     final rosterItems =
         context.read<RosterCubit>().state.items ??
@@ -155,53 +154,60 @@ class _CalendarCriticalPathShareSheetState
       subtitle: Text(l10n.calendarCriticalPathShareSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
-    return AxiSheetScaffold.scroll(
+    return AxiSheetScaffold.sections(
       header: header,
-      bodyPadding: EdgeInsets.zero,
-      children: [
-        Padding(
-          padding: _criticalPathShareContentPadding(context),
-          child: _CriticalPathShareSectionLabel(
-            text: l10n.calendarCriticalPathShareTargetLabel,
+      footer: AxiSheetActions(
+        children: [
+          AxiButton.outline(
+            onPressed: () => closeSheetWithKeyboardDismiss(
+              context,
+              () => Navigator.of(context).maybePop(),
+            ),
+            child: Text(l10n.commonCancel),
           ),
-        ),
-        BlocSelector<ChatsCubit, ChatsState, List<String>>(
-          bloc: widget.locate<ChatsCubit>(),
-          selector: (state) => state.recipientAddressSuggestions,
-          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
-            recipients: _recipients,
-            availableChats: widget.availableChats,
-            rosterItems: rosterItems,
-            databaseSuggestionAddresses: recipientAddressSuggestions,
-            selfJid: chatsSelfJid,
-            selfIdentity: selfIdentity,
-            latestStatuses: const {},
-            collapsedByDefault: false,
-            allowAddressTargets: false,
-            showSuggestionsWhenEmpty: true,
-            horizontalPadding: 0,
-            onRecipientAdded: _handleRecipientAdded,
-            onRecipientRemoved: _handleRecipientRemoved,
+          _CriticalPathShareActionRow(
+            isBusy: _isSending,
+            onPressed: _handleSharePressed,
+            label: l10n.commonSend,
           ),
-        ),
-        SizedBox(height: spacing.m),
-        Padding(
-          padding: _criticalPathShareContentPadding(context),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+        ],
+      ),
+      sections: [
+        AxiSheetSection.edge(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AxiButton.outline(
-                onPressed: () => closeSheetWithKeyboardDismiss(
-                  context,
-                  () => Navigator.of(context).maybePop(),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.spacing.m,
+                  context.spacing.m,
+                  context.spacing.m,
+                  context.spacing.s,
                 ),
-                child: Text(l10n.commonCancel),
+                child: _CriticalPathShareSectionLabel(
+                  text: l10n.calendarCriticalPathShareTargetLabel,
+                ),
               ),
-              SizedBox(width: spacing.s),
-              _CriticalPathShareActionRow(
-                isBusy: _isSending,
-                onPressed: _handleSharePressed,
-                label: l10n.commonSend,
+              BlocSelector<ChatsCubit, ChatsState, List<String>>(
+                bloc: widget.locate<ChatsCubit>(),
+                selector: (state) => state.recipientAddressSuggestions,
+                builder: (context, recipientAddressSuggestions) =>
+                    RecipientChipsBar(
+                      recipients: _recipients,
+                      availableChats: widget.availableChats,
+                      rosterItems: rosterItems,
+                      databaseSuggestionAddresses: recipientAddressSuggestions,
+                      selfJid: chatsSelfJid,
+                      selfIdentity: selfIdentity,
+                      latestStatuses: const {},
+                      collapsedByDefault: false,
+                      allowAddressTargets: false,
+                      showSuggestionsWhenEmpty: true,
+                      horizontalPadding: 0,
+                      onRecipientAdded: _handleRecipientAdded,
+                      onRecipientRemoved: _handleRecipientRemoved,
+                    ),
               ),
             ],
           ),
@@ -363,6 +369,3 @@ class _CriticalPathShareActionRow extends StatelessWidget {
     );
   }
 }
-
-EdgeInsets _criticalPathShareContentPadding(BuildContext context) =>
-    EdgeInsets.symmetric(horizontal: context.spacing.m);

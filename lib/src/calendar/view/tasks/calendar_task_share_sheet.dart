@@ -29,6 +29,7 @@ Future<void> showCalendarTaskShareSheet({
   required CalendarTask task,
 }) async {
   final l10n = context.l10n;
+  final bool isCalendarAnchored = CalendarModalScope.maybeOf(context) != null;
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
   final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
@@ -42,6 +43,9 @@ Future<void> showCalendarTaskShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: modalContext,
     isScrollControlled: true,
+    bottomSafeAreaBehavior: isCalendarAnchored
+        ? AxiSheetBottomSafeAreaBehavior.none
+        : AxiSheetBottomSafeAreaBehavior.insideSurface,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,
@@ -120,47 +124,55 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       horizontal: context.spacing.m,
       vertical: context.spacing.m,
     );
-    final spacing = context.spacing;
     final header = AxiSheetHeader(
       title: Text(l10n.calendarTaskShareTitle),
       subtitle: Text(l10n.calendarTaskShareSubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
-    return AxiSheetScaffold.scroll(
+    return AxiSheetScaffold.sections(
       header: header,
-      bodyPadding: EdgeInsets.zero,
-      children: [
+      footer: widget.availableChats.isEmpty
+          ? null
+          : AxiSheetActions(
+              children: [
+                _TaskShareActionRow(
+                  isBusy: _isSending,
+                  onPressed: _handleSharePressed,
+                  label: l10n.commonSend,
+                ),
+              ],
+            ),
+      sections: [
         if (widget.availableChats.isEmpty)
-          Padding(
-            padding: _taskShareContentPadding(context),
+          AxiSheetSection(
             child: _TaskShareEmptyMessage(
               message: l10n.calendarTaskShareMissingChats,
             ),
           )
         else ...[
-          BlocSelector<ChatsCubit, ChatsState, List<String>>(
-            bloc: widget.locate<ChatsCubit>(),
-            selector: (state) => state.recipientAddressSuggestions,
-            builder: (context, recipientAddressSuggestions) =>
-                RecipientChipsBar(
-                  recipients: _recipients,
-                  availableChats: widget.availableChats,
-                  rosterItems: rosterItems,
-                  databaseSuggestionAddresses: recipientAddressSuggestions,
-                  selfJid: chatsSelfJid,
-                  selfIdentity: selfIdentity,
-                  latestStatuses: const {},
-                  collapsedByDefault: false,
-                  allowAddressTargets: true,
-                  showSuggestionsWhenEmpty: true,
-                  horizontalPadding: 0,
-                  onRecipientAdded: _handleRecipientAdded,
-                  onRecipientRemoved: _handleRecipientRemoved,
-                ),
+          AxiSheetSection.edge(
+            child: BlocSelector<ChatsCubit, ChatsState, List<String>>(
+              bloc: widget.locate<ChatsCubit>(),
+              selector: (state) => state.recipientAddressSuggestions,
+              builder: (context, recipientAddressSuggestions) =>
+                  RecipientChipsBar(
+                    recipients: _recipients,
+                    availableChats: widget.availableChats,
+                    rosterItems: rosterItems,
+                    databaseSuggestionAddresses: recipientAddressSuggestions,
+                    selfJid: chatsSelfJid,
+                    selfIdentity: selfIdentity,
+                    latestStatuses: const {},
+                    collapsedByDefault: false,
+                    allowAddressTargets: true,
+                    showSuggestionsWhenEmpty: true,
+                    horizontalPadding: 0,
+                    onRecipientAdded: _handleRecipientAdded,
+                    onRecipientRemoved: _handleRecipientRemoved,
+                  ),
+            ),
           ),
-          SizedBox(height: spacing.m),
-          Padding(
-            padding: _taskShareContentPadding(context),
+          AxiSheetSection(
             child: TaskDescriptionField(
               controller: _bodyController,
               hintText: l10n.calendarDescriptionHint,
@@ -169,25 +181,13 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
               contentPadding: messageContentPadding,
             ),
           ),
-          SizedBox(height: spacing.m),
-          Padding(
-            padding: _taskShareContentPadding(context),
+          AxiSheetSection(
             child: _TaskShareEditAccessToggle(
               canEdit: !isReadOnly,
               hint: readOnlyHint,
               onChanged: _handleEditAccessChanged,
             ),
           ),
-          SizedBox(height: spacing.m),
-          Padding(
-            padding: _taskShareContentPadding(context),
-            child: _TaskShareActionRow(
-              isBusy: _isSending,
-              onPressed: _handleSharePressed,
-              label: l10n.commonSend,
-            ),
-          ),
-          SizedBox(height: spacing.m),
         ],
       ],
     );
@@ -348,18 +348,12 @@ class _TaskShareActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: AxiButton.primary(
-        onPressed: isBusy ? null : onPressed,
-        loading: isBusy,
-        widthBehavior: AxiButtonWidth.fit,
-        leading: Icon(
-          LucideIcons.send,
-          size: context.sizing.iconButtonIconSize,
-        ),
-        child: Text(label),
-      ),
+    return AxiButton.primary(
+      onPressed: isBusy ? null : onPressed,
+      loading: isBusy,
+      widthBehavior: AxiButtonWidth.fit,
+      leading: Icon(LucideIcons.send, size: context.sizing.iconButtonIconSize),
+      child: Text(label),
     );
   }
 }
@@ -382,6 +376,3 @@ class _TaskShareEmptyMessage extends StatelessWidget {
     );
   }
 }
-
-EdgeInsets _taskShareContentPadding(BuildContext context) =>
-    EdgeInsets.symmetric(horizontal: context.spacing.m);

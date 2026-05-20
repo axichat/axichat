@@ -17,7 +17,6 @@ import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/shell/sync_controls.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/calendar/view/shell/calendar_sheet_header.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 
 DateTime shiftedCalendarDate(CalendarState state, int steps) {
@@ -1275,6 +1274,7 @@ class _DateLabelState extends State<_DateLabel>
     await showAdaptiveBottomSheet<void>(
       context: modalContext,
       isScrollControlled: true,
+      useBottomSafeArea: false,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         var sheetMonth = _visibleMonth;
@@ -1397,10 +1397,12 @@ class _CalendarDropdown extends StatelessWidget {
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
               SizedBox(width: spacing.s),
-              CalendarSheetCloseButton(
+              ModalCloseButton(
                 tooltip: context.l10n.commonClose,
                 color: calendarSubtitleColor,
-                onClose: onClose,
+                backgroundColor: Colors.transparent,
+                borderColor: Colors.transparent,
+                onPressed: onClose,
               ),
             ],
           ),

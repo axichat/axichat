@@ -501,6 +501,71 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
   });
+
+  testWidgets('change nickname dialog uses the shared divider contract', (
+    tester,
+  ) async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+
+    await tester.pumpWidget(
+      _RoomMembersSheetTestApp(
+        child: RoomMembersSheet(
+          roomState: RoomState(
+            roomJid: roomJid,
+            myOccupantJid: selfOccupantId,
+            occupants: <String, Occupant>{
+              selfOccupantId: Occupant(
+                occupantId: selfOccupantId,
+                nick: 'self',
+                realJid: 'self@axi.im',
+                affiliation: OccupantAffiliation.member,
+                role: OccupantRole.participant,
+              ),
+            },
+          ),
+          memberSections: const <RoomMemberSection>[],
+          canInvite: false,
+          avatarUpdateInFlight: false,
+          onInvite: (_) {},
+          onAction: (_, _, _) async {},
+          onOpenDirectChat: (_) async => true,
+          onChangeNickname: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Change nickname'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final dialogScaffoldFinder = find.byType(AxiDialogScaffold);
+    final dividerFinder = find.descendant(
+      of: dialogScaffoldFinder,
+      matching: find.byType(AxiModalEdgeDivider),
+    );
+    final Rect surfaceRect = tester.getRect(
+      find
+          .ancestor(
+            of: dialogScaffoldFinder,
+            matching: find.byType(AxiModalSurface),
+          )
+          .last,
+    );
+    final Rect headerDividerRect = tester.getRect(dividerFinder.first);
+    final Rect footerDividerRect = tester.getRect(dividerFinder.last);
+    final Rect fieldRect = tester.getRect(find.byType(AxiTextFormField));
+
+    expect(dialogScaffoldFinder, findsOneWidget);
+    expect(find.byType(AxiSheetScaffold), findsNothing);
+    expect(dividerFinder, findsNWidgets(2));
+    expect(headerDividerRect.left, surfaceRect.left);
+    expect(headerDividerRect.right, surfaceRect.right);
+    expect(footerDividerRect.left, surfaceRect.left);
+    expect(footerDividerRect.right, surfaceRect.right);
+    expect(fieldRect.top - headerDividerRect.bottom, 8);
+    expect(footerDividerRect.top - fieldRect.bottom, 8);
+  });
 }
 
 class _RoomMembersSheetTestApp extends StatelessWidget {

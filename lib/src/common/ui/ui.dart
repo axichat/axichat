@@ -37,6 +37,7 @@ export 'axi_link.dart';
 export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';
 export 'axi_menu.dart';
+export 'axi_modal_scaffold.dart';
 export 'axi_more.dart';
 export 'axi_now_ticker.dart';
 export 'axi_navigation_rail.dart';
@@ -437,7 +438,7 @@ const calendarEventMinHeight = 20.0;
 const calendarEventMinWidth = 32.0;
 const calendarDayViewDefaultHourHeight = 192.0;
 const calendarDayViewDefaultSubdivisions = 4;
-const calendarVisibleHourRows = 25;
+const calendarVisibleHourRows = 24;
 
 // Structural layout metrics
 const calendarWeekHeaderHeight = 40.0;

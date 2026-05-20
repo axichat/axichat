@@ -11,12 +11,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _taskCopySheetSpacing = 16.0;
-const double _taskCopySheetGap = 8.0;
-const double _taskCopySectionGap = 12.0;
-const double _taskCopyHeaderIconSize = 18.0;
-const double _taskCopyLabelLetterSpacing = 0.4;
-
 const IconData _taskCopyConfirmIcon = LucideIcons.copy;
 
 class CalendarTaskCopyDecision {
@@ -38,6 +32,8 @@ Future<CalendarTaskCopyDecision?> showCalendarTaskCopySheet({
   return showAdaptiveBottomSheet<CalendarTaskCopyDecision>(
     context: context,
     isScrollControlled: true,
+    preferDialogOnMobile: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskCopyDecisionSheet(
       task: task,
       canAddToPersonal: canAddToPersonal,
@@ -83,14 +79,26 @@ class _CalendarTaskCopyDecisionSheetState
       subtitle: Text(l10n.chatTaskCopySubtitle),
       onClose: () => Navigator.of(context).maybePop(),
     );
-    final body = AxiSheetScaffold.scroll(
+    return AxiSheetScaffold.scroll(
       header: header,
+      footer: AxiSheetActions(
+        children: [
+          AxiButton.primary(
+            onPressed: _handleConfirmPressed,
+            leading: Icon(
+              _taskCopyConfirmIcon,
+              size: context.sizing.menuItemIconSize,
+            ),
+            child: Text(l10n.chatTaskCopyConfirmLabel),
+          ),
+        ],
+      ),
       children: [
         _TaskCopySectionLabel(text: l10n.chatTaskCopyPreviewLabel),
         CalendarFragmentCard(
           fragment: CalendarFragment.task(task: widget.task),
         ),
-        const SizedBox(height: _taskCopySheetSpacing),
+        SizedBox(height: context.spacing.m),
         _TaskCopySectionLabel(text: l10n.chatTaskCopyCalendarsLabel),
         if (widget.canAddToPersonal)
           _TaskCopyToggle(
@@ -101,7 +109,7 @@ class _CalendarTaskCopyDecisionSheetState
             }),
           ),
         if (widget.canAddToChat) ...[
-          const SizedBox(height: _taskCopySectionGap),
+          SizedBox(height: context.spacing.s),
           _TaskCopyToggle(
             label: l10n.chatTaskCopyChatLabel,
             value: _addToChat,
@@ -110,15 +118,8 @@ class _CalendarTaskCopyDecisionSheetState
             }),
           ),
         ],
-        const SizedBox(height: _taskCopySheetSpacing),
-        _TaskCopyActionRow(
-          onPressed: _handleConfirmPressed,
-          label: l10n.chatTaskCopyConfirmLabel,
-          iconData: _taskCopyConfirmIcon,
-        ),
       ],
     );
-    return body;
   }
 
   void _handleConfirmPressed() {
@@ -146,15 +147,8 @@ class _TaskCopySectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: _taskCopySheetGap),
-      child: Text(
-        text,
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-          color: context.colorScheme.mutedForeground,
-          letterSpacing: _taskCopyLabelLetterSpacing,
-        ),
-      ),
+      padding: EdgeInsets.only(bottom: context.spacing.s),
+      child: Text(text, style: context.textTheme.sectionLabelM),
     );
   }
 }
@@ -173,30 +167,5 @@ class _TaskCopyToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ShadSwitch(label: Text(label), value: value, onChanged: onChanged);
-  }
-}
-
-class _TaskCopyActionRow extends StatelessWidget {
-  const _TaskCopyActionRow({
-    required this.onPressed,
-    required this.label,
-    required this.iconData,
-  });
-
-  final VoidCallback onPressed;
-  final String label;
-  final IconData iconData;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: AxiButton.primary(
-        size: AxiButtonSize.sm,
-        onPressed: onPressed,
-        leading: Icon(iconData, size: _taskCopyHeaderIconSize),
-        child: Text(label),
-      ),
-    );
   }
 }

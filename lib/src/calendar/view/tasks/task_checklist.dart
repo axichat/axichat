@@ -170,8 +170,9 @@ class _TaskChecklistState extends State<TaskChecklist> {
                 child: items.isEmpty
                     ? const SizedBox.shrink()
                     : Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: context.spacing.xxs,
+                        padding: EdgeInsets.only(
+                          top: context.spacing.s,
+                          bottom: context.spacing.xxs,
                         ),
                         child: ReorderableListView.builder(
                           key: ValueKey<String>(membership.join(';')),

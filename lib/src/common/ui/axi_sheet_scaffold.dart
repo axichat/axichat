@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/axi_modal_scaffold.dart';
 import 'package:flutter/material.dart';
 
 double _sheetKeyboardInset(BuildContext context) {
@@ -13,75 +12,30 @@ double _sheetKeyboardInset(BuildContext context) {
   return MediaQuery.viewInsetsOf(context).bottom;
 }
 
-class AxiSheetHeader extends StatelessWidget {
+enum AxiSheetFooterKeyboardPolicy { alwaysVisible, hideWhenKeyboardOpen }
+
+class AxiSheetSection extends AxiModalSection {
+  const AxiSheetSection({required super.child, super.padding}) : super();
+
+  const AxiSheetSection.edge({required super.child, super.padding})
+    : super.edge();
+
+  const AxiSheetSection.topActions({required super.child, super.padding})
+    : super.topActions();
+}
+
+class AxiSheetHeader extends AxiModalHeader {
   const AxiSheetHeader({
-    required this.title,
-    required this.onClose,
-    this.showCloseButton = true,
-    this.subtitle,
-    this.leading,
-    this.padding,
+    required super.title,
+    required super.onClose,
+    super.showCloseButton,
+    super.includeBottomDivider,
+    super.subtitle,
+    super.leading,
+    super.actions,
+    super.padding,
     super.key,
   });
-
-  final Widget title;
-  final bool showCloseButton;
-  final Widget? subtitle;
-  final Widget? leading;
-  final VoidCallback onClose;
-  final EdgeInsetsGeometry? padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final EdgeInsetsGeometry resolvedPadding =
-        padding ??
-        EdgeInsets.fromLTRB(
-          context.spacing.m,
-          context.spacing.m,
-          context.spacing.m,
-          context.spacing.s,
-        );
-    final Widget titleBlock = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DefaultTextStyle.merge(
-          style: context.modalHeaderTextStyle,
-          child: title,
-        ),
-        if (subtitle != null) ...[
-          SizedBox(height: context.spacing.xs),
-          DefaultTextStyle.merge(
-            style: context.textTheme.muted.copyWith(
-              color: context.colorScheme.mutedForeground,
-            ),
-            child: subtitle!,
-          ),
-        ],
-      ],
-    );
-
-    return Padding(
-      padding: resolvedPadding,
-      child: Row(
-        children: [
-          if (leading != null) ...[
-            leading!,
-            SizedBox(width: context.spacing.s),
-          ],
-          Expanded(child: titleBlock),
-          if (showCloseButton)
-            ModalCloseButton(
-              onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
-              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-              backgroundColor: Colors.transparent,
-              borderColor: Colors.transparent,
-              color: context.colorScheme.mutedForeground,
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class AxiSheetScaffold extends StatelessWidget {
@@ -89,8 +43,10 @@ class AxiSheetScaffold extends StatelessWidget {
     required this.header,
     required this.body,
     this.footer,
+    this.footerKeyboardPolicy = AxiSheetFooterKeyboardPolicy.alwaysVisible,
     super.key,
   }) : _scrollChildren = null,
+       _sections = null,
        bodyPadding = null,
        scrollPhysics = null;
 
@@ -98,175 +54,95 @@ class AxiSheetScaffold extends StatelessWidget {
     required this.header,
     required List<Widget> children,
     this.footer,
+    this.footerKeyboardPolicy = AxiSheetFooterKeyboardPolicy.alwaysVisible,
     this.bodyPadding,
     this.scrollPhysics,
     super.key,
   }) : body = null,
-       _scrollChildren = children;
+       _scrollChildren = children,
+       _sections = null;
+
+  const AxiSheetScaffold.sections({
+    required this.header,
+    required List<AxiSheetSection> sections,
+    this.footer,
+    this.footerKeyboardPolicy = AxiSheetFooterKeyboardPolicy.alwaysVisible,
+    this.bodyPadding,
+    this.scrollPhysics,
+    super.key,
+  }) : body = null,
+       _scrollChildren = null,
+       _sections = sections;
 
   final Widget header;
   final Widget? body;
   final List<Widget>? _scrollChildren;
+  final List<AxiSheetSection>? _sections;
   final EdgeInsets? bodyPadding;
   final ScrollPhysics? scrollPhysics;
   final Widget? footer;
+  final AxiSheetFooterKeyboardPolicy footerKeyboardPolicy;
 
   @override
   Widget build(BuildContext context) {
-    final Widget? fixedBody = body;
-    final List<Widget>? scrollChildren = _scrollChildren;
-    final double keyboardInset = _sheetKeyboardInset(context);
+    final policy =
+        footerKeyboardPolicy ==
+            AxiSheetFooterKeyboardPolicy.hideWhenKeyboardOpen
+        ? AxiModalFooterKeyboardPolicy.hideWhenKeyboardOpen
+        : AxiModalFooterKeyboardPolicy.alwaysVisible;
+    final sections = _sections;
+    final fixedBody = body;
     if (fixedBody != null) {
-      final Widget insetBody = Padding(
-        padding: footer == null
-            ? EdgeInsets.only(bottom: keyboardInset)
-            : EdgeInsets.zero,
-        child: fixedBody,
-      );
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          header,
-          Flexible(fit: FlexFit.loose, child: insetBody),
-          if (footer != null)
-            Padding(
-              padding: EdgeInsets.only(bottom: keyboardInset),
-              child: footer!,
-            ),
-        ],
+      return AxiModalScaffold(
+        header: header,
+        body: fixedBody,
+        footer: footer,
+        footerKeyboardPolicy: policy,
+        keyboardInset: _sheetKeyboardInset(context),
       );
     }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        header,
-        Flexible(
-          fit: FlexFit.loose,
-          child: _AxiSheetScrollableBody(
-            bodyPadding: bodyPadding,
-            scrollPhysics: scrollPhysics,
-            footer: footer,
-            children: scrollChildren ?? const <Widget>[],
-          ),
-        ),
-      ],
+    if (sections != null) {
+      return AxiModalScaffold.sections(
+        header: header,
+        footer: footer,
+        footerKeyboardPolicy: policy,
+        keyboardInset: _sheetKeyboardInset(context),
+        bodyPadding: bodyPadding,
+        scrollPhysics: scrollPhysics,
+        sectionDividerBuilder: (_) => const AxiSheetSectionDivider(),
+        sections: sections,
+      );
+    }
+    return AxiModalScaffold.scroll(
+      header: header,
+      footer: footer,
+      footerKeyboardPolicy: policy,
+      keyboardInset: _sheetKeyboardInset(context),
+      bodyPadding: bodyPadding,
+      scrollPhysics: scrollPhysics,
+      children: _scrollChildren ?? const <Widget>[],
     );
   }
 }
 
-class _AxiSheetScrollableBody extends StatefulWidget {
-  const _AxiSheetScrollableBody({
-    required this.children,
-    required this.bodyPadding,
-    required this.scrollPhysics,
-    required this.footer,
+class AxiSheetBodyItem extends AxiModalBodyItem {
+  const AxiSheetBodyItem({
+    super.key,
+    required super.child,
+    required super.horizontalPadding,
   });
-
-  final List<Widget> children;
-  final EdgeInsets? bodyPadding;
-  final ScrollPhysics? scrollPhysics;
-  final Widget? footer;
-
-  @override
-  State<_AxiSheetScrollableBody> createState() =>
-      _AxiSheetScrollableBodyState();
 }
 
-class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
-  final ScrollController _scrollController = ScrollController();
-  double _scrollExtent = 0;
+class AxiSheetSectionDivider extends AxiModalSectionDivider {
+  const AxiSheetSectionDivider({super.key});
+}
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _scheduleExtentSync() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      final double scrollExtent = _scrollController.position.maxScrollExtent;
-      if (scrollExtent == _scrollExtent) return;
-      setState(() => _scrollExtent = scrollExtent);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    _scheduleExtentSync();
-    final EdgeInsets resolvedPadding =
-        widget.bodyPadding ??
-        EdgeInsets.only(
-          left: context.spacing.m,
-          right: context.spacing.m,
-          bottom: context.spacing.m,
-        );
-    final double keyboardInset = _sheetKeyboardInset(context);
-    final double scrollExtent = _scrollExtent;
-    const double scrollExtentThreshold = 0;
-    final double footerSpacing = context.spacing.s;
-    final Widget? footer = widget.footer;
-
-    if (scrollExtent > scrollExtentThreshold) {
-      final double bottomPadding = resolvedPadding.bottom + keyboardInset;
-      final EdgeInsets padding = resolvedPadding.copyWith(
-        bottom: bottomPadding,
-      );
-      return Scrollbar(
-        controller: _scrollController,
-        thumbVisibility: true,
-        child: ListView(
-          controller: _scrollController,
-          padding: padding,
-          shrinkWrap: true,
-          physics: widget.scrollPhysics,
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-          children: [
-            ...widget.children,
-            if (widget.footer != null) ...[
-              SizedBox(height: footerSpacing),
-              widget.footer!,
-            ],
-          ],
-        ),
-      );
-    }
-
-    final double listBottomPadding = footer == null
-        ? resolvedPadding.bottom + keyboardInset
-        : resolvedPadding.bottom;
-    final EdgeInsets listPadding = resolvedPadding.copyWith(
-      bottom: listBottomPadding,
-    );
-    final Widget list = Scrollbar(
-      controller: _scrollController,
-      thumbVisibility: true,
-      child: ListView(
-        controller: _scrollController,
-        padding: listPadding,
-        shrinkWrap: true,
-        physics: widget.scrollPhysics,
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
-        children: widget.children,
-      ),
-    );
-    if (footer == null) {
-      return list;
-    }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        list,
-        SizedBox(height: footerSpacing),
-        Padding(
-          padding: EdgeInsets.only(bottom: keyboardInset),
-          child: footer,
-        ),
-      ],
-    );
-  }
+class AxiSheetActions extends AxiModalActions {
+  const AxiSheetActions({
+    required super.children,
+    super.padding,
+    super.gap,
+    super.includeTopDivider,
+    super.key,
+  });
 }

@@ -38,6 +38,7 @@ Future<void> showAddToFolderSheet(
     isScrollControlled: true,
     useRootNavigator: true,
     showCloseButton: false,
+    surfacePadding: EdgeInsets.zero,
     builder: (_) => sheet,
   );
 }
@@ -63,6 +64,7 @@ Future<void> showContactFolderRuleSheet(
     isScrollControlled: true,
     useRootNavigator: true,
     showCloseButton: false,
+    surfacePadding: EdgeInsets.zero,
     builder: (_) => sheet,
   );
 }
@@ -138,14 +140,20 @@ class _AddToFolderSheetState extends State<_AddToFolderSheet> {
           buildWhen: (previous, current) =>
               previous.collectionActionState != current.collectionActionState,
           builder: (context, chatState) {
-            return AxiButton.outline(
-              onPressed:
-                  chatState.collectionActionState is ChatCollectionActionLoading
-                  ? null
-                  : () => unawaited(_createFolder()),
-              width: context.sizing.dialogMaxWidth,
-              widthBehavior: AxiButtonWidth.expand,
-              child: Text(l10n.folderCreateTitle),
+            return AxiSheetActions(
+              children: [
+                Expanded(
+                  child: AxiButton.outline(
+                    onPressed:
+                        chatState.collectionActionState
+                            is ChatCollectionActionLoading
+                        ? null
+                        : () => unawaited(_createFolder()),
+                    widthBehavior: AxiButtonWidth.expand,
+                    child: Text(l10n.folderCreateTitle),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -280,11 +288,18 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
                 actionState.address == widget.contact.address &&
                 (actionState.action == ContactActionType.setFolderRule ||
                     actionState.action == ContactActionType.clearFolderRule);
-            return AxiButton.outline(
-              onPressed: loading ? null : () => unawaited(_createFolder()),
-              width: context.sizing.dialogMaxWidth,
-              widthBehavior: AxiButtonWidth.expand,
-              child: Text(l10n.folderCreateTitle),
+            return AxiSheetActions(
+              children: [
+                Expanded(
+                  child: AxiButton.outline(
+                    onPressed: loading
+                        ? null
+                        : () => unawaited(_createFolder()),
+                    widthBehavior: AxiButtonWidth.expand,
+                    child: Text(l10n.folderCreateTitle),
+                  ),
+                ),
+              ],
             );
           },
         ),

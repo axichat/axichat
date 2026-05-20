@@ -38,23 +38,11 @@ class AxiInputDialog extends StatelessWidget {
       horizontal: context.spacing.l,
       vertical: context.spacing.l,
     );
-    final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
-      context.spacing.m,
-      context.spacing.m,
-      context.spacing.s,
-      context.spacing.s,
+    final EdgeInsets bodyPadding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
     );
-    final EdgeInsets bodyPadding = EdgeInsets.only(
-      left: context.spacing.m,
-      right: context.spacing.m,
-      bottom: context.spacing.m,
-    );
-    final EdgeInsets actionsPadding = EdgeInsets.only(
-      left: context.spacing.m,
-      right: context.spacing.m,
-      bottom: context.spacing.m,
-    );
-    final actionButtons = <Widget>[
+    final List<Widget> actionButtons = <Widget>[
       AxiButton.outline(
         onPressed: canPop
             ? () => closeSheetWithKeyboardDismiss(context, () => context.pop())
@@ -73,28 +61,16 @@ class AxiInputDialog extends StatelessWidget {
       constraints: BoxConstraints(maxWidth: resolvedMaxWidth),
       child: AxiModalSurface(
         padding: EdgeInsets.zero,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AxiSheetHeader(
-              title: title,
-              onClose: () =>
-                  closeSheetWithKeyboardDismiss(context, () => context.pop()),
-              showCloseButton: showCloseButton,
-              padding: headerPadding,
-            ),
-            Padding(padding: bodyPadding, child: content),
-            Padding(
-              padding: actionsPadding,
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: context.spacing.s,
-                runSpacing: context.spacing.s,
-                children: actionButtons,
-              ),
-            ),
-          ],
+        child: AxiDialogScaffold.scroll(
+          header: AxiDialogHeader(
+            title: title,
+            onClose: () =>
+                closeSheetWithKeyboardDismiss(context, () => context.pop()),
+            showCloseButton: showCloseButton,
+          ),
+          bodyPadding: bodyPadding,
+          footer: AxiDialogActions(children: actionButtons),
+          children: [content],
         ),
       ),
     );

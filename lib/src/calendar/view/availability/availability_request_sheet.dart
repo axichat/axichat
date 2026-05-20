@@ -53,6 +53,7 @@ Future<CalendarAvailabilityRequest?> showCalendarAvailabilityRequestSheet({
   return showAdaptiveBottomSheet<CalendarAvailabilityRequest>(
     context: context,
     isScrollControlled: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarAvailabilityRequestSheet(
       share: share,
       requesterJid: requesterJid,
@@ -71,6 +72,7 @@ Future<CalendarAvailabilityDecision?> showCalendarAvailabilityDecisionSheet({
   return showAdaptiveBottomSheet<CalendarAvailabilityDecision>(
     context: context,
     isScrollControlled: true,
+    surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarAvailabilityDecisionSheet(
       request: request,
       canAddToPersonal: canAddToPersonal,
@@ -485,7 +487,6 @@ class _AvailabilitySheetActionRow extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: AxiButton.primary(
-        size: AxiButtonSize.sm,
         loading: isBusy,
         onPressed: onPressed,
         leading: Icon(iconData, size: _availabilityRequestSheetHeaderIconSize),

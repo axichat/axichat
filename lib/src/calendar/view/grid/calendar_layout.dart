@@ -210,8 +210,8 @@ CalendarLayoutMetrics resolveCalendarLayoutMetrics({
       ? theme.dayViewSubdivisions
       : zoom.daySubdivisions;
   final double baseSlotHeight = desiredHourHeight / subdivisions;
-  // Legacy grid renders from 00:00 through 24:00 inclusive, resulting in 25
-  // visible hour rows.
+  // Render the 24 actual hour rows; the renderer still paints the 24:00
+  // boundary line at the bottom edge.
   final int totalSlots = theme.visibleHourRows * subdivisions;
 
   if (!availableHeight.isFinite || availableHeight <= 0) {

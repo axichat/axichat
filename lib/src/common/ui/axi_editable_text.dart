@@ -2365,9 +2365,11 @@ class EditableTextState extends State<EditableText>
 
   TextSelectionOverlay? _selectionOverlay;
   ScrollNotificationObserverState? _scrollNotificationObserver;
+  ScrollNotificationObserverState? _focusedScrollNotificationObserver;
   ({TextEditingValue value, Rect selectionBounds})?
   _dataWhenToolbarShowScheduled;
   bool _listeningToScrollNotificationObserver = false;
+  bool _typingCaretSelectionVisible = true;
 
   bool get _webContextMenuEnabled => kIsWeb && BrowserContextMenu.enabled;
 
@@ -3201,6 +3203,10 @@ class EditableTextState extends State<EditableText>
         _handleContextMenuOnParentScroll,
       );
     }
+    if (_hasFocus) {
+      _syncFocusedScrollNotificationObserver();
+      _refreshTypingCaretViewportVisibility();
+    }
   }
 
   @protected
@@ -3334,6 +3340,31 @@ class EditableTextState extends State<EditableText>
     }
   }
 
+  void _syncFocusedScrollNotificationObserver() {
+    if (!_hasFocus) {
+      _disposeFocusedScrollNotificationObserver();
+      return;
+    }
+    final ScrollNotificationObserverState? observer =
+        ScrollNotificationObserver.maybeOf(context);
+    if (identical(_focusedScrollNotificationObserver, observer)) {
+      return;
+    }
+    _focusedScrollNotificationObserver?.removeListener(
+      _handleFocusedParentScroll,
+    );
+    _focusedScrollNotificationObserver = observer;
+    _focusedScrollNotificationObserver?.addListener(_handleFocusedParentScroll);
+  }
+
+  void _disposeFocusedScrollNotificationObserver() {
+    _focusedScrollNotificationObserver?.removeListener(
+      _handleFocusedParentScroll,
+    );
+    _focusedScrollNotificationObserver = null;
+    _setTypingCaretSelectionVisible(true);
+  }
+
   @protected
   @override
   void dispose() {
@@ -3364,10 +3395,11 @@ class EditableTextState extends State<EditableText>
     _liveTextInputStatus?.dispose();
     clipboardStatus.removeListener(_onChangedClipboardStatus);
     clipboardStatus.dispose();
-    _cursorVisibilityNotifier.dispose();
     _appLifecycleListener.dispose();
     FocusManager.instance.removeListener(_unflagInternalFocus);
     _disposeScrollNotificationObserver();
+    _disposeFocusedScrollNotificationObserver();
+    _cursorVisibilityNotifier.dispose();
     super.dispose();
     assert(_batchEditDepth <= 0, 'unfinished batch edits: $_batchEditDepth');
   }
@@ -4250,6 +4282,60 @@ class EditableTextState extends State<EditableText>
     return true;
   }
 
+  void _handleFocusedParentScroll(ScrollNotification notification) {
+    if (!_hasFocus || _isInternalScrollableNotification(notification.context)) {
+      return;
+    }
+    _selectionOverlay?.updateForScroll();
+    _refreshTypingCaretViewportVisibility();
+  }
+
+  Rect? _selectionBoundsForViewportVisibility() {
+    final AxiRenderEditable? renderEditable = _renderEditableOrNull;
+    if (renderEditable == null || !renderEditable.hasSize) {
+      return null;
+    }
+    final TextSelection? selection = renderEditable.selection;
+    if (selection == null || !selection.isValid) {
+      return null;
+    }
+    final List<TextBox> boxes = renderEditable.getBoxesForSelection(selection);
+    if (selection.isCollapsed || boxes.isEmpty) {
+      return renderEditable.getLocalRectForCaret(selection.extent);
+    }
+    return boxes
+        .map((TextBox box) => box.toRect())
+        .reduce((Rect result, Rect rect) => result.expandToInclude(rect));
+  }
+
+  bool _selectionVisibleInViewports() {
+    final Rect? selectionBounds = _selectionBoundsForViewportVisibility();
+    if (selectionBounds == null) {
+      return true;
+    }
+    return _selectionInViewport(selectionBounds);
+  }
+
+  void _setTypingCaretSelectionVisible(bool visible) {
+    if (_typingCaretSelectionVisible == visible) {
+      return;
+    }
+    _typingCaretSelectionVisible = visible;
+    _handleTypingCursorVisibilityChanged();
+  }
+
+  void _refreshTypingCaretViewportVisibility() {
+    if (!_hasFocus) {
+      _setTypingCaretSelectionVisible(true);
+      return;
+    }
+    final bool visible = _selectionVisibleInViewports();
+    _setTypingCaretSelectionVisible(visible);
+    if (!visible) {
+      _selectionOverlay?.hide();
+    }
+  }
+
   TextSelectionOverlay _createSelectionOverlay() {
     final EditableTextContextMenuBuilder? contextMenuBuilder =
         widget.contextMenuBuilder;
@@ -4771,7 +4857,8 @@ class EditableTextState extends State<EditableText>
   AxiRenderEditable? get _typingRenderEditable => _renderEditableOrNull;
 
   void _handleTypingCursorVisibilityChanged() {
-    _typingCaretPainter?.showCaret = _cursorVisibilityNotifier.value;
+    _typingCaretPainter?.showCaret =
+        _cursorVisibilityNotifier.value && _typingCaretSelectionVisible;
   }
 
   void _updateTypingAnimationDuration(Duration duration) {
@@ -5475,9 +5562,11 @@ class EditableTextState extends State<EditableText>
         _typingAnimationsEnabled;
     if (shouldAnimate) {
       _animateTypingCaret(_typingCaretOffset, caretOffset, renderEditable);
+      _refreshTypingCaretViewportVisibility();
       return;
     }
     _jumpTypingCaret(caretOffset);
+    _refreshTypingCaretViewportVisibility();
   }
 
   void _startTypingGlyphMorph(
@@ -5682,7 +5771,10 @@ class EditableTextState extends State<EditableText>
       if (updatedSelection != null) {
         _handleSelectionChanged(updatedSelection, null);
       }
+      _syncFocusedScrollNotificationObserver();
+      _refreshTypingCaretViewportVisibility();
     } else {
+      _disposeFocusedScrollNotificationObserver();
       WidgetsBinding.instance.removeObserver(this);
       setState(() {
         _currentPromptRectRange = null;

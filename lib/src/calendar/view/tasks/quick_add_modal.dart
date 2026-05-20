@@ -5,12 +5,12 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
@@ -78,12 +78,7 @@ class QuickAddModal extends StatefulWidget {
   State<QuickAddModal> createState() => _QuickAddModalState();
 }
 
-class _QuickAddModalState extends State<QuickAddModal>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _animationController;
-  late final Animation<double> _fadeAnimation;
-  late final Animation<double> _scaleAnimation;
-
+class _QuickAddModalState extends State<QuickAddModal> {
   final _taskNameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
@@ -117,30 +112,11 @@ class _QuickAddModalState extends State<QuickAddModal>
     _initialTitleValidationMessage = widget.initialValidationMessage;
     _checklistController = TaskChecklistController();
 
-    _animationController = AnimationController(
-      duration: baseAnimationDuration,
-      vsync: this,
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
-    );
-
-    if (widget.surface == QuickAddModalSurface.dialog) {
-      _animationController.forward();
-    } else {
-      _animationController.value = 1.0;
-    }
-
     final prefilled = widget.prefilledDateTime;
 
     _formController = TaskDraftController(
       initialStart: prefilled,
-      initialEnd: prefilled?.add(const Duration(hours: 1)),
+      initialEnd: prefilled?.add(calendarDefaultTaskDuration),
     );
     _parserService = NlScheduleParserService();
     _applyPrefill(prefilled);
@@ -151,17 +127,14 @@ class _QuickAddModalState extends State<QuickAddModal>
         text: seededText,
         selection: TextSelection.collapsed(offset: seededText.length),
       );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _handleTaskNameChanged(seededText);
-      });
+      _initialTitleValidationMessage = null;
+      _scheduleParserRun(seededText, clearFieldsWhenEmpty: false);
     }
   }
 
   @override
   void dispose() {
     _parserDebounce?.cancel();
-    _animationController.dispose();
     _taskNameController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
@@ -173,143 +146,49 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   @override
   Widget build(BuildContext context) {
-    final BaseCalendarBloc? bloc = _locateCalendarBloc();
-    if (bloc == null) {
-      return _buildModalShell(context, isSubmitting: false);
-    }
-    return BlocConsumer<BaseCalendarBloc, CalendarState>(
-      bloc: bloc,
-      listenWhen: (previous, current) =>
-          previous.isTaskCreationSubmitting !=
-              current.isTaskCreationSubmitting ||
-          previous.isCriticalPathMutating != current.isCriticalPathMutating,
-      listener: _handleCalendarStateChanged,
-      builder: (context, state) => _buildModalShell(
-        context,
-        isSubmitting: state.isTaskCreationSubmitting,
+    return _QuickAddModalShell(
+      formKey: _formKey,
+      bloc: _locateCalendarBloc(),
+      onCalendarStateChanged: _handleCalendarStateChanged,
+      contentBuilder: (context, isSubmitting) => _QuickAddModalContent(
+        isSheet: widget.surface == QuickAddModalSurface.bottomSheet,
+        formController: _formController,
+        isSubmitting: isSubmitting,
+        taskNameController: _taskNameController,
+        descriptionController: _descriptionController,
+        locationController: _locationController,
+        checklistController: _checklistController,
+        taskNameFocusNode: _taskNameFocusNode,
+        locationHelper: widget.locationHelper,
+        onTaskNameChanged: _handleTaskNameChanged,
+        onTaskSubmit: _submitTask,
+        onClose: _requestDismiss,
+        onCancel: _requestDismiss,
+        onLocationChanged: _handleLocationEdited,
+        onStartChanged: _onUserStartChanged,
+        onEndChanged: _onUserEndChanged,
+        onScheduleCleared: _onUserScheduleCleared,
+        onDeadlineChanged: _onUserDeadlineChanged,
+        onRecurrenceChanged: _onUserRecurrenceChanged,
+        onImportantChanged: _onUserImportantChanged,
+        onUrgentChanged: _onUserUrgentChanged,
+        onRemindersChanged: _onRemindersChanged,
+        onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
+        onCategoriesChanged: _onCategoriesChanged,
+        onUrlChanged: _onUrlChanged,
+        onGeoChanged: _onGeoChanged,
+        onOrganizerChanged: _onOrganizerChanged,
+        onAttendeesChanged: _onAttendeesChanged,
+        fallbackDate: widget.prefilledDateTime,
+        onAddToCriticalPath: _queueCriticalPathForDraft,
+        queuedPaths: _queuedPaths(),
+        onRemoveQueuedPath: _removeQueuedCriticalPath,
+        hasCalendarBloc: widget.locateCalendarBloc != null,
+        formError: _formError,
+        titleValidator: _validateTaskTitle,
+        titleAutovalidateMode: _titleAutovalidateMode,
       ),
     );
-  }
-
-  Widget _buildModalShell(BuildContext context, {required bool isSubmitting}) {
-    if (widget.surface == QuickAddModalSurface.bottomSheet) {
-      return SafeArea(
-        top: false,
-        bottom: false,
-        child: ShadForm(
-          key: _formKey,
-          autovalidateMode: ShadAutovalidateMode.disabled,
-          fieldIdSeparator: null,
-          child: _QuickAddModalContent(
-            isSheet: true,
-            formController: _formController,
-            isSubmitting: isSubmitting,
-            taskNameController: _taskNameController,
-            descriptionController: _descriptionController,
-            locationController: _locationController,
-            checklistController: _checklistController,
-            taskNameFocusNode: _taskNameFocusNode,
-            locationHelper: widget.locationHelper,
-            onTaskNameChanged: _handleTaskNameChanged,
-            onTaskSubmit: _submitTask,
-            onClose: _requestDismiss,
-            onCancel: _requestDismiss,
-            onLocationChanged: _handleLocationEdited,
-            onStartChanged: _onUserStartChanged,
-            onEndChanged: _onUserEndChanged,
-            onScheduleCleared: _onUserScheduleCleared,
-            onDeadlineChanged: _onUserDeadlineChanged,
-            onRecurrenceChanged: _onUserRecurrenceChanged,
-            onImportantChanged: _onUserImportantChanged,
-            onUrgentChanged: _onUserUrgentChanged,
-            onRemindersChanged: _onRemindersChanged,
-            onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
-            onCategoriesChanged: _onCategoriesChanged,
-            onUrlChanged: _onUrlChanged,
-            onGeoChanged: _onGeoChanged,
-            onOrganizerChanged: _onOrganizerChanged,
-            onAttendeesChanged: _onAttendeesChanged,
-            actionInsetBuilder: _quickAddActionInset,
-            fallbackDate: widget.prefilledDateTime,
-            onAddToCriticalPath: _queueCriticalPathForDraft,
-            queuedPaths: _queuedPaths(),
-            onRemoveQueuedPath: _removeQueuedCriticalPath,
-            hasCalendarBloc: widget.locateCalendarBloc != null,
-            formError: _formError,
-            titleValidator: _validateTaskTitle,
-            titleAutovalidateMode: _titleAutovalidateMode,
-          ),
-        ),
-      );
-    }
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _scaleAnimation,
-          builder: (context, child) {
-            return Transform.scale(scale: _scaleAnimation.value, child: child);
-          },
-          child: ShadForm(
-            key: _formKey,
-            autovalidateMode: ShadAutovalidateMode.disabled,
-            fieldIdSeparator: null,
-            child: _QuickAddModalContent(
-              isSheet: false,
-              formController: _formController,
-              isSubmitting: isSubmitting,
-              taskNameController: _taskNameController,
-              descriptionController: _descriptionController,
-              locationController: _locationController,
-              checklistController: _checklistController,
-              taskNameFocusNode: _taskNameFocusNode,
-              locationHelper: widget.locationHelper,
-              onTaskNameChanged: _handleTaskNameChanged,
-              onTaskSubmit: _submitTask,
-              onClose: _requestDismiss,
-              onCancel: _requestDismiss,
-              onLocationChanged: _handleLocationEdited,
-              onStartChanged: _onUserStartChanged,
-              onEndChanged: _onUserEndChanged,
-              onScheduleCleared: _onUserScheduleCleared,
-              onDeadlineChanged: _onUserDeadlineChanged,
-              onRecurrenceChanged: _onUserRecurrenceChanged,
-              onImportantChanged: _onUserImportantChanged,
-              onUrgentChanged: _onUserUrgentChanged,
-              onRemindersChanged: _onRemindersChanged,
-              onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
-              onCategoriesChanged: _onCategoriesChanged,
-              onUrlChanged: _onUrlChanged,
-              onGeoChanged: _onGeoChanged,
-              onOrganizerChanged: _onOrganizerChanged,
-              onAttendeesChanged: _onAttendeesChanged,
-              actionInsetBuilder: _quickAddActionInset,
-              fallbackDate: widget.prefilledDateTime,
-              onAddToCriticalPath: _queueCriticalPathForDraft,
-              queuedPaths: _queuedPaths(),
-              onRemoveQueuedPath: _removeQueuedCriticalPath,
-              hasCalendarBloc: widget.locateCalendarBloc != null,
-              formError: _formError,
-              titleValidator: _validateTaskTitle,
-              titleAutovalidateMode: _titleAutovalidateMode,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  double _quickAddActionInset(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double safeBottom = mediaQuery.viewPadding.bottom;
-    if (keyboardInset <= safeBottom) {
-      return 0;
-    }
-    final double inset = keyboardInset > safeBottom
-        ? keyboardInset - safeBottom
-        : 0;
-    return context.spacing.s + inset;
   }
 
   AutovalidateMode get _titleAutovalidateMode => AutovalidateMode.disabled;
@@ -331,22 +210,24 @@ class _QuickAddModalState extends State<QuickAddModal>
   void _handleTaskNameChanged(String value) {
     _setFormError(null);
     _clearInitialValidationMessage();
+    _scheduleParserRun(value, clearFieldsWhenEmpty: true);
+  }
+
+  void _scheduleParserRun(String value, {required bool clearFieldsWhenEmpty}) {
     final trimmed = value.trim();
     _parserDebounce?.cancel();
     if (trimmed.isEmpty) {
-      _clearParserState(clearFields: true);
+      if (clearFieldsWhenEmpty) {
+        _clearParserState(clearFields: true);
+      }
       return;
     }
     if (trimmed == _lastParserInput) {
       return;
     }
-    _parserDebounce = Timer(
-      calendarScrollAnimationDuration +
-          calendarTaskSplitPreviewAnimationDuration,
-      () {
-        _runParser(trimmed);
-      },
-    );
+    _parserDebounce = Timer(calendarQuickAddParserDebounceDelay, () {
+      _runParser(trimmed);
+    });
   }
 
   Future<void> _runParser(String input) async {
@@ -683,6 +564,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     await showCriticalPathPicker(
       context: context,
       paths: paths,
+      bloc: _locateCalendarBloc(),
       stayOpen: true,
       onPathSelected: (path) async {
         _addQueuedCriticalPath(path.id);
@@ -735,7 +617,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     final duration =
         _formController.effectiveDuration ??
-        (scheduledTime != null ? const Duration(hours: 1) : null);
+        (scheduledTime != null ? calendarDefaultTaskDuration : null);
     final List<String>? categories = resolveCategoryOverride(
       base: null,
       categories: _formController.categories,
@@ -797,10 +679,6 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Future<void> _dismissModal() async {
-    if (widget.surface == QuickAddModalSurface.dialog) {
-      await _animationController.reverse();
-    }
-
     if (!mounted) {
       return;
     }
@@ -839,6 +717,48 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 }
 
+class _QuickAddModalShell extends StatelessWidget {
+  const _QuickAddModalShell({
+    required this.formKey,
+    required this.bloc,
+    required this.onCalendarStateChanged,
+    required this.contentBuilder,
+  });
+
+  final GlobalKey<ShadFormState> formKey;
+  final BaseCalendarBloc? bloc;
+  final void Function(BuildContext context, CalendarState state)
+  onCalendarStateChanged;
+  final Widget Function(BuildContext context, bool isSubmitting) contentBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final BaseCalendarBloc? calendarBloc = bloc;
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: ShadForm(
+        key: formKey,
+        autovalidateMode: ShadAutovalidateMode.disabled,
+        fieldIdSeparator: null,
+        child: calendarBloc == null
+            ? contentBuilder(context, false)
+            : BlocConsumer<BaseCalendarBloc, CalendarState>(
+                bloc: calendarBloc,
+                listenWhen: (previous, current) =>
+                    previous.isTaskCreationSubmitting !=
+                        current.isTaskCreationSubmitting ||
+                    previous.isCriticalPathMutating !=
+                        current.isCriticalPathMutating,
+                listener: onCalendarStateChanged,
+                builder: (context, state) =>
+                    contentBuilder(context, state.isTaskCreationSubmitting),
+              ),
+      ),
+    );
+  }
+}
+
 class _QuickAddModalContent extends StatelessWidget {
   const _QuickAddModalContent({
     required this.isSheet,
@@ -869,7 +789,6 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onGeoChanged,
     required this.onOrganizerChanged,
     required this.onAttendeesChanged,
-    required this.actionInsetBuilder,
     required this.fallbackDate,
     required this.onAddToCriticalPath,
     required this.queuedPaths,
@@ -908,7 +827,6 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<CalendarGeo?> onGeoChanged;
   final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
   final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
-  final double Function(BuildContext context) actionInsetBuilder;
   final DateTime? fallbackDate;
   final Future<void> Function() onAddToCriticalPath;
   final List<CalendarCriticalPath> queuedPaths;
@@ -922,40 +840,12 @@ class _QuickAddModalContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = ResponsiveHelper.spec(context);
     final spacing = context.spacing;
-    final double maxWidth =
-        responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
-    final mediaQuery = MediaQuery.of(context);
-    final double keyboardInset = mediaQuery.viewInsets.bottom;
-    final double safeBottom = mediaQuery.viewPadding.bottom;
-    final bool keyboardOpen = isSheet && keyboardInset > safeBottom;
     final EdgeInsets contentPadding = responsive.contentPadding.resolve(
       Directionality.of(context),
     );
-    final EdgeInsets scrollPadding = isSheet
-        ? contentPadding.copyWith(bottom: contentPadding.bottom + keyboardInset)
-        : contentPadding;
-    final BorderRadius borderRadius = isSheet
-        ? const BorderRadius.vertical(top: Radius.circular(24))
-        : BorderRadius.circular(calendarBorderRadius);
-    final Color background = isSheet
-        ? context.colorScheme.card
-        : calendarContainerColor;
-    final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
-    final Widget header = ValueListenableBuilder<TextEditingValue>(
-      valueListenable: taskNameController,
-      builder: (context, value, _) {
-        final bool canSubmit = titleValidator(value.text) == null;
-        return AnimatedBuilder(
-          animation: formController,
-          builder: (context, _) {
-            final bool disabled = isSubmitting || !canSubmit;
-            return _QuickAddHeader(
-              onClose: onClose,
-              onSubmit: disabled ? null : onTaskSubmit,
-            );
-          },
-        );
-      },
+    final Widget header = AxiSheetHeader(
+      title: Text(context.l10n.calendarAddTaskTitle),
+      onClose: onClose,
     );
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: taskNameController,
@@ -970,264 +860,193 @@ class _QuickAddModalContent extends StatelessWidget {
       },
     );
 
-    Widget shell = LayoutBuilder(
-      builder: (context, constraints) {
-        final double resolvedMaxHeight = isSheet && constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : responsive.quickAddMaxHeight;
-        return Container(
-          margin: isSheet ? EdgeInsets.zero : responsive.modalMargin,
-          constraints: BoxConstraints(
-            maxWidth: isSheet ? double.infinity : maxWidth,
-            maxHeight: resolvedMaxHeight,
-          ),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: borderRadius,
-            boxShadow: boxShadow,
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: borderRadius,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                header,
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: scrollPadding,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.manual,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: baseAnimationDuration,
-                          child: formError == null
-                              ? const SizedBox.shrink()
-                              : Container(
-                                  key: const ValueKey('quick-add-error'),
-                                  margin: EdgeInsets.only(bottom: spacing.s),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: spacing.m,
-                                    vertical: spacing.xs,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: calendarDangerColor.withValues(
-                                      alpha: 0.08,
-                                    ),
-                                    borderRadius: BorderRadius.circular(
-                                      calendarBorderRadius,
-                                    ),
-                                    border: Border.all(
-                                      color: calendarDangerColor.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.error_outline,
-                                        color: calendarDangerColor,
-                                        size: context.sizing.menuItemIconSize,
-                                      ),
-                                      SizedBox(width: spacing.xxs),
-                                      Expanded(
-                                        child: Text(
-                                          formError!,
-                                          style: context.textTheme.label.strong
-                                              .copyWith(
-                                                color: calendarDangerColor,
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+    return AxiSheetScaffold.sections(
+      header: header,
+      footer: actions,
+      bodyPadding: EdgeInsets.only(
+        left: contentPadding.left,
+        right: contentPadding.right,
+      ),
+      sections: [
+        AxiSheetSection(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnimatedSwitcher(
+                duration: baseAnimationDuration,
+                child: formError == null
+                    ? const SizedBox.shrink()
+                    : Container(
+                        key: const ValueKey('quick-add-error'),
+                        margin: EdgeInsets.only(bottom: spacing.s),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: spacing.m,
+                          vertical: spacing.xs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: calendarDangerColor.withValues(
+                            alpha: context.motion.tapHoverAlpha,
+                          ),
+                          borderRadius: context.radius,
+                          border: Border.fromBorderSide(
+                            context.borderSide.copyWith(
+                              color: calendarDangerColor.withValues(
+                                alpha: context.motion.tapFocusAlpha,
+                              ),
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: calendarDangerColor,
+                              size: context.sizing.menuItemIconSize,
+                            ),
+                            SizedBox(width: spacing.xxs),
+                            Expanded(
+                              child: Text(
+                                formError!,
+                                style: context.textTheme.label.strong.copyWith(
+                                  color: calendarDangerColor,
                                 ),
+                              ),
+                            ),
+                          ],
                         ),
-                        _QuickAddTaskNameField(
-                          controller: taskNameController,
-                          focusNode: taskNameFocusNode,
-                          helper: locationHelper,
-                          validator: titleValidator,
-                          autovalidateMode: titleAutovalidateMode,
-                          onChanged: onTaskNameChanged,
-                          onSubmit: onTaskSubmit,
-                        ),
-                        SizedBox(height: spacing.m),
-                        _QuickAddPriorityToggles(
-                          formController: formController,
-                          onImportantChanged: onImportantChanged,
-                          onUrgentChanged: onUrgentChanged,
-                        ),
-                        SizedBox(height: spacing.m),
-                        _QuickAddDescriptionField(
-                          controller: descriptionController,
-                        ),
-                        SizedBox(height: spacing.m),
-                        _QuickAddLocationField(
-                          controller: locationController,
-                          helper: locationHelper,
-                          onChanged: onLocationChanged,
-                        ),
-                        SizedBox(height: spacing.m),
-                        TaskChecklist(controller: checklistController),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        _QuickAddScheduleSection(
-                          formController: formController,
-                          onStartChanged: onStartChanged,
-                          onEndChanged: onEndChanged,
-                          onClear: onScheduleCleared,
-                        ),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        _QuickAddDeadlineSection(
-                          formController: formController,
-                          onChanged: onDeadlineChanged,
-                        ),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        AnimatedBuilder(
-                          animation: formController,
-                          builder: (context, _) {
-                            return _QuickAddReminderSection(
-                              reminders: formController.reminders,
-                              deadline: formController.deadline,
-                              advancedAlarms: formController.advancedAlarms,
-                              onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
-                              referenceStart: formController.startTime,
-                              onChanged: onRemindersChanged,
-                            );
-                          },
-                        ),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        AnimatedBuilder(
-                          animation: formController,
-                          builder: (context, _) {
-                            return CalendarCategoriesField(
-                              categories: formController.categories,
-                              onChanged: onCategoriesChanged,
-                              surfaceColor: background,
-                            );
-                          },
-                        ),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        AnimatedBuilder(
-                          animation: formController,
-                          builder: (context, _) {
-                            return CalendarLinkGeoFields(
-                              url: formController.url,
-                              geo: formController.geo,
-                              onUrlChanged: onUrlChanged,
-                              onGeoChanged: onGeoChanged,
-                            );
-                          },
-                        ),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        AnimatedBuilder(
-                          animation: formController,
-                          builder: (context, _) {
-                            return CalendarParticipantsField(
-                              organizer: formController.organizer,
-                              attendees: formController.attendees,
-                              onOrganizerChanged: onOrganizerChanged,
-                              onAttendeesChanged: onAttendeesChanged,
-                            );
-                          },
-                        ),
-                        TaskSectionDivider(verticalPadding: spacing.m),
-                        _QuickAddRecurrenceSection(
-                          formController: formController,
-                          onChanged: onRecurrenceChanged,
-                          fallbackDate: fallbackDate,
-                        ),
-                        SizedBox(height: spacing.m),
-                        TaskSecondaryButton(
-                          label: context.l10n.calendarAddToCriticalPath,
-                          icon: Icons.route,
-                          onPressed: isSubmitting || !hasCalendarBloc
-                              ? null
-                              : onAddToCriticalPath,
-                        ),
-                        SizedBox(height: spacing.xxs),
-                        CriticalPathMembershipList(
-                          paths: queuedPaths,
-                          onRemovePath: onRemoveQueuedPath,
-                        ),
-                        if (keyboardOpen) ...[
-                          SizedBox(height: spacing.m),
-                          actions,
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                if (!keyboardOpen)
-                  AnimatedPadding(
-                    duration: baseAnimationDuration,
-                    curve: Curves.easeOutCubic,
-                    padding: EdgeInsets.only(
-                      bottom: actionInsetBuilder(context),
-                    ),
-                    child: SafeArea(top: false, bottom: true, child: actions),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (isSheet) {
-      return ClipRRect(borderRadius: borderRadius, child: shell);
-    }
-    return shell;
-  }
-}
-
-class _QuickAddHeader extends StatelessWidget {
-  const _QuickAddHeader({required this.onClose, required this.onSubmit});
-
-  final VoidCallback onClose;
-  final VoidCallback? onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final double iconSize = context.sizing.iconButtonIconSize;
-    final spacing = context.spacing;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.m),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: calendarBorderColor,
-            width: context.borderSide.width,
+                      ),
+              ),
+              _QuickAddTaskNameField(
+                controller: taskNameController,
+                focusNode: taskNameFocusNode,
+                helper: locationHelper,
+                validator: titleValidator,
+                autovalidateMode: titleAutovalidateMode,
+                onChanged: onTaskNameChanged,
+                onSubmit: onTaskSubmit,
+              ),
+              SizedBox(height: spacing.m),
+              _QuickAddPriorityToggles(
+                formController: formController,
+                onImportantChanged: onImportantChanged,
+                onUrgentChanged: onUrgentChanged,
+              ),
+              SizedBox(height: spacing.m),
+              _QuickAddDescriptionField(controller: descriptionController),
+              SizedBox(height: spacing.m),
+              _QuickAddLocationField(
+                controller: locationController,
+                helper: locationHelper,
+                onChanged: onLocationChanged,
+              ),
+            ],
           ),
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.add_task, color: calendarTitleColor, size: iconSize),
-          SizedBox(width: spacing.s),
-          Text(
-            l10n.calendarAddTaskTitle,
-            style: context.textTheme.h4.copyWith(color: calendarTitleColor),
+        AxiSheetSection(
+          child: TaskChecklist(
+            controller: checklistController,
+            showDivider: false,
           ),
-          const Spacer(),
-          AxiIconButton.outline(
-            iconData: Icons.check,
-            tooltip: l10n.calendarAddTaskAction,
-            onPressed: onSubmit,
-            color: calendarPrimaryColor,
+        ),
+        AxiSheetSection(
+          child: _QuickAddScheduleSection(
+            formController: formController,
+            onStartChanged: onStartChanged,
+            onEndChanged: onEndChanged,
+            onClear: onScheduleCleared,
           ),
-          SizedBox(width: spacing.s),
-          AxiIconButton.outline(
-            iconData: Icons.close,
-            tooltip: context.l10n.calendarCloseTooltip,
-            onPressed: onClose,
-            color: calendarSubtitleColor,
+        ),
+        AxiSheetSection(
+          child: _QuickAddDeadlineSection(
+            formController: formController,
+            onChanged: onDeadlineChanged,
           ),
-        ],
-      ),
+        ),
+        AxiSheetSection(
+          child: AnimatedBuilder(
+            animation: formController,
+            builder: (context, _) {
+              return TaskReminderRepeatSection(
+                reminders: formController.reminders,
+                onRemindersChanged: onRemindersChanged,
+                recurrence: formController.recurrence,
+                onRecurrenceChanged: onRecurrenceChanged,
+                deadline: formController.deadline,
+                advancedAlarms: formController.advancedAlarms,
+                onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
+                referenceStart: formController.startTime,
+                fallbackWeekday:
+                    formController.startTime?.weekday ??
+                    fallbackDate?.weekday ??
+                    DateTime.now().weekday,
+                recurrenceChipSpacing: spacing.s,
+                recurrenceChipRunSpacing: spacing.s,
+                recurrenceWeekdaySpacing: spacing.s,
+                recurrenceAdvancedSectionSpacing: spacing.m,
+                recurrenceEndSpacing: spacing.m,
+                recurrenceFieldGap: spacing.m,
+              );
+            },
+          ),
+        ),
+        AxiSheetSection(
+          child: AnimatedBuilder(
+            animation: formController,
+            builder: (context, _) {
+              return CalendarCategoriesField(
+                categories: formController.categories,
+                onChanged: onCategoriesChanged,
+                surfaceColor: context.colorScheme.card,
+              );
+            },
+          ),
+        ),
+        AxiSheetSection(
+          child: AnimatedBuilder(
+            animation: formController,
+            builder: (context, _) {
+              return CalendarLinkGeoFields(
+                url: formController.url,
+                geo: formController.geo,
+                onUrlChanged: onUrlChanged,
+                onGeoChanged: onGeoChanged,
+              );
+            },
+          ),
+        ),
+        AxiSheetSection(
+          child: AnimatedBuilder(
+            animation: formController,
+            builder: (context, _) {
+              return CalendarParticipantsField(
+                organizer: formController.organizer,
+                attendees: formController.attendees,
+                onOrganizerChanged: onOrganizerChanged,
+                onAttendeesChanged: onAttendeesChanged,
+              );
+            },
+          ),
+        ),
+        AxiSheetSection(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TaskSecondaryButton(
+                label: context.l10n.calendarAddToCriticalPath,
+                icon: Icons.route,
+                onPressed: isSubmitting || !hasCalendarBloc
+                    ? null
+                    : onAddToCriticalPath,
+              ),
+              SizedBox(height: spacing.xxs),
+              CriticalPathMembershipList(
+                paths: queuedPaths,
+                onRemovePath: onRemoveQueuedPath,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1434,79 +1253,6 @@ class _QuickAddDeadlineSection extends StatelessWidget {
   }
 }
 
-class _QuickAddReminderSection extends StatelessWidget {
-  const _QuickAddReminderSection({
-    required this.reminders,
-    required this.deadline,
-    required this.onChanged,
-    required this.advancedAlarms,
-    required this.onAdvancedAlarmsChanged,
-    required this.referenceStart,
-  });
-
-  final ReminderPreferences reminders;
-  final DateTime? deadline;
-  final ValueChanged<ReminderPreferences> onChanged;
-  final List<CalendarAlarm> advancedAlarms;
-  final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
-  final DateTime? referenceStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return ReminderPreferencesField(
-      value: reminders,
-      onChanged: onChanged,
-      advancedAlarms: advancedAlarms,
-      onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
-      referenceStart: referenceStart,
-      title: context.l10n.calendarRemindersSection,
-      anchor: deadline == null ? ReminderAnchor.start : ReminderAnchor.deadline,
-      showBothAnchors: deadline != null,
-    );
-  }
-}
-
-class _QuickAddRecurrenceSection extends StatelessWidget {
-  const _QuickAddRecurrenceSection({
-    required this.formController,
-    required this.onChanged,
-    required this.fallbackDate,
-  });
-
-  final TaskDraftController formController;
-  final ValueChanged<RecurrenceFormValue> onChanged;
-  final DateTime? fallbackDate;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return AnimatedBuilder(
-      animation: formController,
-      builder: (context, _) {
-        final fallbackWeekday =
-            formController.startTime?.weekday ??
-            fallbackDate?.weekday ??
-            DateTime.now().weekday;
-        return TaskRecurrenceSection(
-          title: l10n.calendarRepeatLabel,
-          headerSize: TaskSectionLabelSize.medium,
-          spacing: context.spacing.s,
-          value: formController.recurrence,
-          fallbackWeekday: fallbackWeekday,
-          referenceStart: formController.startTime,
-          chipSpacing: context.spacing.s,
-          chipRunSpacing: context.spacing.s,
-          weekdaySpacing: context.spacing.s,
-          advancedSectionSpacing: context.spacing.m,
-          endSpacing: context.spacing.m,
-          fieldGap: context.spacing.m,
-          onChanged: onChanged,
-        );
-      },
-    );
-  }
-}
-
 class _QuickAddActions extends StatelessWidget {
   const _QuickAddActions({
     required this.isSubmitting,
@@ -1524,9 +1270,7 @@ class _QuickAddActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final bool disabled = isSubmitting || !canSubmit;
-    return TaskFormActionsRow(
-      includeTopBorder: true,
-      padding: EdgeInsets.all(context.spacing.m),
+    return AxiSheetActions(
       gap: context.spacing.m,
       children: [
         Expanded(
@@ -1562,52 +1306,28 @@ Future<void> showQuickAddModal({
   BaseCalendarBloc? Function()? locateCalendarBloc,
 }) {
   final commandSurface = resolveCommandSurface(context);
-  final bool isDesktop =
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.linux);
-  final bool useSheet = !isDesktop && commandSurface == CommandSurface.sheet;
+  final bool useSheet = commandSurface == CommandSurface.sheet;
   final surface = useSheet
       ? QuickAddModalSurface.bottomSheet
       : QuickAddModalSurface.dialog;
-
-  if (!useSheet) {
-    return showFadeScaleDialog<void>(
-      context: context,
-      useRootNavigator: _calendarUseRootNavigator,
-      builder: (dialogContext) {
-        Widget child = QuickAddModal(
-          surface: surface,
-          prefilledDateTime: prefilledDateTime,
-          prefilledText: prefilledText,
-          onTaskAdded: onTaskAdded,
-          locationHelper: locationHelper,
-          initialValidationMessage: initialValidationMessage,
-          locateCalendarBloc: locateCalendarBloc,
-          onDismiss: () {
-            if (Navigator.of(dialogContext).canPop()) {
-              Navigator.of(dialogContext).maybePop();
-            }
-          },
-        );
-        return child;
-      },
-    );
-  }
-
+  final responsive = ResponsiveHelper.spec(context);
+  final bool isCalendarAnchored = CalendarModalScope.maybeOf(context) != null;
   final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<void>(
     context: modalContext,
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,
-    backgroundColor: Colors.transparent,
+    bottomSafeAreaBehavior: isCalendarAnchored
+        ? AxiSheetBottomSafeAreaBehavior.none
+        : AxiSheetBottomSafeAreaBehavior.insideSurface,
     surfacePadding: EdgeInsets.zero,
-    dialogMaxWidth: 760,
+    dialogMaxWidth:
+        responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth,
     showCloseButton: false,
+    useRootNavigator: _calendarUseRootNavigator,
     builder: (sheetContext) {
-      Widget child = QuickAddModal(
+      return QuickAddModal(
         surface: surface,
         prefilledDateTime: prefilledDateTime,
         prefilledText: prefilledText,
@@ -1615,15 +1335,12 @@ Future<void> showQuickAddModal({
         locationHelper: locationHelper,
         initialValidationMessage: initialValidationMessage,
         locateCalendarBloc: locateCalendarBloc,
-        onDismiss: useSheet
-            ? null
-            : () {
-                if (Navigator.of(sheetContext).canPop()) {
-                  Navigator.of(sheetContext).maybePop();
-                }
-              },
+        onDismiss: () {
+          if (Navigator.of(sheetContext).canPop()) {
+            Navigator.of(sheetContext).maybePop();
+          }
+        },
       );
-      return child;
     },
   );
 }

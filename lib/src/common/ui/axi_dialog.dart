@@ -2,8 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
-import 'package:axichat/src/common/ui/modal_close_button.dart';
+import 'package:axichat/src/common/ui/axi_modal_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -29,27 +30,54 @@ class AxiDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadDialog.raw(
-      variant: variant,
-      title: title,
-      description: description,
-      actions: actions,
-      constraints:
-          constraints ??
-          BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
-      scrollable: scrollable,
-      radius: context.radius,
-      removeBorderRadiusWhenTiny: false,
-      closeIcon: ModalCloseButton(
-        onPressed: () => closeSheetWithKeyboardDismiss(
-          context,
-          () => Navigator.of(context).pop(),
-        ),
-        color: ShadTheme.of(context).colorScheme.mutedForeground,
-        backgroundColor: Colors.transparent,
-        borderColor: Colors.transparent,
+    final EdgeInsets dialogInsets = EdgeInsets.symmetric(
+      horizontal: context.spacing.l,
+      vertical: context.spacing.l,
+    );
+    final EdgeInsets bodyPadding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
+    );
+    final bool hasHeader = title != null || description != null;
+    final Widget header = hasHeader
+        ? AxiDialogHeader(
+            title: title ?? const SizedBox.shrink(),
+            subtitle: description,
+            onClose: () => closeSheetWithKeyboardDismiss(
+              context,
+              () => Navigator.of(context).pop(),
+            ),
+          )
+        : const SizedBox.shrink();
+    final Widget? footer = actions.isEmpty
+        ? null
+        : AxiDialogActions(children: actions);
+    final Widget scaffold = child == null
+        ? AxiDialogScaffold(
+            header: header,
+            body: const SizedBox.shrink(),
+            footer: footer,
+          )
+        : AxiDialogScaffold.scroll(
+            header: header,
+            bodyPadding: bodyPadding,
+            footer: footer,
+            scrollPhysics: scrollable == false
+                ? const NeverScrollableScrollPhysics()
+                : null,
+            children: [child!],
+          );
+    return Dialog(
+      insetPadding: dialogInsets,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      child: ConstrainedBox(
+        constraints:
+            constraints ??
+            BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+        child: AxiModalSurface(padding: EdgeInsets.zero, child: scaffold),
       ),
-      child: child,
     );
   }
 }
