@@ -375,6 +375,16 @@ void main() {
     );
   }
 
+  void emitChannelOverflow() {
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.channelOverflow.code,
+        data1: 0,
+        data2: 0,
+      ),
+    );
+  }
+
   test(
     'marks chats as email and raises notifications on incoming events',
     () async {
@@ -869,6 +879,53 @@ void main() {
         () => transport.performBackgroundFetch(captureAny()),
       ).captured;
       expect(captured, [const Duration(seconds: 15)]);
+      verify(() => transport.refreshChatlistSnapshot()).called(1);
+      verify(() => database.replaceContacts(any())).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'syncSessionState skips home refresh fetch while transport IO is running',
+    () async {
+      when(
+        () => transport.getContactIds(flags: any(named: 'flags')),
+      ).thenAnswer((_) async => const <int>[]);
+      when(
+        () => transport.getBlockedContactIds(),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => database.replaceContacts(any())).thenAnswer((_) async {});
+      when(
+        () => database.getEmailSpamlist(),
+      ).thenAnswer((_) async => <EmailSpamEntry>[]);
+      when(
+        () => database.getEmailBlocklist(),
+      ).thenAnswer((_) async => <EmailBlocklistEntry>[]);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+      when(() => transport.isConfigured()).thenAnswer((_) async => true);
+      when(() => transport.isIoRunning).thenReturn(true);
+      clearInteractions(transport);
+      clearInteractions(database);
+
+      expect(await service.syncSessionState(), isTrue);
+
+      verifyNever(() => transport.performBackgroundFetch(any()));
       verify(() => transport.refreshChatlistSnapshot()).called(1);
       verify(() => database.replaceContacts(any())).called(1);
 
@@ -1823,6 +1880,39 @@ void main() {
   }
 
   test(
+    'home unread refresh skips background fetch while transport IO is running',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        clearInteractions(transport);
+        when(() => transport.isIoRunning).thenReturn(true);
+
+        expect(await service.refreshUnreadForHomeRefresh(), isTrue);
+
+        verifyNever(() => transport.performBackgroundFetch(any()));
+        verify(() => transport.refreshChatlistSnapshot()).called(1);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
     'background fetch completion keeps ready during transient offline sample',
     () async {
       final service = EmailService(
@@ -1927,6 +2017,42 @@ void main() {
     ]);
     await service.shutdown(jid: 'bob@axi.im');
   });
+
+  test(
+    'channel overflow skips background fetch while transport IO is running',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        clearInteractions(transport);
+        when(() => transport.isIoRunning).thenReturn(true);
+
+        emitChannelOverflow();
+        await untilCalled(() => transport.refreshChatlistSnapshot());
+        await pumpMicrotasks();
+
+        verifyNever(() => transport.performBackgroundFetch(any()));
+        verify(() => transport.notifyNetworkAvailable()).called(1);
+        verify(() => transport.refreshChatlistSnapshot()).called(1);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
 
   test(
     'connecting connectivity downgrades a ready sync state after grace',

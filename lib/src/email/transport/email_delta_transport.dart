@@ -650,6 +650,9 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   Future<bool> performBackgroundFetch(Duration timeout) async {
+    if (_ioRunning) {
+      return false;
+    }
     await _ensureContextReady();
     final accounts = _accounts;
     if (accounts == null) {

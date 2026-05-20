@@ -2387,18 +2387,7 @@ class EmailService {
       return true;
     }
     try {
-      final fetched = await performBackgroundFetch(
-        timeout: _foregroundFetchTimeout,
-      );
-      if (!fetched) {
-        return false;
-      }
-      await refreshChatlistFromCore();
-      await _refreshConnectivityState(
-        source: _EmailSyncSource.backgroundFetchDone,
-        recoveryCompleted: true,
-      );
-      return true;
+      return await _refreshHomeEmailSnapshot();
     } on Exception {
       _log.fine('Email unread sync failed.');
       return false;
@@ -2410,22 +2399,30 @@ class EmailService {
       return true;
     }
     try {
-      final fetched = await performBackgroundFetch(
-        timeout: _foregroundFetchTimeout,
-      );
-      if (!fetched) {
-        return false;
-      }
-      await refreshChatlistFromCore();
-      await _refreshConnectivityState(
-        source: _EmailSyncSource.backgroundFetchDone,
-        recoveryCompleted: true,
-      );
-      return true;
+      return await _refreshHomeEmailSnapshot();
     } on Exception {
       _log.fine('Email background sync failed.');
       return false;
     }
+  }
+
+  Future<bool> _refreshHomeEmailSnapshot() async {
+    if (_transport.isIoRunning) {
+      await refreshChatlistFromCore();
+      return true;
+    }
+    final fetched = await performBackgroundFetch(
+      timeout: _foregroundFetchTimeout,
+    );
+    if (!fetched) {
+      return false;
+    }
+    await refreshChatlistFromCore();
+    await _refreshConnectivityState(
+      source: _EmailSyncSource.backgroundFetchDone,
+      recoveryCompleted: true,
+    );
+    return true;
   }
 
   Future<bool> syncContactsForHomeRefresh() async {
@@ -3545,8 +3542,8 @@ class EmailService {
         source: _EmailSyncSource.channelOverflow,
       );
       try {
-        final success = await _transport.performBackgroundFetch(
-          _foregroundFetchTimeout,
+        final success = await _performBackgroundFetchIfIdle(
+          timeout: _foregroundFetchTimeout,
         );
         if (!success) {
           await _transport.notifyNetworkAvailable();
