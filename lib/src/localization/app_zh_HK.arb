@@ -846,7 +846,7 @@
   "settingsSyncStatusNotSynced": "未同步",
   "settingsSyncStatusDeviceOnly": "僅此裝置",
   "settingsSyncStatusSyncing": "正在同步",
-  "settingsOverridesList": "已在 {chats} 中覆寫",
+  "settingsOverridesList": "覆寫項：{chats}",
   "@settingsOverridesList": {
     "placeholders": {
       "chats": {}
@@ -2895,7 +2895,7 @@
   },
   "chatInviteConfirmLabel": "接受",
   "chatChooseTextToAddHint": "選擇要傳送到日曆的訊息內容，或先編輯它。",
-  "chatAttachmentAutoDownloadLabel": "自動下載此聊天中的附件",
+  "chatAttachmentAutoDownloadLabel": "自動下載附件",
   "chatAttachmentAutoDownloadHintOn": "此聊天中的附件將自動下載。",
   "chatAttachmentAutoDownloadHintOff": "附件會被阻止，直到你批准為止。",
   "chatAttachmentCaption": "📎 {filename}（{size}）",

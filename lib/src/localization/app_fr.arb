@@ -847,7 +847,7 @@
   "settingsSyncStatusNotSynced": "Non synchronisé",
   "settingsSyncStatusDeviceOnly": "Cet appareil uniquement",
   "settingsSyncStatusSyncing": "Synchronisation",
-  "settingsOverridesList": "Remplacé dans {chats}",
+  "settingsOverridesList": "Remplacements : {chats}",
   "@settingsOverridesList": {
     "placeholders": {
       "chats": {}
@@ -2898,7 +2898,7 @@
   },
   "chatInviteConfirmLabel": "Accepter",
   "chatChooseTextToAddHint": "Selectionnez une partie du message a envoyer au calendrier ou modifiez-la d abord.",
-  "chatAttachmentAutoDownloadLabel": "Telecharger automatiquement les pieces jointes dans ce chat",
+  "chatAttachmentAutoDownloadLabel": "Télécharger automatiquement les pièces jointes",
   "chatAttachmentAutoDownloadHintOn": "Les pieces jointes de ce chat se telechargeront automatiquement.",
   "chatAttachmentAutoDownloadHintOff": "Les pieces jointes sont bloquees jusqu a votre approbation.",
   "chatAttachmentCaption": "📎 Fichier : {filename} ({size})",

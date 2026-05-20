@@ -945,7 +945,7 @@
   "settingsSyncStatusNotSynced": "Not synced",
   "settingsSyncStatusDeviceOnly": "This device only",
   "settingsSyncStatusSyncing": "Syncing",
-  "settingsOverridesList": "Overridden in {chats}",
+  "settingsOverridesList": "Overrides: {chats}",
   "@settingsOverridesList": {
     "placeholders": {
       "chats": {}
@@ -3079,7 +3079,7 @@
   },
   "chatInviteConfirmLabel": "Accept",
   "chatChooseTextToAddHint": "Select a portion of the message to send to the calendar or edit it first.",
-  "chatAttachmentAutoDownloadLabel": "Automatically download attachments in this chat",
+  "chatAttachmentAutoDownloadLabel": "Automatically download attachments",
   "chatAttachmentAutoDownloadHintOn": "Attachments in this chat will download automatically.",
   "chatAttachmentAutoDownloadHintOff": "Attachments are blocked until you approve them.",
   "chatAttachmentCaption": "📎 {filename} ({size})",

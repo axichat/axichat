@@ -2241,7 +2241,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String settingsOverridesList(Object chats) {
-    return 'Anulado en $chats';
+    return 'Anulaciones: $chats';
   }
 
   @override
@@ -6354,7 +6354,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatAttachmentAutoDownloadLabel =>
-      'Descargar automaticamente los adjuntos en este chat';
+      'Descargar automáticamente los adjuntos';
 
   @override
   String get chatAttachmentAutoDownloadHintOn =>

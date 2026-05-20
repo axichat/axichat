@@ -4005,7 +4005,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsOverridesList.
   ///
   /// In en, this message translates to:
-  /// **'Overridden in {chats}'**
+  /// **'Overrides: {chats}'**
   String settingsOverridesList(Object chats);
 
   /// No description provided for @settingsOverridesResetAll.
@@ -10840,7 +10840,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatAttachmentAutoDownloadLabel.
   ///
   /// In en, this message translates to:
-  /// **'Automatically download attachments in this chat'**
+  /// **'Automatically download attachments'**
   String get chatAttachmentAutoDownloadLabel;
 
   /// No description provided for @chatAttachmentAutoDownloadHintOn.

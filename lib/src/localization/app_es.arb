@@ -847,7 +847,7 @@
   "settingsSyncStatusNotSynced": "No sincronizado",
   "settingsSyncStatusDeviceOnly": "Solo este dispositivo",
   "settingsSyncStatusSyncing": "Sincronizando",
-  "settingsOverridesList": "Anulado en {chats}",
+  "settingsOverridesList": "Anulaciones: {chats}",
   "@settingsOverridesList": {
     "placeholders": {
       "chats": {}
@@ -2921,7 +2921,7 @@
   },
   "chatInviteConfirmLabel": "Aceptar",
   "chatChooseTextToAddHint": "Selecciona una parte del mensaje para enviarla al calendario o editala primero.",
-  "chatAttachmentAutoDownloadLabel": "Descargar automaticamente los adjuntos en este chat",
+  "chatAttachmentAutoDownloadLabel": "Descargar automáticamente los adjuntos",
   "chatAttachmentAutoDownloadHintOn": "Los adjuntos de este chat se descargaran automaticamente.",
   "chatAttachmentAutoDownloadHintOff": "Los adjuntos se bloquean hasta que los apruebes.",
   "chatAttachmentCaption": "📎 Archivo: {filename} ({size})",

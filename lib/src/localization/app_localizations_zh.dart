@@ -2126,7 +2126,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String settingsOverridesList(Object chats) {
-    return '已在 $chats 中覆盖';
+    return '覆盖项：$chats';
   }
 
   @override
@@ -6001,7 +6001,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatChooseTextToAddHint => '选择要发送到日历的消息内容，或先编辑它。';
 
   @override
-  String get chatAttachmentAutoDownloadLabel => '自动下载此聊天中的附件';
+  String get chatAttachmentAutoDownloadLabel => '自动下载附件';
 
   @override
   String get chatAttachmentAutoDownloadHintOn => '此聊天中的附件将自动下载。';
@@ -8507,7 +8507,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String settingsOverridesList(Object chats) {
-    return '已在 $chats 中覆寫';
+    return '覆寫項：$chats';
   }
 
   @override
@@ -12384,7 +12384,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatChooseTextToAddHint => '選擇要傳送到日曆的訊息內容，或先編輯它。';
 
   @override
-  String get chatAttachmentAutoDownloadLabel => '自動下載此聊天中的附件';
+  String get chatAttachmentAutoDownloadLabel => '自動下載附件';
 
   @override
   String get chatAttachmentAutoDownloadHintOn => '此聊天中的附件將自動下載。';

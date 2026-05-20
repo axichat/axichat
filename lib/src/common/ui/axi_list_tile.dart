@@ -146,11 +146,13 @@ class AxiListTile extends StatelessWidget {
                 color: colors.mutedForeground,
               ),
             ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [...?actions],
-      ),
+      trailing: actions == null || actions!.isEmpty
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: actions!,
+            ),
     );
     if (isDesktop) {
       child = Theme(

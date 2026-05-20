@@ -472,9 +472,8 @@ class _ChatSettingsRow extends StatelessWidget {
     final List<Widget> textChildren = [
       Text(
         title,
-        style: context.textTheme.small.copyWith(
+        style: context.textTheme.small.strong.copyWith(
           color: resolvedTitleColor ?? context.colorScheme.foreground,
-          fontWeight: FontWeight.w700,
         ),
       ),
       if (resolvedSubtitle != null)

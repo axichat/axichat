@@ -2252,7 +2252,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String settingsOverridesList(Object chats) {
-    return 'Remplacé dans $chats';
+    return 'Remplacements : $chats';
   }
 
   @override
@@ -6379,7 +6379,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatAttachmentAutoDownloadLabel =>
-      'Telecharger automatiquement les pieces jointes dans ce chat';
+      'Télécharger automatiquement les pièces jointes';
 
   @override
   String get chatAttachmentAutoDownloadHintOn =>

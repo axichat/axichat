@@ -86,7 +86,7 @@ class AxiSelect<T> extends StatelessWidget {
     return ShadTheme(
       data: theme,
       child: ShadSelect<T>(
-        selectedOptionBuilder: selectedOptionBuilder,
+        selectedOptionBuilder: _selectedOptionBuilder,
         options: styledOptions,
         optionsBuilder: optionsBuilder == null
             ? null
@@ -126,6 +126,21 @@ class AxiSelect<T> extends StatelessWidget {
         itemCount: itemCount,
         shrinkWrap: shrinkWrap,
         controller: controller,
+      ),
+    );
+  }
+
+  Widget _selectedOptionBuilder(BuildContext context, T value) {
+    final colors = context.colorScheme;
+    return IconTheme.merge(
+      data: IconThemeData(
+        color: enabled ? colors.foreground : colors.mutedForeground,
+      ),
+      child: DefaultTextStyle.merge(
+        style: context.textTheme.small.copyWith(
+          color: enabled ? colors.foreground : colors.mutedForeground,
+        ),
+        child: selectedOptionBuilder(context, value),
       ),
     );
   }
