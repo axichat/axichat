@@ -155,6 +155,69 @@ void main() {
       },
     );
 
+    test('criticalPathCreated with task does not focus new path', () async {
+      final localBloc = buildBloc();
+      addTearDown(localBloc.close);
+
+      localBloc.add(const CalendarEvent.taskAdded(title: 'Attach me'));
+      await pumpEventQueue();
+      final CalendarTask task = localBloc.state.model.tasks.values.singleWhere(
+        (task) => task.title == 'Attach me',
+      );
+
+      localBloc.add(
+        CalendarEvent.criticalPathCreated(name: 'Launch path', taskId: task.id),
+      );
+      await pumpEventQueue();
+
+      final CalendarCriticalPath path = localBloc
+          .state
+          .model
+          .criticalPaths
+          .values
+          .singleWhere((path) => path.name == 'Launch path');
+      expect(path.taskIds, contains(task.baseId));
+      expect(localBloc.state.focusedCriticalPathId, isNull);
+    });
+
+    test('criticalPathCreated with task preserves existing focus', () async {
+      final localBloc = buildBloc();
+      addTearDown(localBloc.close);
+
+      localBloc.add(
+        const CalendarEvent.criticalPathCreated(name: 'Focused path'),
+      );
+      await pumpEventQueue();
+      final CalendarCriticalPath focusedPath = localBloc
+          .state
+          .model
+          .criticalPaths
+          .values
+          .singleWhere((path) => path.name == 'Focused path');
+      localBloc.add(CalendarEvent.criticalPathFocused(pathId: focusedPath.id));
+      await pumpEventQueue();
+
+      localBloc.add(const CalendarEvent.taskAdded(title: 'Attach elsewhere'));
+      await pumpEventQueue();
+      final CalendarTask task = localBloc.state.model.tasks.values.singleWhere(
+        (task) => task.title == 'Attach elsewhere',
+      );
+
+      localBloc.add(
+        CalendarEvent.criticalPathCreated(name: 'Other path', taskId: task.id),
+      );
+      await pumpEventQueue();
+
+      final CalendarCriticalPath otherPath = localBloc
+          .state
+          .model
+          .criticalPaths
+          .values
+          .singleWhere((path) => path.name == 'Other path');
+      expect(otherPath.taskIds, contains(task.baseId));
+      expect(localBloc.state.focusedCriticalPathId, focusedPath.id);
+    });
+
     blocTest<CalendarBloc, CalendarState>(
       'started computes helper fields for empty model',
       build: () => bloc,

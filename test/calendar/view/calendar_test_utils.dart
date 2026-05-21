@@ -4,10 +4,13 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -16,11 +19,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 
 class MockCalendarBloc extends MockBloc<CalendarEvent, CalendarState>
     implements CalendarBloc {}
+
+class MockChatCalendarBloc extends MockBloc<CalendarEvent, CalendarState>
+    implements ChatCalendarBloc {}
 
 class _InMemoryStorage implements Storage {
   final Map<String, dynamic> _store = {};
@@ -56,6 +63,14 @@ void registerCalendarFallbackValues() {
   _calendarFallbacksRegistered = true;
   registerFallbackValue(const CalendarEvent.started());
   registerFallbackValue(CalendarState.initial());
+}
+
+void ensureCalendarTestStorage() {
+  try {
+    HydratedBloc.storage;
+  } on StorageNotFound {
+    HydratedBloc.storage = _InMemoryStorage();
+  }
 }
 
 class CalendarTestData {
@@ -457,6 +472,7 @@ class CalendarWidgetHarness {
     required WidgetTester tester,
     CalendarState? state,
     Size size = const Size(1280, 860),
+    bool active = true,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -467,11 +483,7 @@ class CalendarWidgetHarness {
 
     final resolvedState = state ?? CalendarTestData.weekView();
     final bloc = MockCalendarBloc();
-    try {
-      HydratedBloc.storage;
-    } on StorageNotFound {
-      HydratedBloc.storage = _InMemoryStorage();
-    }
+    ensureCalendarTestStorage();
     final SettingsCubit settingsCubit = SettingsCubit();
     final stateController = StreamController<CalendarState>.broadcast();
     var currentState = resolvedState;
@@ -515,14 +527,19 @@ class CalendarWidgetHarness {
               colorScheme: const ShadSlateColorScheme.light(),
               brightness: Brightness.light,
             ),
-            child: SizedBox.expand(
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider<CalendarBloc>.value(value: bloc),
-                  BlocProvider<BaseCalendarBloc>.value(value: bloc),
-                  BlocProvider<SettingsCubit>.value(value: settingsCubit),
-                ],
-                child: const CalendarWidget(),
+            child: EnvScope(
+              child: SizedBox.expand(
+                child: MultiBlocProvider(
+                  providers: [
+                    ChangeNotifierProvider<CalendarTaskOffGridDragController>(
+                      create: (context) => CalendarTaskOffGridDragController(),
+                    ),
+                    BlocProvider<CalendarBloc>.value(value: bloc),
+                    BlocProvider<BaseCalendarBloc>.value(value: bloc),
+                    BlocProvider<SettingsCubit>.value(value: settingsCubit),
+                  ],
+                  child: CalendarWidget(active: active),
+                ),
               ),
             ),
           ),

@@ -6678,6 +6678,12 @@ abstract class AppLocalizations {
   /// **'Unfocus'**
   String get calendarCriticalPathUnfocus;
 
+  /// Info toast shown when a critical path focus is active and filtering visible calendar tasks.
+  ///
+  /// In en, this message translates to:
+  /// **'\"{name}\" is focused.'**
+  String calendarCriticalPathFocusedNotice(Object name);
+
   /// No description provided for @calendarCriticalPathCompletedLabel.
   ///
   /// In en, this message translates to:

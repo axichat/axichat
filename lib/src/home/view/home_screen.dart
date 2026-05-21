@@ -2152,6 +2152,9 @@ class _HomeContent extends StatelessWidget {
                                         return false;
                                       },
                                       child: CalendarWidget(
+                                        active:
+                                            homeBranchActive &&
+                                            surfacePopEnabled,
                                         mobileTabIndex: calendarTabIndex,
                                         animateMobileTabChanges:
                                             animateMobileTabChanges,

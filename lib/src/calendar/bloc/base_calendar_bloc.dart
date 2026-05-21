@@ -2606,7 +2606,6 @@ abstract class BaseCalendarBloc
         name: trimmedName,
       ).copyWith(createdAt: now, modifiedAt: now);
       CalendarModel updatedModel = state.model.addCriticalPath(path);
-      var shouldFocus = false;
       final String? initialTaskId = event.taskId;
       if (initialTaskId != null) {
         final CalendarTask? task = updatedModel.resolveTaskInstance(
@@ -2617,17 +2616,14 @@ abstract class BaseCalendarBloc
             pathId: path.id,
             taskId: task.baseId,
           );
-          shouldFocus = true;
         }
       }
       final createdPath = updatedModel.criticalPaths[path.id]!;
       emitModel(
         updatedModel,
         emit,
-        focusedCriticalPathId: shouldFocus
-            ? path.id
-            : state.focusedCriticalPathId,
-        focusedCriticalPathSpecified: shouldFocus,
+        focusedCriticalPathId: state.focusedCriticalPathId,
+        focusedCriticalPathSpecified: true,
         isCriticalPathMutating: false,
         criticalPathMutationError: null,
         lastCreatedCriticalPathId: path.id,

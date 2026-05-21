@@ -3763,6 +3763,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get calendarCriticalPathUnfocus => 'Quitar foco';
 
   @override
+  String calendarCriticalPathFocusedNotice(Object name) {
+    return '\"$name\" está enfocado.';
+  }
+
+  @override
   String get calendarCriticalPathCompletedLabel => 'Completadas';
 
   @override

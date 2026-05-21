@@ -34,6 +34,7 @@ class CalendarBottomDragSession {
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
+    this.active = true,
     this.mobileTabIndex,
     this.animateMobileTabChanges = true,
     this.mobileTabChangeDuration = baseAnimationDuration,
@@ -42,6 +43,7 @@ class CalendarWidget extends StatefulWidget {
     this.bottomDragSession,
   });
 
+  final bool active;
   final int? mobileTabIndex;
   final bool animateMobileTabChanges;
   final Duration mobileTabChangeDuration;
@@ -109,6 +111,9 @@ class _CalendarWidgetState
           oldWidget.mobileTabIndex != null &&
           widget.mobileTabIndex != null,
     );
+    if (!oldWidget.active && widget.active) {
+      activateFocusedCriticalPathNotice();
+    }
   }
 
   @override
@@ -176,6 +181,9 @@ class _CalendarWidgetState
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
   }
+
+  @override
+  bool get focusedCriticalPathNoticeActive => widget.active;
 
   @override
   void onCalendarDragSessionStarted() {

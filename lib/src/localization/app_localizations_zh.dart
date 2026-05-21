@@ -3573,6 +3573,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarCriticalPathUnfocus => '取消聚焦';
 
   @override
+  String calendarCriticalPathFocusedNotice(Object name) {
+    return '“$name”已聚焦。';
+  }
+
+  @override
   String get calendarCriticalPathCompletedLabel => '已完成';
 
   @override
@@ -9957,6 +9962,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarCriticalPathUnfocus => '取消聚焦';
+
+  @override
+  String calendarCriticalPathFocusedNotice(Object name) {
+    return '「$name」已聚焦。';
+  }
 
   @override
   String get calendarCriticalPathCompletedLabel => '已完成';

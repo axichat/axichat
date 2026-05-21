@@ -1578,6 +1578,13 @@
   },
   "calendarCriticalPathFocus": "Focus",
   "calendarCriticalPathUnfocus": "Unfocus",
+  "calendarCriticalPathFocusedNotice": "\"{name}\" is focused.",
+  "@calendarCriticalPathFocusedNotice": {
+    "description": "Info toast shown when a critical path focus is active and filtering visible calendar tasks.",
+    "placeholders": {
+      "name": {}
+    }
+  },
   "calendarCriticalPathCompletedLabel": "Completed",
   "calendarCriticalPathQueuedAdd": "Will add to \"{name}\" on save",
   "@calendarCriticalPathQueuedAdd": {

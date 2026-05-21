@@ -1426,6 +1426,13 @@
   },
   "calendarCriticalPathFocus": "聚焦",
   "calendarCriticalPathUnfocus": "取消聚焦",
+  "calendarCriticalPathFocusedNotice": "“{name}”已聚焦。",
+  "@calendarCriticalPathFocusedNotice": {
+    "description": "Info toast shown when a critical path focus is active and filtering visible calendar tasks.",
+    "placeholders": {
+      "name": {}
+    }
+  },
   "calendarCriticalPathCompletedLabel": "已完成",
   "calendarCriticalPathQueuedAdd": "保存时将添加到“{name}”",
   "@calendarCriticalPathQueuedAdd": {

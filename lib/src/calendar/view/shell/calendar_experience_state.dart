@@ -14,6 +14,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
@@ -57,6 +58,12 @@ abstract class CalendarExperienceState<
   final Object _calendarShellHoverToken = Object();
   CalendarTaskOffGridDragController? _offGridDragController;
   bool _calendarShellOffGridHovering = false;
+  bool _focusedCriticalPathNoticeScheduled = false;
+  bool _focusedCriticalPathNoticeForceScheduled = false;
+  CalendarState? _lastFocusedCriticalPathNoticeState;
+  int? _lastFocusedCriticalPathNoticeTabIndex;
+  String? _lastFocusedCriticalPathNoticePathId;
+  String? _lastObservedFocusedCriticalPathId;
 
   @protected
   CalendarSizeClass? get previousLayoutSizeClass => _previousLayoutSizeClass;
@@ -98,7 +105,9 @@ abstract class CalendarExperienceState<
       parent: _tasksTabPulseController,
       curve: Curves.easeInOut,
     );
+    _mobileTabController.addListener(_handleFocusedCriticalPathTabChanged);
     initCalendarDragTabMixin();
+    activateFocusedCriticalPathNotice();
   }
 
   @override
@@ -109,6 +118,7 @@ abstract class CalendarExperienceState<
       isActive: false,
     );
     disposeCalendarDragTabMixin();
+    _mobileTabController.removeListener(_handleFocusedCriticalPathTabChanged);
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     _cancelBucketHoverNotifier.dispose();
@@ -142,7 +152,10 @@ abstract class CalendarExperienceState<
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<B, CalendarState>(
-      listener: handleStateChanges,
+      listener: (context, state) {
+        handleStateChanges(context, state);
+        _handleFocusedCriticalPathNoticeStateChanged(state);
+      },
       builder: (context, state) {
         final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
         final MediaQueryData mediaQuery = MediaQuery.of(context);
@@ -312,6 +325,102 @@ abstract class CalendarExperienceState<
             ),
           ),
         );
+      },
+    );
+  }
+
+  @protected
+  bool get focusedCriticalPathNoticeActive => true;
+
+  @protected
+  void activateFocusedCriticalPathNotice() {
+    if (!focusedCriticalPathNoticeActive) {
+      return;
+    }
+    final String? focusedPathId = calendarBloc.state.focusedCriticalPathId;
+    _lastObservedFocusedCriticalPathId = focusedPathId;
+    if (focusedPathId != null) {
+      scheduleFocusedCriticalPathNotice(force: true);
+    }
+  }
+
+  @protected
+  void scheduleFocusedCriticalPathNotice({required bool force}) {
+    if (!focusedCriticalPathNoticeActive) {
+      return;
+    }
+    _focusedCriticalPathNoticeForceScheduled =
+        _focusedCriticalPathNoticeForceScheduled || force;
+    if (_focusedCriticalPathNoticeScheduled) {
+      return;
+    }
+    _focusedCriticalPathNoticeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final bool scheduledForce = _focusedCriticalPathNoticeForceScheduled;
+      _focusedCriticalPathNoticeScheduled = false;
+      _focusedCriticalPathNoticeForceScheduled = false;
+      _showFocusedCriticalPathNotice(force: scheduledForce);
+    });
+  }
+
+  void _handleFocusedCriticalPathTabChanged() {
+    if (_mobileTabController.indexIsChanging) {
+      return;
+    }
+    scheduleFocusedCriticalPathNotice(force: false);
+  }
+
+  void _handleFocusedCriticalPathNoticeStateChanged(CalendarState state) {
+    final CalendarState? previousState = _lastFocusedCriticalPathNoticeState;
+    _lastFocusedCriticalPathNoticeState = state;
+    final String? focusedPathId = state.focusedCriticalPathId;
+    if (_lastObservedFocusedCriticalPathId != focusedPathId) {
+      _lastObservedFocusedCriticalPathId = focusedPathId;
+      if (focusedPathId != null) {
+        scheduleFocusedCriticalPathNotice(force: true);
+      }
+    }
+
+    if (previousState?.isCriticalPathMutating == true &&
+        !state.isCriticalPathMutating &&
+        state.focusedCriticalPath != null &&
+        state.criticalPathMutationError == null &&
+        (state.lastCreatedCriticalPathId != null ||
+            state.lastCriticalPathTaskAddedPathId != null)) {
+      scheduleFocusedCriticalPathNotice(force: true);
+    }
+  }
+
+  void _showFocusedCriticalPathNotice({required bool force}) {
+    if (!focusedCriticalPathNoticeActive) {
+      return;
+    }
+    final CalendarState state = calendarBloc.state;
+    final CalendarCriticalPath? focusedPath = state.focusedCriticalPath;
+    if (focusedPath == null) {
+      _lastObservedFocusedCriticalPathId = state.focusedCriticalPathId;
+      _lastFocusedCriticalPathNoticePathId = null;
+      return;
+    }
+    _lastObservedFocusedCriticalPathId = focusedPath.id;
+    final int tabIndex = _mobileTabController.index;
+    if (!force &&
+        _lastFocusedCriticalPathNoticePathId == focusedPath.id &&
+        _lastFocusedCriticalPathNoticeTabIndex == tabIndex) {
+      return;
+    }
+    _lastFocusedCriticalPathNoticePathId = focusedPath.id;
+    _lastFocusedCriticalPathNoticeTabIndex = tabIndex;
+    final void Function(CalendarEvent) dispatchCalendarEvent = calendarBloc.add;
+    FeedbackSystem.showInfo(
+      context,
+      context.l10n.calendarCriticalPathFocusedNotice(focusedPath.name),
+      actionLabel: context.l10n.calendarCriticalPathUnfocus,
+      onAction: () {
+        dispatchCalendarEvent(const CalendarEvent.criticalPathFocused());
       },
     );
   }

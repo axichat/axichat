@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/month/day_event_editor.dart';
@@ -11,6 +13,8 @@ import 'package:axichat/src/calendar/view/tasks/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/tasks/quick_add_modal.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/tasks/reminder_preferences_field.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
+import 'package:axichat/src/calendar/view/shell/chat_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
 import 'package:axichat/src/common/ui/axi_sheet_scaffold.dart';
@@ -25,6 +29,7 @@ import 'package:axichat/src/calendar/view/tasks/resizable_task_widget.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -32,6 +37,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../calendar_test_utils.dart';
@@ -484,6 +490,122 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Created path'), findsOneWidget);
+  });
+
+  testWidgets('focused critical path notice can unfocus calendar', (
+    tester,
+  ) async {
+    final baseState = CalendarTestData.weekView();
+    final path = CalendarCriticalPath(
+      id: 'focused-path',
+      name: 'Focused path',
+      taskIds: const <String>['task-weekly-sync'],
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+    final state = baseState.copyWith(
+      model: baseState.model.addCriticalPath(path),
+      focusedCriticalPathId: path.id,
+    );
+
+    final harness = await CalendarWidgetHarness.pump(
+      tester: tester,
+      state: state,
+      size: const Size(390, 844),
+    );
+
+    expect(find.text('"Focused path" is focused.'), findsOneWidget);
+
+    await tester.tap(find.text('Unfocus'));
+    await tester.pump();
+
+    verify(
+      () => harness.bloc.add(const CalendarEvent.criticalPathFocused()),
+    ).called(1);
+  });
+
+  testWidgets('focused critical path notice is not duplicated by refresh', (
+    tester,
+  ) async {
+    final baseState = CalendarTestData.weekView();
+    final path = CalendarCriticalPath(
+      id: 'focused-path',
+      name: 'Focused path',
+      taskIds: const <String>['task-weekly-sync'],
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+    final state = baseState.copyWith(
+      model: baseState.model.addCriticalPath(path),
+      focusedCriticalPathId: path.id,
+    );
+
+    final harness = await CalendarWidgetHarness.pump(
+      tester: tester,
+      state: state,
+      size: const Size(390, 844),
+    );
+
+    expect(find.text('"Focused path" is focused.'), findsOneWidget);
+
+    await harness.pumpState(
+      state.copyWith(lastSyncTime: DateTime(2024, 1, 16)),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('"Focused path" is focused.'), findsOneWidget);
+  });
+
+  testWidgets('focused critical path notice waits for active surface', (
+    tester,
+  ) async {
+    final baseState = CalendarTestData.weekView();
+    final path = CalendarCriticalPath(
+      id: 'focused-path',
+      name: 'Focused path',
+      taskIds: const <String>['task-weekly-sync'],
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+    final state = baseState.copyWith(
+      model: baseState.model.addCriticalPath(path),
+      focusedCriticalPathId: path.id,
+    );
+
+    await CalendarWidgetHarness.pump(
+      tester: tester,
+      state: state,
+      size: const Size(390, 844),
+      active: false,
+    );
+
+    expect(find.text('"Focused path" is focused.'), findsNothing);
+  });
+
+  testWidgets('chat calendar focus notice waits for active surface', (
+    tester,
+  ) async {
+    final baseState = CalendarTestData.weekView();
+    final path = CalendarCriticalPath(
+      id: 'focused-path',
+      name: 'Focused path',
+      taskIds: const <String>['task-weekly-sync'],
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+    final state = baseState.copyWith(
+      model: baseState.model.addCriticalPath(path),
+      focusedCriticalPathId: path.id,
+    );
+    final harness = _ChatCalendarWidgetHarness(tester: tester, state: state);
+
+    await harness.pump(surfacePopEnabled: false);
+
+    expect(find.text('"Focused path" is focused.'), findsNothing);
+
+    await harness.pump(surfacePopEnabled: true);
+
+    expect(find.text('"Focused path" is focused.'), findsOneWidget);
   });
 
   testWidgets('CalendarWidget week view renders day headers', (tester) async {
@@ -1424,6 +1546,92 @@ Widget _contextMenuTestApp({required Widget child}) {
       ),
     ),
   );
+}
+
+class _ChatCalendarWidgetHarness {
+  _ChatCalendarWidgetHarness({required this.tester, required this.state}) {
+    ensureCalendarTestStorage();
+    settingsCubit = SettingsCubit();
+    when(() => bloc.state).thenReturn(state);
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(() => bloc.add(any<CalendarEvent>())).thenAnswer((_) {});
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+    addTearDown(settingsCubit.close);
+  }
+
+  final WidgetTester tester;
+  final CalendarState state;
+  final MockChatCalendarBloc bloc = MockChatCalendarBloc();
+  late final SettingsCubit settingsCubit;
+  bool _viewConfigured = false;
+
+  Future<void> pump({required bool surfacePopEnabled}) async {
+    if (!_viewConfigured) {
+      _viewConfigured = true;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: const Color(0xFF0F172A),
+          brightness: Brightness.light,
+        ),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: tester.view.physicalSize,
+            devicePixelRatio: 1.0,
+            textScaler: const TextScaler.linear(0.7),
+          ),
+          child: ShadTheme(
+            data: ShadThemeData(
+              colorScheme: const ShadSlateColorScheme.light(),
+              brightness: Brightness.light,
+            ),
+            child: EnvScope(
+              child: SizedBox.expand(
+                child: MultiBlocProvider(
+                  providers: [
+                    ChangeNotifierProvider<CalendarTaskOffGridDragController>(
+                      create: (context) => CalendarTaskOffGridDragController(),
+                    ),
+                    BlocProvider<ChatCalendarBloc>.value(value: bloc),
+                    BlocProvider<CalendarBloc>.value(value: bloc),
+                    BlocProvider<BaseCalendarBloc>.value(value: bloc),
+                    BlocProvider<SettingsCubit>.value(value: settingsCubit),
+                  ],
+                  child: ChatCalendarWidget(
+                    chat: chat_models.Chat(
+                      jid: 'team@example.com',
+                      title: 'Team',
+                      type: chat_models.ChatType.groupChat,
+                      lastChangeTimestamp: DateTime(2024, 1, 15),
+                    ),
+                    surfacePopEnabled: surfacePopEnabled,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+  }
 }
 
 class _MockSettingsCubit extends Mock implements SettingsCubit {}

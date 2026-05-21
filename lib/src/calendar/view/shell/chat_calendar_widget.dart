@@ -62,10 +62,21 @@ class _ChatCalendarWidgetState
   String? buildNavigationChatTitle(CalendarState state) => widget.chat.title;
 
   @override
+  void didUpdateWidget(covariant ChatCalendarWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.surfacePopEnabled && widget.surfacePopEnabled) {
+      activateFocusedCriticalPathNotice();
+    }
+  }
+
+  @override
   void dispose() {
     _hoverTitleController.dispose();
     super.dispose();
   }
+
+  @override
+  bool get focusedCriticalPathNoticeActive => widget.surfacePopEnabled;
 
   @override
   BuildContext get calendarModalContext {
