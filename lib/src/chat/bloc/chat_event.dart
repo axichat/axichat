@@ -32,6 +32,47 @@ final class _ChatMessagesUpdated extends ChatEvent {
   List<Object?> get props => [items];
 }
 
+final class _ChatPresentationHydrationRequested extends ChatEvent {
+  const _ChatPresentationHydrationRequested({
+    required this.messageReferenceIds,
+    required this.deltaMessageIds,
+    required this.missingQuoteIds,
+    required this.metadataIds,
+    this.renderedMessages = const <Message>[],
+    this.allowOffWindowEmailContentHydration = false,
+    this.syncFileMetadata = true,
+  });
+
+  final Set<String> messageReferenceIds;
+  final Set<int> deltaMessageIds;
+  final Set<String> missingQuoteIds;
+  final Set<String> metadataIds;
+  final List<Message> renderedMessages;
+  final bool allowOffWindowEmailContentHydration;
+  final bool syncFileMetadata;
+
+  @override
+  List<Object?> get props => [
+    messageReferenceIds,
+    deltaMessageIds,
+    missingQuoteIds,
+    metadataIds,
+    renderedMessages,
+    allowOffWindowEmailContentHydration,
+    syncFileMetadata,
+  ];
+}
+
+final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
+  ChatRenderedMessagesHydrationRequested(Iterable<Message> messages)
+    : messages = List<Message>.unmodifiable(messages);
+
+  final List<Message> messages;
+
+  @override
+  List<Object?> get props => [messages];
+}
+
 final class _PinnedMessagesUpdated extends ChatEvent {
   const _PinnedMessagesUpdated(this.items);
 
@@ -200,21 +241,26 @@ final class ChatEmailHeadersRequested extends ChatEvent {
 }
 
 final class ChatEmailFullHtmlRequested extends ChatEvent {
-  const ChatEmailFullHtmlRequested(this.message);
+  const ChatEmailFullHtmlRequested(this.message, {this.allowOffWindow = false});
 
   final Message message;
+  final bool allowOffWindow;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, allowOffWindow];
 }
 
 final class ChatEmailQuotedTextRequested extends ChatEvent {
-  const ChatEmailQuotedTextRequested(this.message);
+  const ChatEmailQuotedTextRequested(
+    this.message, {
+    this.allowOffWindow = false,
+  });
 
   final Message message;
+  final bool allowOffWindow;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [message, allowOffWindow];
 }
 
 final class _ChatTypingStopped extends ChatEvent {

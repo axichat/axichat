@@ -1224,11 +1224,10 @@ void main() {
       );
 
       when(
-        () => messageService.loadMessageByReferenceId(
+        () => messageService.loadMessagesByReferenceIds({
           quotedOriginId,
-          chatJid: initialChat.jid,
-        ),
-      ).thenAnswer((_) async => quotedMessage);
+        }, chatJid: initialChat.jid),
+      ).thenAnswer((_) async => [quotedMessage]);
 
       final bloc = ChatBloc(
         jid: initialChat.jid,
@@ -1247,15 +1246,118 @@ void main() {
       await _pumpBloc();
 
       verify(
+        () => messageService.loadMessagesByReferenceIds({
+          quotedOriginId,
+        }, chatJid: initialChat.jid),
+      ).called(1);
+      verifyNever(
         () => messageService.loadMessageByReferenceId(
           quotedOriginId,
           chatJid: initialChat.jid,
         ),
-      ).called(1);
+      );
       verifyNever(() => messageService.loadMessageByStanzaId(quotedOriginId));
       expect(
         bloc.state.quotedMessagesById[quotedOriginId]?.stanzaID,
         quotedMessage.stanzaID,
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'presentation hydration queues later requests without cancelling in-flight work',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      const quotedOriginId = 'queued-quoted-origin-id';
+      final quoteLookupStarted = Completer<void>();
+      final quoteLoadCompleter = Completer<List<Message>>();
+      final htmlLookupStarted = Completer<void>();
+      final quotedMessage = Message(
+        stanzaID: 'queued-quoted-local-stanza-id',
+        originID: quotedOriginId,
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Original body',
+        timestamp: DateTime.now(),
+      );
+      final replyMessage = Message(
+        stanzaID: 'queued-reply-stanza-id',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Reply body',
+        quoting: quotedOriginId,
+        displayed: true,
+        timestamp: DateTime.now(),
+      );
+      final renderedMessage = Message(
+        stanzaID: 'queued-rendered-email-html',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        deltaMsgId: 207,
+        deltaAccountId: 3,
+        displayed: true,
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: initialChat.jid,
+        ),
+      ).thenAnswer((invocation) {
+        final ids = invocation.positionalArguments.single as Set<String>;
+        if (ids.contains(quotedOriginId)) {
+          if (!quoteLookupStarted.isCompleted) {
+            quoteLookupStarted.complete();
+          }
+          return quoteLoadCompleter.future;
+        }
+        return Future.value(const <Message>[]);
+      });
+      when(() => emailService.getMessageFullHtml(any())).thenAnswer((
+        invocation,
+      ) async {
+        final message = invocation.positionalArguments.single as Message;
+        if (message.stanzaID == renderedMessage.stanzaID &&
+            !htmlLookupStarted.isCompleted) {
+          htmlLookupStarted.complete();
+        }
+        return '<p>Rendered html</p>';
+      });
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      messageStreamController.add(<Message>[replyMessage]);
+      await quoteLookupStarted.future;
+
+      bloc.add(ChatRenderedMessagesHydrationRequested([renderedMessage]));
+      await _pumpBloc();
+      expect(htmlLookupStarted.isCompleted, isFalse);
+
+      quoteLoadCompleter.complete([quotedMessage]);
+      await htmlLookupStarted.future;
+      await _pumpBloc();
+
+      expect(
+        bloc.state.quotedMessagesById[quotedOriginId]?.stanzaID,
+        quotedMessage.stanzaID,
+      );
+      expect(
+        bloc.state.emailFullHtmlByDeltaId[renderedMessage.deltaMsgId],
+        '<p>Rendered html</p>',
       );
 
       await bloc.close();
@@ -1301,11 +1403,10 @@ void main() {
         },
       );
       when(
-        () => messageService.loadMessageByReferenceId(
+        () => messageService.loadMessagesByReferenceIds({
           quotedOriginId,
-          chatJid: initialChat.jid,
-        ),
-      ).thenAnswer((_) async => quotedMessage);
+        }, chatJid: initialChat.jid),
+      ).thenAnswer((_) async => [quotedMessage]);
 
       final bloc = ChatBloc(
         jid: initialChat.jid,
@@ -1334,6 +1435,56 @@ void main() {
       );
 
       await bloc.close();
+    },
+  );
+
+  test(
+    'clears file metadata subscription when message window becomes empty',
+    () async {
+      final metadataController =
+          StreamController<Map<String, FileMetadataData?>>.broadcast();
+      final message = Message(
+        id: 'message-with-metadata',
+        stanzaID: 'message-with-metadata',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'file.txt',
+        timestamp: DateTime.now(),
+        fileMetadataID: 'file-1',
+      );
+
+      when(
+        () => messageService.fileMetadataByIdsStream(any()),
+      ).thenAnswer((_) => metadataController.stream);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      messageStreamController.add(<Message>[message]);
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(metadataController.hasListener, isTrue);
+
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(metadataController.hasListener, isFalse);
+
+      await bloc.close();
+      await metadataController.close();
     },
   );
 
@@ -5364,6 +5515,580 @@ void main() {
     await bloc.close();
     await emailMessageStreamController.close();
   });
+
+  test(
+    'email unread bootstrap keeps the first page available for backfill',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+        unreadCount: ChatBloc.messageBatchSize + 5,
+      );
+      final newest = Message(
+        stanzaID: 'email-newest-for-bootstrap',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 205,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+        body: 'Newest visible email',
+      );
+
+      when(
+        () => emailService.getOldestFreshMessageId(any()),
+      ).thenAnswer((_) async => 101);
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => messageService.loadMessageByDeltaId(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      ).thenAnswer((_) async => null);
+
+      late ChatBloc bloc;
+      when(
+        () => emailService.backfillChatHistory(
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((invocation) async {
+        expect(bloc.state.items, [newest]);
+        expect(invocation.namedArguments[#beforeMessageId], newest.deltaMsgId);
+      });
+
+      bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([newest]);
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => emailService.backfillChatHistory(
+          chat: emailChat,
+          desiredWindow: ChatBloc.messageBatchSize + 5,
+          beforeMessageId: newest.deltaMsgId,
+          beforeTimestamp: newest.timestamp,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).called(1);
+      expect(bloc.state.items, [newest]);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test(
+    'no-service full html request marks email content unavailable',
+    () async {
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final message = Message(
+        stanzaID: 'email-no-service-content',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 106,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+      );
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      messageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.emailFullHtmlLoading, isNot(contains(106)));
+      expect(bloc.state.emailFullHtmlUnavailable, contains(106));
+
+      await bloc.close();
+    },
+  );
+
+  test('rendered off-window email messages hydrate full html', () async {
+    final emailService = MockEmailService();
+    final emailMessageStreamController =
+        StreamController<List<Message>>.broadcast();
+    _mockEmailSync(emailService);
+
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 8,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+    );
+    final renderedMessage = Message(
+      stanzaID: 'email-search-result-html',
+      senderJid: 'peer@example.com',
+      chatJid: emailChat.jid,
+      deltaChatId: emailChat.deltaChatId,
+      deltaMsgId: 107,
+      deltaAccountId: 3,
+      timestamp: DateTime(2026, 1, 5, 10),
+    );
+
+    when(
+      () => emailService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => emailMessageStreamController.stream);
+    when(
+      () => emailService.getMessageFullHtml(any()),
+    ).thenAnswer((_) async => '<p>Search result html</p>');
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(emailChat);
+    emailMessageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(ChatRenderedMessagesHydrationRequested([renderedMessage]));
+    await untilCalled(() => emailService.getMessageFullHtml(renderedMessage));
+    await _pumpBloc();
+
+    verify(() => emailService.getMessageFullHtml(renderedMessage)).called(1);
+    expect(
+      bloc.state.emailFullHtmlByDeltaId[renderedMessage.deltaMsgId],
+      '<p>Search result html</p>',
+    );
+
+    await bloc.close();
+    await emailMessageStreamController.close();
+  });
+
+  test('rendered email hydration ignores messages from another chat', () async {
+    final emailService = MockEmailService();
+    final emailMessageStreamController =
+        StreamController<List<Message>>.broadcast();
+    _mockEmailSync(emailService);
+
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 8,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+    );
+    final otherChatMessage = Message(
+      stanzaID: 'email-other-search-result-html',
+      senderJid: 'other@example.com',
+      chatJid: 'other@example.com',
+      deltaChatId: emailChat.deltaChatId,
+      deltaMsgId: 108,
+      deltaAccountId: 3,
+      timestamp: DateTime(2026, 1, 5, 10),
+    );
+
+    when(
+      () => emailService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => emailMessageStreamController.stream);
+    when(
+      () => emailService.getMessageFullHtml(any()),
+    ).thenAnswer((_) async => '<p>Wrong chat html</p>');
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(emailChat);
+    emailMessageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(ChatRenderedMessagesHydrationRequested([otherChatMessage]));
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyNever(() => emailService.getMessageFullHtml(any()));
+    expect(bloc.state.emailFullHtmlByDeltaId, isEmpty);
+    expect(bloc.state.emailFullHtmlLoading, isEmpty);
+
+    await bloc.close();
+    await emailMessageStreamController.close();
+  });
+
+  test(
+    'rendered off-window email share messages preserve share context',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final renderedMessage = Message(
+        stanzaID: 'email-search-share',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 110,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+      );
+      final responder = Chat(
+        jid: 'responder@example.com',
+        title: 'Responder',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime(2026, 1, 5, 11),
+      );
+      final shareContext = ShareContext(
+        shareId: 'share-off-window',
+        subject: 'Shared subject',
+        participants: [responder],
+        originatorDeltaMsgId: renderedMessage.deltaMsgId,
+        participantCount: 1,
+      );
+      final replyMessage = Message(
+        stanzaID: 'email-search-share-reply',
+        senderJid: responder.jid,
+        chatJid: responder.jid,
+        deltaMsgId: 111,
+        timestamp: DateTime(2026, 1, 5, 11),
+        body: 'Reply',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.shareContextForMessage(renderedMessage),
+      ).thenAnswer((_) async => shareContext);
+      when(
+        () => messageService.loadMessagesForShare('share-off-window'),
+      ).thenAnswer((_) async => [replyMessage]);
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      emailMessageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(ChatRenderedMessagesHydrationRequested([renderedMessage]));
+      await untilCalled(
+        () => messageService.loadMessagesForShare('share-off-window'),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.shareContexts[renderedMessage.stanzaID], shareContext);
+      expect(bloc.state.shareReplies[renderedMessage.stanzaID], [responder]);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test('off-window pinned email messages hydrate full html', () async {
+    final emailService = MockEmailService();
+    final emailMessageStreamController =
+        StreamController<List<Message>>.broadcast();
+    final pinnedController =
+        StreamController<List<PinnedMessageEntry>>.broadcast();
+    _mockEmailSync(emailService);
+
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 8,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+    );
+    final pinnedMessage = Message(
+      stanzaID: 'email-pinned-result-html',
+      senderJid: 'peer@example.com',
+      chatJid: emailChat.jid,
+      deltaChatId: emailChat.deltaChatId,
+      deltaMsgId: 109,
+      deltaAccountId: 3,
+      timestamp: DateTime(2026, 1, 5, 10),
+    );
+
+    when(
+      () => emailService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => emailMessageStreamController.stream);
+    when(
+      () => messageService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => pinnedController.stream);
+    when(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async => [pinnedMessage]);
+    when(
+      () => emailService.getMessageFullHtml(any()),
+    ).thenAnswer((_) async => '<p>Pinned html</p>');
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(emailChat);
+    emailMessageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    pinnedController.add([
+      PinnedMessageEntry(
+        messageStanzaId: pinnedMessage.stanzaID,
+        chatJid: emailChat.jid,
+        pinnedAt: DateTime(2026, 1, 5, 11),
+        active: true,
+      ),
+    ]);
+    await untilCalled(() => emailService.getMessageFullHtml(pinnedMessage));
+    await _pumpBloc();
+
+    verify(() => emailService.getMessageFullHtml(pinnedMessage)).called(1);
+    expect(
+      bloc.state.emailFullHtmlByDeltaId[pinnedMessage.deltaMsgId],
+      '<p>Pinned html</p>',
+    );
+
+    await bloc.close();
+    await emailMessageStreamController.close();
+    await pinnedController.close();
+  });
+
+  test(
+    'html-only persisted email marks messages loaded before full html completes',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      final fullHtmlCompleter = Completer<String>();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final message = Message(
+        stanzaID: 'email-html-only',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 103,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+        htmlBody: '<p>Inline html</p>',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.getMessageFullHtml(any()),
+      ).thenAnswer((_) => fullHtmlCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.messagesLoaded, isTrue);
+      expect(bloc.state.items.single.htmlBody, '<p>Inline html</p>');
+      expect(bloc.state.emailFullHtmlByDeltaId, isEmpty);
+      verify(() => emailService.getMessageFullHtml(message)).called(1);
+
+      fullHtmlCompleter.complete('<p>Full html</p>');
+      await _pumpBloc();
+
+      expect(
+        bloc.state.emailFullHtmlByDeltaId[message.deltaMsgId],
+        '<p>Full html</p>',
+      );
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test(
+    'stale full html completion clears loading without writing irrelevant html',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      final fullHtmlCompleter = Completer<String>();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final message = Message(
+        stanzaID: 'email-full-html-stale',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 104,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+        body: 'Rendered fallback body',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.getMessageFullHtml(any()),
+      ).thenAnswer((_) => fullHtmlCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.emailFullHtmlLoading, contains(message.deltaMsgId));
+
+      emailMessageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      fullHtmlCompleter.complete('<p>Stale full html</p>');
+      await _pumpBloc();
+
+      expect(
+        bloc.state.emailFullHtmlLoading,
+        isNot(contains(message.deltaMsgId)),
+      );
+      expect(
+        bloc.state.emailFullHtmlByDeltaId,
+        isNot(contains(message.deltaMsgId)),
+      );
+      expect(
+        bloc.state.emailFullHtmlUnavailable,
+        isNot(contains(message.deltaMsgId)),
+      );
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
 
   test(
     'loaded email window requests full html even when inline html is present',

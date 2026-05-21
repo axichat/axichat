@@ -1,5 +1,6 @@
 import 'package:axichat/src/chat/models/chat_timeline.dart';
 import 'package:axichat/src/chat/models/chat_timeline_projection.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/muc/occupant.dart';
@@ -50,6 +51,7 @@ void main() {
         shareContexts: const {},
         shareReplies: const {},
         emailFullHtmlByDeltaId: const {},
+        emailFullHtmlUnavailable: const {},
         revokedInviteTokens: const {},
         acceptedInviteTokens: const {},
         inviteRoomFallbackLabel: 'Room',
@@ -124,6 +126,7 @@ void main() {
         shareContexts: const {},
         shareReplies: const {},
         emailFullHtmlByDeltaId: const {},
+        emailFullHtmlUnavailable: const {},
         revokedInviteTokens: const {},
         acceptedInviteTokens: const {},
         inviteRoomFallbackLabel: 'Room',
@@ -340,6 +343,7 @@ void main() {
         shareContexts: const {},
         shareReplies: const {},
         emailFullHtmlByDeltaId: const {},
+        emailFullHtmlUnavailable: const {},
         revokedInviteTokens: const {},
         acceptedInviteTokens: const {},
         inviteRoomFallbackLabel: 'Room',
@@ -420,6 +424,7 @@ void main() {
         shareContexts: const {},
         shareReplies: const {},
         emailFullHtmlByDeltaId: const {},
+        emailFullHtmlUnavailable: const {},
         revokedInviteTokens: const {},
         acceptedInviteTokens: const {},
         inviteRoomFallbackLabel: 'Room',
@@ -500,6 +505,7 @@ void main() {
         shareContexts: const {},
         shareReplies: const {},
         emailFullHtmlByDeltaId: const {},
+        emailFullHtmlUnavailable: const {},
         revokedInviteTokens: const {},
         acceptedInviteTokens: const {},
         inviteRoomFallbackLabel: 'Room',
@@ -581,6 +587,7 @@ void main() {
       shareContexts: const {},
       shareReplies: const {},
       emailFullHtmlByDeltaId: const {},
+      emailFullHtmlUnavailable: const {},
       revokedInviteTokens: const {},
       acceptedInviteTokens: const {},
       inviteRoomFallbackLabel: 'Room',
@@ -674,6 +681,7 @@ void main() {
       shareContexts: const {},
       shareReplies: const {},
       emailFullHtmlByDeltaId: const {},
+      emailFullHtmlUnavailable: const {},
       revokedInviteTokens: inviteLifecycle.revokedInviteTokens,
       acceptedInviteTokens: inviteLifecycle.acceptedInviteTokens,
       inviteRoomFallbackLabel: 'Room',
@@ -833,6 +841,192 @@ void main() {
     expect(emptyState.label, equals('Empty'));
   });
 
+  test('pending email delta messages render a loading placeholder', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-content-pending',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 99,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.rowText, 'Loading');
+    expect(item.renderedText, 'Loading');
+  });
+
+  test(
+    'subject-bearing email delta messages render a loading body placeholder',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        deltaChatId: 42,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'email-content-pending-with-subject',
+        senderJid: 'peer@example.com',
+        chatJid: chat.jid,
+        subject: 'Quarterly plan',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 102,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+      );
+
+      final item = _projectMessages(
+        chat: chat,
+        messages: [message],
+        isEmailChat: true,
+        pendingEmailContentLabel: 'Loading',
+      ).whereType<ChatTimelineMessageItem>().single;
+
+      expect(item.subjectLabel, 'Quarterly plan');
+      expect(item.showSubject, isTrue);
+      expect(item.rowText, 'Loading');
+      expect(item.renderedText, 'Loading');
+    },
+  );
+
+  test(
+    'subject-bearing unavailable email delta messages render unavailable body placeholder',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        deltaChatId: 42,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'email-content-unavailable-with-subject',
+        senderJid: 'peer@example.com',
+        chatJid: chat.jid,
+        subject: 'Quarterly plan',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 103,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+      );
+
+      final item = _projectMessages(
+        chat: chat,
+        messages: [message],
+        isEmailChat: true,
+        pendingEmailContentLabel: 'Loading',
+        unavailableEmailContentLabel: 'Service unavailable',
+        emailFullHtmlUnavailable: const {103},
+      ).whereType<ChatTimelineMessageItem>().single;
+
+      expect(item.subjectLabel, 'Quarterly plan');
+      expect(item.showSubject, isTrue);
+      expect(item.rowText, 'Service unavailable');
+      expect(item.renderedText, 'Service unavailable');
+    },
+  );
+
+  test('attachment-only email delta messages skip content placeholders', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-attachment-only',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 101,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+    const attachmentsByMessageId = {
+      'email-attachment-only': ['file-1'],
+    };
+
+    final pendingItem = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      attachmentsByMessageId: attachmentsByMessageId,
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(pendingItem.renderedText, isEmpty);
+    expect(pendingItem.rowText, ' ');
+    expect(pendingItem.attachmentIds, ['file-1']);
+
+    final unavailableItem = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      emailFullHtmlUnavailable: const {101},
+      attachmentsByMessageId: attachmentsByMessageId,
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(unavailableItem.renderedText, isEmpty);
+    expect(unavailableItem.rowText, ' ');
+    expect(unavailableItem.attachmentIds, ['file-1']);
+  });
+
+  test('unavailable email delta messages stop rendering as loading', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-content-unavailable',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 100,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      emailFullHtmlUnavailable: const {100},
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.rowText, 'Service unavailable');
+    expect(item.renderedText, 'Service unavailable');
+  });
+
   test('invite lifecycle tokens use the latest successful marker', () {
     final revoked = Message(
       stanzaID: 'invite-revoked-1',
@@ -884,6 +1078,11 @@ void main() {
 List<ChatTimelineItem> _projectMessages({
   required chat_models.Chat chat,
   required List<Message> messages,
+  bool isEmailChat = false,
+  String? pendingEmailContentLabel,
+  String? unavailableEmailContentLabel,
+  Set<int> emailFullHtmlUnavailable = const {},
+  Map<String, List<String>> attachmentsByMessageId = const {},
   Set<String> revokedInviteTokens = const {},
   Set<String> acceptedInviteTokens = const {},
 }) {
@@ -896,8 +1095,10 @@ List<ChatTimelineItem> _projectMessages({
     unreadDividerLabel: 'Unread',
     emptyStateItemId: 'empty-state',
     emptyStateLabel: 'Empty',
+    pendingEmailContentLabel: pendingEmailContentLabel,
+    unavailableEmailContentLabel: unavailableEmailContentLabel,
     isGroupChat: false,
-    isEmailChat: false,
+    isEmailChat: isEmailChat,
     profileJid: 'self@example.com',
     resolvedEmailSelfJid: null,
     currentUserId: 'self@example.com',
@@ -913,6 +1114,7 @@ List<ChatTimelineItem> _projectMessages({
     shareContexts: const {},
     shareReplies: const {},
     emailFullHtmlByDeltaId: const {},
+    emailFullHtmlUnavailable: emailFullHtmlUnavailable,
     revokedInviteTokens: revokedInviteTokens,
     acceptedInviteTokens: acceptedInviteTokens,
     inviteRoomFallbackLabel: 'Room',
@@ -923,7 +1125,8 @@ List<ChatTimelineItem> _projectMessages({
     inviteActionLabel: (roomDisplayName) => 'Open $roomDisplayName',
     supportsMarkers: false,
     supportsReceipts: false,
-    attachmentsForMessage: (_) => const <String>[],
+    attachmentsForMessage: (message) =>
+        attachmentsByMessageId[message.stanzaID] ?? const <String>[],
     reactionPreviewsForMessage: (_) => const <ReactionPreview>[],
     participantsForBanner: (_, _, _) => const <chat_models.Chat>[],
     avatarPathForBareJid: (_) => null,

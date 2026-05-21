@@ -2173,11 +2173,11 @@ class _ChatState extends State<Chat> {
     final deltaMessageId = messageModel.deltaMsgId;
     final resolvedHtmlBody = isWelcomeChat
         ? null
-        : timelineMessageItem.resolvedHtmlBody ??
-              (deltaMessageId == null
-                  ? messageModel.htmlBody
-                  : state.emailFullHtmlByDeltaId[deltaMessageId] ??
-                        messageModel.htmlBody);
+        : deltaMessageId == null
+        ? timelineMessageItem.resolvedHtmlBody ?? messageModel.htmlBody
+        : state.emailFullHtmlByDeltaId[deltaMessageId] ??
+              timelineMessageItem.resolvedHtmlBody ??
+              messageModel.htmlBody;
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
@@ -5166,10 +5166,12 @@ class _ChatState extends State<Chat> {
         .where((message) {
           final hasHtml = message.normalizedHtmlBody?.isNotEmpty == true;
           final hasSubject = message.subject?.trim().isNotEmpty == true;
+          final deltaMessageId = message.deltaMsgId;
           final attachments = attachmentsForMessage(message);
           return message.body != null ||
               hasSubject ||
               hasHtml ||
+              (deltaMessageId != null && deltaMessageId > 0) ||
               message.error.isNotNone ||
               attachments.isNotEmpty;
         })
@@ -5546,6 +5548,11 @@ class _ChatState extends State<Chat> {
                       : const [],
                 );
                 if (searchState.active) {
+                  context.read<ChatBloc>().add(
+                    ChatRenderedMessagesHydrationRequested(
+                      searchState.results,
+                    ),
+                  );
                   _openChatSearch();
                   return;
                 }
