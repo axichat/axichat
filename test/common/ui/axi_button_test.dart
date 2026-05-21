@@ -84,6 +84,34 @@ void main() {
     expect(tapCount, 0);
   });
 
+  testWidgets('expanded axi list button handles taps across full row', (
+    tester,
+  ) async {
+    var tapCount = 0;
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: SizedBox(
+          width: 320,
+          child: AxiListButton(
+            key: const Key('wide-list-button'),
+            onPressed: () {
+              tapCount += 1;
+            },
+            child: const Text('List'),
+          ),
+        ),
+      ),
+    );
+
+    final buttonRect = tester.getRect(
+      find.byKey(const Key('wide-list-button')),
+    );
+    await tester.tapAt(buttonRect.centerRight - const Offset(8, 0));
+    await tester.pump();
+
+    expect(tapCount, 1);
+  });
+
   testWidgets('loading collapsed axi list button disables presses', (
     tester,
   ) async {

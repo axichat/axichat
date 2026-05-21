@@ -321,6 +321,7 @@ class _AxiListButtonState extends State<AxiListButton> {
               cursor: enabled
                   ? (buttonTheme.cursor ?? SystemMouseCursors.click)
                   : MouseCursor.defer,
+              behavior: HitTestBehavior.opaque,
               hoverStrategies:
                   buttonTheme.hoverStrategies ??
                   ShadTheme.of(context).hoverStrategies,

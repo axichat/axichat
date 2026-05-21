@@ -3,11 +3,9 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -208,7 +206,6 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final capability = context.watch<Capability>();
     final l10n = context.l10n;
     final spacing = context.spacing;
     return Column(
@@ -225,17 +222,56 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
           l10n.emailForwardingWelcomeOtherProviderHint,
           style: context.textTheme.muted,
         ),
-        if (capability.canForegroundService) ...[
-          SizedBox(height: spacing.xl),
-          Text(
-            l10n.emailForwardingGuideNotificationsTitle,
-            style: context.textTheme.large,
-          ),
-          SizedBox(height: spacing.s),
-          const NotificationRequest(),
-        ],
+        SizedBox(height: spacing.xl),
+        const _EmailForwardingNotificationSetting(),
       ],
     );
+  }
+}
+
+class _EmailForwardingNotificationSetting extends StatefulWidget {
+  const _EmailForwardingNotificationSetting();
+
+  @override
+  State<_EmailForwardingNotificationSetting> createState() =>
+      _EmailForwardingNotificationSettingState();
+}
+
+class _EmailForwardingNotificationSettingState
+    extends State<_EmailForwardingNotificationSetting> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final state = context.watch<SettingsCubit>().state;
+    return ShadSwitch(
+      label: Text(l10n.settingsMuteEmailNotifications),
+      sublabel: Text(l10n.settingsMuteEmailNotificationsDescription),
+      value: state.emailNotificationsMuted,
+      onChanged:
+          _saving ||
+              state.isGlobalSettingLoading(
+                GlobalSettingId.emailNotificationsMuted,
+              )
+          ? null
+          : _toggleEmailNotificationsMuted,
+    );
+  }
+
+  Future<void> _toggleEmailNotificationsMuted(bool muted) async {
+    setState(() {
+      _saving = true;
+    });
+    try {
+      await context.read<SettingsCubit>().toggleEmailNotificationsMuted(muted);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 }
 
@@ -251,7 +287,6 @@ class EmailForwardingGuideContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final capability = context.watch<Capability>();
     final l10n = context.l10n;
     final spacing = context.spacing;
     final paragraphStyle = context.textTheme.muted;
@@ -274,20 +309,6 @@ class EmailForwardingGuideContent extends StatelessWidget {
         const EmailForwardingLinkRow(),
       ],
     );
-    final Widget? notificationSection = capability.canForegroundService
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: spacing.m),
-              Text(
-                l10n.emailForwardingGuideNotificationsTitle,
-                style: subheaderStyle,
-              ),
-              SizedBox(height: spacing.s),
-              const NotificationRequest(),
-            ],
-          )
-        : null;
     if (edgeToEdgeDivider) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -297,26 +318,13 @@ class EmailForwardingGuideContent extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: spacing.l),
             child: topSection,
           ),
-          if (notificationSection != null) ...[
-            SizedBox(height: spacing.xl),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: spacing.l),
-              child: notificationSection,
-            ),
-          ],
         ],
       );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        topSection,
-        if (notificationSection != null) ...[
-          SizedBox(height: spacing.xl),
-          notificationSection,
-        ],
-      ],
+      children: [topSection],
     );
   }
 }
