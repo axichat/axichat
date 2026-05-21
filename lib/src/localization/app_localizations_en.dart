@@ -478,6 +478,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'You do not have permission to pin messages in this room.';
 
   @override
+  String get chatMessageSentAgain => 'Message sent again.';
+
+  @override
   String get chatMessageForwarded => 'Message forwarded.';
 
   @override

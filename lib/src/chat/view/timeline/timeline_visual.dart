@@ -1317,6 +1317,7 @@ class _MessageActionBar extends StatelessWidget {
     this.onSelect,
     this.onResend,
     this.resendUsesSendAgainLabel = false,
+    this.resendLoading = false,
     this.onEdit,
     required this.isImportant,
     this.onAddToFolder,
@@ -1338,6 +1339,7 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final bool resendUsesSendAgainLabel;
+  final bool resendLoading;
   final VoidCallback? onEdit;
   final bool isImportant;
   final VoidCallback? onAddToFolder;
@@ -1355,7 +1357,18 @@ class _MessageActionBar extends StatelessWidget {
     final sizing = context.sizing;
     final iconSize = sizing.menuItemIconSize;
     double scaled(double value) => textScaler.scale(value);
+    final resendAction = onResend == null
+        ? null
+        : ContextActionButton(
+            icon: Icon(LucideIcons.repeat, size: iconSize),
+            label: resendUsesSendAgainLabel
+                ? l10n.chatActionSendAgain
+                : l10n.chatActionResend,
+            loading: resendLoading,
+            onPressed: onResend,
+          );
     final actions = <Widget>[
+      if (resendAction != null && resendUsesSendAgainLabel) resendAction,
       ContextActionButton(
         icon: replyLoading
             ? AxiProgressIndicator(color: context.colorScheme.foreground)
@@ -1371,14 +1384,7 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionForward,
         onPressed: onForward,
       ),
-      if (onResend != null)
-        ContextActionButton(
-          icon: Icon(LucideIcons.repeat, size: iconSize),
-          label: resendUsesSendAgainLabel
-              ? l10n.chatActionSendAgain
-              : l10n.chatActionResend,
-          onPressed: onResend,
-        ),
+      if (resendAction != null && !resendUsesSendAgainLabel) resendAction,
       if (onEdit != null)
         ContextActionButton(
           icon: Icon(LucideIcons.pencilLine, size: iconSize),

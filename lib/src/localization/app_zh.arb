@@ -146,6 +146,7 @@
   "chatRoomAvatarUpdated": "群组头像已更新。",
   "chatRoomAvatarUpdateFailed": "无法更新群组头像。",
   "chatPinPermissionDenied": "你没有权限在此群组中置顶消息。",
+  "chatMessageSentAgain": "消息已再次发送。",
   "chatMessageForwarded": "消息已转发。",
   "chatMessageForwardFailed": "无法转发消息。",
   "chatMessageAddedToFolder": "消息已添加到文件夹。",

@@ -146,6 +146,7 @@
   "chatRoomAvatarUpdated": "Avatar de la sala actualizado.",
   "chatRoomAvatarUpdateFailed": "No se pudo actualizar el avatar de la sala.",
   "chatPinPermissionDenied": "No tienes permiso para fijar mensajes en esta sala.",
+  "chatMessageSentAgain": "Mensaje enviado de nuevo.",
   "chatMessageForwarded": "Mensaje reenviado.",
   "chatMessageForwardFailed": "No se pudo reenviar el mensaje.",
   "chatMessageAddedToFolder": "Mensaje agregado a la carpeta.",

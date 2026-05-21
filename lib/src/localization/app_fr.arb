@@ -146,6 +146,7 @@
   "chatRoomAvatarUpdated": "Avatar du salon mis à jour.",
   "chatRoomAvatarUpdateFailed": "Impossible de mettre à jour l’avatar du salon.",
   "chatPinPermissionDenied": "Vous n’avez pas la permission d’épingler des messages dans ce salon.",
+  "chatMessageSentAgain": "Message renvoyé.",
   "chatMessageForwarded": "Message transféré.",
   "chatMessageForwardFailed": "Impossible de transférer le message.",
   "chatMessageAddedToFolder": "Message ajouté au dossier.",

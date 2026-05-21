@@ -88,6 +88,7 @@ void _expectFreshChatState(
   expect(state.fanOutDrafts, isEmpty);
   expect(state.shareContexts, isEmpty);
   expect(state.shareReplies, isEmpty);
+  expect(state.resendLoadingMessageIds, isEmpty);
   expect(state.emailRawHeadersByDeltaId, isEmpty);
   expect(state.emailRawHeadersLoading, isEmpty);
   expect(state.emailRawHeadersUnavailable, isEmpty);
@@ -179,6 +180,7 @@ ChatState _dirtyEveryChatStateField(ChatState state, Chat chat) {
     shareReplies: {
       'dirty-share': [chat],
     },
+    resendLoadingMessageIds: const {'dirty-message'},
     emailRawHeadersByDeltaId: const {1: 'X-Dirty: yes'},
     emailRawHeadersLoading: const {2},
     emailRawHeadersUnavailable: const {3},
@@ -782,7 +784,7 @@ void main() {
     when(
       () =>
           messageService.resendMessage(any(), chatType: any(named: 'chatType')),
-    ).thenAnswer((_) async {});
+    ).thenAnswer((_) async => true);
     when(
       () => messageService.resendMessage(
         any(),
@@ -794,6 +796,7 @@ void main() {
           invocation.namedArguments[#onLocalMessageStored]
               as void Function(String)?;
       callback?.call('manual-send-again-copy');
+      return true;
     });
     when(
       () => messageService.markMessageManualSendAgain(
@@ -1168,6 +1171,10 @@ void main() {
     expect(bloc.state.pinnedMessages, dirtyState.pinnedMessages);
     expect(bloc.state.pinnedMessagesLoaded, isTrue);
     expect(bloc.state.fanOutReports, dirtyState.fanOutReports);
+    expect(
+      bloc.state.resendLoadingMessageIds,
+      dirtyState.resendLoadingMessageIds,
+    );
     expect(bloc.state.fanOutDrafts, dirtyState.fanOutDrafts);
     expect(bloc.state.shareContexts, dirtyState.shareContexts);
     expect(bloc.state.shareReplies, dirtyState.shareReplies);
@@ -2970,6 +2977,371 @@ void main() {
           sendAgainStanzaID: 'manual-send-again-copy',
         ),
       ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test('resend action clears loading and shows success toast', () async {
+    final message = Message(
+      stanzaID: 'resend-loading-message',
+      senderJid: 'self@axi.im',
+      chatJid: initialChat.jid,
+      body: 'Retry me',
+      timestamp: DateTime.timestamp(),
+    );
+    final resendCompleter = Completer<bool>();
+    when(
+      () => messageService.resendMessage(
+        'resend-loading-message',
+        chatType: ChatType.chat,
+      ),
+    ).thenAnswer((_) => resendCompleter.future);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add([message]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+    );
+    await _pumpBloc();
+
+    expect(
+      bloc.state.resendLoadingMessageIds,
+      contains('resend-loading-message'),
+    );
+    expect(bloc.state.toast, isNull);
+
+    resendCompleter.complete(true);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.resendLoadingMessageIds, isEmpty);
+    expect(
+      bloc.state.toast,
+      const ChatToast(message: ChatMessageKey.chatMessageSentAgain),
+    );
+    expect(bloc.state.toastId, 1);
+
+    await bloc.close();
+  });
+
+  test('resend action clears loading when resend fails', () async {
+    final message = Message(
+      stanzaID: 'resend-failed-message',
+      senderJid: 'self@axi.im',
+      chatJid: initialChat.jid,
+      body: 'Retry me',
+      timestamp: DateTime.timestamp(),
+    );
+    final resendCompleter = Completer<bool>();
+    when(
+      () => messageService.resendMessage(
+        'resend-failed-message',
+        chatType: ChatType.chat,
+      ),
+    ).thenAnswer((_) => resendCompleter.future);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add([message]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+    );
+    await _pumpBloc();
+
+    expect(
+      bloc.state.resendLoadingMessageIds,
+      contains('resend-failed-message'),
+    );
+
+    resendCompleter.completeError(Exception('resend failed'));
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.resendLoadingMessageIds, isEmpty);
+    expect(bloc.state.toast, isNull);
+
+    await bloc.close();
+  });
+
+  test(
+    'send again clears loading and suppresses success toast when resend no-ops',
+    () async {
+      final message = Message(
+        stanzaID: 'send-again-no-op',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Still pending',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+      );
+      final resendCompleter = Completer<bool>();
+      when(
+        () => messageService.resendMessage(
+          'send-again-no-op',
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).thenAnswer((_) => resendCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add([message]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.resendLoadingMessageIds, contains('send-again-no-op'));
+
+      resendCompleter.complete(false);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.resendLoadingMessageIds, isEmpty);
+      expect(bloc.state.toast, isNull);
+      expect(bloc.state.toastId, 0);
+      verifyNever(
+        () => messageService.markMessageManualSendAgain(
+          stanzaID: 'send-again-no-op',
+          sendAgainStanzaID: any(named: 'sendAgainStanzaID'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'send again does not mark or toast when resend fails after local copy',
+    () async {
+      final message = Message(
+        stanzaID: 'send-again-copy-then-fails',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Still pending',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+      );
+      final resendCompleter = Completer<void>();
+      when(
+        () => messageService.resendMessage(
+          'send-again-copy-then-fails',
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).thenAnswer((invocation) async {
+        final callback =
+            invocation.namedArguments[#onLocalMessageStored]
+                as void Function(String)?;
+        callback?.call('send-again-copy-before-failure');
+        await resendCompleter.future;
+        throw Exception('resend failed after local copy');
+      });
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add([message]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      expect(
+        bloc.state.resendLoadingMessageIds,
+        contains('send-again-copy-then-fails'),
+      );
+
+      resendCompleter.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.resendLoadingMessageIds, isEmpty);
+      expect(bloc.state.toast, isNull);
+      expect(bloc.state.toastId, 0);
+      verifyNever(
+        () => messageService.markMessageManualSendAgain(
+          stanzaID: 'send-again-copy-then-fails',
+          sendAgainStanzaID: 'send-again-copy-before-failure',
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'send again clears loading and suppresses success toast when marker fails',
+    () async {
+      final message = Message(
+        stanzaID: 'send-again-marker-fails',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Still pending',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+      );
+      final resendCompleter = Completer<bool>();
+      when(
+        () => messageService.resendMessage(
+          'send-again-marker-fails',
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).thenAnswer((invocation) async {
+        final callback =
+            invocation.namedArguments[#onLocalMessageStored]
+                as void Function(String)?;
+        callback?.call('send-again-marker-fails-copy');
+        return resendCompleter.future;
+      });
+      when(
+        () => messageService.markMessageManualSendAgain(
+          stanzaID: 'send-again-marker-fails',
+          sendAgainStanzaID: 'send-again-marker-fails-copy',
+        ),
+      ).thenAnswer((_) async => throw Exception('marker failed'));
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add([message]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      expect(
+        bloc.state.resendLoadingMessageIds,
+        contains('send-again-marker-fails'),
+      );
+
+      resendCompleter.complete(true);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.resendLoadingMessageIds, isEmpty);
+      expect(bloc.state.toast, isNull);
+      expect(bloc.state.toastId, 0);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'send again clears loading and suppresses success toast without copy id',
+    () async {
+      final message = Message(
+        stanzaID: 'send-again-copy-missing',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Still pending',
+        timestamp: DateTime.timestamp().subtract(
+          xmpp.XmppStreamManagementManager.ackTimeoutDuration +
+              const Duration(minutes: 1),
+        ),
+      );
+      final resendCompleter = Completer<bool>();
+      when(
+        () => messageService.resendMessage(
+          'send-again-copy-missing',
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).thenAnswer((_) => resendCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add([message]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+      await _pumpBloc();
+
+      expect(
+        bloc.state.resendLoadingMessageIds,
+        contains('send-again-copy-missing'),
+      );
+
+      resendCompleter.complete(true);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.resendLoadingMessageIds, isEmpty);
+      expect(bloc.state.toast, isNull);
+      expect(bloc.state.toastId, 0);
+      verifyNever(
+        () => messageService.markMessageManualSendAgain(
+          stanzaID: 'send-again-copy-missing',
+          sendAgainStanzaID: any(named: 'sendAgainStanzaID'),
+        ),
+      );
 
       await bloc.close();
     },

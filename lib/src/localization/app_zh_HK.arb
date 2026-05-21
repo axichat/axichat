@@ -146,6 +146,7 @@
   "chatRoomAvatarUpdated": "聊天室頭像已更新。",
   "chatRoomAvatarUpdateFailed": "無法更新聊天室頭像。",
   "chatPinPermissionDenied": "你沒有權限在此聊天室釘選訊息。",
+  "chatMessageSentAgain": "訊息已再次傳送。",
   "chatMessageForwarded": "訊息已轉發。",
   "chatMessageForwardFailed": "無法轉發訊息。",
   "chatMessageAddedToFolder": "訊息已加入資料夾。",

@@ -46,6 +46,22 @@ void main() {
     expect(tapCount, 0);
   });
 
+  testWidgets('loading context action button replaces icon', (tester) async {
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: ContextActionButton(
+          icon: const Icon(Icons.refresh, key: Key('action-icon')),
+          label: 'Send again',
+          loading: true,
+          onPressed: () {},
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('action-icon')), findsNothing);
+    expect(find.byType(AxiProgressIndicator), findsOneWidget);
+  });
+
   testWidgets('loading expanded axi list button disables presses', (
     tester,
   ) async {

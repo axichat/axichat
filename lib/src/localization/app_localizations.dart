@@ -945,6 +945,12 @@ abstract class AppLocalizations {
   /// **'You do not have permission to pin messages in this room.'**
   String get chatPinPermissionDenied;
 
+  /// No description provided for @chatMessageSentAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Message sent again.'**
+  String get chatMessageSentAgain;
+
   /// No description provided for @chatMessageForwarded.
   ///
   /// In en, this message translates to:

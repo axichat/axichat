@@ -459,6 +459,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatPinPermissionDenied => '你没有权限在此群组中置顶消息。';
 
   @override
+  String get chatMessageSentAgain => '消息已再次发送。';
+
+  @override
   String get chatMessageForwarded => '消息已转发。';
 
   @override
@@ -6837,6 +6840,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatPinPermissionDenied => '你沒有權限在此聊天室釘選訊息。';
+
+  @override
+  String get chatMessageSentAgain => '訊息已再次傳送。';
 
   @override
   String get chatMessageForwarded => '訊息已轉發。';

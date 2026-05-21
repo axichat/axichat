@@ -756,11 +756,12 @@ void main() {
           () => mockConnection.sendMessage(any()),
         ).thenAnswer((_) async => true);
 
-        await xmppService.resendMessage(originalStanzaId);
+        final resent = await xmppService.resendMessage(originalStanzaId);
 
         final resentMessage = await database.getMessageByStanzaID(
           resentStanzaId,
         );
+        expect(resent, isTrue);
         expect(
           resentMessage,
           isA<Message>()
@@ -777,6 +778,17 @@ void main() {
                 'Sender',
               ),
         );
+      },
+    );
+
+    test(
+      'resendMessage returns false when the original message is missing',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final resent = await xmppService.resendMessage('missing-original');
+
+        expect(resent, isFalse);
       },
     );
 

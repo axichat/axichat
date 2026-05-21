@@ -487,6 +487,9 @@ class AppLocalizationsEs extends AppLocalizations {
       'No tienes permiso para fijar mensajes en esta sala.';
 
   @override
+  String get chatMessageSentAgain => 'Mensaje enviado de nuevo.';
+
+  @override
   String get chatMessageForwarded => 'Mensaje reenviado.';
 
   @override

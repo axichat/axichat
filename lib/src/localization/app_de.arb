@@ -146,6 +146,7 @@
   "chatRoomAvatarUpdated": "Raum-Avatar aktualisiert.",
   "chatRoomAvatarUpdateFailed": "Raum-Avatar konnte nicht aktualisiert werden.",
   "chatPinPermissionDenied": "Du hast keine Berechtigung, Nachrichten in diesem Raum anzuheften.",
+  "chatMessageSentAgain": "Nachricht erneut gesendet.",
   "chatMessageForwarded": "Nachricht weitergeleitet.",
   "chatMessageForwardFailed": "Nachricht konnte nicht weitergeleitet werden.",
   "chatMessageAddedToFolder": "Nachricht zum Ordner hinzugefügt.",

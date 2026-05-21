@@ -708,6 +708,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       multiSelectActive: multiSelectActive,
       canTogglePins: canTogglePins,
       shareRequestStatus: shareRequestStatus,
+      resendLoading: state.isMessageResendLoading(messageModel.stanzaID),
       bubbleRegionRegistry: bubbleRegionRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       rowKey: rowKey,
@@ -790,6 +791,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.multiSelectActive,
     required this.canTogglePins,
     required this.shareRequestStatus,
+    required this.resendLoading,
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
     required this.rowKey,
@@ -839,6 +841,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final bool multiSelectActive;
   final bool canTogglePins;
   final RequestStatus shareRequestStatus;
+  final bool resendLoading;
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
   final Key? rowKey;
@@ -997,6 +1000,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       chatEntity: chatEntity,
       roomState: roomState,
       shareRequestStatus: shareRequestStatus,
+      resendLoading: resendLoading,
       readOnly: readOnly,
       self: self,
       multiSelectActive: multiSelectActive,
@@ -1745,6 +1749,7 @@ _resolveTimelineMessagePreviews({
   VoidCallback? onSelect,
   VoidCallback? onResend,
   bool resendUsesSendAgainLabel,
+  bool resendLoading,
   VoidCallback? onEdit,
   VoidCallback? onPinToggle,
   VoidCallback? onAddToFolder,
@@ -1764,6 +1769,7 @@ _resolveTimelineMessageActionCallbacks({
   required chat_models.Chat? chatEntity,
   required RoomState? roomState,
   required bool readOnly,
+  required bool resendLoading,
   required bool self,
   required bool multiSelectActive,
   required bool canTogglePins,
@@ -1918,6 +1924,7 @@ _resolveTimelineMessageActionCallbacks({
     onSelect: onSelect,
     onResend: onResend,
     resendUsesSendAgainLabel: canSendAgain && !canRetry,
+    resendLoading: resendLoading,
     onEdit: onEdit,
     onPinToggle: onPinToggle,
     onAddToFolder: onAddToFolder,

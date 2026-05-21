@@ -489,6 +489,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Du hast keine Berechtigung, Nachrichten in diesem Raum anzuheften.';
 
   @override
+  String get chatMessageSentAgain => 'Nachricht erneut gesendet.';
+
+  @override
   String get chatMessageForwarded => 'Nachricht weitergeleitet.';
 
   @override

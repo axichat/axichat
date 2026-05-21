@@ -199,6 +199,7 @@
   "chatRoomAvatarUpdated": "Room avatar updated.",
   "chatRoomAvatarUpdateFailed": "Could not update room avatar.",
   "chatPinPermissionDenied": "You do not have permission to pin messages in this room.",
+  "chatMessageSentAgain": "Message sent again.",
   "chatMessageForwarded": "Message forwarded.",
   "chatMessageForwardFailed": "Unable to forward message.",
   "chatMessageAddedToFolder": "Message added to folder.",

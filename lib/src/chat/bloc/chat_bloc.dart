@@ -5421,6 +5421,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final message = event.message;
     final chatType = event.chatType;
+    final resendMessageId = message.stanzaID.trim();
     final pseudoMessageType = message.pseudoMessageType;
     final isEmailMessage = message.deltaChatId != null;
     final isLocalOnlyChat = isAxichatWelcomeThreadJid(message.chatJid);
@@ -5440,9 +5441,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    try {
+    var resendCompleted = false;
+    var manualSendAgainMarked = false;
+
+    Future<void> performResend() async {
       if (isEmailMessage) {
-        await _resendEmailMessage(message, emit);
+        resendCompleted = await _resendEmailMessage(message, emit);
         return;
       }
       if (pseudoMessageType?.isInvite == true) {
@@ -5452,6 +5456,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? captureManualSendAgainStanzaId
               : null,
         );
+        resendCompleted = true;
         return;
       }
       final attachments = await _attachmentsForMessage(message);
@@ -5524,6 +5529,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             );
           }
         }
+        resendCompleted = true;
         return;
       }
       final hasBody =
@@ -5560,32 +5566,56 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? captureManualSendAgainStanzaId
               : null,
         );
+        resendCompleted = true;
       } else {
         if (shouldMarkManualSendAgain) {
-          await _messageService.resendMessage(
+          resendCompleted = await _messageService.resendMessage(
             message.stanzaID,
             chatType: chatType,
             onLocalMessageStored: captureManualSendAgainStanzaId,
           );
         } else {
-          await _messageService.resendMessage(
+          resendCompleted = await _messageService.resendMessage(
             message.stanzaID,
             chatType: chatType,
           );
         }
       }
+    }
+
+    try {
+      if (resendMessageId.isNotEmpty) {
+        emit(state.markMessageResendLoading(resendMessageId));
+      }
+      await performResend();
     } on Exception catch (error, stackTrace) {
       _log.warning(_messageResendFailedLogMessage, error, stackTrace);
     } finally {
-      if (shouldMarkManualSendAgain && manualSendAgainStanzaId != null) {
-        try {
-          await _messageService.markMessageManualSendAgain(
-            stanzaID: message.stanzaID,
-            sendAgainStanzaID: manualSendAgainStanzaId!,
-          );
-        } on Exception catch (error, stackTrace) {
-          _log.warning(_messageResendFailedLogMessage, error, stackTrace);
+      if (shouldMarkManualSendAgain && resendCompleted) {
+        final sendAgainStanzaId = manualSendAgainStanzaId;
+        if (sendAgainStanzaId != null) {
+          try {
+            await _messageService.markMessageManualSendAgain(
+              stanzaID: message.stanzaID,
+              sendAgainStanzaID: sendAgainStanzaId,
+            );
+            manualSendAgainMarked = true;
+          } on Exception catch (error, stackTrace) {
+            _log.warning(_messageResendFailedLogMessage, error, stackTrace);
+          }
         }
+      }
+      if (resendMessageId.isNotEmpty) {
+        emit(state.clearMessageResendLoading(resendMessageId));
+      }
+      if (resendCompleted &&
+          (!shouldMarkManualSendAgain || manualSendAgainMarked)) {
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(message: ChatMessageKey.chatMessageSentAgain),
+          ),
+        );
       }
     }
   }
@@ -7903,27 +7933,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(shareReplies: replies));
   }
 
-  Future<void> _resendEmailMessage(
+  Future<bool> _resendEmailMessage(
     Message message,
     Emitter<ChatState> emit,
   ) async {
     final chat = state.chat;
     final service = _emailService;
-    if (chat == null || service == null) return;
+    if (chat == null || service == null) return false;
     final resolvedBody = message.plainText.trim();
     final normalizedHtml = message.normalizedHtmlBody;
     final hasBody = resolvedBody.isNotEmpty;
     final attachments = await _attachmentsForMessage(message);
     final hasAttachment = attachments.isNotEmpty;
     if (!hasBody && !hasAttachment) {
-      return;
+      return false;
     }
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
     shareContext ??= await service.shareContextForMessage(message);
     try {
       final resent = await service.resendMessages([message]);
       if (resent) {
-        return;
+        return true;
       }
       if (hasAttachment) {
         final caption = hasBody ? resolvedBody : null;
@@ -7933,6 +7963,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachments: attachments,
           caption: caption,
         );
+        if (bundled.isEmpty) {
+          return false;
+        }
         for (var index = 0; index < bundled.length; index += 1) {
           final attachment = bundled[index];
           final captionedAttachment = index == 0 && caption != null
@@ -7951,7 +7984,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (shouldBundle && bundled.isNotEmpty) {
           EmailAttachmentBundler.scheduleCleanup(bundled.first);
         }
-        return;
+        return true;
       }
       if (hasBody) {
         await service.sendMessage(
@@ -7963,6 +7996,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           forwardedFromJid: message.forwardedFromJid,
           forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
         );
+        return true;
       }
     } on DeltaChatException catch (error, stackTrace) {
       _log.warning(_emailResendFailedLogMessage, error, stackTrace);
@@ -7981,5 +8015,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception catch (error, stackTrace) {
       _log.warning(_emailResendFailedLogMessage, error, stackTrace);
     }
+    return false;
   }
 }

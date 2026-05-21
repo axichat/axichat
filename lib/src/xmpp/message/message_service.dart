@@ -7335,7 +7335,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     );
   }
 
-  Future<void> resendMessage(
+  Future<bool> resendMessage(
     String stanzaID, {
     ChatType? chatType,
     void Function(String stanzaId)? onLocalMessageStored,
@@ -7346,7 +7346,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     final normalizedHtml = message?.normalizedHtmlBody;
     final messageBody = message?.plainText ?? '';
     if (message == null || (messageBody.isEmpty && normalizedHtml == null)) {
-      return;
+      return false;
     }
     final CalendarFragment? fragment = message.calendarFragment;
     final CalendarTask? taskIcs = message.calendarTaskIcs;
@@ -7384,6 +7384,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
       onLocalMessageStored: onLocalMessageStored,
     );
+    return true;
   }
 
   Future<bool> _canSendChatMarkers({

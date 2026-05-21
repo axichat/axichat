@@ -166,6 +166,7 @@ abstract class ChatState with _$ChatState {
     @Default(<String, FanOutDraft>{}) Map<String, FanOutDraft> fanOutDrafts,
     @Default(<String, ShareContext>{}) Map<String, ShareContext> shareContexts,
     @Default(_emptyShareReplies) Map<String, List<Chat>> shareReplies,
+    @Default(<String>{}) Set<String> resendLoadingMessageIds,
     @Default(<int, String>{}) Map<int, String> emailRawHeadersByDeltaId,
     @Default(<int>{}) Set<int> emailRawHeadersLoading,
     @Default(<int>{}) Set<int> emailRawHeadersUnavailable,
@@ -229,6 +230,41 @@ extension ChatStateSettingsSync on ChatState {
     return copyWith(
       chatSettingStatuses: Map<ChatSettingId, RequestStatus>.unmodifiable(
         statuses,
+      ),
+    );
+  }
+}
+
+extension ChatStateResendLoading on ChatState {
+  bool isMessageResendLoading(String stanzaId) {
+    final trimmedStanzaId = stanzaId.trim();
+    return trimmedStanzaId.isNotEmpty &&
+        resendLoadingMessageIds.contains(trimmedStanzaId);
+  }
+
+  ChatState markMessageResendLoading(String stanzaId) {
+    final trimmedStanzaId = stanzaId.trim();
+    if (trimmedStanzaId.isEmpty ||
+        resendLoadingMessageIds.contains(trimmedStanzaId)) {
+      return this;
+    }
+    return copyWith(
+      resendLoadingMessageIds: Set<String>.unmodifiable(<String>{
+        ...resendLoadingMessageIds,
+        trimmedStanzaId,
+      }),
+    );
+  }
+
+  ChatState clearMessageResendLoading(String stanzaId) {
+    final trimmedStanzaId = stanzaId.trim();
+    if (trimmedStanzaId.isEmpty ||
+        !resendLoadingMessageIds.contains(trimmedStanzaId)) {
+      return this;
+    }
+    return copyWith(
+      resendLoadingMessageIds: Set<String>.unmodifiable(
+        Set<String>.from(resendLoadingMessageIds)..remove(trimmedStanzaId),
       ),
     );
   }

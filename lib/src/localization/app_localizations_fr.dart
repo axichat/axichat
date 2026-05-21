@@ -494,6 +494,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Vous n’avez pas la permission d’épingler des messages dans ce salon.';
 
   @override
+  String get chatMessageSentAgain => 'Message renvoyé.';
+
+  @override
   String get chatMessageForwarded => 'Message transféré.';
 
   @override
