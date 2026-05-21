@@ -141,12 +141,9 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
           return const SizedBox.shrink();
         }
         if (showLoading) {
-          return Padding(
-            padding: EdgeInsets.symmetric(vertical: spacing.m),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [AxiProgressIndicator(color: colors.mutedForeground)],
-            ),
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [AxiProgressIndicator(color: colors.mutedForeground)],
           );
         }
         final visiblePinnedMessages = widget.pinnedMessages
@@ -157,22 +154,19 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
             )
             .toList(growable: false);
         if (visiblePinnedMessages.isEmpty) {
-          return Padding(
-            padding: EdgeInsets.symmetric(vertical: spacing.m),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(
-                  child: Text(
-                    l10n.chatPinnedEmptyState,
-                    textAlign: TextAlign.center,
-                    style: context.textTheme.muted.copyWith(
-                      color: colors.mutedForeground,
-                    ),
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  l10n.chatPinnedEmptyState,
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.muted.copyWith(
+                    color: colors.mutedForeground,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         }
         return ListView.builder(
@@ -217,24 +211,25 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
       constraints: BoxConstraints(maxHeight: widget.maxHeight),
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.m,
-          vertical: spacing.m,
-        ),
         decoration: BoxDecoration(
           color: colors.card,
-          border: Border(bottom: BorderSide(color: colors.border)),
+          border: Border(bottom: context.borderSide),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _ChatIndexedHeader(
               title: l10n.chatPinnedMessagesTitle,
               onClose: widget.onClose,
-              padding: EdgeInsets.zero,
             ),
-            SizedBox(height: spacing.m),
-            Flexible(fit: FlexFit.loose, child: panelBody),
+            Flexible(
+              fit: FlexFit.loose,
+              child: Padding(
+                padding: EdgeInsets.all(spacing.m),
+                child: panelBody,
+              ),
+            ),
           ],
         ),
       ),

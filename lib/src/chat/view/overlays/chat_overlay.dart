@@ -145,15 +145,10 @@ class _ChatSubrouteShell extends StatelessWidget {
 }
 
 class _ChatIndexedHeader extends StatelessWidget {
-  const _ChatIndexedHeader({
-    required this.title,
-    required this.onClose,
-    this.padding,
-  });
+  const _ChatIndexedHeader({required this.title, required this.onClose});
 
   final String title;
   final VoidCallback onClose;
-  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -161,7 +156,7 @@ class _ChatIndexedHeader extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(border: Border(bottom: context.borderSide)),
       child: Padding(
-        padding: padding ?? EdgeInsets.all(spacing.m),
+        padding: EdgeInsets.all(spacing.m),
         child: Row(
           children: [
             AxiIconButton.ghost(
