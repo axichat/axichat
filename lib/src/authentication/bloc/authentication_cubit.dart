@@ -183,7 +183,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         initialState?.config ?? initialEndpointConfig ?? const EndpointConfig();
     _handleEndpointConfigUpdated(initialConfig);
     _lifecycleListener = AppLifecycleListener(
-      onResume: () => _handleLifecycleResume('onResume'),
+      onResume: () => _handleLifecycleResume(
+        'onResume',
+        emailRecovery: _EmailReconnectRecovery.foregroundResume,
+      ),
       onShow: () => _handleLifecycleResume('onShow'),
       onRestart: () => _handleLifecycleResume('onRestart'),
       onDetach: _handleLifecycleDetach,
@@ -201,9 +204,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           lifeCycleState == AppLifecycleState.resumed ||
               lifeCycleState == AppLifecycleState.inactive,
         );
-        if (lifeCycleState == AppLifecycleState.resumed) {
-          await _triggerEmailReconnect();
-        }
       },
     );
     _connectivitySubscription = xmppService.connectivityStream
@@ -1035,7 +1035,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  Future<void> _handleLifecycleResume(String source) async {
+  Future<void> _handleLifecycleResume(
+    String source, {
+    _EmailReconnectRecovery emailRecovery = _EmailReconnectRecovery.normal,
+  }) async {
     _cancelXmppReconnectPauseTimer();
     final activeLifecycleResume = _activeLifecycleResume;
     if (activeLifecycleResume != null) {
@@ -1043,11 +1046,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'Joining active lifecycle resume: source=$source '
         'state=${state.runtimeType}',
       );
+      if (emailRecovery == _EmailReconnectRecovery.foregroundResume) {
+        unawaited(
+          _triggerEmailReconnect(
+            waitForNetworkAvailable: false,
+            recovery: emailRecovery,
+          ),
+        );
+      }
       await activeLifecycleResume;
       return;
     }
 
-    final lifecycleResume = _runLifecycleResume(source: source);
+    final lifecycleResume = _runLifecycleResume(
+      source: source,
+      emailRecovery: emailRecovery,
+    );
     _activeLifecycleResume = lifecycleResume;
     try {
       await lifecycleResume;
@@ -1119,7 +1133,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _xmppService.pauseAutomaticReconnect();
   }
 
-  Future<void> _runLifecycleResume({required String source}) async {
+  Future<void> _runLifecycleResume({
+    required String source,
+    required _EmailReconnectRecovery emailRecovery,
+  }) async {
     _log.info(
       'Handling lifecycle resume: source=$source '
       'state=${state.runtimeType} '
@@ -1130,7 +1147,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is! AuthenticationComplete) {
       return;
     }
-    await _resumeStickySession(source: source);
+    await _resumeStickySession(source: source, emailRecovery: emailRecovery);
   }
 
   Future<void> _handleLifecycleDetach() async {
@@ -1163,7 +1180,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return false;
   }
 
-  Future<void> _resumeStickySession({required String source}) async {
+  Future<void> _resumeStickySession({
+    required String source,
+    required _EmailReconnectRecovery emailRecovery,
+  }) async {
     _log.info(
       'Resuming sticky session: source=$source '
       'canReconnect=${_canReconnectWithInMemoryCredentials()} '
@@ -1175,7 +1195,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
-    await _triggerEmailReconnect(waitForNetworkAvailable: false);
+    await _triggerEmailReconnect(
+      waitForNetworkAvailable: false,
+      recovery: emailRecovery,
+    );
     if (state is! AuthenticationComplete) {
       return;
     }
@@ -1233,11 +1256,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> _triggerEmailReconnect({
     bool waitForNetworkAvailable = true,
+    _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
   }) async {
     await _resumeEmailReconnectIfPossible(
       jid: _xmppService.myJid,
       requireStoredCredentials: state is! AuthenticationLogInInProgress,
       waitForNetworkAvailable: waitForNetworkAvailable,
+      recovery: recovery,
     );
   }
 
@@ -1245,6 +1270,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String? jid,
     required bool requireStoredCredentials,
     bool waitForNetworkAvailable = true,
+    _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
   }) async {
     final EndpointConfig config = endpointConfig;
     if (!config.smtpEnabled) return;
@@ -1255,6 +1281,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final isReady = emailService.syncState.status == EmailSyncStatus.ready;
     if (isReady && emailService.hasActiveSession) {
+      if (recovery == _EmailReconnectRecovery.foregroundResume) {
+        if (waitForNetworkAvailable) {
+          await _notifyEmailNetworkAvailable(emailService, recovery: recovery);
+        } else {
+          unawaited(
+            _notifyEmailNetworkAvailable(emailService, recovery: recovery),
+          );
+        }
+      }
       return;
     }
     if (requireStoredCredentials && jid != null) {
@@ -1270,18 +1305,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (waitForNetworkAvailable) {
-        await _notifyEmailNetworkAvailable(emailService);
+        await _notifyEmailNetworkAvailable(emailService, recovery: recovery);
       } else {
-        unawaited(_notifyEmailNetworkAvailable(emailService));
+        unawaited(
+          _notifyEmailNetworkAvailable(emailService, recovery: recovery),
+        );
       }
     } on Exception catch (error, stackTrace) {
       _log.finer('Email reconnect trigger failed', error, stackTrace);
     }
   }
 
-  Future<void> _notifyEmailNetworkAvailable(EmailService emailService) async {
+  Future<void> _notifyEmailNetworkAvailable(
+    EmailService emailService, {
+    required _EmailReconnectRecovery recovery,
+  }) async {
     try {
-      await emailService.handleNetworkAvailable();
+      switch (recovery) {
+        case _EmailReconnectRecovery.normal:
+          await emailService.handleNetworkAvailable();
+        case _EmailReconnectRecovery.foregroundResume:
+          await emailService.handleForegroundResumeNetworkAvailable();
+      }
     } on Exception catch (error, stackTrace) {
       _log.finer('Email reconnect trigger failed', error, stackTrace);
     }
@@ -3994,6 +4039,8 @@ enum _ProvisioningStatus {
 
   bool get shouldWipeCredentials => this == _ProvisioningStatus.blockedFatal;
 }
+
+enum _EmailReconnectRecovery { normal, foregroundResume }
 
 enum _ResumeResult {
   resumed,

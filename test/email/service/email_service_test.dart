@@ -2258,6 +2258,90 @@ void main() {
     },
   );
 
+  test(
+    'handleForegroundResumeNetworkAvailable restarts transport when Delta stays connecting',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        clearInteractions(transport);
+        when(() => transport.isIoRunning).thenReturn(true);
+        when(() => transport.connectivity()).thenAnswer((_) async => 2000);
+
+        await service.handleForegroundResumeNetworkAvailable();
+        await Future<void>.delayed(const Duration(milliseconds: 4300));
+        await pumpMicrotasks();
+
+        expect(service.syncState.status, EmailSyncStatus.recovering);
+        verify(() => transport.notifyNetworkAvailable()).called(3);
+        verify(() => transport.removeEventListener(any())).called(1);
+        verify(() => transport.stop()).called(1);
+        verify(() => transport.addEventListener(any())).called(1);
+        verify(() => transport.start()).called(1);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
+    'handleForegroundResumeNetworkAvailable only re-notifies when Delta reaches working',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+
+        clearInteractions(transport);
+        var connectivityCalls = 0;
+        when(() => transport.isIoRunning).thenReturn(true);
+        when(() => transport.connectivity()).thenAnswer((_) async {
+          connectivityCalls++;
+          return connectivityCalls >= 5 ? 3000 : 2000;
+        });
+
+        await service.handleForegroundResumeNetworkAvailable();
+        await Future<void>.delayed(const Duration(milliseconds: 4300));
+        await pumpMicrotasks();
+
+        expect(service.syncState.status, EmailSyncStatus.ready);
+        verify(() => transport.notifyNetworkAvailable()).called(2);
+        verifyNever(() => transport.removeEventListener(any()));
+        verifyNever(() => transport.stop());
+        verifyNever(() => transport.addEventListener(any()));
+        verifyNever(() => transport.start());
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
   for (final connectivity in const [3000, 4000]) {
     test(
       'handleNetworkAvailable does not restart transport at connectivity $connectivity',

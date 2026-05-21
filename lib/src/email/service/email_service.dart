@@ -79,6 +79,8 @@ extension _EmailSyncSourceLabels on _EmailSyncSource {
 
 enum _EmailRuntimePhase { stopped, running, stopping, disposing }
 
+enum _EmailReconnectRestartPolicy { offlineOnly, foregroundResume }
+
 enum EmailPasswordRefreshResult {
   confirmed,
   reconnectPending;
@@ -2240,7 +2242,15 @@ class EmailService {
     await _transport.registerPushToken(normalized);
   }
 
-  Future<void> handleNetworkAvailable() async {
+  Future<void> handleNetworkAvailable() =>
+      _handleNetworkAvailable(_EmailReconnectRestartPolicy.offlineOnly);
+
+  Future<void> handleForegroundResumeNetworkAvailable() =>
+      _handleNetworkAvailable(_EmailReconnectRestartPolicy.foregroundResume);
+
+  Future<void> _handleNetworkAvailable(
+    _EmailReconnectRestartPolicy restartPolicy,
+  ) async {
     if (_blocksRuntimeReentry) {
       return;
     }
@@ -2253,8 +2263,8 @@ class EmailService {
     await _runReconnectCatchUp();
     await _refreshConnectivityState(source: _EmailSyncSource.networkAvailable);
     fireAndForget(
-      _scheduleReconnectRestartIfOffline,
-      operationName: 'EmailService.reconnectRestartIfOffline',
+      () => _scheduleReconnectRestart(restartPolicy),
+      operationName: 'EmailService.reconnectRestart',
     );
   }
 
@@ -2372,8 +2382,9 @@ class EmailService {
       await _transport.notifyNetworkAvailable();
       await _bootstrapActiveAccountIfNeeded();
       fireAndForget(
-        _scheduleReconnectRestartIfOffline,
-        operationName: 'EmailService.reconnectRestartIfOffline',
+        () =>
+            _scheduleReconnectRestart(_EmailReconnectRestartPolicy.offlineOnly),
+        operationName: 'EmailService.reconnectRestart',
       );
       return !_blocksRuntimeReentry;
     } on Exception {
@@ -3970,7 +3981,9 @@ class EmailService {
     });
   }
 
-  Future<void> _scheduleReconnectRestartIfOffline() async {
+  Future<void> _scheduleReconnectRestart(
+    _EmailReconnectRestartPolicy restartPolicy,
+  ) async {
     await _reconnectRestartQueue.run(() async {
       if (!_acceptsRuntimeWork) {
         return;
@@ -3983,13 +3996,17 @@ class EmailService {
         final connectivity = await _refreshConnectivityState(
           source: _EmailSyncSource.reconnectRestart,
         );
-        if (connectivity == null ||
-            connectivity >= _connectivityConnectingMin) {
+        final restartConnectivity = await _connectivityForRestart(
+          connectivity: connectivity,
+          restartPolicy: restartPolicy,
+        );
+        if (restartConnectivity == null) {
           return;
         }
         _log.warning(
-          'Email transport still offline after network available; '
-          'restarting. connectivity=$connectivity',
+          'Email transport did not recover after network available; '
+          'restarting. connectivity=$restartConnectivity '
+          'policy=${restartPolicy.name}',
         );
         await stop();
         await start();
@@ -4006,6 +4023,47 @@ class EmailService {
         }
       }
     });
+  }
+
+  Future<int?> _connectivityForRestart({
+    required int? connectivity,
+    required _EmailReconnectRestartPolicy restartPolicy,
+  }) async {
+    if (connectivity == null) {
+      return null;
+    }
+    if (connectivity < _connectivityConnectingMin) {
+      return connectivity;
+    }
+    if (connectivity >= _connectivityWorkingMin) {
+      return null;
+    }
+    if (restartPolicy != _EmailReconnectRestartPolicy.foregroundResume) {
+      return null;
+    }
+    if (!_transport.isIoRunning) {
+      return null;
+    }
+    await _transport.notifyNetworkAvailable();
+    await Future.delayed(_reconnectRestartDelay);
+    if (!_acceptsRuntimeWork) {
+      return null;
+    }
+    final retryConnectivity = await _refreshConnectivityState(
+      source: _EmailSyncSource.reconnectRestart,
+    );
+    if (retryConnectivity == null) {
+      return null;
+    }
+    if (retryConnectivity >= _connectivityWorkingMin) {
+      await _runReconnectCatchUp();
+      return null;
+    }
+    if (retryConnectivity >= _connectivityConnectingMin &&
+        !_transport.isIoRunning) {
+      return null;
+    }
+    return retryConnectivity;
   }
 
   Future<void> _ensureReady() async {

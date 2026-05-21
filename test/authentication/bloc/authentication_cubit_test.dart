@@ -148,6 +148,9 @@ void main() {
     when(
       () => mockEmailService.handleNetworkAvailable(),
     ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.handleForegroundResumeNetworkAvailable(),
+    ).thenAnswer((_) async {});
     when(() => mockEmailService.handleNetworkLost()).thenAnswer((_) async {});
     when(
       () => mockEmailService.ensureProvisioned(
@@ -2538,12 +2541,33 @@ void main() {
   });
 
   group('lifecycle resume', () {
+    void moveLifecycleToHidden() {
+      final binding = WidgetsBinding.instance;
+      if (binding.lifecycleState == AppLifecycleState.detached) {
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      }
+      if (binding.lifecycleState == null ||
+          binding.lifecycleState == AppLifecycleState.resumed) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      }
+      if (binding.lifecycleState == AppLifecycleState.paused) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      }
+      if (binding.lifecycleState == AppLifecycleState.inactive) {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      }
+    }
+
     test(
       'starts email reconnect before XMPP without waiting for catch-up',
       () async {
         final emailCompleter = Completer<void>();
         final events = <String>[];
-        when(() => mockEmailService.handleNetworkAvailable()).thenAnswer((_) {
+        when(
+          () => mockEmailService.handleForegroundResumeNetworkAvailable(),
+        ).thenAnswer((_) {
           events.add('email');
           return emailCompleter.future;
         });
@@ -2579,6 +2603,112 @@ void main() {
         expect(emailCompleter.isCompleted, isFalse);
 
         emailCompleter.complete();
+        await pumpEventQueue();
+      },
+    );
+
+    test('foreground resume probes ready active email sessions', () async {
+      when(() => mockEmailService.hasActiveSession).thenReturn(true);
+      when(
+        () => mockEmailService.syncState,
+      ).thenReturn(const EmailSyncState.ready());
+
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      );
+      addTearDown(bloc.close);
+
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      await pumpEventQueue();
+
+      verify(
+        () => mockEmailService.handleForegroundResumeNetworkAvailable(),
+      ).called(1);
+      verifyNever(() => mockEmailService.handleNetworkAvailable());
+    });
+
+    test('show lifecycle does not run foreground email recovery', () async {
+      when(() => mockEmailService.hasActiveSession).thenReturn(true);
+      when(
+        () => mockEmailService.syncState,
+      ).thenReturn(const EmailSyncState.ready());
+
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      );
+      addTearDown(bloc.close);
+
+      moveLifecycleToHidden();
+      WidgetsBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      await pumpEventQueue();
+
+      verifyNever(
+        () => mockEmailService.handleForegroundResumeNetworkAvailable(),
+      );
+      verifyNever(() => mockEmailService.handleNetworkAvailable());
+    });
+
+    test(
+      'foreground resume probes email when joining active show resume',
+      () async {
+        final reconnectCompleter = Completer<bool>();
+        when(() => mockEmailService.hasActiveSession).thenReturn(true);
+        when(
+          () => mockEmailService.syncState,
+        ).thenReturn(const EmailSyncState.ready());
+        when(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) => reconnectCompleter.future);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        addTearDown(bloc.close);
+
+        moveLifecycleToHidden();
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        await untilCalled(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        );
+
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await pumpEventQueue();
+
+        verify(
+          () => mockEmailService.handleForegroundResumeNetworkAvailable(),
+        ).called(1);
+        verifyNever(() => mockEmailService.handleNetworkAvailable());
+
+        reconnectCompleter.complete(true);
         await pumpEventQueue();
       },
     );
@@ -3066,6 +3196,38 @@ void main() {
         );
 
         await subscription.cancel();
+        await bloc.close();
+      },
+    );
+
+    test(
+      'Connectivity connected uses normal email network recovery.',
+      () async {
+        final connectivityController =
+            StreamController<ConnectionState>.broadcast();
+        when(
+          () => mockXmppService.connectivityStream,
+        ).thenAnswer((_) => connectivityController.stream);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+
+        connectivityController.add(ConnectionState.connected);
+        await Future<void>.delayed(Duration.zero);
+
+        verify(() => mockEmailService.handleNetworkAvailable()).called(1);
+        verifyNever(
+          () => mockEmailService.handleForegroundResumeNetworkAvailable(),
+        );
+
+        await connectivityController.close();
         await bloc.close();
       },
     );
