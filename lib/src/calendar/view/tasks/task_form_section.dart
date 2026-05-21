@@ -1123,6 +1123,7 @@ class TaskDescriptionField extends StatelessWidget {
     this.onChanged,
     this.contentPadding,
     this.variant = AxiInputVariant.ghost,
+    this.groupId,
   });
 
   final TextEditingController controller;
@@ -1137,6 +1138,7 @@ class TaskDescriptionField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final EdgeInsetsGeometry? contentPadding;
   final AxiInputVariant variant;
+  final Object? groupId;
 
   @override
   Widget build(BuildContext context) {
@@ -1156,6 +1158,7 @@ class TaskDescriptionField extends StatelessWidget {
       enabled: enabled,
       contentPadding: contentPadding,
       variant: variant,
+      groupId: groupId,
     );
   }
 }

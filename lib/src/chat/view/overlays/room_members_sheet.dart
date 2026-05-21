@@ -1197,6 +1197,7 @@ class _InviteChipsSheet extends StatefulWidget {
 
 class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   late List<ComposerRecipient> _recipients;
+  final Object _recipientTextInputTapRegionGroup = Object();
 
   @override
   void initState() {
@@ -1324,6 +1325,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                 onRecipientRemoved: _removeRecipient,
                 collapsedByDefault: false,
                 horizontalPadding: 0,
+                tapRegionGroup: _recipientTextInputTapRegionGroup,
               );
             },
           ),

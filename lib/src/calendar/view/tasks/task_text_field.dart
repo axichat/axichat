@@ -39,6 +39,7 @@ class TaskTextField extends StatelessWidget {
     this.helperStyle,
     this.errorText,
     this.errorStyle,
+    this.groupId,
   }) : maxLines = maxLines ?? minLines;
 
   final TextEditingController controller;
@@ -66,6 +67,7 @@ class TaskTextField extends StatelessWidget {
   final TextStyle? helperStyle;
   final String? errorText;
   final TextStyle? errorStyle;
+  final Object? groupId;
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +97,7 @@ class TaskTextField extends StatelessWidget {
       padding: resolvedPadding,
       leading: prefix,
       trailing: suffix,
+      groupId: groupId,
     );
 
     if (labelText == null && helperText == null && errorText == null) {

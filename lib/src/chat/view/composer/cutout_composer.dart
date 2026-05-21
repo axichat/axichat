@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -72,6 +73,7 @@ class ChatCutoutComposer extends StatelessWidget {
     this.header,
     this.semanticsLabel,
     this.enabled = true,
+    this.groupId = axi.EditableText,
   });
 
   final TextEditingController controller;
@@ -86,6 +88,7 @@ class ChatCutoutComposer extends StatelessWidget {
   final Widget? header;
   final String? semanticsLabel;
   final bool enabled;
+  final Object groupId;
 
   @override
   Widget build(BuildContext context) {
@@ -176,6 +179,7 @@ class ChatCutoutComposer extends StatelessWidget {
                   label: semanticsLabel ?? hintText,
                   textField: true,
                   child: AxiTextField(
+                    groupId: groupId,
                     controller: controller,
                     focusNode: focusNode,
                     enabled: true,

@@ -80,6 +80,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   bool _isSending = false;
   bool _isReadOnly = _taskShareReadOnlyDefault;
   final TextEditingController _bodyController = TextEditingController();
+  final Object _recipientTextInputTapRegionGroup = Object();
 
   @override
   void initState() {
@@ -167,6 +168,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
                     allowAddressTargets: true,
                     showSuggestionsWhenEmpty: true,
                     horizontalPadding: 0,
+                    tapRegionGroup: _recipientTextInputTapRegionGroup,
                     onRecipientAdded: _handleRecipientAdded,
                     onRecipientRemoved: _handleRecipientRemoved,
                   ),
@@ -179,6 +181,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
               minLines: messageMinLines,
               maxLines: messageMaxLines,
               contentPadding: messageContentPadding,
+              groupId: _recipientTextInputTapRegionGroup,
             ),
           ),
           AxiSheetSection(

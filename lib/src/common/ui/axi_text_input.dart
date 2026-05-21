@@ -43,6 +43,7 @@ class AxiTextInput extends StatelessWidget {
     this.leading,
     this.trailing,
     this.constraints,
+    this.groupId,
   });
 
   final TextEditingController? controller;
@@ -76,6 +77,7 @@ class AxiTextInput extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
   final BoxConstraints? constraints;
+  final Object? groupId;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +113,7 @@ class AxiTextInput extends StatelessWidget {
       leading: leading,
       trailing: trailing,
       constraints: constraints,
+      groupId: groupId,
     );
   }
 }

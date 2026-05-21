@@ -370,6 +370,7 @@ class _InlineExpandedDraftComposerSectionState
                       ? () => unawaited(widget.onSave())
                       : null,
                   onTaskDropped: widget.onTaskDropped,
+                  tapRegionGroup: widget.tapRegionGroup,
                 ),
               );
             },
@@ -785,6 +786,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
       showExpandDraftAction: widget.showExpandDraftAction,
       expandDraftEnabled: widget.expandDraftEnabled,
       onExpandDraftPressed: widget.onExpandDraftPressed,
+      groupId: widget.tapRegionGroup,
     );
     final showAttachmentTray = pendingAttachments.isNotEmpty;
     final commandSurface = resolveCommandSurface(context);
@@ -841,6 +843,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
                       maxLines: widget.composerMaxLines,
                       semanticsLabel: context.l10n.chatComposerSemantics,
                       onSend: widget.onSend,
+                      groupId: widget.tapRegionGroup,
                       header: subjectHeader,
                       actions: widget.buildComposerAccessories(
                         canSend: sendEnabled,
@@ -969,6 +972,7 @@ class _SubjectTextField extends StatelessWidget {
     required this.showExpandDraftAction,
     required this.expandDraftEnabled,
     required this.onExpandDraftPressed,
+    required this.groupId,
   });
 
   final bool enabled;
@@ -978,6 +982,7 @@ class _SubjectTextField extends StatelessWidget {
   final bool showExpandDraftAction;
   final bool expandDraftEnabled;
   final VoidCallback onExpandDraftPressed;
+  final Object groupId;
 
   @override
   Widget build(BuildContext context) {
@@ -1020,6 +1025,7 @@ class _SubjectTextField extends StatelessWidget {
             SizedBox(width: spacing.xs),
             Expanded(
               child: AxiInput(
+                groupId: groupId,
                 controller: controller,
                 focusNode: focusNode,
                 enabled: enabled,

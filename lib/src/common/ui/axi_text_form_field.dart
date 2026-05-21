@@ -38,6 +38,7 @@ class AxiTextFormField extends StatelessWidget {
     this.crossAxisAlignment,
     this.constraints,
     this.padding,
+    this.groupId,
   });
 
   final TextEditingController? controller;
@@ -68,6 +69,7 @@ class AxiTextFormField extends StatelessWidget {
   final CrossAxisAlignment? crossAxisAlignment;
   final BoxConstraints? constraints;
   final EdgeInsets? padding;
+  final Object? groupId;
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +102,7 @@ class AxiTextFormField extends StatelessWidget {
       crossAxisAlignment: crossAxisAlignment,
       constraints: constraints,
       padding: padding,
+      groupId: groupId,
     );
   }
 }

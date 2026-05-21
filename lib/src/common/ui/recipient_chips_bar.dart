@@ -8,14 +8,15 @@ import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
-import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -72,6 +73,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   static const _collapsedVisibleCount = 4;
 
   late Object _tapRegionGroup;
+  final Object _fallbackTapRegionGroup = Object();
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   List<String> _databaseSuggestionAddresses = const [];
@@ -103,7 +105,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? axi.EditableText;
+    _tapRegionGroup = widget.tapRegionGroup ?? _fallbackTapRegionGroup;
     _focusNode.onKeyEvent = _handleKeyEvent;
     _renderedRecipients = _visibleRecipientsForState();
     _barCollapsed = widget.collapsedByDefault;
@@ -144,7 +146,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? axi.EditableText;
+      _tapRegionGroup = widget.tapRegionGroup ?? _fallbackTapRegionGroup;
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -545,14 +547,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         }
       }
 
-      final addresses = <String>{}
-        ..addAll(widget.suggestionAddresses)
-        ..addAll(
-          _databaseSuggestionAddresses.where((address) {
-            final normalized = _normalizeAddress(address);
-            return normalized == null || !hiddenAddresses.contains(normalized);
-          }),
-        );
+      final addresses = <String>{};
       void addAddress(String? raw) {
         final value = raw?.trim();
         if (value == null || value.isEmpty) return;
@@ -561,9 +556,17 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         if (_isWelcomeThreadAddress(value)) return;
         final normalized = _normalizeAddress(value);
         if (normalized != null && hiddenAddresses.contains(normalized)) return;
-        addresses.add(value);
+        if (value.isValidEmailAddress) {
+          addresses.add(value);
+        }
       }
 
+      for (final suggestion in widget.suggestionAddresses) {
+        addAddress(suggestion);
+      }
+      for (final suggestion in _databaseSuggestionAddresses) {
+        addAddress(suggestion);
+      }
       for (final chat in availableChats) {
         for (final address in chat.identityAddresses) {
           addAddress(address);
@@ -627,30 +630,79 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
   Future<bool> _handleManualEntry(String value) async {
     final trimmed = value.trim();
+    final shareTokenSignatureEnabled = context
+        .read<SettingsCubit>()
+        .state
+        .shareTokenSignatureEnabled;
+    if (widget.allowAddressTargets && trimmed.isValidEmailAddress) {
+      if (_isRoomNick(trimmed)) {
+        return false;
+      }
+      if (_isOwnAddress(trimmed)) {
+        return false;
+      }
+      if (_isWelcomeThreadAddress(trimmed)) {
+        return false;
+      }
+      return _handleRecipientAdded(
+        Contact.address(
+          address: trimmed,
+          shareSignatureEnabled: shareTokenSignatureEnabled,
+        ),
+      );
+    }
+    final displayNameTargets = _exactDisplayNameTargets(
+      trimmed,
+      shareTokenSignatureEnabled: shareTokenSignatureEnabled,
+    );
+    if (displayNameTargets.length == 1) {
+      return _handleRecipientAdded(displayNameTargets.single);
+    }
+    if (displayNameTargets.length > 1) {
+      return false;
+    }
     if (!widget.allowAddressTargets) {
       return false;
     }
-    if (!isValidAddress(trimmed)) {
-      return false;
+    return false;
+  }
+
+  List<Contact> _exactDisplayNameTargets(
+    String value, {
+    required bool shareTokenSignatureEnabled,
+  }) {
+    final query = value.trim().toLowerCase();
+    if (query.isEmpty) {
+      return const <Contact>[];
     }
-    if (_isRoomNick(trimmed)) {
-      return false;
+    final matches = <Contact>[];
+    final excludedKeys = _recipientNormalizedKeys();
+    final seen = <String>{};
+    for (final chat in _availableAutocompleteChats) {
+      final option = Contact.chat(
+        chat: chat,
+        shareSignatureEnabled:
+            chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
+      );
+      final rawKey = option.recipientId ?? option.resolvedAddress;
+      final normalizedKey = _normalizeAddress(rawKey);
+      if (normalizedKey == null ||
+          normalizedKey.isEmpty ||
+          seen.contains(normalizedKey) ||
+          excludedKeys.contains(normalizedKey)) {
+        continue;
+      }
+      final displayNames = <String>{option.displayName, chat.title};
+      final contactDisplayName = chat.contactDisplayName;
+      if (contactDisplayName != null) {
+        displayNames.add(contactDisplayName);
+      }
+      if (displayNames.any((name) => name.trim().toLowerCase() == query)) {
+        matches.add(option);
+        seen.add(normalizedKey);
+      }
     }
-    if (_isOwnAddress(trimmed)) {
-      return false;
-    }
-    if (_isWelcomeThreadAddress(trimmed)) {
-      return false;
-    }
-    return _handleRecipientAdded(
-      Contact.address(
-        address: trimmed,
-        shareSignatureEnabled: context
-            .read<SettingsCubit>()
-            .state
-            .shareTokenSignatureEnabled,
-      ),
-    );
+    return matches;
   }
 
   void _updateSuggestions(List<Contact> suggestions) {
@@ -947,10 +999,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       shareSignatureEnabled:
           chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
     );
-    Contact addressTarget(String address) => Contact.address(
-      address: address,
-      shareSignatureEnabled: shareTokenSignatureEnabled,
-    );
+
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
     final results = <Contact>[];
@@ -970,6 +1019,18 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return results.length >= maxSuggestions;
     }
 
+    bool addAddressTarget(String address) {
+      if (!address.isValidEmailAddress) {
+        return false;
+      }
+      return addTarget(
+        Contact.address(
+          address: address,
+          shareSignatureEnabled: shareTokenSignatureEnabled,
+        ),
+      );
+    }
+
     if (query.isEmpty) {
       for (final chat in candidates) {
         if (addTarget(chatTarget(chat))) {
@@ -978,7 +1039,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       }
       if (results.length < maxSuggestions) {
         for (final address in knownAddresses) {
-          if (addTarget(addressTarget(address))) {
+          if (addAddressTarget(address)) {
             return results;
           }
         }
@@ -996,7 +1057,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
     for (final address in knownAddresses) {
       if (address.toLowerCase().startsWith(query) &&
-          addTarget(addressTarget(address))) {
+          addAddressTarget(address)) {
         if (results.length >= maxSuggestions) {
           return results;
         }
@@ -1031,7 +1092,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
             });
       for (final entry in domainEntries) {
         final suggestion = '$localPart@${entry.domain}';
-        if (addTarget(addressTarget(suggestion))) {
+        if (addAddressTarget(suggestion)) {
           return results;
         }
       }
@@ -1640,24 +1701,21 @@ class _RecipientAutocompleteField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AutofillGroup(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 140, maxWidth: 260),
-        child: _RecipientAutocompleteOverlay(
-          controller: controller,
-          focusNode: focusNode,
-          tapRegionGroup: tapRegionGroup,
-          fieldOuterPadding: fieldOuterPadding,
-          fieldInnerPadding: fieldInnerPadding,
-          backgroundColor: backgroundColor,
-          avatarPathsByJid: avatarPathsByJid,
-          selfIdentity: selfIdentity,
-          showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
-          optionsBuilder: optionsBuilder,
-          highlightedIndexListenable: highlightedIndexListenable,
-          onOptionsChanged: onOptionsChanged,
-          onSubmitted: onSubmitted,
-          onRecipientAdded: onRecipientAdded,
-        ),
+      child: _RecipientAutocompleteOverlay(
+        controller: controller,
+        focusNode: focusNode,
+        tapRegionGroup: tapRegionGroup,
+        fieldOuterPadding: fieldOuterPadding,
+        fieldInnerPadding: fieldInnerPadding,
+        backgroundColor: backgroundColor,
+        avatarPathsByJid: avatarPathsByJid,
+        selfIdentity: selfIdentity,
+        showSuggestionsWhenEmpty: showSuggestionsWhenEmpty,
+        optionsBuilder: optionsBuilder,
+        highlightedIndexListenable: highlightedIndexListenable,
+        onOptionsChanged: onOptionsChanged,
+        onSubmitted: onSubmitted,
+        onRecipientAdded: onRecipientAdded,
       ),
     );
   }
@@ -1717,6 +1775,7 @@ final class _RecipientAutocompleteOverlayState
   final OverlayPortalController _portalController = OverlayPortalController();
 
   List<Contact> _options = const <Contact>[];
+  int? _handledOutsidePointer;
 
   @override
   bool get isAxiSurfaceOpen => _portalController.isShowing;
@@ -1910,7 +1969,7 @@ final class _RecipientAutocompleteOverlayState
     double widestText = 0.0;
     for (final option in _options) {
       final chat = option.chat;
-      final title = chat?.title ?? option.displayName;
+      final title = option.displayName;
       final subtitleSource =
           chat?.emailAddress ??
           chat?.jid ??
@@ -1965,12 +2024,67 @@ final class _RecipientAutocompleteOverlayState
     widget.onOptionsChanged(const <Contact>[]);
   }
 
-  void _handleOutsideTap() {
-    if (widget.controller.text.trim().isNotEmpty) {
+  void _handleOutsideTap(PointerDownEvent event) {
+    if (_handledOutsidePointer == event.pointer) {
+      return;
+    }
+    _handledOutsidePointer = event.pointer;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _handledOutsidePointer != event.pointer) {
+        return;
+      }
+      _handledOutsidePointer = null;
+    });
+    final hasPendingText = widget.controller.text.trim().isNotEmpty;
+    if (hasPendingText) {
+      GestureBinding.instance.cancelPointer(event.pointer);
       unawaited(widget.onSubmitted());
     }
-    widget.focusNode.unfocus();
     _dismissOverlay();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || FocusManager.instance.primaryFocus != widget.focusNode) {
+        return;
+      }
+      widget.focusNode.unfocus();
+    });
+  }
+
+  double _triggerWidth({
+    required BuildContext context,
+    required TextStyle textStyle,
+    required String hintText,
+    required String inputText,
+  }) {
+    final spacing = context.spacing;
+    final horizontalPadding =
+        (widget.fieldOuterPadding + widget.fieldInnerPadding) * 2;
+    final minWidth =
+        context.sizing.iconButtonTapTarget + horizontalPadding + spacing.xs;
+    final maxWidth = math.max(
+      minWidth,
+      context.sizing.menuMaxWidth - spacing.xl,
+    );
+    final availableTextWidth = math.max(
+      0.0,
+      maxWidth - horizontalPadding - spacing.s,
+    );
+    final painter = TextPainter(
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+      ellipsis: '…',
+    );
+
+    double measure(String value) {
+      painter
+        ..text = TextSpan(text: value, style: textStyle)
+        ..layout(minWidth: 0, maxWidth: availableTextWidth);
+      return painter.width;
+    }
+
+    final textWidth = math.max(measure(hintText), measure(inputText.trim()));
+    final idealWidth = textWidth + horizontalPadding + spacing.s;
+    return idealWidth.clamp(minWidth, maxWidth).toDouble();
   }
 
   @override
@@ -1978,6 +2092,7 @@ final class _RecipientAutocompleteOverlayState
     final colors = context.colorScheme;
     final hintColor = colors.mutedForeground.withValues(alpha: 0.8);
     final textStyle = context.textTheme.p;
+    final hintText = context.l10n.recipientsAddHint;
     final Widget child = CompositedTransformTarget(
       link: _layerLink,
       child: OverlayPortal(
@@ -2019,19 +2134,13 @@ final class _RecipientAutocompleteOverlayState
 
           return Stack(
             children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _handleOutsideTap,
-                ),
-              ),
               CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
                 offset: overlayOffset,
                 child: TapRegion(
                   groupId: widget.tapRegionGroup,
-                  onTapOutside: (_) => _handleOutsideTap(),
+                  onTapOutside: _handleOutsideTap,
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: ConstrainedBox(
@@ -2119,70 +2228,81 @@ final class _RecipientAutocompleteOverlayState
         },
         child: TapRegion(
           groupId: widget.tapRegionGroup,
-          onTapOutside: (_) => _handleOutsideTap(),
-          child: SizedBox(
-            key: _triggerKey,
-            height: chipsBarHeight,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.fieldOuterPadding,
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DecoratedBox(
-                  decoration: ShapeDecoration(
-                    color: widget.backgroundColor,
-                    shape: RoundedSuperellipseBorder(
-                      borderRadius: BorderRadius.circular(
-                        context.radii.squircle,
-                      ),
-                    ),
+          onTapOutside: _handleOutsideTap,
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: widget.controller,
+            builder: (context, value, _) {
+              final triggerWidth = _triggerWidth(
+                context: context,
+                textStyle: textStyle,
+                hintText: hintText,
+                inputText: value.text,
+              );
+              return SizedBox(
+                key: _triggerKey,
+                width: triggerWidth,
+                height: chipsBarHeight,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.fieldOuterPadding,
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: widget.fieldInnerPadding,
-                    ),
-                    child: AxiTextField(
-                      groupId: widget.tapRegionGroup,
-                      controller: widget.controller,
-                      focusNode: widget.focusNode,
-                      maxLines: 1,
-                      keyboardType: TextInputType.emailAddress,
-                      textCapitalization: TextCapitalization.none,
-                      autocorrect: false,
-                      autofillHints: const [AutofillHints.email],
-                      inputFormatters: [
-                        FilteringTextInputFormatter.deny(RegExp(r'\\s')),
-                      ],
-                      decoration: InputDecoration(
-                        hintText: context.l10n.recipientsAddHint,
-                        hintStyle: textStyle.copyWith(color: hintColor),
-                        isDense: true,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: DecoratedBox(
+                      decoration: ShapeDecoration(
+                        color: widget.backgroundColor,
+                        shape: RoundedSuperellipseBorder(
+                          borderRadius: BorderRadius.circular(
+                            context.radii.squircle,
+                          ),
+                        ),
                       ),
-                      style: textStyle,
-                      cursorHeight: textStyle.fontSize,
-                      textInputAction: TextInputAction.go,
-                      onEditingComplete: () => widget.focusNode.requestFocus(),
-                      textAlignVertical: TextAlignVertical.center,
-                      onSubmitted: (_) async {
-                        await widget.onSubmitted();
-                        if (!context.mounted) {
-                          return;
-                        }
-                        widget.focusNode.requestFocus();
-                      },
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: widget.fieldInnerPadding,
+                        ),
+                        child: AxiTextField(
+                          groupId: widget.tapRegionGroup,
+                          controller: widget.controller,
+                          focusNode: widget.focusNode,
+                          maxLines: 1,
+                          keyboardType: TextInputType.emailAddress,
+                          textCapitalization: TextCapitalization.none,
+                          autocorrect: false,
+                          autofillHints: const [AutofillHints.email],
+                          decoration: InputDecoration(
+                            hintText: hintText,
+                            hintStyle: textStyle.copyWith(color: hintColor),
+                            isDense: true,
+                            filled: false,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                          style: textStyle,
+                          cursorHeight: textStyle.fontSize,
+                          textInputAction: TextInputAction.go,
+                          onEditingComplete: () =>
+                              widget.focusNode.requestFocus(),
+                          onTapOutside: _handleOutsideTap,
+                          textAlignVertical: TextAlignVertical.center,
+                          onSubmitted: (_) async {
+                            await widget.onSubmitted();
+                            if (!context.mounted) {
+                              return;
+                            }
+                            widget.focusNode.requestFocus();
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -2313,7 +2433,7 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
           itemBuilder: (context, index) {
             final option = options[index];
             final chat = option.chat;
-            final title = chat?.title ?? option.displayName;
+            final title = option.displayName;
             final subtitleSource =
                 chat?.emailAddress ??
                 chat?.jid ??

@@ -93,6 +93,7 @@ class _CalendarCriticalPathShareSheetState
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
   Chat? _initialChat;
+  final Object _recipientTextInputTapRegionGroup = Object();
   bool _didInitRecipients = false;
 
   @override
@@ -205,6 +206,7 @@ class _CalendarCriticalPathShareSheetState
                       allowAddressTargets: false,
                       showSuggestionsWhenEmpty: true,
                       horizontalPadding: 0,
+                      tapRegionGroup: _recipientTextInputTapRegionGroup,
                       onRecipientAdded: _handleRecipientAdded,
                       onRecipientRemoved: _handleRecipientRemoved,
                     ),

@@ -113,6 +113,7 @@ class DraftFormState extends State<DraftForm> {
   late final TextEditingController _subjectTextController;
   late final FocusNode _bodyFocusNode;
   late final FocusNode _subjectFocusNode;
+  final Object _recipientTextInputTapRegionGroup = Object();
   late List<ComposerRecipient> _recipients;
   late List<PendingAttachment> _pendingAttachments;
   late List<DraftForwardedBlock> _forwardedBlocks;
@@ -791,6 +792,7 @@ class DraftFormState extends State<DraftForm> {
                           onDiscardPressed: _handleDiscard,
                           onSavePressed: _handleSaveDraft,
                           onTaskDropped: _handleTaskDrop,
+                          tapRegionGroup: _recipientTextInputTapRegionGroup,
                         );
                       },
                     ),

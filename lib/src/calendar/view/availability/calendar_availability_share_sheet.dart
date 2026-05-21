@@ -146,6 +146,7 @@ class _CalendarAvailabilityShareScreenState
   List<CalendarFreeBusyInterval> _draftIntervals =
       const <CalendarFreeBusyInterval>[];
   List<CalendarAvailabilityPreset> _presets = <CalendarAvailabilityPreset>[];
+  final Object _recipientTextInputTapRegionGroup = Object();
   Chat? _selectedChat;
   Chat? _lockedChat;
   bool _isSending = false;
@@ -247,6 +248,7 @@ class _CalendarAvailabilityShareScreenState
             onRecipientRemoved: _handleRecipientRemoved,
             onBack: _handleBackToEditor,
             onSend: _handleSendPressed,
+            tapRegionGroup: _recipientTextInputTapRegionGroup,
           );
     final Widget paddedStepChild = _step.isEditor
         ? Padding(
@@ -969,6 +971,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
     required this.onRecipientRemoved,
     required this.onBack,
     required this.onSend,
+    required this.tapRegionGroup,
   });
 
   final String rangeLabel;
@@ -980,6 +983,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   final ValueChanged<String> onRecipientRemoved;
   final VoidCallback onBack;
   final VoidCallback onSend;
+  final Object tapRegionGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -1043,6 +1047,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
                   collapsedByDefault: false,
                   allowAddressTargets: false,
                   showSuggestionsWhenEmpty: true,
+                  tapRegionGroup: tapRegionGroup,
                   onRecipientAdded: onRecipientAdded,
                   onRecipientRemoved: onRecipientRemoved,
                 ),
