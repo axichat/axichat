@@ -21,6 +21,7 @@ Future<T?> showFadeScaleDialog<T>({
   Offset? anchorPoint,
   bool useSafeArea = true,
   Duration? transitionDuration,
+  bool? requestFocus,
 }) {
   final Color? themeBarrierColor = Theme.of(context).dialogTheme.barrierColor;
   final Color resolvedBarrierColor =
@@ -52,6 +53,7 @@ Future<T?> showFadeScaleDialog<T>({
     useRootNavigator: useRootNavigator,
     routeSettings: routeSettings,
     anchorPoint: anchorPoint,
+    requestFocus: requestFocus,
     transitionDuration: resolvedDuration,
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       if (resolvedDuration == Duration.zero) {

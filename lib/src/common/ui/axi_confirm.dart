@@ -13,6 +13,8 @@ Future<bool?> confirm(
   String? text,
   String confirmLabel = '',
   String cancelLabel = '',
+  String? titleChipLabel,
+  AxiStatusChipTone titleChipTone = AxiStatusChipTone.neutral,
   bool destructiveConfirm = true,
   bool barrierDismissible = true,
   TextAlign messageAlign = TextAlign.start,
@@ -50,7 +52,13 @@ Future<bool?> confirm(
         constraints: BoxConstraints(
           maxWidth: dialogContext.sizing.dialogMaxWidth,
         ),
-        title: Text(resolvedTitle, style: context.modalHeaderTextStyle),
+        title: titleChipLabel == null
+            ? Text(resolvedTitle, style: context.modalHeaderTextStyle)
+            : _ConfirmTitle(
+                title: resolvedTitle,
+                titleChipLabel: titleChipLabel,
+                titleChipTone: titleChipTone,
+              ),
         actions: [
           AxiButton.outline(
             onPressed: () => pop(false),
@@ -62,6 +70,37 @@ Future<bool?> confirm(
       );
     },
   );
+}
+
+class _ConfirmTitle extends StatelessWidget {
+  const _ConfirmTitle({
+    required this.title,
+    required this.titleChipLabel,
+    required this.titleChipTone,
+  });
+
+  final String title;
+  final String titleChipLabel;
+  final AxiStatusChipTone titleChipTone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: context.modalHeaderTextStyle,
+          ),
+        ),
+        SizedBox(width: context.spacing.s),
+        AxiStatusChip(label: titleChipLabel, tone: titleChipTone),
+      ],
+    );
+  }
 }
 
 final class EmailSendConfirmationDecision {

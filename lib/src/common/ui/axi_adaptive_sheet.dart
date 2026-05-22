@@ -29,6 +29,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   bool useRootNavigator = false,
   bool isDismissible = true,
   bool showCloseButton = false,
+  bool? requestFocus,
   Color? backgroundColor,
   Color? barrierColor,
   EdgeInsets? dialogInsetPadding,
@@ -68,6 +69,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
       backgroundColor: Colors.transparent,
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
+      requestFocus: requestFocus,
       builder: (sheetContext) {
         final MediaQueryData mediaQuery = MediaQuery.of(sheetContext);
         final MediaQueryData viewMediaQuery = MediaQueryData.fromView(
@@ -152,6 +154,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
     useRootNavigator: useRootNavigator,
     barrierDismissible: isDismissible,
     useSafeArea: useSafeArea,
+    requestFocus: requestFocus,
     builder: (dialogContext) {
       final mediaQuery = MediaQuery.of(dialogContext);
       final Size size = mediaQuery.size;

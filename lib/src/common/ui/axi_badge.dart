@@ -6,7 +6,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/status_colors.dart';
 import 'package:axichat/src/common/ui/squircle_border.dart';
 
-enum AxiStatusChipTone { info, warning, neutral }
+enum AxiStatusChipTone { info, success, warning, neutral }
 
 class AxiStatusChip extends StatelessWidget {
   const AxiStatusChip({
@@ -24,6 +24,7 @@ class AxiStatusChip extends StatelessWidget {
     final spacing = context.spacing;
     final Color foreground = switch (tone) {
       AxiStatusChipTone.info => colors.primary,
+      AxiStatusChipTone.success => colors.green,
       AxiStatusChipTone.warning => colors.warning,
       AxiStatusChipTone.neutral => colors.mutedForeground,
     };
