@@ -6,6 +6,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -223,53 +224,9 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         SizedBox(height: spacing.xl),
-        const _EmailForwardingBackgroundMessagingSetting(),
+        const NotificationRequest(),
       ],
     );
-  }
-}
-
-class _EmailForwardingBackgroundMessagingSetting extends StatefulWidget {
-  const _EmailForwardingBackgroundMessagingSetting();
-
-  @override
-  State<_EmailForwardingBackgroundMessagingSetting> createState() =>
-      _EmailForwardingBackgroundMessagingSettingState();
-}
-
-class _EmailForwardingBackgroundMessagingSettingState
-    extends State<_EmailForwardingBackgroundMessagingSetting> {
-  bool _saving = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final state = context.watch<SettingsCubit>().state;
-    return ShadSwitch(
-      label: Text(l10n.notificationsMessageToggle),
-      sublabel: Text(l10n.notificationsRequiresRestart),
-      value: state.backgroundMessagingEnabled,
-      onChanged:
-          _saving ||
-              state.isGlobalSettingLoading(GlobalSettingId.backgroundMessaging)
-          ? null
-          : _toggleBackgroundMessaging,
-    );
-  }
-
-  Future<void> _toggleBackgroundMessaging(bool enabled) async {
-    setState(() {
-      _saving = true;
-    });
-    try {
-      await context.read<SettingsCubit>().toggleBackgroundMessaging(enabled);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-        });
-      }
-    }
   }
 }
 

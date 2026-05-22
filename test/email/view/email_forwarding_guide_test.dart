@@ -1,10 +1,14 @@
+import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +16,14 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  setUp(() {
+    foregroundServiceActive.value = true;
+  });
+
+  tearDown(() {
+    foregroundServiceActive.value = false;
+  });
+
   testWidgets('connect existing email guide omits notification request', (
     tester,
   ) async {
@@ -35,7 +47,9 @@ void main() {
       child: const EmailForwardingWelcomeContent(),
     );
 
-    expect(find.byType(NotificationRequest), findsNothing);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NotificationRequest), findsOneWidget);
     expect(find.text('Mute email notifications'), findsNothing);
     expect(find.text('Background notifications'), findsOneWidget);
     expect(find.text('Strongly recommended'), findsOneWidget);
@@ -51,6 +65,7 @@ void main() {
       child: const EmailForwardingWelcomeContent(),
     );
 
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(ShadSwitch));
     await tester.pump();
 
@@ -120,42 +135,53 @@ Future<void> _pumpEmailForwardingApp(
   required Widget child,
   _MockSettingsCubit? settingsCubit,
   _MockAuthenticationCubit? authenticationCubit,
+  _MockNotificationService? notificationService,
+  _MockXmppService? xmppService,
 }) {
   final cubit = settingsCubit ?? _settingsCubit();
   final authCubit =
       authenticationCubit ??
       _authenticationCubit(state: const AuthenticationNone());
+  final notifications = notificationService ?? _notificationService();
+  final xmpp = xmppService ?? _xmppService();
 
   return tester.pumpWidget(
-    MultiBlocProvider(
+    MultiRepositoryProvider(
       providers: [
-        BlocProvider<SettingsCubit>.value(value: cubit),
-        BlocProvider<AuthenticationCubit>.value(value: authCubit),
+        RepositoryProvider<Capability>.value(value: const _TestCapability()),
+        RepositoryProvider<NotificationService>.value(value: notifications),
+        RepositoryProvider<XmppService>.value(value: xmpp),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          platform: TargetPlatform.android,
-          useMaterial3: true,
-          colorSchemeSeed: const Color(0xFF0F172A),
-          brightness: Brightness.light,
-          extensions: const <ThemeExtension<dynamic>>[
-            axiBorders,
-            axiRadii,
-            axiSpacing,
-            axiSizing,
-            axiMotion,
-          ],
-        ),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('en'),
-        home: ShadTheme(
-          data: ShadThemeData(
-            colorScheme: const ShadSlateColorScheme.light(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<SettingsCubit>.value(value: cubit),
+          BlocProvider<AuthenticationCubit>.value(value: authCubit),
+        ],
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            platform: TargetPlatform.android,
+            useMaterial3: true,
+            colorSchemeSeed: const Color(0xFF0F172A),
             brightness: Brightness.light,
+            extensions: const <ThemeExtension<dynamic>>[
+              axiBorders,
+              axiRadii,
+              axiSpacing,
+              axiSizing,
+              axiMotion,
+            ],
           ),
-          child: Scaffold(body: child),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: ShadTheme(
+            data: ShadThemeData(
+              colorScheme: const ShadSlateColorScheme.light(),
+              brightness: Brightness.light,
+            ),
+            child: Scaffold(body: child),
+          ),
         ),
       ),
     ),
@@ -177,6 +203,23 @@ _MockSettingsCubit _settingsCubit({
   return settingsCubit;
 }
 
+_MockNotificationService _notificationService() {
+  final notificationService = _MockNotificationService();
+  when(
+    notificationService.hasAllNotificationPermissions,
+  ).thenAnswer((_) async => true);
+  when(
+    notificationService.requestAllNotificationPermissions,
+  ).thenAnswer((_) async => true);
+  return notificationService;
+}
+
+_MockXmppService _xmppService() {
+  final xmppService = _MockXmppService();
+  when(xmppService.ensureForegroundSocketIfActive).thenAnswer((_) async {});
+  return xmppService;
+}
+
 _MockAuthenticationCubit _authenticationCubit({
   required AuthenticationState state,
 }) {
@@ -188,6 +231,17 @@ _MockAuthenticationCubit _authenticationCubit({
   return authenticationCubit;
 }
 
+class _TestCapability extends Capability {
+  const _TestCapability();
+
+  @override
+  bool get canForegroundService => true;
+}
+
 class _MockAuthenticationCubit extends Mock implements AuthenticationCubit {}
 
+class _MockNotificationService extends Mock implements NotificationService {}
+
 class _MockSettingsCubit extends Mock implements SettingsCubit {}
+
+class _MockXmppService extends Mock implements XmppService {}
