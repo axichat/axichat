@@ -40,6 +40,114 @@ class RosterMatcher extends Matcher {
       });
 }
 
+class _RecordingRosterStateManager extends mox.BaseRosterStateManager {
+  String? committedVersion;
+  List<String> removed = const [];
+  List<mox.XmppRosterItem> modified = const [];
+  List<mox.XmppRosterItem> added = const [];
+
+  @override
+  Future<void> commitRoster(
+    String? version,
+    List<String> removed,
+    List<mox.XmppRosterItem> modified,
+    List<mox.XmppRosterItem> added,
+  ) async {
+    committedVersion = version;
+    this.removed = List<String>.from(removed);
+    this.modified = List<mox.XmppRosterItem>.from(modified);
+    this.added = List<mox.XmppRosterItem>.from(added);
+  }
+
+  @override
+  Future<mox.RosterCacheLoadResult> loadRosterCache() async {
+    return mox.RosterCacheLoadResult(committedVersion, <mox.XmppRosterItem>[]);
+  }
+}
+
+({
+  XmppRosterManager manager,
+  _RecordingRosterStateManager stateManager,
+  List<mox.StanzaDetails> replies,
+  List<mox.XmppEvent> events,
+})
+_buildRosterManagerHarness({
+  String selfJid = 'hello2@axi.im/axichat.resource',
+}) {
+  final stateManager = _RecordingRosterStateManager();
+  final replies = <mox.StanzaDetails>[];
+  final events = <mox.XmppEvent>[];
+  final manager = XmppRosterManager(stateManager)
+    ..register(
+      mox.XmppManagerAttributes(
+        sendStanza: (details) async {
+          replies.add(details);
+          return null;
+        },
+        sendNonza: (_) {},
+        getManagerById: <T extends mox.XmppManagerBase>(_) => null,
+        sendEvent: events.add,
+        getConnectionSettings: () => XmppConnectionSettings(
+          jid: mox.JID.fromString(selfJid),
+          password: password,
+        ),
+        getFullJID: () => mox.JID.fromString(selfJid),
+        getSocket: () => XmppSocketWrapper(),
+        getConnection: () => XmppConnection(),
+        getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(_) => null,
+      ),
+    );
+  return (
+    manager: manager,
+    stateManager: stateManager,
+    replies: replies,
+    events: events,
+  );
+}
+
+mox.Stanza _rosterPushStanza({
+  String? from,
+  String to = 'hello2@axi.im/axichat.resource',
+  String contactJid = 'hello@axi.im',
+  String? ask,
+  String? name,
+  String? ver,
+}) {
+  return mox.Stanza.iq(
+    type: 'set',
+    id: 'push-id',
+    to: to,
+    from: from,
+    children: [
+      mox.XMLNode.xmlns(
+        tag: 'query',
+        xmlns: mox.rosterXmlns,
+        attributes: <String, String>{'ver': ?ver},
+        children: [
+          mox.XMLNode(
+            tag: 'item',
+            attributes: <String, String>{
+              'jid': contactJid,
+              'subscription': 'none',
+              'ask': ?ask,
+              'name': ?name,
+            },
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+mox.StanzaHandlerData _stanzaHandlerData(mox.Stanza stanza) {
+  return mox.StanzaHandlerData(
+    false,
+    false,
+    stanza,
+    mox.TypedMap<mox.StanzaHandlerExtension>(),
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -104,6 +212,96 @@ void main() {
 
   tearDown(() {
     resetMocktailState();
+  });
+
+  group('XmppRosterManager', () {
+    test('Accepts a roster push without a from attribute.', () async {
+      final harness = _buildRosterManagerHarness();
+      final stanza = _rosterPushStanza();
+
+      final result = await harness.manager
+          .getIncomingStanzaHandlers()
+          .single
+          .callback(stanza, _stanzaHandlerData(stanza));
+
+      await pumpEventQueue();
+
+      expect(result.done, isTrue);
+      expect(harness.stateManager.added, hasLength(1));
+      expect(harness.replies, hasLength(1));
+      expect(harness.replies.single.stanza.type, 'result');
+      expect(harness.events, hasLength(1));
+      expect(harness.events.single, isA<mox.RosterUpdatedEvent>());
+    });
+
+    test(
+      'Accepts a roster push from the bare account when settings contain a full JID.',
+      () async {
+        final harness = _buildRosterManagerHarness();
+        final stanza = _rosterPushStanza(
+          from: 'hello2@axi.im',
+          ask: 'subscribe',
+          name: 'hello',
+          ver: 'v1',
+        );
+
+        final result = await harness.manager
+            .getIncomingStanzaHandlers()
+            .single
+            .callback(stanza, _stanzaHandlerData(stanza));
+
+        await pumpEventQueue();
+
+        expect(result.done, isTrue);
+        expect(harness.stateManager.added, hasLength(1));
+        expect(harness.stateManager.added.single.jid, 'hello@axi.im');
+        expect(harness.stateManager.added.single.ask, 'subscribe');
+        expect(harness.stateManager.added.single.name, 'hello');
+        expect(harness.stateManager.committedVersion, 'v1');
+        expect(harness.replies, hasLength(1));
+        expect(harness.replies.single.stanza.type, 'result');
+        expect(harness.events, hasLength(1));
+        expect(harness.events.single, isA<mox.RosterUpdatedEvent>());
+      },
+    );
+
+    test('Accepts a roster push from the full account JID.', () async {
+      final harness = _buildRosterManagerHarness();
+      final stanza = _rosterPushStanza(from: 'hello2@axi.im/axichat.resource');
+
+      final result = await harness.manager
+          .getIncomingStanzaHandlers()
+          .single
+          .callback(stanza, _stanzaHandlerData(stanza));
+
+      await pumpEventQueue();
+
+      expect(result.done, isTrue);
+      expect(harness.stateManager.added, hasLength(1));
+      expect(harness.replies, hasLength(1));
+      expect(harness.replies.single.stanza.type, 'result');
+      expect(harness.events, hasLength(1));
+      expect(harness.events.single, isA<mox.RosterUpdatedEvent>());
+    });
+
+    test('Rejects a roster push from a foreign account.', () async {
+      final harness = _buildRosterManagerHarness();
+      final stanza = _rosterPushStanza(from: 'intruder@axi.im');
+
+      final result = await harness.manager
+          .getIncomingStanzaHandlers()
+          .single
+          .callback(stanza, _stanzaHandlerData(stanza));
+
+      await pumpEventQueue();
+
+      expect(result.done, isTrue);
+      expect(harness.stateManager.added, isEmpty);
+      expect(harness.stateManager.modified, isEmpty);
+      expect(harness.stateManager.removed, isEmpty);
+      expect(harness.replies, isEmpty);
+      expect(harness.events, isEmpty);
+    });
   });
 
   group('rosterStream', () {

@@ -88,7 +88,7 @@ mixin RosterService
   @override
   List<mox.XmppManagerBase> get featureManagers => <mox.XmppManagerBase>[
     ...super.featureManagers,
-    mox.RosterManager(XmppRosterStateManager(owner: this)),
+    XmppRosterManager(XmppRosterStateManager(owner: this)),
   ];
 
   Future<void> requestRoster() async {
@@ -300,6 +300,69 @@ mixin RosterService
       _rosterLog.severe('Failed to reject subscription.', error, stackTrace);
       throw XmppRosterException();
     }
+  }
+}
+
+class XmppRosterManager extends mox.RosterManager {
+  XmppRosterManager(this._stateManager) : super(_stateManager);
+
+  final mox.BaseRosterStateManager _stateManager;
+
+  @override
+  List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
+    createIncomingStanzaHandler(
+      'iq',
+      xmlns: mox.rosterXmlns,
+      tagName: 'query',
+      callback: _onRosterPush,
+    ),
+  ];
+
+  Future<mox.StanzaHandlerData> _onRosterPush(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    final attrs = getAttributes();
+    final from = stanza.attributes['from'] as String?;
+    final selfJid = attrs.getConnectionSettings().jid.toBare();
+
+    logger.fine('Received roster push');
+
+    // Axichat keeps the bound resource in connectionSettings; roster pushes
+    // from the server are still addressed from the bare account JID.
+    if (from != null && mox.JID.fromString(from).toBare() != selfJid) {
+      logger.warning(
+        'Roster push invalid! Unexpected from attribute: ${stanza.toXml()}',
+      );
+      return state..done = true;
+    }
+
+    final query = stanza.firstTag('query', xmlns: mox.rosterXmlns)!;
+    logger.fine('Roster push: ${query.toXml()}');
+    final item = query.firstTag('item');
+
+    if (item == null) {
+      logger.warning('Received empty roster push');
+      return state..done = true;
+    }
+
+    unawaited(
+      _stateManager.handleRosterPush(
+        mox.RosterPushResult(
+          mox.XmppRosterItem(
+            jid: item.attributes['jid']! as String,
+            subscription: item.attributes['subscription']! as String,
+            ask: item.attributes['ask'] as String?,
+            name: item.attributes['name'] as String?,
+          ),
+          query.attributes['ver'] as String?,
+        ),
+      ),
+    );
+
+    await reply(state, 'result', []);
+
+    return state..done = true;
   }
 }
 
