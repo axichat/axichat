@@ -1103,14 +1103,8 @@ Widget _inputPromptSheet(
   required String description,
   required String primaryLabel,
 }) {
-  return AxiSheetScaffold.scroll(
+  return AxiSheetScaffold.sections(
     header: AxiSheetHeader(title: Text(title), onClose: close),
-    bodyPadding: EdgeInsets.fromLTRB(
-      context.spacing.m,
-      context.spacing.s,
-      context.spacing.m,
-      context.spacing.m,
-    ),
     footer: AxiSheetActions(
       children: [
         AxiButton.outline(
@@ -1120,13 +1114,20 @@ Widget _inputPromptSheet(
         AxiButton.primary(onPressed: close, child: Text(primaryLabel)),
       ],
     ),
-    children: [
-      Text(description, style: context.textTheme.muted),
-      SizedBox(height: context.spacing.m),
-      AxiTextFormField(
-        initialValue: fieldLabel,
-        placeholder: Text(fieldLabel),
-        textInputAction: TextInputAction.done,
+    sections: [
+      AxiSheetSection.compact(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(description, style: context.textTheme.muted),
+            SizedBox(height: context.spacing.m),
+            AxiTextFormField(
+              initialValue: fieldLabel,
+              placeholder: Text(fieldLabel),
+              textInputAction: TextInputAction.done,
+            ),
+          ],
+        ),
       ),
     ],
   );
@@ -1207,21 +1208,22 @@ Widget _fixedBodySheet(
   required IconData icon,
   required String body,
 }) {
-  return AxiSheetScaffold(
+  return AxiSheetScaffold.sections(
     header: AxiSheetHeader(title: Text(title), onClose: close),
-    body: Padding(
-      padding: EdgeInsets.all(context.spacing.m),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: context.sizing.attachmentPreviewExtent),
-            SizedBox(height: context.spacing.m),
-            Text(body, style: context.textTheme.muted),
-          ],
+    sections: [
+      AxiSheetSection(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: context.sizing.attachmentPreviewExtent),
+              SizedBox(height: context.spacing.m),
+              Text(body, style: context.textTheme.muted),
+            ],
+          ),
         ),
       ),
-    ),
+    ],
     footer: AxiSheetActions(
       children: [
         Expanded(

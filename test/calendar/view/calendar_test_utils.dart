@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/view/grid/calendar_grid.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/buttons/axi_plain_header_button.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -455,11 +456,16 @@ class CalendarWidgetHarness {
       findsOneWidget,
       reason: 'Expected to locate header text "$label" in calendar grid.',
     );
-    final headerInkWellFinder = find.ancestor(
+    final headerButtonFinder = find.ancestor(
       of: headerTextFinder,
-      matching: find.byType(InkWell),
+      matching: find.byType(AxiPlainHeaderButton),
     );
-    final rect = tester.getRect(headerInkWellFinder);
+    expect(
+      headerButtonFinder,
+      findsOneWidget,
+      reason: 'Expected "$label" to be inside the calendar day header button.',
+    );
+    final rect = tester.getRect(headerButtonFinder);
     _gridBodyTopCache = rect.bottom;
     return rect.bottom;
   }

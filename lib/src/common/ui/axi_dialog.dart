@@ -34,10 +34,6 @@ class AxiDialog extends StatelessWidget {
       horizontal: context.spacing.l,
       vertical: context.spacing.l,
     );
-    final EdgeInsets bodyPadding = EdgeInsets.symmetric(
-      horizontal: context.spacing.m,
-      vertical: context.spacing.s,
-    );
     final bool hasHeader = title != null || description != null;
     final Widget header = hasHeader
         ? AxiDialogHeader(
@@ -58,14 +54,13 @@ class AxiDialog extends StatelessWidget {
             body: const SizedBox.shrink(),
             footer: footer,
           )
-        : AxiDialogScaffold.scroll(
+        : AxiDialogScaffold.sections(
             header: header,
-            bodyPadding: bodyPadding,
             footer: footer,
             scrollPhysics: scrollable == false
                 ? const NeverScrollableScrollPhysics()
                 : null,
-            children: [child!],
+            sections: [AxiModalSection.compact(child: child!)],
           );
     return Dialog(
       insetPadding: dialogInsets,

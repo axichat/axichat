@@ -29,7 +29,6 @@ Future<void> showCalendarTaskShareSheet({
   required CalendarTask task,
 }) async {
   final l10n = context.l10n;
-  final bool isCalendarAnchored = CalendarModalScope.maybeOf(context) != null;
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
   final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
@@ -43,9 +42,7 @@ Future<void> showCalendarTaskShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: modalContext,
     isScrollControlled: true,
-    bottomSafeAreaBehavior: isCalendarAnchored
-        ? AxiSheetBottomSafeAreaBehavior.none
-        : AxiSheetBottomSafeAreaBehavior.insideSurface,
+    bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,

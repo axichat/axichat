@@ -15,13 +15,13 @@ double _sheetKeyboardInset(BuildContext context) {
 enum AxiSheetFooterKeyboardPolicy { alwaysVisible, hideWhenKeyboardOpen }
 
 class AxiSheetSection extends AxiModalSection {
-  const AxiSheetSection({required super.child, super.padding}) : super();
+  const AxiSheetSection({required super.child}) : super();
 
-  const AxiSheetSection.edge({required super.child, super.padding})
-    : super.edge();
+  const AxiSheetSection.compact({required super.child}) : super.compact();
 
-  const AxiSheetSection.topActions({required super.child, super.padding})
-    : super.topActions();
+  const AxiSheetSection.edge({required super.child}) : super.edge();
+
+  const AxiSheetSection.topActions({required super.child}) : super.topActions();
 }
 
 class AxiSheetHeader extends AxiModalHeader {
@@ -33,7 +33,6 @@ class AxiSheetHeader extends AxiModalHeader {
     super.subtitle,
     super.leading,
     super.actions,
-    super.padding,
     super.key,
   });
 }
@@ -47,7 +46,6 @@ class AxiSheetScaffold extends StatelessWidget {
     super.key,
   }) : _scrollChildren = null,
        _sections = null,
-       bodyPadding = null,
        scrollPhysics = null;
 
   const AxiSheetScaffold.scroll({
@@ -55,7 +53,6 @@ class AxiSheetScaffold extends StatelessWidget {
     required List<Widget> children,
     this.footer,
     this.footerKeyboardPolicy = AxiSheetFooterKeyboardPolicy.alwaysVisible,
-    this.bodyPadding,
     this.scrollPhysics,
     super.key,
   }) : body = null,
@@ -67,7 +64,6 @@ class AxiSheetScaffold extends StatelessWidget {
     required List<AxiSheetSection> sections,
     this.footer,
     this.footerKeyboardPolicy = AxiSheetFooterKeyboardPolicy.alwaysVisible,
-    this.bodyPadding,
     this.scrollPhysics,
     super.key,
   }) : body = null,
@@ -78,7 +74,6 @@ class AxiSheetScaffold extends StatelessWidget {
   final Widget? body;
   final List<Widget>? _scrollChildren;
   final List<AxiSheetSection>? _sections;
-  final EdgeInsets? bodyPadding;
   final ScrollPhysics? scrollPhysics;
   final Widget? footer;
   final AxiSheetFooterKeyboardPolicy footerKeyboardPolicy;
@@ -107,7 +102,6 @@ class AxiSheetScaffold extends StatelessWidget {
         footer: footer,
         footerKeyboardPolicy: policy,
         keyboardInset: _sheetKeyboardInset(context),
-        bodyPadding: bodyPadding,
         scrollPhysics: scrollPhysics,
         sectionDividerBuilder: (_) => const AxiSheetSectionDivider(),
         sections: sections,
@@ -118,7 +112,6 @@ class AxiSheetScaffold extends StatelessWidget {
       footer: footer,
       footerKeyboardPolicy: policy,
       keyboardInset: _sheetKeyboardInset(context),
-      bodyPadding: bodyPadding,
       scrollPhysics: scrollPhysics,
       children: _scrollChildren ?? const <Widget>[],
     );
@@ -140,7 +133,6 @@ class AxiSheetSectionDivider extends AxiModalSectionDivider {
 class AxiSheetActions extends AxiModalActions {
   const AxiSheetActions({
     required super.children,
-    super.padding,
     super.gap,
     super.includeTopDivider,
     super.key,

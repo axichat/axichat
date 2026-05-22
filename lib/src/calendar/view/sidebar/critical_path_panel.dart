@@ -23,46 +23,50 @@ const double _criticalPathZeroProgress = 0.0;
 const double _criticalPathMaxProgress = 1.0;
 const int _criticalPathSingleTaskCount = 1;
 
-class PendingCriticalPathSelection {
-  const PendingCriticalPathSelection({
+enum _CriticalPathMutationPhase { dispatched, observed }
+
+class _PendingCriticalPathSelection {
+  const _PendingCriticalPathSelection({
     required this.pathId,
     required this.pathName,
-    required this.taskIds,
     required this.taskCount,
     required this.remainingTaskIds,
     this.currentTaskId,
+    this.phase = _CriticalPathMutationPhase.dispatched,
   });
 
   final String pathId;
   final String pathName;
-  final Set<String> taskIds;
   final int taskCount;
   final List<String> remainingTaskIds;
   final String? currentTaskId;
+  final _CriticalPathMutationPhase phase;
 
-  PendingCriticalPathSelection copyWith({
+  _PendingCriticalPathSelection copyWith({
     List<String>? remainingTaskIds,
     String? currentTaskId,
+    _CriticalPathMutationPhase? phase,
   }) {
-    return PendingCriticalPathSelection(
+    return _PendingCriticalPathSelection(
       pathId: pathId,
       pathName: pathName,
-      taskIds: taskIds,
       taskCount: taskCount,
       remainingTaskIds: remainingTaskIds ?? this.remainingTaskIds,
-      currentTaskId: currentTaskId,
+      currentTaskId: currentTaskId ?? this.currentTaskId,
+      phase: phase ?? this.phase,
     );
   }
 }
 
-class PendingCriticalPathCreation {
-  const PendingCriticalPathCreation({
+class _PendingCriticalPathCreation {
+  const _PendingCriticalPathCreation({
     required this.name,
     required this.targetTaskIds,
     required this.remainingTaskIds,
     required this.taskCount,
     this.createdPathId,
     this.currentTaskId,
+    this.phase = _CriticalPathMutationPhase.dispatched,
   });
 
   final String name;
@@ -71,19 +75,22 @@ class PendingCriticalPathCreation {
   final int taskCount;
   final String? createdPathId;
   final String? currentTaskId;
+  final _CriticalPathMutationPhase phase;
 
-  PendingCriticalPathCreation copyWith({
+  _PendingCriticalPathCreation copyWith({
     String? createdPathId,
     List<String>? remainingTaskIds,
     String? currentTaskId,
+    _CriticalPathMutationPhase? phase,
   }) {
-    return PendingCriticalPathCreation(
+    return _PendingCriticalPathCreation(
       name: name,
       targetTaskIds: targetTaskIds,
       remainingTaskIds: remainingTaskIds ?? this.remainingTaskIds,
       taskCount: taskCount,
       createdPathId: createdPathId ?? this.createdPathId,
-      currentTaskId: currentTaskId,
+      currentTaskId: currentTaskId ?? this.currentTaskId,
+      phase: phase ?? this.phase,
     );
   }
 }
@@ -888,6 +895,7 @@ CriticalPathProgress computeCriticalPathProgress({
     );
   }
   int completed = _criticalPathZeroCount;
+  double progressUnits = _criticalPathZeroProgress;
   for (final String id in path.taskIds) {
     final String baseId = baseTaskIdFrom(id);
     final CalendarTask? task = tasks[baseId] ?? tasks[id];
@@ -896,11 +904,19 @@ CriticalPathProgress computeCriticalPathProgress({
     }
     if (task.isCompleted) {
       completed += _criticalPathTaskUnit;
+      progressUnits += _criticalPathTaskUnit;
       continue;
+    }
+    final List<TaskChecklistItem> checklist = task.checklist;
+    if (checklist.isNotEmpty) {
+      final int completedChecklistItems = checklist
+          .where((item) => item.isCompleted)
+          .length;
+      progressUnits += completedChecklistItems / checklist.length;
     }
     break;
   }
-  final double progressValue = (completed / total).clamp(
+  final double progressValue = (progressUnits / total).clamp(
     _criticalPathZeroProgress,
     _criticalPathMaxProgress,
   );
@@ -916,22 +932,17 @@ class CriticalPathMembershipList extends StatelessWidget {
     super.key,
     required this.paths,
     this.onRemovePath,
-    this.emptyLabel,
   });
 
   final List<CalendarCriticalPath> paths;
   final ValueChanged<String>? onRemovePath;
-  final String? emptyLabel;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     if (paths.isEmpty) {
-      if (emptyLabel == null || emptyLabel!.isEmpty) {
-        return const SizedBox.shrink();
-      }
-      return Text(emptyLabel!, style: textTheme.muted);
+      return const SizedBox.shrink();
     }
     return Wrap(
       spacing: context.spacing.xxs,
@@ -971,6 +982,33 @@ class CriticalPathMembershipList extends StatelessWidget {
             ),
           )
           .toList(),
+    );
+  }
+}
+
+class CriticalPathMembershipControls extends StatelessWidget {
+  const CriticalPathMembershipControls({
+    super.key,
+    required this.addButton,
+    required this.paths,
+    this.onRemovePath,
+  });
+
+  final Widget addButton;
+  final List<CalendarCriticalPath> paths;
+  final ValueChanged<String>? onRemovePath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        addButton,
+        if (paths.isNotEmpty) ...[
+          SizedBox(height: context.spacing.s),
+          CriticalPathMembershipList(paths: paths, onRemovePath: onRemovePath),
+        ],
+      ],
     );
   }
 }
@@ -1039,7 +1077,7 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
         padding: EdgeInsets.zero,
         shrinkWrap: true,
         itemCount: widget.paths.length,
-        separatorBuilder: (_, _) => SizedBox(height: context.spacing.xxs),
+        separatorBuilder: (_, _) => SizedBox(height: context.spacing.s),
         itemBuilder: (context, index) {
           final path = widget.paths[index];
           return AxiTapBounce(
@@ -1112,398 +1150,628 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
   required BuildContext context,
   required List<CalendarCriticalPath> paths,
   BaseCalendarBloc? bloc,
-  ValueNotifier<PendingCriticalPathSelection?>? pendingSelectionNotifier,
-  ValueNotifier<PendingCriticalPathCreation?>? pendingCreationNotifier,
   bool stayOpen = false,
-  Future<String?> Function(CalendarCriticalPath path)? onPathSelected,
-  Future<String?> Function()? onCreateNewPath,
+  Future<String?> Function(
+    BuildContext pickerContext,
+    CalendarCriticalPath path,
+  )?
+  onPathSelected,
+  Future<String?> Function(BuildContext pickerContext)? onCreateNewPath,
 }) {
-  final ValueNotifier<String?> statusNotifier = ValueNotifier<String?>(null);
-  final ValueNotifier<List<CalendarCriticalPath>> pathsNotifier =
-      ValueNotifier<List<CalendarCriticalPath>>(
-        bloc?.state.criticalPaths ?? paths,
-      );
-  final bool ownsSelectionNotifier = pendingSelectionNotifier == null;
-  final ValueNotifier<PendingCriticalPathSelection?> selectionNotifier =
-      pendingSelectionNotifier ??
-      ValueNotifier<PendingCriticalPathSelection?>(null);
-  final bool ownsCreationNotifier = pendingCreationNotifier == null;
-  final ValueNotifier<PendingCriticalPathCreation?> creationNotifier =
-      pendingCreationNotifier ??
-      ValueNotifier<PendingCriticalPathCreation?>(null);
-  final result = showAdaptiveBottomSheet<CriticalPathPickerResult>(
+  return _showCriticalPathPickerRoute(
+    context: context,
+    paths: paths,
+    bloc: bloc,
+    stayOpen: stayOpen,
+    onPathSelected: onPathSelected,
+    onCreateNewPath: onCreateNewPath,
+  );
+}
+
+Future<CriticalPathPickerResult?> _showCriticalPathPickerRoute({
+  required BuildContext context,
+  required List<CalendarCriticalPath> paths,
+  BaseCalendarBloc? bloc,
+  bool stayOpen = false,
+  Future<String?> Function(
+    BuildContext pickerContext,
+    CalendarCriticalPath path,
+  )?
+  onPathSelected,
+  Future<String?> Function(BuildContext pickerContext)? onCreateNewPath,
+  _CriticalPathTaskAddIntent? taskAddIntent,
+}) {
+  return showAdaptiveBottomSheet<CriticalPathPickerResult>(
     context: context,
     dialogMaxWidth: context.sizing.dialogMaxWidth,
     preferDialogOnMobile: true,
     surfacePadding: EdgeInsets.zero,
     showCloseButton: false,
     builder: (sheetContext) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final colors = context.colorScheme;
-          final textTheme = context.textTheme;
-          final screenHeight = MediaQuery.sizeOf(context).height;
-          final availableHeight = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : screenHeight;
-          final listViewportHeight = availableHeight * 0.7;
-
-          bool isBusy(CalendarState? state) {
-            if (state == null) {
-              return false;
-            }
-            final bool hasPendingSelection = selectionNotifier.value != null;
-            final bool hasPendingCreation = creationNotifier.value != null;
-            return state.isCriticalPathMutating &&
-                (hasPendingSelection || hasPendingCreation);
-          }
-
-          Widget content = ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: constraints.maxWidth,
-              maxHeight: availableHeight,
-            ),
-            child: AxiSheetScaffold(
-              header: AxiSheetHeader(
-                title: Text(sheetContext.l10n.calendarCriticalPathAddToTitle),
-                onClose: () => Navigator.of(sheetContext).maybePop(),
-              ),
-              body: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  context.spacing.m,
-                  context.spacing.s,
-                  context.spacing.m,
-                  context.spacing.m,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ValueListenableBuilder<List<CalendarCriticalPath>>(
-                      valueListenable: pathsNotifier,
-                      builder: (context, visiblePaths, _) {
-                        if (visiblePaths.isEmpty) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                context.l10n.calendarCriticalPathCreatePrompt,
-                                style: textTheme.muted,
-                              ),
-                              SizedBox(height: context.spacing.m),
-                            ],
-                          );
-                        }
-                        return ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: listViewportHeight,
-                          ),
-                          child: AnimatedBuilder(
-                            animation: Listenable.merge([
-                              selectionNotifier,
-                              creationNotifier,
-                            ]),
-                            builder: (context, _) {
-                              final CalendarState? currentState = bloc?.state;
-                              return _CriticalPathPickerList(
-                                paths: visiblePaths,
-                                isBusy: isBusy(currentState),
-                                onPathPressed: (path) async {
-                                  if (stayOpen && onPathSelected != null) {
-                                    final String? status = await onPathSelected(
-                                      path,
-                                    );
-                                    if (!sheetContext.mounted) {
-                                      return;
-                                    }
-                                    if (status != null) {
-                                      statusNotifier.value = status;
-                                    }
-                                    return;
-                                  }
-                                  Navigator.of(
-                                    sheetContext,
-                                  ).pop(CriticalPathPickerResult.path(path.id));
-                                },
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                    ValueListenableBuilder<String?>(
-                      valueListenable: statusNotifier,
-                      builder: (context, status, _) {
-                        if (status == null) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            top: context.spacing.s,
-                            bottom: context.spacing.s,
-                          ),
-                          child: Container(
-                            padding: EdgeInsets.all(context.spacing.xs),
-                            decoration: BoxDecoration(
-                              color: colors.primary.withValues(
-                                alpha: context.motion.tapHoverAlpha,
-                              ),
-                              borderRadius: context.radius,
-                              border: Border.fromBorderSide(
-                                context.borderSide.copyWith(
-                                  color: colors.primary,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  size: context.sizing.menuItemIconSize,
-                                  color: colors.primary,
-                                ),
-                                SizedBox(width: context.spacing.xxs),
-                                Expanded(
-                                  child: Text(
-                                    status,
-                                    style: textTheme.small.strong.copyWith(
-                                      color: colors.primary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              footer: AnimatedBuilder(
-                animation: Listenable.merge([
-                  selectionNotifier,
-                  creationNotifier,
-                ]),
-                builder: (context, _) {
-                  final CalendarState? currentState = bloc?.state;
-                  final bool busy = isBusy(currentState);
-                  return AxiSheetActions(
-                    children: [
-                      AxiButton.ghost(
-                        loading: busy,
-                        onPressed: busy
-                            ? null
-                            : () async {
-                                if (stayOpen && onCreateNewPath != null) {
-                                  final String? status =
-                                      await onCreateNewPath();
-                                  if (!sheetContext.mounted) {
-                                    return;
-                                  }
-                                  if (status != null) {
-                                    statusNotifier.value = status;
-                                  }
-                                  return;
-                                }
-                                Navigator.of(sheetContext).pop(
-                                  const CriticalPathPickerResult.createNew(),
-                                );
-                              },
-                        leading: Icon(
-                          Icons.add,
-                          size: context.sizing.menuItemIconSize,
-                        ),
-                        child: Text(context.l10n.calendarCriticalPathsNew),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          );
-          if (bloc == null) {
-            return content;
-          }
-          content = BlocListener<BaseCalendarBloc, CalendarState>(
-            bloc: bloc,
-            listener: (context, state) {
-              pathsNotifier.value = state.criticalPaths;
-              final PendingCriticalPathSelection? pendingSelection =
-                  selectionNotifier.value;
-              if (pendingSelection != null && !state.isCriticalPathMutating) {
-                if (state.criticalPathMutationError != null) {
-                  statusNotifier.value = null;
-                  selectionNotifier.value = null;
-                  FeedbackSystem.showError(
-                    context,
-                    context.l10n.calendarCriticalPathAddFailed(
-                      pendingSelection.taskCount,
-                    ),
-                  );
-                } else {
-                  final String? currentTaskId = pendingSelection.currentTaskId;
-                  final CalendarCriticalPath? path =
-                      state.model.criticalPaths[pendingSelection.pathId];
-                  final bool added =
-                      currentTaskId != null &&
-                      state.lastCriticalPathTaskAddedPathId ==
-                          pendingSelection.pathId &&
-                      state.lastCriticalPathTaskAddedTaskId == currentTaskId &&
-                      path != null &&
-                      path.taskIds.contains(currentTaskId);
-                  if (!added) {
-                    statusNotifier.value = null;
-                    selectionNotifier.value = null;
-                    FeedbackSystem.showError(
-                      context,
-                      context.l10n.calendarCriticalPathAddFailed(
-                        pendingSelection.taskCount,
-                      ),
-                    );
-                  } else if (pendingSelection.remainingTaskIds.length ==
-                      _criticalPathSingleTaskCount) {
-                    selectionNotifier.value = null;
-                    statusNotifier.value = context.l10n
-                        .calendarCriticalPathAddSuccess(
-                          pendingSelection.taskCount,
-                          pendingSelection.pathName,
-                        );
-                  } else {
-                    final List<String> remainingTaskIds = List<String>.from(
-                      pendingSelection.remainingTaskIds.skip(1),
-                    );
-                    final String nextTaskId = remainingTaskIds.first;
-                    bloc.add(
-                      CalendarEvent.criticalPathTaskAdded(
-                        pathId: pendingSelection.pathId,
-                        taskId: nextTaskId,
-                      ),
-                    );
-                    selectionNotifier.value = pendingSelection.copyWith(
-                      remainingTaskIds: remainingTaskIds,
-                      currentTaskId: nextTaskId,
-                    );
-                  }
-                }
-              }
-
-              final PendingCriticalPathCreation? pendingCreation =
-                  creationNotifier.value;
-              if (pendingCreation == null || state.isCriticalPathMutating) {
-                return;
-              }
-              if (pendingCreation.createdPathId == null &&
-                  state.criticalPathMutationError != null) {
-                creationNotifier.value = null;
-                FeedbackSystem.showError(
-                  context,
-                  pendingCreation.createdPathId == null
-                      ? context.l10n.calendarCriticalPathCreateFailed
-                      : context.l10n.calendarCriticalPathAddFailed(
-                          pendingCreation.taskCount,
-                        ),
-                );
-                return;
-              }
-              if (pendingCreation.createdPathId == null) {
-                final String? createdPathId = state.lastCreatedCriticalPathId;
-                if (createdPathId == null) {
-                  return;
-                }
-                if (pendingCreation.targetTaskIds.isEmpty) {
-                  creationNotifier.value = null;
-                  statusNotifier.value = context.l10n
-                      .calendarCriticalPathQueuedCreate(pendingCreation.name);
-                  return;
-                }
-                final String nextTaskId =
-                    pendingCreation.remainingTaskIds.first;
-                bloc.add(
-                  CalendarEvent.criticalPathTaskAdded(
-                    pathId: createdPathId,
-                    taskId: nextTaskId,
-                  ),
-                );
-                creationNotifier.value = pendingCreation.copyWith(
-                  createdPathId: createdPathId,
-                  currentTaskId: nextTaskId,
-                );
-                return;
-              }
-              if (state.criticalPathMutationError != null) {
-                creationNotifier.value = null;
-                FeedbackSystem.showError(
-                  context,
-                  context.l10n.calendarCriticalPathAddFailed(
-                    pendingCreation.taskCount,
-                  ),
-                );
-                return;
-              }
-              final String? currentTaskId = pendingCreation.currentTaskId;
-              final CalendarCriticalPath? path =
-                  state.model.criticalPaths[pendingCreation.createdPathId];
-              final bool createdAndAdded =
-                  currentTaskId != null &&
-                  state.lastCriticalPathTaskAddedPathId ==
-                      pendingCreation.createdPathId &&
-                  state.lastCriticalPathTaskAddedTaskId == currentTaskId &&
-                  path != null &&
-                  path.taskIds.contains(currentTaskId);
-              if (!createdAndAdded) {
-                creationNotifier.value = null;
-                FeedbackSystem.showError(
-                  context,
-                  context.l10n.calendarCriticalPathAddFailed(
-                    pendingCreation.taskCount,
-                  ),
-                );
-                return;
-              }
-              if (pendingCreation.remainingTaskIds.length >
-                  _criticalPathSingleTaskCount) {
-                final List<String> remainingTaskIds = List<String>.from(
-                  pendingCreation.remainingTaskIds.skip(1),
-                );
-                final String nextTaskId = remainingTaskIds.first;
-                bloc.add(
-                  CalendarEvent.criticalPathTaskAdded(
-                    pathId: pendingCreation.createdPathId!,
-                    taskId: nextTaskId,
-                  ),
-                );
-                creationNotifier.value = pendingCreation.copyWith(
-                  remainingTaskIds: remainingTaskIds,
-                  currentTaskId: nextTaskId,
-                );
-                return;
-              }
-              creationNotifier.value = null;
-              statusNotifier.value = context.l10n
-                  .calendarCriticalPathCreateSuccess(
-                    pendingCreation.taskCount,
-                    pendingCreation.name,
-                  );
-            },
-            child: content,
-          );
-          return content;
-        },
+      return _CriticalPathPickerSheet(
+        paths: paths,
+        bloc: bloc,
+        stayOpen: stayOpen,
+        onPathSelected: onPathSelected,
+        onCreateNewPath: onCreateNewPath,
+        taskAddIntent: taskAddIntent,
       );
     },
   );
-  return result.whenComplete(() {
-    statusNotifier.dispose();
-    pathsNotifier.dispose();
-    if (ownsSelectionNotifier) {
-      selectionNotifier.dispose();
-    }
-    if (ownsCreationNotifier) {
-      creationNotifier.dispose();
-    }
+}
+
+class _CriticalPathTaskAddIntent {
+  const _CriticalPathTaskAddIntent({
+    required this.tasks,
+    required this.pathNamesById,
   });
+
+  final List<CalendarTask> tasks;
+  final Map<String, String> pathNamesById;
+
+  int get taskCount => tasks.length;
+
+  Set<String> get targetTaskIds =>
+      tasks.map((task) => baseTaskIdFrom(task.id)).toSet();
+}
+
+class _CriticalPathPickerSheet extends StatefulWidget {
+  const _CriticalPathPickerSheet({
+    required this.paths,
+    required this.stayOpen,
+    this.bloc,
+    this.onPathSelected,
+    this.onCreateNewPath,
+    this.taskAddIntent,
+  });
+
+  final List<CalendarCriticalPath> paths;
+  final BaseCalendarBloc? bloc;
+  final bool stayOpen;
+  final Future<String?> Function(
+    BuildContext pickerContext,
+    CalendarCriticalPath path,
+  )?
+  onPathSelected;
+  final Future<String?> Function(BuildContext pickerContext)? onCreateNewPath;
+  final _CriticalPathTaskAddIntent? taskAddIntent;
+
+  @override
+  State<_CriticalPathPickerSheet> createState() =>
+      _CriticalPathPickerSheetState();
+}
+
+class _CriticalPathPickerSheetState extends State<_CriticalPathPickerSheet> {
+  String? _status;
+  _PendingCriticalPathSelection? _pendingSelection;
+  _PendingCriticalPathCreation? _pendingCreation;
+
+  @override
+  Widget build(BuildContext context) {
+    final BaseCalendarBloc? bloc = widget.bloc;
+    if (bloc == null) {
+      return _CriticalPathPickerScaffold(
+        paths: widget.paths,
+        status: _status,
+        busy: _isBusy(null),
+        onPathPressed: _handlePathPressed,
+        onCreatePressed: _handleCreatePressed,
+      );
+    }
+    return BlocConsumer<BaseCalendarBloc, CalendarState>(
+      bloc: bloc,
+      listener: _handleCalendarStateChanged,
+      builder: (context, state) {
+        return _CriticalPathPickerScaffold(
+          paths: state.criticalPaths,
+          status: _status,
+          busy: _isBusy(state),
+          onPathPressed: _handlePathPressed,
+          onCreatePressed: _handleCreatePressed,
+        );
+      },
+    );
+  }
+
+  bool _isBusy(CalendarState? state) {
+    return state?.isCriticalPathMutating == true ||
+        _pendingSelection != null ||
+        _pendingCreation != null;
+  }
+
+  Future<void> _handlePathPressed(
+    BuildContext context,
+    CalendarCriticalPath path,
+  ) async {
+    if (widget.taskAddIntent != null) {
+      _addTasksToPath(context, path);
+      return;
+    }
+    if (widget.stayOpen && widget.onPathSelected != null) {
+      final String? status = await widget.onPathSelected!(context, path);
+      if (!mounted) {
+        return;
+      }
+      if (status != null) {
+        setState(() => _status = status);
+      }
+      return;
+    }
+    Navigator.of(context).pop(CriticalPathPickerResult.path(path.id));
+  }
+
+  Future<void> _handleCreatePressed(BuildContext context) async {
+    if (widget.taskAddIntent != null) {
+      await _createPathForTasks(context);
+      return;
+    }
+    if (widget.stayOpen && widget.onCreateNewPath != null) {
+      final String? status = await widget.onCreateNewPath!(context);
+      if (!mounted) {
+        return;
+      }
+      if (status != null) {
+        setState(() => _status = status);
+      }
+      return;
+    }
+    Navigator.of(context).pop(const CriticalPathPickerResult.createNew());
+  }
+
+  void _addTasksToPath(BuildContext context, CalendarCriticalPath path) {
+    final _CriticalPathTaskAddIntent? intent = widget.taskAddIntent;
+    final BaseCalendarBloc? bloc = widget.bloc;
+    if (intent == null || bloc == null) {
+      return;
+    }
+    final Set<String> existingTaskIds = path.taskIds
+        .map(baseTaskIdFrom)
+        .toSet();
+    final List<CalendarTask> tasksToAdd = intent.tasks
+        .where((task) => !existingTaskIds.contains(baseTaskIdFrom(task.id)))
+        .toList();
+    final int skippedCount = intent.taskCount - tasksToAdd.length;
+    if (skippedCount == intent.taskCount) {
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarCriticalPathAlreadyContainsTasks(intent.taskCount),
+      );
+      return;
+    }
+    if (skippedCount > 0) {
+      FeedbackSystem.showError(
+        context,
+        context.l10n.calendarCriticalPathAlreadyContainsTasks(skippedCount),
+      );
+    }
+    final List<String> remainingTaskIds = tasksToAdd
+        .map((task) => task.id)
+        .toList(growable: false);
+    final String firstTaskId = remainingTaskIds.first;
+    final String pathName =
+        _resolveCriticalPathName(
+          bloc: bloc,
+          pathId: path.id,
+          fallbackNames: intent.pathNamesById,
+        ) ??
+        path.name;
+    setState(() {
+      _status = null;
+      _pendingSelection = _PendingCriticalPathSelection(
+        pathId: path.id,
+        pathName: pathName,
+        taskCount: tasksToAdd.length,
+        remainingTaskIds: remainingTaskIds,
+        currentTaskId: firstTaskId,
+      );
+    });
+    bloc.add(
+      CalendarEvent.criticalPathTaskAdded(pathId: path.id, taskId: firstTaskId),
+    );
+  }
+
+  Future<void> _createPathForTasks(BuildContext context) async {
+    final _CriticalPathTaskAddIntent? intent = widget.taskAddIntent;
+    final BaseCalendarBloc? bloc = widget.bloc;
+    if (intent == null || bloc == null || intent.tasks.isEmpty) {
+      return;
+    }
+    final String? name = await promptCriticalPathName(
+      context: context,
+      title: context.l10n.calendarCriticalPathsNew,
+    );
+    if (!mounted || name == null) {
+      return;
+    }
+    setState(() {
+      _status = null;
+      _pendingCreation = _PendingCriticalPathCreation(
+        name: name,
+        targetTaskIds: intent.targetTaskIds,
+        remainingTaskIds: intent.tasks
+            .skip(_criticalPathSingleTaskCount)
+            .map((task) => task.id)
+            .toList(growable: false),
+        taskCount: intent.taskCount,
+      );
+    });
+    bloc.add(
+      CalendarEvent.criticalPathCreated(
+        name: name,
+        taskId: intent.tasks.first.id,
+      ),
+    );
+  }
+
+  void _handleCalendarStateChanged(BuildContext context, CalendarState state) {
+    _handlePendingSelection(context, state);
+    _handlePendingCreation(context, state);
+  }
+
+  void _handlePendingSelection(BuildContext context, CalendarState state) {
+    final _PendingCriticalPathSelection? pendingSelection = _pendingSelection;
+    if (pendingSelection == null) {
+      return;
+    }
+    if (state.isCriticalPathMutating) {
+      if (pendingSelection.phase != _CriticalPathMutationPhase.observed) {
+        setState(() {
+          _pendingSelection = pendingSelection.copyWith(
+            phase: _CriticalPathMutationPhase.observed,
+          );
+        });
+      }
+      return;
+    }
+    if (pendingSelection.phase != _CriticalPathMutationPhase.observed) {
+      return;
+    }
+    if (state.criticalPathMutationError != null) {
+      _clearSelectionWithError(context, pendingSelection);
+      return;
+    }
+    final String? currentTaskId = pendingSelection.currentTaskId;
+    final String? currentBaseId = currentTaskId == null
+        ? null
+        : baseTaskIdFrom(currentTaskId);
+    final CalendarCriticalPath? path =
+        state.model.criticalPaths[pendingSelection.pathId];
+    final bool added =
+        currentBaseId != null &&
+        _pathContainsBaseIds(path, <String>[currentBaseId]);
+    if (!added) {
+      return;
+    }
+    if (pendingSelection.remainingTaskIds.length ==
+        _criticalPathSingleTaskCount) {
+      setState(() {
+        _pendingSelection = null;
+        _status = context.l10n.calendarCriticalPathAddSuccess(
+          pendingSelection.taskCount,
+          pendingSelection.pathName,
+        );
+      });
+      return;
+    }
+    final List<String> remainingTaskIds = List<String>.from(
+      pendingSelection.remainingTaskIds.skip(1),
+    );
+    final String nextTaskId = remainingTaskIds.first;
+    setState(() {
+      _pendingSelection = pendingSelection.copyWith(
+        remainingTaskIds: remainingTaskIds,
+        currentTaskId: nextTaskId,
+        phase: _CriticalPathMutationPhase.dispatched,
+      );
+    });
+    widget.bloc?.add(
+      CalendarEvent.criticalPathTaskAdded(
+        pathId: pendingSelection.pathId,
+        taskId: nextTaskId,
+      ),
+    );
+  }
+
+  void _handlePendingCreation(BuildContext context, CalendarState state) {
+    final _PendingCriticalPathCreation? pendingCreation = _pendingCreation;
+    if (pendingCreation == null) {
+      return;
+    }
+    if (state.isCriticalPathMutating) {
+      if (pendingCreation.phase != _CriticalPathMutationPhase.observed) {
+        setState(() {
+          _pendingCreation = pendingCreation.copyWith(
+            phase: _CriticalPathMutationPhase.observed,
+          );
+        });
+      }
+      return;
+    }
+    if (pendingCreation.phase != _CriticalPathMutationPhase.observed) {
+      return;
+    }
+    if (pendingCreation.createdPathId == null) {
+      if (state.criticalPathMutationError != null) {
+        _clearCreationWithError(
+          context,
+          context.l10n.calendarCriticalPathCreateFailed,
+        );
+        return;
+      }
+      final String? createdPathId = state.lastCreatedCriticalPathId;
+      if (createdPathId == null) {
+        return;
+      }
+      final CalendarCriticalPath? path =
+          state.model.criticalPaths[createdPathId];
+      if (path == null || path.name != pendingCreation.name) {
+        return;
+      }
+      final Set<String> remainingBaseIds = pendingCreation.remainingTaskIds
+          .map(baseTaskIdFrom)
+          .toSet();
+      final Set<String> taskIdsAttachedByCreate = pendingCreation.targetTaskIds
+          .difference(remainingBaseIds);
+      if (!_pathContainsBaseIds(path, taskIdsAttachedByCreate)) {
+        return;
+      }
+      if (pendingCreation.remainingTaskIds.isEmpty) {
+        if (!_pathContainsBaseIds(path, pendingCreation.targetTaskIds)) {
+          return;
+        }
+        setState(() {
+          _pendingCreation = null;
+          _status = context.l10n.calendarCriticalPathCreateSuccess(
+            pendingCreation.taskCount,
+            pendingCreation.name,
+          );
+        });
+        return;
+      }
+      final String nextTaskId = pendingCreation.remainingTaskIds.first;
+      setState(() {
+        _pendingCreation = pendingCreation.copyWith(
+          createdPathId: createdPathId,
+          currentTaskId: nextTaskId,
+          phase: _CriticalPathMutationPhase.dispatched,
+        );
+      });
+      widget.bloc?.add(
+        CalendarEvent.criticalPathTaskAdded(
+          pathId: createdPathId,
+          taskId: nextTaskId,
+        ),
+      );
+      return;
+    }
+    if (state.criticalPathMutationError != null) {
+      _clearCreationWithError(
+        context,
+        context.l10n.calendarCriticalPathAddFailed(pendingCreation.taskCount),
+      );
+      return;
+    }
+    final String? currentTaskId = pendingCreation.currentTaskId;
+    final String? currentBaseId = currentTaskId == null
+        ? null
+        : baseTaskIdFrom(currentTaskId);
+    final CalendarCriticalPath? path =
+        state.model.criticalPaths[pendingCreation.createdPathId];
+    final bool added =
+        currentBaseId != null &&
+        _pathContainsBaseIds(path, <String>[currentBaseId]);
+    if (!added) {
+      return;
+    }
+    if (pendingCreation.remainingTaskIds.length >
+        _criticalPathSingleTaskCount) {
+      final List<String> remainingTaskIds = List<String>.from(
+        pendingCreation.remainingTaskIds.skip(1),
+      );
+      final String nextTaskId = remainingTaskIds.first;
+      setState(() {
+        _pendingCreation = pendingCreation.copyWith(
+          remainingTaskIds: remainingTaskIds,
+          currentTaskId: nextTaskId,
+          phase: _CriticalPathMutationPhase.dispatched,
+        );
+      });
+      widget.bloc?.add(
+        CalendarEvent.criticalPathTaskAdded(
+          pathId: pendingCreation.createdPathId!,
+          taskId: nextTaskId,
+        ),
+      );
+      return;
+    }
+    if (!_pathContainsBaseIds(path, pendingCreation.targetTaskIds)) {
+      return;
+    }
+    setState(() {
+      _pendingCreation = null;
+      _status = context.l10n.calendarCriticalPathCreateSuccess(
+        pendingCreation.taskCount,
+        pendingCreation.name,
+      );
+    });
+  }
+
+  bool _pathContainsBaseIds(
+    CalendarCriticalPath? path,
+    Iterable<String> taskIds,
+  ) {
+    if (path == null) {
+      return false;
+    }
+    final Set<String> pathTaskIds = path.taskIds.map(baseTaskIdFrom).toSet();
+    return taskIds.every(pathTaskIds.contains);
+  }
+
+  void _clearSelectionWithError(
+    BuildContext context,
+    _PendingCriticalPathSelection pendingSelection,
+  ) {
+    setState(() {
+      _status = null;
+      _pendingSelection = null;
+    });
+    FeedbackSystem.showError(
+      context,
+      context.l10n.calendarCriticalPathAddFailed(pendingSelection.taskCount),
+    );
+  }
+
+  void _clearCreationWithError(BuildContext context, String message) {
+    setState(() {
+      _status = null;
+      _pendingCreation = null;
+    });
+    FeedbackSystem.showError(context, message);
+  }
+}
+
+class _CriticalPathPickerScaffold extends StatelessWidget {
+  const _CriticalPathPickerScaffold({
+    required this.paths,
+    required this.status,
+    required this.busy,
+    required this.onPathPressed,
+    required this.onCreatePressed,
+  });
+
+  final List<CalendarCriticalPath> paths;
+  final String? status;
+  final bool busy;
+  final Future<void> Function(BuildContext context, CalendarCriticalPath path)
+  onPathPressed;
+  final Future<void> Function(BuildContext context) onCreatePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenHeight = MediaQuery.sizeOf(context).height;
+        final availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : screenHeight;
+        final listViewportHeight = availableHeight * 0.7;
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: constraints.maxWidth,
+            maxHeight: availableHeight,
+          ),
+          child: AxiSheetScaffold.sections(
+            header: AxiSheetHeader(
+              title: Text(context.l10n.calendarCriticalPathAddToTitle),
+              onClose: () => Navigator.of(context).maybePop(),
+            ),
+            footer: AxiSheetActions(
+              children: [
+                AxiButton.outline(
+                  onPressed: busy ? null : () => onCreatePressed(context),
+                  leading: Icon(
+                    Icons.add,
+                    size: context.sizing.menuItemIconSize,
+                  ),
+                  child: Text(context.l10n.calendarCriticalPathsNew),
+                ),
+                AxiButton.primary(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  child: Text(context.l10n.commonDone),
+                ),
+              ],
+            ),
+            sections: [
+              AxiSheetSection(
+                child: _CriticalPathPickerBody(
+                  paths: paths,
+                  status: status,
+                  busy: busy,
+                  listViewportHeight: listViewportHeight,
+                  onPathPressed: (path) => onPathPressed(context, path),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CriticalPathPickerBody extends StatelessWidget {
+  const _CriticalPathPickerBody({
+    required this.paths,
+    required this.status,
+    required this.busy,
+    required this.listViewportHeight,
+    required this.onPathPressed,
+  });
+
+  final List<CalendarCriticalPath> paths;
+  final String? status;
+  final bool busy;
+  final double listViewportHeight;
+  final Future<void> Function(CalendarCriticalPath path) onPathPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (paths.isEmpty)
+          Text(
+            context.l10n.calendarCriticalPathCreatePrompt,
+            style: textTheme.muted,
+          )
+        else
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: listViewportHeight),
+            child: _CriticalPathPickerList(
+              paths: paths,
+              isBusy: busy,
+              onPathPressed: onPathPressed,
+            ),
+          ),
+        if (status != null) ...[
+          SizedBox(height: context.spacing.s),
+          Container(
+            padding: EdgeInsets.all(context.spacing.xs),
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(
+                alpha: context.motion.tapHoverAlpha,
+              ),
+              borderRadius: context.radius,
+              border: Border.fromBorderSide(
+                context.borderSide.copyWith(color: colors.primary),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  size: context.sizing.menuItemIconSize,
+                  color: colors.primary,
+                ),
+                SizedBox(width: context.spacing.xxs),
+                Expanded(
+                  child: Text(
+                    status!,
+                    style: textTheme.small.strong.copyWith(
+                      color: colors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 Future<String?> promptCriticalPathName({
@@ -1524,21 +1792,14 @@ Future<String?> promptCriticalPathName({
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, _) {
-          final textTheme = context.textTheme;
           return ShadForm(
             key: formKey,
             autovalidateMode: ShadAutovalidateMode.disabled,
             fieldIdSeparator: null,
-            child: AxiSheetScaffold.scroll(
+            child: AxiSheetScaffold.sections(
               header: AxiSheetHeader(
                 title: Text(title),
                 onClose: () => Navigator.of(dialogContext).maybePop(),
-              ),
-              bodyPadding: EdgeInsets.fromLTRB(
-                context.spacing.m,
-                context.spacing.s,
-                context.spacing.m,
-                context.spacing.m,
               ),
               footer: AxiSheetActions(
                 children: [
@@ -1561,33 +1822,30 @@ Future<String?> promptCriticalPathName({
                   ),
                 ],
               ),
-              children: [
-                Text(
-                  context.l10n.calendarCriticalPathNamePrompt,
-                  style: textTheme.muted,
-                ),
-                SizedBox(height: context.spacing.s),
-                AxiTextFormField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  autofocus: true,
-                  keyboardType: TextInputType.text,
-                  textInputAction: TextInputAction.done,
-                  placeholder: Text(
-                    context.l10n.calendarCriticalPathNamePlaceholder,
+              sections: [
+                AxiSheetSection.compact(
+                  child: AxiTextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    autofocus: true,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.done,
+                    placeholder: Text(
+                      context.l10n.calendarCriticalPathNamePlaceholder,
+                    ),
+                    validator: (value) {
+                      final String trimmed = value.trim();
+                      if (trimmed.isEmpty) {
+                        return context.l10n.calendarCriticalPathNameEmptyError;
+                      }
+                      return null;
+                    },
+                    onSubmitted: (value) {
+                      if (formKey.currentState?.validate() ?? false) {
+                        Navigator.of(dialogContext).pop(value.trim());
+                      }
+                    },
                   ),
-                  validator: (value) {
-                    final String trimmed = value.trim();
-                    if (trimmed.isEmpty) {
-                      return context.l10n.calendarCriticalPathNameEmptyError;
-                    }
-                    return null;
-                  },
-                  onSubmitted: (value) {
-                    if (formKey.currentState?.validate() ?? false) {
-                      Navigator.of(dialogContext).pop(value.trim());
-                    }
-                  },
                 ),
               ],
             ),
@@ -1630,97 +1888,14 @@ Future<void> addTasksToCriticalPath({
   final List<CalendarCriticalPath> paths = bloc.state.criticalPaths;
   final Map<String, String> pathNamesById = <String, String>{}
     ..addEntries(paths.map((path) => MapEntry(path.id, path.name)));
-  final int taskCount = tasks.length;
-  final Set<String> targetTaskIds = <String>{}
-    ..addAll(tasks.map((task) => baseTaskIdFrom(task.id)));
-  final ValueNotifier<PendingCriticalPathSelection?> pendingSelectionNotifier =
-      ValueNotifier<PendingCriticalPathSelection?>(null);
-  final ValueNotifier<PendingCriticalPathCreation?> pendingCreationNotifier =
-      ValueNotifier<PendingCriticalPathCreation?>(null);
-  try {
-    await showCriticalPathPicker(
-      context: context,
-      paths: paths,
-      bloc: bloc,
-      pendingSelectionNotifier: pendingSelectionNotifier,
-      pendingCreationNotifier: pendingCreationNotifier,
-      stayOpen: true,
-      onPathSelected: (path) async {
-        final Set<String> existingTaskIds = <String>{}..addAll(path.taskIds);
-        final List<CalendarTask> tasksToAdd = tasks
-            .where((task) => !existingTaskIds.contains(baseTaskIdFrom(task.id)))
-            .toList();
-        final int skippedCount = taskCount - tasksToAdd.length;
-        if (skippedCount == taskCount) {
-          FeedbackSystem.showError(
-            context,
-            context.l10n.calendarCriticalPathAlreadyContainsTasks(taskCount),
-          );
-          return null;
-        }
-        if (skippedCount > 0) {
-          FeedbackSystem.showError(
-            context,
-            context.l10n.calendarCriticalPathAlreadyContainsTasks(skippedCount),
-          );
-        }
-        final Set<String> addedTaskIds = <String>{}
-          ..addAll(tasksToAdd.map((task) => baseTaskIdFrom(task.id)));
-        if (tasksToAdd.isEmpty) {
-          return null;
-        }
-        final List<String> remainingTaskIds = tasksToAdd
-            .map((task) => task.id)
-            .toList(growable: false);
-        final String firstTaskId = remainingTaskIds.first;
-        final String? resolvedName = _resolveCriticalPathName(
-          bloc: bloc,
-          pathId: path.id,
-          fallbackNames: pathNamesById,
-        );
-        if (resolvedName != null) {
-          pendingSelectionNotifier.value = PendingCriticalPathSelection(
-            pathId: path.id,
-            pathName: resolvedName,
-            taskIds: addedTaskIds,
-            taskCount: tasksToAdd.length,
-            remainingTaskIds: remainingTaskIds,
-            currentTaskId: firstTaskId,
-          );
-        }
-        bloc.add(
-          CalendarEvent.criticalPathTaskAdded(
-            pathId: path.id,
-            taskId: firstTaskId,
-          ),
-        );
-        return null;
-      },
-      onCreateNewPath: () async {
-        final String? name = await promptCriticalPathName(
-          context: context,
-          title: context.l10n.calendarCriticalPathsNew,
-        );
-        if (!context.mounted || name == null) {
-          return null;
-        }
-        pendingCreationNotifier.value = PendingCriticalPathCreation(
-          name: name,
-          targetTaskIds: targetTaskIds,
-          remainingTaskIds: tasks
-              .skip(_criticalPathSingleTaskCount)
-              .map((task) => task.id)
-              .toList(growable: false),
-          taskCount: taskCount,
-        );
-        bloc.add(
-          CalendarEvent.criticalPathCreated(name: name, taskId: tasks.first.id),
-        );
-        return null;
-      },
-    );
-  } finally {
-    pendingSelectionNotifier.dispose();
-    pendingCreationNotifier.dispose();
-  }
+  await _showCriticalPathPickerRoute(
+    context: context,
+    paths: paths,
+    bloc: bloc,
+    stayOpen: true,
+    taskAddIntent: _CriticalPathTaskAddIntent(
+      tasks: tasks,
+      pathNamesById: pathNamesById,
+    ),
+  );
 }

@@ -38,10 +38,6 @@ class AxiInputDialog extends StatelessWidget {
       horizontal: context.spacing.l,
       vertical: context.spacing.l,
     );
-    final EdgeInsets bodyPadding = EdgeInsets.symmetric(
-      horizontal: context.spacing.m,
-      vertical: context.spacing.s,
-    );
     final List<Widget> actionButtons = <Widget>[
       AxiButton.outline(
         onPressed: canPop
@@ -61,16 +57,15 @@ class AxiInputDialog extends StatelessWidget {
       constraints: BoxConstraints(maxWidth: resolvedMaxWidth),
       child: AxiModalSurface(
         padding: EdgeInsets.zero,
-        child: AxiDialogScaffold.scroll(
+        child: AxiDialogScaffold.sections(
           header: AxiDialogHeader(
             title: title,
             onClose: () =>
                 closeSheetWithKeyboardDismiss(context, () => context.pop()),
             showCloseButton: showCloseButton,
           ),
-          bodyPadding: bodyPadding,
           footer: AxiDialogActions(children: actionButtons),
-          children: [content],
+          sections: [AxiModalSection.compact(child: content)],
         ),
       ),
     );

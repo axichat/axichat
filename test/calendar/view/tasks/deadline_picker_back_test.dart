@@ -5,9 +5,14 @@ import 'dart:ui';
 
 import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+import '../../../mocks.dart';
 
 void main() {
   testWidgets('system back closes deadline dropdown before popping route', (
@@ -52,32 +57,43 @@ class _DeadlineBackTestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: ShadTheme(
-        data: ShadThemeData(
-          colorScheme: const ShadSlateColorScheme.light(),
-          brightness: Brightness.light,
-        ),
-        child: Builder(
-          builder: (context) {
-            return Scaffold(
-              body: Center(
-                child: ElevatedButton(
-                  key: const Key('open-deadline-page'),
-                  onPressed: () {
-                    Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const _DeadlinePage(),
-                      ),
-                    );
-                  },
-                  child: const Text('Open'),
+    final settingsCubit = MockSettingsCubit();
+    when(() => settingsCubit.state).thenReturn(const SettingsState());
+    when(() => settingsCubit.stream).thenAnswer((_) => const Stream.empty());
+    when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
+    return BlocProvider<SettingsCubit>.value(
+      value: settingsCubit,
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ShadTheme(
+          data: ShadThemeData(
+            colorScheme: const ShadSlateColorScheme.light(),
+            brightness: Brightness.light,
+          ),
+          child: Builder(
+            builder: (context) {
+              return Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    key: const Key('open-deadline-page'),
+                    onPressed: () {
+                      final ShadThemeData shadTheme = ShadTheme.of(context);
+                      Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ShadTheme(
+                            data: shadTheme,
+                            child: const _DeadlinePage(),
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Open'),
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

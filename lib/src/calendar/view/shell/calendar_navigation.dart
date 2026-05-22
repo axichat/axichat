@@ -1123,6 +1123,7 @@ class _DateLabelState extends State<_DateLabel>
       height: context.sizing.buttonHeightRegular,
       child: AxiButton.outline(
         onPressed: _toggleOverlay,
+        constrainChild: true,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1134,14 +1135,16 @@ class _DateLabelState extends State<_DateLabel>
             ),
             if (!hideText) ...[
               SizedBox(width: context.spacing.s),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: context.sizing.menuMaxWidth,
-                ),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: context.sizing.menuMaxWidth,
+                  ),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
@@ -1274,7 +1277,7 @@ class _DateLabelState extends State<_DateLabel>
     await showAdaptiveBottomSheet<void>(
       context: modalContext,
       isScrollControlled: true,
-      useBottomSafeArea: false,
+      bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         var sheetMonth = _visibleMonth;

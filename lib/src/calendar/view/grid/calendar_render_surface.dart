@@ -13,12 +13,12 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/view/availability/calendar_free_busy_style.dart';
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_surface.dart';
+import 'package:axichat/src/calendar/view/availability/calendar_free_busy_style.dart';
 
 /// Controller that exposes geometry computed by [RenderCalendarSurface].
 class CalendarSurfaceController {

@@ -8,22 +8,30 @@ import 'package:flutter/material.dart';
 enum AxiModalFooterKeyboardPolicy { alwaysVisible, hideWhenKeyboardOpen }
 
 class AxiModalSection {
-  const AxiModalSection({required this.child, this.padding})
+  const AxiModalSection({required this.child})
     : edgeToEdge = false,
-      topActions = false;
+      topActions = false,
+      compact = false;
 
-  const AxiModalSection.edge({required this.child, this.padding})
+  const AxiModalSection.compact({required this.child})
+    : edgeToEdge = false,
+      topActions = false,
+      compact = true;
+
+  const AxiModalSection.edge({required this.child})
     : edgeToEdge = true,
-      topActions = false;
+      topActions = false,
+      compact = false;
 
-  const AxiModalSection.topActions({required this.child, this.padding})
+  const AxiModalSection.topActions({required this.child})
     : edgeToEdge = false,
-      topActions = true;
+      topActions = true,
+      compact = false;
 
   final Widget child;
-  final EdgeInsetsGeometry? padding;
   final bool edgeToEdge;
   final bool topActions;
+  final bool compact;
 }
 
 class AxiModalHeader extends StatelessWidget {
@@ -35,7 +43,6 @@ class AxiModalHeader extends StatelessWidget {
     this.subtitle,
     this.leading,
     this.actions = const <Widget>[],
-    this.padding,
     super.key,
   });
 
@@ -46,18 +53,9 @@ class AxiModalHeader extends StatelessWidget {
   final Widget? leading;
   final List<Widget> actions;
   final VoidCallback onClose;
-  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsetsGeometry resolvedPadding =
-        padding ??
-        EdgeInsets.fromLTRB(
-          context.spacing.m,
-          context.spacing.m,
-          context.spacing.m,
-          context.spacing.s,
-        );
     final Widget titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -79,7 +77,14 @@ class AxiModalHeader extends StatelessWidget {
     );
 
     final Widget content = Padding(
-      padding: resolvedPadding,
+      padding: EdgeInsets.fromLTRB(
+        context.spacing.m,
+        !showCloseButton && actions.isNotEmpty
+            ? context.spacing.s
+            : context.spacing.m,
+        context.spacing.m,
+        context.spacing.s,
+      ),
       child: Row(
         children: [
           if (leading != null) ...[
@@ -126,7 +131,6 @@ class AxiDialogHeader extends AxiModalHeader {
     super.subtitle,
     super.leading,
     super.actions,
-    super.padding,
     super.key,
   });
 }
@@ -141,7 +145,6 @@ class AxiModalScaffold extends StatelessWidget {
     super.key,
   }) : _scrollChildren = null,
        _sections = null,
-       bodyPadding = null,
        scrollPhysics = null,
        sectionDividerBuilder = null;
 
@@ -151,7 +154,6 @@ class AxiModalScaffold extends StatelessWidget {
     this.footer,
     this.footerKeyboardPolicy = AxiModalFooterKeyboardPolicy.alwaysVisible,
     this.keyboardInset = 0,
-    this.bodyPadding,
     this.scrollPhysics,
     this.sectionDividerBuilder,
     super.key,
@@ -165,7 +167,6 @@ class AxiModalScaffold extends StatelessWidget {
     this.footer,
     this.footerKeyboardPolicy = AxiModalFooterKeyboardPolicy.alwaysVisible,
     this.keyboardInset = 0,
-    this.bodyPadding,
     this.scrollPhysics,
     this.sectionDividerBuilder,
     super.key,
@@ -177,7 +178,6 @@ class AxiModalScaffold extends StatelessWidget {
   final Widget? body;
   final List<Widget>? _scrollChildren;
   final List<AxiModalSection>? _sections;
-  final EdgeInsets? bodyPadding;
   final ScrollPhysics? scrollPhysics;
   final Widget? footer;
   final AxiModalFooterKeyboardPolicy footerKeyboardPolicy;
@@ -228,7 +228,6 @@ class AxiModalScaffold extends StatelessWidget {
         Flexible(
           fit: FlexFit.loose,
           child: _AxiModalScrollableBody(
-            bodyPadding: bodyPadding,
             scrollPhysics: scrollPhysics,
             footer: footer,
             footerVisible: !footerHiddenByKeyboard,
@@ -251,14 +250,12 @@ class AxiDialogScaffold extends StatelessWidget {
     super.key,
   }) : _scrollChildren = null,
        _sections = null,
-       bodyPadding = null,
        scrollPhysics = null;
 
   const AxiDialogScaffold.scroll({
     required this.header,
     required List<Widget> children,
     this.footer,
-    this.bodyPadding,
     this.scrollPhysics,
     super.key,
   }) : body = null,
@@ -269,7 +266,6 @@ class AxiDialogScaffold extends StatelessWidget {
     required this.header,
     required List<AxiModalSection> sections,
     this.footer,
-    this.bodyPadding,
     this.scrollPhysics,
     super.key,
   }) : body = null,
@@ -280,7 +276,6 @@ class AxiDialogScaffold extends StatelessWidget {
   final Widget? body;
   final List<Widget>? _scrollChildren;
   final List<AxiModalSection>? _sections;
-  final EdgeInsets? bodyPadding;
   final ScrollPhysics? scrollPhysics;
   final Widget? footer;
 
@@ -295,7 +290,6 @@ class AxiDialogScaffold extends StatelessWidget {
       return AxiModalScaffold.sections(
         header: header,
         footer: footer,
-        bodyPadding: bodyPadding,
         scrollPhysics: scrollPhysics,
         sections: sections,
       );
@@ -303,7 +297,6 @@ class AxiDialogScaffold extends StatelessWidget {
     return AxiModalScaffold.scroll(
       header: header,
       footer: footer,
-      bodyPadding: bodyPadding,
       scrollPhysics: scrollPhysics,
       children: _scrollChildren ?? const <Widget>[],
     );
@@ -313,7 +306,6 @@ class AxiDialogScaffold extends StatelessWidget {
 class _AxiModalScrollableBody extends StatefulWidget {
   const _AxiModalScrollableBody({
     required this.children,
-    required this.bodyPadding,
     required this.scrollPhysics,
     required this.footer,
     required this.footerVisible,
@@ -324,7 +316,6 @@ class _AxiModalScrollableBody extends StatefulWidget {
 
   final List<Widget> children;
   final List<AxiModalSection>? sections;
-  final EdgeInsets? bodyPadding;
   final ScrollPhysics? scrollPhysics;
   final Widget? footer;
   final bool footerVisible;
@@ -348,14 +339,12 @@ class _AxiModalScrollableBodyState extends State<_AxiModalScrollableBody> {
   @override
   Widget build(BuildContext context) {
     final bool usesSections = widget.sections != null;
-    final EdgeInsets resolvedPadding =
-        widget.bodyPadding ??
-        EdgeInsets.only(
-          left: context.spacing.m,
-          top: usesSections ? 0 : context.spacing.s,
-          right: context.spacing.m,
-          bottom: usesSections ? 0 : context.spacing.m,
-        );
+    final EdgeInsets resolvedPadding = EdgeInsets.only(
+      left: context.spacing.m,
+      top: usesSections ? 0 : context.spacing.s,
+      right: context.spacing.m,
+      bottom: usesSections ? 0 : context.spacing.m,
+    );
     final Widget? footer = widget.footer;
     final double listBottomPadding =
         resolvedPadding.bottom +
@@ -427,8 +416,7 @@ class _AxiModalScrollableBodyState extends State<_AxiModalScrollableBody> {
               ? EdgeInsets.zero
               : horizontalPadding,
           child: Padding(
-            padding:
-                section.padding ?? _defaultSectionPadding(context, section),
+            padding: _defaultSectionPadding(context, section),
             child: section.child,
           ),
         ),
@@ -443,6 +431,12 @@ class _AxiModalScrollableBodyState extends State<_AxiModalScrollableBody> {
   ) {
     if (section.topActions) {
       return EdgeInsets.symmetric(vertical: context.spacing.s);
+    }
+    if (section.compact) {
+      return EdgeInsets.symmetric(vertical: context.spacing.s);
+    }
+    if (section.edgeToEdge) {
+      return EdgeInsets.zero;
     }
     return EdgeInsets.symmetric(vertical: context.spacing.m);
   }
@@ -479,23 +473,19 @@ class AxiModalSectionDivider extends StatelessWidget {
 class AxiModalActions extends StatelessWidget {
   const AxiModalActions({
     required this.children,
-    this.padding,
     this.gap,
     this.includeTopDivider = true,
     super.key,
   });
 
   final List<Widget> children;
-  final EdgeInsetsGeometry? padding;
   final double? gap;
   final bool includeTopDivider;
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsetsGeometry resolvedPadding =
-        padding ?? EdgeInsets.all(context.spacing.m);
     final Widget content = Padding(
-      padding: resolvedPadding,
+      padding: EdgeInsets.all(context.spacing.m),
       child: _AxiModalActionsLayout(
         gap: gap ?? context.spacing.s,
         children: children,
@@ -515,7 +505,6 @@ class AxiModalActions extends StatelessWidget {
 class AxiDialogActions extends AxiModalActions {
   const AxiDialogActions({
     required super.children,
-    super.padding,
     super.gap,
     super.includeTopDivider,
     super.key,

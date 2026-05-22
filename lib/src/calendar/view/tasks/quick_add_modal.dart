@@ -566,16 +566,16 @@ class _QuickAddModalState extends State<QuickAddModal> {
       paths: paths,
       bloc: _locateCalendarBloc(),
       stayOpen: true,
-      onPathSelected: (path) async {
+      onPathSelected: (pickerContext, path) async {
         _addQueuedCriticalPath(path.id);
-        return context.l10n.calendarCriticalPathQueuedAdd(path.name);
+        return pickerContext.l10n.calendarCriticalPathQueuedAdd(path.name);
       },
-      onCreateNewPath: () async {
+      onCreateNewPath: (pickerContext) async {
         final String? name = await promptCriticalPathName(
-          context: context,
-          title: context.l10n.calendarCriticalPathsNew,
+          context: pickerContext,
+          title: pickerContext.l10n.calendarCriticalPathsNew,
         );
-        if (!mounted || name == null) {
+        if (!mounted || !pickerContext.mounted || name == null) {
           return null;
         }
         _awaitingCriticalPathCreate = true;
@@ -838,11 +838,7 @@ class _QuickAddModalContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = ResponsiveHelper.spec(context);
     final spacing = context.spacing;
-    final EdgeInsets contentPadding = responsive.contentPadding.resolve(
-      Directionality.of(context),
-    );
     final Widget header = AxiSheetHeader(
       title: Text(context.l10n.calendarAddTaskTitle),
       onClose: onClose,
@@ -863,10 +859,6 @@ class _QuickAddModalContent extends StatelessWidget {
     return AxiSheetScaffold.sections(
       header: header,
       footer: actions,
-      bodyPadding: EdgeInsets.only(
-        left: contentPadding.left,
-        right: contentPadding.right,
-      ),
       sections: [
         AxiSheetSection(
           child: Column(
@@ -1028,22 +1020,16 @@ class _QuickAddModalContent extends StatelessWidget {
           ),
         ),
         AxiSheetSection(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TaskSecondaryButton(
-                label: context.l10n.calendarAddToCriticalPath,
-                icon: Icons.route,
-                onPressed: isSubmitting || !hasCalendarBloc
-                    ? null
-                    : onAddToCriticalPath,
-              ),
-              SizedBox(height: spacing.xxs),
-              CriticalPathMembershipList(
-                paths: queuedPaths,
-                onRemovePath: onRemoveQueuedPath,
-              ),
-            ],
+          child: CriticalPathMembershipControls(
+            addButton: TaskSecondaryButton(
+              label: context.l10n.calendarAddToCriticalPath,
+              icon: Icons.route,
+              onPressed: isSubmitting || !hasCalendarBloc
+                  ? null
+                  : onAddToCriticalPath,
+            ),
+            paths: queuedPaths,
+            onRemovePath: onRemoveQueuedPath,
           ),
         ),
       ],
@@ -1094,7 +1080,6 @@ class _QuickAddTaskNameField extends StatelessWidget {
         validator: validator,
         autovalidateMode: autovalidateMode,
         onSubmitted: onSubmit,
-        labelText: l10n.calendarTaskNameRequired,
         hintText: l10n.calendarTaskNameHint,
         textInputAction: TextInputAction.done,
       ),
@@ -1311,16 +1296,13 @@ Future<void> showQuickAddModal({
       ? QuickAddModalSurface.bottomSheet
       : QuickAddModalSurface.dialog;
   final responsive = ResponsiveHelper.spec(context);
-  final bool isCalendarAnchored = CalendarModalScope.maybeOf(context) != null;
   final BuildContext modalContext = context.calendarModalContext;
   return showAdaptiveBottomSheet<void>(
     context: modalContext,
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,
-    bottomSafeAreaBehavior: isCalendarAnchored
-        ? AxiSheetBottomSafeAreaBehavior.none
-        : AxiSheetBottomSafeAreaBehavior.insideSurface,
+    bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth:
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth,

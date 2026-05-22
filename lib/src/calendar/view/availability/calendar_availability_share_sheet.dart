@@ -154,6 +154,7 @@ class _CalendarAvailabilityShareScreenState
   _AvailabilityShareStep _step = _AvailabilityShareStep.editor;
   bool _stepReversing = false;
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
+  bool _didInitDraftIntervals = false;
   bool _didInitRecipients = false;
 
   @override
@@ -170,12 +171,15 @@ class _CalendarAvailabilityShareScreenState
     _selectedChat =
         _lockedChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
-    _resetDraftIntervals();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_didInitDraftIntervals) {
+      _didInitDraftIntervals = true;
+      _resetDraftIntervals();
+    }
     if (_didInitRecipients) {
       return;
     }
@@ -1047,6 +1051,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
                   collapsedByDefault: false,
                   allowAddressTargets: false,
                   showSuggestionsWhenEmpty: true,
+                  horizontalPadding: 0,
                   tapRegionGroup: tapRegionGroup,
                   onRecipientAdded: onRecipientAdded,
                   onRecipientRemoved: onRecipientRemoved,

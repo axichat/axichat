@@ -255,17 +255,11 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        useBottomSafeArea: false,
-        showCloseButton: true,
+        bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {
           return StatefulBuilder(
             builder: (context, setSheetState) {
-              final MediaQueryData hostMediaQuery = MediaQuery.of(sheetContext);
-              final double desiredHeight = widget.showTimeSelectors
-                  ? _timePickerDesiredHeight
-                  : _datePickerExpandedHeight;
-
               void closeSheet() => Navigator.of(sheetContext).maybePop();
 
               void updateVisibleMonth(DateTime month) {
@@ -359,10 +353,20 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                   ? () => updateVisibleMonth(nextMonth)
                   : null;
 
-              final header = _DeadlineMonthHeader(
-                label: _monthLabel(_visibleMonth),
-                onPrevious: handlePrevious,
-                onNext: handleNext,
+              final sheetHeader = AxiSheetHeader(
+                title: Center(child: Text(_monthLabel(_visibleMonth))),
+                leading: _DeadlineNavigationButton(
+                  icon: Icons.chevron_left,
+                  onPressed: handlePrevious,
+                ),
+                actions: [
+                  _DeadlineNavigationButton(
+                    icon: Icons.chevron_right,
+                    onPressed: handleNext,
+                  ),
+                ],
+                showCloseButton: false,
+                onClose: closeSheet,
               );
               final calendarGrid = _DeadlineCalendarGrid(
                 visibleMonth: _visibleMonth,
@@ -379,44 +383,35 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                 minuteValues: _minuteValues,
                 onHourSelected: handleHourSelected,
                 onMinuteSelected: handleMinuteSelected,
+                framed: false,
               );
-              final actions = _DeadlinePickerActions(
-                showTimeSelectors: widget.showTimeSelectors,
-                hasValue: _currentValue != null,
-                onCancel: handleCancel,
-                onClear: _currentValue != null ? handleClear : null,
-                onDone: closeSheet,
-                includeBottomSafeArea: true,
+              final actions = AxiSheetActions(
+                children: [
+                  AxiButton.outline(
+                    onPressed: handleCancel,
+                    child: Text(context.l10n.commonCancel),
+                  ),
+                  if (_currentValue != null)
+                    AxiButton.outline(
+                      onPressed: handleClear,
+                      child: Text(context.l10n.commonClear),
+                    ),
+                  const Spacer(),
+                  AxiButton.primary(
+                    onPressed: closeSheet,
+                    child: Text(context.l10n.commonDone),
+                  ),
+                ],
               );
 
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final double availableHeight = constraints.maxHeight.isFinite
-                      ? constraints.maxHeight
-                      : hostMediaQuery.size.height;
-                  final double maxHeight =
-                      availableHeight.isFinite && availableHeight > 0
-                      ? math.min(desiredHeight, availableHeight)
-                      : desiredHeight;
-                  final spacing = context.spacing;
-                  final EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
-                    spacing.m,
-                    spacing.xxs,
-                    spacing.m,
-                    spacing.m,
-                  );
-                  return Padding(
-                    padding: sheetPadding,
-                    child: _DeadlineSheetContent(
-                      maxHeight: maxHeight,
-                      showTimeSelectors: widget.showTimeSelectors,
-                      monthHeader: header,
-                      calendarGrid: calendarGrid,
-                      timeSelectors: timeSelectors,
-                      actions: actions,
-                    ),
-                  );
-                },
+              return AxiSheetScaffold.sections(
+                header: sheetHeader,
+                footer: actions,
+                sections: [
+                  AxiSheetSection(child: calendarGrid),
+                  if (widget.showTimeSelectors)
+                    AxiSheetSection(child: timeSelectors),
+                ],
               );
             },
           );
@@ -1019,87 +1014,6 @@ class _DeadlineDropdownSurface extends StatelessWidget {
   }
 }
 
-class _DeadlineSheetContent extends StatelessWidget {
-  const _DeadlineSheetContent({
-    required this.maxHeight,
-    required this.showTimeSelectors,
-    required this.monthHeader,
-    required this.calendarGrid,
-    required this.timeSelectors,
-    required this.actions,
-  });
-
-  final double maxHeight;
-  final bool showTimeSelectors;
-  final Widget monthHeader;
-  final Widget calendarGrid;
-  final Widget timeSelectors;
-  final Widget actions;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      bottom: false,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final double desiredHeight = showTimeSelectors
-                ? _CalendarDateTimeFieldState._timePickerDesiredHeight
-                : _CalendarDateTimeFieldState._datePickerExpandedHeight;
-            final bool needsScroll = constraints.maxHeight < desiredHeight;
-
-            if (!needsScroll) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: showTimeSelectors
-                    ? [monthHeader, calendarGrid, timeSelectors, actions]
-                    : [monthHeader, calendarGrid, actions],
-              );
-            }
-
-            if (showTimeSelectors) {
-              return Column(
-                mainAxisSize: MainAxisSize.max,
-                children: [
-                  monthHeader,
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: EdgeInsets.zero,
-                      physics: const ClampingScrollPhysics(),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [calendarGrid, timeSelectors],
-                      ),
-                    ),
-                  ),
-                  actions,
-                ],
-              );
-            }
-
-            return Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                monthHeader,
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.zero,
-                    physics: const ClampingScrollPhysics(),
-                    child: calendarGrid,
-                  ),
-                ),
-                actions,
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
 class _DeadlineFieldContent extends StatelessWidget {
   const _DeadlineFieldContent({
     required this.placeholder,
@@ -1350,6 +1264,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
     required this.minuteValues,
     required this.onHourSelected,
     required this.onMinuteSelected,
+    this.framed = true,
   });
 
   final bool showTimeSelectors;
@@ -1359,6 +1274,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
   final List<int> minuteValues;
   final ValueChanged<int> onHourSelected;
   final ValueChanged<int> onMinuteSelected;
+  final bool framed;
 
   @override
   Widget build(BuildContext context) {
@@ -1367,18 +1283,22 @@ class _DeadlineTimeSelectors extends StatelessWidget {
     }
 
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.m,
-        vertical: context.spacing.s,
-      ),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: calendarBorderColor,
-            width: context.borderSide.width,
-          ),
-        ),
-      ),
+      padding: framed
+          ? EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
+            )
+          : EdgeInsets.zero,
+      decoration: framed
+          ? BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: calendarBorderColor,
+                  width: context.borderSide.width,
+                ),
+              ),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1497,7 +1417,6 @@ class _DeadlinePickerActions extends StatelessWidget {
     required this.onCancel,
     this.onClear,
     required this.onDone,
-    this.includeBottomSafeArea = false,
   });
 
   final bool showTimeSelectors;
@@ -1505,7 +1424,6 @@ class _DeadlinePickerActions extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback? onClear;
   final VoidCallback onDone;
-  final bool includeBottomSafeArea;
 
   @override
   Widget build(BuildContext context) {
@@ -1546,9 +1464,6 @@ class _DeadlinePickerActions extends StatelessWidget {
         ],
       ),
     );
-    if (!includeBottomSafeArea) {
-      return content;
-    }
-    return SafeArea(top: false, left: false, right: false, child: content);
+    return content;
   }
 }

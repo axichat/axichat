@@ -272,12 +272,6 @@ class _AxiSheetScaffoldHarness extends StatelessWidget {
             onClose: () {},
             showCloseButton: false,
           ),
-          bodyPadding: EdgeInsets.fromLTRB(
-            context.spacing.l,
-            context.spacing.s,
-            context.spacing.l,
-            context.spacing.s,
-          ),
           children: [
             SizedBox(
               key: const ValueKey<String>('paddedBodyContent'),
@@ -348,12 +342,6 @@ class _AxiSheetFooterGapHarness extends StatelessWidget {
             title: const Text('Footer contract'),
             onClose: () {},
             showCloseButton: false,
-          ),
-          bodyPadding: EdgeInsets.fromLTRB(
-            context.spacing.m,
-            context.spacing.s,
-            context.spacing.m,
-            context.spacing.m,
           ),
           footer: const AxiSheetActions(
             key: ValueKey<String>('footerActions'),
@@ -434,7 +422,6 @@ class _AxiSheetChipsOnlyHarness extends StatelessWidget {
           ),
           sections: [
             AxiSheetSection.edge(
-              padding: EdgeInsets.zero,
               child: SizedBox(
                 key: const ValueKey<String>('chipsOnlyContent'),
                 height: context.sizing.menuItemHeight,

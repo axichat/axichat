@@ -1253,7 +1253,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final DateTime? picked = await showAdaptiveBottomSheet<DateTime>(
       context: modalContext,
       isScrollControlled: true,
-      useBottomSafeArea: false,
+      bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         return _SplitTaskPickerSheet(
@@ -1552,7 +1552,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        useBottomSafeArea: false,
+        bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
         surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {
@@ -3382,7 +3382,10 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   String _getDayOfWeekShort(BuildContext context, DateTime date) {
-    return DateFormat('EEE', context.l10n.localeName).format(date);
+    return DateFormat(
+      'EEE',
+      context.l10n.localeName,
+    ).format(date).toUpperCase();
   }
 
   void _selectDateAndSwitchToDay(DateTime date) {
@@ -4589,24 +4592,11 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
-      context.spacing.m,
-      context.spacing.s,
-      context.spacing.m,
-      context.spacing.m,
-    );
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
         title: Text(context.l10n.calendarSplitTaskAt),
         onClose: () => Navigator.of(context).maybePop(),
-        padding: EdgeInsets.fromLTRB(
-          context.spacing.m,
-          context.spacing.m,
-          context.spacing.m,
-          context.spacing.xs,
-        ),
       ),
-      bodyPadding: sheetPadding,
       footer: AxiSheetActions(
         children: [
           Expanded(

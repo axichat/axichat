@@ -2480,7 +2480,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        useBottomSafeArea: false,
+        bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
         surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {
@@ -2855,16 +2855,16 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       paths: locate<B>().state.criticalPaths,
       bloc: locate<B>(),
       stayOpen: true,
-      onPathSelected: (path) async {
+      onPathSelected: (pickerContext, path) async {
         _addQueuedCriticalPath(path.id);
-        return context.l10n.calendarCriticalPathQueuedAdd(path.name);
+        return pickerContext.l10n.calendarCriticalPathQueuedAdd(path.name);
       },
-      onCreateNewPath: () async {
+      onCreateNewPath: (pickerContext) async {
         final String? name = await promptCriticalPathName(
-          context: context,
-          title: context.l10n.calendarCriticalPathsNew,
+          context: pickerContext,
+          title: pickerContext.l10n.calendarCriticalPathsNew,
         );
-        if (!mounted || name == null) {
+        if (!mounted || !pickerContext.mounted || name == null) {
           return null;
         }
         _pendingCriticalPathName = name;
@@ -6158,24 +6158,18 @@ class _AdvancedOptions extends StatelessWidget {
         ),
         _AdvancedOptionsSection(
           label: l10n.calendarFragmentCriticalPathLabel,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: TaskSecondaryButton(
-                  label: l10n.calendarAddToCriticalPath,
-                  icon: Icons.route,
-                  widthBehavior: AxiButtonWidth.expand,
-                  onPressed: onAddToCriticalPath,
-                ).withTapBounce(),
-              ),
-              SizedBox(height: context.spacing.s),
-              CriticalPathMembershipList(
-                paths: queuedPaths,
-                onRemovePath: onRemoveQueuedPath,
-              ),
-            ],
+          child: CriticalPathMembershipControls(
+            addButton: SizedBox(
+              width: double.infinity,
+              child: TaskSecondaryButton(
+                label: l10n.calendarAddToCriticalPath,
+                icon: Icons.route,
+                widthBehavior: AxiButtonWidth.expand,
+                onPressed: onAddToCriticalPath,
+              ).withTapBounce(),
+            ),
+            paths: queuedPaths,
+            onRemovePath: onRemoveQueuedPath,
           ),
         ),
       ],

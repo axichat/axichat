@@ -117,16 +117,11 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final config =
         _draftConfig ?? context.watch<SettingsCubit>().state.endpointConfig;
     final placeholderStyle = textTheme.muted;
-    final EdgeInsets sheetPadding = EdgeInsets.symmetric(
-      horizontal: widget.compact ? spacing.m : spacing.l,
-    );
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
         title: Text(context.l10n.authCustomServerTitle),
         onClose: () => Navigator.of(context).maybePop(),
-        padding: sheetPadding.copyWith(top: spacing.m, bottom: spacing.s),
       ),
-      bodyPadding: sheetPadding.copyWith(bottom: spacing.m),
       children: [
         Text(context.l10n.authCustomServerDescription, style: textTheme.muted),
         SizedBox(height: spacing.m),

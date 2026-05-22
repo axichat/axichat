@@ -76,7 +76,7 @@ Future<DayEventEditorResult?> showDayEventEditor({
   return showAdaptiveBottomSheet<DayEventEditorResult>(
     context: modalContext,
     isScrollControlled: true,
-    useBottomSafeArea: false,
+    bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
     dialogMaxWidth: context.sizing.dialogMaxWidth,
     surfacePadding: EdgeInsets.zero,
     showCloseButton: false,
@@ -225,7 +225,6 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
             onClose: () => Navigator.of(context).maybePop(),
           ),
           footer: actions,
-          bodyPadding: EdgeInsets.symmetric(horizontal: context.spacing.m),
           sections: [
             AxiSheetSection(
               child: Column(

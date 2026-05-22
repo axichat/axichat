@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/view/tasks/reminder_preferences_field.dart'
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/calendar/view/shell/chat_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
+import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
 import 'package:axichat/src/common/ui/axi_sheet_scaffold.dart';
 import 'package:axichat/src/common/env.dart';
@@ -464,7 +465,7 @@ void main() {
                   paths: const <CalendarCriticalPath>[],
                   bloc: bloc,
                   stayOpen: true,
-                  onCreateNewPath: () async {
+                  onCreateNewPath: (_) async {
                     state = state.copyWith(
                       model: state.model.addCriticalPath(createdPath),
                     );
@@ -490,6 +491,236 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Created path'), findsOneWidget);
+  });
+
+  testWidgets('add-to-critical-path create treats first task as attached', (
+    tester,
+  ) async {
+    final controller = StreamController<CalendarState>.broadcast();
+    addTearDown(controller.close);
+
+    final bloc = MockCalendarBloc();
+    final events = <CalendarEvent>[];
+    var state = CalendarTestData.baseState();
+    final task = state.model.tasks['task-weekly-sync']!;
+    when(() => bloc.state).thenAnswer((_) => state);
+    when(() => bloc.stream).thenAnswer((_) => controller.stream);
+    when(() => bloc.add(any())).thenAnswer((invocation) {
+      events.add(invocation.positionalArguments.first as CalendarEvent);
+    });
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+
+    await _pumpMobileSheetHarness(
+      tester,
+      Builder(
+        builder: (context) {
+          return Center(
+            child: ElevatedButton(
+              onPressed: () {
+                unawaited(
+                  addTaskToCriticalPath(
+                    context: context,
+                    bloc: bloc,
+                    task: task,
+                  ),
+                );
+              },
+              child: const Text('Open add to critical path'),
+            ),
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Open add to critical path'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New critical path'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Critical path name'), findsOneWidget);
+    await tester.tap(find.text('Critical path name'), warnIfMissed: false);
+    tester.testTextInput.enterText('Created path');
+    await tester.pump();
+    await tester.tap(find.text('Save').last);
+    await tester.pump();
+    final saveException = tester.takeException();
+    expect(
+      saveException,
+      isNull,
+      reason: saveException is FlutterError
+          ? saveException.toStringDeep()
+          : '$saveException',
+    );
+
+    expect(events.single, isA<CalendarCriticalPathCreated>());
+    final createdEvent = events.single as CalendarCriticalPathCreated;
+    expect(createdEvent.taskId, task.id);
+
+    final stalePath = CalendarCriticalPath(
+      id: 'stale-path',
+      name: 'Stale path',
+      createdAt: DateTime(2024, 1, 14),
+      modifiedAt: DateTime(2024, 1, 14),
+    );
+    state = state.copyWith(
+      model: state.model.addCriticalPath(stalePath),
+      isCriticalPathMutating: false,
+      criticalPathMutationError: null,
+      lastCreatedCriticalPathId: stalePath.id,
+    );
+    controller.add(state);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    expect(
+      find.text('Created "Created path" and added task.'),
+      findsNothing,
+      reason: 'A stale last-created path must not complete this request.',
+    );
+
+    state = state.copyWith(
+      isCriticalPathMutating: true,
+      criticalPathMutationError: null,
+      lastCreatedCriticalPathId: null,
+    );
+    controller.add(state);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    final createdPath = CalendarCriticalPath(
+      id: 'created-path',
+      name: 'Created path',
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+    final updatedModel = state.model
+        .addCriticalPath(createdPath)
+        .addTaskToCriticalPath(pathId: createdPath.id, taskId: task.baseId);
+    state = state.copyWith(
+      model: updatedModel,
+      isCriticalPathMutating: false,
+      criticalPathMutationError: null,
+      lastCreatedCriticalPathId: createdPath.id,
+      lastCriticalPathTaskAddedPathId: null,
+      lastCriticalPathTaskAddedTaskId: null,
+    );
+    controller.add(state);
+    await tester.pump();
+
+    expect(find.text('Created "Created path" and added task.'), findsOneWidget);
+    expect(
+      events.whereType<CalendarCriticalPathTaskAdded>(),
+      isEmpty,
+      reason: 'The create event already attaches the first task.',
+    );
+    expect(tester.takeException(), isNull);
+
+    Navigator.of(
+      tester.element(find.text('Created "Created path" and added task.')),
+    ).pop();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('add-to-critical-path picker re-enables after path selection', (
+    tester,
+  ) async {
+    final controller = StreamController<CalendarState>.broadcast();
+    addTearDown(controller.close);
+
+    final bloc = MockCalendarBloc();
+    final events = <CalendarEvent>[];
+    final firstPath = CalendarCriticalPath(
+      id: 'first-path',
+      name: 'First path',
+      createdAt: DateTime(2024, 1, 15),
+      modifiedAt: DateTime(2024, 1, 15),
+    );
+    final secondPath = CalendarCriticalPath(
+      id: 'second-path',
+      name: 'Second path',
+      createdAt: DateTime(2024, 1, 16),
+      modifiedAt: DateTime(2024, 1, 16),
+    );
+    final baseState = CalendarTestData.baseState();
+    var state = baseState.copyWith(
+      model: baseState.model
+          .addCriticalPath(firstPath)
+          .addCriticalPath(secondPath),
+    );
+    final task = state.model.tasks['task-weekly-sync']!;
+    when(() => bloc.state).thenAnswer((_) => state);
+    when(() => bloc.stream).thenAnswer((_) => controller.stream);
+    when(() => bloc.add(any())).thenAnswer((invocation) {
+      events.add(invocation.positionalArguments.first as CalendarEvent);
+    });
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+
+    await _pumpMobileSheetHarness(
+      tester,
+      Builder(
+        builder: (context) {
+          return Center(
+            child: ElevatedButton(
+              onPressed: () {
+                unawaited(
+                  addTaskToCriticalPath(
+                    context: context,
+                    bloc: bloc,
+                    task: task,
+                  ),
+                );
+              },
+              child: const Text('Open add to critical path'),
+            ),
+          );
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Open add to critical path'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('First path'));
+    await tester.pump();
+    expect(events.single, isA<CalendarCriticalPathTaskAdded>());
+
+    state = state.copyWith(
+      isCriticalPathMutating: true,
+      criticalPathMutationError: null,
+      lastCriticalPathTaskAddedPathId: null,
+      lastCriticalPathTaskAddedTaskId: null,
+    );
+    controller.add(state);
+    await tester.pump();
+
+    state = state.copyWith(
+      model: state.model.addTaskToCriticalPath(
+        pathId: firstPath.id,
+        taskId: task.baseId,
+      ),
+      isCriticalPathMutating: false,
+      criticalPathMutationError: null,
+      lastCriticalPathTaskAddedPathId: firstPath.id,
+      lastCriticalPathTaskAddedTaskId: task.baseId,
+    );
+    controller.add(state);
+    await tester.pump();
+
+    expect(find.text('Added to "First path".'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Second path'));
+    await tester.pump();
+    expect(events.whereType<CalendarCriticalPathTaskAdded>(), hasLength(2));
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Done'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('focused critical path notice can unfocus calendar', (
@@ -610,6 +841,52 @@ void main() {
     expect(find.text('"Focused path" is focused.'), findsOneWidget);
   });
 
+  testWidgets(
+    'closing add-to-critical-path picker does not reuse disposed state',
+    (tester) async {
+      final controller = StreamController<CalendarState>.broadcast();
+      addTearDown(controller.close);
+
+      final bloc = MockCalendarBloc();
+      final state = CalendarTestData.baseState();
+      final task = state.model.tasks['task-weekly-sync']!;
+      when(() => bloc.state).thenReturn(state);
+      when(() => bloc.stream).thenAnswer((_) => controller.stream);
+      when(() => bloc.add(any())).thenAnswer((_) {});
+      when(() => bloc.close()).thenAnswer((_) async {});
+      addTearDown(bloc.close);
+
+      await _pumpMobileSheetHarness(
+        tester,
+        Builder(
+          builder: (context) {
+            return Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  unawaited(
+                    addTaskToCriticalPath(
+                      context: context,
+                      bloc: bloc,
+                      task: task,
+                    ),
+                  );
+                },
+                child: const Text('Open add to critical path'),
+              ),
+            );
+          },
+        ),
+      );
+
+      await tester.tap(find.text('Open add to critical path'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('CalendarWidget week view renders day headers', (tester) async {
     final harness = await CalendarWidgetHarness.pump(
       tester: tester,
@@ -656,11 +933,11 @@ void main() {
     gridState.zoomIn();
     await tester.pump();
 
-    expect(find.text('Comfort'), findsOneWidget);
+    expect(find.text('Expanded'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 6));
     await tester.pump(const Duration(milliseconds: 200));
-    expect(find.text('Comfort'), findsOneWidget);
+    expect(find.text('Expanded'), findsOneWidget);
   });
 
   testWidgets('selection sidebar summary updates with bloc state', (
@@ -693,21 +970,23 @@ void main() {
       size: const Size(1600, 900),
     );
 
-    final applyFinder = find.widgetWithText(ShadButton, 'Apply changes');
+    final applyFinder = find.widgetWithText(AxiButton, 'Apply changes');
     expect(applyFinder, findsOneWidget);
 
-    var applyButton = tester.widget<ShadButton>(applyFinder);
+    var applyButton = tester.widget<AxiButton>(applyFinder);
     expect(applyButton.onPressed, isNull);
 
-    final titleField = find.byWidgetPredicate((widget) {
-      return widget is TextField &&
-          widget.decoration?.hintText == 'Set title for selected tasks';
-    });
+    final titleField = _taskTextFieldByHint('Set title for selected tasks');
+    final titleController = _taskTextController(
+      tester,
+      'Set title for selected tasks',
+    );
 
-    await tester.enterText(titleField, 'Batch Title');
+    await tester.tap(titleField, warnIfMissed: false);
+    tester.testTextInput.enterText('Batch Title');
     await tester.pump();
 
-    applyButton = tester.widget<ShadButton>(applyFinder);
+    applyButton = tester.widget<AxiButton>(applyFinder);
     expect(applyButton.onPressed, isNotNull);
 
     await tester.tap(applyFinder);
@@ -755,10 +1034,9 @@ void main() {
 
     await harness.pumpState(updatedState);
 
-    final textField = tester.widget<TextField>(titleField);
-    expect(textField.controller?.text, 'Batch Title');
+    expect(titleController.text, 'Batch Title');
 
-    applyButton = tester.widget<ShadButton>(applyFinder);
+    applyButton = tester.widget<AxiButton>(applyFinder);
     expect(applyButton.onPressed, isNull);
   });
 
@@ -779,8 +1057,7 @@ void main() {
 
     expect(menuFinder, findsOneWidget);
 
-    await tester.tapAt(const Offset(5, 5));
-    await tester.pump(const Duration(milliseconds: 200));
+    await _clickOutsideContextMenu(tester);
     expect(menuFinder, findsNothing);
   });
 
@@ -809,8 +1086,7 @@ void main() {
         reason: 'context menu did not open on attempt $attempt',
       );
 
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pump(const Duration(milliseconds: 200));
+      await _clickOutsideContextMenu(tester);
       expect(
         menuFinder,
         findsNothing,
@@ -851,8 +1127,7 @@ void main() {
             'Menu should anchor near the $label click point vertically (dy=${point.dy}).',
       );
 
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pump(const Duration(milliseconds: 200));
+      await _clickOutsideContextMenu(tester);
       expect(
         menuFinder,
         findsNothing,
@@ -958,8 +1233,7 @@ void main() {
       }
 
       final double topMenuOffset = await openMenu(topTaskFinder);
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pump(const Duration(milliseconds: 150));
+      await _clickOutsideContextMenu(tester);
 
       final double bottomMenuOffset = await openMenu(bottomTaskFinder);
       expect(
@@ -969,8 +1243,7 @@ void main() {
             'Bottom task anchor should appear lower than the top task anchor.',
       );
 
-      await tester.tapAt(const Offset(5, 5));
-      await tester.pump(const Duration(milliseconds: 150));
+      await _clickOutsideContextMenu(tester);
     },
   );
 
@@ -1008,8 +1281,7 @@ void main() {
     );
 
     await tester.sendEventToBinding(hoverPointer.removePointer());
-    await tester.tapAt(const Offset(5, 5));
-    await tester.pump(const Duration(milliseconds: 150));
+    await _clickOutsideContextMenu(tester);
     expect(menuFinder, findsNothing);
   });
 
@@ -1116,29 +1388,21 @@ void main() {
       size: const Size(1600, 900),
     );
 
-    final titleField = find.byWidgetPredicate((widget) {
-      return widget is TextField &&
-          widget.decoration?.hintText == 'Set title for selected tasks';
-    });
-    final descriptionField = find.byWidgetPredicate((widget) {
-      return widget is TextField &&
-          widget.decoration?.hintText ==
-              'Set description (leave blank to clear)';
-    });
-    final locationField = find.byWidgetPredicate((widget) {
-      return widget is TextField &&
-          widget.decoration?.hintText == 'Set location (leave blank to clear)';
-    });
-
     expect(
-      tester.widget<TextField>(titleField).controller?.text,
+      _taskTextController(tester, 'Set title for selected tasks').text,
       updatedTask.title,
     );
     expect(
-      tester.widget<TextField>(descriptionField).controller?.text,
+      _taskTextController(
+        tester,
+        'Set description (leave blank to clear)',
+      ).text,
       'Review the sprint backlog',
     );
-    expect(tester.widget<TextField>(locationField).controller?.text, 'Room 12');
+    expect(
+      _taskTextController(tester, 'Set location (leave blank to clear)').text,
+      'Room 12',
+    );
   });
 
   testWidgets('selection list retains recurring occurrences when updated', (
@@ -1484,6 +1748,17 @@ Future<void> _pumpUntilMenuVisible(
   );
 }
 
+Future<void> _clickOutsideContextMenu(WidgetTester tester) async {
+  final gesture = await tester.startGesture(
+    const Offset(5, 5),
+    kind: PointerDeviceKind.mouse,
+    buttons: kPrimaryButton,
+  );
+  await tester.pump();
+  await gesture.up();
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
 Future<void> _pumpMobileSheetHarness(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1.0;
@@ -1525,6 +1800,16 @@ Future<void> _pumpMobileSheetHarness(WidgetTester tester, Widget child) async {
     ),
   );
   await tester.pump();
+}
+
+Finder _taskTextFieldByHint(String hint) {
+  return find.byWidgetPredicate((widget) {
+    return widget is TaskTextField && widget.hintText == hint;
+  });
+}
+
+TextEditingController _taskTextController(WidgetTester tester, String hint) {
+  return tester.widget<TaskTextField>(_taskTextFieldByHint(hint)).controller;
 }
 
 Widget _contextMenuTestApp({required Widget child}) {

@@ -174,44 +174,32 @@ class _CalendarCriticalPathShareSheetState
         ],
       ),
       sections: [
+        AxiSheetSection(
+          child: _CriticalPathShareSectionLabel(
+            text: l10n.calendarCriticalPathShareTargetLabel,
+          ),
+        ),
         AxiSheetSection.edge(
-          padding: EdgeInsets.zero,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  context.spacing.m,
-                  context.spacing.m,
-                  context.spacing.m,
-                  context.spacing.s,
+          child: BlocSelector<ChatsCubit, ChatsState, List<String>>(
+            bloc: widget.locate<ChatsCubit>(),
+            selector: (state) => state.recipientAddressSuggestions,
+            builder: (context, recipientAddressSuggestions) =>
+                RecipientChipsBar(
+                  recipients: _recipients,
+                  availableChats: widget.availableChats,
+                  rosterItems: rosterItems,
+                  databaseSuggestionAddresses: recipientAddressSuggestions,
+                  selfJid: chatsSelfJid,
+                  selfIdentity: selfIdentity,
+                  latestStatuses: const {},
+                  collapsedByDefault: false,
+                  allowAddressTargets: false,
+                  showSuggestionsWhenEmpty: true,
+                  horizontalPadding: 0,
+                  tapRegionGroup: _recipientTextInputTapRegionGroup,
+                  onRecipientAdded: _handleRecipientAdded,
+                  onRecipientRemoved: _handleRecipientRemoved,
                 ),
-                child: _CriticalPathShareSectionLabel(
-                  text: l10n.calendarCriticalPathShareTargetLabel,
-                ),
-              ),
-              BlocSelector<ChatsCubit, ChatsState, List<String>>(
-                bloc: widget.locate<ChatsCubit>(),
-                selector: (state) => state.recipientAddressSuggestions,
-                builder: (context, recipientAddressSuggestions) =>
-                    RecipientChipsBar(
-                      recipients: _recipients,
-                      availableChats: widget.availableChats,
-                      rosterItems: rosterItems,
-                      databaseSuggestionAddresses: recipientAddressSuggestions,
-                      selfJid: chatsSelfJid,
-                      selfIdentity: selfIdentity,
-                      latestStatuses: const {},
-                      collapsedByDefault: false,
-                      allowAddressTargets: false,
-                      showSuggestionsWhenEmpty: true,
-                      horizontalPadding: 0,
-                      tapRegionGroup: _recipientTextInputTapRegionGroup,
-                      onRecipientAdded: _handleRecipientAdded,
-                      onRecipientRemoved: _handleRecipientRemoved,
-                    ),
-              ),
-            ],
           ),
         ),
       ],

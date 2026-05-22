@@ -4846,7 +4846,6 @@ class _ChatState extends State<Chat> {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes, l10n);
         final colors = sheetContext.colorScheme;
-        final spacing = sheetContext.spacing;
         return BlocProvider.value(
           value: chatBloc,
           child: Builder(
@@ -4855,18 +4854,6 @@ class _ChatState extends State<Chat> {
                 header: AxiSheetHeader(
                   title: Text(l10n.chatAttachmentTooltip),
                   onClose: () => Navigator.of(sheetContext).maybePop(),
-                  padding: EdgeInsets.fromLTRB(
-                    spacing.m,
-                    spacing.m,
-                    spacing.m,
-                    spacing.s,
-                  ),
-                ),
-                bodyPadding: EdgeInsets.fromLTRB(
-                  spacing.m,
-                  spacing.xs,
-                  spacing.m,
-                  spacing.m,
                 ),
                 children: [
                   AxiListButton(

@@ -2101,19 +2101,11 @@ class DraftFormState extends State<DraftForm> {
         final attachment = pending.attachment;
         final sizeLabel = formatBytes(attachment.sizeBytes, context.l10n);
         final colors = sheetContext.colorScheme;
-        final spacing = sheetContext.spacing;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
             title: Text(sheetContext.l10n.chatAttachmentTooltip),
             onClose: () => Navigator.of(sheetContext).maybePop(),
-            padding: EdgeInsets.fromLTRB(
-              spacing.m,
-              spacing.m,
-              spacing.m,
-              spacing.s,
-            ),
           ),
-          bodyPadding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m),
           children: [
             AxiListTile(
               leading: Icon(attachmentIcon(attachment), color: colors.primary),

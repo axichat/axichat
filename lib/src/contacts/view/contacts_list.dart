@@ -39,7 +39,6 @@ Future<void> showContactDetailsSheet({
   final action = await showAdaptiveBottomSheet<_ContactDetailsSheetAction>(
     context: context,
     isScrollControlled: true,
-    useBottomSafeArea: false,
     surfacePadding: EdgeInsets.zero,
     showDragHandle: true,
     builder: (_) {
@@ -696,12 +695,6 @@ class _ContactDetailsSheet extends StatelessWidget {
             header: AxiSheetHeader(
               title: Text(context.l10n.contactsDetailsSectionTitle),
               onClose: () => Navigator.of(context).maybePop(),
-            ),
-            bodyPadding: EdgeInsets.fromLTRB(
-              spacing.m,
-              0,
-              spacing.m,
-              spacing.s,
             ),
             children: [
               _ContactSummaryCard(contact: currentContact),

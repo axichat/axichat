@@ -40,4 +40,11 @@ extension CalendarModalContext on BuildContext {
     final BuildContext? navigatorContext = scope?.navigatorContext;
     return navigatorContext ?? this;
   }
+
+  AxiSheetBottomSafeAreaBehavior get calendarSheetBottomSafeAreaBehavior {
+    if (CalendarModalScope.maybeOf(this) == null) {
+      return AxiSheetBottomSafeAreaBehavior.insideSurface;
+    }
+    return AxiSheetBottomSafeAreaBehavior.none;
+  }
 }

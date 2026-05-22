@@ -119,7 +119,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
         await showAdaptiveBottomSheet<void>(
           context: modalContext,
           isScrollControlled: true,
-          useBottomSafeArea: false,
+          bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
           surfacePadding: EdgeInsets.zero,
           showCloseButton: false,
           builder: (sheetContext) {

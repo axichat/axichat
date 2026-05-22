@@ -484,12 +484,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           title: Text(context.l10n.calendarEditTaskTitle),
           onClose: _dismiss,
           showCloseButton: false,
-          padding: EdgeInsets.fromLTRB(
-            context.spacing.m,
-            context.spacing.s,
-            context.spacing.m,
-            context.spacing.s,
-          ),
           actions: [
             AxiIconButton.outline(
               iconData: Icons.check,
@@ -1891,30 +1885,23 @@ class _TaskCriticalPathMembership<B extends BaseCalendarBloc>
     return BlocBuilder<B, CalendarState>(
       builder: (context, state) {
         final paths = state.criticalPathsForTask(task);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TaskSecondaryButton(
-              label: context.l10n.calendarAddToCriticalPath,
-              icon: Icons.route,
-              onPressed: () => addTaskToCriticalPath(
-                context: context,
-                bloc: context.read<B>(),
-                task: task,
-              ),
+        return CriticalPathMembershipControls(
+          addButton: TaskSecondaryButton(
+            label: context.l10n.calendarAddToCriticalPath,
+            icon: Icons.route,
+            onPressed: () => addTaskToCriticalPath(
+              context: context,
+              bloc: context.read<B>(),
+              task: task,
             ),
-            SizedBox(height: context.spacing.xxs),
-            CriticalPathMembershipList(
-              paths: paths,
-              onRemovePath: (pathId) => context.read<B>().add(
-                CalendarEvent.criticalPathTaskRemoved(
-                  pathId: pathId,
-                  taskId: task.id,
-                ),
-              ),
-              emptyLabel: context.l10n.calendarNoCriticalPathMembership,
+          ),
+          paths: paths,
+          onRemovePath: (pathId) => context.read<B>().add(
+            CalendarEvent.criticalPathTaskRemoved(
+              pathId: pathId,
+              taskId: task.id,
             ),
-          ],
+          ),
         );
       },
     );

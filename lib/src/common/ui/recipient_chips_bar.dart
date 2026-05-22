@@ -18,6 +18,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -1804,6 +1805,15 @@ final class _RecipientAutocompleteOverlayState
 
   void _hideOverlayPortal() {
     if (!_portalController.isShowing) {
+      return;
+    }
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _hideOverlayPortal();
+        }
+      });
       return;
     }
     _portalController.hide();

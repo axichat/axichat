@@ -9,6 +9,7 @@ import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/view/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -1064,62 +1065,63 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
             ),
           ],
         );
-        return AxiDialogScaffold.scroll(
+        return AxiDialogScaffold.sections(
           header: AxiDialogHeader(
             title: Text(l10n.mucEditAvatar, style: titleStyle),
             onClose: widget.onCancel,
           ),
-          bodyPadding: EdgeInsets.symmetric(
-            horizontal: spacing.m,
-            vertical: spacing.s,
-          ),
           footer: actions,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SignupAvatarEditorPanel(
-                  mode: avatarState.editorMode,
-                  avatarBytes: avatarState.previewBytes,
-                  animationDuration: animationDuration,
-                  showRotationTimer: avatarState.carouselRunning,
-                  rotationStartedAt: avatarState.carouselStartedAt,
-                  rotationDuration: AvatarEditorCubit.avatarCarouselInterval,
-                  cropBytes: avatarState.draftAvatar?.sourceBytes,
-                  cropRect: avatarState.draftAvatar?.cropRect,
-                  imageWidth: avatarState.draftAvatar?.sourceWidth?.toDouble(),
-                  imageHeight: avatarState.draftAvatar?.sourceHeight
-                      ?.toDouble(),
-                  onCropChanged: (rect) =>
-                      context.read<AvatarEditorCubit>().updateCropRect(rect),
-                  onCropReset: () =>
-                      context.read<AvatarEditorCubit>().resetCrop(),
-                  onCropCommitted: (rect) =>
-                      context.read<AvatarEditorCubit>().commitCrop(rect),
-                  onShuffle: () => context
-                      .read<AvatarEditorCubit>()
-                      .pauseOnPreviewAvatar(context.colorScheme),
-                  onUpload: () => context.read<AvatarEditorCubit>().pickImage(),
-                  onUseCurrent: () =>
-                      context.read<AvatarEditorCubit>().selectCarouselAvatar(),
-                  useActionEnabled: useActionEnabled,
-                  canShuffleBackground: avatarState.canShuffleBackground,
-                  onShuffleBackground: avatarState.canShuffleBackground
-                      ? () => context
-                            .read<AvatarEditorCubit>()
-                            .shuffleBackground(context.colorScheme)
-                      : null,
-                ),
-                if (errorText != null) ...[
-                  SizedBox(height: spacing.s),
-                  Text(
-                    errorText,
-                    style: context.textTheme.small.copyWith(
-                      color: context.colorScheme.destructive,
-                    ),
+          sections: [
+            AxiModalSection(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SignupAvatarEditorPanel(
+                    mode: avatarState.editorMode,
+                    avatarBytes: avatarState.previewBytes,
+                    animationDuration: animationDuration,
+                    showRotationTimer: avatarState.carouselRunning,
+                    rotationStartedAt: avatarState.carouselStartedAt,
+                    rotationDuration: AvatarEditorCubit.avatarCarouselInterval,
+                    cropBytes: avatarState.draftAvatar?.sourceBytes,
+                    cropRect: avatarState.draftAvatar?.cropRect,
+                    imageWidth: avatarState.draftAvatar?.sourceWidth
+                        ?.toDouble(),
+                    imageHeight: avatarState.draftAvatar?.sourceHeight
+                        ?.toDouble(),
+                    onCropChanged: (rect) =>
+                        context.read<AvatarEditorCubit>().updateCropRect(rect),
+                    onCropReset: () =>
+                        context.read<AvatarEditorCubit>().resetCrop(),
+                    onCropCommitted: (rect) =>
+                        context.read<AvatarEditorCubit>().commitCrop(rect),
+                    onShuffle: () => context
+                        .read<AvatarEditorCubit>()
+                        .pauseOnPreviewAvatar(context.colorScheme),
+                    onUpload: () =>
+                        context.read<AvatarEditorCubit>().pickImage(),
+                    onUseCurrent: () => context
+                        .read<AvatarEditorCubit>()
+                        .selectCarouselAvatar(),
+                    useActionEnabled: useActionEnabled,
+                    canShuffleBackground: avatarState.canShuffleBackground,
+                    onShuffleBackground: avatarState.canShuffleBackground
+                        ? () => context
+                              .read<AvatarEditorCubit>()
+                              .shuffleBackground(context.colorScheme)
+                        : null,
                   ),
+                  if (errorText != null) ...[
+                    SizedBox(height: spacing.s),
+                    Text(
+                      errorText,
+                      style: context.textTheme.small.copyWith(
+                        color: context.colorScheme.destructive,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ],
         );
@@ -1158,7 +1160,7 @@ bool _isMucInviteEligibleChat(
   if (chat.type != chat_models.ChatType.chat) {
     return false;
   }
-  if (chat.isEmailBacked || chat.isAxichatWelcomeThread) {
+  if (chat.defaultTransport.isEmail || chat.isAxichatWelcomeThread) {
     return false;
   }
   return _isMucInviteEligibleAddress(
@@ -1168,7 +1170,7 @@ bool _isMucInviteEligibleChat(
 }
 
 bool _isMucInviteEligibleTarget(Contact target, {required String? domain}) {
-  if (target.isEmailBacked || target.isAxichatWelcomeThread) {
+  if (target.usesEmailTransport() || target.isAxichatWelcomeThread) {
     return false;
   }
   return _isMucInviteEligibleAddress(target.bareRemoteAddress, domain: domain);
@@ -1287,7 +1289,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       footer: actions,
       sections: [
         AxiSheetSection.edge(
-          padding: EdgeInsets.zero,
           child: BlocSelector<ChatsCubit, ChatsState, List<String>>(
             bloc: locate<ChatsCubit>(),
             selector: (state) => state.recipientAddressSuggestions,
@@ -1371,7 +1372,6 @@ class _NicknameSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final spacing = context.spacing;
     final Widget actions = AxiDialogActions(
       children: [
         AxiButton.outline(
@@ -1384,22 +1384,20 @@ class _NicknameSheet extends StatelessWidget {
         ),
       ],
     );
-    return AxiDialogScaffold.scroll(
+    return AxiDialogScaffold.sections(
       header: AxiDialogHeader(
         title: Text(l10n.mucChangeNicknameTitle),
         onClose: onCancel,
       ),
-      bodyPadding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
-        vertical: spacing.s,
-      ),
       footer: actions,
-      children: [
-        AxiTextFormField(
-          controller: controller,
-          autofocus: true,
-          placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-          onSubmitted: onSubmit,
+      sections: [
+        AxiModalSection.compact(
+          child: AxiTextFormField(
+            controller: controller,
+            autofocus: true,
+            placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+            onSubmitted: onSubmit,
+          ),
         ),
       ],
     );
