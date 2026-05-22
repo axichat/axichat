@@ -1,3 +1,5 @@
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -25,21 +27,21 @@ void main() {
     expect(find.text('Link existing email'), findsOneWidget);
   });
 
-  testWidgets('signup welcome uses email notification setting', (tester) async {
+  testWidgets('signup welcome uses background messaging setting', (
+    tester,
+  ) async {
     await _pumpEmailForwardingApp(
       tester,
       child: const EmailForwardingWelcomeContent(),
     );
 
     expect(find.byType(NotificationRequest), findsNothing);
-    expect(find.text('Mute email notifications'), findsOneWidget);
-    expect(
-      find.text('Stop receiving email message notifications on this device.'),
-      findsOneWidget,
-    );
+    expect(find.text('Mute email notifications'), findsNothing);
+    expect(find.text('Background notifications'), findsOneWidget);
+    expect(find.text('Strongly recommended'), findsOneWidget);
   });
 
-  testWidgets('signup email notification setting updates SettingsCubit', (
+  testWidgets('signup background messaging setting updates SettingsCubit', (
     tester,
   ) async {
     final settingsCubit = _settingsCubit();
@@ -52,7 +54,64 @@ void main() {
     await tester.tap(find.byType(ShadSwitch));
     await tester.pump();
 
-    verify(() => settingsCubit.toggleEmailNotificationsMuted(true)).called(1);
+    verify(() => settingsCubit.toggleBackgroundMessaging(true)).called(1);
+  });
+
+  testWidgets('signup welcome gate ignores the persisted guide-seen setting', (
+    tester,
+  ) async {
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: _settingsCubit(
+        state: const SettingsState(emailForwardingGuideSeen: true),
+      ),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationCompleteFromSignup(),
+      ),
+      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsOneWidget);
+    expect(find.text('Skip for now'), findsOneWidget);
+  });
+
+  testWidgets('signup welcome gate skips normal login completions', (
+    tester,
+  ) async {
+    await _pumpEmailForwardingApp(
+      tester,
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationComplete(),
+      ),
+      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsNothing);
+  });
+
+  testWidgets('signup welcome gate skips smtp-disabled signups', (
+    tester,
+  ) async {
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: _settingsCubit(
+        state: const SettingsState(
+          endpointConfig: EndpointConfig(smtpEnabled: false),
+        ),
+      ),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationCompleteFromSignup(),
+      ),
+      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsNothing);
   });
 }
 
@@ -60,12 +119,19 @@ Future<void> _pumpEmailForwardingApp(
   WidgetTester tester, {
   required Widget child,
   _MockSettingsCubit? settingsCubit,
+  _MockAuthenticationCubit? authenticationCubit,
 }) {
   final cubit = settingsCubit ?? _settingsCubit();
+  final authCubit =
+      authenticationCubit ??
+      _authenticationCubit(state: const AuthenticationNone());
 
   return tester.pumpWidget(
-    BlocProvider<SettingsCubit>.value(
-      value: cubit,
+    MultiBlocProvider(
+      providers: [
+        BlocProvider<SettingsCubit>.value(value: cubit),
+        BlocProvider<AuthenticationCubit>.value(value: authCubit),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -96,17 +162,32 @@ Future<void> _pumpEmailForwardingApp(
   );
 }
 
-_MockSettingsCubit _settingsCubit() {
+_MockSettingsCubit _settingsCubit({
+  SettingsState state = const SettingsState(),
+}) {
   final settingsCubit = _MockSettingsCubit();
-  when(() => settingsCubit.state).thenReturn(const SettingsState());
+  when(() => settingsCubit.state).thenReturn(state);
   when(
     () => settingsCubit.stream,
   ).thenAnswer((_) => const Stream<SettingsState>.empty());
   when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
   when(
-    () => settingsCubit.toggleEmailNotificationsMuted(any()),
+    () => settingsCubit.toggleBackgroundMessaging(any()),
   ).thenAnswer((_) async {});
   return settingsCubit;
 }
+
+_MockAuthenticationCubit _authenticationCubit({
+  required AuthenticationState state,
+}) {
+  final authenticationCubit = _MockAuthenticationCubit();
+  when(() => authenticationCubit.state).thenReturn(state);
+  when(
+    () => authenticationCubit.stream,
+  ).thenAnswer((_) => const Stream<AuthenticationState>.empty());
+  return authenticationCubit;
+}
+
+class _MockAuthenticationCubit extends Mock implements AuthenticationCubit {}
 
 class _MockSettingsCubit extends Mock implements SettingsCubit {}

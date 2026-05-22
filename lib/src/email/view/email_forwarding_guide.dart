@@ -223,22 +223,22 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         SizedBox(height: spacing.xl),
-        const _EmailForwardingNotificationSetting(),
+        const _EmailForwardingBackgroundMessagingSetting(),
       ],
     );
   }
 }
 
-class _EmailForwardingNotificationSetting extends StatefulWidget {
-  const _EmailForwardingNotificationSetting();
+class _EmailForwardingBackgroundMessagingSetting extends StatefulWidget {
+  const _EmailForwardingBackgroundMessagingSetting();
 
   @override
-  State<_EmailForwardingNotificationSetting> createState() =>
-      _EmailForwardingNotificationSettingState();
+  State<_EmailForwardingBackgroundMessagingSetting> createState() =>
+      _EmailForwardingBackgroundMessagingSettingState();
 }
 
-class _EmailForwardingNotificationSettingState
-    extends State<_EmailForwardingNotificationSetting> {
+class _EmailForwardingBackgroundMessagingSettingState
+    extends State<_EmailForwardingBackgroundMessagingSetting> {
   bool _saving = false;
 
   @override
@@ -246,25 +246,23 @@ class _EmailForwardingNotificationSettingState
     final l10n = context.l10n;
     final state = context.watch<SettingsCubit>().state;
     return ShadSwitch(
-      label: Text(l10n.settingsMuteEmailNotifications),
-      sublabel: Text(l10n.settingsMuteEmailNotificationsDescription),
-      value: state.emailNotificationsMuted,
+      label: Text(l10n.notificationsMessageToggle),
+      sublabel: Text(l10n.notificationsRequiresRestart),
+      value: state.backgroundMessagingEnabled,
       onChanged:
           _saving ||
-              state.isGlobalSettingLoading(
-                GlobalSettingId.emailNotificationsMuted,
-              )
+              state.isGlobalSettingLoading(GlobalSettingId.backgroundMessaging)
           ? null
-          : _toggleEmailNotificationsMuted,
+          : _toggleBackgroundMessaging,
     );
   }
 
-  Future<void> _toggleEmailNotificationsMuted(bool muted) async {
+  Future<void> _toggleBackgroundMessaging(bool enabled) async {
     setState(() {
       _saving = true;
     });
     try {
-      await context.read<SettingsCubit>().toggleEmailNotificationsMuted(muted);
+      await context.read<SettingsCubit>().toggleBackgroundMessaging(enabled);
     } finally {
       if (mounted) {
         setState(() {
@@ -495,10 +493,6 @@ class _EmailForwardingWelcomeGateState
     final authState = context.read<AuthenticationCubit>().state;
     if (!_debugAlwaysShowWelcome &&
         authState is! AuthenticationCompleteFromSignup) {
-      return;
-    }
-    if (!_debugAlwaysShowWelcome &&
-        context.read<SettingsCubit>().state.emailForwardingGuideSeen) {
       return;
     }
     _dialogShown = true;
