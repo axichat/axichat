@@ -108,6 +108,7 @@ void registerOmemoFallbacks() {
   registerFallbackValue(fallbackOmemoDeviceList);
   registerFallbackValue(FakeOmemoTrust());
   registerFallbackValue(FakeOmemoBundleCache());
+  registerFallbackValue(FakeStanzaDetails());
 }
 
 void resetForegroundNotifier({required bool value}) {

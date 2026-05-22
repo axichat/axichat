@@ -26,6 +26,18 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
   Future<String?> getApplicationSupportPath() async => supportPath;
 }
 
+Uint8List _tinyPngAvatarBytes() => Uint8List.fromList(const <int>[
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+]);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -160,6 +172,9 @@ void main() {
       final events = <XmppOperationEvent>[];
       final subscription = xmppService.xmppOperationStream.listen(events.add);
       addTearDown(subscription.cancel);
+      await xmppService.runBootstrapOperations(
+        XmppBootstrapTrigger.fullNegotiation,
+      );
 
       final payload = AvatarUploadPayload(
         bytes: Uint8List.fromList(const <int>[
@@ -177,6 +192,7 @@ void main() {
         width: 1,
         height: 1,
         hash: 'self-avatar-hash',
+        jid: 'jid@axi.im',
       );
 
       await expectLater(
@@ -216,17 +232,7 @@ void main() {
 
       await xmppService.storeAvatarBytesForJid(
         jid: contactJid,
-        bytes: Uint8List.fromList(const <int>[
-          0x89,
-          0x50,
-          0x4E,
-          0x47,
-          0x0D,
-          0x0A,
-          0x1A,
-          0x0A,
-          0x00,
-        ]),
+        bytes: _tinyPngAvatarBytes(),
         hash: 'avatar-hash',
       );
 
@@ -264,4 +270,263 @@ void main() {
       await tempDir.delete(recursive: true);
     }
   });
+
+  test('New cached avatar writes use account scoped directory', () async {
+    const contactJid = 'contact@example.com';
+    final originalPathProvider = PathProviderPlatform.instance;
+    final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+    final supportDir = Directory(p.join(tempDir.path, 'support'));
+    await supportDir.create(recursive: true);
+    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
+
+    try {
+      await database.saveRosterItems([
+        const RosterItem(
+          jid: contactJid,
+          title: 'contact',
+          presence: Presence.chat,
+          subscription: Subscription.both,
+        ),
+      ]);
+
+      await xmppService.storeAvatarBytesForJid(
+        jid: contactJid,
+        bytes: _tinyPngAvatarBytes(),
+        hash: 'avatar-hash',
+      );
+
+      final storedPath = (await database.getRosterItem(contactJid))?.avatarPath;
+      expect(storedPath, isNotNull);
+      final relative = p.relative(
+        storedPath!,
+        from: p.join(supportDir.path, 'avatars'),
+      );
+      final segments = p.split(relative);
+      expect(segments.first, 'v2');
+      expect(segments, hasLength(4));
+      expect(await File(storedPath).exists(), isTrue);
+    } finally {
+      PathProviderPlatform.instance = originalPathProvider;
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  test('Valid legacy cached avatar migrates to scoped path', () async {
+    const contactJid = 'contact@example.com';
+    final originalPathProvider = PathProviderPlatform.instance;
+    final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+    final supportDir = Directory(p.join(tempDir.path, 'support'));
+    await supportDir.create(recursive: true);
+    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
+
+    try {
+      await database.saveRosterItems([
+        const RosterItem(
+          jid: contactJid,
+          title: 'contact',
+          presence: Presence.chat,
+          subscription: Subscription.both,
+        ),
+      ]);
+
+      final avatarBytes = _tinyPngAvatarBytes();
+      await xmppService.storeAvatarBytesForJid(
+        jid: contactJid,
+        bytes: avatarBytes,
+        hash: 'avatar-hash',
+      );
+
+      final scopedPath = (await database.getRosterItem(
+        contactJid,
+      ))!.avatarPath!;
+      final legacyPath = p.join(supportDir.path, 'avatars', 'legacy.enc');
+      await File(
+        legacyPath,
+      ).writeAsBytes(await File(scopedPath).readAsBytes(), flush: true);
+      await database.updateRosterAvatar(
+        jid: contactJid,
+        avatarPath: legacyPath,
+        avatarHash: 'avatar-hash',
+      );
+      await database.updateChatAvatar(
+        jid: contactJid,
+        avatarPath: legacyPath,
+        avatarHash: 'avatar-hash',
+      );
+
+      final loaded = await xmppService.loadAvatarBytes(legacyPath);
+
+      expect(loaded, avatarBytes);
+      expect(await File(legacyPath).exists(), isTrue);
+      expect(
+        (await database.getRosterItem(contactJid))?.avatarPath,
+        scopedPath,
+      );
+      expect((await database.getChat(contactJid))?.avatarPath, scopedPath);
+    } finally {
+      PathProviderPlatform.instance = originalPathProvider;
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  test('Plain legacy cached avatar migrates to scoped path', () async {
+    const contactJid = 'contact@example.com';
+    final originalPathProvider = PathProviderPlatform.instance;
+    final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+    final supportDir = Directory(p.join(tempDir.path, 'support'));
+    await supportDir.create(recursive: true);
+    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
+
+    try {
+      await database.saveRosterItems([
+        const RosterItem(
+          jid: contactJid,
+          title: 'contact',
+          presence: Presence.chat,
+          subscription: Subscription.both,
+        ),
+      ]);
+
+      final avatarBytes = _tinyPngAvatarBytes();
+      final legacyPath = p.join(supportDir.path, 'avatars', 'legacy.png');
+      final legacyFile = File(legacyPath);
+      await legacyFile.parent.create(recursive: true);
+      await legacyFile.writeAsBytes(avatarBytes, flush: true);
+      await database.updateRosterAvatar(
+        jid: contactJid,
+        avatarPath: legacyPath,
+        avatarHash: 'avatar-hash',
+      );
+      await database.updateChatAvatar(
+        jid: contactJid,
+        avatarPath: legacyPath,
+        avatarHash: 'avatar-hash',
+      );
+
+      final loaded = await xmppService.loadAvatarBytes(legacyPath);
+      final updatedPath = (await database.getRosterItem(
+        contactJid,
+      ))?.avatarPath;
+
+      expect(loaded, avatarBytes);
+      expect(await legacyFile.exists(), isTrue);
+      expect(updatedPath, isNotNull);
+      expect(updatedPath, isNot(legacyPath));
+      final updatedSegments = p.split(
+        p.relative(updatedPath!, from: supportDir.path),
+      );
+      expect(updatedSegments.first, 'avatars');
+      expect(updatedSegments[1], 'v2');
+      expect(updatedSegments, hasLength(5));
+      expect((await database.getChat(contactJid))?.avatarPath, updatedPath);
+    } finally {
+      PathProviderPlatform.instance = originalPathProvider;
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  test(
+    'Invalid legacy cached avatar clears references without deleting file',
+    () async {
+      const contactJid = 'contact@example.com';
+      final originalPathProvider = PathProviderPlatform.instance;
+      final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+      final supportDir = Directory(p.join(tempDir.path, 'support'));
+      await supportDir.create(recursive: true);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(
+        supportDir.path,
+      );
+
+      try {
+        await database.saveRosterItems([
+          const RosterItem(
+            jid: contactJid,
+            title: 'contact',
+            presence: Presence.chat,
+            subscription: Subscription.both,
+          ),
+        ]);
+        final legacyPath = p.join(supportDir.path, 'avatars', 'legacy-bad.enc');
+        final legacyFile = File(legacyPath);
+        await legacyFile.parent.create(recursive: true);
+        await legacyFile.writeAsBytes(const <int>[1, 2, 3, 4], flush: true);
+        await database.updateRosterAvatar(
+          jid: contactJid,
+          avatarPath: legacyPath,
+          avatarHash: 'avatar-hash',
+        );
+        await database.updateChatAvatar(
+          jid: contactJid,
+          avatarPath: legacyPath,
+          avatarHash: 'avatar-hash',
+        );
+
+        final loaded = await xmppService.loadAvatarBytes(legacyPath);
+
+        expect(loaded, isNull);
+        expect(await legacyFile.exists(), isTrue);
+        expect((await database.getRosterItem(contactJid))?.avatarPath, isNull);
+        expect((await database.getChat(contactJid))?.avatarPath, isNull);
+      } finally {
+        PathProviderPlatform.instance = originalPathProvider;
+        await tempDir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'Wrong scoped cached avatar clears references without deleting file',
+    () async {
+      const contactJid = 'contact@example.com';
+      final originalPathProvider = PathProviderPlatform.instance;
+      final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+      final supportDir = Directory(p.join(tempDir.path, 'support'));
+      await supportDir.create(recursive: true);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(
+        supportDir.path,
+      );
+
+      try {
+        await database.saveRosterItems([
+          const RosterItem(
+            jid: contactJid,
+            title: 'contact',
+            presence: Presence.chat,
+            subscription: Subscription.both,
+          ),
+        ]);
+        final wrongScopePath = p.join(
+          supportDir.path,
+          'avatars',
+          'v2',
+          'other-account',
+          'other-key',
+          'avatar.enc',
+        );
+        final wrongScopeFile = File(wrongScopePath);
+        await wrongScopeFile.parent.create(recursive: true);
+        await wrongScopeFile.writeAsBytes(const <int>[1, 2, 3, 4], flush: true);
+        await database.updateRosterAvatar(
+          jid: contactJid,
+          avatarPath: wrongScopePath,
+          avatarHash: 'avatar-hash',
+        );
+        await database.updateChatAvatar(
+          jid: contactJid,
+          avatarPath: wrongScopePath,
+          avatarHash: 'avatar-hash',
+        );
+
+        final loaded = await xmppService.loadAvatarBytes(wrongScopePath);
+
+        expect(loaded, isNull);
+        expect(await wrongScopeFile.exists(), isTrue);
+        expect((await database.getRosterItem(contactJid))?.avatarPath, isNull);
+        expect((await database.getChat(contactJid))?.avatarPath, isNull);
+      } finally {
+        PathProviderPlatform.instance = originalPathProvider;
+        await tempDir.delete(recursive: true);
+      }
+    },
+  );
 }

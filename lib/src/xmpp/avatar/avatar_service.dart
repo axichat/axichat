@@ -395,6 +395,8 @@ final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
   const _AvatarMetadataLoadFailed();
 }
 
+enum _AvatarCachePathKind { activeScope, legacyRoot, otherScope, outsideRoot }
+
 mixin AvatarService on XmppBase, BaseStreamService {
   final _avatarLog = Logger('AvatarService');
   StreamController<bool> _selfAvatarHydratingController =
@@ -404,10 +406,13 @@ mixin AvatarService on XmppBase, BaseStreamService {
   bool _selfAvatarHydrating = false;
   SecretKey? _avatarEncryptionKey;
   List<int>? _avatarEncryptionSalt;
+  String? _avatarCacheAccountScope;
+  String? _avatarCacheKeyScope;
   final Map<String, Object> _avatarRefreshInProgress = <String, Object>{};
   final Set<String> _configuredAvatarNodes = {};
   final Set<String> _pubSubAvatarJids = {};
   Future<void>? _selfAvatarRefreshFuture;
+  Future<void> _selfAvatarStateOperation = Future<void>.value();
   Object _selfAvatarRefreshOwner = Object();
   _SelfAvatarRefreshRequest? _activeSelfAvatarRefreshRequest;
   _SelfAvatarRefreshRequest? _pendingSelfAvatarRefreshRequest;
@@ -419,6 +424,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   static const int _safeAvatarBytesCacheLimit = _avatarBytesCacheLimit;
   static const int _conversationAvatarChatStart = 0;
   static const int _conversationAvatarChatEnd = 0;
+  static const int _avatarCacheScopeSegmentLength = 32;
   static const Duration _avatarRefreshTimeout = Duration(seconds: 12);
   static const Duration _avatarPublishTimeout = Duration(seconds: 30);
   static const String _avatarConfigKeySeparator = '|';
@@ -438,6 +444,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   static const String _avatarClearReasonPubSubNodeDeleted =
       'pubsub_node_deleted';
   static const String _avatarClearReasonPubSubNodePurged = 'pubsub_node_purged';
+  static const String _avatarScopedCacheDirectory = 'v2';
   static const String _mimePng = 'image/png';
   static const String _mimeJpeg = 'image/jpeg';
   static const List<int> _pngMagicBytes = <int>[
@@ -915,14 +922,16 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
 
     final path = await _writeAvatarFile(bytes: payload.bytes);
-    await _persistOwnAvatar(path, payload.hash);
-    await _persistPendingSelfAvatarPublish(
-      path: path,
-      payload: payload,
-      public: public,
-    );
-    _setCachedSelfAvatar(Avatar(path: path, hash: payload.hash));
-    return AvatarUploadResult(path: path, hash: payload.hash);
+    return _runSelfAvatarStateOperation(() async {
+      await _persistOwnAvatar(path, payload.hash);
+      await _persistPendingSelfAvatarPublish(
+        path: path,
+        payload: payload,
+        public: public,
+      );
+      _setCachedSelfAvatar(Avatar(path: path, hash: payload.hash));
+      return AvatarUploadResult(path: path, hash: payload.hash);
+    });
   }
 
   Future<AvatarUploadResult> saveSelfAvatar(
@@ -966,11 +975,21 @@ mixin AvatarService on XmppBase, BaseStreamService {
   Future<void> _initializeAvatarEncryption(String passphrase) async {
     try {
       final salt = await _loadOrCreateAvatarSalt();
-      final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
-      _avatarEncryptionKey = await hkdf.deriveKey(
-        secretKey: SecretKey(utf8.encode(passphrase)),
-        nonce: salt,
-        info: utf8.encode('axichat-avatar-v1'),
+      _avatarEncryptionKey = await Hkdf(hmac: Hmac.sha256(), outputLength: 32)
+          .deriveKey(
+            secretKey: SecretKey(utf8.encode(passphrase)),
+            nonce: salt,
+            info: utf8.encode('axichat-avatar-v1'),
+          );
+      final cacheScopeKey = await Hkdf(hmac: Hmac.sha256(), outputLength: 16)
+          .deriveKey(
+            secretKey: SecretKey(utf8.encode(passphrase)),
+            nonce: salt,
+            info: utf8.encode('axichat-avatar-cache-scope-v1'),
+          );
+      _avatarCacheAccountScope = _resolveAvatarCacheAccountScope();
+      _avatarCacheKeyScope = _avatarCacheScopeSegment(
+        await cacheScopeKey.extractBytes(),
       );
     } catch (error, stackTrace) {
       _avatarLog.severe(
@@ -979,6 +998,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
         stackTrace,
       );
       _avatarEncryptionKey = null;
+      _avatarCacheAccountScope = null;
+      _avatarCacheKeyScope = null;
     }
   }
 
@@ -1025,10 +1046,13 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarRefreshFuture = null;
+    _selfAvatarStateOperation = Future<void>.value();
     _selfAvatarRefreshOwner = Object();
     _activeSelfAvatarRefreshRequest = null;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
+    _avatarCacheAccountScope = null;
+    _avatarCacheKeyScope = null;
     _cachedSelfAvatar = null;
     _clearSelfAvatarNegotiationState();
     await super._reset();
@@ -1779,110 +1803,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
   }
 
-  Future<void> _refreshAvatarFromVCard(String jid, String hash) async {
-    final bareJid = _avatarSafeBareJid(jid);
-    if (bareJid == null) return;
-    if (await _shouldSkipAvatarForBareJid(bareJid)) {
-      _avatarLog.fine('VCard refresh skipped; jid marked skippable.');
-      return;
-    }
-    if (hash.isEmpty) {
-      if (_isPubSubAvatarPreferred(bareJid)) {
-        _avatarLog.fine('VCard hash empty; keeping PubSub avatar.');
-        return;
-      }
-      _avatarLog.fine('VCard hash empty; clearing avatar.');
-      await _clearAvatarForJid(bareJid, reason: _avatarClearReasonVcardEmpty);
-      return;
-    }
-    final myBareJid = _myJid?.toBare().toString();
-    final isSelf = myBareJid != null && myBareJid == bareJid;
-    if (isSelf) {
-      await _requestSelfAvatarRefresh(
-        _SelfAvatarRefreshRequest(vcardHash: hash),
-      );
-      return;
-    }
-    Object? refreshToken;
-    try {
-      final existingHash = await _storedAvatarHash(bareJid);
-      if (existingHash == hash) {
-        final existingPath = await _storedAvatarPath(bareJid);
-        if (await _hasCachedAvatarFile(existingPath)) {
-          return;
-        }
-      }
-
-      final manager = _connection.getManager<mox.VCardManager>();
-      if (manager == null) {
-        _avatarLog.fine('VCardManager unavailable; skipping refresh.');
-        return;
-      }
-      final startedRefresh = _startAvatarRefresh(bareJid);
-      if (startedRefresh == null) {
-        _avatarLog.fine('VCard refresh already in progress; skipping.');
-        return;
-      }
-      refreshToken = startedRefresh;
-
-      final vcardResult = await _withAvatarRefreshTimeout(
-        manager.requestVCard(mox.JID.fromString(bareJid)),
-        operationName: 'Avatar vCard fetch',
-      );
-      if (vcardResult.isType<mox.VCardError>()) {
-        _avatarLog.fine('VCard request failed; aborting refresh.');
-        return;
-      }
-      final vcard = vcardResult.get<mox.VCard>();
-      final rawEncoded = vcard.photo?.binval?.trim();
-      if (rawEncoded == null || rawEncoded.isEmpty) {
-        _avatarLog.fine('VCard photo missing; aborting refresh.');
-        return;
-      }
-      if (rawEncoded.length > _maxAvatarBase64Length * 2) {
-        _avatarLog.fine('VCard photo payload too large; aborting refresh.');
-        return;
-      }
-      final encoded = rawEncoded.replaceAll(RegExp(r'\s+'), '');
-      if (encoded.isEmpty) {
-        _avatarLog.fine('VCard photo payload empty after normalization.');
-        return;
-      }
-      if (encoded.length > _maxAvatarBase64Length) {
-        _avatarLog.fine('VCard photo payload exceeds max length.');
-        return;
-      }
-
-      final bytes = base64Decode(encoded);
-      if (bytes.isEmpty) {
-        _avatarLog.fine('VCard avatar bytes empty after decode.');
-        return;
-      }
-      if (bytes.length > _maxAvatarBytes) {
-        _avatarLog.fine('VCard avatar bytes exceed max size.');
-        return;
-      }
-
-      if (!_ownsAvatarRefresh(bareJid, refreshToken)) {
-        _avatarLog.fine('Dropping stale vCard refresh before write.');
-        return;
-      }
-      final path = await _writeAvatarFile(bytes: bytes);
-      if (!_ownsAvatarRefresh(bareJid, refreshToken)) {
-        _avatarLog.fine('Dropping stale vCard refresh result.');
-        return;
-      }
-      await _storeAvatar(jid: bareJid, path: path, hash: hash);
-      _avatarLog.fine('VCard avatar stored successfully.');
-    } catch (error, stackTrace) {
-      _avatarLog.warning('Failed to refresh vCard avatar.', error, stackTrace);
-    } finally {
-      if (refreshToken != null) {
-        _finishAvatarRefresh(bareJid, refreshToken);
-      }
-    }
-  }
-
   Future<_AvatarMetadataLoadResult> _loadMetadata(String jid) async {
     final pubsub = _connection.getManager<mox.PubSubManager>();
     if (pubsub == null) {
@@ -2099,25 +2019,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
 
     if (existingPath != null && existingPath.isNotEmpty) {
-      _evictCachedAvatarBytes(existingPath);
-      final cacheDirectory = await _avatarCacheDirectory();
-      if (!_isSafeAvatarCachePath(
-        cacheDirectory: cacheDirectory,
-        filePath: existingPath,
-      )) {
-        _avatarLog.warning(
-          'Refusing to delete avatar outside cache directory.',
-        );
-        return;
-      }
-      final file = File(existingPath);
-      if (await file.exists()) {
-        try {
-          await file.delete();
-        } on Exception catch (error, stackTrace) {
-          _avatarLog.fine('Failed to delete avatar file', error, stackTrace);
-        }
-      }
+      await _deleteAvatarCacheFile(existingPath);
     }
   }
 
@@ -2126,12 +2028,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (normalizedPath.isEmpty) return;
     _evictCachedAvatarBytes(normalizedPath);
     _evictCachedSafeAvatarBytes(normalizedPath);
-    final cacheDirectory = await _avatarCacheDirectory();
-    if (!_isSafeAvatarCachePath(
-      cacheDirectory: cacheDirectory,
-      filePath: normalizedPath,
-    )) {
-      _avatarLog.warning('Refusing to delete avatar outside cache directory.');
+    if (await _avatarCachePathKind(normalizedPath) !=
+        _AvatarCachePathKind.activeScope) {
       return;
     }
     final file = File(normalizedPath);
@@ -2192,72 +2090,39 @@ mixin AvatarService on XmppBase, BaseStreamService {
       throw XmppAvatarException();
     }
     final isSelfTarget = _isSelfAvatarTarget(targetJid);
-    if (isSelfTarget) {
-      if (!_hasSelfAvatarNegotiatedStream) {
-        throw XmppAvatarException(XmppDisconnectedException());
-      }
-    } else if (connectionState != ConnectionState.connected) {
-      throw XmppAvatarException(XmppDisconnectedException());
-    }
     final shouldEmitOperation = isSelfTarget;
     if (shouldEmitOperation) {
       emitXmppOperation(_selfAvatarPublishStartEvent);
     }
-    _avatarLog.fine('Publishing avatar. public=$public.');
     var success = false;
     try {
-      final result = await _publishAvatarOnce(
+      if (isSelfTarget) {
+        if (!_hasSelfAvatarNegotiatedStream) {
+          throw XmppAvatarException(XmppDisconnectedException());
+        }
+      } else if (connectionState != ConnectionState.connected) {
+        throw XmppAvatarException(XmppDisconnectedException());
+      }
+      _avatarLog.fine('Publishing avatar. public=$public.');
+      await _publishAvatarRemoteWithFallback(
         payload: payload,
         targetJid: targetJid,
         public: public,
       );
       _markPubSubAvatarPreferred(targetJid);
-      if (_isSelfAvatarTarget(targetJid)) {
-        await _clearPendingSelfAvatarPublish();
-      }
+      final result = await _storePublishedAvatarLocally(
+        payload: payload,
+        targetJid: targetJid,
+      );
       _avatarLog.fine('Avatar publish completed.');
       success = true;
       return result;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
-      if (cause is mox.AvatarError || cause is mox.PubSubError) {
-        if (!public) {
-          rethrow;
-        }
-        const retryPublic = false;
-        try {
-          final result = await _publishAvatarOnce(
-            payload: payload,
-            targetJid: targetJid,
-            public: retryPublic,
-          );
-          _markPubSubAvatarPreferred(targetJid);
-          if (_isSelfAvatarTarget(targetJid)) {
-            await _clearPendingSelfAvatarPublish();
-          }
-          _avatarLog.fine('Avatar publish completed.');
-          success = true;
-          return result;
-        } on XmppAvatarException catch (retryError, retryStackTrace) {
-          final retryCause = retryError.wrapped;
-          final isAvatarError = retryCause is mox.AvatarError;
-          final log = isAvatarError ? _avatarLog.warning : _avatarLog.severe;
-          log(
-            'Failed to publish avatar',
-            retryError,
-            isAvatarError ? null : retryStackTrace,
-          );
-          rethrow;
-        } catch (retryError, retryStackTrace) {
-          _avatarLog.severe(
-            'Failed to publish avatar',
-            retryError,
-            retryStackTrace,
-          );
-          throw XmppAvatarException(retryError);
-        }
+      if (cause is XmppDisconnectedException) {
+        _avatarLog.fine('Avatar publish skipped; connection unavailable.');
+        rethrow;
       }
-
       final isAvatarError = cause is mox.AvatarError;
       final log = isAvatarError ? _avatarLog.warning : _avatarLog.severe;
       log('Failed to publish avatar', error, isAvatarError ? null : stackTrace);
@@ -2276,7 +2141,53 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
   }
 
-  Future<AvatarUploadResult> _publishAvatarOnce({
+  Future<void> _publishAvatarRemoteWithFallback({
+    required AvatarUploadPayload payload,
+    required String targetJid,
+    required bool public,
+  }) async {
+    try {
+      await _publishAvatarRemoteOnce(
+        payload: payload,
+        targetJid: targetJid,
+        public: public,
+      );
+    } on XmppAvatarException catch (error) {
+      final cause = error.wrapped;
+      if (!public || (cause is! mox.AvatarError && cause is! mox.PubSubError)) {
+        rethrow;
+      }
+      await _publishAvatarRemoteOnce(
+        payload: payload,
+        targetJid: targetJid,
+        public: false,
+      );
+    }
+  }
+
+  Future<AvatarUploadResult> _storePublishedAvatarLocally({
+    required AvatarUploadPayload payload,
+    required String targetJid,
+  }) async {
+    final path = await _writeAvatarFile(bytes: payload.bytes);
+    final result = AvatarUploadResult(path: path, hash: payload.hash);
+    if (_isSelfAvatarTarget(targetJid)) {
+      return _runSelfAvatarStateOperation(() async {
+        await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
+        final vCardManager = _connection.getManager<mox.VCardManager>();
+        vCardManager?.setLastHash(targetJid, payload.hash);
+        _avatarLog.fine('Avatar publish stored locally.');
+        return result;
+      });
+    }
+    await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
+    final vCardManager = _connection.getManager<mox.VCardManager>();
+    vCardManager?.setLastHash(targetJid, payload.hash);
+    _avatarLog.fine('Avatar publish stored locally.');
+    return result;
+  }
+
+  Future<void> _publishAvatarRemoteOnce({
     required AvatarUploadPayload payload,
     required String targetJid,
     required bool public,
@@ -2619,13 +2530,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
       }
     }
 
-    final path = await _writeAvatarFile(bytes: payload.bytes);
-    await _storeAvatar(jid: targetJid, path: path, hash: payload.hash);
-    final vCardManager = _connection.getManager<mox.VCardManager>();
-    vCardManager?.setLastHash(targetJid, payload.hash);
-    _avatarLog.fine('Avatar publish stored locally.');
-
-    return AvatarUploadResult(path: path, hash: payload.hash);
+    _avatarLog.fine('Avatar publish verified remotely.');
   }
 
   String _avatarConfigKey({
@@ -2675,7 +2580,17 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _selfAvatarRepairLastAttempt = DateTime.now();
     try {
       if (!_ownsSelfAvatarRefresh(owner)) return;
-      await publishAvatar(payload);
+      await _publishAvatarRemoteWithFallback(
+        payload: payload,
+        targetJid: bareJid,
+        public: true,
+      );
+      final pending = await _readPendingSelfAvatarPublish();
+      if (pending == null || pending.hash.trim() == hash) {
+        _markPubSubAvatarPreferred(bareJid);
+        final vCardManager = _connection.getManager<mox.VCardManager>();
+        vCardManager?.setLastHash(bareJid, hash);
+      }
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to repair missing server avatar.', error);
       _avatarLog.fine('Repair failure details', error, stackTrace);
@@ -2712,12 +2627,14 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (normalizedPath.isEmpty) return null;
 
     return _runAvatarFileOperation(normalizedPath, () async {
-      final cacheDirectory = await _avatarCacheDirectory();
-      if (!_isSafeAvatarCachePath(
-        cacheDirectory: cacheDirectory,
-        filePath: normalizedPath,
-      )) {
+      final pathKind = await _avatarCachePathKind(normalizedPath);
+      if (pathKind == _AvatarCachePathKind.outsideRoot) {
         _avatarLog.warning('Rejected avatar path outside cache directory.');
+        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
+        return null;
+      }
+      if (pathKind == _AvatarCachePathKind.otherScope) {
+        _avatarLog.fine('Clearing stale avatar path from another cache scope.');
         await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
         return null;
       }
@@ -2742,6 +2659,13 @@ mixin AvatarService on XmppBase, BaseStreamService {
         }
         final isEncrypted = p.extension(normalizedPath).toLowerCase() == '.enc';
         if (!isEncrypted) {
+          if (pathKind == _AvatarCachePathKind.legacyRoot) {
+            await _migrateLegacyAvatarPath(
+              oldPath: normalizedPath,
+              bytes: bytes,
+            );
+            return bytes;
+          }
           _cacheAvatarBytes(normalizedPath, bytes);
           return bytes;
         }
@@ -2756,18 +2680,33 @@ mixin AvatarService on XmppBase, BaseStreamService {
           _avatarLog.warning(
             'Cached avatar decrypted to an empty payload; clearing cache entry.',
           );
-          await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+          await _invalidateCachedAvatarPath(
+            normalizedPath,
+            deleteFile: pathKind == _AvatarCachePathKind.activeScope,
+          );
           return null;
+        }
+        if (pathKind == _AvatarCachePathKind.legacyRoot) {
+          await _migrateLegacyAvatarPath(
+            oldPath: normalizedPath,
+            bytes: decrypted,
+          );
+          return decrypted;
         }
         _cacheAvatarBytes(normalizedPath, decrypted);
         return decrypted;
       } on Exception catch (error, stackTrace) {
         _avatarLog.warning(
-          'Failed to load cached avatar; deleting corrupted cache entry.',
+          pathKind == _AvatarCachePathKind.activeScope
+              ? 'Failed to load cached avatar; deleting corrupted cache entry.'
+              : 'Failed to load cached avatar; clearing stale cache reference.',
           error,
           stackTrace,
         );
-        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+        await _invalidateCachedAvatarPath(
+          normalizedPath,
+          deleteFile: pathKind == _AvatarCachePathKind.activeScope,
+        );
         return null;
       }
     });
@@ -2800,6 +2739,25 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
   }
 
+  Future<T> _runSelfAvatarStateOperation<T>(
+    Future<T> Function() operation,
+  ) async {
+    final previous = _selfAvatarStateOperation;
+    final completer = Completer<void>();
+    final next = completer.future;
+    _selfAvatarStateOperation = next;
+    await previous;
+
+    try {
+      return await operation();
+    } finally {
+      completer.complete();
+      if (identical(_selfAvatarStateOperation, next)) {
+        _selfAvatarStateOperation = Future<void>.value();
+      }
+    }
+  }
+
   Future<void> _invalidateCachedAvatarPath(
     String path, {
     required bool deleteFile,
@@ -2821,47 +2779,42 @@ mixin AvatarService on XmppBase, BaseStreamService {
     await _clearPendingSelfAvatarIfPathMatches(normalizedPath);
 
     if (!deleteFile) return;
-    final file = File(normalizedPath);
-    try {
-      if (await file.exists()) {
-        await file.delete();
-      }
-    } on Exception catch (error, stackTrace) {
-      _avatarLog.fine(
-        'Failed to delete invalid cached avatar file.',
-        error,
-        stackTrace,
-      );
-    }
+    await _deleteAvatarCacheFile(normalizedPath);
   }
 
   Future<void> _clearSelfAvatarReferenceIfPathMatches(String path) async {
     if (!isStateStoreReady) return;
 
-    String? storedPath;
-    try {
-      storedPath = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) => ss.read(key: selfAvatarPathKey) as String?,
-      );
-    } on XmppAbortedException {
-      return;
-    }
-    if (storedPath?.trim() != path) return;
+    await _runSelfAvatarStateOperation(() async {
+      String? storedPath;
+      try {
+        storedPath = await _dbOpReturning<XmppStateStore, String?>(
+          (ss) => ss.read(key: selfAvatarPathKey) as String?,
+        );
+      } on XmppAbortedException {
+        return;
+      }
+      if (storedPath?.trim() != path) return;
 
-    try {
-      await _persistStoredSelfAvatar(null);
-    } on XmppAbortedException {
-      return;
-    }
+      try {
+        await _persistStoredSelfAvatar(null);
+      } on XmppAbortedException {
+        return;
+      }
 
-    _setCachedSelfAvatar(null);
+      if (_cachedSelfAvatar?.path.trim() == path) {
+        _setCachedSelfAvatar(null);
+      }
+    });
   }
 
   Future<void> _clearPendingSelfAvatarIfPathMatches(String path) async {
     if (!isStateStoreReady) return;
-    final pending = await _readPendingSelfAvatarPublish();
-    if (pending?.path.trim() != path) return;
-    await _clearPendingSelfAvatarPublish();
+    await _runSelfAvatarStateOperation(() async {
+      final pending = await _readPendingSelfAvatarPublish();
+      if (pending?.path.trim() != path) return;
+      await _clearPendingSelfAvatarPublish();
+    });
   }
 
   bool _isSelfAvatarTarget(String targetJid) =>
@@ -2975,6 +2928,76 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
   }
 
+  bool _pendingSelfAvatarMatches({
+    required _PendingSelfAvatarPublish current,
+    required _PendingSelfAvatarPublish expected,
+    required String selfJid,
+  }) {
+    final currentJid = _avatarSafeBareJid(current.jid ?? selfJid);
+    final expectedJid = _avatarSafeBareJid(expected.jid ?? selfJid);
+    return current.path.trim() == expected.path.trim() &&
+        current.hash.trim() == expected.hash.trim() &&
+        current.mimeType.trim() == expected.mimeType.trim() &&
+        current.width == expected.width &&
+        current.height == expected.height &&
+        current.public == expected.public &&
+        currentJid == expectedJid;
+  }
+
+  Future<bool> _clearPendingSelfAvatarIfCurrent(
+    _PendingSelfAvatarPublish expected,
+  ) async {
+    if (!isStateStoreReady) return false;
+    final selfJid = _myJid?.toBare().toString();
+    if (selfJid == null || selfJid.isEmpty) return false;
+    return _runSelfAvatarStateOperation(() async {
+      final current = await _readPendingSelfAvatarPublish();
+      if (current == null ||
+          !_pendingSelfAvatarMatches(
+            current: current,
+            expected: expected,
+            selfJid: selfJid,
+          )) {
+        return false;
+      }
+      await _clearPendingSelfAvatarPublish();
+      return true;
+    });
+  }
+
+  Future<bool> _storePendingSelfAvatarFromRemoteIfCurrent({
+    required _PendingSelfAvatarPublish expected,
+    required String targetJid,
+    required Uint8List bytes,
+  }) async {
+    final path = await _writeAvatarFile(bytes: bytes);
+    var stored = false;
+    try {
+      stored = await _runSelfAvatarStateOperation(() async {
+        final current = await _readPendingSelfAvatarPublish();
+        if (current == null ||
+            !_pendingSelfAvatarMatches(
+              current: current,
+              expected: expected,
+              selfJid: targetJid,
+            )) {
+          return false;
+        }
+        await _storeAvatar(jid: targetJid, path: path, hash: expected.hash);
+        await _clearPendingSelfAvatarPublish();
+        return true;
+      });
+      if (stored && expected.path.trim() != path.trim()) {
+        await _deleteAvatarCacheFile(expected.path);
+      }
+      return stored;
+    } finally {
+      if (!stored) {
+        await _deleteAvatarCacheFile(path);
+      }
+    }
+  }
+
   Future<bool> _publishPendingSelfAvatarIfAvailable({
     bool verifyRemoteMetadata = true,
   }) async {
@@ -2984,17 +3007,26 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (myBareJid == null || myBareJid.isEmpty) return false;
     final targetJid = _avatarSafeBareJid(pending.jid ?? myBareJid);
     if (targetJid == null || targetJid != myBareJid) {
-      await _clearPendingSelfAvatarPublish();
+      await _clearPendingSelfAvatarIfCurrent(pending);
       return false;
     }
-    if (verifyRemoteMetadata &&
-        await _publishedAvatarMatchesHash(targetJid, pending.hash)) {
-      await _clearPendingSelfAvatarPublish();
-      return true;
+    if (verifyRemoteMetadata) {
+      final remoteBytes = await _loadPublishedAvatarDataForHash(
+        targetJid,
+        pending.hash,
+      );
+      if (remoteBytes != null) {
+        await _storePendingSelfAvatarFromRemoteIfCurrent(
+          expected: pending,
+          targetJid: targetJid,
+          bytes: remoteBytes,
+        );
+        return true;
+      }
     }
     final bytes = await loadAvatarBytes(pending.path);
     if (bytes == null || bytes.isEmpty) {
-      await _clearPendingSelfAvatarPublish();
+      await _clearPendingSelfAvatarIfCurrent(pending);
       return false;
     }
     final payload = AvatarUploadPayload(
@@ -3006,38 +3038,42 @@ mixin AvatarService on XmppBase, BaseStreamService {
       jid: pending.jid,
     );
     try {
-      await publishAvatar(payload, public: pending.public);
+      await _publishAvatarRemoteWithFallback(
+        payload: payload,
+        targetJid: targetJid,
+        public: pending.public,
+      );
+      if (await _clearPendingSelfAvatarIfCurrent(pending)) {
+        _markPubSubAvatarPreferred(targetJid);
+        final vCardManager = _connection.getManager<mox.VCardManager>();
+        vCardManager?.setLastHash(targetJid, pending.hash);
+      }
     } on Exception catch (error, stackTrace) {
       _avatarLog.fine('Pending self avatar publish failed.', error, stackTrace);
     }
     return true;
   }
 
-  Future<bool> _metadataMatchesAvatarHash(String jid, String hash) async {
+  Future<Uint8List?> _loadPublishedAvatarDataForHash(
+    String jid,
+    String hash,
+  ) async {
     final normalizedHash = hash.trim();
-    if (normalizedHash.isEmpty) return false;
-    switch (await _loadMetadata(jid)) {
-      case _AvatarMetadataLoaded(:final metadata):
-        return metadata.id == normalizedHash;
-      case _AvatarMetadataMissing() || _AvatarMetadataLoadFailed():
-        return false;
-    }
-  }
-
-  Future<bool> _publishedAvatarMatchesHash(String jid, String hash) async {
+    if (normalizedHash.isEmpty) return null;
+    late final _AvatarMetadataLoadResult metadataResult;
     try {
-      if (!await _metadataMatchesAvatarHash(jid, hash)) return false;
-      return _avatarDataItemExists(jid, hash);
+      metadataResult = await _loadMetadata(jid);
     } on TimeoutException {
-      return false;
+      return null;
     }
-  }
-
-  Future<bool> _avatarDataItemExists(String jid, String hash) async {
-    final normalizedHash = hash.trim();
-    if (normalizedHash.isEmpty) return false;
+    switch (metadataResult) {
+      case _AvatarMetadataLoaded(:final metadata):
+        if (metadata.id != normalizedHash) return null;
+      case _AvatarMetadataMissing() || _AvatarMetadataLoadFailed():
+        return null;
+    }
     final pubsub = _connection.getManager<mox.PubSubManager>();
-    if (pubsub == null) return false;
+    if (pubsub == null) return null;
     const avatarDataTag = 'data';
     try {
       final result = await _withAvatarRefreshTimeout(
@@ -3048,14 +3084,26 @@ mixin AvatarService on XmppBase, BaseStreamService {
         ),
         operationName: 'Avatar data verification',
       );
-      if (result.isType<mox.PubSubError>()) return false;
+      if (result.isType<mox.PubSubError>()) return null;
       final payload = result.get<mox.PubSubItem>().payload;
-      return payload != null &&
-          payload.tag == avatarDataTag &&
-          payload.attributes['xmlns'] == mox.userAvatarDataXmlns &&
-          payload.innerText().trim().isNotEmpty;
+      if (payload == null ||
+          payload.tag != avatarDataTag ||
+          payload.attributes['xmlns'] != mox.userAvatarDataXmlns) {
+        return null;
+      }
+      final encoded = payload.innerText().replaceAll(RegExp(r'\s+'), '');
+      if (encoded.isEmpty || encoded.length > _maxAvatarBase64Length) {
+        return null;
+      }
+      final bytes = base64Decode(encoded);
+      if (bytes.isEmpty || bytes.length > _maxAvatarBytes) return null;
+      if (!_isSupportedAvatarBytes(bytes)) return null;
+      if (sha1.convert(bytes).toString() != normalizedHash) return null;
+      return bytes;
+    } on FormatException {
+      return null;
     } on TimeoutException {
-      return false;
+      return null;
     }
   }
 
@@ -3106,7 +3154,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
   }
 
   Future<String> _writeAvatarFile({required List<int> bytes}) async {
-    final directory = await _avatarCacheDirectory();
+    final directory = await _activeAvatarCacheDirectory();
     final contentHash = sha256.convert(bytes).toString();
     final filename = '$contentHash.enc';
     final file = File(p.join(directory.path, filename));
@@ -3139,6 +3187,109 @@ mixin AvatarService on XmppBase, BaseStreamService {
     });
   }
 
+  Future<void> _migrateLegacyAvatarPath({
+    required String oldPath,
+    required Uint8List bytes,
+  }) async {
+    final newPath = await _writeAvatarFile(bytes: bytes);
+    if (newPath.trim() == oldPath.trim()) return;
+    try {
+      await _dbOp<XmppDatabase>(
+        (db) => db.replaceAvatarReferencesForPath(
+          oldPath: oldPath,
+          newPath: newPath,
+        ),
+        awaitDatabase: true,
+      );
+    } on XmppAbortedException {
+      return;
+    }
+    await _replaceSelfAvatarReferenceIfPathMatches(
+      oldPath: oldPath,
+      newPath: newPath,
+    );
+    await _replacePendingSelfAvatarPathIfMatches(
+      oldPath: oldPath,
+      newPath: newPath,
+    );
+    _evictCachedAvatarBytes(oldPath);
+  }
+
+  Future<void> _replaceSelfAvatarReferenceIfPathMatches({
+    required String oldPath,
+    required String newPath,
+  }) async {
+    if (!isStateStoreReady) return;
+
+    await _runSelfAvatarStateOperation(() async {
+      Avatar? stored;
+      try {
+        stored = await _dbOpReturning<XmppStateStore, Avatar?>(
+          (ss) => _readStoredSelfAvatar(ss),
+        );
+      } on XmppAbortedException {
+        return;
+      }
+      final current = stored;
+      if (current == null || current.path.trim() != oldPath.trim()) return;
+
+      final updated = Avatar(path: newPath, hash: current.hash);
+      try {
+        await _persistStoredSelfAvatar(updated);
+      } on XmppAbortedException {
+        return;
+      }
+
+      if (_cachedSelfAvatar?.path.trim() == oldPath.trim()) {
+        _setCachedSelfAvatar(updated);
+      }
+    });
+  }
+
+  Future<void> _replacePendingSelfAvatarPathIfMatches({
+    required String oldPath,
+    required String newPath,
+  }) async {
+    if (!isStateStoreReady) return;
+    await _runSelfAvatarStateOperation(() async {
+      final pending = await _readPendingSelfAvatarPublish();
+      if (pending == null || pending.path.trim() != oldPath.trim()) return;
+      await _dbOp<XmppStateStore>(
+        (ss) => ss.write(
+          key: selfAvatarPendingPublishKey,
+          value: jsonEncode(
+            _PendingSelfAvatarPublish(
+              path: newPath,
+              hash: pending.hash,
+              mimeType: pending.mimeType,
+              width: pending.width,
+              height: pending.height,
+              public: pending.public,
+              jid: pending.jid,
+            ).toJson(),
+          ),
+        ),
+        awaitDatabase: true,
+      );
+    });
+  }
+
+  Future<Directory> _activeAvatarCacheDirectory() async {
+    final root = await _avatarCacheDirectory();
+    final accountScope = _avatarCacheAccountScope;
+    final keyScope = _avatarCacheKeyScope;
+    if (accountScope == null || keyScope == null) {
+      throw XmppAvatarException('Avatar cache scope unavailable');
+    }
+    final directory = Directory(
+      p.join(root.path, _avatarScopedCacheDirectory, accountScope, keyScope),
+    );
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    return directory;
+  }
+
   Future<Directory> _avatarCacheDirectory() async {
     final cached = _avatarDirectory;
     if (cached != null && await cached.exists()) {
@@ -3159,6 +3310,53 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _avatarDirectory = directory;
     return directory;
   }
+
+  Future<_AvatarCachePathKind> _avatarCachePathKind(String path) async {
+    final normalizedPath = p.normalize(path.trim());
+    if (normalizedPath.isEmpty || !p.isAbsolute(normalizedPath)) {
+      return _AvatarCachePathKind.outsideRoot;
+    }
+    final root = await _avatarCacheDirectory();
+    if (!_isSafeAvatarCachePath(
+      cacheDirectory: root,
+      filePath: normalizedPath,
+    )) {
+      return _AvatarCachePathKind.outsideRoot;
+    }
+
+    final activeAccountScope = _avatarCacheAccountScope;
+    final activeKeyScope = _avatarCacheKeyScope;
+    final relative = p.relative(normalizedPath, from: p.normalize(root.path));
+    final segments = p.split(relative);
+    if (segments.length == 1) {
+      return _AvatarCachePathKind.legacyRoot;
+    }
+    if (segments.length == 4 &&
+        segments[0] == _avatarScopedCacheDirectory &&
+        segments[1] == activeAccountScope &&
+        segments[2] == activeKeyScope &&
+        segments[3].trim().isNotEmpty) {
+      return _AvatarCachePathKind.activeScope;
+    }
+    return _AvatarCachePathKind.otherScope;
+  }
+
+  String? _resolveAvatarCacheAccountScope() {
+    final prefix = activeDatabasePrefix?.trim();
+    if (prefix != null && prefix.isNotEmpty) {
+      return _avatarCacheScopeSegment(utf8.encode('db:$prefix'));
+    }
+    final bareJid = _myJid?.toBare().toString().trim();
+    if (bareJid != null && bareJid.isNotEmpty) {
+      return _avatarCacheScopeSegment(utf8.encode('jid:$bareJid'));
+    }
+    return null;
+  }
+
+  String _avatarCacheScopeSegment(List<int> bytes) => sha256
+      .convert(bytes)
+      .toString()
+      .substring(0, _avatarCacheScopeSegmentLength);
 
   bool _isSafeAvatarCachePath({
     required Directory cacheDirectory,

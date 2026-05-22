@@ -14,9 +14,11 @@ import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:crypto/crypto.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -211,8 +213,11 @@ class RecordingMamManager extends mox.MAMManager {
 
 class RecordingAvatarPubSubManager extends PubSubManager {
   int publishCount = 0;
+  final Map<String, int> _getItemsCountsByNode = <String, int>{};
   final Map<String, int> _getItemCountsByNode = <String, int>{};
   final Map<String, mox.XMLNode> _publishedItems = <String, mox.XMLNode>{};
+
+  int getItemsCount(String node) => _getItemsCountsByNode[node] ?? 0;
 
   int getItemCount(String node) => _getItemCountsByNode[node] ?? 0;
 
@@ -272,6 +277,7 @@ class RecordingAvatarPubSubManager extends PubSubManager {
     int? maxItems,
     String? subId,
   }) async {
+    _getItemsCountsByNode[node] = getItemsCount(node) + 1;
     final items = _publishedItems.entries
         .where((entry) => entry.key.startsWith('$node|'))
         .map(
@@ -306,6 +312,59 @@ class MissingInitialAvatarDataPubSubManager
     if (node == mox.userAvatarDataXmlns && publishCount <= 2) {
       _getItemCountsByNode[node] = getItemCount(node) + 1;
       return moxlib.Result(mox.ItemNotFoundError());
+    }
+    return super.getItem(jid, node, id, subId: subId);
+  }
+}
+
+class _FirstPublishBlockingAvatarPubSub extends RecordingAvatarPubSubManager {
+  final Completer<void> firstPublishStarted = Completer<void>();
+  final Completer<void> allowFirstPublish = Completer<void>();
+  var _blockedFirstPublish = false;
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> publish(
+    mox.JID jid,
+    String node,
+    mox.XMLNode payload, {
+    String? id,
+    mox.PubSubPublishOptions? options,
+    bool autoCreate = false,
+    mox.NodeConfig? createNodeConfig,
+  }) async {
+    if (!_blockedFirstPublish) {
+      _blockedFirstPublish = true;
+      firstPublishStarted.complete();
+      await allowFirstPublish.future;
+    }
+    return super.publish(
+      jid,
+      node,
+      payload,
+      id: id,
+      options: options,
+      autoCreate: autoCreate,
+      createNodeConfig: createNodeConfig,
+    );
+  }
+}
+
+class _AvatarDataLookupBlockingPubSub extends RecordingAvatarPubSubManager {
+  final Completer<void> dataGetStarted = Completer<void>();
+  final Completer<void> allowDataGet = Completer<void>();
+  var _blockedDataGet = false;
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
+    mox.JID jid,
+    String node,
+    String id, {
+    String? subId,
+  }) async {
+    if (node == mox.userAvatarDataXmlns && !_blockedDataGet) {
+      _blockedDataGet = true;
+      dataGetStarted.complete();
+      await allowDataGet.future;
     }
     return super.getItem(jid, node, id, subId: subId);
   }
@@ -788,6 +847,7 @@ void main() {
       verify(
         () => presenceManager.sendUnavailablePresenceForDisconnect(),
       ).called(1);
+      verify(() => mockConnection.disconnect()).called(1);
     });
 
     test(
@@ -903,13 +963,14 @@ void main() {
         final pubsubManager = RecordingAvatarPubSubManager();
         final stateStoreValues = <String, Object?>{};
         final avatarBytes = _validPngBytes();
+        final avatarHash = sha1.convert(avatarBytes).toString();
         final metadataPayload =
             (mox.XmlBuilder.withNamespace(
                   'metadata',
                   mox.userAvatarMetadataXmlns,
                 )..child(
                   (mox.XmlBuilder('info')
-                        ..attr('id', 'saved-avatar-hash')
+                        ..attr('id', avatarHash)
                         ..attr('bytes', avatarBytes.length.toString())
                         ..attr('type', 'image/png')
                         ..attr('width', '1')
@@ -941,13 +1002,13 @@ void main() {
             mox.JID.fromString('jid@axi.im'),
             mox.userAvatarMetadataXmlns,
             metadataPayload,
-            id: 'saved-avatar-hash',
+            id: avatarHash,
           );
           await pubsubManager.publish(
             mox.JID.fromString('jid@axi.im'),
             mox.userAvatarDataXmlns,
             dataPayload,
-            id: 'saved-avatar-hash',
+            id: avatarHash,
           );
           pubsubManager.publishCount = 0;
 
@@ -957,11 +1018,11 @@ void main() {
               mimeType: 'image/png',
               width: 1,
               height: 1,
-              hash: 'saved-avatar-hash',
+              hash: avatarHash,
             ),
           );
 
-          expect(result.hash, 'saved-avatar-hash');
+          expect(result.hash, avatarHash);
           expect(
             stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
             isNotNull,
@@ -981,6 +1042,211 @@ void main() {
             stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
             isNull,
           );
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'pending self avatar hydrates local cache when remote data already matches.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-save-self-avatar-hydrate-published-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final pubsubManager = RecordingAvatarPubSubManager();
+        final stateStoreValues = <String, Object?>{};
+        final avatarBytes = _validPngBytes();
+        final avatarHash = sha1.convert(avatarBytes).toString();
+        final metadataPayload =
+            (mox.XmlBuilder.withNamespace(
+                  'metadata',
+                  mox.userAvatarMetadataXmlns,
+                )..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', avatarHash)
+                        ..attr('bytes', avatarBytes.length.toString())
+                        ..attr('type', 'image/png')
+                        ..attr('width', '1')
+                        ..attr('height', '1'))
+                      .build(),
+                ))
+                .build();
+        final dataPayload = (mox.XmlBuilder.withNamespace(
+          'data',
+          mox.userAvatarDataXmlns,
+        )..text(base64Encode(avatarBytes))).build();
+
+        try {
+          _stubStateStoreValues(stateStoreValues);
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(null);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+          await pubsubManager.publish(
+            mox.JID.fromString('jid@axi.im'),
+            mox.userAvatarMetadataXmlns,
+            metadataPayload,
+            id: avatarHash,
+          );
+          await pubsubManager.publish(
+            mox.JID.fromString('jid@axi.im'),
+            mox.userAvatarDataXmlns,
+            dataPayload,
+            id: avatarHash,
+          );
+          pubsubManager.publishCount = 0;
+
+          final result = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: avatarBytes,
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: avatarHash,
+            ),
+          );
+          await File(result.path).delete();
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          expect(pubsubManager.publishCount, equals(0));
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNull,
+          );
+          final stored = await xmppService.getOwnAvatar();
+          expect(stored?.hash, avatarHash);
+          final storedBytes = await xmppService.loadAvatarBytes(stored!.path);
+          expect(storedBytes, orderedEquals(avatarBytes));
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'pending self avatar hydration does not overwrite newer pending avatar.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-save-self-avatar-hydrate-stale-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final pubsubManager = _AvatarDataLookupBlockingPubSub();
+        final stateStoreValues = <String, Object?>{};
+        final oldBytes = _validPngBytes();
+        final oldHash = sha1.convert(oldBytes).toString();
+        final newBytes = Uint8List.fromList(<int>[..._validPngBytes(), 0]);
+        final newHash = sha1.convert(newBytes).toString();
+        final metadataPayload =
+            (mox.XmlBuilder.withNamespace(
+                  'metadata',
+                  mox.userAvatarMetadataXmlns,
+                )..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', oldHash)
+                        ..attr('bytes', oldBytes.length.toString())
+                        ..attr('type', 'image/png')
+                        ..attr('width', '1')
+                        ..attr('height', '1'))
+                      .build(),
+                ))
+                .build();
+        final dataPayload = (mox.XmlBuilder.withNamespace(
+          'data',
+          mox.userAvatarDataXmlns,
+        )..text(base64Encode(oldBytes))).build();
+
+        try {
+          _stubStateStoreValues(stateStoreValues);
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(null);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+          await pubsubManager.publish(
+            mox.JID.fromString('jid@axi.im'),
+            mox.userAvatarMetadataXmlns,
+            metadataPayload,
+            id: oldHash,
+          );
+          await pubsubManager.publish(
+            mox.JID.fromString('jid@axi.im'),
+            mox.userAvatarDataXmlns,
+            dataPayload,
+            id: oldHash,
+          );
+          pubsubManager.publishCount = 0;
+
+          final oldResult = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: oldBytes,
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: oldHash,
+            ),
+          );
+          expect(oldResult.hash, oldHash);
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pubsubManager.dataGetStarted.future;
+
+          final newResult = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: newBytes,
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: newHash,
+            ),
+          );
+          expect(newResult.hash, newHash);
+
+          pubsubManager.allowDataGet.complete();
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          expect(pubsubManager.publishCount, equals(2));
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNull,
+          );
+          expect((await xmppService.getOwnAvatar())?.hash, newHash);
         } finally {
           PathProviderPlatform.instance = originalPathProvider;
           await tempDir.delete(recursive: true);
@@ -1150,6 +1416,189 @@ void main() {
             stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
             isNull,
           );
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'pending self avatar publishes when metadata verification times out.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-save-self-avatar-metadata-timeout-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final metadataPubsubManager = MockPubSubManager();
+        final publishPubsubManager = RecordingAvatarPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        final stateStoreValues = <String, Object?>{};
+        final avatarBytes = _validPngBytes();
+        final avatarHash = sha1.convert(avatarBytes).toString();
+
+        try {
+          _stubStateStoreValues(stateStoreValues);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(metadataPubsubManager);
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(publishPubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(userAvatarManager);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+          when(
+            () => metadataPubsubManager.getItems(
+              any(),
+              mox.userAvatarMetadataXmlns,
+              maxItems: any(named: 'maxItems'),
+            ),
+          ).thenThrow(TimeoutException('metadata verification timed out'));
+
+          final result = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: avatarBytes,
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: avatarHash,
+            ),
+          );
+
+          expect(result.hash, avatarHash);
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNotNull,
+          );
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          expect(publishPubsubManager.publishCount, equals(2));
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNull,
+          );
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'missing metadata repair does not clear newer pending self avatar.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-self-avatar-repair-newer-pending-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final pubsubManager = _FirstPublishBlockingAvatarPubSub();
+        final userAvatarManager = MockUserAvatarManager();
+        final stateStoreValues = <String, Object?>{};
+        final oldBytes = Uint8List.fromList(
+          img.encodePng(img.Image(width: 1, height: 1)),
+        );
+        final oldHash = sha1.convert(oldBytes).toString();
+        final newBytes = Uint8List.fromList(<int>[..._validPngBytes(), 0]);
+        final newHash = sha1.convert(newBytes).toString();
+
+        try {
+          _stubStateStoreValues(stateStoreValues);
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(userAvatarManager);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+
+          final oldResult = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: oldBytes,
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: oldHash,
+            ),
+          );
+          expect(oldResult.hash, oldHash);
+          final repairBytes = await xmppService.loadAvatarBytes(oldResult.path);
+          expect(repairBytes, isNotNull);
+          expect(img.decodeImage(repairBytes!), isNotNull);
+          stateStoreValues[xmppService.selfAvatarPendingPublishKey.value] =
+              null;
+
+          final repairFuture = xmppService.refreshSelfAvatarIfNeeded(
+            force: true,
+          );
+          await pumpEventQueue(times: 10);
+          await pubsubManager.firstPublishStarted.future.timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {
+              fail(
+                'Repair publish did not start. '
+                'publishCount=${pubsubManager.publishCount} '
+                'metadataGetItems=${pubsubManager.getItemsCount(mox.userAvatarMetadataXmlns)} '
+                'pending=${stateStoreValues[xmppService.selfAvatarPendingPublishKey.value]} '
+                'ownHash=${stateStoreValues[xmppService.selfAvatarHashKey.value]}',
+              );
+            },
+          );
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 10);
+
+          final newResult = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: newBytes,
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: newHash,
+            ),
+          );
+          expect(newResult.hash, newHash);
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNotNull,
+          );
+
+          pubsubManager.allowFirstPublish.complete();
+          await repairFuture;
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          expect(pubsubManager.publishCount, equals(4));
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNull,
+          );
+          expect((await xmppService.getOwnAvatar())?.hash, newHash);
         } finally {
           PathProviderPlatform.instance = originalPathProvider;
           await tempDir.delete(recursive: true);
