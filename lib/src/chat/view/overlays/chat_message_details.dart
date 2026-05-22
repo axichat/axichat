@@ -488,7 +488,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     required storage_models.Chat recipient,
     required bool canCreateEmailChat,
   }) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     final onAddRecipient = widget.onAddRecipient;
     await showFadeScaleDialog<void>(
       context: context,
@@ -526,16 +526,14 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                         if (!added) {
                           return;
                         }
+                        final message = context.l10n
+                            .chatMessageAddRecipientSuccess(recipientName);
                         Navigator.of(dialogContext).pop();
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              context.l10n.chatMessageAddRecipientSuccess(
-                                recipientName,
-                              ),
-                            ),
-                          ),
-                        );
+                        if (messenger != null) {
+                          messenger
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(SnackBar(content: Text(message)));
+                        }
                       },
                       child: Text(context.l10n.chatMessageAddRecipients),
                     ),
@@ -639,7 +637,8 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
   }
 
   void _showSnackbar(BuildContext context, String message) {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));

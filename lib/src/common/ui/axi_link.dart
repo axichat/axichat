@@ -69,7 +69,8 @@ class AxiLink extends StatelessWidget {
   }
 
   void _showSnackbar(BuildContext context, String message) {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));

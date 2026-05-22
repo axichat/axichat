@@ -318,6 +318,7 @@ class _ChatState extends State<Chat> {
   List<Message> _cachedFilteredItems = const [];
   final _bubbleWidthByMessageId = <String, double>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _messageListKey = GlobalKey();
   Set<String> _reportedReadThresholdMessageIds = const <String>{};
   var _readThresholdSyncScheduled = false;
@@ -3632,7 +3633,10 @@ class _ChatState extends State<Chat> {
 
   void _showSnackbar(String message) {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger =
+        _scaffoldMessengerKey.currentState ??
+        ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -3950,7 +3954,9 @@ class _ChatState extends State<Chat> {
           _lastSavedInlineDraftSignature = savedSignature;
         }
       });
-      _showSnackbar(l10n.chatDraftSaved);
+      ShadToaster.maybeOf(
+        context,
+      )?.show(FeedbackToast.success(title: l10n.draftSaved));
       return true;
     } on Exception {
       if (!mounted) {
@@ -6184,14 +6190,17 @@ class _ChatState extends State<Chat> {
                       }),
                 storageManager: storageManager,
               );
-              return _ChatContentSurface(
-                chatEntity: chatEntity,
-                calendarAvailable: chatCalendarAvailable,
-                resolvedChatCalendarCoordinator:
-                    resolvedChatCalendarCoordinator,
-                storage: storage,
-                storageManager: storageManager,
-                child: scaffold,
+              return ScaffoldMessenger(
+                key: _scaffoldMessengerKey,
+                child: _ChatContentSurface(
+                  chatEntity: chatEntity,
+                  calendarAvailable: chatCalendarAvailable,
+                  resolvedChatCalendarCoordinator:
+                      resolvedChatCalendarCoordinator,
+                  storage: storage,
+                  storageManager: storageManager,
+                  child: scaffold,
+                ),
               );
             },
           ),
