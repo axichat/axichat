@@ -1104,8 +1104,9 @@ mixin AvatarService on XmppBase, BaseStreamService {
       await _notifyCachedSelfAvatarIfAvailable();
     }
     if (!_ownsSelfAvatarRefresh(owner)) return;
-    if (request.publishPending) {
-      await _publishPendingSelfAvatarIfAvailable();
+    if (request.publishPending &&
+        await _publishPendingSelfAvatarIfAvailable()) {
+      return;
     }
     if (!_ownsSelfAvatarRefresh(owner)) return;
     if (request.preferPubSub ||
@@ -2637,6 +2638,12 @@ mixin AvatarService on XmppBase, BaseStreamService {
     required Object owner,
   }) async {
     if (!_ownsSelfAvatarRefresh(owner)) return;
+    if (await _publishPendingSelfAvatarIfAvailable(
+      verifyRemoteMetadata: false,
+    )) {
+      return;
+    }
+    if (!_ownsSelfAvatarRefresh(owner)) return;
     final lastAttempt = _selfAvatarRepairLastAttempt;
     if (lastAttempt != null &&
         DateTime.now().difference(lastAttempt) < _selfAvatarRepairCooldown) {
@@ -2668,12 +2675,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _selfAvatarRepairLastAttempt = DateTime.now();
     try {
       if (!_ownsSelfAvatarRefresh(owner)) return;
-      await _publishAvatarOnce(
-        payload: payload,
-        targetJid: bareJid,
-        public: true,
-      );
-      _markPubSubAvatarPreferred(bareJid);
+      await publishAvatar(payload);
     } catch (error, stackTrace) {
       _avatarLog.warning('Failed to repair missing server avatar.', error);
       _avatarLog.fine('Repair failure details', error, stackTrace);
@@ -2973,20 +2975,27 @@ mixin AvatarService on XmppBase, BaseStreamService {
     }
   }
 
-  Future<void> _publishPendingSelfAvatarIfAvailable() async {
+  Future<bool> _publishPendingSelfAvatarIfAvailable({
+    bool verifyRemoteMetadata = true,
+  }) async {
     final pending = await _readPendingSelfAvatarPublish();
-    if (pending == null) return;
+    if (pending == null) return false;
     final myBareJid = _myJid?.toBare().toString();
-    if (myBareJid == null || myBareJid.isEmpty) return;
+    if (myBareJid == null || myBareJid.isEmpty) return false;
     final targetJid = _avatarSafeBareJid(pending.jid ?? myBareJid);
     if (targetJid == null || targetJid != myBareJid) {
       await _clearPendingSelfAvatarPublish();
-      return;
+      return false;
+    }
+    if (verifyRemoteMetadata &&
+        await _publishedAvatarMatchesHash(targetJid, pending.hash)) {
+      await _clearPendingSelfAvatarPublish();
+      return true;
     }
     final bytes = await loadAvatarBytes(pending.path);
     if (bytes == null || bytes.isEmpty) {
       await _clearPendingSelfAvatarPublish();
-      return;
+      return false;
     }
     final payload = AvatarUploadPayload(
       bytes: bytes,
@@ -3000,6 +3009,53 @@ mixin AvatarService on XmppBase, BaseStreamService {
       await publishAvatar(payload, public: pending.public);
     } on Exception catch (error, stackTrace) {
       _avatarLog.fine('Pending self avatar publish failed.', error, stackTrace);
+    }
+    return true;
+  }
+
+  Future<bool> _metadataMatchesAvatarHash(String jid, String hash) async {
+    final normalizedHash = hash.trim();
+    if (normalizedHash.isEmpty) return false;
+    switch (await _loadMetadata(jid)) {
+      case _AvatarMetadataLoaded(:final metadata):
+        return metadata.id == normalizedHash;
+      case _AvatarMetadataMissing() || _AvatarMetadataLoadFailed():
+        return false;
+    }
+  }
+
+  Future<bool> _publishedAvatarMatchesHash(String jid, String hash) async {
+    try {
+      if (!await _metadataMatchesAvatarHash(jid, hash)) return false;
+      return _avatarDataItemExists(jid, hash);
+    } on TimeoutException {
+      return false;
+    }
+  }
+
+  Future<bool> _avatarDataItemExists(String jid, String hash) async {
+    final normalizedHash = hash.trim();
+    if (normalizedHash.isEmpty) return false;
+    final pubsub = _connection.getManager<mox.PubSubManager>();
+    if (pubsub == null) return false;
+    const avatarDataTag = 'data';
+    try {
+      final result = await _withAvatarRefreshTimeout(
+        pubsub.getItem(
+          mox.JID.fromString(jid),
+          mox.userAvatarDataXmlns,
+          normalizedHash,
+        ),
+        operationName: 'Avatar data verification',
+      );
+      if (result.isType<mox.PubSubError>()) return false;
+      final payload = result.get<mox.PubSubItem>().payload;
+      return payload != null &&
+          payload.tag == avatarDataTag &&
+          payload.attributes['xmlns'] == mox.userAvatarDataXmlns &&
+          payload.innerText().trim().isNotEmpty;
+    } on TimeoutException {
+      return false;
     }
   }
 

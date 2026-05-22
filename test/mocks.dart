@@ -180,6 +180,9 @@ void prepareMockConnection() {
 
   when(() => mockConnection.hasConnectionSettings).thenReturn(false);
   when(() => mockConnection.socketWrapper).thenReturn(XmppSocketWrapper());
+  when(
+    () => mockConnection.getConnectionState(),
+  ).thenAnswer((_) async => mox.XmppConnectionState.connected);
 
   when(
     () => mockConnection.registerFeatureNegotiators(any()),
@@ -297,6 +300,10 @@ void prepareMockConnection() {
     () => mockConnection.getManager<XmppStreamManagementManager>(),
   ).thenAnswer(
     (_) => lookupManagerById<XmppStreamManagementManager>(mox.smManager),
+  );
+  when(() => mockConnection.getManager<XmppKeepAliveManager>()).thenAnswer(
+    (_) =>
+        lookupManagerById<XmppKeepAliveManager>(XmppKeepAliveManager.managerId),
   );
   when(
     () => mockConnection.omemoActivityStream,

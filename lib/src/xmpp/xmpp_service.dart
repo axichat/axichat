@@ -364,10 +364,20 @@ final class XmppPingController {
       _scheduleIdleCheck();
       return;
     }
-    _sendPing();
+    fireAndForget(_sendPing, operationName: 'XmppService.idlePing');
   }
 
-  void _sendPing() {
+  Future<void> _sendPing() async {
+    final connectionState = await _owner._connection.getConnectionState();
+    if (connectionState != mox.XmppConnectionState.connected) {
+      _owner._xmppLogger.fine(
+        'Skipping idle ping because the XMPP stream is not connected.',
+      );
+      _owner._setConnectionState(ConnectionState.notConnected);
+      await _owner.requestReconnect(ReconnectTrigger.autoFailure);
+      return;
+    }
+
     final manager = _owner._connection.getManager<XmppKeepAliveManager>();
     if (manager == null) {
       _scheduleIdleCheck();
@@ -996,6 +1006,10 @@ class XmppService extends XmppBase
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     manager.registerHandler<mox.ConnectionStateChangedEvent>((event) async {
       _setConnectionState(event.state);
+      if (event.before == ConnectionState.connected &&
+          event.state == ConnectionState.notConnected) {
+        await _requestReconnectAfterUnexpectedDisconnect();
+      }
     });
     super.configureEventHandlers(manager);
     manager
@@ -1082,6 +1096,26 @@ class XmppService extends XmppBase
       _xmppLogger.fine(_reconnectEnableFailedLog, error, stackTrace);
     }
     return true;
+  }
+
+  Future<void> _requestReconnectAfterUnexpectedDisconnect() async {
+    if (!_sessionReconnectEnabled ||
+        _reconnectBlocked ||
+        _automaticReconnectPaused ||
+        _connectInFlight ||
+        !_synchronousConnection.isCompleted ||
+        !_connection.hasConnectionSettings) {
+      return;
+    }
+    if (await _connection.isReconnecting()) {
+      return;
+    }
+    if (!await requestReconnect(ReconnectTrigger.autoFailure)) {
+      _xmppLogger.info(
+        'Unexpected disconnect did not start reconnect. '
+        '${await _reconnectStateSummary()}',
+      );
+    }
   }
 
   @override

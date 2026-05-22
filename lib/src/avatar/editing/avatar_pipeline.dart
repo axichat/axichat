@@ -13,7 +13,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class AvatarPipelineConfig {
   const AvatarPipelineConfig({
     this.targetSize = 256,
-    this.maxBytes = 64 * 1024,
+    this.maxBytes = 42 * 1024,
     this.minJpegQuality = 55,
     this.qualityStep = 5,
     this.uploadMaxDimension = 256,

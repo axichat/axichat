@@ -16,6 +16,17 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'default avatar byte budget leaves room for base64 transport overhead',
+    () {
+      final maxBytes = const AvatarPipelineConfig().maxBytes;
+      final base64Length = ((maxBytes + 2) ~/ 3) * 4;
+
+      expect(maxBytes, 42 * 1024);
+      expect(base64Length, lessThan(58 * 1024));
+    },
+  );
+
   test('seeded start emits the seed first and advances on the timer', () {
     fakeAsync((async) {
       final frames = <AvatarCarouselFrame>[];
