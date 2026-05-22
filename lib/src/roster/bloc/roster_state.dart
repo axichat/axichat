@@ -124,30 +124,53 @@ final class RosterState extends Equatable {
 
 extension RosterStateActionLoading on RosterState {
   bool isRosterJidLoading(String jid) {
-    return loadingActions.any((action) => action.jid == jid);
+    final key = _rosterActionJidKey(jid);
+    return loadingActions.any(
+      (action) => _rosterActionJidKey(action.jid) == key,
+    );
   }
 
   bool isRosterActionLoading(RosterActionLoading action) {
-    return loadingActions.contains(action);
+    return loadingActions.any(
+      (loading) =>
+          loading.action == action.action &&
+          _rosterActionJidKey(loading.jid) == _rosterActionJidKey(action.jid),
+    );
   }
 
   RosterState markRosterActionLoading(RosterActionLoading action) {
-    if (loadingActions.contains(action)) return this;
+    final normalizedAction = action.normalized;
+    if (isRosterActionLoading(normalizedAction)) return this;
     return copyWith(
-      actionState: action,
+      actionState: normalizedAction,
       loadingActions: Set<RosterActionLoading>.unmodifiable({
         ...loadingActions,
-        action,
+        normalizedAction,
       }),
     );
   }
 
   RosterState clearRosterActionLoading(RosterActionLoading action) {
-    if (!loadingActions.contains(action)) return this;
+    final normalizedAction = action.normalized;
+    if (!isRosterActionLoading(normalizedAction)) return this;
     return copyWith(
       loadingActions: Set<RosterActionLoading>.unmodifiable(
-        Set<RosterActionLoading>.from(loadingActions)..remove(action),
+        loadingActions.where(
+          (loading) =>
+              loading.action != normalizedAction.action ||
+              _rosterActionJidKey(loading.jid) != normalizedAction.jid,
+        ),
       ),
     );
   }
+}
+
+extension on RosterActionLoading {
+  RosterActionLoading get normalized {
+    return RosterActionLoading(action: action, jid: _rosterActionJidKey(jid));
+  }
+}
+
+String _rosterActionJidKey(String jid) {
+  return normalizedAddressKey(jid) ?? jid.trim().toLowerCase();
 }

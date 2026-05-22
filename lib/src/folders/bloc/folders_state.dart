@@ -99,6 +99,7 @@ class FoldersState extends Equatable {
     this.query = '',
     this.sortOrder = SearchSortOrder.newestFirst,
     this.actionState = const FoldersActionIdle(),
+    this.loadingActions = const <FoldersActionLoading>{},
     this.actionId = 0,
   });
 
@@ -112,6 +113,7 @@ class FoldersState extends Equatable {
   final String query;
   final SearchSortOrder sortOrder;
   final FoldersActionState actionState;
+  final Set<FoldersActionLoading> loadingActions;
   final int actionId;
 
   List<MessageCollectionEntry> get customCollections {
@@ -208,6 +210,7 @@ class FoldersState extends Equatable {
     String? query,
     SearchSortOrder? sortOrder,
     FoldersActionState? actionState,
+    Set<FoldersActionLoading>? loadingActions,
     int? actionId,
   }) {
     final nextActionState = actionState ?? this.actionState;
@@ -222,6 +225,7 @@ class FoldersState extends Equatable {
       query: query ?? this.query,
       sortOrder: sortOrder ?? this.sortOrder,
       actionState: nextActionState,
+      loadingActions: loadingActions ?? this.loadingActions,
       actionId:
           actionId ??
           (nextActionState is FoldersActionFailure &&
@@ -243,6 +247,33 @@ class FoldersState extends Equatable {
     query,
     sortOrder,
     actionState,
+    loadingActions,
     actionId,
   ];
+}
+
+extension FoldersStateActionLoading on FoldersState {
+  bool isFolderActionLoading(FoldersActionLoading action) {
+    return loadingActions.contains(action);
+  }
+
+  FoldersState markFolderActionLoading(FoldersActionLoading action) {
+    if (loadingActions.contains(action)) return this;
+    return copyWith(
+      actionState: action,
+      loadingActions: Set<FoldersActionLoading>.unmodifiable({
+        ...loadingActions,
+        action,
+      }),
+    );
+  }
+
+  FoldersState clearFolderActionLoading(FoldersActionLoading action) {
+    if (!loadingActions.contains(action)) return this;
+    return copyWith(
+      loadingActions: Set<FoldersActionLoading>.unmodifiable(
+        Set<FoldersActionLoading>.from(loadingActions)..remove(action),
+      ),
+    );
+  }
 }

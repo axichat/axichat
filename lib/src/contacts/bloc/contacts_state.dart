@@ -102,6 +102,7 @@ final class ContactsState extends Equatable {
     this.visibleItems,
     this.criteria = const ContactsViewCriteria(),
     this.actionState = const ContactActionIdle(),
+    this.loadingActions = const <ContactActionLoading>{},
     this.actionId = 0,
   });
 
@@ -109,6 +110,7 @@ final class ContactsState extends Equatable {
   final List<ContactDirectoryEntry>? visibleItems;
   final ContactsViewCriteria criteria;
   final ContactActionState actionState;
+  final Set<ContactActionLoading> loadingActions;
   final int actionId;
 
   ContactsState copyWith({
@@ -116,6 +118,7 @@ final class ContactsState extends Equatable {
     List<ContactDirectoryEntry>? visibleItems,
     ContactsViewCriteria? criteria,
     ContactActionState? actionState,
+    Set<ContactActionLoading>? loadingActions,
     int? actionId,
   }) {
     final nextActionState = actionState ?? this.actionState;
@@ -124,6 +127,7 @@ final class ContactsState extends Equatable {
       visibleItems: visibleItems ?? this.visibleItems,
       criteria: criteria ?? this.criteria,
       actionState: nextActionState,
+      loadingActions: loadingActions ?? this.loadingActions,
       actionId:
           actionId ??
           (nextActionState is ContactActionFailure &&
@@ -139,6 +143,52 @@ final class ContactsState extends Equatable {
     visibleItems,
     criteria,
     actionState,
+    loadingActions,
     actionId,
   ];
+}
+
+extension ContactsStateActionLoading on ContactsState {
+  bool isContactActionLoading({
+    required ContactActionType action,
+    required String address,
+    String? collectionId,
+  }) {
+    final addressKey = contactDirectoryAddressKey(address);
+    return addressKey.isNotEmpty &&
+        loadingActions.any(
+          (loading) =>
+              loading.action == action &&
+              contactDirectoryAddressKey(loading.address) == addressKey &&
+              (collectionId == null || loading.collectionId == collectionId),
+        );
+  }
+
+  bool isContactAddressLoading(String address) {
+    final addressKey = contactDirectoryAddressKey(address);
+    return addressKey.isNotEmpty &&
+        loadingActions.any(
+          (action) => contactDirectoryAddressKey(action.address) == addressKey,
+        );
+  }
+
+  ContactsState markContactActionLoading(ContactActionLoading action) {
+    if (loadingActions.contains(action)) return this;
+    return copyWith(
+      actionState: action,
+      loadingActions: Set<ContactActionLoading>.unmodifiable({
+        ...loadingActions,
+        action,
+      }),
+    );
+  }
+
+  ContactsState clearContactActionLoading(ContactActionLoading action) {
+    if (!loadingActions.contains(action)) return this;
+    return copyWith(
+      loadingActions: Set<ContactActionLoading>.unmodifiable(
+        Set<ContactActionLoading>.from(loadingActions)..remove(action),
+      ),
+    );
+  }
 }

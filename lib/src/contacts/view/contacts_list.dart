@@ -369,14 +369,11 @@ class _ContactListTile extends StatelessWidget {
     );
     final address = contact.address;
     final addressKey = contactDirectoryAddressKey(address);
-    final contactsActionState = context
-        .watch<ContactsCubit>()
-        .state
-        .actionState;
-    final isRemoving =
-        contactsActionState is ContactActionLoading &&
-        contactsActionState.action == ContactActionType.removeContact &&
-        contactDirectoryAddressKey(contactsActionState.address) == addressKey;
+    final contactsState = context.watch<ContactsCubit>().state;
+    final isRemoving = contactsState.isContactActionLoading(
+      action: ContactActionType.removeContact,
+      address: addressKey,
+    );
     return ListItemPadding(
       padding: EdgeInsets.fromLTRB(
         spacing.m,
@@ -532,10 +529,18 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
     if (!supportsEmail && !supportsXmpp) {
       return null;
     }
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
+    final hinted = hintTransportForAddress(
+      _address,
+      xmppDomainHints: {endpointConfig.domain},
+    );
+    if (hinted != null) {
+      return hinted;
+    }
     return showTransportChoiceDialog(
       context,
       address: _address.trim(),
-      defaultTransport: hintTransportForAddress(_address),
+      defaultTransport: hinted,
     );
   }
 
@@ -570,13 +575,15 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
       child: BlocBuilder<ContactsCubit, ContactsState>(
         buildWhen: (previous, current) =>
             previous.items != current.items ||
-            previous.actionState != current.actionState,
+            previous.actionState != current.actionState ||
+            previous.loadingActions != current.loadingActions,
         builder: (context, contactsState) {
           final contactsActionState = contactsState.actionState;
-          final loading =
-              contactsActionState is ContactActionLoading &&
-              contactsActionState.action == ContactActionType.addContact &&
-              _matchesSubmittedAddress(contactsActionState.address);
+          final loading = contactsState.loadingActions.any(
+            (action) =>
+                action.action == ContactActionType.addContact &&
+                _matchesSubmittedAddress(action.address),
+          );
           final errorMessage = switch (contactsActionState) {
             ContactActionFailure(:final reason, :final address)
                 when contactsActionState.action ==
@@ -679,7 +686,8 @@ class _ContactDetailsSheet extends StatelessWidget {
       child: BlocBuilder<ContactsCubit, ContactsState>(
         buildWhen: (previous, current) =>
             previous.items != current.items ||
-            previous.actionState != current.actionState,
+            previous.actionState != current.actionState ||
+            previous.loadingActions != current.loadingActions,
         builder: (context, state) {
           final spacing = context.spacing;
           final currentContact = _currentContactForSheet(state.items, contact);
@@ -1050,27 +1058,26 @@ class _ContactDetailsActions extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final addressKey = contactDirectoryAddressKey(contact.address);
-    final contactsActionState = context
-        .watch<ContactsCubit>()
-        .state
-        .actionState;
-    final isUpdatingContact =
-        contactsActionState is ContactActionLoading &&
-        contactDirectoryAddressKey(contactsActionState.address) == addressKey;
+    final contactsState = context.watch<ContactsCubit>().state;
+    final isUpdatingContact = contactsState.isContactAddressLoading(addressKey);
     final blocklistState = context.watch<BlocklistCubit>().state;
     final isBlocking =
         blocklistState is BlocklistLoading &&
         (blocklistState.jid == contact.address || blocklistState.jid == null);
-    final isRemoving =
-        contactsActionState is ContactActionLoading &&
-        contactsActionState.action == ContactActionType.removeContact &&
-        contactDirectoryAddressKey(contactsActionState.address) == addressKey;
+    final isRemoving = contactsState.isContactActionLoading(
+      action: ContactActionType.removeContact,
+      address: addressKey,
+    );
     final disabled = isRemoving || isUpdatingContact || isBlocking;
     final isRenaming =
-        contactsActionState is ContactActionLoading &&
-        contactDirectoryAddressKey(contactsActionState.address) == addressKey &&
-        (contactsActionState.action == ContactActionType.rename ||
-            contactsActionState.action == ContactActionType.resetRename);
+        contactsState.isContactActionLoading(
+          action: ContactActionType.rename,
+          address: addressKey,
+        ) ||
+        contactsState.isContactActionLoading(
+          action: ContactActionType.resetRename,
+          address: addressKey,
+        );
     return Padding(
       padding: EdgeInsets.only(bottom: spacing.xs),
       child: Column(
@@ -1201,7 +1208,7 @@ IconData _contactFolderRuleIcon(SystemMessageCollection collection) {
 bool _emailComposeEnabled({
   required ContactDirectoryEntry contact,
   required bool emailEnabled,
-}) => contact.hasEmailContact && emailEnabled;
+}) => emailEnabled && normalizedAddressValue(contact.address) != null;
 
 ContactDirectoryEntry _currentContactForSheet(
   List<ContactDirectoryEntry>? items,

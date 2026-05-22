@@ -227,6 +227,124 @@ void main() {
     },
   );
 
+  test(
+    'keeps different folder item removals actionable while one loads',
+    () async {
+      final firstItem = FolderMessageItem(
+        collectionId: 'Projects',
+        chatJid: 'peer@axi.im',
+        messageReferenceId: 'message-1',
+        messageStanzaId: 'message-1',
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026),
+        active: true,
+        message: null,
+        chat: null,
+      );
+      final secondItem = FolderMessageItem(
+        collectionId: 'Projects',
+        chatJid: 'peer@axi.im',
+        messageReferenceId: 'message-2',
+        messageStanzaId: 'message-2',
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: DateTime.utc(2026),
+        active: true,
+        message: null,
+        chat: null,
+      );
+      final firstRemoval = Completer<bool>();
+      when(
+        () => xmppService.removeMessageCollectionMembership(firstItem),
+      ).thenAnswer((_) => firstRemoval.future);
+      when(
+        () => xmppService.removeMessageCollectionMembership(secondItem),
+      ).thenAnswer((_) async => true);
+
+      final cubit = FoldersCubit(xmppService: xmppService);
+      addTearDown(cubit.close);
+
+      final pending = cubit.removeItem(firstItem);
+      await pumpEventQueue();
+
+      expect(
+        cubit.state.loadingActions,
+        contains(
+          const FoldersActionLoading(
+            action: FoldersActionType.removeMembership,
+            collectionId: 'Projects',
+            chatJid: 'peer@axi.im',
+            messageReferenceId: 'message-1',
+          ),
+        ),
+      );
+      expect(await cubit.removeItem(secondItem), isTrue);
+
+      verify(
+        () => xmppService.removeMessageCollectionMembership(firstItem),
+      ).called(1);
+      verify(
+        () => xmppService.removeMessageCollectionMembership(secondItem),
+      ).called(1);
+      expect(
+        cubit.state.loadingActions,
+        contains(
+          const FoldersActionLoading(
+            action: FoldersActionType.removeMembership,
+            collectionId: 'Projects',
+            chatJid: 'peer@axi.im',
+            messageReferenceId: 'message-1',
+          ),
+        ),
+      );
+
+      firstRemoval.complete(true);
+      expect(await pending, isTrue);
+      expect(cubit.state.loadingActions, isEmpty);
+    },
+  );
+
+  test('ignores duplicate folder item removals while the item loads', () async {
+    final item = FolderMessageItem(
+      collectionId: 'Projects',
+      chatJid: 'peer@axi.im',
+      messageReferenceId: 'message-1',
+      messageStanzaId: 'message-1',
+      messageOriginId: null,
+      messageMucStanzaId: null,
+      deltaAccountId: null,
+      deltaMsgId: null,
+      addedAt: DateTime.utc(2026),
+      active: true,
+      message: null,
+      chat: null,
+      isContactRuleDerived: false,
+    );
+    final removal = Completer<bool>();
+    when(
+      () => xmppService.removeMessageCollectionMembership(item),
+    ).thenAnswer((_) => removal.future);
+
+    final cubit = FoldersCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    final pending = cubit.removeItem(item);
+    await pumpEventQueue();
+
+    expect(await cubit.removeItem(item), isFalse);
+
+    verify(() => xmppService.removeMessageCollectionMembership(item)).called(1);
+
+    removal.complete(true);
+    expect(await pending, isTrue);
+    expect(cubit.state.loadingActions, isEmpty);
+  });
+
   test('exposes explicit and rule-derived folder ids separately', () async {
     final chat = Chat(
       jid: 'alpha@example.com',

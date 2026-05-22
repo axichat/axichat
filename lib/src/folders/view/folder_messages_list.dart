@@ -72,7 +72,6 @@ class FolderMessagesList extends StatelessWidget {
               child: Text(emptyLabel, style: context.textTheme.muted),
             );
           }
-          final actionState = state.actionState;
           return ListView.builder(
             padding: EdgeInsets.only(
               top: context.spacing.m,
@@ -90,13 +89,14 @@ class FolderMessagesList extends StatelessWidget {
                   context,
                   item.markedAt.toLocal(),
                 ),
-                removing:
-                    actionState is FoldersActionLoading &&
-                    actionState.action == FoldersActionType.removeMembership &&
-                    actionState.collectionId == item.collectionId.trim() &&
-                    actionState.chatJid == item.chatJid.trim() &&
-                    actionState.messageReferenceId ==
-                        item.messageReferenceId.trim(),
+                removing: state.isFolderActionLoading(
+                  FoldersActionLoading(
+                    action: FoldersActionType.removeMembership,
+                    collectionId: item.collectionId.trim(),
+                    chatJid: item.chatJid.trim(),
+                    messageReferenceId: item.messageReferenceId.trim(),
+                  ),
+                ),
                 onPressed: onPressed == null ? null : () => onPressed!(item),
                 onRemovePressed: item.isContactRuleDerived
                     ? null

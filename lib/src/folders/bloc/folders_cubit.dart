@@ -59,8 +59,6 @@ class FoldersCubit extends Cubit<FoldersState> {
   late final StreamSubscription<Map<String, String>>
   _contactFolderRulesSubscription;
 
-  bool get _actionLoading => state.actionState is FoldersActionLoading;
-
   void _handleCollections(List<MessageCollectionEntry> collections) {
     emit(state.copyWith(collections: collections));
   }
@@ -150,46 +148,49 @@ class FoldersCubit extends Cubit<FoldersState> {
   }
 
   Future<MessageCollectionEntry?> createFolder(String title) async {
-    if (_actionLoading) return null;
-    emit(
-      state.copyWith(
-        actionState: const FoldersActionLoading(
-          action: FoldersActionType.createFolder,
-        ),
-      ),
+    const loading = FoldersActionLoading(
+      action: FoldersActionType.createFolder,
     );
+    if (state.isFolderActionLoading(loading)) return null;
+    emit(state.markFolderActionLoading(loading));
     try {
       final collection = await _xmppService.createMessageCollection(
         title: title,
       );
       emit(
-        state.copyWith(
-          actionState: FoldersActionSuccess(
-            action: FoldersActionType.createFolder,
-            collectionId: collection.id,
-          ),
-        ),
+        state
+            .clearFolderActionLoading(loading)
+            .copyWith(
+              actionState: FoldersActionSuccess(
+                action: FoldersActionType.createFolder,
+                collectionId: collection.id,
+              ),
+            ),
       );
       return collection;
     } on MessageCollectionNameException catch (error) {
       emit(
-        state.copyWith(
-          actionState: FoldersActionFailure(
-            action: FoldersActionType.createFolder,
-            reason: FoldersFailureReason.invalidName,
-            nameFailure: error.failure,
-          ),
-        ),
+        state
+            .clearFolderActionLoading(loading)
+            .copyWith(
+              actionState: FoldersActionFailure(
+                action: FoldersActionType.createFolder,
+                reason: FoldersFailureReason.invalidName,
+                nameFailure: error.failure,
+              ),
+            ),
       );
       return null;
     } on XmppMessageException {
       emit(
-        state.copyWith(
-          actionState: const FoldersActionFailure(
-            action: FoldersActionType.createFolder,
-            reason: FoldersFailureReason.createFailed,
-          ),
-        ),
+        state
+            .clearFolderActionLoading(loading)
+            .copyWith(
+              actionState: const FoldersActionFailure(
+                action: FoldersActionType.createFolder,
+                reason: FoldersFailureReason.createFailed,
+              ),
+            ),
       );
       return null;
     }
@@ -199,60 +200,63 @@ class FoldersCubit extends Cubit<FoldersState> {
     if (item.isContactRuleDerived) {
       return false;
     }
-    if (_actionLoading) return false;
     final collectionId = item.collectionId.trim();
     final chatJid = item.chatJid.trim();
     final messageReferenceId = item.messageReferenceId.trim();
-    emit(
-      state.copyWith(
-        actionState: FoldersActionLoading(
-          action: FoldersActionType.removeMembership,
-          collectionId: collectionId,
-          chatJid: chatJid,
-          messageReferenceId: messageReferenceId,
-        ),
-      ),
+    final loading = FoldersActionLoading(
+      action: FoldersActionType.removeMembership,
+      collectionId: collectionId,
+      chatJid: chatJid,
+      messageReferenceId: messageReferenceId,
     );
+    if (state.isFolderActionLoading(loading)) return false;
+    emit(state.markFolderActionLoading(loading));
     try {
       final removed = await _xmppService.removeMessageCollectionMembership(
         item,
       );
       if (!removed) {
         emit(
-          state.copyWith(
-            actionState: FoldersActionFailure(
-              action: FoldersActionType.removeMembership,
-              reason: FoldersFailureReason.removeFailed,
-              collectionId: collectionId,
-              chatJid: chatJid,
-              messageReferenceId: messageReferenceId,
-            ),
-          ),
+          state
+              .clearFolderActionLoading(loading)
+              .copyWith(
+                actionState: FoldersActionFailure(
+                  action: FoldersActionType.removeMembership,
+                  reason: FoldersFailureReason.removeFailed,
+                  collectionId: collectionId,
+                  chatJid: chatJid,
+                  messageReferenceId: messageReferenceId,
+                ),
+              ),
         );
         return false;
       }
       emit(
-        state.copyWith(
-          actionState: FoldersActionSuccess(
-            action: FoldersActionType.removeMembership,
-            collectionId: collectionId,
-            chatJid: chatJid,
-            messageReferenceId: messageReferenceId,
-          ),
-        ),
+        state
+            .clearFolderActionLoading(loading)
+            .copyWith(
+              actionState: FoldersActionSuccess(
+                action: FoldersActionType.removeMembership,
+                collectionId: collectionId,
+                chatJid: chatJid,
+                messageReferenceId: messageReferenceId,
+              ),
+            ),
       );
       return true;
     } on XmppMessageException {
       emit(
-        state.copyWith(
-          actionState: FoldersActionFailure(
-            action: FoldersActionType.removeMembership,
-            reason: FoldersFailureReason.removeFailed,
-            collectionId: collectionId,
-            chatJid: chatJid,
-            messageReferenceId: messageReferenceId,
-          ),
-        ),
+        state
+            .clearFolderActionLoading(loading)
+            .copyWith(
+              actionState: FoldersActionFailure(
+                action: FoldersActionType.removeMembership,
+                reason: FoldersFailureReason.removeFailed,
+                collectionId: collectionId,
+                chatJid: chatJid,
+                messageReferenceId: messageReferenceId,
+              ),
+            ),
       );
       return false;
     }

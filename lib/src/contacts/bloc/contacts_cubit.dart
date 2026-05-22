@@ -32,8 +32,6 @@ class ContactsCubit extends Cubit<ContactsState> {
   List<ContactDirectoryEntry>? _items;
   var _criteria = const ContactsViewCriteria();
 
-  bool get _actionLoading => state.actionState is ContactActionLoading;
-
   void updateEmailService(EmailService? emailService) {
     _emailService = emailService;
   }
@@ -79,28 +77,27 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.addContact,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.addContact,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     final title = _trimmedOrNull(displayName);
     if (transport.isXmpp) {
       try {
         await _xmppService.addToRoster(jid: normalized, title: title);
       } on XmppRosterException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.addContact,
-              address: normalized,
-              reason: ContactFailureReason.addFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.addContact,
+                  address: normalized,
+                  reason: ContactFailureReason.addFailed,
+                ),
+              ),
         );
         return;
       }
@@ -108,13 +105,15 @@ class ContactsCubit extends Cubit<ContactsState> {
       final emailService = _emailService;
       if (emailService == null) {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.addContact,
-              address: normalized,
-              reason: ContactFailureReason.unavailable,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.addContact,
+                  address: normalized,
+                  reason: ContactFailureReason.unavailable,
+                ),
+              ),
         );
         return;
       }
@@ -125,46 +124,54 @@ class ContactsCubit extends Cubit<ContactsState> {
         );
       } on EmailServiceException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.addContact,
-              address: normalized,
-              reason: ContactFailureReason.addFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.addContact,
+                  address: normalized,
+                  reason: ContactFailureReason.addFailed,
+                ),
+              ),
         );
         return;
       } on EmailProvisioningException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.addContact,
-              address: normalized,
-              reason: ContactFailureReason.addFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.addContact,
+                  address: normalized,
+                  reason: ContactFailureReason.addFailed,
+                ),
+              ),
         );
         return;
       } on DeltaChatException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.addContact,
-              address: normalized,
-              reason: ContactFailureReason.addFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.addContact,
+                  address: normalized,
+                  reason: ContactFailureReason.addFailed,
+                ),
+              ),
         );
         return;
       }
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.addContact,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.addContact,
+              address: normalized,
+            ),
+          ),
     );
   }
 
@@ -200,27 +207,26 @@ class ContactsCubit extends Cubit<ContactsState> {
     } else {
       emailService = null;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.removeContact,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.removeContact,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     if (contact.hasXmppRoster) {
       try {
         await _xmppService.removeFromRoster(jid: normalized);
       } on XmppRosterException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.removeContact,
-              address: normalized,
-              reason: ContactFailureReason.removeFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.removeContact,
+                  address: normalized,
+                  reason: ContactFailureReason.removeFailed,
+                ),
+              ),
         );
         return;
       }
@@ -230,35 +236,41 @@ class ContactsCubit extends Cubit<ContactsState> {
         await emailService.deleteContactsByNativeIds(contact.emailNativeIds);
       } on EmailServiceException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.removeContact,
-              address: normalized,
-              reason: ContactFailureReason.removeFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.removeContact,
+                  address: normalized,
+                  reason: ContactFailureReason.removeFailed,
+                ),
+              ),
         );
         return;
       } on EmailProvisioningException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.removeContact,
-              address: normalized,
-              reason: ContactFailureReason.removeFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.removeContact,
+                  address: normalized,
+                  reason: ContactFailureReason.removeFailed,
+                ),
+              ),
         );
         return;
       } on DeltaChatException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.removeContact,
-              address: normalized,
-              reason: ContactFailureReason.removeFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.removeContact,
+                  address: normalized,
+                  reason: ContactFailureReason.removeFailed,
+                ),
+              ),
         );
         return;
       }
@@ -268,24 +280,28 @@ class ContactsCubit extends Cubit<ContactsState> {
         await _xmppService.deactivatePrivateContact(address: normalized);
       } on XmppContactDirectoryException {
         emit(
-          state.copyWith(
-            actionState: ContactActionFailure(
-              action: ContactActionType.removeContact,
-              address: normalized,
-              reason: ContactFailureReason.removeFailed,
-            ),
-          ),
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.removeContact,
+                  address: normalized,
+                  reason: ContactFailureReason.removeFailed,
+                ),
+              ),
         );
         return;
       }
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.removeContact,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.removeContact,
+              address: normalized,
+            ),
+          ),
     );
   }
 
@@ -306,15 +322,12 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return false;
     }
-    if (_actionLoading) return false;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.addManual,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.addManual,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return false;
+    emit(state.markContactActionLoading(loading));
     try {
       await _xmppService.addManualContact(
         address: normalized,
@@ -322,23 +335,27 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
     } on XmppContactDirectoryException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.addManual,
-            address: normalized,
-            reason: ContactFailureReason.addFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.addManual,
+                address: normalized,
+                reason: ContactFailureReason.addFailed,
+              ),
+            ),
       );
       return false;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.addManual,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.addManual,
+              address: normalized,
+            ),
+          ),
     );
     return true;
   }
@@ -359,36 +376,37 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.removeManual,
-          address: contact.address,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.removeManual,
+      address: addressKey,
     );
+    if (state.isContactAddressLoading(addressKey)) return;
+    emit(state.markContactActionLoading(loading));
     try {
       await _xmppService.deactivatePrivateContact(address: contact.address);
     } on XmppContactDirectoryException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.removeManual,
-            address: contact.address,
-            reason: ContactFailureReason.removeFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.removeManual,
+                address: contact.address,
+                reason: ContactFailureReason.removeFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.removeManual,
-          address: contact.address,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.removeManual,
+              address: contact.address,
+            ),
+          ),
     );
   }
 
@@ -409,25 +427,24 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.addEmail,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.addEmail,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     final emailService = _emailService;
     if (emailService == null) {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.addEmail,
-            address: normalized,
-            reason: ContactFailureReason.unavailable,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.addEmail,
+                address: normalized,
+                reason: ContactFailureReason.unavailable,
+              ),
+            ),
       );
       return;
     }
@@ -438,45 +455,53 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
     } on EmailServiceException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.addEmail,
-            address: normalized,
-            reason: ContactFailureReason.addFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.addEmail,
+                address: normalized,
+                reason: ContactFailureReason.addFailed,
+              ),
+            ),
       );
       return;
     } on EmailProvisioningException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.addEmail,
-            address: normalized,
-            reason: ContactFailureReason.addFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.addEmail,
+                address: normalized,
+                reason: ContactFailureReason.addFailed,
+              ),
+            ),
       );
       return;
     } on DeltaChatException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.addEmail,
-            address: normalized,
-            reason: ContactFailureReason.addFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.addEmail,
+                address: normalized,
+                reason: ContactFailureReason.addFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.addEmail,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.addEmail,
+              address: normalized,
+            ),
+          ),
     );
   }
 
@@ -502,12 +527,9 @@ class ContactsCubit extends Cubit<ContactsState> {
     final action = favorited
         ? ContactActionType.favorite
         : ContactActionType.unfavorite;
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(action: action, address: normalized),
-      ),
-    );
+    final loading = ContactActionLoading(action: action, address: normalized);
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     final previousItems = _items;
     _replaceContact(
       _currentContactOrFallback(contact).withFavorited(favorited),
@@ -520,24 +542,31 @@ class ContactsCubit extends Cubit<ContactsState> {
     } on XmppContactDirectoryException {
       _items = previousItems;
       emit(
-        state.copyWith(
-          items: _items,
-          visibleItems: _visibleItems(),
-          actionState: ContactActionFailure(
-            action: action,
-            address: normalized,
-            reason: ContactFailureReason.updateFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              items: _items,
+              visibleItems: _visibleItems(),
+              actionState: ContactActionFailure(
+                action: action,
+                address: normalized,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        items: _items,
-        visibleItems: _visibleItems(),
-        actionState: ContactActionSuccess(action: action, address: normalized),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            items: _items,
+            visibleItems: _visibleItems(),
+            actionState: ContactActionSuccess(
+              action: action,
+              address: normalized,
+            ),
+          ),
     );
   }
 
@@ -563,15 +592,12 @@ class ContactsCubit extends Cubit<ContactsState> {
       await resetContactDisplayName(contact: contact);
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.rename,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.rename,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     try {
       await _xmppService.setContactDisplayNameOverride(
         address: normalized,
@@ -589,23 +615,27 @@ class ContactsCubit extends Cubit<ContactsState> {
       }
     } on XmppContactDirectoryException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.rename,
-            address: normalized,
-            reason: ContactFailureReason.updateFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.rename,
+                address: normalized,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.rename,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.rename,
+              address: normalized,
+            ),
+          ),
     );
   }
 
@@ -625,15 +655,12 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.resetRename,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.resetRename,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     try {
       await _xmppService.setContactDisplayNameOverride(
         address: normalized,
@@ -641,23 +668,27 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
     } on XmppContactDirectoryException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.resetRename,
-            address: normalized,
-            reason: ContactFailureReason.updateFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.resetRename,
+                address: normalized,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.resetRename,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.resetRename,
+              address: normalized,
+            ),
+          ),
     );
   }
 
@@ -680,16 +711,13 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.setFolderRule,
-          address: normalized,
-          collectionId: trimmedCollectionId,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.setFolderRule,
+      address: normalized,
+      collectionId: trimmedCollectionId,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     try {
       await _xmppService.setContactFolderRule(
         address: normalized,
@@ -697,25 +725,29 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
     } on XmppContactDirectoryException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.setFolderRule,
-            address: normalized,
-            collectionId: trimmedCollectionId,
-            reason: ContactFailureReason.updateFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.setFolderRule,
+                address: normalized,
+                collectionId: trimmedCollectionId,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.setFolderRule,
-          address: normalized,
-          collectionId: trimmedCollectionId,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.setFolderRule,
+              address: normalized,
+              collectionId: trimmedCollectionId,
+            ),
+          ),
     );
   }
 
@@ -735,39 +767,40 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.clearFolderRule,
-          address: normalized,
-          collectionId: contact.folderCollectionId,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.clearFolderRule,
+      address: normalized,
+      collectionId: contact.folderCollectionId,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     try {
       await _xmppService.clearContactFolderRule(address: normalized);
     } on XmppContactDirectoryException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.clearFolderRule,
-            address: normalized,
-            collectionId: contact.folderCollectionId,
-            reason: ContactFailureReason.updateFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.clearFolderRule,
+                address: normalized,
+                collectionId: contact.folderCollectionId,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.clearFolderRule,
-          address: normalized,
-          collectionId: contact.folderCollectionId,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.clearFolderRule,
+              address: normalized,
+              collectionId: contact.folderCollectionId,
+            ),
+          ),
     );
   }
 
@@ -789,58 +822,63 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: ContactActionLoading(
-          action: ContactActionType.removeEmail,
-          address: normalized,
-        ),
-      ),
+    final loading = ContactActionLoading(
+      action: ContactActionType.removeEmail,
+      address: normalized,
     );
+    if (state.isContactAddressLoading(normalized)) return;
+    emit(state.markContactActionLoading(loading));
     try {
       await emailService.deleteContactsByNativeIds(nativeIds);
     } on EmailServiceException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.removeEmail,
-            address: normalized,
-            reason: ContactFailureReason.removeFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.removeEmail,
+                address: normalized,
+                reason: ContactFailureReason.removeFailed,
+              ),
+            ),
       );
       return;
     } on EmailProvisioningException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.removeEmail,
-            address: normalized,
-            reason: ContactFailureReason.removeFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.removeEmail,
+                address: normalized,
+                reason: ContactFailureReason.removeFailed,
+              ),
+            ),
       );
       return;
     } on DeltaChatException {
       emit(
-        state.copyWith(
-          actionState: ContactActionFailure(
-            action: ContactActionType.removeEmail,
-            address: normalized,
-            reason: ContactFailureReason.removeFailed,
-          ),
-        ),
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.removeEmail,
+                address: normalized,
+                reason: ContactFailureReason.removeFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: ContactActionSuccess(
-          action: ContactActionType.removeEmail,
-          address: normalized,
-        ),
-      ),
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.removeEmail,
+              address: normalized,
+            ),
+          ),
     );
   }
 

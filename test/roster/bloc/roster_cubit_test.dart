@@ -100,4 +100,51 @@ void main() {
     await pending;
     expect(cubit.state.loadingActions, isEmpty);
   });
+
+  test('normalizes roster action loading keys before deduping', () async {
+    final add = Completer<void>();
+    when(
+      () => rosterService.addToRoster(
+        jid: 'alpha@example.com/resource',
+        title: null,
+      ),
+    ).thenAnswer((_) => add.future);
+
+    final pending = cubit.addContact(jid: 'alpha@example.com/resource');
+    await pumpEventQueue();
+
+    expect(
+      cubit.state.loadingActions,
+      contains(
+        const RosterActionLoading(
+          action: RosterActionType.add,
+          jid: 'alpha@example.com',
+        ),
+      ),
+    );
+    expect(cubit.state.isRosterJidLoading('alpha@example.com'), isTrue);
+    expect(
+      cubit.state.isRosterActionLoading(
+        const RosterActionLoading(
+          action: RosterActionType.add,
+          jid: 'alpha@example.com/resource',
+        ),
+      ),
+      isTrue,
+    );
+
+    await cubit.rejectContact(jid: 'alpha@example.com');
+    await cubit.addContact(jid: 'alpha@example.com');
+
+    verifyNever(
+      () => rosterService.rejectSubscriptionRequest('alpha@example.com'),
+    );
+    verifyNever(
+      () => rosterService.addToRoster(jid: 'alpha@example.com', title: null),
+    );
+
+    add.complete();
+    await pending;
+    expect(cubit.state.loadingActions, isEmpty);
+  });
 }

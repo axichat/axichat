@@ -143,6 +143,91 @@ void main() {
     );
   });
 
+  test(
+    'keeps different contact addresses actionable while one loads',
+    () async {
+      final firstAdd = Completer<void>();
+      when(
+        () => xmppService.addToRoster(jid: 'alpha@example.com', title: null),
+      ).thenAnswer((_) => firstAdd.future);
+      when(
+        () => xmppService.addToRoster(jid: 'beta@example.com', title: null),
+      ).thenAnswer((_) async {});
+
+      final pending = cubit.addContact(
+        address: 'alpha@example.com',
+        displayName: null,
+        transport: MessageTransport.xmpp,
+      );
+      await pumpEventQueue();
+
+      expect(
+        cubit.state.loadingActions,
+        contains(
+          const ContactActionLoading(
+            action: ContactActionType.addContact,
+            address: 'alpha@example.com',
+          ),
+        ),
+      );
+
+      await cubit.addContact(
+        address: 'beta@example.com',
+        displayName: null,
+        transport: MessageTransport.xmpp,
+      );
+
+      verify(
+        () => xmppService.addToRoster(jid: 'alpha@example.com', title: null),
+      ).called(1);
+      verify(
+        () => xmppService.addToRoster(jid: 'beta@example.com', title: null),
+      ).called(1);
+      expect(
+        cubit.state.loadingActions,
+        contains(
+          const ContactActionLoading(
+            action: ContactActionType.addContact,
+            address: 'alpha@example.com',
+          ),
+        ),
+      );
+
+      firstAdd.complete();
+      await pending;
+
+      expect(cubit.state.loadingActions, isEmpty);
+    },
+  );
+
+  test('ignores duplicate contact actions while the address loads', () async {
+    final add = Completer<void>();
+    when(
+      () => xmppService.addToRoster(jid: 'alpha@example.com', title: null),
+    ).thenAnswer((_) => add.future);
+
+    final pending = cubit.addContact(
+      address: 'alpha@example.com',
+      displayName: null,
+      transport: MessageTransport.xmpp,
+    );
+    await pumpEventQueue();
+
+    await cubit.addContact(
+      address: 'alpha@example.com',
+      displayName: null,
+      transport: MessageTransport.xmpp,
+    );
+
+    verify(
+      () => xmppService.addToRoster(jid: 'alpha@example.com', title: null),
+    ).called(1);
+
+    add.complete();
+    await pending;
+    expect(cubit.state.loadingActions, isEmpty);
+  });
+
   test('reports XMPP add failure without creating a private contact', () async {
     when(
       () => xmppService.addToRoster(jid: 'alice@example.com', title: 'Alice'),

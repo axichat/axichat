@@ -260,8 +260,12 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
           previous.actionState != current.actionState,
       listener: (context, state) {
         final actionState = state.actionState;
+        final contactAddressKey = contactDirectoryAddressKey(
+          widget.contact.address,
+        );
         if (actionState is! ContactActionFailure ||
-            actionState.address != widget.contact.address ||
+            contactDirectoryAddressKey(actionState.address) !=
+                contactAddressKey ||
             (actionState.action != ContactActionType.setFolderRule &&
                 actionState.action != ContactActionType.clearFolderRule) ||
             _handledFailureId == state.actionId) {
@@ -280,14 +284,18 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
         ),
         footer: BlocBuilder<ContactsCubit, ContactsState>(
           buildWhen: (previous, current) =>
-              previous.actionState != current.actionState,
+              previous.actionState != current.actionState ||
+              previous.loadingActions != current.loadingActions,
           builder: (context, contactsState) {
-            final actionState = contactsState.actionState;
             final loading =
-                actionState is ContactActionLoading &&
-                actionState.address == widget.contact.address &&
-                (actionState.action == ContactActionType.setFolderRule ||
-                    actionState.action == ContactActionType.clearFolderRule);
+                contactsState.isContactActionLoading(
+                  action: ContactActionType.setFolderRule,
+                  address: widget.contact.address,
+                ) ||
+                contactsState.isContactActionLoading(
+                  action: ContactActionType.clearFolderRule,
+                  address: widget.contact.address,
+                );
             return AxiSheetActions(
               children: [
                 Expanded(
@@ -323,15 +331,31 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
               return BlocBuilder<ContactsCubit, ContactsState>(
                 buildWhen: (previous, current) =>
                     previous.actionState != current.actionState ||
-                    previous.items != current.items,
+                    previous.items != current.items ||
+                    previous.loadingActions != current.loadingActions,
                 builder: (context, contactsState) {
-                  final actionState = contactsState.actionState;
+                  final contactAddressKey = contactDirectoryAddressKey(
+                    widget.contact.address,
+                  );
                   final currentContact = contactsState.items?.firstWhere(
-                    (item) => item.address == widget.contact.address,
+                    (item) =>
+                        contactDirectoryAddressKey(item.address) ==
+                        contactAddressKey,
                     orElse: () => widget.contact,
                   );
                   final activeCollectionId = currentContact?.folderCollectionId
                       ?.trim();
+                  String? loadingCollectionId;
+                  for (final action in contactsState.loadingActions) {
+                    if (contactDirectoryAddressKey(action.address) ==
+                            contactAddressKey &&
+                        (action.action == ContactActionType.setFolderRule ||
+                            action.action ==
+                                ContactActionType.clearFolderRule)) {
+                      loadingCollectionId = action.collectionId;
+                      break;
+                    }
+                  }
                   return _FolderCollectionList(
                     collections: collections,
                     explicitActiveCollectionIds: <String>{
@@ -340,18 +364,7 @@ class _ContactFolderRuleSheetState extends State<_ContactFolderRuleSheet> {
                         activeCollectionId,
                     },
                     ruleDerivedCollectionIds: const <String>{},
-                    loadingCollectionId:
-                        actionState is ContactActionLoading &&
-                            actionState.address == widget.contact.address &&
-                            actionState.action ==
-                                ContactActionType.setFolderRule
-                        ? actionState.collectionId
-                        : actionState is ContactActionLoading &&
-                              actionState.address == widget.contact.address &&
-                              actionState.action ==
-                                  ContactActionType.clearFolderRule
-                        ? actionState.collectionId
-                        : null,
+                    loadingCollectionId: loadingCollectionId,
                     onToggleFolder: (collection, active) => _setRule(
                       currentContact ?? widget.contact,
                       collection,
@@ -572,7 +585,9 @@ class _FolderCreateDialogState extends State<_FolderCreateDialog> {
   }
 
   Future<void> _submit(FoldersState state) async {
-    if (state.actionState is FoldersActionLoading) {
+    if (state.isFolderActionLoading(
+      const FoldersActionLoading(action: FoldersActionType.createFolder),
+    )) {
       return;
     }
     if (!(_formKey.currentState?.validate() ?? false)) {
@@ -604,9 +619,9 @@ class _FolderCreateDialogState extends State<_FolderCreateDialog> {
       builder: (context, state) {
         final l10n = context.l10n;
         final actionState = state.actionState;
-        final submitting =
-            actionState is FoldersActionLoading &&
-            actionState.action == FoldersActionType.createFolder;
+        final submitting = state.isFolderActionLoading(
+          const FoldersActionLoading(action: FoldersActionType.createFolder),
+        );
         final submitFailed =
             actionState is FoldersActionFailure &&
             actionState.action == FoldersActionType.createFolder &&

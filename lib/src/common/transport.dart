@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 
 enum MessageTransport { xmpp, email }
 
@@ -53,15 +54,23 @@ const Set<String> _emailDomainHints = <String>{
 };
 
 const Set<String> _xmppDomainHints = <String>{
+  EndpointConfig.defaultDomain,
   'conversations.im',
   'disroot.org',
   'jabber.org',
 };
 
-MessageTransport? hintTransportForAddress(String? address) {
+MessageTransport? hintTransportForAddress(
+  String? address, {
+  Iterable<String> xmppDomainHints = const <String>[],
+}) {
   final domain = _hintDomainForAddress(address);
   if (domain == null || domain.isEmpty) {
     return null;
+  }
+  final extraXmppDomainHints = _normalizedHintDomains(xmppDomainHints);
+  if (_matchesHintedDomain(domain, extraXmppDomainHints)) {
+    return MessageTransport.xmpp;
   }
   if (_matchesHintedDomain(domain, _emailDomainHints)) {
     return MessageTransport.email;
@@ -79,6 +88,22 @@ String? _hintDomainForAddress(String? address) {
     return null;
   }
   return domain.endsWith('.') ? domain.substring(0, domain.length - 1) : domain;
+}
+
+Set<String> _normalizedHintDomains(Iterable<String> domains) {
+  final normalized = <String>{};
+  for (final domain in domains) {
+    final trimmed = domain.trim().toLowerCase();
+    if (trimmed.isEmpty) {
+      continue;
+    }
+    normalized.add(
+      trimmed.endsWith('.')
+          ? trimmed.substring(0, trimmed.length - 1)
+          : trimmed,
+    );
+  }
+  return normalized;
 }
 
 bool _matchesHintedDomain(String domain, Set<String> hints) {

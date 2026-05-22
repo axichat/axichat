@@ -60,10 +60,11 @@ class RosterAddButton extends StatelessWidget {
                             _rosterFailureMessage(context, reason),
                           _ => null,
                         };
-                        final isLoading = state.loadingActions.any(
-                          (action) =>
-                              action.action == RosterActionType.add &&
-                              action.jid == jid,
+                        final isLoading = state.isRosterActionLoading(
+                          RosterActionLoading(
+                            action: RosterActionType.add,
+                            jid: jid,
+                          ),
                         );
                         return BlocSelector<
                           AuthenticationCubit,
@@ -89,10 +90,8 @@ class RosterAddButton extends StatelessWidget {
                   ],
                 ),
                 loading: context.select<RosterCubit, bool>(
-                  (cubit) => cubit.state.loadingActions.any(
-                    (action) =>
-                        action.action == RosterActionType.add &&
-                        action.jid == jid,
+                  (cubit) => cubit.state.isRosterActionLoading(
+                    RosterActionLoading(action: RosterActionType.add, jid: jid),
                   ),
                 ),
                 callback: jid.isEmpty
