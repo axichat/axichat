@@ -864,6 +864,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     AvatarUploadPayload? avatar,
     ChatPrimaryView primaryView = ChatPrimaryView.chat,
   }) async {
+    if (state.creationStatus.isLoading) return;
     emit(
       state.copyWith(
         creationStatus: RequestStatus.loading,

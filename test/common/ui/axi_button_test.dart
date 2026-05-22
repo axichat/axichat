@@ -62,6 +62,29 @@ void main() {
     expect(find.byType(AxiProgressIndicator), findsOneWidget);
   });
 
+  testWidgets('context action button constrains long labels', (tester) async {
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: SizedBox(
+            width: 96,
+            child: ContextActionButton(
+              icon: const Icon(Icons.calendar_month),
+              label: 'Add to calendar',
+              onPressed: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final label = tester.widget<Text>(find.text('Add to calendar'));
+    expect(label.overflow, TextOverflow.ellipsis);
+  });
+
   testWidgets('loading expanded axi list button disables presses', (
     tester,
   ) async {

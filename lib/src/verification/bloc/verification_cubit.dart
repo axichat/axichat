@@ -20,12 +20,25 @@ class VerificationCubit extends Cubit<VerificationState> {
   final OmemoService _omemoService;
 
   Future<void> _initialize() async {
-    await _omemoService.populateTrustCache(jid: jid);
-    await loadFingerprints();
+    try {
+      await _omemoService.populateTrustCache(jid: jid);
+      await _loadFingerprints();
+    } finally {
+      _clearLoadingIfNeeded();
+    }
   }
 
   Future<void> loadFingerprints() async {
+    if (state.loading) return;
     emit(state.copyWith(loading: true));
+    try {
+      await _loadFingerprints();
+    } finally {
+      _clearLoadingIfNeeded();
+    }
+  }
+
+  Future<void> _loadFingerprints() async {
     final fingerprints = await _omemoService.getFingerprints(jid: jid);
     final myFingerprints = await _omemoService.getFingerprints(
       jid: _omemoService.myJid!,
@@ -44,9 +57,18 @@ class VerificationCubit extends Cubit<VerificationState> {
     required int device,
     required BTBVTrustState trust,
   }) async {
+    if (state.loading) return;
     emit(state.copyWith(loading: true));
-    await _omemoService.setDeviceTrust(jid: jid, device: device, trust: trust);
-    await loadFingerprints();
+    try {
+      await _omemoService.setDeviceTrust(
+        jid: jid,
+        device: device,
+        trust: trust,
+      );
+      await _loadFingerprints();
+    } finally {
+      _clearLoadingIfNeeded();
+    }
   }
 
   Future<void> labelFingerprint({
@@ -54,11 +76,23 @@ class VerificationCubit extends Cubit<VerificationState> {
     required int device,
     required String label,
   }) async {
-    await _omemoService.labelFingerprint(
-      jid: jid,
-      device: device,
-      label: label,
-    );
-    await loadFingerprints();
+    if (state.loading) return;
+    emit(state.copyWith(loading: true));
+    try {
+      await _omemoService.labelFingerprint(
+        jid: jid,
+        device: device,
+        label: label,
+      );
+      await _loadFingerprints();
+    } finally {
+      _clearLoadingIfNeeded();
+    }
+  }
+
+  void _clearLoadingIfNeeded() {
+    if (state.loading) {
+      emit(state.copyWith(loading: false));
+    }
   }
 }

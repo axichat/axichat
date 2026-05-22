@@ -66,12 +66,9 @@ class _MessageSelectionToolbar extends StatelessWidget {
                 onPressed: onCopy,
               ),
               ContextActionButton(
-                icon: shareStatus.isLoading
-                    ? AxiProgressIndicator(
-                        color: context.colorScheme.foreground,
-                      )
-                    : Icon(LucideIcons.share2, size: iconSize),
+                icon: Icon(LucideIcons.share2, size: iconSize),
                 label: l10n.chatActionShare,
+                loading: shareStatus.isLoading,
                 onPressed: shareStatus.isLoading ? null : onShare,
               ),
               ContextActionButton(

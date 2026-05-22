@@ -3187,6 +3187,69 @@ void main() {
     await bloc.close();
   });
 
+  test('resend action ignores duplicate request while loading', () async {
+    final message = Message(
+      stanzaID: 'resend-duplicate-message',
+      senderJid: 'self@axi.im',
+      chatJid: initialChat.jid,
+      body: 'Retry me',
+      timestamp: DateTime.timestamp(),
+    );
+    final resendCompleter = Completer<bool>();
+    when(
+      () => messageService.resendMessage(
+        'resend-duplicate-message',
+        chatType: ChatType.chat,
+      ),
+    ).thenAnswer((_) => resendCompleter.future);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add([message]);
+    await _pumpBloc();
+
+    bloc
+      ..add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      )
+      ..add(
+        ChatMessageResendRequested(message: message, chatType: ChatType.chat),
+      );
+    await _pumpBloc();
+
+    expect(
+      bloc.state.resendLoadingMessageIds,
+      contains('resend-duplicate-message'),
+    );
+
+    resendCompleter.complete(true);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verify(
+      () => messageService.resendMessage(
+        'resend-duplicate-message',
+        chatType: ChatType.chat,
+      ),
+    ).called(1);
+    expect(bloc.state.resendLoadingMessageIds, isEmpty);
+    expect(
+      bloc.state.toast,
+      const ChatToast(message: ChatMessageKey.chatMessageSentAgain),
+    );
+    expect(bloc.state.toastId, 1);
+
+    await bloc.close();
+  });
+
   test('resend action clears loading when resend fails', () async {
     final message = Message(
       stanzaID: 'resend-failed-message',

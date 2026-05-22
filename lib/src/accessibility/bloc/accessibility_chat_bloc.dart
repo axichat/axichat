@@ -185,6 +185,7 @@ class AccessibilityChatBloc
       );
       return;
     }
+    if (state.busy) return;
     emit(state.copyWith(busy: true, statusMessage: null, errorMessage: null));
     final failures = <String>[];
     for (final contact in recipients) {
@@ -286,6 +287,7 @@ class AccessibilityChatBloc
       );
       return;
     }
+    if (state.busy) return;
     emit(state.copyWith(busy: true, statusMessage: null, errorMessage: null));
     try {
       final draft = await _messageService.saveDraft(

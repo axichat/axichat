@@ -643,6 +643,7 @@ class AccessibilityActionBloc
   ) async {
     final roster = _rosterService;
     if (roster == null) return;
+    if (state.busy) return;
     emit(state.copyWith(busy: true, statusMessage: null, errorMessage: null));
     try {
       if (action.accept) {

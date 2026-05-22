@@ -32,6 +32,8 @@ class ContactsCubit extends Cubit<ContactsState> {
   List<ContactDirectoryEntry>? _items;
   var _criteria = const ContactsViewCriteria();
 
+  bool get _actionLoading => state.actionState is ContactActionLoading;
+
   void updateEmailService(EmailService? emailService) {
     _emailService = emailService;
   }
@@ -77,6 +79,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -197,6 +200,7 @@ class ContactsCubit extends Cubit<ContactsState> {
     } else {
       emailService = null;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -302,6 +306,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return false;
     }
+    if (_actionLoading) return false;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -354,6 +359,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -403,6 +409,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -495,6 +502,7 @@ class ContactsCubit extends Cubit<ContactsState> {
     final action = favorited
         ? ContactActionType.favorite
         : ContactActionType.unfavorite;
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(action: action, address: normalized),
@@ -555,6 +563,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       await resetContactDisplayName(contact: contact);
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -616,6 +625,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -670,6 +680,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -724,6 +735,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(
@@ -777,6 +789,7 @@ class ContactsCubit extends Cubit<ContactsState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: ContactActionLoading(

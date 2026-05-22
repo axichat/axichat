@@ -36,6 +36,7 @@ class ContextActionButton extends StatelessWidget {
       child: AxiButton.outline(
         onPressed: onPressed,
         loading: loading,
+        constrainChild: true,
         leading: IconTheme.merge(
           data: IconThemeData(color: destructiveColor),
           child: icon,

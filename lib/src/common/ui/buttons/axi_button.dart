@@ -159,6 +159,7 @@ class AxiButton extends StatefulWidget {
     required this.variant,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -175,6 +176,7 @@ class AxiButton extends StatefulWidget {
     super.key,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -191,6 +193,7 @@ class AxiButton extends StatefulWidget {
     super.key,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -207,6 +210,7 @@ class AxiButton extends StatefulWidget {
     super.key,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -223,6 +227,7 @@ class AxiButton extends StatefulWidget {
     super.key,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -239,6 +244,7 @@ class AxiButton extends StatefulWidget {
     super.key,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -255,6 +261,7 @@ class AxiButton extends StatefulWidget {
     super.key,
     this.size = AxiButtonSize.regular,
     this.child,
+    this.constrainChild = false,
     this.leading,
     this.trailing,
     this.selected = false,
@@ -270,6 +277,7 @@ class AxiButton extends StatefulWidget {
   final AxiButtonVariant variant;
   final AxiButtonSize size;
   final Widget? child;
+  final bool constrainChild;
   final Widget? leading;
   final Widget? trailing;
   final bool selected;
@@ -390,7 +398,10 @@ class _AxiButtonState extends State<AxiButton> {
                 : widget.leading!,
           if (widget.leading != null && widget.child != null)
             SizedBox(width: gap),
-          if (widget.child != null) widget.child!,
+          if (widget.child != null)
+            widget.constrainChild
+                ? Flexible(child: widget.child!)
+                : widget.child!,
           if (widget.trailing != null && widget.child != null)
             SizedBox(width: gap),
           if (widget.trailing != null) widget.trailing!,

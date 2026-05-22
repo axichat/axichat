@@ -58,6 +58,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:path/path.dart' as p;
+import 'package:stream_transform/stream_transform.dart';
 
 part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
@@ -104,6 +105,32 @@ const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
 const _emptyShareReplies = <String, List<Chat>>{};
+
+EventTransformer<ChatMessageResendRequested> _dedupeConcurrentResendRequests() {
+  final activeStanzaIds = <String>{};
+  return (events, mapper) => events
+      .where((event) {
+        final stanzaId = event.message.stanzaID.trim();
+        if (stanzaId.isEmpty) {
+          return true;
+        }
+        if (activeStanzaIds.contains(stanzaId)) {
+          return false;
+        }
+        activeStanzaIds.add(stanzaId);
+        return true;
+      })
+      .concurrentAsyncExpand((event) async* {
+        final stanzaId = event.message.stanzaID.trim();
+        try {
+          yield* mapper(event);
+        } finally {
+          if (stanzaId.isNotEmpty) {
+            activeStanzaIds.remove(stanzaId);
+          }
+        }
+      });
+}
 
 class FanOutDraft extends Equatable {
   const FanOutDraft({
@@ -319,7 +346,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEmailReadReceiptsChanged>(_onChatEmailReadReceiptsChanged);
     on<ChatEmailSendConfirmationChanged>(_onChatEmailSendConfirmationChanged);
     on<ChatEmailComposerWatermarkChanged>(_onChatEmailComposerWatermarkChanged);
-    on<ChatSettingSyncRetried>(_onChatSettingSyncRetried);
+    on<ChatSettingSyncRetried>(
+      _onChatSettingSyncRetried,
+      transformer: sequential(),
+    );
     on<ChatEncryptionChanged>(_onChatEncryptionChanged);
     on<ChatEncryptionRepaired>(_onChatEncryptionRepaired);
     on<ChatCapabilitiesRequested>(_onChatCapabilitiesRequested);
@@ -327,14 +357,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
     on<ChatContactAddRequested>(_onChatContactAddRequested);
     on<ChatRecipientEmailChatRequested>(_onChatRecipientEmailChatRequested);
-    on<ChatMessagePinRequested>(_onChatMessagePinRequested);
+    on<ChatMessagePinRequested>(
+      _onChatMessagePinRequested,
+      transformer: sequential(),
+    );
     on<ChatMessageCollectionMembershipChanged>(
       _onChatMessageCollectionMembershipChanged,
+      transformer: sequential(),
     );
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatForwardDraftConsumed>(_onChatForwardDraftConsumed);
-    on<ChatMessageResendRequested>(_onChatMessageResendRequested);
+    on<ChatMessageResendRequested>(
+      _onChatMessageResendRequested,
+      transformer: _dedupeConcurrentResendRequests(),
+    );
     on<ChatInviteRequested>(_onChatInviteRequested);
     on<ChatModerationActionRequested>(_onChatModerationActionRequested);
     on<ChatMessageEditRequested>(_onChatMessageEditRequested);
@@ -357,7 +394,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatDestroyRoomRequested>(_onDestroyRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
     on<ChatRoomMembersOpened>(_onChatRoomMembersOpened);
-    on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
+    on<ChatRoomAvatarChangeRequested>(
+      _onRoomAvatarChangeRequested,
+      transformer: sequential(),
+    );
     on<ChatContactRenameRequested>(_onContactRenameRequested);
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
@@ -3345,6 +3385,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     if (event.avatar.bytes.isEmpty) return;
+    if (state.roomAvatarUpdateStatus.isLoading) return;
     emit(state.copyWith(roomAvatarUpdateStatus: RequestStatus.loading));
     try {
       final updated = await _mucService.updateRoomAvatar(
@@ -4631,6 +4672,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat Function(Chat chat) updateLocalChat,
     required Future<bool> Function() mutation,
   }) async {
+    if (state.isChatSettingLoading(settingId)) return;
     final currentChat = state.chat;
     emit(
       state
@@ -4669,6 +4711,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return;
     }
+    if (state.isChatSettingLoading(event.settingId)) return;
     emit(state.markChatSettingLoading(event.settingId));
     final publishedSnapshot = state.chat?.chatSettingsSyncJson;
     final published = await _chatsService.retryChatSettingsSync(chat.jid);
@@ -5272,6 +5315,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
+    final collectionActionState = state.collectionActionState;
+    if (collectionActionState is ChatCollectionActionLoading &&
+        collectionActionState.collectionId == collectionId &&
+        collectionActionState.messageReferenceId == messageReferenceId &&
+        collectionActionState.active == event.active) {
+      return;
+    }
     emit(
       state.copyWith(
         collectionActionState: ChatCollectionActionLoading(
@@ -5554,6 +5604,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final message = event.message;
     final chatType = event.chatType;
     final resendMessageId = message.stanzaID.trim();
+    if (state.isMessageResendLoading(resendMessageId)) return;
     final pseudoMessageType = message.pseudoMessageType;
     final isEmailMessage = message.deltaChatId != null;
     final isLocalOnlyChat = isAxichatWelcomeThreadJid(message.chatJid);

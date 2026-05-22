@@ -26,15 +26,10 @@ class ChatExportActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final resolvedIconSize = iconSize ?? context.sizing.menuItemIconSize;
     final label = exporting ? (progressLabel ?? readyLabel) : readyLabel;
-    final progressIndicator = SizedBox.square(
-      dimension: resolvedIconSize,
-      child: const Center(child: AxiProgressIndicator()),
-    );
     return ContextActionButton(
-      icon: exporting
-          ? progressIndicator
-          : Icon(LucideIcons.share2, size: resolvedIconSize),
+      icon: Icon(LucideIcons.share2, size: resolvedIconSize),
       label: label,
+      loading: exporting,
       onPressed: exporting ? null : onPressed,
     );
   }

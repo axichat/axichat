@@ -40,6 +40,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
 
   int get inviteCount => _invites?.length ?? 0;
   var contacts = <String>{};
+  bool get _actionLoading => state.actionState is RosterActionLoading;
 
   @override
   Future<void> close() async {
@@ -87,6 +88,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
       );
       return;
     }
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: RosterActionLoading(
@@ -120,6 +122,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   }
 
   Future<void> removeContact({required String jid}) async {
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: RosterActionLoading(
@@ -153,6 +156,7 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   }
 
   Future<void> rejectContact({required String jid}) async {
+    if (_actionLoading) return;
     emit(
       state.copyWith(
         actionState: RosterActionLoading(

@@ -1365,16 +1365,15 @@ class _MessageActionBar extends StatelessWidget {
                 ? l10n.chatActionSendAgain
                 : l10n.chatActionResend,
             loading: resendLoading,
-            onPressed: onResend,
+            onPressed: resendLoading ? null : onResend,
           );
     final actions = <Widget>[
       if (resendAction != null && resendUsesSendAgainLabel) resendAction,
       ContextActionButton(
-        icon: replyLoading
-            ? AxiProgressIndicator(color: context.colorScheme.foreground)
-            : Icon(LucideIcons.reply, size: iconSize),
+        icon: Icon(LucideIcons.reply, size: iconSize),
         label: l10n.chatActionReply,
-        onPressed: onReply,
+        loading: replyLoading,
+        onPressed: replyLoading ? null : onReply,
       ),
       ContextActionButton(
         icon: Transform.scale(
@@ -1405,14 +1404,13 @@ class _MessageActionBar extends StatelessWidget {
         ),
       if (onPinToggle != null || pinLoading || pinDisabled)
         ContextActionButton(
-          icon: pinLoading
-              ? AxiProgressIndicator(color: context.colorScheme.foreground)
-              : Icon(
-                  isPinned ? LucideIcons.pinOff : LucideIcons.pin,
-                  size: iconSize,
-                ),
+          icon: Icon(
+            isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+            size: iconSize,
+          ),
           label: isPinned ? l10n.chatUnpinMessage : l10n.chatPinMessage,
-          onPressed: onPinToggle,
+          loading: pinLoading,
+          onPressed: pinLoading ? null : onPinToggle,
         ),
       ContextActionButton(
         icon: Icon(LucideIcons.copy, size: iconSize),
@@ -1420,10 +1418,9 @@ class _MessageActionBar extends StatelessWidget {
         onPressed: onCopy,
       ),
       ContextActionButton(
-        icon: shareStatus.isLoading
-            ? AxiProgressIndicator(color: context.colorScheme.foreground)
-            : Icon(LucideIcons.share2, size: iconSize),
+        icon: Icon(LucideIcons.share2, size: iconSize),
         label: l10n.chatActionShare,
+        loading: shareStatus.isLoading,
         onPressed: shareStatus.isLoading ? null : onShare,
       ),
       ContextActionButton(

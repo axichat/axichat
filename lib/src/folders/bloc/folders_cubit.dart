@@ -59,6 +59,8 @@ class FoldersCubit extends Cubit<FoldersState> {
   late final StreamSubscription<Map<String, String>>
   _contactFolderRulesSubscription;
 
+  bool get _actionLoading => state.actionState is FoldersActionLoading;
+
   void _handleCollections(List<MessageCollectionEntry> collections) {
     emit(state.copyWith(collections: collections));
   }
@@ -148,6 +150,7 @@ class FoldersCubit extends Cubit<FoldersState> {
   }
 
   Future<MessageCollectionEntry?> createFolder(String title) async {
+    if (_actionLoading) return null;
     emit(
       state.copyWith(
         actionState: const FoldersActionLoading(
@@ -196,6 +199,7 @@ class FoldersCubit extends Cubit<FoldersState> {
     if (item.isContactRuleDerived) {
       return false;
     }
+    if (_actionLoading) return false;
     final collectionId = item.collectionId.trim();
     final chatJid = item.chatJid.trim();
     final messageReferenceId = item.messageReferenceId.trim();
