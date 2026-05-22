@@ -493,7 +493,6 @@ class _PinnedMessageTile extends StatelessWidget {
         effectiveMessage?.stanzaID ??
         item.messageStanzaId.trim();
     final isEmailMessage =
-        chat.isEmailBacked ||
         chat.defaultTransport.isEmail ||
         previewTimelineItem?.isEmailMessage == true ||
         effectiveMessage?.isEmailBacked == true;
@@ -609,6 +608,9 @@ class _PinnedMessageTile extends StatelessWidget {
         package: icon.fontPackage,
       ),
     );
+    final openPgpIcon = effectiveMessage?.encryptionProtocol.isOpenPgp == true
+        ? iconDetailSpan(LucideIcons.lock, detailColor)
+        : null;
 
     final timestamp = (effectiveMessage?.timestamp ?? item.pinnedAt).toLocal();
     final timeLabel =
@@ -625,6 +627,7 @@ class _PinnedMessageTile extends StatelessWidget {
     final detailSpans = <InlineSpan>[
       TextSpan(text: timeLabel, style: detailStyle),
       iconDetailSpan(transportIconData, detailColor),
+      ?openPgpIcon,
       iconDetailSpan(LucideIcons.pin, detailColor),
       if (isImportant) iconDetailSpan(Icons.star_rounded, detailColor),
       if (trusted != null)
@@ -953,7 +956,8 @@ class _PinnedMessageTile extends StatelessWidget {
     }
 
     if (effectiveMessage != null && attachmentIds.isNotEmpty) {
-      final isEmailBacked = chat.isEmailBacked;
+      final isEmailBacked =
+          chat.defaultTransport.isEmail || effectiveMessage.isEmailBacked;
       final bool attachmentsBlockedForPin = attachmentsBlocked;
       final allowAttachmentOnce = attachmentsBlockedForPin
           ? false
@@ -1038,13 +1042,15 @@ class _PinnedMessageTile extends StatelessWidget {
         messageForPin != null &&
         messageForPin.awaitsMucReference(
           isGroupChat: chat.type == ChatType.groupChat,
-          isEmailBacked: chat.isEmailBacked,
+          isEmailBacked:
+              chat.defaultTransport.isEmail || messageForPin.isEmailBacked,
         );
     final pinActionPending =
         messageForPin != null &&
         messageForPin.waitsForOwnMucReference(
           isGroupChat: chat.type == ChatType.groupChat,
-          isEmailBacked: chat.isEmailBacked,
+          isEmailBacked:
+              chat.defaultTransport.isEmail || messageForPin.isEmailBacked,
           selfJid: accountJid,
           myOccupantJid: roomState?.myOccupantJid,
         );

@@ -695,7 +695,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
                   senderJid: message.senderJid,
                   stanzaId: message.stanzaID,
                   chat: chat,
-                  isEmailChat: false,
+                  isEmailChat: isEmailChat,
                   isSelf: entry.isSelf,
                 );
                 if (!approved) return false;

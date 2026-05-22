@@ -13,6 +13,7 @@ import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/chat_export_action_button.dart';
@@ -835,7 +836,8 @@ class _ChatListTileState extends State<ChatListTile> {
       now: widget.timestampNow,
     );
     final isCalendarFirstRoom = item.isCalendarFirstRoom;
-    final isEmailChatRow = item.isEmailBacked && !isCalendarFirstRoom;
+    final isEmailChatRow =
+        item.defaultTransport.isEmail && !isCalendarFirstRoom;
     final editContact = widget.archivedContext || widget.spamContext
         ? null
         : _editableContactForChat(

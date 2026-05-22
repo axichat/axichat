@@ -83,10 +83,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 ? l10n.commonUnknownLabel
                 : _timestampFormat.format(timestamp);
             final showEmailRecipients =
-                isFromSelf &&
-                (transport?.isEmail ?? false) &&
-                shareParticipants.isNotEmpty;
+                isFromSelf && isEmailTransport && shareParticipants.isNotEmpty;
             final showReactions =
+                !isEmailMessage &&
                 (transport == null || transport.isXmpp) &&
                 message.reactionsPreview.isNotEmpty;
             final copyLabel = l10n.chatActionCopy;

@@ -123,7 +123,7 @@ class _UnknownSenderBannerState extends State<_UnknownSenderBanner> {
             chat.type != ChatType.chat ||
             chat.spam ||
             chat.isAxichatWelcomeThread ||
-            chat.isEmailBacked) {
+            chat.defaultTransport.isEmail) {
           return const SizedBox.shrink();
         }
         return BlocBuilder<RosterCubit, RosterState>(
@@ -455,7 +455,8 @@ class _ChatScaffoldBody extends StatelessWidget {
                         );
                       }
                     }
-                    final isEmailChat = state.chat?.isEmailBacked == true;
+                    final isEmailChat =
+                        state.chat?.defaultTransport.isEmail == true;
                     final selectedMessages = loadingMessages
                         ? const <Message>[]
                         : owner._collectSelectedMessages(filteredItems);
