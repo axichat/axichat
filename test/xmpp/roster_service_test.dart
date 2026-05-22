@@ -265,9 +265,9 @@ void main() {
       },
     );
 
-    test('Accepts a roster push from the full account JID.', () async {
+    test('Rejects a roster push from a full account JID.', () async {
       final harness = _buildRosterManagerHarness();
-      final stanza = _rosterPushStanza(from: 'hello2@axi.im/axichat.resource');
+      final stanza = _rosterPushStanza(from: 'hello2@axi.im/other-resource');
 
       final result = await harness.manager
           .getIncomingStanzaHandlers()
@@ -277,11 +277,11 @@ void main() {
       await pumpEventQueue();
 
       expect(result.done, isTrue);
-      expect(harness.stateManager.added, hasLength(1));
-      expect(harness.replies, hasLength(1));
-      expect(harness.replies.single.stanza.type, 'result');
-      expect(harness.events, hasLength(1));
-      expect(harness.events.single, isA<mox.RosterUpdatedEvent>());
+      expect(harness.stateManager.added, isEmpty);
+      expect(harness.stateManager.modified, isEmpty);
+      expect(harness.stateManager.removed, isEmpty);
+      expect(harness.replies, isEmpty);
+      expect(harness.events, isEmpty);
     });
 
     test('Rejects a roster push from a foreign account.', () async {

@@ -89,10 +89,12 @@ class _RosterListBody extends StatelessWidget {
           final item = items[index];
           return BlocSelector<RosterCubit, RosterState, bool>(
             selector: (state) {
-              final actionState = state.actionState;
-              return actionState is RosterActionLoading &&
-                  actionState.action == RosterActionType.remove &&
-                  actionState.jid == item.jid;
+              return state.isRosterActionLoading(
+                RosterActionLoading(
+                  action: RosterActionType.remove,
+                  jid: item.jid,
+                ),
+              );
             },
             builder: (context, isLoading) {
               final open = openJid == item.jid;

@@ -75,6 +75,7 @@ final class RosterState extends Equatable {
     this.contactsCriteria = const RosterViewCriteria(),
     this.invitesCriteria = const RosterViewCriteria(),
     this.actionState = const RosterActionIdle(),
+    this.loadingActions = const <RosterActionLoading>{},
   });
 
   final List<RosterItem>? items;
@@ -84,6 +85,7 @@ final class RosterState extends Equatable {
   final RosterViewCriteria contactsCriteria;
   final RosterViewCriteria invitesCriteria;
   final RosterActionState actionState;
+  final Set<RosterActionLoading> loadingActions;
 
   RosterState copyWith({
     List<RosterItem>? items,
@@ -93,6 +95,7 @@ final class RosterState extends Equatable {
     RosterViewCriteria? contactsCriteria,
     RosterViewCriteria? invitesCriteria,
     RosterActionState? actionState,
+    Set<RosterActionLoading>? loadingActions,
   }) {
     return RosterState(
       items: items ?? this.items,
@@ -102,6 +105,7 @@ final class RosterState extends Equatable {
       contactsCriteria: contactsCriteria ?? this.contactsCriteria,
       invitesCriteria: invitesCriteria ?? this.invitesCriteria,
       actionState: actionState ?? this.actionState,
+      loadingActions: loadingActions ?? this.loadingActions,
     );
   }
 
@@ -114,5 +118,36 @@ final class RosterState extends Equatable {
     contactsCriteria,
     invitesCriteria,
     actionState,
+    loadingActions,
   ];
+}
+
+extension RosterStateActionLoading on RosterState {
+  bool isRosterJidLoading(String jid) {
+    return loadingActions.any((action) => action.jid == jid);
+  }
+
+  bool isRosterActionLoading(RosterActionLoading action) {
+    return loadingActions.contains(action);
+  }
+
+  RosterState markRosterActionLoading(RosterActionLoading action) {
+    if (loadingActions.contains(action)) return this;
+    return copyWith(
+      actionState: action,
+      loadingActions: Set<RosterActionLoading>.unmodifiable({
+        ...loadingActions,
+        action,
+      }),
+    );
+  }
+
+  RosterState clearRosterActionLoading(RosterActionLoading action) {
+    if (!loadingActions.contains(action)) return this;
+    return copyWith(
+      loadingActions: Set<RosterActionLoading>.unmodifiable(
+        Set<RosterActionLoading>.from(loadingActions)..remove(action),
+      ),
+    );
+  }
 }

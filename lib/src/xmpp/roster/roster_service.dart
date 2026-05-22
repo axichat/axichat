@@ -330,7 +330,7 @@ class XmppRosterManager extends mox.RosterManager {
 
     // Axichat keeps the bound resource in connectionSettings; roster pushes
     // from the server are still addressed from the bare account JID.
-    if (from != null && mox.JID.fromString(from).toBare() != selfJid) {
+    if (from != null && mox.JID.fromString(from) != selfJid) {
       logger.warning(
         'Roster push invalid! Unexpected from attribute: ${stanza.toXml()}',
       );

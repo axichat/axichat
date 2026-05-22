@@ -81,9 +81,7 @@ class _RosterInvitesBody extends StatelessWidget {
           final invite = invites[index];
           return BlocSelector<RosterCubit, RosterState, bool>(
             selector: (state) {
-              final actionState = state.actionState;
-              return actionState is RosterActionLoading &&
-                  actionState.jid == invite.jid;
+              return state.isRosterJidLoading(invite.jid);
             },
             builder: (context, disabled) {
               return ListItemPadding(

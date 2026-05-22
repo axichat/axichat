@@ -40,7 +40,6 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
 
   int get inviteCount => _invites?.length ?? 0;
   var contacts = <String>{};
-  bool get _actionLoading => state.actionState is RosterActionLoading;
 
   @override
   Future<void> close() async {
@@ -88,104 +87,104 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
       );
       return;
     }
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: RosterActionLoading(
-          action: RosterActionType.add,
-          jid: jid,
-        ),
-      ),
-    );
+    final loading = RosterActionLoading(action: RosterActionType.add, jid: jid);
+    if (state.isRosterJidLoading(jid)) return;
+    emit(state.markRosterActionLoading(loading));
     try {
       await _rosterService.addToRoster(jid: jid, title: title);
     } on XmppRosterException catch (_) {
       emit(
-        state.copyWith(
-          actionState: RosterActionFailure(
-            action: RosterActionType.add,
-            jid: jid,
-            reason: RosterFailureReason.addFailed,
-          ),
-        ),
+        state
+            .clearRosterActionLoading(loading)
+            .copyWith(
+              actionState: RosterActionFailure(
+                action: RosterActionType.add,
+                jid: jid,
+                reason: RosterFailureReason.addFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: RosterActionSuccess(
-          action: RosterActionType.add,
-          jid: jid,
-        ),
-      ),
+      state
+          .clearRosterActionLoading(loading)
+          .copyWith(
+            actionState: RosterActionSuccess(
+              action: RosterActionType.add,
+              jid: jid,
+            ),
+          ),
     );
   }
 
   Future<void> removeContact({required String jid}) async {
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: RosterActionLoading(
-          action: RosterActionType.remove,
-          jid: jid,
-        ),
-      ),
+    final loading = RosterActionLoading(
+      action: RosterActionType.remove,
+      jid: jid,
     );
+    if (state.isRosterJidLoading(jid)) return;
+    emit(state.markRosterActionLoading(loading));
     try {
       await _rosterService.removeFromRoster(jid: jid);
     } on XmppRosterException catch (_) {
       emit(
-        state.copyWith(
-          actionState: RosterActionFailure(
-            action: RosterActionType.remove,
-            jid: jid,
-            reason: RosterFailureReason.removeFailed,
-          ),
-        ),
+        state
+            .clearRosterActionLoading(loading)
+            .copyWith(
+              actionState: RosterActionFailure(
+                action: RosterActionType.remove,
+                jid: jid,
+                reason: RosterFailureReason.removeFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: RosterActionSuccess(
-          action: RosterActionType.remove,
-          jid: jid,
-        ),
-      ),
+      state
+          .clearRosterActionLoading(loading)
+          .copyWith(
+            actionState: RosterActionSuccess(
+              action: RosterActionType.remove,
+              jid: jid,
+            ),
+          ),
     );
   }
 
   Future<void> rejectContact({required String jid}) async {
-    if (_actionLoading) return;
-    emit(
-      state.copyWith(
-        actionState: RosterActionLoading(
-          action: RosterActionType.reject,
-          jid: jid,
-        ),
-      ),
+    final loading = RosterActionLoading(
+      action: RosterActionType.reject,
+      jid: jid,
     );
+    if (state.isRosterJidLoading(jid)) return;
+    emit(state.markRosterActionLoading(loading));
     try {
       await _rosterService.rejectSubscriptionRequest(jid);
     } on XmppRosterException catch (_) {
       emit(
-        state.copyWith(
-          actionState: RosterActionFailure(
-            action: RosterActionType.reject,
-            jid: jid,
-            reason: RosterFailureReason.rejectFailed,
-          ),
-        ),
+        state
+            .clearRosterActionLoading(loading)
+            .copyWith(
+              actionState: RosterActionFailure(
+                action: RosterActionType.reject,
+                jid: jid,
+                reason: RosterFailureReason.rejectFailed,
+              ),
+            ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        actionState: RosterActionSuccess(
-          action: RosterActionType.reject,
-          jid: jid,
-        ),
-      ),
+      state
+          .clearRosterActionLoading(loading)
+          .copyWith(
+            actionState: RosterActionSuccess(
+              action: RosterActionType.reject,
+              jid: jid,
+            ),
+          ),
     );
   }
 

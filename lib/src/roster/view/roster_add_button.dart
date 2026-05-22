@@ -43,6 +43,7 @@ class RosterAddButton extends StatelessWidget {
                         final actionState = state.actionState;
                         if (actionState is RosterActionSuccess &&
                             actionState.action == RosterActionType.add &&
+                            actionState.jid == jid &&
                             context.canPop()) {
                           context.pop();
                         }
@@ -50,14 +51,20 @@ class RosterAddButton extends StatelessWidget {
                       builder: (context, state) {
                         final actionState = state.actionState;
                         final errorMessage = switch (actionState) {
-                          RosterActionFailure(:final reason)
-                              when actionState.action == RosterActionType.add =>
+                          RosterActionFailure(
+                            :final reason,
+                            jid: final failedJid,
+                          )
+                              when actionState.action == RosterActionType.add &&
+                                  failedJid == jid =>
                             _rosterFailureMessage(context, reason),
                           _ => null,
                         };
-                        final isLoading =
-                            actionState is RosterActionLoading &&
-                            actionState.action == RosterActionType.add;
+                        final isLoading = state.loadingActions.any(
+                          (action) =>
+                              action.action == RosterActionType.add &&
+                              action.jid == jid,
+                        );
                         return BlocSelector<
                           AuthenticationCubit,
                           AuthenticationState,
@@ -82,11 +89,11 @@ class RosterAddButton extends StatelessWidget {
                   ],
                 ),
                 loading: context.select<RosterCubit, bool>(
-                  (cubit) => switch (cubit.state.actionState) {
-                    RosterActionLoading(:final action) =>
-                      action == RosterActionType.add,
-                    _ => false,
-                  },
+                  (cubit) => cubit.state.loadingActions.any(
+                    (action) =>
+                        action.action == RosterActionType.add &&
+                        action.jid == jid,
+                  ),
                 ),
                 callback: jid.isEmpty
                     ? null
