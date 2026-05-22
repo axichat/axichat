@@ -218,6 +218,35 @@ void main() {
       expect(localBloc.state.focusedCriticalPathId, focusedPath.id);
     });
 
+    test('criticalPathUnfocused clears only matching focus', () async {
+      final localBloc = buildBloc();
+      addTearDown(localBloc.close);
+
+      localBloc.add(const CalendarEvent.criticalPathCreated(name: 'First'));
+      await pumpEventQueue();
+      final firstPath = localBloc.state.model.criticalPaths.values.singleWhere(
+        (path) => path.name == 'First',
+      );
+
+      localBloc.add(const CalendarEvent.criticalPathCreated(name: 'Second'));
+      await pumpEventQueue();
+      final secondPath = localBloc.state.model.criticalPaths.values.singleWhere(
+        (path) => path.name == 'Second',
+      );
+
+      localBloc.add(CalendarEvent.criticalPathFocused(pathId: secondPath.id));
+      await pumpEventQueue();
+      expect(localBloc.state.focusedCriticalPathId, secondPath.id);
+
+      localBloc.add(CalendarEvent.criticalPathUnfocused(pathId: firstPath.id));
+      await pumpEventQueue();
+      expect(localBloc.state.focusedCriticalPathId, secondPath.id);
+
+      localBloc.add(CalendarEvent.criticalPathUnfocused(pathId: secondPath.id));
+      await pumpEventQueue();
+      expect(localBloc.state.focusedCriticalPathId, isNull);
+    });
+
     blocTest<CalendarBloc, CalendarState>(
       'started computes helper fields for empty model',
       build: () => bloc,

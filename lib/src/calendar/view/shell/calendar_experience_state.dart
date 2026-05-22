@@ -420,7 +420,9 @@ abstract class CalendarExperienceState<
       context.l10n.calendarCriticalPathFocusedNotice(focusedPath.name),
       actionLabel: context.l10n.calendarCriticalPathUnfocus,
       onAction: () {
-        dispatchCalendarEvent(const CalendarEvent.criticalPathFocused());
+        dispatchCalendarEvent(
+          CalendarEvent.criticalPathUnfocused(pathId: focusedPath.id),
+        );
       },
     );
   }

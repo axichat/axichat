@@ -520,7 +520,9 @@ void main() {
     await tester.pump();
 
     verify(
-      () => harness.bloc.add(const CalendarEvent.criticalPathFocused()),
+      () => harness.bloc.add(
+        CalendarEvent.criticalPathUnfocused(pathId: path.id),
+      ),
     ).called(1);
   });
 
@@ -599,7 +601,7 @@ void main() {
     );
     final harness = _ChatCalendarWidgetHarness(tester: tester, state: state);
 
-    await harness.pump(surfacePopEnabled: false);
+    await harness.pump(surfacePopEnabled: true, active: false);
 
     expect(find.text('"Focused path" is focused.'), findsNothing);
 
@@ -1568,7 +1570,10 @@ class _ChatCalendarWidgetHarness {
   late final SettingsCubit settingsCubit;
   bool _viewConfigured = false;
 
-  Future<void> pump({required bool surfacePopEnabled}) async {
+  Future<void> pump({
+    required bool surfacePopEnabled,
+    bool active = true,
+  }) async {
     if (!_viewConfigured) {
       _viewConfigured = true;
       tester.view.physicalSize = const Size(390, 844);
@@ -1621,6 +1626,7 @@ class _ChatCalendarWidgetHarness {
                       lastChangeTimestamp: DateTime(2024, 1, 15),
                     ),
                     surfacePopEnabled: surfacePopEnabled,
+                    active: active,
                   ),
                 ),
               ),

@@ -118,6 +118,7 @@ abstract class BaseCalendarBloc
     on<CalendarCriticalPathTaskAdded>(_onCriticalPathTaskAdded);
     on<CalendarCriticalPathTaskRemoved>(_onCriticalPathTaskRemoved);
     on<CalendarCriticalPathFocused>(_onCriticalPathFocused);
+    on<CalendarCriticalPathUnfocused>(_onCriticalPathUnfocused);
     on<CalendarCriticalPathReordered>(_onCriticalPathReordered);
   }
 
@@ -2830,7 +2831,21 @@ abstract class BaseCalendarBloc
     CalendarCriticalPathFocused event,
     Emitter<CalendarState> emit,
   ) {
-    final String? normalized = _normalizeFocusedPath(event.pathId, state.model);
+    _emitFocusedCriticalPath(event.pathId, emit);
+  }
+
+  void _onCriticalPathUnfocused(
+    CalendarCriticalPathUnfocused event,
+    Emitter<CalendarState> emit,
+  ) {
+    if (state.focusedCriticalPathId != event.pathId) {
+      return;
+    }
+    _emitFocusedCriticalPath(null, emit);
+  }
+
+  void _emitFocusedCriticalPath(String? pathId, Emitter<CalendarState> emit) {
+    final String? normalized = _normalizeFocusedPath(pathId, state.model);
     final Set<String> filteredSelection = _filterSelectionForFocus(
       focusedPathId: normalized,
       model: state.model,

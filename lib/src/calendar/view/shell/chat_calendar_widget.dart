@@ -29,12 +29,14 @@ class ChatCalendarWidget extends StatefulWidget {
     super.key,
     required this.chat,
     required this.surfacePopEnabled,
+    this.active = true,
     this.showHeader = true,
     this.onCanHandleBackChanged,
   });
 
   final Chat chat;
   final bool surfacePopEnabled;
+  final bool active;
   final bool showHeader;
   final ValueChanged<bool>? onCanHandleBackChanged;
 
@@ -64,7 +66,7 @@ class _ChatCalendarWidgetState
   @override
   void didUpdateWidget(covariant ChatCalendarWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.surfacePopEnabled && widget.surfacePopEnabled) {
+    if (!oldWidget.active && widget.active) {
       activateFocusedCriticalPathNotice();
     }
   }
@@ -76,7 +78,7 @@ class _ChatCalendarWidgetState
   }
 
   @override
-  bool get focusedCriticalPathNoticeActive => widget.surfacePopEnabled;
+  bool get focusedCriticalPathNoticeActive => widget.active;
 
   @override
   BuildContext get calendarModalContext {

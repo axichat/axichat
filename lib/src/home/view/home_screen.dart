@@ -2090,17 +2090,20 @@ class _HomeContent extends StatelessWidget {
                       builder: (context, state) {
                         final chatsState = context.watch<ChatsCubit>().state;
                         final chatRoute = chatsState.openChatRoute;
-                        final Widget chatPane = Align(
-                          alignment: Alignment.topLeft,
-                          child: _HomeSecondaryChatPane(
-                            key: ValueKey(pane.scopeKey),
-                            pane: pane,
-                            settings: settings,
-                            emailEnabled: emailEnabled,
-                          ),
-                        );
-
-                        Widget chatLayout({required bool showChatCalendar}) {
+                        Widget chatLayout({
+                          required bool showChatCalendar,
+                          required bool chatCalendarActive,
+                        }) {
+                          final Widget chatPane = Align(
+                            alignment: Alignment.topLeft,
+                            child: _HomeSecondaryChatPane(
+                              key: ValueKey(pane.scopeKey),
+                              pane: pane,
+                              settings: settings,
+                              emailEnabled: emailEnabled,
+                              chatCalendarActive: chatCalendarActive,
+                            ),
+                          );
                           final Widget content = Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -2195,6 +2198,7 @@ class _HomeContent extends StatelessWidget {
                           if (!hasCalendarBloc) {
                             body = chatLayout(
                               showChatCalendar: showChatCalendar,
+                              chatCalendarActive: homeBranchActive,
                             );
                           } else {
                             body = AxiDirectionalIndexedStack(
@@ -2206,7 +2210,11 @@ class _HomeContent extends StatelessWidget {
                                   navPlacement == NavPlacement.bottom &&
                                   homeBranchActive,
                               children: [
-                                chatLayout(showChatCalendar: showChatCalendar),
+                                chatLayout(
+                                  showChatCalendar: showChatCalendar,
+                                  chatCalendarActive:
+                                      homeBranchActive && !openCalendar,
+                                ),
                                 calendarLayout(
                                   calendarTabIndex: calendarTabIndex,
                                   animateMobileTabChanges:
@@ -2360,11 +2368,13 @@ class _HomeSecondaryChatPane extends StatelessWidget {
     required this.pane,
     required this.settings,
     required this.emailEnabled,
+    required this.chatCalendarActive,
   });
 
   final HomeSecondaryPane pane;
   final SettingsState settings;
   final bool emailEnabled;
+  final bool chatCalendarActive;
 
   @override
   Widget build(BuildContext context) {
@@ -2378,7 +2388,10 @@ class _HomeSecondaryChatPane extends StatelessWidget {
       settings: settings,
       emailService: emailEnabled ? locate<EmailService>() : null,
       locate: locate,
-      child: Chat(syncWithOpenChatRoute: pane.syncWithOpenChatRoute),
+      child: Chat(
+        syncWithOpenChatRoute: pane.syncWithOpenChatRoute,
+        calendarSurfaceActive: chatCalendarActive,
+      ),
     );
   }
 }

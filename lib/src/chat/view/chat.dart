@@ -248,10 +248,12 @@ class Chat extends StatefulWidget {
     super.key,
     this.readOnly = false,
     this.syncWithOpenChatRoute = true,
+    this.calendarSurfaceActive = true,
   });
 
   final bool readOnly;
   final bool syncWithOpenChatRoute;
+  final bool calendarSurfaceActive;
 
   @override
   State<Chat> createState() => _ChatState();
@@ -6134,6 +6136,7 @@ class _ChatState extends State<Chat> {
                 isSettingsRoute: isSettingsRoute,
                 calendarFirstRoom: calendarFirstRoom,
                 showingChatCalendar: showingChatCalendar,
+                calendarSurfaceActive: widget.calendarSurfaceActive,
                 pinnedCount: pinnedCount,
                 navigationActions: navigationActions,
                 navigationActionCount: navigationActionCount,

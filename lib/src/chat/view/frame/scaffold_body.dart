@@ -229,6 +229,7 @@ class _ChatScaffoldBody extends StatelessWidget {
     required this.isGroupChat,
     required this.isEmailComposer,
     required this.chatCalendarAvailable,
+    required this.calendarSurfaceActive,
     required this.personalCalendarAvailable,
     required this.currentUserId,
     required this.selfXmppJid,
@@ -284,6 +285,7 @@ class _ChatScaffoldBody extends StatelessWidget {
   final bool isGroupChat;
   final bool isEmailComposer;
   final bool chatCalendarAvailable;
+  final bool calendarSurfaceActive;
   final bool personalCalendarAvailable;
   final String? currentUserId;
   final String? selfXmppJid;
@@ -1144,6 +1146,7 @@ class _ChatScaffoldBody extends StatelessWidget {
               owner._handleSpamToggle(sendToSpam: sendToSpam),
           onRenameContact: canRenameContact ? owner._promptContactRename : null,
           onImportantMessageSelected: owner._handleImportantMessageSelected,
+          chatCalendarSurfaceActive: calendarSurfaceActive,
           onChatCalendarCanHandleBackChanged:
               owner._handleChatCalendarCanHandleBackChanged,
         );

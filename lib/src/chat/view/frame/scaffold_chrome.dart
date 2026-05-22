@@ -142,12 +142,14 @@ class _ChatCalendarPanel extends StatelessWidget {
     required this.chat,
     required this.calendarAvailable,
     required this.surfacePopEnabled,
+    required this.active,
     required this.onCanHandleBackChanged,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
   final bool surfacePopEnabled;
+  final bool active;
   final ValueChanged<bool> onCanHandleBackChanged;
 
   @override
@@ -161,6 +163,7 @@ class _ChatCalendarPanel extends StatelessWidget {
       child: ChatCalendarWidget(
         chat: currentChat,
         surfacePopEnabled: surfacePopEnabled,
+        active: active,
         showHeader: true,
         onCanHandleBackChanged: onCanHandleBackChanged,
       ),
@@ -235,6 +238,7 @@ class _ChatScaffoldLayout extends StatelessWidget {
     required this.isSettingsRoute,
     required this.calendarFirstRoom,
     required this.showingChatCalendar,
+    required this.calendarSurfaceActive,
     required this.pinnedCount,
     required this.navigationActions,
     required this.navigationActionCount,
@@ -301,6 +305,7 @@ class _ChatScaffoldLayout extends StatelessWidget {
   final bool isSettingsRoute;
   final bool calendarFirstRoom;
   final bool showingChatCalendar;
+  final bool calendarSurfaceActive;
   final int pinnedCount;
   final List<AppBarActionItem> navigationActions;
   final int navigationActionCount;
@@ -512,6 +517,7 @@ class _ChatScaffoldLayout extends StatelessWidget {
             isGroupChat: isGroupChat,
             isEmailComposer: isEmailComposer,
             chatCalendarAvailable: chatCalendarAvailable,
+            calendarSurfaceActive: calendarSurfaceActive,
             personalCalendarAvailable: personalCalendarAvailable,
             currentUserId: currentUserId,
             selfXmppJid: selfXmppJid,
