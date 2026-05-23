@@ -871,6 +871,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get draftSendFailed => 'Entwurf konnte nicht gesendet werden.';
 
   @override
+  String get draftPartialSendNotice =>
+      'Einige Empfänger wurden nicht erreicht. Gesendete Empfänger wurden entfernt; versuche die verbleibenden Empfänger erneut.';
+
+  @override
   String get draftSent => 'Gesendet';
 
   @override

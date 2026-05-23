@@ -1185,6 +1185,16 @@ class MessageCopiesAccessor
   Future<MessageCopyData?> selectOne(int id) =>
       (select(table)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
 
+  Future<void> insertForDeltaMessage(MessageCopiesCompanion data) =>
+      into(table).insert(
+        data,
+        onConflict: DoUpdate.withExcluded(
+          (old, excluded) =>
+              MessageCopiesCompanion.custom(dcChatId: excluded.dcChatId),
+          target: [table.dcMsgId, table.dcAccountId],
+        ),
+      );
+
   @override
   Future<void> deleteOne(int id) =>
       (delete(table)..where((tbl) => tbl.id.equals(id))).go();
@@ -4553,7 +4563,7 @@ WHERE stanza_i_d = ?
     required int dcChatId,
     int dcAccountId = DeltaAccountDefaults.legacyId,
   }) async {
-    await messageCopiesAccessor.insertOrUpdateOne(
+    await messageCopiesAccessor.insertForDeltaMessage(
       MessageCopiesCompanion.insert(
         shareId: shareId,
         dcMsgId: dcMsgId,

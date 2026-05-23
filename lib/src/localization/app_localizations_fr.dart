@@ -873,6 +873,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftSendFailed => 'Échec de l’envoi du brouillon.';
 
   @override
+  String get draftPartialSendNotice =>
+      'Certains destinataires n’ont pas reçu le message. Les destinataires déjà envoyés ont été retirés ; réessayez avec les destinataires restants.';
+
+  @override
   String get draftSent => 'Envoyé';
 
   @override

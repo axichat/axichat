@@ -866,6 +866,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get draftSendFailed => 'No se pudo enviar el borrador.';
 
   @override
+  String get draftPartialSendNotice =>
+      'Algunos destinatarios no recibieron el mensaje. Los destinatarios enviados se quitaron; vuelve a intentar con los restantes.';
+
+  @override
   String get draftSent => 'Enviado';
 
   @override

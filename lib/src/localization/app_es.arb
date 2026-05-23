@@ -266,6 +266,7 @@
   "draftAttachmentFailed": "No se pudo adjuntar el archivo.",
   "draftDiscarded": "Borrador descartado.",
   "draftSendFailed": "No se pudo enviar el borrador.",
+  "draftPartialSendNotice": "Algunos destinatarios no recibieron el mensaje. Los destinatarios enviados se quitaron; vuelve a intentar con los restantes.",
   "draftSent": "Enviado",
   "draftLimitWarning": "La sincronización de borradores admite hasta {limit} borradores. Ya tienes {count}.",
   "@draftLimitWarning": {

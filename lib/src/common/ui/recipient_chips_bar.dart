@@ -1182,7 +1182,7 @@ class _RecipientChip extends StatelessWidget {
         ? removalColor
         : (included ? accentColor : Colors.transparent);
 
-    return _SquircleChipButton(
+    final chip = _SquircleChipButton(
       backgroundColor: effectiveBackground,
       foregroundColor: effectiveForeground,
       borderColor: borderColor,
@@ -1200,7 +1200,6 @@ class _RecipientChip extends StatelessWidget {
             target: recipient.target,
             avatarPathsByJid: avatarPathsByJid,
             selfIdentity: selfIdentity,
-            status: status,
           ),
           SizedBox(width: spacing.xxs),
           Flexible(
@@ -1218,6 +1217,17 @@ class _RecipientChip extends StatelessWidget {
             ),
         ],
       ),
+    );
+    final badge = _RecipientChipStatusBadge(status: status);
+    if (badge.isEmpty) {
+      return chip;
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        chip,
+        Positioned(right: -2, bottom: -2, child: IgnorePointer(child: badge)),
+      ],
     );
   }
 
@@ -1251,17 +1261,14 @@ class _RecipientChipAvatar extends StatelessWidget {
     required this.target,
     required this.avatarPathsByJid,
     required this.selfIdentity,
-    this.status,
   });
 
   final Contact target;
   final Map<String, String> avatarPathsByJid;
   final SelfAvatar selfIdentity;
-  final FanOutRecipientState? status;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final chat = target.chat;
     const double avatarSize = 20.0;
     final avatar = chat != null
@@ -1295,58 +1302,7 @@ class _RecipientChipAvatar extends StatelessWidget {
             size: avatarSize,
             shape: AxiAvatarShape.squircle,
           );
-    final badgeIcon = _statusIcon(status, colors);
-    if (badgeIcon == null) {
-      return SizedBox.square(dimension: avatarSize, child: avatar);
-    }
-    const double badgeSize = 12.0;
-    const double badgeBorderWidth = 1.5;
-    final badgeBackground = colors.card;
-    final badgeBorder = colors.card;
-    return SizedBox.square(
-      dimension: avatarSize,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(child: avatar),
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: Container(
-              width: badgeSize,
-              height: badgeSize,
-              decoration: BoxDecoration(
-                color: badgeBackground,
-                shape: BoxShape.circle,
-                border: Border.all(color: badgeBorder, width: badgeBorderWidth),
-              ),
-              child: Center(child: badgeIcon),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget? _statusIcon(FanOutRecipientState? state, ShadColorScheme colors) {
-    const double statusBadgeSize = 12.0;
-    return switch (state) {
-      FanOutRecipientState.failed => Icon(
-        Icons.warning_amber_rounded,
-        size: statusBadgeSize - 2,
-        color: colors.destructive,
-      ),
-      FanOutRecipientState.sent => null,
-      FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
-        width: statusBadgeSize - 2,
-        height: statusBadgeSize - 2,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: colors.mutedForeground,
-        ),
-      ),
-      null => null,
-    };
+    return SizedBox.square(dimension: avatarSize, child: avatar);
   }
 
   String? _avatarPathForKey(String? key) {
@@ -1373,6 +1329,71 @@ class _RecipientChipAvatar extends StatelessWidget {
       }
     }
     return null;
+  }
+}
+
+class _RecipientChipStatusBadge extends StatelessWidget {
+  const _RecipientChipStatusBadge({this.status});
+
+  final FanOutRecipientState? status;
+
+  bool get isEmpty => status == null || status == FanOutRecipientState.sent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    final badgeSize = sizing.menuItemIconSize;
+    final indicatorSize = badgeSize - spacing.xxs;
+    final badgeIcon = _statusIcon(
+      status,
+      colors,
+      indicatorSize: indicatorSize,
+      strokeWidth: sizing.progressIndicatorStrokeWidth,
+    );
+    if (badgeIcon == null) {
+      return const SizedBox.shrink();
+    }
+    const double badgeBorderWidth = 1.5;
+    final isFailed = status == FanOutRecipientState.failed;
+    final badgeBackground = isFailed ? colors.destructive : colors.card;
+    final badgeBorder = isFailed ? colors.destructive : colors.card;
+    return Container(
+      width: badgeSize,
+      height: badgeSize,
+      decoration: BoxDecoration(
+        color: badgeBackground,
+        shape: BoxShape.circle,
+        border: Border.all(color: badgeBorder, width: badgeBorderWidth),
+      ),
+      child: Center(child: badgeIcon),
+    );
+  }
+
+  Widget? _statusIcon(
+    FanOutRecipientState? state,
+    ShadColorScheme colors, {
+    required double indicatorSize,
+    required double strokeWidth,
+  }) {
+    return switch (state) {
+      FanOutRecipientState.failed => Icon(
+        Icons.priority_high_rounded,
+        size: indicatorSize,
+        color: colors.destructiveForeground,
+      ),
+      FanOutRecipientState.sent => null,
+      FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
+        width: indicatorSize,
+        height: indicatorSize,
+        child: CircularProgressIndicator(
+          strokeWidth: strokeWidth,
+          color: colors.mutedForeground,
+        ),
+      ),
+      null => null,
+    };
   }
 }
 

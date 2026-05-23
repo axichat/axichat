@@ -124,6 +124,57 @@ void main() {
   });
 
   test(
+    'message copy insert is idempotent for duplicate delta message',
+    () async {
+      const originalShareId = '01HX5R8W7YAYR5K1R7Q7MB5G4A';
+      const duplicateShareId = '01HX5R8W7YAYR5K1R7Q7MB5G4B';
+      await db.createMessageShare(
+        share: MessageShareData(
+          shareId: originalShareId,
+          originatorDcMsgId: null,
+          createdAt: DateTime.utc(2026, 5, 23),
+          participantCount: 0,
+        ),
+        participants: const [],
+      );
+      await db.createMessageShare(
+        share: MessageShareData(
+          shareId: duplicateShareId,
+          originatorDcMsgId: null,
+          createdAt: DateTime.utc(2026, 5, 23),
+          participantCount: 0,
+        ),
+        participants: const [],
+      );
+
+      await db.insertMessageCopy(
+        shareId: originalShareId,
+        dcMsgId: 58,
+        dcChatId: 18,
+        dcAccountId: 1,
+      );
+      await db.insertMessageCopy(
+        shareId: duplicateShareId,
+        dcMsgId: 58,
+        dcChatId: 19,
+        dcAccountId: 1,
+      );
+
+      expect(
+        await db.getShareIdForDeltaMessage(58, deltaAccountId: 1),
+        originalShareId,
+      );
+      final originalCopies = await db.getMessageCopiesForShare(originalShareId);
+      final duplicateCopies = await db.getMessageCopiesForShare(
+        duplicateShareId,
+      );
+      expect(originalCopies, hasLength(1));
+      expect(originalCopies.single.dcChatId, 19);
+      expect(duplicateCopies, isEmpty);
+    },
+  );
+
+  test(
     'saveMessage does not increment unread for direct self messages',
     () async {
       const selfJid = 'me@example.com';

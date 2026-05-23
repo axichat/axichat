@@ -265,6 +265,7 @@
   "draftAttachmentFailed": "Datei konnte nicht angehängt werden.",
   "draftDiscarded": "Entwurf verworfen.",
   "draftSendFailed": "Entwurf konnte nicht gesendet werden.",
+  "draftPartialSendNotice": "Einige Empfänger wurden nicht erreicht. Gesendete Empfänger wurden entfernt; versuche die verbleibenden Empfänger erneut.",
   "draftSent": "Gesendet",
   "draftLimitWarning": "Die Entwurfssynchronisierung behält bis zu {limit} Entwürfe. Du hast {count}.",
   "@draftLimitWarning": {

@@ -5,9 +5,12 @@ import 'dart:async';
 import 'dart:io';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/draft_forwarded_content.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
+import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
+import 'package:axichat/src/email/models/fan_out_recipient_status.dart';
 import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
@@ -44,6 +47,67 @@ class DraftSearchSnapshot extends Equatable {
 }
 
 enum DraftSendFailureType { noRecipients, noContent, sendFailed }
+
+enum DraftSendTransport { xmpp, email }
+
+final class DraftSendOutcome {
+  DraftSendOutcome._({
+    required this.failureType,
+    Set<DraftSendTransport> completedTransports = const {},
+    Set<String> completedEmailRecipientKeys = const {},
+    Map<String, FanOutRecipientState> latestEmailRecipientStatuses = const {},
+  }) : completedTransports = Set.unmodifiable(completedTransports),
+       completedEmailRecipientKeys = Set.unmodifiable(
+         completedEmailRecipientKeys,
+       ),
+       latestEmailRecipientStatuses = Map.unmodifiable(
+         latestEmailRecipientStatuses,
+       );
+
+  factory DraftSendOutcome.success({
+    Set<DraftSendTransport> completedTransports = const {},
+    Set<String> completedEmailRecipientKeys = const {},
+    Map<String, FanOutRecipientState> latestEmailRecipientStatuses = const {},
+  }) => DraftSendOutcome._(
+    failureType: null,
+    completedTransports: completedTransports,
+    completedEmailRecipientKeys: completedEmailRecipientKeys,
+    latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+  );
+
+  factory DraftSendOutcome.failure({
+    required DraftSendFailureType failureType,
+    Set<DraftSendTransport> completedTransports = const {},
+    Set<String> completedEmailRecipientKeys = const {},
+    Map<String, FanOutRecipientState> latestEmailRecipientStatuses = const {},
+  }) => DraftSendOutcome._(
+    failureType: failureType,
+    completedTransports: completedTransports,
+    completedEmailRecipientKeys: completedEmailRecipientKeys,
+    latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+  );
+
+  final DraftSendFailureType? failureType;
+  final Set<DraftSendTransport> completedTransports;
+  final Set<String> completedEmailRecipientKeys;
+  final Map<String, FanOutRecipientState> latestEmailRecipientStatuses;
+
+  bool get succeeded => failureType == null;
+}
+
+final class _DraftEmailSendResult {
+  const _DraftEmailSendResult({
+    required this.completedRecipientKeys,
+    required this.latestRecipientStatuses,
+  });
+
+  final Set<String> completedRecipientKeys;
+  final Map<String, FanOutRecipientState> latestRecipientStatuses;
+
+  bool get hasFailures => latestRecipientStatuses.values.any(
+    (status) => status == FanOutRecipientState.failed,
+  );
+}
 
 sealed class DraftSendValidationException implements Exception {
   const DraftSendValidationException();
@@ -170,7 +234,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     );
   }
 
-  Future<bool> sendDraft({
+  Future<DraftSendOutcome> sendDraft({
     required int? id,
     required List<DraftXmppTarget> xmppTargets,
     required List<Contact> emailTargets,
@@ -183,18 +247,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
   }) async {
     emit(DraftSending(items: _items, visibleItems: _visibleItems));
+    final completedTransports = <DraftSendTransport>{};
+    final completedEmailRecipientKeys = <String>{};
+    final latestEmailRecipientStatuses = <String, FanOutRecipientState>{};
     try {
-      if (emailTargets.isNotEmpty) {
-        await _sendEmailDraft(
-          targets: emailTargets,
-          body: body,
-          subject: subject,
-          quoteTarget: quoteTarget,
-          attachments: attachments,
-          calendarTaskIcsMessage: calendarTaskIcsMessage,
-          forwardedBlocks: forwardedBlocks,
-          shareTokenSignatureEnabled: shareTokenSignatureEnabled,
-        );
+      if (emailTargets.isEmpty && xmppTargets.isEmpty) {
+        throw const DraftSendNoRecipientsException();
       }
       if (xmppTargets.isNotEmpty) {
         await _sendXmppDraft(
@@ -205,6 +263,27 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           calendarTaskIcsMessage: calendarTaskIcsMessage,
           forwardedBlocks: forwardedBlocks,
         );
+        completedTransports.add(DraftSendTransport.xmpp);
+      }
+      if (emailTargets.isNotEmpty) {
+        final emailResult = await _sendEmailDraft(
+          targets: emailTargets,
+          body: body,
+          subject: subject,
+          quoteTarget: quoteTarget,
+          attachments: attachments,
+          calendarTaskIcsMessage: calendarTaskIcsMessage,
+          forwardedBlocks: forwardedBlocks,
+          shareTokenSignatureEnabled: shareTokenSignatureEnabled,
+        );
+        completedEmailRecipientKeys.addAll(emailResult.completedRecipientKeys);
+        latestEmailRecipientStatuses.addAll(
+          emailResult.latestRecipientStatuses,
+        );
+        if (emailResult.hasFailures) {
+          throw const DraftSendFailedException();
+        }
+        completedTransports.add(DraftSendTransport.email);
       }
     } on DraftSendValidationException catch (error) {
       emit(
@@ -214,7 +293,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           visibleItems: _visibleItems,
         ),
       );
-      return false;
+      return DraftSendOutcome.failure(
+        failureType: _failureTypeFor(error),
+        completedTransports: completedTransports,
+        completedEmailRecipientKeys: completedEmailRecipientKeys,
+        latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+      );
     } on FanOutValidationException {
       emit(
         DraftFailure(
@@ -223,7 +307,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           visibleItems: _visibleItems,
         ),
       );
-      return false;
+      return DraftSendOutcome.failure(
+        failureType: DraftSendFailureType.sendFailed,
+        completedTransports: completedTransports,
+        completedEmailRecipientKeys: completedEmailRecipientKeys,
+        latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+      );
     } on XmppMessageException catch (_) {
       emit(
         DraftFailure(
@@ -232,7 +321,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           visibleItems: _visibleItems,
         ),
       );
-      return false;
+      return DraftSendOutcome.failure(
+        failureType: DraftSendFailureType.sendFailed,
+        completedTransports: completedTransports,
+        completedEmailRecipientKeys: completedEmailRecipientKeys,
+        latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+      );
     } on Exception catch (_) {
       emit(
         DraftFailure(
@@ -241,7 +335,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           visibleItems: _visibleItems,
         ),
       );
-      return false;
+      return DraftSendOutcome.failure(
+        failureType: DraftSendFailureType.sendFailed,
+        completedTransports: completedTransports,
+        completedEmailRecipientKeys: completedEmailRecipientKeys,
+        latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+      );
     }
     if (id != null) {
       try {
@@ -251,7 +350,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       }
     }
     emit(DraftSendComplete(items: _items, visibleItems: _visibleItems));
-    return true;
+    return DraftSendOutcome.success(
+      completedTransports: completedTransports,
+      completedEmailRecipientKeys: completedEmailRecipientKeys,
+      latestEmailRecipientStatuses: latestEmailRecipientStatuses,
+    );
   }
 
   Future<Draft> saveDraft({
@@ -319,7 +422,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return _messageService.countDrafts();
   }
 
-  Future<void> _sendEmailDraft({
+  Future<_DraftEmailSendResult> _sendEmailDraft({
     required List<Contact> targets,
     required String body,
     String? subject,
@@ -362,23 +465,56 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         shareTokenSignatureEnabled &&
         targets.every((target) => target.shareSignatureEnabled);
     final shareId = ShareTokenCodec.generateShareId();
-    final shouldSendBodyOnly =
-        (trimmedBody.isNotEmpty || hasSubject) && !hasAttachments;
-    if (shouldSendBodyOnly) {
+    var activeTargets = targets.toList(growable: false);
+    final completedRecipientKeys = <String>{};
+    final latestRecipientStatuses = <String, FanOutRecipientState>{};
+
+    Future<void> sendEmailUnit({
+      String? body,
+      String? htmlBody,
+      Attachment? attachment,
+      String? htmlCaption,
+    }) async {
+      if (activeTargets.isEmpty) {
+        return;
+      }
       final report = await emailService.fanOutSend(
-        targets: targets,
-        body: trimmedBody,
+        targets: activeTargets,
+        body: body,
         htmlBody: htmlBody,
+        attachment: attachment,
+        htmlCaption: htmlCaption,
         subject: subject,
         quotedStanzaId: quoteTarget?.stanzaId,
         shareId: shareId,
         useSubjectToken: includeSignatureToken,
         tokenAsSignature: includeSignatureToken,
       );
-      _throwIfFanOutFailed(report);
+      final statuses = _fanOutStatusesByTargetKey(
+        targets: activeTargets,
+        report: report,
+      );
+      for (final target in activeTargets) {
+        final status = statuses[target.key] ?? FanOutRecipientState.failed;
+        _addEmailRecipientStatus(
+          latestRecipientStatuses,
+          target: target,
+          status: status,
+        );
+      }
+      activeTargets = activeTargets
+          .where((target) => statuses[target.key] == FanOutRecipientState.sent)
+          .toList(growable: false);
+    }
+
+    final shouldSendBodyOnly =
+        (trimmedBody.isNotEmpty || hasSubject) && !hasAttachments;
+    if (shouldSendBodyOnly) {
+      await sendEmailUnit(body: trimmedBody, htmlBody: htmlBody);
     }
     final caption = trimmedBody.isNotEmpty ? trimmedBody : null;
     final htmlCaption = caption == null ? null : htmlBody;
+    var captionAppliedToAttachment = false;
     if (attachments.isNotEmpty) {
       final bool shouldBundle =
           attachments.length >= _emailAttachmentBundleMinimumCount;
@@ -389,20 +525,17 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       try {
         for (var index = 0; index < attachmentsToSend.length; index += 1) {
           final attachment = attachmentsToSend[index];
-          final captionedAttachment = index == 0 && caption != null
+          final shouldApplyCaption = index == 0 && caption != null;
+          final captionedAttachment = shouldApplyCaption
               ? attachment.copyWith(caption: caption)
               : attachment;
-          final report = await emailService.fanOutSend(
-            targets: targets,
+          if (shouldApplyCaption) {
+            captionAppliedToAttachment = true;
+          }
+          await sendEmailUnit(
             attachment: captionedAttachment,
-            htmlCaption: index == 0 ? htmlCaption : null,
-            subject: subject,
-            quotedStanzaId: quoteTarget?.stanzaId,
-            shareId: shareId,
-            useSubjectToken: includeSignatureToken,
-            tokenAsSignature: includeSignatureToken,
+            htmlCaption: shouldApplyCaption ? htmlCaption : null,
           );
-          _throwIfFanOutFailed(report);
         }
       } finally {
         if (shouldBundle) {
@@ -413,20 +546,21 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       }
     }
     if (calendarTaskAttachment != null) {
-      final report = await emailService.fanOutSend(
-        targets: targets,
-        attachment: caption == null
-            ? calendarTaskAttachment
-            : calendarTaskAttachment.copyWith(caption: caption),
-        htmlCaption: htmlCaption,
-        subject: subject,
-        quotedStanzaId: quoteTarget?.stanzaId,
-        shareId: shareId,
-        useSubjectToken: includeSignatureToken,
-        tokenAsSignature: includeSignatureToken,
+      final shouldApplyCaption = caption != null && !captionAppliedToAttachment;
+      await sendEmailUnit(
+        attachment: shouldApplyCaption
+            ? calendarTaskAttachment.copyWith(caption: caption)
+            : calendarTaskAttachment,
+        htmlCaption: shouldApplyCaption ? htmlCaption : null,
       );
-      _throwIfFanOutFailed(report);
     }
+    for (final target in activeTargets) {
+      completedRecipientKeys.addAll(_emailRecipientLookupKeys(target));
+    }
+    return _DraftEmailSendResult(
+      completedRecipientKeys: completedRecipientKeys,
+      latestRecipientStatuses: latestRecipientStatuses,
+    );
   }
 
   Future<void> _sendXmppDraft({
@@ -558,11 +692,98 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     }
   }
 
-  void _throwIfFanOutFailed(FanOutSendReport report) {
-    if (!report.hasFailures) {
+  Map<String, FanOutRecipientState> _fanOutStatusesByTargetKey({
+    required List<Contact> targets,
+    required FanOutSendReport report,
+  }) {
+    final statuses = <String, FanOutRecipientState>{};
+    if (report.statuses.isEmpty && !report.hasFailures) {
+      for (final target in targets) {
+        statuses[target.key] = FanOutRecipientState.sent;
+      }
+      return statuses;
+    }
+    for (final target in targets) {
+      statuses[target.key] = _fanOutStatusForTarget(
+        target: target,
+        statuses: report.statuses,
+      );
+    }
+    return statuses;
+  }
+
+  FanOutRecipientState _fanOutStatusForTarget({
+    required Contact target,
+    required List<FanOutRecipientStatus> statuses,
+  }) {
+    FanOutRecipientState? resolved;
+    for (final status in statuses) {
+      if (!_fanOutStatusMatchesTarget(target: target, status: status)) {
+        continue;
+      }
+      if (status.state == FanOutRecipientState.failed) {
+        return FanOutRecipientState.failed;
+      }
+      resolved ??= status.state;
+    }
+    return resolved ?? FanOutRecipientState.failed;
+  }
+
+  bool _fanOutStatusMatchesTarget({
+    required Contact target,
+    required FanOutRecipientStatus status,
+  }) {
+    final targetKeys = _emailRecipientLookupKeys(target);
+    if (targetKeys.isEmpty) {
+      return false;
+    }
+    final statusKeys = _emailChatLookupKeys(status.chat);
+    for (final key in targetKeys) {
+      if (statusKeys.contains(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Set<String> _emailRecipientLookupKeys(Contact target) {
+    final keys = <String>{};
+    _addLookupKey(keys, target.key);
+    for (final key in target.statusLookupKeys) {
+      _addLookupKey(keys, key);
+    }
+    return keys;
+  }
+
+  Set<String> _emailChatLookupKeys(Chat chat) {
+    final keys = <String>{};
+    _addLookupKey(keys, chat.jid);
+    for (final key in chat.normalizedIdentityKeys) {
+      _addLookupKey(keys, key);
+    }
+    return keys;
+  }
+
+  void _addEmailRecipientStatus(
+    Map<String, FanOutRecipientState> statuses, {
+    required Contact target,
+    required FanOutRecipientState status,
+  }) {
+    for (final key in _emailRecipientLookupKeys(target)) {
+      statuses[key] = status;
+    }
+  }
+
+  void _addLookupKey(Set<String> keys, String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) {
       return;
     }
-    throw const DraftSendFailedException();
+    keys.add(value);
+    final normalized = normalizedAddressValue(value);
+    if (normalized != null && normalized.isNotEmpty) {
+      keys.add(normalized);
+    }
   }
 
   DraftSendFailureType _failureTypeFor(DraftSendValidationException error) =>

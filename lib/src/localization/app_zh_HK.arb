@@ -265,6 +265,7 @@
   "draftAttachmentFailed": "無法附加檔案。",
   "draftDiscarded": "草稿已捨棄。",
   "draftSendFailed": "無法傳送草稿。",
+  "draftPartialSendNotice": "部分收件人未成功傳送。已傳送的收件人已移除；請重試剩餘收件人。",
   "draftSent": "已傳送",
   "draftLimitWarning": "草稿同步最多保留 {limit} 個草稿。你已有 {count} 個。",
   "@draftLimitWarning": {

@@ -326,6 +326,7 @@
   "draftAttachmentFailed": "Unable to attach file.",
   "draftDiscarded": "Draft discarded.",
   "draftSendFailed": "Failed to send draft.",
+  "draftPartialSendNotice": "Some recipients were not sent. Sent recipients were removed; retry the remaining recipients.",
   "draftSent": "Sent",
   "draftLimitWarning": "Draft sync keeps up to {limit} drafts. You're at {count}.",
   "@draftLimitWarning": {

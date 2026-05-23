@@ -266,6 +266,7 @@
   "draftAttachmentFailed": "Impossible de joindre le fichier.",
   "draftDiscarded": "Brouillon supprimé.",
   "draftSendFailed": "Échec de l’envoi du brouillon.",
+  "draftPartialSendNotice": "Certains destinataires n’ont pas reçu le message. Les destinataires déjà envoyés ont été retirés ; réessayez avec les destinataires restants.",
   "draftSent": "Envoyé",
   "draftLimitWarning": "La synchronisation des brouillons conserve jusqu’à {limit} brouillons. Vous en avez {count}.",
   "@draftLimitWarning": {

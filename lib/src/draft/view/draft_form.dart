@@ -23,6 +23,7 @@ import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
+import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
@@ -119,6 +120,9 @@ class DraftFormState extends State<DraftForm> {
   late List<DraftForwardedBlock> _forwardedBlocks;
   late List<String> _seedAttachmentMetadataIds;
   late String _lastBodyText;
+  late String _lastSubjectText;
+  Map<String, FanOutRecipientState> _latestEmailRecipientStatuses = const {};
+  bool _partialSendNoticeVisible = false;
   CalendarTaskIcsMessage? _pendingCalendarTaskIcsMessage;
   final Map<String, _ConvertedForwardRange> _convertedForwardRanges =
       <String, _ConvertedForwardRange>{};
@@ -165,6 +169,7 @@ class DraftFormState extends State<DraftForm> {
     _lastBodyText = initialBodyText;
     _bodyTextController = TextEditingController(text: initialBodyText)
       ..addListener(_bodyListener);
+    _lastSubjectText = widget.subject;
     _subjectTextController = TextEditingController(text: widget.subject)
       ..addListener(_subjectListener);
     _bodyFocusNode = FocusNode();
@@ -263,13 +268,21 @@ class DraftFormState extends State<DraftForm> {
     if (!mounted) {
       return;
     }
+    final nextText = _bodyTextController.text;
+    if (nextText == _lastBodyText) {
+      return;
+    }
     _updateConvertedForwardRanges(
       previousText: _lastBodyText,
-      nextText: _bodyTextController.text,
+      nextText: nextText,
     );
-    _lastBodyText = _bodyTextController.text;
+    _lastBodyText = nextText;
     _syncConvertedForwardBlocksFromBody();
-    setState(() => _sendErrorMessage = null);
+    setState(() {
+      _sendErrorMessage = null;
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
+    });
     _scheduleAutosave();
   }
 
@@ -346,7 +359,16 @@ class DraftFormState extends State<DraftForm> {
     if (!mounted) {
       return;
     }
-    setState(() => _sendErrorMessage = null);
+    final nextText = _subjectTextController.text;
+    if (nextText == _lastSubjectText) {
+      return;
+    }
+    _lastSubjectText = nextText;
+    setState(() {
+      _sendErrorMessage = null;
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
+    });
     _scheduleAutosave();
   }
 
@@ -380,6 +402,8 @@ class DraftFormState extends State<DraftForm> {
 
   void _handleTaskDrop(CalendarDragPayload payload) {
     setState(() {
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
       _pendingCalendarTaskIcsMessage = CalendarTaskIcsMessage(
         task: payload.snapshot,
       );
@@ -389,25 +413,32 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Widget? _composerBanner(Widget? baseBanner) {
+    final banners = <Widget>[
+      if (_partialSendNoticeVisible) const _DraftPartialSendBanner(),
+      ?baseBanner,
+    ];
     final calendarTaskIcsMessage = _pendingCalendarTaskIcsMessage;
-    if (calendarTaskIcsMessage == null) {
-      return baseBanner;
+    if (calendarTaskIcsMessage != null) {
+      banners.add(
+        _DraftCalendarTaskBanner(
+          message: calendarTaskIcsMessage,
+          onRemove: _handleCalendarTaskRemoved,
+        ),
+      );
     }
-    final taskBanner = _DraftCalendarTaskBanner(
-      message: calendarTaskIcsMessage,
-      onRemove: _handleCalendarTaskRemoved,
-    );
-    if (baseBanner == null) {
-      return taskBanner;
+    if (banners.isEmpty) {
+      return null;
     }
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [baseBanner, taskBanner],
-    );
+    if (banners.length == 1) {
+      return banners.single;
+    }
+    return Column(mainAxisSize: MainAxisSize.min, children: banners);
   }
 
   void _handleCalendarTaskRemoved() {
     setState(() {
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
       _pendingCalendarTaskIcsMessage = null;
     });
     _scheduleAutosave();
@@ -630,11 +661,11 @@ class DraftFormState extends State<DraftForm> {
                               FeedbackToast.success(title: l10n.draftSaved),
                             );
                           }
-                        }
-                        if (state is DraftSending) {
+                        } else if (state is DraftSending) {
                           if (_sendingDraft && mounted) {
                             setState(() {
                               _sendErrorMessage = null;
+                              _partialSendNoticeVisible = false;
                               _pendingAttachments = _pendingAttachments
                                   .map(
                                     (pending) => pending.copyWith(
@@ -655,6 +686,7 @@ class DraftFormState extends State<DraftForm> {
                                 state.type,
                                 l10n,
                               );
+                              _partialSendNoticeVisible = false;
                               _pendingAttachments = _pendingAttachments
                                   .map(
                                     (pending) => pending.copyWith(
@@ -670,10 +702,13 @@ class DraftFormState extends State<DraftForm> {
                         }
                       },
                       builder: (context, state) {
+                        final bool sendFlowActive = _sendingDraft;
                         final isSending =
                             state is DraftSending && _sendingDraft;
                         final enabled =
-                            !isSending && !_savingDraft && !_discardingDraft;
+                            !sendFlowActive &&
+                            !_savingDraft &&
+                            !_discardingDraft;
                         final bodyText = _bodyTextController.text.trim();
                         final subjectText = _subjectTextController.text.trim();
                         final pendingAttachments = _pendingAttachments;
@@ -731,7 +766,9 @@ class DraftFormState extends State<DraftForm> {
                         final String? sendErrorMessage = _sendErrorMessage;
                         final readyToSend =
                             sendBlocker == null &&
+                            !sendFlowActive &&
                             !_addingAttachment &&
+                            !_loadingAttachments &&
                             !hasPreparingAttachments;
                         final bool showAutosaveHint =
                             _lastAutosaveAt != null &&
@@ -746,7 +783,7 @@ class DraftFormState extends State<DraftForm> {
                               chatsState.recipientAddressSuggestions,
                           selfJid: locate<ChatsCubit>().selfJid,
                           selfIdentity: selfIdentity,
-                          latestStatuses: const {},
+                          latestStatuses: _latestEmailRecipientStatuses,
                           collapsedRecipientsByDefault: false,
                           suggestionAddresses: widget.suggestionAddresses,
                           suggestionDomains: widget.suggestionDomains,
@@ -775,8 +812,9 @@ class DraftFormState extends State<DraftForm> {
                           sending: isSending,
                           disabledSendReason: sendBlocker,
                           onSendPressed:
-                              isSending ||
+                              sendFlowActive ||
                                   _addingAttachment ||
+                                  _loadingAttachments ||
                                   hasPreparingAttachments
                               ? null
                               : _handleSendDraft,
@@ -1015,6 +1053,8 @@ class DraftFormState extends State<DraftForm> {
     );
     setState(() {
       _sendErrorMessage = null;
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
       if (existingIndex >= 0) {
         _recipients[existingIndex] = _recipients[existingIndex]
             .withTarget(target)
@@ -1056,11 +1096,81 @@ class DraftFormState extends State<DraftForm> {
   void _handleRecipientRemoved(String key) {
     setState(() {
       _sendErrorMessage = null;
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
       _recipients.removeWhere((recipient) => recipient.key == key);
     });
     _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();
     _scheduleAutosave();
+  }
+
+  void _removeRecipientsForSendOutcome(DraftSendOutcome outcome) {
+    if (outcome.completedTransports.isEmpty &&
+        outcome.completedEmailRecipientKeys.isEmpty) {
+      return;
+    }
+    _recipients = _recipients
+        .where((recipient) {
+          if (!recipient.included) {
+            return true;
+          }
+          if (outcome.completedTransports.contains(DraftSendTransport.email) &&
+              recipient.usesEmailTransport()) {
+            return false;
+          }
+          if (recipient.usesEmailTransport() &&
+              _recipientMatchesEmailKeys(
+                recipient,
+                outcome.completedEmailRecipientKeys,
+              )) {
+            return false;
+          }
+          if (outcome.completedTransports.contains(DraftSendTransport.xmpp)) {
+            final jid = recipient.xmppJid();
+            if (jid != null && jid.isNotEmpty) {
+              return false;
+            }
+          }
+          return true;
+        })
+        .toList(growable: false);
+  }
+
+  bool _recipientMatchesEmailKeys(
+    ComposerRecipient recipient,
+    Set<String> keys,
+  ) {
+    if (keys.isEmpty) {
+      return false;
+    }
+    for (final key in _recipientLookupKeys(recipient)) {
+      if (keys.contains(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Set<String> _recipientLookupKeys(ComposerRecipient recipient) {
+    final keys = <String>{};
+    void addKey(String? raw) {
+      final value = raw?.trim();
+      if (value == null || value.isEmpty) {
+        return;
+      }
+      keys.add(value);
+      final normalized = normalizedAddressValue(value);
+      if (normalized != null && normalized.isNotEmpty) {
+        keys.add(normalized);
+      }
+    }
+
+    addKey(recipient.key);
+    for (final key in recipient.target.statusLookupKeys) {
+      addKey(key);
+    }
+    return keys;
   }
 
   Future<void> _handleAttachmentAdded() async {
@@ -1117,6 +1227,8 @@ class DraftFormState extends State<DraftForm> {
         sizeBytes: file.size > 0 ? file.size : 0,
       );
       setState(() {
+        _latestEmailRecipientStatuses = const {};
+        _partialSendNoticeVisible = false;
         _pendingAttachments = [
           ..._pendingAttachments,
           PendingAttachment(
@@ -1185,6 +1297,8 @@ class DraftFormState extends State<DraftForm> {
 
   void _handlePendingAttachmentRemoved(String id) {
     setState(() {
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
       _pendingAttachments = _pendingAttachments
           .where((pending) => pending.id != id)
           .toList();
@@ -1365,13 +1479,16 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
-  Future<void> _awaitAttachmentWorkIfNeeded() async {
+  Future<void> _awaitAttachmentWorkIfNeeded({bool bestEffort = true}) async {
     while (true) {
       final hydrationOperation = _attachmentHydrationOperation;
       if (hydrationOperation != null) {
         try {
           await hydrationOperation;
         } on Exception {
+          if (!bestEffort) {
+            rethrow;
+          }
           // Best-effort wait for attachment hydration before closing/discarding.
         }
         continue;
@@ -1383,6 +1500,9 @@ class DraftFormState extends State<DraftForm> {
       try {
         await preparationOperation;
       } on Exception {
+        if (!bestEffort) {
+          rethrow;
+        }
         // Best-effort wait for attachment preparation before closing/discarding.
       }
     }
@@ -1832,53 +1952,53 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleSendDraft() async {
+    if (_sendingDraft) {
+      return;
+    }
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
     setState(() {
+      _sendingDraft = true;
       _showValidationMessages = true;
       _sendErrorMessage = null;
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
     });
+    try {
+      await _awaitAttachmentWorkIfNeeded(bestEffort: false);
+    } on Exception {
+      if (!mounted) return;
+      setState(() {
+        _sendingDraft = false;
+        _pendingAttachments = _resetUploadingPendingAttachments();
+      });
+      _showToast(context.l10n.draftAttachmentFailed);
+      return;
+    }
+    if (!mounted) return;
     if (_addingAttachment ||
         _pendingAttachments.any((pending) => pending.isPreparing)) {
+      setState(() {
+        _sendingDraft = false;
+        _pendingAttachments = _resetUploadingPendingAttachments();
+      });
       return;
     }
     final transportsReady = await _ensureRecipientTransports();
     if (!mounted) return;
-    if (!transportsReady) return;
+    if (!transportsReady) {
+      setState(() {
+        _sendingDraft = false;
+        _pendingAttachments = _resetUploadingPendingAttachments();
+      });
+      return;
+    }
     final settingsCubit = context.read<SettingsCubit>();
     final settingsState = settingsCubit.state;
+    final endpointConfig = settingsState.endpointConfig;
+    _syncConvertedForwardBlocksFromBody();
     final activeRecipients = _recipients.includedRecipients;
     final emailRecipients = activeRecipients.emailRecipients();
-    final xmppRecipients = activeRecipients.xmppRecipients();
-    final endpointConfig = settingsState.endpointConfig;
-    final shareTokenSignatureEnabled = settingsState.shareTokenSignatureEnabled;
-    final xmppTargets = xmppRecipients
-        .map((recipient) {
-          final jid = recipient.xmppJid();
-          if (jid == null || jid.isEmpty) {
-            return null;
-          }
-          return DraftXmppTarget(
-            jid: jid,
-            encryptionProtocol: recipient.target.encryptionProtocol,
-            chatType: recipient.target.chatType,
-          );
-        })
-        .whereType<DraftXmppTarget>()
-        .toList();
-    final emailTargets = emailRecipients.map((recipient) {
-      if (recipient.target.hasBackingChat) {
-        final address = recipient.target.preferredEmailAddress;
-        if (address != null && address.isNotEmpty) {
-          return Contact.address(
-            address: address,
-            displayName: recipient.target.displayName,
-            shareSignatureEnabled: recipient.target.shareSignatureEnabled,
-          );
-        }
-      }
-      return recipient.target;
-    }).toList();
     final validationMessage = _sendValidationMessage(
       hasActiveRecipients: activeRecipients.isNotEmpty,
       hasContent: _hasContent(),
@@ -1886,9 +2006,14 @@ class DraftFormState extends State<DraftForm> {
           !endpointConfig.smtpEnabled && emailRecipients.isNotEmpty,
     );
     final formValid = _formKey.currentState?.validate() ?? false;
-    if (validationMessage != null || !formValid) return;
-    if (emailTargets.isNotEmpty) {
-      _syncConvertedForwardBlocksFromBody();
+    if (validationMessage != null || !formValid) {
+      setState(() {
+        _sendingDraft = false;
+        _pendingAttachments = _resetUploadingPendingAttachments();
+      });
+      return;
+    }
+    if (emailRecipients.isNotEmpty) {
       final shouldSend = await _confirmEmailSendIfNeeded(
         settingsCubit: settingsCubit,
         recipients: _recipientStrings(),
@@ -1898,6 +2023,12 @@ class DraftFormState extends State<DraftForm> {
             .toList(growable: false),
       );
       if (!mounted || !shouldSend) {
+        if (mounted) {
+          setState(() {
+            _sendingDraft = false;
+            _pendingAttachments = _resetUploadingPendingAttachments();
+          });
+        }
         return;
       }
     }
@@ -1915,35 +2046,90 @@ class DraftFormState extends State<DraftForm> {
             .toList();
       });
     }
-    var succeeded = false;
+    late final DraftSendOutcome outcome;
     try {
-      succeeded = await context.read<DraftCubit>().sendDraft(
+      _syncConvertedForwardBlocksFromBody();
+      final sendRecipients = _recipients.includedRecipients;
+      final sendEmailRecipients = sendRecipients.emailRecipients();
+      final xmppTargets = sendRecipients
+          .xmppRecipients()
+          .map((recipient) {
+            final jid = recipient.xmppJid();
+            if (jid == null || jid.isEmpty) {
+              return null;
+            }
+            return DraftXmppTarget(
+              jid: jid,
+              encryptionProtocol: recipient.target.encryptionProtocol,
+              chatType: recipient.target.chatType,
+            );
+          })
+          .whereType<DraftXmppTarget>()
+          .toList(growable: false);
+      final emailTargets = sendEmailRecipients
+          .map((recipient) {
+            if (recipient.target.hasBackingChat) {
+              final address = recipient.target.preferredEmailAddress;
+              if (address != null && address.isNotEmpty) {
+                return Contact.address(
+                  address: address,
+                  displayName: recipient.target.displayName,
+                  shareSignatureEnabled: recipient.target.shareSignatureEnabled,
+                );
+              }
+            }
+            return recipient.target;
+          })
+          .toList(growable: false);
+      outcome = await context.read<DraftCubit>().sendDraft(
         id: id,
         xmppTargets: xmppTargets,
         emailTargets: emailTargets,
         body: _draftIntroText(),
-        shareTokenSignatureEnabled: shareTokenSignatureEnabled,
+        shareTokenSignatureEnabled: settingsState.shareTokenSignatureEnabled,
         subject: _subjectTextController.text,
         quoteTarget: widget.quoteTarget,
         attachments: _currentAttachments(),
         calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
-        forwardedBlocks: _forwardedBlocks,
+        forwardedBlocks: List<DraftForwardedBlock>.from(
+          _forwardedBlocks,
+          growable: false,
+        ),
       );
     } on Exception {
       if (!mounted) return;
       setState(() {
         _sendingDraft = false;
         _sendCompletionHandled = true;
+        _partialSendNoticeVisible = false;
+        _sendErrorMessage = context.l10n.draftSendFailed;
+        _pendingAttachments = _resetUploadingPendingAttachments();
       });
       _showToast(context.l10n.draftSendFailed);
       return;
     }
-    if (!mounted || !succeeded) {
-      if (mounted && succeeded == false) {
+    if (!mounted || !outcome.succeeded) {
+      if (mounted) {
+        final recipientCountBeforeFailure = _recipients.length;
+        final partialSend = _isPartialSendOutcome(outcome);
+        final failureType =
+            outcome.failureType ?? DraftSendFailureType.sendFailed;
         setState(() {
+          _removeRecipientsForSendOutcome(outcome);
+          _latestEmailRecipientStatuses = outcome.latestEmailRecipientStatuses;
+          _partialSendNoticeVisible = partialSend;
+          _sendErrorMessage = partialSend
+              ? null
+              : _draftFailureMessage(failureType, context.l10n);
+          _pendingAttachments = _resetUploadingPendingAttachments();
           _sendingDraft = false;
           _sendCompletionHandled = true;
         });
+        if (partialSend || recipientCountBeforeFailure != _recipients.length) {
+          _notifyRecipientAddressesChanged();
+          _revalidateFormIfNeeded();
+          _scheduleAutosave();
+        }
         _bodyFocusNode.requestFocus();
       }
       return;
@@ -1964,6 +2150,7 @@ class DraftFormState extends State<DraftForm> {
       _sendingDraft = false;
       _pendingAttachments = const [];
       _pendingCalendarTaskIcsMessage = null;
+      _partialSendNoticeVisible = false;
       _pendingAttachmentSeed = 0;
       _lastAutosaveAt = null;
       _lastSavedSignature = null;
@@ -1992,6 +2179,26 @@ class DraftFormState extends State<DraftForm> {
 
   List<Attachment> _currentAttachments() =>
       _pendingAttachments.map((pending) => pending.attachment).toList();
+
+  List<PendingAttachment> _resetUploadingPendingAttachments() =>
+      _pendingAttachments
+          .map(
+            (pending) => pending.status == PendingAttachmentStatus.uploading
+                ? pending.copyWith(
+                    status: PendingAttachmentStatus.queued,
+                    clearErrorMessage: true,
+                  )
+                : pending,
+          )
+          .toList();
+
+  bool _isPartialSendOutcome(DraftSendOutcome outcome) {
+    if (outcome.succeeded) {
+      return false;
+    }
+    return outcome.completedTransports.isNotEmpty ||
+        outcome.completedEmailRecipientKeys.isNotEmpty;
+  }
 
   void _showToast(String message) {
     ShadToaster.maybeOf(context)?.show(FeedbackToast.info(message: message));
@@ -2209,6 +2416,48 @@ class _DraftForwardedBlockPreview extends StatelessWidget {
             SelectableText(block.originalPlainText, style: context.textTheme.p),
         ],
       ],
+    );
+  }
+}
+
+class _DraftPartialSendBanner extends StatelessWidget {
+  const _DraftPartialSendBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.destructive,
+          border: Border(
+            top: context.borderSide.copyWith(color: colors.destructive),
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(spacing.m),
+          child: Row(
+            children: [
+              Icon(
+                Icons.priority_high_rounded,
+                color: colors.destructiveForeground,
+                size: context.sizing.menuItemIconSize,
+              ),
+              SizedBox(width: spacing.s),
+              Expanded(
+                child: Text(
+                  context.l10n.draftPartialSendNotice,
+                  style: context.textTheme.p.copyWith(
+                    color: colors.destructiveForeground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

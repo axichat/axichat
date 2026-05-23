@@ -530,7 +530,7 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.priority_high_rounded), findsOneWidget);
   });
 
   testWidgets('does not show sent status checkmarks on recipient chips', (

@@ -1635,6 +1635,12 @@ abstract class AppLocalizations {
   /// **'Failed to send draft.'**
   String get draftSendFailed;
 
+  /// No description provided for @draftPartialSendNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Some recipients were not sent. Sent recipients were removed; retry the remaining recipients.'**
+  String get draftPartialSendNotice;
+
   /// No description provided for @draftSent.
   ///
   /// In en, this message translates to:

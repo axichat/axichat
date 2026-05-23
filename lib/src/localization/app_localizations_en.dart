@@ -848,6 +848,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftSendFailed => 'Failed to send draft.';
 
   @override
+  String get draftPartialSendNotice =>
+      'Some recipients were not sent. Sent recipients were removed; retry the remaining recipients.';
+
+  @override
   String get draftSent => 'Sent';
 
   @override

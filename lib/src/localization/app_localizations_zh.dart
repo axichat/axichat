@@ -810,6 +810,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSendFailed => '草稿发送失败。';
 
   @override
+  String get draftPartialSendNotice => '部分收件人未发送成功。已发送的收件人已移除；请重试剩余收件人。';
+
+  @override
   String get draftSent => '已发送';
 
   @override
@@ -7196,6 +7199,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get draftSendFailed => '無法傳送草稿。';
+
+  @override
+  String get draftPartialSendNotice => '部分收件人未成功傳送。已傳送的收件人已移除；請重試剩餘收件人。';
 
   @override
   String get draftSent => '已傳送';
