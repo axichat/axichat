@@ -2786,15 +2786,16 @@ mixin AvatarService on XmppBase, BaseStreamService {
     if (!isStateStoreReady) return;
 
     await _runSelfAvatarStateOperation(() async {
-      String? storedPath;
+      Avatar? stored;
       try {
-        storedPath = await _dbOpReturning<XmppStateStore, String?>(
-          (ss) => ss.read(key: selfAvatarPathKey) as String?,
+        stored = await _dbOpReturning<XmppStateStore, Avatar?>(
+          (ss) => _readStoredSelfAvatar(ss),
         );
       } on XmppAbortedException {
         return;
       }
-      if (storedPath?.trim() != path) return;
+      final current = stored;
+      if (current == null || current.path.trim() != path) return;
 
       try {
         await _persistStoredSelfAvatar(null);

@@ -5,6 +5,7 @@ import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
@@ -24,6 +25,42 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
 
   @override
   Future<String?> getApplicationSupportPath() async => supportPath;
+}
+
+void _stubStateStoreValues(Map<String, Object?> values) {
+  when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+    invocation,
+  ) {
+    final key = invocation.namedArguments[#key] as RegisteredStateKey;
+    return values[key.value];
+  });
+  when(() => mockStateStore.writeAll(data: any(named: 'data'))).thenAnswer((
+    invocation,
+  ) async {
+    final data =
+        invocation.namedArguments[#data] as Map<RegisteredStateKey, Object?>;
+    for (final entry in data.entries) {
+      values[entry.key.value] = entry.value;
+    }
+    return true;
+  });
+  when(
+    () => mockStateStore.write(
+      key: any(named: 'key'),
+      value: any(named: 'value'),
+    ),
+  ).thenAnswer((invocation) async {
+    final key = invocation.namedArguments[#key] as RegisteredStateKey;
+    values[key.value] = invocation.namedArguments[#value];
+    return true;
+  });
+  when(() => mockStateStore.delete(key: any(named: 'key'))).thenAnswer((
+    invocation,
+  ) async {
+    final key = invocation.namedArguments[#key] as RegisteredStateKey;
+    values.remove(key.value);
+    return true;
+  });
 }
 
 Uint8List _tinyPngAvatarBytes() => Uint8List.fromList(const <int>[
@@ -467,6 +504,53 @@ void main() {
         expect(await legacyFile.exists(), isTrue);
         expect((await database.getRosterItem(contactJid))?.avatarPath, isNull);
         expect((await database.getChat(contactJid))?.avatarPath, isNull);
+      } finally {
+        PathProviderPlatform.instance = originalPathProvider;
+        await tempDir.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
+    'Invalid legacy self avatar clears canonical self avatar state',
+    () async {
+      final originalPathProvider = PathProviderPlatform.instance;
+      final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+      final supportDir = Directory(p.join(tempDir.path, 'support'));
+      await supportDir.create(recursive: true);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(
+        supportDir.path,
+      );
+      final stateStoreValues = <String, Object?>{};
+
+      try {
+        _stubStateStoreValues(stateStoreValues);
+        final legacyPath = p.join(
+          supportDir.path,
+          'avatars',
+          'legacy-self-bad.enc',
+        );
+        final legacyFile = File(legacyPath);
+        await legacyFile.parent.create(recursive: true);
+        await legacyFile.writeAsBytes(
+          Uint8List.fromList(List<int>.generate(32, (index) => index)),
+          flush: true,
+        );
+        stateStoreValues['self_avatar_state_v2'] = <String, String?>{
+          'path': legacyPath,
+          'hash': 'avatar-hash',
+        };
+
+        expect((await xmppService.getOwnAvatar())?.path, legacyPath);
+
+        final loaded = await xmppService.loadAvatarBytes(legacyPath);
+
+        expect(loaded, isNull);
+        expect(await legacyFile.exists(), isTrue);
+        expect(stateStoreValues['self_avatar_state_v2'], isNull);
+        expect(stateStoreValues[xmppService.selfAvatarPathKey.value], isNull);
+        expect(stateStoreValues[xmppService.selfAvatarHashKey.value], isNull);
+        expect(await xmppService.getOwnAvatar(), isNull);
       } finally {
         PathProviderPlatform.instance = originalPathProvider;
         await tempDir.delete(recursive: true);
