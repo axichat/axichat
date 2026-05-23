@@ -201,7 +201,10 @@ void main() {
     final details = find.byKey(
       const ValueKey('contact-details-alice@example.com'),
     );
+    final Rect headerRect = tester.getRect(find.byType(AxiSheetHeader));
+    final Rect summaryRect = tester.getRect(summary);
     expect(find.text('Details'), findsOneWidget);
+    expect(summaryRect.top - headerRect.bottom, greaterThanOrEqualTo(8));
     expect(
       find.descendant(of: summary, matching: find.text('Alice Local')),
       findsOneWidget,
