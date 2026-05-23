@@ -2,13 +2,10 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 Future<MessageTransport?> showTransportChoiceDialog(
   BuildContext context, {
@@ -23,18 +20,7 @@ Future<MessageTransport?> showTransportChoiceDialog(
   return showFadeScaleDialog<MessageTransport>(
     context: context,
     builder: (dialogContext) {
-      final configuredDomain = dialogContext.select<SettingsCubit, String>(
-        (cubit) => cubit.state.endpointConfig.domain.trim().toLowerCase(),
-      );
-      final addressDomain =
-          addressDomainPart(address)?.trim().toLowerCase() ??
-          EndpointConfig.defaultDomain;
-      final sameDomain =
-          addressDomain == configuredDomain ||
-          addressDomain == EndpointConfig.defaultDomain;
-      final chatLabel = sameDomain
-          ? dialogContext.l10n.chatTransportChoiceAxichatLabel
-          : MessageTransport.xmpp.label;
+      final chatLabel = MessageTransport.xmpp.label;
       final pop = Navigator.of(dialogContext).pop;
       final emailPrimary = defaultTransport == MessageTransport.email;
       final chatPrimary = defaultTransport == MessageTransport.xmpp;
