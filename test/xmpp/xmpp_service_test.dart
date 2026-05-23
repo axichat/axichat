@@ -13,6 +13,7 @@ import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:drift/native.dart';
@@ -864,6 +865,9 @@ void main() {
         );
         final pubsubManager = RecordingAvatarPubSubManager();
         final stateStoreValues = <String, Object?>{};
+        final events = <XmppOperationEvent>[];
+        final subscription = xmppService.xmppOperationStream.listen(events.add);
+        addTearDown(subscription.cancel);
         try {
           when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
             invocation,
@@ -941,6 +945,15 @@ void main() {
             stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
             isNull,
           );
+          final publishEvents = events
+              .where(
+                (event) => event.kind == XmppOperationKind.selfAvatarPublish,
+              )
+              .toList(growable: false);
+          expect(publishEvents, hasLength(2));
+          expect(publishEvents.first.stage, XmppOperationStage.start);
+          expect(publishEvents.last.stage, XmppOperationStage.end);
+          expect(publishEvents.last.isSuccess, isTrue);
         } finally {
           PathProviderPlatform.instance = originalPathProvider;
           await tempDir.delete(recursive: true);
@@ -1487,6 +1500,141 @@ void main() {
           await pumpEventQueue(times: 20);
 
           expect(publishPubsubManager.publishCount, equals(2));
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNull,
+          );
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'pending self avatar publish failure emits operation failure event.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-save-self-avatar-publish-failure-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final pubsubManager = FailingAvatarPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        final stateStoreValues = <String, Object?>{};
+        final events = <XmppOperationEvent>[];
+        final subscription = xmppService.xmppOperationStream.listen(events.add);
+        addTearDown(subscription.cancel);
+
+        try {
+          _stubStateStoreValues(stateStoreValues);
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(userAvatarManager);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+
+          final result = await xmppService.saveSelfAvatar(
+            AvatarUploadPayload(
+              bytes: _validPngBytes(),
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: 'saved-avatar-hash',
+            ),
+          );
+
+          expect(result.hash, 'saved-avatar-hash');
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          final publishEvents = events
+              .where(
+                (event) => event.kind == XmppOperationKind.selfAvatarPublish,
+              )
+              .toList(growable: false);
+          expect(publishEvents, hasLength(2));
+          expect(publishEvents.first.stage, XmppOperationStage.start);
+          expect(publishEvents.last.stage, XmppOperationStage.end);
+          expect(publishEvents.last.isSuccess, isFalse);
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNotNull,
+          );
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'pending self avatar clears after legacy cache path migration.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-save-self-avatar-legacy-pending-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        final avatarRoot = Directory(p.join(supportDir.path, 'avatars'));
+        await avatarRoot.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final pubsubManager = RecordingAvatarPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        final stateStoreValues = <String, Object?>{};
+        final avatarBytes = _validPngBytes();
+        final avatarHash = sha1.convert(avatarBytes).toString();
+        final legacyPath = p.join(avatarRoot.path, 'legacy-avatar.png');
+        await File(legacyPath).writeAsBytes(avatarBytes, flush: true);
+
+        try {
+          _stubStateStoreValues(stateStoreValues);
+          stateStoreValues[xmppService.selfAvatarPendingPublishKey.value] =
+              jsonEncode(<String, Object?>{
+                'path': legacyPath,
+                'hash': avatarHash,
+                'mime': 'image/png',
+                'width': 1,
+                'height': 1,
+                'public': true,
+                'jid': 'jid@axi.im',
+              });
+          when(
+            () => mockConnection.getManager<PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(userAvatarManager);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue(times: 20);
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          await pumpEventQueue(times: 20);
+
+          expect(pubsubManager.publishCount, equals(2));
           expect(
             stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
             isNull,

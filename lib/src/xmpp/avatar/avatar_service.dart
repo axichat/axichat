@@ -2933,10 +2933,22 @@ mixin AvatarService on XmppBase, BaseStreamService {
     required _PendingSelfAvatarPublish expected,
     required String selfJid,
   }) {
+    return current.path.trim() == expected.path.trim() &&
+        _pendingSelfAvatarUploadMatches(
+          current: current,
+          expected: expected,
+          selfJid: selfJid,
+        );
+  }
+
+  bool _pendingSelfAvatarUploadMatches({
+    required _PendingSelfAvatarPublish current,
+    required _PendingSelfAvatarPublish expected,
+    required String selfJid,
+  }) {
     final currentJid = _avatarSafeBareJid(current.jid ?? selfJid);
     final expectedJid = _avatarSafeBareJid(expected.jid ?? selfJid);
-    return current.path.trim() == expected.path.trim() &&
-        current.hash.trim() == expected.hash.trim() &&
+    return current.hash.trim() == expected.hash.trim() &&
         current.mimeType.trim() == expected.mimeType.trim() &&
         current.width == expected.width &&
         current.height == expected.height &&
@@ -3029,27 +3041,47 @@ mixin AvatarService on XmppBase, BaseStreamService {
       await _clearPendingSelfAvatarIfCurrent(pending);
       return false;
     }
+    final currentPending = await _readPendingSelfAvatarPublish();
+    if (currentPending == null) return false;
+    if (!_pendingSelfAvatarUploadMatches(
+      current: currentPending,
+      expected: pending,
+      selfJid: targetJid,
+    )) {
+      return true;
+    }
     final payload = AvatarUploadPayload(
       bytes: bytes,
-      mimeType: pending.mimeType,
-      width: pending.width,
-      height: pending.height,
-      hash: pending.hash,
-      jid: pending.jid,
+      mimeType: currentPending.mimeType,
+      width: currentPending.width,
+      height: currentPending.height,
+      hash: currentPending.hash,
+      jid: currentPending.jid,
     );
+    var publishSucceeded = false;
+    emitXmppOperation(_selfAvatarPublishStartEvent);
     try {
       await _publishAvatarRemoteWithFallback(
         payload: payload,
         targetJid: targetJid,
-        public: pending.public,
+        public: currentPending.public,
       );
-      if (await _clearPendingSelfAvatarIfCurrent(pending)) {
-        _markPubSubAvatarPreferred(targetJid);
-        final vCardManager = _connection.getManager<mox.VCardManager>();
-        vCardManager?.setLastHash(targetJid, pending.hash);
-      }
+      publishSucceeded = true;
     } on Exception catch (error, stackTrace) {
       _avatarLog.fine('Pending self avatar publish failed.', error, stackTrace);
+    } finally {
+      emitXmppOperation(
+        publishSucceeded
+            ? _selfAvatarPublishSuccessEvent
+            : _selfAvatarPublishFailureEvent,
+      );
+    }
+    if (publishSucceeded) {
+      if (await _clearPendingSelfAvatarIfCurrent(currentPending)) {
+        _markPubSubAvatarPreferred(targetJid);
+        final vCardManager = _connection.getManager<mox.VCardManager>();
+        vCardManager?.setLastHash(targetJid, currentPending.hash);
+      }
     }
     return true;
   }
