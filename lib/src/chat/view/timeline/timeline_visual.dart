@@ -1368,7 +1368,7 @@ class _MessageActionBar extends StatelessWidget {
             onPressed: resendLoading ? null : onResend,
           );
     final actions = <Widget>[
-      if (resendAction != null && resendUsesSendAgainLabel) resendAction,
+      ?resendAction,
       ContextActionButton(
         icon: Icon(LucideIcons.reply, size: iconSize),
         label: l10n.chatActionReply,
@@ -1383,7 +1383,6 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionForward,
         onPressed: onForward,
       ),
-      if (resendAction != null && !resendUsesSendAgainLabel) resendAction,
       if (onEdit != null)
         ContextActionButton(
           icon: Icon(LucideIcons.pencilLine, size: iconSize),
