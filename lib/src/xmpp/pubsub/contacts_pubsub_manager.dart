@@ -16,7 +16,7 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const String contactsPubSubNode = 'urn:axi:contacts';
 const String contactsNotifyFeature = 'urn:axi:contacts+notify';
-const int contactsSyncMaxItems = 5000;
+const int contactsSyncMaxItems = 1000;
 
 const String _contactTag = 'contact';
 const String _fieldTag = 'field';

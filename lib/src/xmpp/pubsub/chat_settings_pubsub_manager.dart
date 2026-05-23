@@ -16,7 +16,7 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 const String chatSettingsPubSubNode = 'urn:axi:chat-settings';
 const String chatSettingsNotifyFeature = 'urn:axi:chat-settings+notify';
-const int chatSettingsSyncMaxItems = 5000;
+const int chatSettingsSyncMaxItems = 1000;
 const int chatSettingsSyncMaxPayloadBytes = 32 * 1024;
 const int chatSettingsSyncSourceIdMaxBytes = 128;
 

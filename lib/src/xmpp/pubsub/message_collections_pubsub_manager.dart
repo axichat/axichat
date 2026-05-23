@@ -17,7 +17,7 @@ const String messageCollectionsPubSubNode = 'urn:axi:message-collections';
 const String messageCollectionsNotifyFeature =
     'urn:axi:message-collections+notify';
 
-const int messageCollectionSyncMaxItems = 5000;
+const int messageCollectionSyncMaxItems = 1000;
 
 const String _entryTag = 'entry';
 const String _collectionTag = 'collection';
