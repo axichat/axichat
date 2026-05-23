@@ -184,7 +184,7 @@ class _DraftsListBody extends StatelessWidget {
                   '${_subjectLabel(context, item)} — ${_recipientLabel(context, item)}',
               minTileHeight: sizing.chatTileMinHeight,
               horizontalTitleGap: spacing.s,
-              subtitle: _subtitleLabel(item),
+              subtitle: draftListSubtitleLabel(item),
             ),
           );
         },
@@ -206,20 +206,22 @@ String _recipientLabel(BuildContext context, Draft draft) {
   return context.l10n.draftRecipientCount(count);
 }
 
-String _subtitleLabel(Draft draft) {
+@visibleForTesting
+String draftListSubtitleLabel(Draft draft) {
   final body = draft.body?.trim();
   if (body != null && body.isNotEmpty) {
-    return _oneLinePreview(body);
+    return draftListOneLinePreview(body);
   }
   for (final block in draft.forwardedBlocks) {
     final forwardedText = block.activePlainText.trim();
     if (forwardedText.isNotEmpty) {
-      return _oneLinePreview(forwardedText);
+      return draftListOneLinePreview(forwardedText);
     }
   }
-  return _oneLinePreview(draft.jids.join(', '));
+  return draftListOneLinePreview(draft.jids.join(', '));
 }
 
-String _oneLinePreview(String value) {
+@visibleForTesting
+String draftListOneLinePreview(String value) {
   return value.trim().replaceAll(RegExp(r'\s+'), ' ');
 }
