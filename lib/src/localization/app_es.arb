@@ -752,12 +752,7 @@
   "profileJumpToTop": "Volver arriba",
   "settingsWebsiteLabel": "Sitio web",
   "settingsDonateLabel": "Donar",
-  "profileDonationPromptMessage": "Hola {username}, por favor apoya a Axichat. Es gratis y de código abierto, así que dependemos de donaciones de usuarios como tú para mantener la app y los servidores en funcionamiento. Incluso 5 $ ayudan mucho a cubrir nuestros gastos mensuales.",
-  "@profileDonationPromptMessage": {
-    "placeholders": {
-      "username": {}
-    }
-  },
+  "profileDonationPromptMessage": "Si te está gustando Axichat, considera hacer una donación. Es gratis y de código abierto, así que dependemos de donaciones de usuarios como tú para mantener la app y los servidores en funcionamiento.",
   "settingsMastodonLabel": "Mastodon",
   "settingsGithubLabel": "GitHub",
   "settingsGitlabLabel": "GitLab",
@@ -880,7 +875,7 @@
   "settingsSectionEmail": "Preferencias de correo",
   "settingsSectionAbout": "Acerca de",
   "settingsAboutAxichat": "Acerca de Axichat",
-  "settingsAboutLegalese": "Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.",
+  "settingsAboutLegalese": "Copyright (C) 2025 Axichat LLC\n\nEste programa es software libre: puedes redistribuirlo y/o modificarlo bajo los términos de la Licencia Pública General Affero de GNU publicada por la Free Software Foundation, ya sea la versión 3 de la Licencia o (a tu elección) cualquier versión posterior.\n\nEste programa se distribuye con la esperanza de que sea útil, pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulta la Licencia Pública General Affero de GNU para más detalles.\n\nDeberías haber recibido una copia de la Licencia Pública General Affero de GNU junto con este programa. Si no, consulta <https://www.gnu.org/licenses/>.",
   "settingsTermsLabel": "Términos",
   "settingsPrivacyLabel": "Privacidad",
   "settingsLicenseAgpl": "AGPLv3",
@@ -903,7 +898,7 @@
   "settingsEmailSendOnEnter": "Enviar correos con Enter",
   "settingsEmailSendOnEnterDescription": "Si está activado, Enter envía mensajes de correo. Mayús+Enter inserta una línea nueva.",
   "settingsEmailComposerWatermark": "Prellenar marca de agua de correo",
-  "settingsEmailComposerWatermarkDescription": "Rellena previamente los correos nuevos con el texto \"Sent from Axichat\" que puedes editar o eliminar.",
+  "settingsEmailComposerWatermarkDescription": "Rellena previamente los correos nuevos con el texto \"Enviado desde Axichat\" que puedes editar o eliminar.",
   "settingsTypingIndicators": "Enviar indicadores de escritura",
   "settingsTypingIndicatorsDescription": "Permite que otros en el chat vean cuando estás escribiendo.",
   "settingsShareTokenFooter": "Incluir pie de token de compartir",
@@ -1204,7 +1199,7 @@
   "chatsShowActions": "Mostrar acciones del chat",
   "chatsSelectedLabel": "Chat seleccionado",
   "chatsSelectLabel": "Seleccionar chat",
-  "chatsExportFileLabel": "chats",
+  "chatsExportFileLabel": "conversaciones",
   "chatSelectionExportEmptyTitle": "No hay mensajes para exportar",
   "chatSelectionExportEmptyMessage": "Selecciona chats con contenido de texto",
   "chatSelectionExportShareText": "Exportaciones de chat desde Axichat",
@@ -1761,6 +1756,88 @@
   "settingsAutoDownloadArchivesDescription": "Se aplica cuando este chat permite descargas automáticas.",
   "settingsAutoDownloadScopeAlways": "Siempre",
   "settingsAutoDownloadScopeTrustedContacts": "Solo para contactos de confianza.",
+  "emailEncryptionBetaLabel": "Cifrado de correo",
+  "emailEncryptionBetaChip": "Beta",
+  "emailEncryptionBetaEnabledStatus": "Activado para {address}",
+  "@emailEncryptionBetaEnabledStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaDisabledStatus": "Desactivado para {address}",
+  "@emailEncryptionBetaDisabledStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaDisabledExistingKeyStatus": "Desactivado para {address}; clave existente en este dispositivo",
+  "@emailEncryptionBetaDisabledExistingKeyStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaEnableAction": "Activar",
+  "emailEncryptionBetaDisableAction": "Desactivar",
+  "emailEncryptionBetaWarningTitle": "Cifrado de correo",
+  "emailEncryptionBetaWarningBody": "Activa esto solo si entiendes las claves OpenPGP. Esta configuración de clave es unidireccional: si este dispositivo aún no tiene una clave de cifrado de correo, la clave que importes o crees a continuación se convertirá en la clave propia local para esta cuenta de correo. Trátalo como tu única oportunidad para importar tu propia clave privada para esta cuenta; cuando ya exista una clave propia, Axichat usará esa clave y no ofrecerá reemplazarla aquí. Esta beta puede hacer que el correo electrónico sea menos cómodo: el cifrado es oportunista, no todos los correos salientes se cifrarán y el correo cifrado es más difícil de usar en varios dispositivos. Cada dispositivo debe importar manualmente la misma clave privada; de lo contrario, quizá no pueda leer mensajes cifrados. Este ajuste solo afecta a los envíos por correo. Los envíos normales de chat/XMPP no usan este cifrado OpenPGP de correo a menos que envíes como correo desde el menú de pulsación larga del botón de envío o actives el envío por correo en los ajustes de ese chat. Si quieres la experiencia normal de correo, déjalo desactivado.",
+  "emailEncryptionBetaExistingKeyWarningBody": "Este dispositivo ya tiene una clave OpenPGP de correo para esta cuenta. Al activar esto se usará esa clave existente; Axichat no ofrecerá importar ni reemplazarla aquí. Puedes desactivar la beta más tarde para envíos futuros, pero eso no borrará ni cambiará la clave. Este ajuste solo afecta a los envíos por correo. Los envíos normales de chat/XMPP no usan este cifrado OpenPGP de correo a menos que envíes como correo desde el menú de pulsación larga del botón de envío o actives el envío por correo en los ajustes de ese chat.",
+  "emailEncryptionBetaChooseActionTitle": "Elegir configuración de clave",
+  "emailEncryptionBetaChooseActionBody": "Esta es tu única oportunidad para importar tu propia clave privada para esta cuenta. Importa ahora una clave privada OpenPGP ASCII-armored sin cifrar, o crea una clave nueva y guarda el archivo exportado.",
+  "emailEncryptionBetaImportAction": "Importar clave",
+  "emailEncryptionBetaCreateAction": "Crear clave",
+  "emailEncryptionBetaExportFilename": "axichat-email-openpgp-key.zip",
+  "emailEncryptionBetaUnsupportedFormat": "Usa una clave privada OpenPGP ASCII-armored sin cifrar. Las claves protegidas con frase de contraseña y las claves .gpg binarias no son compatibles en esta beta.",
+  "emailEncryptionBetaAmbiguousArchive": "Ese archivo contiene varias claves privadas posibles. Los archivos exportados necesitan exactamente una clave privada predeterminada.",
+  "emailEncryptionBetaNoPrivateKeyFound": "No se encontró ninguna clave privada OpenPGP ASCII-armored.",
+  "emailEncryptionBetaImportFailed": "Error al importar la clave. Las claves protegidas con frase de contraseña no son compatibles en esta beta.",
+  "emailEncryptionBetaExportFailed": "Error al exportar la clave.",
+  "emailEncryptionBetaSaveFailed": "No se guardó el archivo de clave.",
+  "emailEncryptionBetaNoActiveAccount": "Configura el correo antes de activar la beta de cifrado de correo.",
+  "emailEncryptionBetaActivationSuccess": "La beta de cifrado de correo está activada en este dispositivo.",
+  "emailEncryptionBetaDisableSuccess": "La beta de cifrado de correo está desactivada para nuevos envíos futuros.",
+  "emailEncryptionKeyIdentityWarningTitle": "Confirmar identidad de la clave",
+  "emailEncryptionKeyIdentityWarningBody": "Esta clave privada no incluye la dirección de correo activa. Huella: {fingerprint}. Identidades: {identities}. Continúa solo si verificaste que esta clave pertenece a la cuenta activa.",
+  "@emailEncryptionKeyIdentityWarningBody": {
+    "placeholders": {
+      "fingerprint": {},
+      "identities": {}
+    }
+  },
+  "emailEncryptionKeyIdentityNoIdentities": "No hay identidades en la clave",
+  "contactEmailEncryptionTitle": "Clave de cifrado de correo",
+  "contactEmailEncryptionActive": "Activa",
+  "contactEmailEncryptionInactiveBetaOff": "Guardada",
+  "contactEmailEncryptionNoKey": "Añade una clave pública del contacto para cifrar nuevos correos futuros cuando tu beta de cifrado de correo esté activada.",
+  "contactEmailEncryptionNoActiveAccount": "Configura el correo antes de añadir claves públicas de contactos.",
+  "contactEmailEncryptionAddPublicKey": "Añadir clave pública",
+  "contactEmailEncryptionReplacePublicKey": "Reemplazar clave pública",
+  "contactEmailEncryptionRemovePublicKey": "Eliminar clave",
+  "contactEmailEncryptionRemoveConfirm": "¿Eliminar la clave pública guardada para {address}? Los nuevos correos futuros usarán el comportamiento normal de Autocrypt.",
+  "@contactEmailEncryptionRemoveConfirm": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "contactEmailEncryptionFingerprint": "Huella: {fingerprint}",
+  "@contactEmailEncryptionFingerprint": {
+    "placeholders": {
+      "fingerprint": {}
+    }
+  },
+  "contactEmailEncryptionIdentityWarningTitle": "Confirmar clave del contacto",
+  "contactEmailEncryptionIdentityWarningBody": "Esta clave pública no incluye {address}. Huella: {fingerprint}. Identidades: {identities}. Continúa solo si verificaste que esta clave pertenece a este contacto.",
+  "@contactEmailEncryptionIdentityWarningBody": {
+    "placeholders": {
+      "address": {},
+      "fingerprint": {},
+      "identities": {}
+    }
+  },
+  "contactEmailEncryptionImportSuccess": "Clave pública del contacto guardada.",
+  "contactEmailEncryptionRemoveSuccess": "Clave pública del contacto eliminada.",
+  "contactEmailEncryptionUnsupportedFormat": "Usa un único archivo de clave pública OpenPGP ASCII-armored sin cifrar.",
+  "contactEmailEncryptionImportFailed": "Error al importar la clave pública del contacto.",
+  "contactEmailEncryptionRemoveFailed": "Error al eliminar la clave pública del contacto.",
   "emailContactsImportTitle": "Importar contactos",
   "emailContactsImportSubtitle": "CSVs de Gmail, Outlook, Yahoo o vCards.",
   "emailContactsImportFileAccessError": "No se puede acceder al archivo seleccionado.",
@@ -2049,7 +2126,7 @@
   "languageChineseSimplifiedShort": "ZH",
   "languageChineseHongKongShort": "ZH-HK",
   "languageSystemFlag": "🌐",
-  "languageEnglishFlag": "🇬🇧",
+  "languageEnglishFlag": "🇺🇸",
   "languageGermanFlag": "🇩🇪",
   "languageSpanishFlag": "🇪🇸",
   "languageFrenchFlag": "🇫🇷",
@@ -2974,6 +3051,10 @@
   "@chatUnreadDividerLabel": {
     "description": "Label for the unread messages divider in chat history."
   },
+  "chatEmailEncryptionStatusLabel": "Los correos están cifrados de extremo a extremo.",
+  "@chatEmailEncryptionStatusLabel": {
+    "description": "Neutral system row shown when Delta reports an email chat has become end-to-end encrypted."
+  },
   "messageErrorServiceUnavailableTooltip": "El servicio informo de un problema temporal.",
   "messageErrorServiceUnavailable": "Servicio no disponible",
   "messageErrorServerNotFound": "Servidor no encontrado",
@@ -3088,6 +3169,9 @@
     }
   },
   "chatSettingsCapabilitiesEmpty": "No se informó ninguna función",
+  "chatSendAsEmail": "Enviar como correo",
+  "chatEmailOutboundOverrideTitle": "Enviar por correo",
+  "chatEmailOutboundOverrideSubtitle": "Los mensajes nuevos en este chat usan correo en lugar de XMPP.",
   "chatSearchImportantOnly": "Solo importantes",
   "chatLeaveRoomFailed": "No se pudo salir de la sala.",
   "chatDestroyRoomFailed": "No se pudo eliminar la sala.",

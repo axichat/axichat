@@ -3675,8 +3675,8 @@ abstract class AppLocalizations {
   /// No description provided for @profileDonationPromptMessage.
   ///
   /// In en, this message translates to:
-  /// **'Hi {username}, please support Axichat. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running. Even \$5 goes a long way to help cover our monthly expenses.'**
-  String profileDonationPromptMessage(Object username);
+  /// **'If you\'re liking Axichat, please consider donating. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running.'**
+  String get profileDonationPromptMessage;
 
   /// No description provided for @settingsMastodonLabel.
   ///
@@ -7884,6 +7884,277 @@ abstract class AppLocalizations {
   /// **'Only for trusted contacts.'**
   String get settingsAutoDownloadScopeTrustedContacts;
 
+  /// No description provided for @emailEncryptionBetaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email encryption'**
+  String get emailEncryptionBetaLabel;
+
+  /// No description provided for @emailEncryptionBetaChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Beta'**
+  String get emailEncryptionBetaChip;
+
+  /// No description provided for @emailEncryptionBetaEnabledStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'On for {address}'**
+  String emailEncryptionBetaEnabledStatus(Object address);
+
+  /// No description provided for @emailEncryptionBetaDisabledStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Off for {address}'**
+  String emailEncryptionBetaDisabledStatus(Object address);
+
+  /// No description provided for @emailEncryptionBetaDisabledExistingKeyStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Off for {address}; existing key on this device'**
+  String emailEncryptionBetaDisabledExistingKeyStatus(Object address);
+
+  /// No description provided for @emailEncryptionBetaEnableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on'**
+  String get emailEncryptionBetaEnableAction;
+
+  /// No description provided for @emailEncryptionBetaDisableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get emailEncryptionBetaDisableAction;
+
+  /// No description provided for @emailEncryptionBetaWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email encryption'**
+  String get emailEncryptionBetaWarningTitle;
+
+  /// No description provided for @emailEncryptionBetaWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Only turn this on if you understand OpenPGP keys. This is a one-way key setup: if this device does not already have an email encryption key, the key you import or create next becomes the local self key for this email account. Treat this as your only chance to import your own private key for this account; after a self key exists, Axichat will use that key and will not offer replacement here. This beta can make email less convenient: encryption is opportunistic, not every outgoing email will be encrypted, and encrypted mail is harder to use across devices. Each device must manually import the same private key, or it may not be able to read encrypted messages. This setting only affects email sends. Regular chat/XMPP sends do not use this OpenPGP email encryption unless you send as email from the send button long-press menu or turn on email sending in that chat\'s settings. If you want the normal email experience, leave this off.'**
+  String get emailEncryptionBetaWarningBody;
+
+  /// No description provided for @emailEncryptionBetaExistingKeyWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This device already has an OpenPGP email key for this account. Turning this on will use that existing key; Axichat will not offer import or replacement here. You can turn beta off later for future sends, but that will not delete or change the key. This setting only affects email sends. Regular chat/XMPP sends do not use this OpenPGP email encryption unless you send as email from the send button long-press menu or turn on email sending in that chat\'s settings.'**
+  String get emailEncryptionBetaExistingKeyWarningBody;
+
+  /// No description provided for @emailEncryptionBetaChooseActionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose key setup'**
+  String get emailEncryptionBetaChooseActionTitle;
+
+  /// No description provided for @emailEncryptionBetaChooseActionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This is your only chance to import your own private key for this account. Import an unencrypted ASCII-armored OpenPGP private key now, or create a new key and save the exported archive.'**
+  String get emailEncryptionBetaChooseActionBody;
+
+  /// No description provided for @emailEncryptionBetaImportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Import key'**
+  String get emailEncryptionBetaImportAction;
+
+  /// No description provided for @emailEncryptionBetaCreateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create key'**
+  String get emailEncryptionBetaCreateAction;
+
+  /// No description provided for @emailEncryptionBetaExportFilename.
+  ///
+  /// In en, this message translates to:
+  /// **'axichat-email-openpgp-key.zip'**
+  String get emailEncryptionBetaExportFilename;
+
+  /// No description provided for @emailEncryptionBetaUnsupportedFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Use an unencrypted ASCII-armored OpenPGP private key. Passphrase-protected and binary .gpg keys are unsupported in this beta.'**
+  String get emailEncryptionBetaUnsupportedFormat;
+
+  /// No description provided for @emailEncryptionBetaAmbiguousArchive.
+  ///
+  /// In en, this message translates to:
+  /// **'That archive has multiple possible private keys. Export archives need exactly one default private key.'**
+  String get emailEncryptionBetaAmbiguousArchive;
+
+  /// No description provided for @emailEncryptionBetaNoPrivateKeyFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No ASCII-armored OpenPGP private key was found.'**
+  String get emailEncryptionBetaNoPrivateKeyFound;
+
+  /// No description provided for @emailEncryptionBetaImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Key import failed. Passphrase-protected keys are unsupported in this beta.'**
+  String get emailEncryptionBetaImportFailed;
+
+  /// No description provided for @emailEncryptionBetaExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Key export failed.'**
+  String get emailEncryptionBetaExportFailed;
+
+  /// No description provided for @emailEncryptionBetaSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The key archive was not saved.'**
+  String get emailEncryptionBetaSaveFailed;
+
+  /// No description provided for @emailEncryptionBetaNoActiveAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up email before enabling email encryption beta.'**
+  String get emailEncryptionBetaNoActiveAccount;
+
+  /// No description provided for @emailEncryptionBetaActivationSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Email encryption beta is on for this device.'**
+  String get emailEncryptionBetaActivationSuccess;
+
+  /// No description provided for @emailEncryptionBetaDisableSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Email encryption beta is off for future new sends.'**
+  String get emailEncryptionBetaDisableSuccess;
+
+  /// No description provided for @emailEncryptionKeyIdentityWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm key identity'**
+  String get emailEncryptionKeyIdentityWarningTitle;
+
+  /// No description provided for @emailEncryptionKeyIdentityWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This private key does not list the active email address. Fingerprint: {fingerprint}. Identities: {identities}. Continue only if you verified this key belongs to the active account.'**
+  String emailEncryptionKeyIdentityWarningBody(
+    Object fingerprint,
+    Object identities,
+  );
+
+  /// No description provided for @emailEncryptionKeyIdentityNoIdentities.
+  ///
+  /// In en, this message translates to:
+  /// **'No identities in key'**
+  String get emailEncryptionKeyIdentityNoIdentities;
+
+  /// No description provided for @contactEmailEncryptionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email encryption key'**
+  String get contactEmailEncryptionTitle;
+
+  /// No description provided for @contactEmailEncryptionActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get contactEmailEncryptionActive;
+
+  /// No description provided for @contactEmailEncryptionInactiveBetaOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get contactEmailEncryptionInactiveBetaOff;
+
+  /// No description provided for @contactEmailEncryptionNoKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a contact public key to encrypt future new email when your email encryption beta is on.'**
+  String get contactEmailEncryptionNoKey;
+
+  /// No description provided for @contactEmailEncryptionNoActiveAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up email before adding contact public keys.'**
+  String get contactEmailEncryptionNoActiveAccount;
+
+  /// No description provided for @contactEmailEncryptionAddPublicKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Add public key'**
+  String get contactEmailEncryptionAddPublicKey;
+
+  /// No description provided for @contactEmailEncryptionReplacePublicKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace public key'**
+  String get contactEmailEncryptionReplacePublicKey;
+
+  /// No description provided for @contactEmailEncryptionRemovePublicKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove key'**
+  String get contactEmailEncryptionRemovePublicKey;
+
+  /// No description provided for @contactEmailEncryptionRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the saved public key for {address}? Future new email will use normal Autocrypt behavior.'**
+  String contactEmailEncryptionRemoveConfirm(Object address);
+
+  /// No description provided for @contactEmailEncryptionFingerprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fingerprint: {fingerprint}'**
+  String contactEmailEncryptionFingerprint(Object fingerprint);
+
+  /// No description provided for @contactEmailEncryptionIdentityWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm contact key'**
+  String get contactEmailEncryptionIdentityWarningTitle;
+
+  /// No description provided for @contactEmailEncryptionIdentityWarningBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This public key does not list {address}. Fingerprint: {fingerprint}. Identities: {identities}. Continue only if you verified this key belongs to this contact.'**
+  String contactEmailEncryptionIdentityWarningBody(
+    Object address,
+    Object fingerprint,
+    Object identities,
+  );
+
+  /// No description provided for @contactEmailEncryptionImportSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact public key saved.'**
+  String get contactEmailEncryptionImportSuccess;
+
+  /// No description provided for @contactEmailEncryptionRemoveSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact public key removed.'**
+  String get contactEmailEncryptionRemoveSuccess;
+
+  /// No description provided for @contactEmailEncryptionUnsupportedFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Use one unencrypted ASCII-armored OpenPGP public key file.'**
+  String get contactEmailEncryptionUnsupportedFormat;
+
+  /// No description provided for @contactEmailEncryptionImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact public key import failed.'**
+  String get contactEmailEncryptionImportFailed;
+
+  /// No description provided for @contactEmailEncryptionRemoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact public key removal failed.'**
+  String get contactEmailEncryptionRemoveFailed;
+
   /// No description provided for @emailContactsImportTitle.
   ///
   /// In en, this message translates to:
@@ -8882,7 +9153,7 @@ abstract class AppLocalizations {
   /// No description provided for @languageEnglishFlag.
   ///
   /// In en, this message translates to:
-  /// **'🇬🇧'**
+  /// **'🇺🇸'**
   String get languageEnglishFlag;
 
   /// No description provided for @languageGermanFlag.
@@ -10939,6 +11210,12 @@ abstract class AppLocalizations {
   /// **'New'**
   String get chatUnreadDividerLabel;
 
+  /// Neutral system row shown when Delta reports an email chat has become end-to-end encrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'Emails are end-to-end encrypted.'**
+  String get chatEmailEncryptionStatusLabel;
+
   /// No description provided for @messageErrorServiceUnavailableTooltip.
   ///
   /// In en, this message translates to:
@@ -11598,6 +11875,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No features reported'**
   String get chatSettingsCapabilitiesEmpty;
+
+  /// No description provided for @chatSendAsEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Send as email'**
+  String get chatSendAsEmail;
+
+  /// No description provided for @chatEmailOutboundOverrideTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send by email'**
+  String get chatEmailOutboundOverrideTitle;
+
+  /// No description provided for @chatEmailOutboundOverrideSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New messages in this chat use email instead of XMPP.'**
+  String get chatEmailOutboundOverrideSubtitle;
 }
 
 class _AppLocalizationsDelegate

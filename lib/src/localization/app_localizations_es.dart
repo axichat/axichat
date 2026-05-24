@@ -2055,9 +2055,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsDonateLabel => 'Donar';
 
   @override
-  String profileDonationPromptMessage(Object username) {
-    return 'Hola $username, por favor apoya a Axichat. Es gratis y de código abierto, así que dependemos de donaciones de usuarios como tú para mantener la app y los servidores en funcionamiento. Incluso 5 \$ ayudan mucho a cubrir nuestros gastos mensuales.';
-  }
+  String get profileDonationPromptMessage =>
+      'Si te está gustando Axichat, considera hacer una donación. Es gratis y de código abierto, así que dependemos de donaciones de usuarios como tú para mantener la app y los servidores en funcionamiento.';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -2312,7 +2311,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsAboutLegalese =>
-      'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
+      'Copyright (C) 2025 Axichat LLC\n\nEste programa es software libre: puedes redistribuirlo y/o modificarlo bajo los términos de la Licencia Pública General Affero de GNU publicada por la Free Software Foundation, ya sea la versión 3 de la Licencia o (a tu elección) cualquier versión posterior.\n\nEste programa se distribuye con la esperanza de que sea útil, pero SIN NINGUNA GARANTÍA; incluso sin la garantía implícita de COMERCIABILIDAD o IDONEIDAD PARA UN PROPÓSITO PARTICULAR. Consulta la Licencia Pública General Affero de GNU para más detalles.\n\nDeberías haber recibido una copia de la Licencia Pública General Affero de GNU junto con este programa. Si no, consulta <https://www.gnu.org/licenses/>.';
 
   @override
   String get settingsTermsLabel => 'Términos';
@@ -2406,7 +2405,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get settingsEmailComposerWatermarkDescription =>
-      'Rellena previamente los correos nuevos con el texto \"Sent from Axichat\" que puedes editar o eliminar.';
+      'Rellena previamente los correos nuevos con el texto \"Enviado desde Axichat\" que puedes editar o eliminar.';
 
   @override
   String get settingsTypingIndicators => 'Enviar indicadores de escritura';
@@ -3227,7 +3226,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatsSelectLabel => 'Seleccionar chat';
 
   @override
-  String get chatsExportFileLabel => 'chats';
+  String get chatsExportFileLabel => 'conversaciones';
 
   @override
   String get chatSelectionExportEmptyTitle => 'No hay mensajes para exportar';
@@ -4474,6 +4473,183 @@ class AppLocalizationsEs extends AppLocalizations {
       'Solo para contactos de confianza.';
 
   @override
+  String get emailEncryptionBetaLabel => 'Cifrado de correo';
+
+  @override
+  String get emailEncryptionBetaChip => 'Beta';
+
+  @override
+  String emailEncryptionBetaEnabledStatus(Object address) {
+    return 'Activado para $address';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledStatus(Object address) {
+    return 'Desactivado para $address';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledExistingKeyStatus(Object address) {
+    return 'Desactivado para $address; clave existente en este dispositivo';
+  }
+
+  @override
+  String get emailEncryptionBetaEnableAction => 'Activar';
+
+  @override
+  String get emailEncryptionBetaDisableAction => 'Desactivar';
+
+  @override
+  String get emailEncryptionBetaWarningTitle => 'Cifrado de correo';
+
+  @override
+  String get emailEncryptionBetaWarningBody =>
+      'Activa esto solo si entiendes las claves OpenPGP. Esta configuración de clave es unidireccional: si este dispositivo aún no tiene una clave de cifrado de correo, la clave que importes o crees a continuación se convertirá en la clave propia local para esta cuenta de correo. Trátalo como tu única oportunidad para importar tu propia clave privada para esta cuenta; cuando ya exista una clave propia, Axichat usará esa clave y no ofrecerá reemplazarla aquí. Esta beta puede hacer que el correo electrónico sea menos cómodo: el cifrado es oportunista, no todos los correos salientes se cifrarán y el correo cifrado es más difícil de usar en varios dispositivos. Cada dispositivo debe importar manualmente la misma clave privada; de lo contrario, quizá no pueda leer mensajes cifrados. Este ajuste solo afecta a los envíos por correo. Los envíos normales de chat/XMPP no usan este cifrado OpenPGP de correo a menos que envíes como correo desde el menú de pulsación larga del botón de envío o actives el envío por correo en los ajustes de ese chat. Si quieres la experiencia normal de correo, déjalo desactivado.';
+
+  @override
+  String get emailEncryptionBetaExistingKeyWarningBody =>
+      'Este dispositivo ya tiene una clave OpenPGP de correo para esta cuenta. Al activar esto se usará esa clave existente; Axichat no ofrecerá importar ni reemplazarla aquí. Puedes desactivar la beta más tarde para envíos futuros, pero eso no borrará ni cambiará la clave. Este ajuste solo afecta a los envíos por correo. Los envíos normales de chat/XMPP no usan este cifrado OpenPGP de correo a menos que envíes como correo desde el menú de pulsación larga del botón de envío o actives el envío por correo en los ajustes de ese chat.';
+
+  @override
+  String get emailEncryptionBetaChooseActionTitle =>
+      'Elegir configuración de clave';
+
+  @override
+  String get emailEncryptionBetaChooseActionBody =>
+      'Esta es tu única oportunidad para importar tu propia clave privada para esta cuenta. Importa ahora una clave privada OpenPGP ASCII-armored sin cifrar, o crea una clave nueva y guarda el archivo exportado.';
+
+  @override
+  String get emailEncryptionBetaImportAction => 'Importar clave';
+
+  @override
+  String get emailEncryptionBetaCreateAction => 'Crear clave';
+
+  @override
+  String get emailEncryptionBetaExportFilename =>
+      'axichat-email-openpgp-key.zip';
+
+  @override
+  String get emailEncryptionBetaUnsupportedFormat =>
+      'Usa una clave privada OpenPGP ASCII-armored sin cifrar. Las claves protegidas con frase de contraseña y las claves .gpg binarias no son compatibles en esta beta.';
+
+  @override
+  String get emailEncryptionBetaAmbiguousArchive =>
+      'Ese archivo contiene varias claves privadas posibles. Los archivos exportados necesitan exactamente una clave privada predeterminada.';
+
+  @override
+  String get emailEncryptionBetaNoPrivateKeyFound =>
+      'No se encontró ninguna clave privada OpenPGP ASCII-armored.';
+
+  @override
+  String get emailEncryptionBetaImportFailed =>
+      'Error al importar la clave. Las claves protegidas con frase de contraseña no son compatibles en esta beta.';
+
+  @override
+  String get emailEncryptionBetaExportFailed => 'Error al exportar la clave.';
+
+  @override
+  String get emailEncryptionBetaSaveFailed =>
+      'No se guardó el archivo de clave.';
+
+  @override
+  String get emailEncryptionBetaNoActiveAccount =>
+      'Configura el correo antes de activar la beta de cifrado de correo.';
+
+  @override
+  String get emailEncryptionBetaActivationSuccess =>
+      'La beta de cifrado de correo está activada en este dispositivo.';
+
+  @override
+  String get emailEncryptionBetaDisableSuccess =>
+      'La beta de cifrado de correo está desactivada para nuevos envíos futuros.';
+
+  @override
+  String get emailEncryptionKeyIdentityWarningTitle =>
+      'Confirmar identidad de la clave';
+
+  @override
+  String emailEncryptionKeyIdentityWarningBody(
+    Object fingerprint,
+    Object identities,
+  ) {
+    return 'Esta clave privada no incluye la dirección de correo activa. Huella: $fingerprint. Identidades: $identities. Continúa solo si verificaste que esta clave pertenece a la cuenta activa.';
+  }
+
+  @override
+  String get emailEncryptionKeyIdentityNoIdentities =>
+      'No hay identidades en la clave';
+
+  @override
+  String get contactEmailEncryptionTitle => 'Clave de cifrado de correo';
+
+  @override
+  String get contactEmailEncryptionActive => 'Activa';
+
+  @override
+  String get contactEmailEncryptionInactiveBetaOff => 'Guardada';
+
+  @override
+  String get contactEmailEncryptionNoKey =>
+      'Añade una clave pública del contacto para cifrar nuevos correos futuros cuando tu beta de cifrado de correo esté activada.';
+
+  @override
+  String get contactEmailEncryptionNoActiveAccount =>
+      'Configura el correo antes de añadir claves públicas de contactos.';
+
+  @override
+  String get contactEmailEncryptionAddPublicKey => 'Añadir clave pública';
+
+  @override
+  String get contactEmailEncryptionReplacePublicKey =>
+      'Reemplazar clave pública';
+
+  @override
+  String get contactEmailEncryptionRemovePublicKey => 'Eliminar clave';
+
+  @override
+  String contactEmailEncryptionRemoveConfirm(Object address) {
+    return '¿Eliminar la clave pública guardada para $address? Los nuevos correos futuros usarán el comportamiento normal de Autocrypt.';
+  }
+
+  @override
+  String contactEmailEncryptionFingerprint(Object fingerprint) {
+    return 'Huella: $fingerprint';
+  }
+
+  @override
+  String get contactEmailEncryptionIdentityWarningTitle =>
+      'Confirmar clave del contacto';
+
+  @override
+  String contactEmailEncryptionIdentityWarningBody(
+    Object address,
+    Object fingerprint,
+    Object identities,
+  ) {
+    return 'Esta clave pública no incluye $address. Huella: $fingerprint. Identidades: $identities. Continúa solo si verificaste que esta clave pertenece a este contacto.';
+  }
+
+  @override
+  String get contactEmailEncryptionImportSuccess =>
+      'Clave pública del contacto guardada.';
+
+  @override
+  String get contactEmailEncryptionRemoveSuccess =>
+      'Clave pública del contacto eliminada.';
+
+  @override
+  String get contactEmailEncryptionUnsupportedFormat =>
+      'Usa un único archivo de clave pública OpenPGP ASCII-armored sin cifrar.';
+
+  @override
+  String get contactEmailEncryptionImportFailed =>
+      'Error al importar la clave pública del contacto.';
+
+  @override
+  String get contactEmailEncryptionRemoveFailed =>
+      'Error al eliminar la clave pública del contacto.';
+
+  @override
   String get emailContactsImportTitle => 'Importar contactos';
 
   @override
@@ -5097,7 +5273,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get languageSystemFlag => '🌐';
 
   @override
-  String get languageEnglishFlag => '🇬🇧';
+  String get languageEnglishFlag => '🇺🇸';
 
   @override
   String get languageGermanFlag => '🇩🇪';
@@ -6417,6 +6593,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatUnreadDividerLabel => 'No leídos';
 
   @override
+  String get chatEmailEncryptionStatusLabel =>
+      'Los correos están cifrados de extremo a extremo.';
+
+  @override
   String get messageErrorServiceUnavailableTooltip =>
       'El servicio informo de un problema temporal.';
 
@@ -6801,4 +6981,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatSettingsCapabilitiesEmpty => 'No se informó ninguna función';
+
+  @override
+  String get chatSendAsEmail => 'Enviar como correo';
+
+  @override
+  String get chatEmailOutboundOverrideTitle => 'Enviar por correo';
+
+  @override
+  String get chatEmailOutboundOverrideSubtitle =>
+      'Los mensajes nuevos en este chat usan correo en lugar de XMPP.';
 }

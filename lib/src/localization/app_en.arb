@@ -849,12 +849,7 @@
   "profileJumpToTop": "Back to top",
   "settingsWebsiteLabel": "Website",
   "settingsDonateLabel": "Donate",
-  "profileDonationPromptMessage": "Hi {username}, please support Axichat. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running. Even $5 goes a long way to help cover our monthly expenses.",
-  "@profileDonationPromptMessage": {
-    "placeholders": {
-      "username": {}
-    }
-  },
+  "profileDonationPromptMessage": "If you're liking Axichat, please consider donating. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running.",
   "settingsMastodonLabel": "Mastodon",
   "settingsGithubLabel": "GitHub",
   "settingsGitlabLabel": "GitLab",
@@ -1917,6 +1912,88 @@
   "settingsAutoDownloadArchivesDescription": "Applies when this chat allows automatic downloads.",
   "settingsAutoDownloadScopeAlways": "Always",
   "settingsAutoDownloadScopeTrustedContacts": "Only for trusted contacts.",
+  "emailEncryptionBetaLabel": "Email encryption",
+  "emailEncryptionBetaChip": "Beta",
+  "emailEncryptionBetaEnabledStatus": "On for {address}",
+  "@emailEncryptionBetaEnabledStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaDisabledStatus": "Off for {address}",
+  "@emailEncryptionBetaDisabledStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaDisabledExistingKeyStatus": "Off for {address}; existing key on this device",
+  "@emailEncryptionBetaDisabledExistingKeyStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaEnableAction": "Turn on",
+  "emailEncryptionBetaDisableAction": "Turn off",
+  "emailEncryptionBetaWarningTitle": "Email encryption",
+  "emailEncryptionBetaWarningBody": "Only turn this on if you understand OpenPGP keys. This is a one-way key setup: if this device does not already have an email encryption key, the key you import or create next becomes the local self key for this email account. Treat this as your only chance to import your own private key for this account; after a self key exists, Axichat will use that key and will not offer replacement here. This beta can make email less convenient: encryption is opportunistic, not every outgoing email will be encrypted, and encrypted mail is harder to use across devices. Each device must manually import the same private key, or it may not be able to read encrypted messages. This setting only affects email sends. Regular chat/XMPP sends do not use this OpenPGP email encryption unless you send as email from the send button long-press menu or turn on email sending in that chat's settings. If you want the normal email experience, leave this off.",
+  "emailEncryptionBetaExistingKeyWarningBody": "This device already has an OpenPGP email key for this account. Turning this on will use that existing key; Axichat will not offer import or replacement here. You can turn beta off later for future sends, but that will not delete or change the key. This setting only affects email sends. Regular chat/XMPP sends do not use this OpenPGP email encryption unless you send as email from the send button long-press menu or turn on email sending in that chat's settings.",
+  "emailEncryptionBetaChooseActionTitle": "Choose key setup",
+  "emailEncryptionBetaChooseActionBody": "This is your only chance to import your own private key for this account. Import an unencrypted ASCII-armored OpenPGP private key now, or create a new key and save the exported archive.",
+  "emailEncryptionBetaImportAction": "Import key",
+  "emailEncryptionBetaCreateAction": "Create key",
+  "emailEncryptionBetaExportFilename": "axichat-email-openpgp-key.zip",
+  "emailEncryptionBetaUnsupportedFormat": "Use an unencrypted ASCII-armored OpenPGP private key. Passphrase-protected and binary .gpg keys are unsupported in this beta.",
+  "emailEncryptionBetaAmbiguousArchive": "That archive has multiple possible private keys. Export archives need exactly one default private key.",
+  "emailEncryptionBetaNoPrivateKeyFound": "No ASCII-armored OpenPGP private key was found.",
+  "emailEncryptionBetaImportFailed": "Key import failed. Passphrase-protected keys are unsupported in this beta.",
+  "emailEncryptionBetaExportFailed": "Key export failed.",
+  "emailEncryptionBetaSaveFailed": "The key archive was not saved.",
+  "emailEncryptionBetaNoActiveAccount": "Set up email before enabling email encryption beta.",
+  "emailEncryptionBetaActivationSuccess": "Email encryption beta is on for this device.",
+  "emailEncryptionBetaDisableSuccess": "Email encryption beta is off for future new sends.",
+  "emailEncryptionKeyIdentityWarningTitle": "Confirm key identity",
+  "emailEncryptionKeyIdentityWarningBody": "This private key does not list the active email address. Fingerprint: {fingerprint}. Identities: {identities}. Continue only if you verified this key belongs to the active account.",
+  "@emailEncryptionKeyIdentityWarningBody": {
+    "placeholders": {
+      "fingerprint": {},
+      "identities": {}
+    }
+  },
+  "emailEncryptionKeyIdentityNoIdentities": "No identities in key",
+  "contactEmailEncryptionTitle": "Email encryption key",
+  "contactEmailEncryptionActive": "Active",
+  "contactEmailEncryptionInactiveBetaOff": "Saved",
+  "contactEmailEncryptionNoKey": "Add a contact public key to encrypt future new email when your email encryption beta is on.",
+  "contactEmailEncryptionNoActiveAccount": "Set up email before adding contact public keys.",
+  "contactEmailEncryptionAddPublicKey": "Add public key",
+  "contactEmailEncryptionReplacePublicKey": "Replace public key",
+  "contactEmailEncryptionRemovePublicKey": "Remove key",
+  "contactEmailEncryptionRemoveConfirm": "Remove the saved public key for {address}? Future new email will use normal Autocrypt behavior.",
+  "@contactEmailEncryptionRemoveConfirm": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "contactEmailEncryptionFingerprint": "Fingerprint: {fingerprint}",
+  "@contactEmailEncryptionFingerprint": {
+    "placeholders": {
+      "fingerprint": {}
+    }
+  },
+  "contactEmailEncryptionIdentityWarningTitle": "Confirm contact key",
+  "contactEmailEncryptionIdentityWarningBody": "This public key does not list {address}. Fingerprint: {fingerprint}. Identities: {identities}. Continue only if you verified this key belongs to this contact.",
+  "@contactEmailEncryptionIdentityWarningBody": {
+    "placeholders": {
+      "address": {},
+      "fingerprint": {},
+      "identities": {}
+    }
+  },
+  "contactEmailEncryptionImportSuccess": "Contact public key saved.",
+  "contactEmailEncryptionRemoveSuccess": "Contact public key removed.",
+  "contactEmailEncryptionUnsupportedFormat": "Use one unencrypted ASCII-armored OpenPGP public key file.",
+  "contactEmailEncryptionImportFailed": "Contact public key import failed.",
+  "contactEmailEncryptionRemoveFailed": "Contact public key removal failed.",
   "emailContactsImportTitle": "Import contacts",
   "emailContactsImportSubtitle": "Gmail, Outlook, Yahoo CSVs, or vCards.",
   "emailContactsImportFileAccessError": "Unable to access the selected file.",
@@ -2207,7 +2284,7 @@
   "languageChineseSimplifiedShort": "ZH",
   "languageChineseHongKongShort": "ZH-HK",
   "languageSystemFlag": "🌐",
-  "languageEnglishFlag": "🇬🇧",
+  "languageEnglishFlag": "🇺🇸",
   "languageGermanFlag": "🇩🇪",
   "languageSpanishFlag": "🇪🇸",
   "languageFrenchFlag": "🇫🇷",
@@ -3132,6 +3209,10 @@
   "@chatUnreadDividerLabel": {
     "description": "Label for the unread messages divider in chat history."
   },
+  "chatEmailEncryptionStatusLabel": "Emails are end-to-end encrypted.",
+  "@chatEmailEncryptionStatusLabel": {
+    "description": "Neutral system row shown when Delta reports an email chat has become end-to-end encrypted."
+  },
   "messageErrorServiceUnavailableTooltip": "The service reported a temporary issue.",
   "messageErrorServiceUnavailable": "Service unavailable",
   "messageErrorServerNotFound": "Server not found",
@@ -3246,5 +3327,8 @@
       "timestamp": {}
     }
   },
-  "chatSettingsCapabilitiesEmpty": "No features reported"
+  "chatSettingsCapabilitiesEmpty": "No features reported",
+  "chatSendAsEmail": "Send as email",
+  "chatEmailOutboundOverrideTitle": "Send by email",
+  "chatEmailOutboundOverrideSubtitle": "New messages in this chat use email instead of XMPP."
 }

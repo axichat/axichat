@@ -19,6 +19,7 @@ class AxiTextFormField extends StatelessWidget {
     this.obscureText,
     this.validator,
     this.onChanged,
+    this.onEditingComplete,
     this.onSubmitted,
     this.initialValue,
     this.description,
@@ -50,6 +51,7 @@ class AxiTextFormField extends StatelessWidget {
   final bool? obscureText;
   final String? Function(String)? validator;
   final ValueChanged<String>? onChanged;
+  final VoidCallback? onEditingComplete;
   final ValueChanged<String>? onSubmitted;
   final String? initialValue;
   final Widget? description;
@@ -83,6 +85,7 @@ class AxiTextFormField extends StatelessWidget {
       obscureText: obscureText ?? false,
       validator: validator,
       onChanged: onChanged,
+      onEditingComplete: onEditingComplete,
       onSubmitted: onSubmitted,
       initialValue: initialValue,
       description: description,

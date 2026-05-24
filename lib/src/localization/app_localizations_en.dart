@@ -2022,9 +2022,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDonateLabel => 'Donate';
 
   @override
-  String profileDonationPromptMessage(Object username) {
-    return 'Hi $username, please support Axichat. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running. Even \$5 goes a long way to help cover our monthly expenses.';
-  }
+  String get profileDonationPromptMessage =>
+      'If you\'re liking Axichat, please consider donating. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running.';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -4403,6 +4402,177 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only for trusted contacts.';
 
   @override
+  String get emailEncryptionBetaLabel => 'Email encryption';
+
+  @override
+  String get emailEncryptionBetaChip => 'Beta';
+
+  @override
+  String emailEncryptionBetaEnabledStatus(Object address) {
+    return 'On for $address';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledStatus(Object address) {
+    return 'Off for $address';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledExistingKeyStatus(Object address) {
+    return 'Off for $address; existing key on this device';
+  }
+
+  @override
+  String get emailEncryptionBetaEnableAction => 'Turn on';
+
+  @override
+  String get emailEncryptionBetaDisableAction => 'Turn off';
+
+  @override
+  String get emailEncryptionBetaWarningTitle => 'Email encryption';
+
+  @override
+  String get emailEncryptionBetaWarningBody =>
+      'Only turn this on if you understand OpenPGP keys. This is a one-way key setup: if this device does not already have an email encryption key, the key you import or create next becomes the local self key for this email account. Treat this as your only chance to import your own private key for this account; after a self key exists, Axichat will use that key and will not offer replacement here. This beta can make email less convenient: encryption is opportunistic, not every outgoing email will be encrypted, and encrypted mail is harder to use across devices. Each device must manually import the same private key, or it may not be able to read encrypted messages. This setting only affects email sends. Regular chat/XMPP sends do not use this OpenPGP email encryption unless you send as email from the send button long-press menu or turn on email sending in that chat\'s settings. If you want the normal email experience, leave this off.';
+
+  @override
+  String get emailEncryptionBetaExistingKeyWarningBody =>
+      'This device already has an OpenPGP email key for this account. Turning this on will use that existing key; Axichat will not offer import or replacement here. You can turn beta off later for future sends, but that will not delete or change the key. This setting only affects email sends. Regular chat/XMPP sends do not use this OpenPGP email encryption unless you send as email from the send button long-press menu or turn on email sending in that chat\'s settings.';
+
+  @override
+  String get emailEncryptionBetaChooseActionTitle => 'Choose key setup';
+
+  @override
+  String get emailEncryptionBetaChooseActionBody =>
+      'This is your only chance to import your own private key for this account. Import an unencrypted ASCII-armored OpenPGP private key now, or create a new key and save the exported archive.';
+
+  @override
+  String get emailEncryptionBetaImportAction => 'Import key';
+
+  @override
+  String get emailEncryptionBetaCreateAction => 'Create key';
+
+  @override
+  String get emailEncryptionBetaExportFilename =>
+      'axichat-email-openpgp-key.zip';
+
+  @override
+  String get emailEncryptionBetaUnsupportedFormat =>
+      'Use an unencrypted ASCII-armored OpenPGP private key. Passphrase-protected and binary .gpg keys are unsupported in this beta.';
+
+  @override
+  String get emailEncryptionBetaAmbiguousArchive =>
+      'That archive has multiple possible private keys. Export archives need exactly one default private key.';
+
+  @override
+  String get emailEncryptionBetaNoPrivateKeyFound =>
+      'No ASCII-armored OpenPGP private key was found.';
+
+  @override
+  String get emailEncryptionBetaImportFailed =>
+      'Key import failed. Passphrase-protected keys are unsupported in this beta.';
+
+  @override
+  String get emailEncryptionBetaExportFailed => 'Key export failed.';
+
+  @override
+  String get emailEncryptionBetaSaveFailed => 'The key archive was not saved.';
+
+  @override
+  String get emailEncryptionBetaNoActiveAccount =>
+      'Set up email before enabling email encryption beta.';
+
+  @override
+  String get emailEncryptionBetaActivationSuccess =>
+      'Email encryption beta is on for this device.';
+
+  @override
+  String get emailEncryptionBetaDisableSuccess =>
+      'Email encryption beta is off for future new sends.';
+
+  @override
+  String get emailEncryptionKeyIdentityWarningTitle => 'Confirm key identity';
+
+  @override
+  String emailEncryptionKeyIdentityWarningBody(
+    Object fingerprint,
+    Object identities,
+  ) {
+    return 'This private key does not list the active email address. Fingerprint: $fingerprint. Identities: $identities. Continue only if you verified this key belongs to the active account.';
+  }
+
+  @override
+  String get emailEncryptionKeyIdentityNoIdentities => 'No identities in key';
+
+  @override
+  String get contactEmailEncryptionTitle => 'Email encryption key';
+
+  @override
+  String get contactEmailEncryptionActive => 'Active';
+
+  @override
+  String get contactEmailEncryptionInactiveBetaOff => 'Saved';
+
+  @override
+  String get contactEmailEncryptionNoKey =>
+      'Add a contact public key to encrypt future new email when your email encryption beta is on.';
+
+  @override
+  String get contactEmailEncryptionNoActiveAccount =>
+      'Set up email before adding contact public keys.';
+
+  @override
+  String get contactEmailEncryptionAddPublicKey => 'Add public key';
+
+  @override
+  String get contactEmailEncryptionReplacePublicKey => 'Replace public key';
+
+  @override
+  String get contactEmailEncryptionRemovePublicKey => 'Remove key';
+
+  @override
+  String contactEmailEncryptionRemoveConfirm(Object address) {
+    return 'Remove the saved public key for $address? Future new email will use normal Autocrypt behavior.';
+  }
+
+  @override
+  String contactEmailEncryptionFingerprint(Object fingerprint) {
+    return 'Fingerprint: $fingerprint';
+  }
+
+  @override
+  String get contactEmailEncryptionIdentityWarningTitle =>
+      'Confirm contact key';
+
+  @override
+  String contactEmailEncryptionIdentityWarningBody(
+    Object address,
+    Object fingerprint,
+    Object identities,
+  ) {
+    return 'This public key does not list $address. Fingerprint: $fingerprint. Identities: $identities. Continue only if you verified this key belongs to this contact.';
+  }
+
+  @override
+  String get contactEmailEncryptionImportSuccess => 'Contact public key saved.';
+
+  @override
+  String get contactEmailEncryptionRemoveSuccess =>
+      'Contact public key removed.';
+
+  @override
+  String get contactEmailEncryptionUnsupportedFormat =>
+      'Use one unencrypted ASCII-armored OpenPGP public key file.';
+
+  @override
+  String get contactEmailEncryptionImportFailed =>
+      'Contact public key import failed.';
+
+  @override
+  String get contactEmailEncryptionRemoveFailed =>
+      'Contact public key removal failed.';
+
+  @override
   String get emailContactsImportTitle => 'Import contacts';
 
   @override
@@ -5013,7 +5183,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageSystemFlag => '🌐';
 
   @override
-  String get languageEnglishFlag => '🇬🇧';
+  String get languageEnglishFlag => '🇺🇸';
 
   @override
   String get languageGermanFlag => '🇩🇪';
@@ -6330,6 +6500,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatUnreadDividerLabel => 'New';
 
   @override
+  String get chatEmailEncryptionStatusLabel =>
+      'Emails are end-to-end encrypted.';
+
+  @override
   String get messageErrorServiceUnavailableTooltip =>
       'The service reported a temporary issue.';
 
@@ -6691,4 +6865,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatSettingsCapabilitiesEmpty => 'No features reported';
+
+  @override
+  String get chatSendAsEmail => 'Send as email';
+
+  @override
+  String get chatEmailOutboundOverrideTitle => 'Send by email';
+
+  @override
+  String get chatEmailOutboundOverrideSubtitle =>
+      'New messages in this chat use email instead of XMPP.';
 }

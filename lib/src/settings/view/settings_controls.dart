@@ -1369,9 +1369,6 @@ class _DonationRequestBanner extends StatelessWidget {
         final spacing = context.spacing;
         final sizing = context.sizing;
         final colors = context.colorScheme;
-        final displayName = profileState.username.trim().isEmpty
-            ? profileState.jid
-            : profileState.username;
         return Padding(
           padding: EdgeInsets.fromLTRB(
             spacing.m,
@@ -1394,7 +1391,7 @@ class _DonationRequestBanner extends StatelessWidget {
                 ),
                 SizedBox(height: spacing.m),
                 Text(
-                  l10n.profileDonationPromptMessage(displayName),
+                  l10n.profileDonationPromptMessage,
                   style: context.textTheme.muted,
                   textAlign: TextAlign.center,
                 ),
@@ -1510,6 +1507,7 @@ class _SettingsSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final header = Padding(
       padding: padding,
       child: Text(label.toUpperCase(), style: context.textTheme.sectionLabelM),
@@ -1520,6 +1518,7 @@ class _SettingsSectionHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        SizedBox(height: spacing.m),
         ShadSeparator.horizontal(
           color: context.borderSide.color,
           thickness: context.borderSide.width,

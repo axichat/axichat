@@ -1942,9 +1942,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsDonateLabel => '捐赠';
 
   @override
-  String profileDonationPromptMessage(Object username) {
-    return '嗨，$username，请支持 Axichat。它是免费且开源的，所以我们依靠像你这样的用户捐赠来维护应用并保持服务器运行。哪怕是 5 美元，也能大大帮助我们分担每月开支。';
-  }
+  String get profileDonationPromptMessage =>
+      '如果你喜欢 Axichat，请考虑捐赠。它是免费且开源的，所以我们依靠像你这样的用户捐赠来维护应用并保持服务器运行。';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -2193,7 +2192,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAboutLegalese =>
-      'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
+      'Copyright (C) 2025 Axichat LLC\n\n本程序是自由软件：你可以根据自由软件基金会发布的 GNU Affero 通用公共许可证条款重新分发和/或修改它，可以选择许可证第 3 版，或（由你选择）任何后续版本。\n\n本程序的发布是希望它有用，但不提供任何担保；甚至不提供适销性或特定用途适用性的默示担保。详情请参见 GNU Affero 通用公共许可证。\n\n你应该已经随本程序收到 GNU Affero 通用公共许可证的副本。如果没有，请参见 <https://www.gnu.org/licenses/>。';
 
   @override
   String get settingsTermsLabel => '条款';
@@ -3062,7 +3061,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsSelectLabel => '选择聊天';
 
   @override
-  String get chatsExportFileLabel => 'chats';
+  String get chatsExportFileLabel => '聊天';
 
   @override
   String get chatSelectionExportEmptyTitle => '没有可导出的消息';
@@ -4249,6 +4248,168 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAutoDownloadScopeTrustedContacts => '仅限可信联系人。';
 
   @override
+  String get emailEncryptionBetaLabel => '电子邮件加密';
+
+  @override
+  String get emailEncryptionBetaChip => '测试版';
+
+  @override
+  String emailEncryptionBetaEnabledStatus(Object address) {
+    return '已为 $address 开启';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledStatus(Object address) {
+    return '已为 $address 关闭';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledExistingKeyStatus(Object address) {
+    return '已为 $address 关闭；此设备上已有密钥';
+  }
+
+  @override
+  String get emailEncryptionBetaEnableAction => '开启';
+
+  @override
+  String get emailEncryptionBetaDisableAction => '关闭';
+
+  @override
+  String get emailEncryptionBetaWarningTitle => '电子邮件加密';
+
+  @override
+  String get emailEncryptionBetaWarningBody =>
+      '只有在你了解 OpenPGP 密钥时才开启此功能。这是一次性的密钥设置：如果此设备还没有电子邮件加密密钥，接下来导入或创建的密钥会成为此电子邮件账户的本地自用密钥。请把这视为你为此账户导入自己私钥的唯一机会；一旦自用密钥存在，Axichat 就会使用该密钥，并且不会在这里提供替换。此测试版可能会降低电子邮件使用便利性：加密是机会式的，并非每封外发电子邮件都会加密，而且加密邮件更难在多台设备上使用。每台设备都必须手动导入同一个私钥，否则可能无法读取加密消息。此设置只影响电子邮件发送。常规聊天/XMPP 发送不会使用此 OpenPGP 电子邮件加密，除非你从发送按钮的长按菜单中选择以电子邮件发送，或在该聊天的设置中开启电子邮件发送。如果你想要普通电子邮件体验，请保持关闭。';
+
+  @override
+  String get emailEncryptionBetaExistingKeyWarningBody =>
+      '此设备已为此账户拥有 OpenPGP 电子邮件密钥。开启后将使用这个现有密钥；Axichat 不会在这里提供导入或替换。你稍后可以为未来发送关闭测试版，但这不会删除或更改密钥。此设置只影响电子邮件发送。常规聊天/XMPP 发送不会使用此 OpenPGP 电子邮件加密，除非你从发送按钮的长按菜单中选择以电子邮件发送，或在该聊天的设置中开启电子邮件发送。';
+
+  @override
+  String get emailEncryptionBetaChooseActionTitle => '选择密钥设置';
+
+  @override
+  String get emailEncryptionBetaChooseActionBody =>
+      '这是你为此账户导入自己私钥的唯一机会。请立即导入未加密的 ASCII-armored OpenPGP 私钥，或创建新密钥并保存导出的压缩包。';
+
+  @override
+  String get emailEncryptionBetaImportAction => '导入密钥';
+
+  @override
+  String get emailEncryptionBetaCreateAction => '创建密钥';
+
+  @override
+  String get emailEncryptionBetaExportFilename =>
+      'axichat-email-openpgp-key.zip';
+
+  @override
+  String get emailEncryptionBetaUnsupportedFormat =>
+      '请使用未加密的 ASCII-armored OpenPGP 私钥。此测试版不支持受密码短语保护的密钥和二进制 .gpg 密钥。';
+
+  @override
+  String get emailEncryptionBetaAmbiguousArchive =>
+      '该压缩包包含多个可能的私钥。导出的压缩包必须正好包含一个默认私钥。';
+
+  @override
+  String get emailEncryptionBetaNoPrivateKeyFound =>
+      '未找到 ASCII-armored OpenPGP 私钥。';
+
+  @override
+  String get emailEncryptionBetaImportFailed => '密钥导入失败。此测试版不支持受密码短语保护的密钥。';
+
+  @override
+  String get emailEncryptionBetaExportFailed => '密钥导出失败。';
+
+  @override
+  String get emailEncryptionBetaSaveFailed => '密钥压缩包未保存。';
+
+  @override
+  String get emailEncryptionBetaNoActiveAccount => '请先设置电子邮件，再开启电子邮件加密测试版。';
+
+  @override
+  String get emailEncryptionBetaActivationSuccess => '此设备已开启电子邮件加密测试版。';
+
+  @override
+  String get emailEncryptionBetaDisableSuccess => '未来新发送将关闭电子邮件加密测试版。';
+
+  @override
+  String get emailEncryptionKeyIdentityWarningTitle => '确认密钥身份';
+
+  @override
+  String emailEncryptionKeyIdentityWarningBody(
+    Object fingerprint,
+    Object identities,
+  ) {
+    return '此私钥未列出当前电子邮件地址。指纹：$fingerprint。身份：$identities。只有在你确认此密钥属于当前账号后才继续。';
+  }
+
+  @override
+  String get emailEncryptionKeyIdentityNoIdentities => '密钥中没有身份';
+
+  @override
+  String get contactEmailEncryptionTitle => '电子邮件加密密钥';
+
+  @override
+  String get contactEmailEncryptionActive => '有效';
+
+  @override
+  String get contactEmailEncryptionInactiveBetaOff => '已保存';
+
+  @override
+  String get contactEmailEncryptionNoKey =>
+      '添加联系人的公钥，以便在你的电子邮件加密测试版开启时加密未来新邮件。';
+
+  @override
+  String get contactEmailEncryptionNoActiveAccount => '请先设置电子邮件，再添加联系人公钥。';
+
+  @override
+  String get contactEmailEncryptionAddPublicKey => '添加公钥';
+
+  @override
+  String get contactEmailEncryptionReplacePublicKey => '替换公钥';
+
+  @override
+  String get contactEmailEncryptionRemovePublicKey => '移除密钥';
+
+  @override
+  String contactEmailEncryptionRemoveConfirm(Object address) {
+    return '移除为 $address 保存的公钥？未来新邮件将使用普通 Autocrypt 行为。';
+  }
+
+  @override
+  String contactEmailEncryptionFingerprint(Object fingerprint) {
+    return '指纹：$fingerprint';
+  }
+
+  @override
+  String get contactEmailEncryptionIdentityWarningTitle => '确认联系人密钥';
+
+  @override
+  String contactEmailEncryptionIdentityWarningBody(
+    Object address,
+    Object fingerprint,
+    Object identities,
+  ) {
+    return '此公钥未列出 $address。指纹：$fingerprint。身份：$identities。只有在你确认此密钥属于该联系人后才继续。';
+  }
+
+  @override
+  String get contactEmailEncryptionImportSuccess => '联系人公钥已保存。';
+
+  @override
+  String get contactEmailEncryptionRemoveSuccess => '联系人公钥已移除。';
+
+  @override
+  String get contactEmailEncryptionUnsupportedFormat =>
+      '请使用一个未加密的 ASCII-armored OpenPGP 公钥文件。';
+
+  @override
+  String get contactEmailEncryptionImportFailed => '联系人公钥导入失败。';
+
+  @override
+  String get contactEmailEncryptionRemoveFailed => '联系人公钥移除失败。';
+
+  @override
   String get emailContactsImportTitle => '导入联系人';
 
   @override
@@ -4841,7 +5002,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get languageSystemFlag => '🌐';
 
   @override
-  String get languageEnglishFlag => '🇬🇧';
+  String get languageEnglishFlag => '🇺🇸';
 
   @override
   String get languageGermanFlag => '🇩🇪';
@@ -6060,6 +6221,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatUnreadDividerLabel => '未读';
 
   @override
+  String get chatEmailEncryptionStatusLabel => '电子邮件已端到端加密。';
+
+  @override
   String get messageErrorServiceUnavailableTooltip => '服务出现暂时性问题。';
 
   @override
@@ -6393,6 +6557,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatSettingsCapabilitiesEmpty => '未报告任何功能';
+
+  @override
+  String get chatSendAsEmail => '以电子邮件发送';
+
+  @override
+  String get chatEmailOutboundOverrideTitle => '通过电子邮件发送';
+
+  @override
+  String get chatEmailOutboundOverrideSubtitle => '此聊天中的新消息将使用电子邮件而不是 XMPP。';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -8334,9 +8507,8 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsDonateLabel => '捐贈';
 
   @override
-  String profileDonationPromptMessage(Object username) {
-    return '嗨，$username，請支持 Axichat。它是免費而且開源的，所以我們依靠像你這樣的用戶捐款來維護應用程式並讓伺服器持續運作。哪怕只是 5 美元，也能大大幫助我們分擔每月開支。';
-  }
+  String get profileDonationPromptMessage =>
+      '如果你喜歡 Axichat，請考慮捐款。它是免費而且開源的，所以我們依靠像你這樣的用戶捐款來維護應用程式並讓伺服器持續運作。';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -8585,7 +8757,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsAboutLegalese =>
-      'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
+      'Copyright (C) 2025 Axichat LLC\n\n本程式是自由軟件：你可以根據自由軟件基金會發布的 GNU Affero 通用公共許可證條款重新分發和/或修改它，可以選擇許可證第 3 版，或（由你選擇）任何後續版本。\n\n本程式的發布是希望它有用，但不提供任何擔保；甚至不提供適銷性或特定用途適用性的默示擔保。詳情請參見 GNU Affero 通用公共許可證。\n\n你應該已經隨本程式收到 GNU Affero 通用公共許可證的副本。如果沒有，請參見 <https://www.gnu.org/licenses/>。';
 
   @override
   String get settingsTermsLabel => '條款';
@@ -9455,7 +9627,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsSelectLabel => '選取聊天';
 
   @override
-  String get chatsExportFileLabel => 'chats';
+  String get chatsExportFileLabel => '聊天';
 
   @override
   String get chatSelectionExportEmptyTitle => '沒有可匯出的訊息';
@@ -10643,6 +10815,168 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsAutoDownloadScopeTrustedContacts => '僅限受信任聯絡人。';
 
   @override
+  String get emailEncryptionBetaLabel => '電郵加密';
+
+  @override
+  String get emailEncryptionBetaChip => '測試版';
+
+  @override
+  String emailEncryptionBetaEnabledStatus(Object address) {
+    return '已為 $address 開啟';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledStatus(Object address) {
+    return '已為 $address 關閉';
+  }
+
+  @override
+  String emailEncryptionBetaDisabledExistingKeyStatus(Object address) {
+    return '已為 $address 關閉；此裝置上已有金鑰';
+  }
+
+  @override
+  String get emailEncryptionBetaEnableAction => '開啟';
+
+  @override
+  String get emailEncryptionBetaDisableAction => '關閉';
+
+  @override
+  String get emailEncryptionBetaWarningTitle => '電郵加密';
+
+  @override
+  String get emailEncryptionBetaWarningBody =>
+      '只有在你了解 OpenPGP 金鑰時才開啟此功能。這是一次性的金鑰設定：如果此裝置尚未有電郵加密金鑰，接下來匯入或建立的金鑰會成為此電郵帳戶的本機自用金鑰。請把這視為你為此帳戶匯入自己私密金鑰的唯一機會；一旦自用金鑰存在，Axichat 就會使用該金鑰，並且不會在這裡提供替換。此測試版可能會令電郵使用較不方便：加密是機會式的，並非每封外寄電郵都會加密，而且加密電郵較難在多部裝置上使用。每部裝置都必須手動匯入同一個私密金鑰，否則可能無法讀取加密訊息。此設定只影響電郵傳送。一般聊天/XMPP 傳送不會使用此 OpenPGP 電郵加密，除非你從傳送按鈕的長按選單中選擇以電郵傳送，或在該聊天的設定中開啟電郵傳送。如果你想要一般電郵體驗，請保持關閉。';
+
+  @override
+  String get emailEncryptionBetaExistingKeyWarningBody =>
+      '此裝置已為此帳戶擁有 OpenPGP 電郵金鑰。開啟後將使用這個現有金鑰；Axichat 不會在這裡提供匯入或替換。你稍後可以為未來傳送關閉測試版，但這不會刪除或更改金鑰。此設定只影響電郵傳送。一般聊天/XMPP 傳送不會使用此 OpenPGP 電郵加密，除非你從傳送按鈕的長按選單中選擇以電郵傳送，或在該聊天的設定中開啟電郵傳送。';
+
+  @override
+  String get emailEncryptionBetaChooseActionTitle => '選擇金鑰設定';
+
+  @override
+  String get emailEncryptionBetaChooseActionBody =>
+      '這是你為此帳戶匯入自己私密金鑰的唯一機會。請立即匯入未加密的 ASCII-armored OpenPGP 私密金鑰，或建立新金鑰並儲存匯出的壓縮檔。';
+
+  @override
+  String get emailEncryptionBetaImportAction => '匯入金鑰';
+
+  @override
+  String get emailEncryptionBetaCreateAction => '建立金鑰';
+
+  @override
+  String get emailEncryptionBetaExportFilename =>
+      'axichat-email-openpgp-key.zip';
+
+  @override
+  String get emailEncryptionBetaUnsupportedFormat =>
+      '請使用未加密的 ASCII-armored OpenPGP 私密金鑰。此測試版不支援受密碼短語保護的金鑰和二進制 .gpg 金鑰。';
+
+  @override
+  String get emailEncryptionBetaAmbiguousArchive =>
+      '該壓縮檔包含多個可能的私密金鑰。匯出的壓縮檔必須剛好包含一個預設私密金鑰。';
+
+  @override
+  String get emailEncryptionBetaNoPrivateKeyFound =>
+      '找不到 ASCII-armored OpenPGP 私密金鑰。';
+
+  @override
+  String get emailEncryptionBetaImportFailed => '金鑰匯入失敗。此測試版不支援受密碼短語保護的金鑰。';
+
+  @override
+  String get emailEncryptionBetaExportFailed => '金鑰匯出失敗。';
+
+  @override
+  String get emailEncryptionBetaSaveFailed => '金鑰壓縮檔未儲存。';
+
+  @override
+  String get emailEncryptionBetaNoActiveAccount => '請先設定電郵，再開啟電郵加密測試版。';
+
+  @override
+  String get emailEncryptionBetaActivationSuccess => '此裝置已開啟電郵加密測試版。';
+
+  @override
+  String get emailEncryptionBetaDisableSuccess => '未來新傳送將關閉電郵加密測試版。';
+
+  @override
+  String get emailEncryptionKeyIdentityWarningTitle => '確認金鑰身份';
+
+  @override
+  String emailEncryptionKeyIdentityWarningBody(
+    Object fingerprint,
+    Object identities,
+  ) {
+    return '此私密金鑰未列出目前電郵地址。指紋：$fingerprint。身份：$identities。只有在你確認此金鑰屬於目前帳戶後才繼續。';
+  }
+
+  @override
+  String get emailEncryptionKeyIdentityNoIdentities => '金鑰中沒有身份';
+
+  @override
+  String get contactEmailEncryptionTitle => '電郵加密金鑰';
+
+  @override
+  String get contactEmailEncryptionActive => '有效';
+
+  @override
+  String get contactEmailEncryptionInactiveBetaOff => '已儲存';
+
+  @override
+  String get contactEmailEncryptionNoKey =>
+      '新增聯絡人的公開金鑰，以便在你的電郵加密測試版開啟時加密未來新電郵。';
+
+  @override
+  String get contactEmailEncryptionNoActiveAccount => '請先設定電郵，再新增聯絡人公開金鑰。';
+
+  @override
+  String get contactEmailEncryptionAddPublicKey => '新增公開金鑰';
+
+  @override
+  String get contactEmailEncryptionReplacePublicKey => '取代公開金鑰';
+
+  @override
+  String get contactEmailEncryptionRemovePublicKey => '移除金鑰';
+
+  @override
+  String contactEmailEncryptionRemoveConfirm(Object address) {
+    return '移除為 $address 儲存的公開金鑰？未來新電郵將使用一般 Autocrypt 行為。';
+  }
+
+  @override
+  String contactEmailEncryptionFingerprint(Object fingerprint) {
+    return '指紋：$fingerprint';
+  }
+
+  @override
+  String get contactEmailEncryptionIdentityWarningTitle => '確認聯絡人金鑰';
+
+  @override
+  String contactEmailEncryptionIdentityWarningBody(
+    Object address,
+    Object fingerprint,
+    Object identities,
+  ) {
+    return '此公開金鑰未列出 $address。指紋：$fingerprint。身份：$identities。只有在你確認此金鑰屬於該聯絡人後才繼續。';
+  }
+
+  @override
+  String get contactEmailEncryptionImportSuccess => '聯絡人公開金鑰已儲存。';
+
+  @override
+  String get contactEmailEncryptionRemoveSuccess => '聯絡人公開金鑰已移除。';
+
+  @override
+  String get contactEmailEncryptionUnsupportedFormat =>
+      '請使用一個未加密的 ASCII-armored OpenPGP 公開金鑰檔案。';
+
+  @override
+  String get contactEmailEncryptionImportFailed => '聯絡人公開金鑰匯入失敗。';
+
+  @override
+  String get contactEmailEncryptionRemoveFailed => '聯絡人公開金鑰移除失敗。';
+
+  @override
   String get emailContactsImportTitle => '匯入聯絡人';
 
   @override
@@ -11235,7 +11569,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get languageSystemFlag => '🌐';
 
   @override
-  String get languageEnglishFlag => '🇬🇧';
+  String get languageEnglishFlag => '🇺🇸';
 
   @override
   String get languageGermanFlag => '🇩🇪';
@@ -12454,6 +12788,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatUnreadDividerLabel => '未讀';
 
   @override
+  String get chatEmailEncryptionStatusLabel => '電郵已端對端加密。';
+
+  @override
   String get messageErrorServiceUnavailableTooltip => '服務出現暫時性問題。';
 
   @override
@@ -12787,4 +13124,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatSettingsCapabilitiesEmpty => '未回報任何功能';
+
+  @override
+  String get chatSendAsEmail => '以電郵傳送';
+
+  @override
+  String get chatEmailOutboundOverrideTitle => '透過電郵傳送';
+
+  @override
+  String get chatEmailOutboundOverrideSubtitle => '此聊天中的新訊息將使用電郵而不是 XMPP。';
 }

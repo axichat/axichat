@@ -756,12 +756,7 @@
   "profileJumpToTop": "返回顶部",
   "settingsWebsiteLabel": "网站",
   "settingsDonateLabel": "捐赠",
-  "profileDonationPromptMessage": "嗨，{username}，请支持 Axichat。它是免费且开源的，所以我们依靠像你这样的用户捐赠来维护应用并保持服务器运行。哪怕是 5 美元，也能大大帮助我们分担每月开支。",
-  "@profileDonationPromptMessage": {
-    "placeholders": {
-      "username": {}
-    }
-  },
+  "profileDonationPromptMessage": "如果你喜欢 Axichat，请考虑捐赠。它是免费且开源的，所以我们依靠像你这样的用户捐赠来维护应用并保持服务器运行。",
   "settingsMastodonLabel": "Mastodon",
   "settingsGithubLabel": "GitHub",
   "settingsGitlabLabel": "GitLab",
@@ -884,7 +879,7 @@
   "settingsSectionEmail": "邮件偏好",
   "settingsSectionAbout": "关于",
   "settingsAboutAxichat": "关于 Axichat",
-  "settingsAboutLegalese": "Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.",
+  "settingsAboutLegalese": "Copyright (C) 2025 Axichat LLC\n\n本程序是自由软件：你可以根据自由软件基金会发布的 GNU Affero 通用公共许可证条款重新分发和/或修改它，可以选择许可证第 3 版，或（由你选择）任何后续版本。\n\n本程序的发布是希望它有用，但不提供任何担保；甚至不提供适销性或特定用途适用性的默示担保。详情请参见 GNU Affero 通用公共许可证。\n\n你应该已经随本程序收到 GNU Affero 通用公共许可证的副本。如果没有，请参见 <https://www.gnu.org/licenses/>。",
   "settingsTermsLabel": "条款",
   "settingsPrivacyLabel": "隐私",
   "settingsLicenseAgpl": "AGPLv3",
@@ -1208,7 +1203,7 @@
   "chatsShowActions": "显示聊天操作",
   "chatsSelectedLabel": "聊天已选择",
   "chatsSelectLabel": "选择聊天",
-  "chatsExportFileLabel": "chats",
+  "chatsExportFileLabel": "聊天",
   "chatSelectionExportEmptyTitle": "没有可导出的消息",
   "chatSelectionExportEmptyMessage": "选择包含文本内容的聊天",
   "chatSelectionExportShareText": "来自 Axichat 的聊天导出",
@@ -1765,6 +1760,88 @@
   "settingsAutoDownloadArchivesDescription": "当此聊天允许自动下载时生效。",
   "settingsAutoDownloadScopeAlways": "始终",
   "settingsAutoDownloadScopeTrustedContacts": "仅限可信联系人。",
+  "emailEncryptionBetaLabel": "电子邮件加密",
+  "emailEncryptionBetaChip": "测试版",
+  "emailEncryptionBetaEnabledStatus": "已为 {address} 开启",
+  "@emailEncryptionBetaEnabledStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaDisabledStatus": "已为 {address} 关闭",
+  "@emailEncryptionBetaDisabledStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaDisabledExistingKeyStatus": "已为 {address} 关闭；此设备上已有密钥",
+  "@emailEncryptionBetaDisabledExistingKeyStatus": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "emailEncryptionBetaEnableAction": "开启",
+  "emailEncryptionBetaDisableAction": "关闭",
+  "emailEncryptionBetaWarningTitle": "电子邮件加密",
+  "emailEncryptionBetaWarningBody": "只有在你了解 OpenPGP 密钥时才开启此功能。这是一次性的密钥设置：如果此设备还没有电子邮件加密密钥，接下来导入或创建的密钥会成为此电子邮件账户的本地自用密钥。请把这视为你为此账户导入自己私钥的唯一机会；一旦自用密钥存在，Axichat 就会使用该密钥，并且不会在这里提供替换。此测试版可能会降低电子邮件使用便利性：加密是机会式的，并非每封外发电子邮件都会加密，而且加密邮件更难在多台设备上使用。每台设备都必须手动导入同一个私钥，否则可能无法读取加密消息。此设置只影响电子邮件发送。常规聊天/XMPP 发送不会使用此 OpenPGP 电子邮件加密，除非你从发送按钮的长按菜单中选择以电子邮件发送，或在该聊天的设置中开启电子邮件发送。如果你想要普通电子邮件体验，请保持关闭。",
+  "emailEncryptionBetaExistingKeyWarningBody": "此设备已为此账户拥有 OpenPGP 电子邮件密钥。开启后将使用这个现有密钥；Axichat 不会在这里提供导入或替换。你稍后可以为未来发送关闭测试版，但这不会删除或更改密钥。此设置只影响电子邮件发送。常规聊天/XMPP 发送不会使用此 OpenPGP 电子邮件加密，除非你从发送按钮的长按菜单中选择以电子邮件发送，或在该聊天的设置中开启电子邮件发送。",
+  "emailEncryptionBetaChooseActionTitle": "选择密钥设置",
+  "emailEncryptionBetaChooseActionBody": "这是你为此账户导入自己私钥的唯一机会。请立即导入未加密的 ASCII-armored OpenPGP 私钥，或创建新密钥并保存导出的压缩包。",
+  "emailEncryptionBetaImportAction": "导入密钥",
+  "emailEncryptionBetaCreateAction": "创建密钥",
+  "emailEncryptionBetaExportFilename": "axichat-email-openpgp-key.zip",
+  "emailEncryptionBetaUnsupportedFormat": "请使用未加密的 ASCII-armored OpenPGP 私钥。此测试版不支持受密码短语保护的密钥和二进制 .gpg 密钥。",
+  "emailEncryptionBetaAmbiguousArchive": "该压缩包包含多个可能的私钥。导出的压缩包必须正好包含一个默认私钥。",
+  "emailEncryptionBetaNoPrivateKeyFound": "未找到 ASCII-armored OpenPGP 私钥。",
+  "emailEncryptionBetaImportFailed": "密钥导入失败。此测试版不支持受密码短语保护的密钥。",
+  "emailEncryptionBetaExportFailed": "密钥导出失败。",
+  "emailEncryptionBetaSaveFailed": "密钥压缩包未保存。",
+  "emailEncryptionBetaNoActiveAccount": "请先设置电子邮件，再开启电子邮件加密测试版。",
+  "emailEncryptionBetaActivationSuccess": "此设备已开启电子邮件加密测试版。",
+  "emailEncryptionBetaDisableSuccess": "未来新发送将关闭电子邮件加密测试版。",
+  "emailEncryptionKeyIdentityWarningTitle": "确认密钥身份",
+  "emailEncryptionKeyIdentityWarningBody": "此私钥未列出当前电子邮件地址。指纹：{fingerprint}。身份：{identities}。只有在你确认此密钥属于当前账号后才继续。",
+  "@emailEncryptionKeyIdentityWarningBody": {
+    "placeholders": {
+      "fingerprint": {},
+      "identities": {}
+    }
+  },
+  "emailEncryptionKeyIdentityNoIdentities": "密钥中没有身份",
+  "contactEmailEncryptionTitle": "电子邮件加密密钥",
+  "contactEmailEncryptionActive": "有效",
+  "contactEmailEncryptionInactiveBetaOff": "已保存",
+  "contactEmailEncryptionNoKey": "添加联系人的公钥，以便在你的电子邮件加密测试版开启时加密未来新邮件。",
+  "contactEmailEncryptionNoActiveAccount": "请先设置电子邮件，再添加联系人公钥。",
+  "contactEmailEncryptionAddPublicKey": "添加公钥",
+  "contactEmailEncryptionReplacePublicKey": "替换公钥",
+  "contactEmailEncryptionRemovePublicKey": "移除密钥",
+  "contactEmailEncryptionRemoveConfirm": "移除为 {address} 保存的公钥？未来新邮件将使用普通 Autocrypt 行为。",
+  "@contactEmailEncryptionRemoveConfirm": {
+    "placeholders": {
+      "address": {}
+    }
+  },
+  "contactEmailEncryptionFingerprint": "指纹：{fingerprint}",
+  "@contactEmailEncryptionFingerprint": {
+    "placeholders": {
+      "fingerprint": {}
+    }
+  },
+  "contactEmailEncryptionIdentityWarningTitle": "确认联系人密钥",
+  "contactEmailEncryptionIdentityWarningBody": "此公钥未列出 {address}。指纹：{fingerprint}。身份：{identities}。只有在你确认此密钥属于该联系人后才继续。",
+  "@contactEmailEncryptionIdentityWarningBody": {
+    "placeholders": {
+      "address": {},
+      "fingerprint": {},
+      "identities": {}
+    }
+  },
+  "contactEmailEncryptionImportSuccess": "联系人公钥已保存。",
+  "contactEmailEncryptionRemoveSuccess": "联系人公钥已移除。",
+  "contactEmailEncryptionUnsupportedFormat": "请使用一个未加密的 ASCII-armored OpenPGP 公钥文件。",
+  "contactEmailEncryptionImportFailed": "联系人公钥导入失败。",
+  "contactEmailEncryptionRemoveFailed": "联系人公钥移除失败。",
   "emailContactsImportTitle": "导入联系人",
   "emailContactsImportSubtitle": "Gmail、Outlook、Yahoo 的 CSV 或 vCard。",
   "emailContactsImportFileAccessError": "无法访问所选文件。",
@@ -2053,7 +2130,7 @@
   "languageChineseSimplifiedShort": "ZH",
   "languageChineseHongKongShort": "ZH-HK",
   "languageSystemFlag": "🌐",
-  "languageEnglishFlag": "🇬🇧",
+  "languageEnglishFlag": "🇺🇸",
   "languageGermanFlag": "🇩🇪",
   "languageSpanishFlag": "🇪🇸",
   "languageFrenchFlag": "🇫🇷",
@@ -2955,6 +3032,10 @@
   "@chatUnreadDividerLabel": {
     "description": "Label for the unread messages divider in chat history."
   },
+  "chatEmailEncryptionStatusLabel": "电子邮件已端到端加密。",
+  "@chatEmailEncryptionStatusLabel": {
+    "description": "Neutral system row shown when Delta reports an email chat has become end-to-end encrypted."
+  },
   "messageErrorServiceUnavailableTooltip": "服务出现暂时性问题。",
   "messageErrorServiceUnavailable": "服务不可用",
   "messageErrorServerNotFound": "未找到服务器",
@@ -3093,6 +3174,9 @@
     }
   },
   "chatSettingsCapabilitiesEmpty": "未报告任何功能",
+  "chatSendAsEmail": "以电子邮件发送",
+  "chatEmailOutboundOverrideTitle": "通过电子邮件发送",
+  "chatEmailOutboundOverrideSubtitle": "此聊天中的新消息将使用电子邮件而不是 XMPP。",
   "chatSearchImportantOnly": "仅重要",
   "chatLeaveRoomFailed": "无法离开群组。",
   "chatDestroyRoomFailed": "无法删除群组。",

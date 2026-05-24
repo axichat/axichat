@@ -47,8 +47,10 @@ class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
   static const Size _captchaFrameSize = Size(180, 70);
 
+  final _usernameFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
   final _password2FocusNode = FocusNode();
+  final _captchaFocusNode = FocusNode();
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
@@ -117,8 +119,10 @@ class _SignupFormState extends State<SignupForm>
 
   @override
   void dispose() {
+    _usernameFocusNode.dispose();
     _passwordFocusNode.dispose();
     _password2FocusNode.dispose();
+    _captchaFocusNode.dispose();
     _jidTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
@@ -484,7 +488,6 @@ class _SignupFormState extends State<SignupForm>
       return;
     }
 
-    FocusScope.of(context).unfocus();
     setState(() {
       _pwnedCheckInProgress = true;
     });
@@ -554,13 +557,30 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _goToNextSignupStep() {
+    _goToSignupStep(_currentIndex + 1);
+  }
+
+  void _goToPreviousSignupStep() {
+    _goToSignupStep(_currentIndex - 1);
+  }
+
+  void _goToSignupStep(int stepIndex) {
     if (!mounted) return;
+    final nextIndex = stepIndex.clamp(0, _formKeys.length - 1).toInt();
+    if (nextIndex == _currentIndex) return;
+    final focusNode = switch (nextIndex) {
+      0 => _usernameFocusNode,
+      1 => _passwordFocusNode,
+      2 => _captchaFocusNode,
+      _ => null,
+    };
     setState(() {
-      _currentIndex++;
+      _currentIndex = nextIndex;
       _errorText = null;
       _showAllowInsecureError = false;
       _showBreachedError = false;
     });
+    focusNode?.requestFocus();
   }
 
   @override
@@ -764,6 +784,12 @@ class _SignupFormState extends State<SignupForm>
                                             ),
                                             enabled: !isBusy,
                                             controller: _jidTextController,
+                                            focusNode: _usernameFocusNode,
+                                            textInputAction:
+                                                TextInputAction.next,
+                                            onEditingComplete: () => unawaited(
+                                              _handleContinuePressed(context),
+                                            ),
                                             trailing: EndpointSuffix(
                                               server: state.server,
                                             ),
@@ -913,23 +939,24 @@ class _SignupFormState extends State<SignupForm>
                                   Padding(
                                     padding: fieldSpacing,
                                     child: PasswordInput(
-                                      enabled:
-                                          !isBusy && !_pwnedCheckInProgress,
+                                      enabled: !isBusy,
                                       controller: _passwordTextController,
                                       focusNode: _passwordFocusNode,
                                       textInputAction: TextInputAction.next,
-                                      onSubmitted: (_) =>
+                                      onEditingComplete: () =>
                                           _password2FocusNode.requestFocus(),
                                     ),
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
                                     child: PasswordInput(
-                                      enabled:
-                                          !isBusy && !_pwnedCheckInProgress,
+                                      enabled: !isBusy,
                                       controller: _password2TextController,
                                       focusNode: _password2FocusNode,
-                                      textInputAction: TextInputAction.done,
+                                      textInputAction: TextInputAction.next,
+                                      onEditingComplete: () => unawaited(
+                                        _handleContinuePressed(context),
+                                      ),
                                       confirmValidator: (text) =>
                                           text != _passwordTextController.text
                                           ? context.l10n.authPasswordsMismatch
@@ -1085,6 +1112,8 @@ class _SignupFormState extends State<SignupForm>
                                         ),
                                         enabled: !isBusy,
                                         controller: _captchaTextController,
+                                        focusNode: _captchaFocusNode,
+                                        textInputAction: TextInputAction.done,
                                         validator: (text) {
                                           final value = text;
                                           if (value.isEmpty) {
@@ -1155,11 +1184,7 @@ class _SignupFormState extends State<SignupForm>
                                     child: AxiButton.secondary(
                                       onPressed: isBusy || isCheckingPwned
                                           ? null
-                                          : () {
-                                              setState(() {
-                                                _currentIndex--;
-                                              });
-                                            },
+                                          : _goToPreviousSignupStep,
                                       child: Text(context.l10n.commonBack),
                                     ),
                                   )

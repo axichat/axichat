@@ -18,6 +18,7 @@ class PasswordInput extends StatefulWidget {
     this.enabled = false,
     this.focusNode,
     this.textInputAction,
+    this.onEditingComplete,
     this.onSubmitted,
     this.confirmValidator,
     this.validator,
@@ -28,6 +29,7 @@ class PasswordInput extends StatefulWidget {
   final FocusNode? focusNode;
   final String? placeholder;
   final TextInputAction? textInputAction;
+  final VoidCallback? onEditingComplete;
   final ValueChanged<String>? onSubmitted;
   final String? Function(String)? confirmValidator;
   final FormFieldValidator<String>? validator;
@@ -59,6 +61,7 @@ class _PasswordInputState extends State<PasswordInput> {
         obscureText: obscure,
         controller: widget.controller,
         textInputAction: widget.textInputAction,
+        onEditingComplete: widget.onEditingComplete,
         onSubmitted: widget.onSubmitted,
         trailing: ExcludeFocusTraversal(
           child: AxiIconButton.ghost(
