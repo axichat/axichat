@@ -1,12 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
+import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
+import 'package:axichat/src/calendar/view/shell/guest_calendar_widget.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:bloc_test/bloc_test.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:provider/provider.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
+class MockGuestCalendarBloc extends MockBloc<CalendarEvent, CalendarState>
+    implements GuestCalendarBloc {}
 
 void main() {
+  setUpAll(() {
+    HydratedBloc.storage = _InMemoryStorage();
+    registerFallbackValue(const CalendarEvent.started());
+  });
+
   testWidgets(
     'system back does not force-pop nested route when top route blocks pop',
     (tester) async {
@@ -72,6 +98,74 @@ void main() {
       expect(find.byKey(const Key('calendar-sheet')), findsOneWidget);
     },
   );
+
+  testWidgets('guest calendar bare system back returns to login', (
+    tester,
+  ) async {
+    await _pumpGuestCalendarBackHarness(tester);
+
+    expect(find.byType(GuestCalendarWidget), findsOneWidget);
+    expect(find.byKey(_loginScreenKey), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await _pumpGuestCalendarBackFrame(tester);
+
+    expect(find.byKey(_loginScreenKey), findsOneWidget);
+  });
+
+  testWidgets('guest calendar keeps framework back handling active', (
+    tester,
+  ) async {
+    final frameworkHandlesBack = ValueNotifier<bool?>(null);
+    addTearDown(frameworkHandlesBack.dispose);
+
+    await _pumpGuestCalendarBackHarness(
+      tester,
+      frameworkHandlesBack: frameworkHandlesBack,
+    );
+
+    expect(frameworkHandlesBack.value, isTrue);
+  });
+
+  testWidgets(
+    'guest calendar system back unfocuses sidebar input before login',
+    (tester) async {
+      await _pumpGuestCalendarBackHarness(tester);
+
+      await tester.tap(find.text('Try guest calendar'));
+      await _pumpGuestCalendarBackFrame(tester);
+
+      await tester.tapAt(tester.getCenter(find.textContaining('Quick task')));
+      await _pumpGuestCalendarBackFrame(tester);
+
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'sidebarTitleInput',
+      );
+
+      await tester.binding.handlePopRoute();
+      await _pumpGuestCalendarBackFrame(tester);
+
+      expect(find.byType(GuestCalendarWidget), findsOneWidget);
+      expect(find.byKey(_loginScreenKey), findsNothing);
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        isNot('sidebarTitleInput'),
+      );
+
+      await tester.binding.handlePopRoute();
+      await _pumpGuestCalendarBackFrame(tester);
+
+      expect(find.byKey(_loginScreenKey), findsOneWidget);
+    },
+  );
+}
+
+const Key _loginScreenKey = Key('login-screen');
+
+Future<void> _pumpGuestCalendarBackFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 class _CalendarSheetBindingHarness extends StatefulWidget {
@@ -162,5 +256,114 @@ class _CalendarSheetBindingHarnessState
         ),
       ),
     );
+  }
+}
+
+Future<void> _pumpGuestCalendarBackHarness(
+  WidgetTester tester, {
+  ValueNotifier<bool?>? frameworkHandlesBack,
+}) async {
+  tester.view.physicalSize = const Size(1440, 900);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  final guestCalendarBloc = MockGuestCalendarBloc();
+  when(() => guestCalendarBloc.state).thenReturn(CalendarState.initial());
+  when(
+    () => guestCalendarBloc.stream,
+  ).thenAnswer((_) => const Stream<CalendarState>.empty());
+  when(() => guestCalendarBloc.add(any<CalendarEvent>())).thenReturn(null);
+  when(() => guestCalendarBloc.close()).thenAnswer((_) async {});
+  final settingsCubit = SettingsCubit();
+  final calendarDragController = CalendarTaskOffGridDragController();
+  final router = GoRouter(
+    initialLocation: '/guest-calendar',
+    routes: [
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const Scaffold(
+          body: SizedBox.expand(
+            child: Center(child: Text('login screen', key: _loginScreenKey)),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/guest-calendar',
+        builder: (context, state) => const GuestCalendarWidget(),
+      ),
+    ],
+  );
+  addTearDown(() async {
+    router.dispose();
+    calendarDragController.dispose();
+    await settingsCubit.close();
+    await guestCalendarBloc.close();
+  });
+
+  await tester.pumpWidget(
+    MultiBlocProvider(
+      providers: [
+        BlocProvider<SettingsCubit>.value(value: settingsCubit),
+        BlocProvider<GuestCalendarBloc>.value(value: guestCalendarBloc),
+        BlocProvider<BaseCalendarBloc>.value(value: guestCalendarBloc),
+      ],
+      child: ChangeNotifierProvider<CalendarTaskOffGridDragController>.value(
+        value: calendarDragController,
+        child: MaterialApp.router(
+          debugShowCheckedModeBanner: false,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          routerConfig: router,
+          onNavigationNotification: (notification) {
+            frameworkHandlesBack?.value = notification.canHandlePop;
+            return true;
+          },
+          builder: (context, child) {
+            final mediaQuery = MediaQuery.of(context).copyWith(
+              padding: EdgeInsets.zero,
+              viewInsets: EdgeInsets.zero,
+              viewPadding: EdgeInsets.zero,
+              textScaler: const TextScaler.linear(0.7),
+            );
+            return MediaQuery(
+              data: mediaQuery,
+              child: ShadTheme(
+                data: ShadThemeData(
+                  colorScheme: const ShadSlateColorScheme.light(),
+                  brightness: Brightness.light,
+                ),
+                child: EnvScope(child: child ?? const SizedBox.shrink()),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+  await _pumpGuestCalendarBackFrame(tester);
+}
+
+class _InMemoryStorage implements Storage {
+  final Map<String, dynamic> _store = {};
+
+  @override
+  Future<void> clear() async => _store.clear();
+
+  @override
+  Future<void> close() async => _store.clear();
+
+  @override
+  Future<void> delete(String key) async => _store.remove(key);
+
+  @override
+  dynamic read(String key) => _store[key];
+
+  @override
+  Future<void> write(String key, dynamic value) async {
+    _store[key] = value;
   }
 }

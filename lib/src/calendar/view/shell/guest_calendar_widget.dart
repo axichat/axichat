@@ -34,9 +34,14 @@ import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/bloc/guest/guest_calendar_bloc.dart';
 
 class GuestCalendarWidget extends StatefulWidget {
-  const GuestCalendarWidget({super.key, this.showBackButton = true});
+  const GuestCalendarWidget({
+    super.key,
+    this.showBackButton = true,
+    bool? handleSystemBackToLogin,
+  }) : handleSystemBackToLogin = handleSystemBackToLogin ?? showBackButton;
 
   final bool showBackButton;
+  final bool handleSystemBackToLogin;
 
   @override
   State<GuestCalendarWidget> createState() => _GuestCalendarWidgetState();
@@ -167,20 +172,61 @@ class _GuestCalendarWidgetState
       ),
     );
     if (!usesDesktopLayout || _desktopOverlayDismissed) {
-      return content;
+      return _GuestSystemBackScope(
+        handleSystemBackToLogin: widget.handleSystemBackToLogin,
+        onNavigateBack: _handleSystemBackNavigation,
+        child: content,
+      );
     }
-    return Stack(
-      children: [
-        content,
-        Positioned.fill(
-          child: _GuestDesktopOverlay(
-            onPressed: () {
-              setState(() => _desktopOverlayDismissed = true);
-            },
+    return _GuestSystemBackScope(
+      handleSystemBackToLogin: widget.handleSystemBackToLogin,
+      onNavigateBack: _handleSystemBackNavigation,
+      child: Stack(
+        children: [
+          content,
+          Positioned.fill(
+            child: _GuestDesktopOverlay(
+              onPressed: () {
+                setState(() => _desktopOverlayDismissed = true);
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  void _handleSystemBackNavigation() {
+    if (_dismissCalendarSurfaceBack()) {
+      return;
+    }
+    _navigateBackToLogin();
+  }
+
+  bool _dismissCalendarSurfaceBack() {
+    final navigator = _calendarNavigatorKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      unawaited(navigator.maybePop());
+      return true;
+    }
+    final modalContext =
+        _calendarModalAnchorKey.currentContext ??
+        _calendarNavigatorKey.currentContext;
+    final surfaceController = modalContext == null
+        ? null
+        : AxiSurfaceScope.maybeControllerOf(modalContext);
+    if (surfaceController == null) {
+      return false;
+    }
+    if (surfaceController.dismissActiveTextInput()) {
+      return true;
+    }
+    return surfaceController.dismissTopSurface();
+  }
+
+  void _navigateBackToLogin() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    context.go('/login');
   }
 
   @override
@@ -297,13 +343,45 @@ class _GuestCalendarWidgetState
     if (!mounted) {
       return;
     }
-    context.go('/login');
+    _navigateBackToLogin();
   }
 
   Color _calendarSurfaceColor(BuildContext context) {
     return context.brightness == Brightness.dark
         ? context.colorScheme.card
         : calendarSidebarBackgroundColor;
+  }
+}
+
+class _GuestSystemBackScope extends StatelessWidget {
+  const _GuestSystemBackScope({
+    required this.handleSystemBackToLogin,
+    required this.onNavigateBack,
+    required this.child,
+  });
+
+  final bool handleSystemBackToLogin;
+  final VoidCallback onNavigateBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!handleSystemBackToLogin) {
+      return child;
+    }
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        onNavigateBack();
+      },
+      child: NotificationListener<NavigationNotification>(
+        onNotification: (_) => true,
+        child: child,
+      ),
+    );
   }
 }
 
