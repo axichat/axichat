@@ -303,7 +303,6 @@ abstract class CalendarEvent with _$CalendarEvent {
     required CalendarTask task,
     required List<Contact> recipients,
     required String shareText,
-    required bool readOnly,
     required Completer<CalendarShareResult> completer,
   }) = CalendarTaskShareRequested;
 

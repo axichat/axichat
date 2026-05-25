@@ -1,15 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
@@ -40,6 +43,11 @@ class _MockCalendarSyncManager extends Mock implements CalendarSyncManager {}
 
 class _MockXmppService extends Mock implements XmppService {}
 
+Map<String, dynamic> _decodeCalendarEnvelope(CalendarSyncOutbound outbound) {
+  final decoded = jsonDecode(outbound.envelope) as Map<String, dynamic>;
+  return decoded['calendar_sync'] as Map<String, dynamic>;
+}
+
 void main() {
   group('CalendarBloc', () {
     const String rawOverrideTitle = 'Raw override';
@@ -66,6 +74,8 @@ void main() {
           modifiedAt: DateTime.utc(2024, 1, 1),
         ),
       );
+      registerFallbackValue(const CalendarSyncOutbound(envelope: '{}'));
+      registerFallbackValue(ChatType.chat);
     });
 
     setUp(() {
@@ -127,6 +137,62 @@ void main() {
       syncCompleter.complete();
       await pumpEventQueue();
     });
+
+    test(
+      'task add, update, and delete route through the real sync manager',
+      () async {
+        final sent = <CalendarSyncOutbound>[];
+        when(() => xmppService.myJid).thenReturn('jid@axi.im');
+        when(
+          () => xmppService.sendCalendarSyncMessage(
+            jid: any(named: 'jid'),
+            outbound: any(named: 'outbound'),
+            chatType: any(named: 'chatType'),
+          ),
+        ).thenAnswer((invocation) async {
+          sent.add(
+            invocation.namedArguments[#outbound] as CalendarSyncOutbound,
+          );
+        });
+
+        final localBloc = CalendarBloc(
+          syncManagerBuilder: buildPersonalCalendarSyncManager,
+          xmppService: xmppService,
+          storage: storage,
+        );
+        addTearDown(localBloc.close);
+
+        localBloc.add(const CalendarEvent.taskAdded(title: 'Synced task'));
+        await pumpEventQueue(times: 10);
+        final task = localBloc.state.model.tasks.values.singleWhere(
+          (candidate) => candidate.title == 'Synced task',
+        );
+
+        localBloc.add(
+          CalendarEvent.taskUpdated(
+            task: task.copyWith(
+              title: 'Synced task updated',
+              modifiedAt: task.modifiedAt.add(const Duration(minutes: 1)),
+            ),
+          ),
+        );
+        await pumpEventQueue(times: 10);
+        localBloc.add(CalendarEvent.taskDeleted(taskId: task.id));
+        await pumpEventQueue(times: 10);
+
+        final payloads = sent.map(_decodeCalendarEnvelope).toList();
+        expect(payloads.map((payload) => payload['type']), [
+          CalendarSyncType.update,
+          CalendarSyncType.update,
+          CalendarSyncType.update,
+        ]);
+        expect(payloads.map((payload) => payload['operation']), [
+          'add',
+          'update',
+          'delete',
+        ]);
+      },
+    );
 
     test(
       'criticalPathCreated updates the local model before sync completes',

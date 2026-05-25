@@ -9750,6 +9750,18 @@ abstract class AppLocalizations {
   /// **'Calendar snapshot unavailable. Export your calendar JSON from another device and import it here to restore.'**
   String get calendarSyncWarningSnapshotMessage;
 
+  /// No description provided for @calendarSyncWarningArchiveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sync'**
+  String get calendarSyncWarningArchiveTitle;
+
+  /// No description provided for @calendarSyncWarningArchiveMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar history sync incomplete. Axichat will retry automatically.'**
+  String get calendarSyncWarningArchiveMessage;
+
   /// No description provided for @commonLabelValue.
   ///
   /// In en, this message translates to:

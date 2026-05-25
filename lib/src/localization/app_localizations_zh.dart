@@ -5343,6 +5343,12 @@ class AppLocalizationsZh extends AppLocalizations {
       '日历快照不可用。请从另一台设备导出日历 JSON 并在此导入以恢复。';
 
   @override
+  String get calendarSyncWarningArchiveTitle => '日历同步';
+
+  @override
+  String get calendarSyncWarningArchiveMessage => '日历历史同步未完成。Axichat 会自动重试。';
+
+  @override
   String commonLabelValue(String label, String value) {
     return '$label: $value';
   }
@@ -11908,6 +11914,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String get calendarSyncWarningSnapshotMessage =>
       '日曆快照不可用。請從另一部裝置匯出日曆 JSON 並在此匯入以恢復。';
+
+  @override
+  String get calendarSyncWarningArchiveTitle => '日曆同步';
+
+  @override
+  String get calendarSyncWarningArchiveMessage => '日曆歷史同步未完成。Axichat 會自動重試。';
 
   @override
   String commonLabelValue(String label, String value) {

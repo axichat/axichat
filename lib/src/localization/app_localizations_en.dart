@@ -5591,6 +5591,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Calendar snapshot unavailable. Export your calendar JSON from another device and import it here to restore.';
 
   @override
+  String get calendarSyncWarningArchiveTitle => 'Calendar sync';
+
+  @override
+  String get calendarSyncWarningArchiveMessage =>
+      'Calendar history sync incomplete. Axichat will retry automatically.';
+
+  @override
   String commonLabelValue(String label, String value) {
     return '$label: $value';
   }

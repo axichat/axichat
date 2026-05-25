@@ -5676,6 +5676,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Instantanea del calendario no disponible. Exporta el JSON del calendario desde otro dispositivo e importalo aqui para restaurar.';
 
   @override
+  String get calendarSyncWarningArchiveTitle => 'Sincronizacion de calendario';
+
+  @override
+  String get calendarSyncWarningArchiveMessage =>
+      'La sincronizacion del historial del calendario esta incompleta. Axichat lo reintentara automaticamente.';
+
+  @override
   String commonLabelValue(String label, String value) {
     return '$label: $value';
   }

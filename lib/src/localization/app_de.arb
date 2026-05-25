@@ -2379,6 +2379,8 @@
   "axiVersionTagAlpha": "alpha",
   "calendarSyncWarningSnapshotTitle": "Kalendersynchronisierung",
   "calendarSyncWarningSnapshotMessage": "Kalender-Schnappschuss nicht verfugbar. Exportiere dein Kalender-JSON von einem anderen Gerat und importiere es hier zur Wiederherstellung.",
+  "calendarSyncWarningArchiveTitle": "Kalendersynchronisierung",
+  "calendarSyncWarningArchiveMessage": "Kalenderverlauf-Synchronisierung unvollstandig. Axichat versucht es automatisch erneut.",
   "commonLabelValue": "{label}: {value}",
   "@commonLabelValue": {
     "placeholders": {

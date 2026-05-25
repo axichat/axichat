@@ -45,19 +45,19 @@ class CalendarSyncDispatch {
 }
 
 class ChatCalendarSyncDispatch {
-  ChatCalendarSyncDispatch({required this.envelope, Completer<void>? completer})
-    : _completer = completer ?? Completer<void>();
+  ChatCalendarSyncDispatch({required this.envelope, Completer<bool>? completer})
+    : _completer = completer ?? Completer<bool>();
 
   final ChatCalendarSyncEnvelope envelope;
-  final Completer<void> _completer;
+  final Completer<bool> _completer;
 
-  Future<void> get result => _completer.future;
+  Future<bool> get result => _completer.future;
 
-  void complete() {
+  void complete(bool applied) {
     if (_completer.isCompleted) {
       return;
     }
-    _completer.complete();
+    _completer.complete(applied);
   }
 
   void completeError(Object error, StackTrace stackTrace) {
@@ -69,4 +69,4 @@ class ChatCalendarSyncDispatch {
 }
 
 typedef ChatCalendarSyncHandler =
-    Future<void> Function(ChatCalendarSyncEnvelope envelope);
+    Future<bool> Function(ChatCalendarSyncEnvelope envelope);

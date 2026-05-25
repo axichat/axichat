@@ -85,12 +85,18 @@ class ChatCalendarSyncCoordinator {
     session.detachBloc();
   }
 
-  Future<void> handleInbound(ChatCalendarSyncEnvelope envelope) async {
+  Future<bool> handleInbound(ChatCalendarSyncEnvelope envelope) async {
     final manager = _ensureSession(
       chatJid: envelope.chatJid,
       chatType: envelope.chatType,
     ).manager(sendSnapshotFile: _sendSnapshotFile);
-    await manager.onCalendarMessage(envelope.inbound);
+    return manager.onCalendarMessage(envelope.inbound);
+  }
+
+  Future<void> flushPending() async {
+    for (final session in _sessions.values.toList(growable: false)) {
+      await session.flushPending(sendSnapshotFile: _sendSnapshotFile);
+    }
   }
 
   Future<void> addTask({
@@ -209,6 +215,12 @@ class _ChatCalendarSession {
       return;
     }
     await _sendMessage(jid: chatJid, outbound: outbound, chatType: _chatType);
+  }
+
+  Future<void> flushPending({
+    required ChatCalendarSnapshotSender? sendSnapshotFile,
+  }) {
+    return manager(sendSnapshotFile: sendSnapshotFile).flushPending();
   }
 
   void _resetToStorage() {

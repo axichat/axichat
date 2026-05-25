@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
@@ -6,9 +9,35 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.temporaryPath);
+
+  final String temporaryPath;
+
+  @override
+  Future<String?> getTemporaryPath() async => temporaryPath;
+}
+
+Map<String, dynamic> _decodeEnvelope(CalendarSyncOutbound outbound) {
+  final decoded = jsonDecode(outbound.envelope) as Map<String, dynamic>;
+  return decoded['calendar_sync'] as Map<String, dynamic>;
+}
+
+Future<void> _useTemporaryPathProvider(String name) async {
+  final directory = await Directory.systemTemp.createTemp(name);
+  final previous = PathProviderPlatform.instance;
+  PathProviderPlatform.instance = _FakePathProviderPlatform(directory.path);
+  addTearDown(() async {
+    PathProviderPlatform.instance = previous;
+    await directory.delete(recursive: true);
+  });
+}
 
 void main() {
   CalendarSyncManager buildManager({
@@ -845,5 +874,957 @@ void main() {
         );
       },
     );
+  });
+
+  group('CalendarSyncManager out-of-order replay', () {
+    const String taskId = 'out-of-order-task';
+    const String addOperation = 'add';
+    const String updateOperation = 'update';
+    const String deleteOperation = 'delete';
+
+    test(
+      'keeps newer task update when an older envelope arrives later',
+      () async {
+        final DateTime olderModifiedAt = DateTime.utc(2024, 4, 1, 12);
+        final DateTime newerModifiedAt = olderModifiedAt.add(
+          const Duration(minutes: 10),
+        );
+        final CalendarTask olderTask = CalendarTask(
+          id: taskId,
+          title: 'Older title',
+          createdAt: olderModifiedAt,
+          modifiedAt: olderModifiedAt,
+        );
+        final CalendarTask newerTask = CalendarTask(
+          id: taskId,
+          title: 'Newer title',
+          createdAt: olderModifiedAt,
+          modifiedAt: newerModifiedAt,
+        );
+
+        CalendarModel currentModel = CalendarModel.empty();
+        CalendarSyncState syncState = const CalendarSyncState();
+        final CalendarSyncManager manager = CalendarSyncManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+          sendCalendarMessage: (_) async {},
+          readSyncState: () => syncState,
+          writeSyncState: (CalendarSyncState state) async {
+            syncState = state;
+          },
+        );
+
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: newerModifiedAt,
+              taskId: taskId,
+              operation: updateOperation,
+              data: newerTask.toJson(),
+            ),
+            receivedAt: newerModifiedAt,
+            isFromMam: true,
+            stanzaId: 'newer-envelope',
+          ),
+        );
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: olderModifiedAt,
+              taskId: taskId,
+              operation: updateOperation,
+              data: olderTask.toJson(),
+            ),
+            receivedAt: olderModifiedAt,
+            isFromMam: true,
+            stanzaId: 'older-envelope',
+          ),
+        );
+
+        expect(currentModel.tasks[taskId]?.title, equals('Newer title'));
+        expect(syncState.lastHandledTimestamp, equals(newerModifiedAt));
+        expect(syncState.lastHandledStanzaId, equals('newer-envelope'));
+      },
+    );
+
+    test(
+      'keeps newer tombstone when an older add arrives for a missing task',
+      () async {
+        final DateTime olderModifiedAt = DateTime.utc(2024, 4, 1, 12);
+        final DateTime newerModifiedAt = olderModifiedAt.add(
+          const Duration(minutes: 10),
+        );
+        final CalendarTask olderTask = CalendarTask(
+          id: taskId,
+          title: 'Older resurrected task',
+          createdAt: olderModifiedAt,
+          modifiedAt: olderModifiedAt,
+        );
+        final CalendarTask newerDeletedTask = CalendarTask(
+          id: taskId,
+          title: 'Deleted task',
+          createdAt: olderModifiedAt,
+          modifiedAt: newerModifiedAt,
+        );
+
+        CalendarModel currentModel = CalendarModel.empty();
+        CalendarSyncState syncState = const CalendarSyncState();
+        final CalendarSyncManager manager = CalendarSyncManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+          sendCalendarMessage: (_) async {},
+          readSyncState: () => syncState,
+          writeSyncState: (CalendarSyncState state) async {
+            syncState = state;
+          },
+        );
+
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: newerModifiedAt,
+              taskId: taskId,
+              operation: deleteOperation,
+              data: newerDeletedTask.toJson(),
+            ),
+            receivedAt: newerModifiedAt,
+            isFromMam: true,
+            stanzaId: 'newer-delete',
+          ),
+        );
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: olderModifiedAt,
+              taskId: taskId,
+              operation: addOperation,
+              data: olderTask.toJson(),
+            ),
+            receivedAt: olderModifiedAt,
+            isFromMam: true,
+            stanzaId: 'older-add',
+          ),
+        );
+
+        expect(currentModel.tasks.containsKey(taskId), isFalse);
+        expect(currentModel.deletedTaskIds, contains(taskId));
+        expect(syncState.lastHandledTimestamp, equals(newerModifiedAt));
+        expect(syncState.lastHandledStanzaId, equals('newer-delete'));
+      },
+    );
+
+    test(
+      'keeps newer snapshot task when an older envelope arrives later',
+      () async {
+        final DateTime olderModifiedAt = DateTime.utc(2024, 4, 1, 12);
+        final DateTime newerModifiedAt = olderModifiedAt.add(
+          const Duration(minutes: 10),
+        );
+        final CalendarTask olderTask = CalendarTask(
+          id: taskId,
+          title: 'Older title',
+          createdAt: olderModifiedAt,
+          modifiedAt: olderModifiedAt,
+        );
+        final CalendarTask newerTask = CalendarTask(
+          id: taskId,
+          title: 'Newer snapshot title',
+          createdAt: olderModifiedAt,
+          modifiedAt: newerModifiedAt,
+        );
+        final CalendarModel snapshotModel = CalendarModel.empty().addTask(
+          newerTask,
+        );
+        final String snapshotChecksum = snapshotModel.calculateChecksum();
+
+        CalendarModel currentModel = CalendarModel.empty();
+        CalendarSyncState syncState = const CalendarSyncState();
+        final CalendarSyncManager manager = CalendarSyncManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+          sendCalendarMessage: (_) async {},
+          readSyncState: () => syncState,
+          writeSyncState: (CalendarSyncState state) async {
+            syncState = state;
+          },
+        );
+
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.snapshot,
+              timestamp: newerModifiedAt,
+              data: snapshotModel.toJson(),
+              checksum: snapshotChecksum,
+              isSnapshot: true,
+              snapshotChecksum: snapshotChecksum,
+            ),
+            receivedAt: newerModifiedAt,
+            isFromMam: true,
+            stanzaId: 'newer-snapshot',
+          ),
+        );
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: olderModifiedAt,
+              taskId: taskId,
+              operation: updateOperation,
+              data: olderTask.toJson(),
+            ),
+            receivedAt: olderModifiedAt,
+            isFromMam: true,
+            stanzaId: 'older-envelope',
+          ),
+        );
+
+        expect(
+          currentModel.tasks[taskId]?.title,
+          equals('Newer snapshot title'),
+        );
+        expect(syncState.lastHandledTimestamp, equals(newerModifiedAt));
+        expect(syncState.lastHandledStanzaId, equals('newer-snapshot'));
+      },
+    );
+
+    test('older snapshot cannot remove a newer task missing from it', () async {
+      final DateTime olderModifiedAt = DateTime.utc(2024, 4, 1, 12);
+      final DateTime newerModifiedAt = olderModifiedAt.add(
+        const Duration(minutes: 10),
+      );
+      final CalendarTask newerTask = CalendarTask(
+        id: taskId,
+        title: 'Newer envelope title',
+        createdAt: olderModifiedAt,
+        modifiedAt: newerModifiedAt,
+      );
+      final CalendarModel olderSnapshotModel = CalendarModel.empty();
+      final String snapshotChecksum = olderSnapshotModel.calculateChecksum();
+
+      CalendarModel currentModel = CalendarModel.empty();
+      CalendarSyncState syncState = const CalendarSyncState();
+      final CalendarSyncManager manager = CalendarSyncManager(
+        readModel: () => currentModel,
+        applyModel: (CalendarModel next) async {
+          currentModel = next;
+        },
+        sendCalendarMessage: (_) async {},
+        readSyncState: () => syncState,
+        writeSyncState: (CalendarSyncState state) async {
+          syncState = state;
+        },
+      );
+
+      await manager.onCalendarMessage(
+        CalendarSyncInbound(
+          message: CalendarSyncMessage(
+            type: CalendarSyncType.update,
+            timestamp: newerModifiedAt,
+            taskId: taskId,
+            operation: updateOperation,
+            data: newerTask.toJson(),
+          ),
+          receivedAt: newerModifiedAt,
+          isFromMam: true,
+          stanzaId: 'newer-envelope',
+        ),
+      );
+      await manager.onCalendarMessage(
+        CalendarSyncInbound(
+          message: CalendarSyncMessage(
+            type: CalendarSyncType.snapshot,
+            timestamp: olderModifiedAt,
+            data: olderSnapshotModel.toJson(),
+            checksum: snapshotChecksum,
+            isSnapshot: true,
+            snapshotChecksum: snapshotChecksum,
+          ),
+          receivedAt: olderModifiedAt,
+          isFromMam: true,
+          stanzaId: 'older-snapshot',
+        ),
+      );
+
+      expect(currentModel.tasks[taskId]?.title, equals('Newer envelope title'));
+      expect(syncState.lastHandledTimestamp, equals(newerModifiedAt));
+      expect(syncState.lastHandledStanzaId, equals('newer-envelope'));
+    });
+
+    test(
+      'records handled coverage for stale envelopes that do not mutate current data',
+      () async {
+        final DateTime localModifiedAt = DateTime.utc(2024, 4, 1, 12, 10);
+        final DateTime remoteModifiedAt = DateTime.utc(2024, 4, 1, 12);
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: 'Local title',
+          createdAt: remoteModifiedAt,
+          modifiedAt: localModifiedAt,
+        );
+        final CalendarTask remoteTask = CalendarTask(
+          id: taskId,
+          title: 'Remote stale title',
+          createdAt: remoteModifiedAt,
+          modifiedAt: remoteModifiedAt,
+        );
+
+        CalendarModel currentModel = CalendarModel.empty().addTask(localTask);
+        CalendarSyncState syncState = const CalendarSyncState();
+        final CalendarSyncManager manager = CalendarSyncManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+          sendCalendarMessage: (_) async {},
+          readSyncState: () => syncState,
+          writeSyncState: (CalendarSyncState state) async {
+            syncState = state;
+          },
+        );
+
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: remoteModifiedAt,
+              taskId: taskId,
+              operation: updateOperation,
+              data: remoteTask.toJson(),
+            ),
+            receivedAt: remoteModifiedAt,
+            isFromMam: true,
+            stanzaId: 'stale-envelope',
+          ),
+        );
+
+        expect(currentModel.tasks[taskId]?.title, equals('Local title'));
+        expect(syncState.lastHandledTimestamp, equals(remoteModifiedAt));
+        expect(syncState.lastHandledStanzaId, equals('stale-envelope'));
+        expect(
+          syncState.coverageStatus,
+          CalendarArchiveCoverageStatus.incomplete,
+        );
+      },
+    );
+  });
+
+  group('Calendar sync cursor and retry safety', () {
+    test('markHandled bounds far-future archive timestamps', () {
+      final DateTime now = DateTime.now().toUtc();
+      final DateTime farFuture = now.add(const Duration(days: 365));
+      final state = const CalendarSyncState().markHandled(
+        CalendarSyncInbound(
+          message: CalendarSyncMessage(
+            type: CalendarSyncType.request,
+            timestamp: farFuture,
+          ),
+          receivedAt: farFuture,
+          stanzaId: 'future-envelope',
+        ),
+      );
+
+      expect(state.lastHandledStanzaId, equals('future-envelope'));
+      expect(state.lastHandledTimestamp, isNotNull);
+      expect(
+        state.lastHandledTimestamp!.isBefore(
+          farFuture.subtract(const Duration(days: 1)),
+        ),
+        isTrue,
+      );
+    });
+
+    test('markHandled clears stale stanza ids for idless envelopes', () {
+      final DateTime olderTimestamp = DateTime.utc(2024, 5, 1, 12);
+      final DateTime newerTimestamp = olderTimestamp.add(
+        const Duration(minutes: 1),
+      );
+      final state =
+          CalendarSyncState(
+            lastAppliedTimestamp: olderTimestamp,
+            lastAppliedStanzaId: 'older-envelope',
+            lastHandledTimestamp: olderTimestamp,
+            lastHandledStanzaId: 'older-envelope',
+          ).markHandled(
+            CalendarSyncInbound(
+              message: CalendarSyncMessage(
+                type: CalendarSyncType.request,
+                timestamp: newerTimestamp,
+              ),
+              receivedAt: newerTimestamp,
+              isFromMam: true,
+            ),
+          );
+
+      expect(state.lastAppliedTimestamp, newerTimestamp);
+      expect(state.lastAppliedStanzaId, isNull);
+      expect(state.lastHandledTimestamp, newerTimestamp);
+      expect(state.lastHandledStanzaId, isNull);
+    });
+
+    test(
+      'advances stanza cursor for envelopes with the same timestamp',
+      () async {
+        final DateTime archiveTimestamp = DateTime.utc(2024, 5, 1, 12);
+        CalendarModel currentModel = CalendarModel.empty();
+        CalendarSyncState syncState = const CalendarSyncState();
+        final manager = CalendarSyncManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+          sendCalendarMessage: (_) async {},
+          readSyncState: () => syncState,
+          writeSyncState: (CalendarSyncState state) async {
+            syncState = state;
+          },
+        );
+
+        CalendarSyncInbound inboundFor(String taskId, String stanzaId) {
+          final task = CalendarTask(
+            id: taskId,
+            title: taskId,
+            createdAt: archiveTimestamp,
+            modifiedAt: archiveTimestamp,
+          );
+          return CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.update,
+              timestamp: archiveTimestamp,
+              taskId: taskId,
+              operation: 'add',
+              data: task.toJson(),
+            ),
+            receivedAt: archiveTimestamp,
+            isFromMam: true,
+            stanzaId: stanzaId,
+          );
+        }
+
+        await manager.onCalendarMessage(inboundFor('first-task', 'first-id'));
+        await manager.onCalendarMessage(inboundFor('second-task', 'second-id'));
+
+        expect(syncState.lastHandledTimestamp, archiveTimestamp);
+        expect(syncState.lastHandledStanzaId, 'second-id');
+      },
+    );
+
+    test('records handled cursor for invalid update envelopes', () async {
+      final DateTime archiveTimestamp = DateTime.utc(2024, 5, 1, 13);
+      CalendarSyncState syncState = const CalendarSyncState();
+      final manager = CalendarSyncManager(
+        readModel: CalendarModel.empty,
+        applyModel: (_) async {},
+        sendCalendarMessage: (_) async {},
+        readSyncState: () => syncState,
+        writeSyncState: (CalendarSyncState state) async {
+          syncState = state;
+        },
+      );
+
+      final applied = await manager.onCalendarMessage(
+        CalendarSyncInbound(
+          message: CalendarSyncMessage(
+            type: CalendarSyncType.update,
+            timestamp: archiveTimestamp,
+            taskId: 'invalid-operation-task',
+            operation: 'rename',
+            data: const <String, dynamic>{'id': 'invalid-operation-task'},
+          ),
+          receivedAt: archiveTimestamp,
+          isFromMam: true,
+          stanzaId: 'invalid-update',
+        ),
+      );
+
+      expect(applied, isFalse);
+      expect(syncState.lastHandledTimestamp, archiveTimestamp);
+      expect(syncState.lastHandledStanzaId, 'invalid-update');
+    });
+
+    test('records handled cursor for invalid update payloads', () async {
+      final DateTime archiveTimestamp = DateTime.utc(2024, 5, 1, 13, 30);
+      CalendarSyncState syncState = const CalendarSyncState();
+      final manager = CalendarSyncManager(
+        readModel: CalendarModel.empty,
+        applyModel: (_) async {},
+        sendCalendarMessage: (_) async {},
+        readSyncState: () => syncState,
+        writeSyncState: (CalendarSyncState state) async {
+          syncState = state;
+        },
+      );
+
+      final applied = await manager.onCalendarMessage(
+        CalendarSyncInbound(
+          message: CalendarSyncMessage(
+            type: CalendarSyncType.update,
+            timestamp: archiveTimestamp,
+            taskId: 'invalid-payload-task',
+            operation: 'update',
+            data: const <String, dynamic>{'id': 'invalid-payload-task'},
+          ),
+          receivedAt: archiveTimestamp,
+          isFromMam: true,
+          stanzaId: 'invalid-update-payload',
+        ),
+      );
+
+      expect(applied, isFalse);
+      expect(syncState.lastHandledTimestamp, archiveTimestamp);
+      expect(syncState.lastHandledStanzaId, 'invalid-update-payload');
+    });
+
+    test('records handled cursor for unsupported snapshots', () async {
+      final DateTime archiveTimestamp = DateTime.utc(2024, 5, 1, 14);
+      CalendarSyncState syncState = const CalendarSyncState();
+      final manager = CalendarSyncManager(
+        readModel: CalendarModel.empty,
+        applyModel: (_) async {},
+        sendCalendarMessage: (_) async {},
+        readSyncState: () => syncState,
+        writeSyncState: (CalendarSyncState state) async {
+          syncState = state;
+        },
+      );
+
+      final applied = await manager.onCalendarMessage(
+        CalendarSyncInbound(
+          message: CalendarSyncMessage(
+            type: CalendarSyncType.snapshot,
+            timestamp: archiveTimestamp,
+            data: CalendarModel.empty().toJson(),
+            isSnapshot: true,
+            snapshotVersion: 999,
+          ),
+          receivedAt: archiveTimestamp,
+          isFromMam: true,
+          stanzaId: 'unsupported-snapshot',
+        ),
+      );
+
+      expect(applied, isFalse);
+      expect(syncState.lastHandledTimestamp, archiveTimestamp);
+      expect(syncState.lastHandledStanzaId, 'unsupported-snapshot');
+    });
+
+    group('outbound sync', () {
+      test('sendTaskUpdate sends a calendar update envelope', () async {
+        final modifiedAt = DateTime.utc(2024, 6, 1, 12);
+        final task = CalendarTask(
+          id: 'outbound-task',
+          title: 'Outbound task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: CalendarModel.empty,
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+        );
+
+        await manager.sendTaskUpdate(task, 'add');
+
+        expect(sent, hasLength(1));
+        final payload = _decodeEnvelope(sent.single);
+        expect(payload['type'], CalendarSyncType.update);
+        expect(payload['entity'], 'task');
+        expect(payload['operation'], 'add');
+        expect(payload['task_id'], task.id);
+        expect(payload['data'], isA<Map<String, dynamic>>());
+      });
+
+      test('snapshot threshold sends after 50 outbound mutations', () async {
+        final modifiedAt = DateTime.utc(2024, 6, 1, 13);
+        final task = CalendarTask(
+          id: 'threshold-task',
+          title: 'Threshold task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        CalendarSyncState syncState = const CalendarSyncState();
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: () => CalendarModel.empty().addTask(task),
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+          readSyncState: () => syncState,
+          writeSyncState: (state) async {
+            syncState = state;
+          },
+        );
+
+        for (var index = 0; index < 49; index += 1) {
+          await manager.sendTaskUpdate(task, 'update');
+        }
+
+        expect(sent, hasLength(49));
+        expect(
+          sent
+              .map(_decodeEnvelope)
+              .where((payload) => payload['type'] == CalendarSyncType.snapshot),
+          isEmpty,
+        );
+        expect(syncState.updatesSinceSnapshot, 49);
+
+        await manager.sendTaskUpdate(task, 'update');
+
+        expect(sent, hasLength(51));
+        expect(_decodeEnvelope(sent[49])['type'], CalendarSyncType.update);
+        final snapshotPayload = _decodeEnvelope(sent[50]);
+        expect(snapshotPayload['type'], CalendarSyncType.snapshot);
+        expect(snapshotPayload['data'], isA<Map<String, dynamic>>());
+        expect(syncState.updatesSinceSnapshot, 0);
+        expect(syncState.lastSnapshotChecksum, isNotNull);
+      });
+
+      test('MAM replay does not echo updates or trigger snapshots', () async {
+        CalendarModel model = CalendarModel.empty();
+        CalendarSyncState syncState = const CalendarSyncState();
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: () => model,
+          applyModel: (next) async {
+            model = next;
+          },
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+          readSyncState: () => syncState,
+          writeSyncState: (state) async {
+            syncState = state;
+          },
+        );
+        final baseTime = DateTime.utc(2024, 6, 1, 14);
+
+        for (var index = 0; index < 50; index += 1) {
+          final timestamp = baseTime.add(Duration(minutes: index));
+          final task = CalendarTask(
+            id: 'mam-replay-task-$index',
+            title: 'MAM replay task $index',
+            createdAt: timestamp,
+            modifiedAt: timestamp,
+          );
+          await manager.onCalendarMessage(
+            CalendarSyncInbound(
+              message: CalendarSyncMessage(
+                type: CalendarSyncType.update,
+                timestamp: timestamp,
+                taskId: task.id,
+                operation: 'add',
+                data: task.toJson(),
+              ),
+              receivedAt: timestamp,
+              isFromMam: true,
+              stanzaId: 'mam-replay-$index',
+            ),
+          );
+        }
+
+        expect(model.tasks, hasLength(50));
+        expect(sent, isEmpty);
+        expect(syncState.updatesSinceSnapshot, 0);
+      });
+
+      test('pushFullSync sends a snapshot immediately', () async {
+        final modifiedAt = DateTime.utc(2024, 6, 1, 15);
+        final task = CalendarTask(
+          id: 'push-full-sync-task',
+          title: 'Push full sync task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: () => CalendarModel.empty().addTask(task),
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+        );
+
+        await manager.pushFullSync();
+
+        expect(sent, hasLength(1));
+        final payload = _decodeEnvelope(sent.single);
+        expect(payload['type'], CalendarSyncType.snapshot);
+        expect(payload['data'], isA<Map<String, dynamic>>());
+      });
+
+      test('pushFullSync skips empty calendars', () async {
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: CalendarModel.empty,
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+        );
+
+        await manager.pushFullSync();
+
+        expect(sent, isEmpty);
+      });
+
+      test(
+        'attachment snapshot path sends snapshot metadata and attachment',
+        () async {
+          await _useTemporaryPathProvider('axichat_snapshot_attachment');
+          final modifiedAt = DateTime.utc(2024, 6, 1, 16);
+          final task = CalendarTask(
+            id: 'attachment-snapshot-task',
+            title: 'Attachment snapshot task',
+            createdAt: modifiedAt,
+            modifiedAt: modifiedAt,
+          );
+          final model = CalendarModel.empty().addTask(task);
+          CalendarSnapshotResult? uploadedSnapshot;
+          bool uploadFileExisted = false;
+          final sent = <CalendarSyncOutbound>[];
+          final manager = CalendarSyncManager(
+            readModel: () => model,
+            applyModel: (_) async {},
+            sendCalendarMessage: (outbound) async {
+              sent.add(outbound);
+            },
+            sendSnapshotFile: (file) async {
+              uploadFileExisted = await file.exists();
+              uploadedSnapshot = await CalendarSnapshotCodec.decodeFile(file);
+              return const CalendarSnapshotUploadResult(
+                url: 'https://files.example.com/calendar.snapshot',
+                checksum: 'snapshot-checksum',
+                version: CalendarSnapshotCodec.currentVersion,
+              );
+            },
+          );
+
+          await manager.pushFullSync();
+
+          expect(sent, hasLength(1));
+          expect(uploadFileExisted, isTrue);
+          expect(uploadedSnapshot, isNotNull);
+          expect(
+            CalendarSnapshotCodec.verifyChecksum(uploadedSnapshot!),
+            isTrue,
+          );
+          expect(uploadedSnapshot!.model.tasks[task.id]?.title, task.title);
+          final outbound = sent.single;
+          final payload = _decodeEnvelope(outbound);
+          expect(payload['type'], CalendarSyncType.snapshot);
+          expect(
+            payload['snapshot_url'],
+            'https://files.example.com/calendar.snapshot',
+          );
+          expect(payload['snapshot_checksum'], 'snapshot-checksum');
+          expect(
+            payload['snapshot_version'],
+            CalendarSnapshotCodec.currentVersion,
+          );
+          expect(payload['data'], isNull);
+          expect(
+            outbound.attachment?.url,
+            'https://files.example.com/calendar.snapshot',
+          );
+          expect(outbound.attachment?.mimeType, CalendarSnapshotCodec.mimeType);
+        },
+      );
+
+      test(
+        'inline snapshot fallback sends data when upload is absent',
+        () async {
+          final modifiedAt = DateTime.utc(2024, 6, 1, 17);
+          final task = CalendarTask(
+            id: 'inline-snapshot-task',
+            title: 'Inline snapshot task',
+            createdAt: modifiedAt,
+            modifiedAt: modifiedAt,
+          );
+          final model = CalendarModel.empty().addTask(task);
+          final sent = <CalendarSyncOutbound>[];
+          final manager = CalendarSyncManager(
+            readModel: () => model,
+            applyModel: (_) async {},
+            sendCalendarMessage: (outbound) async {
+              sent.add(outbound);
+            },
+          );
+
+          await manager.pushFullSync();
+
+          expect(sent, hasLength(1));
+          final payload = _decodeEnvelope(sent.single);
+          final snapshotModel = CalendarModel.fromJson(
+            payload['data'] as Map<String, dynamic>,
+          );
+          expect(payload['type'], CalendarSyncType.snapshot);
+          expect(payload['data'], isA<Map<String, dynamic>>());
+          expect(snapshotModel.tasks[task.id]?.title, task.title);
+          expect(
+            payload['snapshot_checksum'],
+            snapshotModel.calculateChecksum(),
+          );
+          expect(payload['checksum'], snapshotModel.calculateChecksum());
+          expect(
+            payload['snapshot_version'],
+            CalendarSnapshotCodec.currentVersion,
+          );
+          expect(sent.single.attachment, isNull);
+        },
+      );
+
+      test('inline snapshot fallback sends data when upload fails', () async {
+        await _useTemporaryPathProvider('axichat_snapshot_upload_failure');
+        final modifiedAt = DateTime.utc(2024, 6, 1, 18);
+        final task = CalendarTask(
+          id: 'upload-fallback-task',
+          title: 'Upload fallback task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: () => CalendarModel.empty().addTask(task),
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+          sendSnapshotFile: (_) async {
+            throw Exception('upload failed');
+          },
+        );
+
+        await manager.pushFullSync();
+
+        expect(sent, hasLength(1));
+        final payload = _decodeEnvelope(sent.single);
+        expect(payload['type'], CalendarSyncType.snapshot);
+        expect(payload['data'], isA<Map<String, dynamic>>());
+        expect(sent.single.attachment, isNull);
+      });
+
+      test('queued attachment snapshot preserves metadata on flush', () async {
+        await _useTemporaryPathProvider('axichat_snapshot_queue');
+        final modifiedAt = DateTime.utc(2024, 6, 1, 19);
+        final task = CalendarTask(
+          id: 'queued-attachment-task',
+          title: 'Queued attachment task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        var attempts = 0;
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: () => CalendarModel.empty().addTask(task),
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            attempts += 1;
+            if (attempts == 1) {
+              throw Exception('offline');
+            }
+            sent.add(outbound);
+          },
+          sendSnapshotFile: (_) async {
+            return const CalendarSnapshotUploadResult(
+              url: 'https://files.example.com/queued.snapshot',
+              checksum: 'queued-checksum',
+              version: CalendarSnapshotCodec.currentVersion,
+            );
+          },
+        );
+
+        await manager.pushFullSync();
+        expect(attempts, 1);
+        expect(sent, isEmpty);
+
+        await manager.flushPending();
+
+        expect(attempts, 2);
+        expect(sent, hasLength(1));
+        final outbound = sent.single;
+        final payload = _decodeEnvelope(outbound);
+        expect(
+          payload['snapshot_url'],
+          'https://files.example.com/queued.snapshot',
+        );
+        expect(payload['snapshot_checksum'], 'queued-checksum');
+        expect(
+          outbound.attachment?.url,
+          'https://files.example.com/queued.snapshot',
+        );
+        expect(outbound.attachment?.mimeType, CalendarSnapshotCodec.mimeType);
+      });
+    });
+
+    test(
+      'failed immediate sends remain queued for an explicit flush',
+      () async {
+        final DateTime modifiedAt = DateTime.utc(2024, 5, 1, 12);
+        final task = CalendarTask(
+          id: 'retry-task',
+          title: 'Retry task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        var attempts = 0;
+        final sentEnvelopes = <String>[];
+        final manager = CalendarSyncManager(
+          readModel: CalendarModel.empty,
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            attempts += 1;
+            if (attempts == 1) {
+              throw Exception('offline');
+            }
+            sentEnvelopes.add(outbound.envelope);
+          },
+        );
+
+        await expectLater(
+          manager.sendTaskUpdate(task, 'update'),
+          throwsA(isA<Exception>()),
+        );
+        expect(attempts, equals(1));
+        expect(sentEnvelopes, isEmpty);
+
+        await manager.flushPending();
+
+        expect(attempts, equals(2));
+        expect(sentEnvelopes, hasLength(1));
+        expect(sentEnvelopes.single, contains('Retry task'));
+      },
+    );
+
+    test('archive resume cursor does not overwrite handled watermark', () {
+      final handledAt = DateTime.utc(2024, 5, 1, 12);
+      final state =
+          CalendarSyncState(
+            lastHandledTimestamp: handledAt,
+            lastHandledStanzaId: 'handled-envelope',
+          ).markArchivePageHandled(
+            resumeId: 'mam-page-last',
+            calendarJid: 'me@example.com',
+            archiveJid: 'me@example.com',
+          );
+
+      expect(state.lastHandledTimestamp, handledAt);
+      expect(state.lastHandledStanzaId, 'handled-envelope');
+      expect(state.lastArchiveResumeId, 'mam-page-last');
+      expect(state.coverageStatus, CalendarArchiveCoverageStatus.incomplete);
+    });
   });
 }

@@ -12,7 +12,6 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
-import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
@@ -20,7 +19,6 @@ import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
-import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
@@ -38,7 +36,13 @@ CalendarSyncManager buildPersonalCalendarSyncManager(CalendarBloc owner) {
   return CalendarSyncManager(
     readModel: () => owner.currentModel,
     applyModel: (model) async {
+      if (owner.currentModel.checksum == model.checksum) {
+        return;
+      }
       owner.add(CalendarEvent.remoteModelApplied(model: model));
+      await owner.stream
+          .firstWhere((state) => state.model.checksum == model.checksum)
+          .timeout(const Duration(seconds: 5));
     },
     sendCalendarMessage: owner.sendPersonalCalendarSync,
     sendSnapshotFile: owner.uploadCalendarSnapshot,
@@ -63,6 +67,8 @@ class CalendarBloc extends BaseCalendarBloc {
        _onDispose = onDispose,
        super(storage: storage, storagePrefix: authStoragePrefix) {
     _syncManager = _syncManagerBuilder(this);
+    _calendarSyncFlushCallback = _syncManager.flushPending;
+    _xmppService.registerCalendarSyncFlushCallback(_calendarSyncFlushCallback);
     _attachCalendarSyncSubscriptions();
     _configureHomeCoordinators(storage: storage);
     on<CalendarSyncRequested>(_onCalendarSyncRequested);
@@ -92,6 +98,7 @@ class CalendarBloc extends BaseCalendarBloc {
   StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
   Future<void> _pendingCalendarDispatch = Future<void>.value();
   Future<void> _pendingChatCalendarDispatch = Future<void>.value();
+  late final Future<void> Function() _calendarSyncFlushCallback;
 
   void updateEmailService(EmailService? emailService) {
     _emailService = emailService;
@@ -249,8 +256,10 @@ class CalendarBloc extends BaseCalendarBloc {
             _,
           ) async {
             try {
-              await coordinator.handleInbound(dispatch.envelope);
-              dispatch.complete();
+              final applied = await coordinator.handleInbound(
+                dispatch.envelope,
+              );
+              dispatch.complete(applied);
             } catch (error, stackTrace) {
               dispatch.completeError(error, stackTrace);
             }
@@ -336,7 +345,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskAdded(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'add');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task addition: $error',
@@ -349,7 +357,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskUpdated(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task update: $error',
@@ -362,7 +369,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskDeleted(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'delete');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task deletion: $error',
@@ -375,7 +381,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onTaskCompleted(CalendarTask task) async {
     try {
       await _syncManager.sendTaskUpdate(task, 'update');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync task completion: $error',
@@ -388,7 +393,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onDayEventAdded(DayEvent event) async {
     try {
       await _syncManager.sendDayEventUpdate(event, 'add');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync day event addition: $error',
@@ -401,7 +405,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onDayEventUpdated(DayEvent event) async {
     try {
       await _syncManager.sendDayEventUpdate(event, 'update');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync day event update: $error',
@@ -414,7 +417,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onDayEventDeleted(DayEvent event) async {
     try {
       await _syncManager.sendDayEventUpdate(event, 'delete');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync day event deletion: $error',
@@ -451,7 +453,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onCriticalPathAdded(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'add');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync critical path addition: $error',
@@ -464,7 +465,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onCriticalPathUpdated(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'update');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync critical path update: $error',
@@ -477,7 +477,6 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> onCriticalPathDeleted(CalendarCriticalPath path) async {
     try {
       await _syncManager.sendCriticalPathUpdate(path, 'delete');
-      _recordSyncTimestamp();
     } catch (error) {
       SafeLogging.debugLog(
         'Failed to sync critical path deletion: $error',
@@ -507,11 +506,23 @@ class CalendarBloc extends BaseCalendarBloc {
   @override
   Future<void> close() async {
     _onDispose?.call();
-    await _calendarSyncSubscription?.cancel();
-    await _chatCalendarSyncSubscription?.cancel();
-    await _calendarSyncWarningSubscription?.cancel();
-    await _pendingCalendarDispatch;
-    await _pendingChatCalendarDispatch;
+    _xmppService.unregisterCalendarSyncFlushCallback(
+      _calendarSyncFlushCallback,
+    );
+    try {
+      await _syncManager.flushPending();
+    } catch (error) {
+      SafeLogging.debugLog(
+        'Failed to flush pending calendar sync before close: $error',
+        name: 'CalendarBloc',
+      );
+    } finally {
+      await _calendarSyncSubscription?.cancel();
+      await _chatCalendarSyncSubscription?.cancel();
+      await _calendarSyncWarningSubscription?.cancel();
+      await _pendingCalendarDispatch;
+      await _pendingChatCalendarDispatch;
+    }
     return super.close();
   }
 
@@ -648,7 +659,6 @@ class CalendarBloc extends BaseCalendarBloc {
           recipients: recipients,
           task: event.task,
           shareText: event.shareText,
-          readOnly: event.readOnly,
         );
         completer.complete(const CalendarShareResult.success());
         return;
@@ -678,13 +688,10 @@ class CalendarBloc extends BaseCalendarBloc {
             text: event.shareText,
             encryptionProtocol: chat.encryptionProtocol,
             calendarTaskIcs: event.task,
-            calendarTaskIcsReadOnly: event.readOnly,
+            calendarTaskIcsReadOnly: true,
             chatType: chat.type,
           );
           _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: chat.jid);
-          if (!event.readOnly) {
-            await _linkSharedTask(chat: chat, taskId: event.task.id);
-          }
         }
       }
       completer.complete(const CalendarShareResult.success());
@@ -805,11 +812,9 @@ class CalendarBloc extends BaseCalendarBloc {
     required List<Contact> recipients,
     required CalendarTask task,
     required String shareText,
-    required bool readOnly,
   }) async {
     final seenJids = <String>{};
     for (final target in recipients) {
-      final targetChat = target.chat;
       final targetJid = target.recipientId?.trim();
       if (targetJid == null || targetJid.isEmpty) {
         continue;
@@ -822,13 +827,10 @@ class CalendarBloc extends BaseCalendarBloc {
         text: shareText,
         encryptionProtocol: target.encryptionProtocol,
         calendarTaskIcs: task,
-        calendarTaskIcsReadOnly: readOnly,
+        calendarTaskIcsReadOnly: true,
         chatType: target.chatType,
       );
       _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: targetJid);
-      if (!readOnly && targetChat != null) {
-        await _linkSharedTask(chat: targetChat, taskId: task.id);
-      }
     }
     if (seenJids.isEmpty) {
       throw StateError('No recipients resolved for demo task share.');
@@ -851,28 +853,6 @@ class CalendarBloc extends BaseCalendarBloc {
     } catch (_) {
       return null;
     }
-  }
-
-  Future<void> _linkSharedTask({
-    required Chat chat,
-    required String taskId,
-  }) async {
-    if (!chat.supportsChatCalendar) {
-      return;
-    }
-    final String trimmedTaskId = taskId.trim();
-    if (trimmedTaskId.isEmpty) {
-      return;
-    }
-    final String chatStorageId = chatCalendarStorageId(chat.jid);
-    final Set<String> storageIds = <String>{id, chatStorageId};
-    if (storageIds.length < 2) {
-      return;
-    }
-    await CalendarLinkedTaskRegistry.instance.addLinks(
-      taskId: trimmedTaskId,
-      storageIds: storageIds,
-    );
   }
 
   String? _resolveAvailabilityOwnerJid({

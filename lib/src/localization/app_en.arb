@@ -2533,6 +2533,8 @@
   "axiVersionTagAlpha": "alpha",
   "calendarSyncWarningSnapshotTitle": "Calendar sync",
   "calendarSyncWarningSnapshotMessage": "Calendar snapshot unavailable. Export your calendar JSON from another device and import it here to restore.",
+  "calendarSyncWarningArchiveTitle": "Calendar sync",
+  "calendarSyncWarningArchiveMessage": "Calendar history sync incomplete. Axichat will retry automatically.",
   "commonLabelValue": "{label}: {value}",
   "@commonLabelValue": {
     "placeholders": {

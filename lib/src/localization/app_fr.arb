@@ -2375,6 +2375,8 @@
   "axiVersionTagAlpha": "alpha",
   "calendarSyncWarningSnapshotTitle": "Synchronisation du calendrier",
   "calendarSyncWarningSnapshotMessage": "Instantane du calendrier indisponible. Exportez le JSON du calendrier depuis un autre appareil et importez-le ici pour le restaurer.",
+  "calendarSyncWarningArchiveTitle": "Synchronisation du calendrier",
+  "calendarSyncWarningArchiveMessage": "La synchronisation de l'historique du calendrier est incomplete. Axichat reessaiera automatiquement.",
   "commonLabelValue": "{label} : {value}",
   "@commonLabelValue": {
     "placeholders": {

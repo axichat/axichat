@@ -176,6 +176,10 @@ class _CalendarWidgetState
           l10n.calendarSyncWarningSnapshotTitle,
           l10n.calendarSyncWarningSnapshotMessage,
         ),
+        CalendarSyncWarningType.archiveIncomplete => (
+          l10n.calendarSyncWarningArchiveTitle,
+          l10n.calendarSyncWarningArchiveMessage,
+        ),
       };
       FeedbackSystem.showWarning(context, message, title: title);
       calendarBloc.add(const CalendarEvent.syncWarningCleared());

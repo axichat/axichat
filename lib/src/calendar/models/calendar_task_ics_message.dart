@@ -5,14 +5,12 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 
 const String _calendarTaskIcsMessageTaskKey = 'task';
 const String _calendarTaskIcsMessageReadOnlyKey = 'readOnly';
-const String _calendarTaskIcsMessageTrueValue = 'true';
-const String _calendarTaskIcsMessageFalseValue = 'false';
 
 class CalendarTaskIcsMessage {
   const CalendarTaskIcsMessage({
     required this.task,
-    this.readOnly = defaultReadOnly,
-  });
+    bool readOnly = defaultReadOnly,
+  }) : readOnly = defaultReadOnly;
 
   static const bool defaultReadOnly = true;
 
@@ -20,13 +18,7 @@ class CalendarTaskIcsMessage {
   final bool readOnly;
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = <String, dynamic>{
-      _calendarTaskIcsMessageTaskKey: task.toJson(),
-    };
-    if (readOnly != defaultReadOnly) {
-      data[_calendarTaskIcsMessageReadOnlyKey] = readOnly;
-    }
-    return data;
+    return <String, dynamic>{_calendarTaskIcsMessageTaskKey: task.toJson()};
   }
 
   static CalendarTaskIcsMessage? tryParse(Map<String, dynamic>? raw) {
@@ -39,10 +31,10 @@ class CalendarTaskIcsMessage {
       if (task == null) {
         return null;
       }
-      final bool readOnly = _parseReadOnly(
-        raw[_calendarTaskIcsMessageReadOnlyKey],
+      return CalendarTaskIcsMessage(
+        task: task,
+        readOnly: _parseReadOnly(raw[_calendarTaskIcsMessageReadOnlyKey]),
       );
-      return CalendarTaskIcsMessage(task: task, readOnly: readOnly);
     }
     final CalendarTask? legacyTask = _parseTaskMap(raw);
     if (legacyTask == null) {
@@ -59,19 +51,9 @@ class CalendarTaskIcsMessage {
     }
   }
 
-  static bool _parseReadOnly(Object? raw) {
-    if (raw is bool) {
-      return raw;
-    }
-    if (raw is String) {
-      final normalized = raw.trim().toLowerCase();
-      if (normalized == _calendarTaskIcsMessageTrueValue) {
-        return true;
-      }
-      if (normalized == _calendarTaskIcsMessageFalseValue) {
-        return false;
-      }
-    }
+  static bool _parseReadOnly(Object? _) {
+    // Editable task shares are no longer supported; legacy false values are
+    // treated as read-only compatibility data.
     return defaultReadOnly;
   }
 

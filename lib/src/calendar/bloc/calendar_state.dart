@@ -34,7 +34,7 @@ class CalendarSyncWarning {
   final CalendarSyncWarningType type;
 }
 
-enum CalendarSyncWarningType { snapshotUnavailable }
+enum CalendarSyncWarningType { snapshotUnavailable, archiveIncomplete }
 
 @freezed
 abstract class CalendarState with _$CalendarState {

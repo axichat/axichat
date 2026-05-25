@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -26,10 +25,6 @@ import 'package:axichat/src/common/safe_logging.dart';
 
 /// Threshold of updates before sending a snapshot.
 const int kSnapshotThreshold = 50;
-const int _calendarSyncBatchIntervalSeconds = 30;
-const Duration _calendarSyncBatchInterval = Duration(
-  seconds: _calendarSyncBatchIntervalSeconds,
-);
 const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
@@ -39,7 +34,6 @@ const String _snapshotVersionUnsupportedLogPrefix =
 const String _snapshotVersionUnsupportedLogSuffix = ')';
 const String _inlineSnapshotSentLog = 'Sent inline calendar snapshot';
 const String _inlineSnapshotFailedLog = 'Error sending inline snapshot';
-const String _batchFlushFailedLog = 'Failed to flush batched calendar updates';
 const String _calendarSyncEntityTask = 'task';
 const String _calendarSyncEntityDayEvent = 'day_event';
 const String _calendarSyncEntityCriticalPath = 'critical_path';
@@ -78,7 +72,6 @@ class CalendarSyncManager {
   final ListQueue<CalendarSyncOutbound> _pendingEnvelopes =
       ListQueue<CalendarSyncOutbound>();
   Future<void>? _pendingFlush;
-  Timer? _batchFlushTimer;
 
   /// Handles an incoming calendar sync message.
   Future<bool> onCalendarMessage(CalendarSyncInbound inbound) async {
@@ -86,7 +79,7 @@ class CalendarSyncManager {
     try {
       switch (message.type) {
         case CalendarSyncType.request:
-          return await _handleRequestMessage(message);
+          return await _handleRequestMessage(message, inbound: inbound);
         case CalendarSyncType.full:
           return await _handleFullMessage(message, inbound: inbound);
         case CalendarSyncType.update:
@@ -121,7 +114,10 @@ class CalendarSyncManager {
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null) return false;
+    if (message.data == null) {
+      await _recordHandledMessage(inbound: inbound);
+      return false;
+    }
 
     try {
       final int? snapshotVersion = message.snapshotVersion;
@@ -133,9 +129,17 @@ class CalendarSyncManager {
           '$_snapshotVersionUnsupportedLogSuffix',
           name: 'CalendarSyncManager',
         );
+        await _recordHandledMessage(inbound: inbound);
         return false;
       }
-      final remoteModel = CalendarModel.fromJson(message.data!);
+      final remoteModel = await _parseCalendarModel(
+        message.data!,
+        inbound: inbound,
+        description: 'snapshot',
+      );
+      if (remoteModel == null) {
+        return false;
+      }
       final localModel = _readModel();
       final snapshotChecksum = message.snapshotChecksum ?? message.checksum;
 
@@ -150,6 +154,7 @@ class CalendarSyncManager {
           _snapshotChecksumMismatchLog,
           name: 'CalendarSyncManager',
         );
+        await _recordHandledMessage(inbound: inbound);
         return false;
       }
 
@@ -183,10 +188,15 @@ class CalendarSyncManager {
     return false;
   }
 
-  Future<bool> _handleRequestMessage(CalendarSyncMessage message) async {
+  Future<bool> _handleRequestMessage(
+    CalendarSyncMessage _, {
+    required CalendarSyncInbound inbound,
+  }) async {
     try {
       await _flushPendingEnvelopes();
-      return await _maybeSendSnapshot();
+      final sent = await _maybeSendSnapshot();
+      await _recordHandledMessage(inbound: inbound);
+      return sent;
     } catch (e) {
       SafeLogging.debugLog(
         'Error handling request message: $e',
@@ -200,10 +210,20 @@ class CalendarSyncManager {
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null) return false;
+    if (message.data == null) {
+      await _recordHandledMessage(inbound: inbound);
+      return false;
+    }
 
     try {
-      final remoteModel = CalendarModel.fromJson(message.data!);
+      final remoteModel = await _parseCalendarModel(
+        message.data!,
+        inbound: inbound,
+        description: 'full calendar',
+      );
+      if (remoteModel == null) {
+        return false;
+      }
       final localModel = _readModel();
 
       // Use checksum for conflict detection
@@ -213,7 +233,7 @@ class CalendarSyncManager {
 
       if (localChecksum == remoteChecksum) {
         SafeLogging.debugLog('Calendars already in sync - no changes needed');
-        await _recordAppliedMessage(inbound: inbound);
+        await _recordHandledMessage(inbound: inbound);
         return true;
       }
 
@@ -224,7 +244,7 @@ class CalendarSyncManager {
         localModel.mergeWith(remoteModel),
       );
       await _applyModel(mergedModel);
-      await _recordAppliedMessage(inbound: inbound);
+      await _recordHandledMessage(inbound: inbound);
       return true;
     } catch (e) {
       SafeLogging.debugLog('Error handling full calendar message: $e');
@@ -236,34 +256,70 @@ class CalendarSyncManager {
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null || message.taskId == null) return false;
+    if (message.data == null || message.taskId == null) {
+      await _recordHandledMessage(inbound: inbound);
+      return false;
+    }
 
     try {
       bool applied = false;
       var shouldTrackCalendarSnapshotCounter = true;
       final String operation =
           message.operation ?? _calendarSyncOperationUpdate;
+      if (!_isKnownUpdateOperation(operation)) {
+        SafeLogging.debugLog('Unknown calendar operation: $operation');
+        await _recordHandledMessage(inbound: inbound);
+        return false;
+      }
       switch (message.entity) {
         case CalendarSyncMessage.roomPrimaryViewEntity:
           applied = await _mergeRoomPrimaryView(message, operation);
           shouldTrackCalendarSnapshotCounter = false;
           break;
         case _calendarSyncEntityDayEvent:
-          final DayEvent event = DayEvent.fromJson(message.data!);
+          final DayEvent? event = await _parseUpdateData<DayEvent>(
+            inbound: inbound,
+            description: _calendarSyncEntityDayEvent,
+            parse: () => DayEvent.fromJson(message.data!),
+          );
+          if (event == null) {
+            return false;
+          }
           applied = await _mergeDayEvent(event, operation);
           break;
         case _calendarSyncEntityCriticalPath:
-          final path = CalendarCriticalPath.fromJson(message.data!);
+          final CalendarCriticalPath? path =
+              await _parseUpdateData<CalendarCriticalPath>(
+                inbound: inbound,
+                description: _calendarSyncEntityCriticalPath,
+                parse: () => CalendarCriticalPath.fromJson(message.data!),
+              );
+          if (path == null) {
+            return false;
+          }
           applied = await _mergeCriticalPath(path, operation);
           break;
         case _calendarSyncEntityJournal:
-          final CalendarJournal journal = CalendarJournal.fromJson(
-            message.data!,
-          );
+          final CalendarJournal? journal =
+              await _parseUpdateData<CalendarJournal>(
+                inbound: inbound,
+                description: _calendarSyncEntityJournal,
+                parse: () => CalendarJournal.fromJson(message.data!),
+              );
+          if (journal == null) {
+            return false;
+          }
           applied = await _mergeJournal(journal, operation);
           break;
         default:
-          final task = CalendarTask.fromJson(message.data!);
+          final CalendarTask? task = await _parseUpdateData<CalendarTask>(
+            inbound: inbound,
+            description: _calendarSyncEntityTask,
+            parse: () => CalendarTask.fromJson(message.data!),
+          );
+          if (task == null) {
+            return false;
+          }
           applied = await _mergeTask(task, operation);
           break;
       }
@@ -274,13 +330,53 @@ class CalendarSyncManager {
             allowSnapshot: !inbound.isFromMam,
           );
         }
-        await _recordAppliedMessage(inbound: inbound);
       }
+      await _recordHandledMessage(inbound: inbound);
       return applied;
     } catch (e) {
       SafeLogging.debugLog('Error handling calendar update: $e');
     }
     return false;
+  }
+
+  bool _isKnownUpdateOperation(String operation) {
+    return operation == _calendarSyncOperationAdd ||
+        operation == _calendarSyncOperationUpdate ||
+        operation == _calendarSyncOperationDelete;
+  }
+
+  Future<CalendarModel?> _parseCalendarModel(
+    Map<String, dynamic> data, {
+    required CalendarSyncInbound inbound,
+    required String description,
+  }) async {
+    try {
+      return CalendarModel.fromJson(data);
+    } on Exception catch (error) {
+      SafeLogging.debugLog(
+        'Invalid calendar $description payload: $error',
+        name: 'CalendarSyncManager',
+      );
+      await _recordHandledMessage(inbound: inbound);
+      return null;
+    }
+  }
+
+  Future<T?> _parseUpdateData<T>({
+    required CalendarSyncInbound inbound,
+    required String description,
+    required T Function() parse,
+  }) async {
+    try {
+      return parse();
+    } on Exception catch (error) {
+      SafeLogging.debugLog(
+        'Invalid calendar update payload for $description: $error',
+        name: 'CalendarSyncManager',
+      );
+      await _recordHandledMessage(inbound: inbound);
+      return null;
+    }
   }
 
   Future<bool> _mergeRoomPrimaryView(
@@ -299,8 +395,8 @@ class CalendarSyncManager {
     return true;
   }
 
-  /// Records that a message was applied, updating the sync state.
-  Future<void> _recordAppliedMessage({
+  /// Records that an archive envelope was deterministically handled.
+  Future<void> _recordHandledMessage({
     required CalendarSyncInbound inbound,
   }) async {
     final CalendarSyncState previous = _readSyncState();
@@ -315,7 +411,8 @@ class CalendarSyncManager {
     CalendarSyncState state,
     CalendarSyncInbound inbound,
   ) {
-    final DateTime? rawPrevious = state.lastAppliedTimestamp;
+    final DateTime? rawPrevious =
+        state.lastHandledTimestamp ?? state.lastAppliedTimestamp;
     final DateTime? previous = rawPrevious == null
         ? null
         : _boundSyncInstant(rawPrevious);
@@ -324,14 +421,24 @@ class CalendarSyncManager {
             (rawPrevious != null &&
                 _compareSyncInstants(previous, rawPrevious) == 0)
         ? state
-        : state.copyWith(lastAppliedTimestamp: previous);
+        : state.copyWith(
+            lastAppliedTimestamp: previous,
+            lastHandledTimestamp: previous,
+          );
     final DateTime candidate = _trustedInboundCursorTimestamp(inbound);
-    if (previous != null && !_isSyncInstantAfter(candidate, previous)) {
+    if (previous != null &&
+        !_isSyncInstantAfter(candidate, previous) &&
+        (!_isSameSyncInstant(candidate, previous) ||
+            inbound.stanzaId == null ||
+            inbound.stanzaId == state.lastHandledStanzaId)) {
       return normalizedState;
     }
     return normalizedState.copyWith(
       lastAppliedTimestamp: candidate,
       lastAppliedStanzaId: inbound.stanzaId,
+      lastHandledTimestamp: candidate,
+      lastHandledStanzaId: inbound.stanzaId,
+      coverageStatus: CalendarArchiveCoverageStatus.incomplete,
     );
   }
 
@@ -392,9 +499,17 @@ class CalendarSyncManager {
 
         final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
 
-        await _sendCalendarMessage(
-          CalendarSyncOutbound(envelope: messageJson, attachment: attachment),
-        );
+        try {
+          await _sendEnvelope(
+            CalendarSyncOutbound(envelope: messageJson, attachment: attachment),
+          );
+        } on Exception catch (error) {
+          SafeLogging.debugLog(
+            'Error queueing calendar snapshot: $error',
+            name: 'CalendarSyncManager',
+          );
+          return false;
+        }
 
         final state = _readSyncState().resetCounter().copyWith(
           lastSnapshotChecksum: result.checksum,
@@ -462,7 +577,7 @@ class CalendarSyncManager {
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
     final CalendarTask normalizedTask = _normalizeTaskForSync(task);
-    _queueUpdate(
+    await _queueUpdate(
       payloadId: normalizedTask.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedTask.modifiedAt),
@@ -474,7 +589,7 @@ class CalendarSyncManager {
 
   Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
     final DayEvent normalizedEvent = _normalizeDayEventForSync(event);
-    _queueUpdate(
+    await _queueUpdate(
       payloadId: normalizedEvent.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedEvent.modifiedAt),
@@ -489,7 +604,7 @@ class CalendarSyncManager {
     String operation,
   ) async {
     final CalendarJournal normalizedJournal = _normalizeJournalForSync(journal);
-    _queueUpdate(
+    await _queueUpdate(
       payloadId: normalizedJournal.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedJournal.modifiedAt),
@@ -505,7 +620,7 @@ class CalendarSyncManager {
     String operation,
   ) async {
     final CalendarCriticalPath normalizedPath = _normalizePathForSync(path);
-    _queueUpdate(
+    await _queueUpdate(
       payloadId: normalizedPath.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedPath.modifiedAt),
@@ -530,13 +645,15 @@ class CalendarSyncManager {
     await _maybeSendSnapshot();
   }
 
-  void _queueUpdate({
+  Future<void> flushPending() => _flushPendingEnvelopes();
+
+  Future<void> _queueUpdate({
     required String payloadId,
     required String operation,
     required DateTime timestamp,
     required Map<String, dynamic> data,
     required String entity,
-  }) {
+  }) async {
     final CalendarSyncMessage syncMessage = CalendarSyncMessage(
       type: CalendarSyncType.update,
       timestamp: _normalizeSyncInstant(timestamp),
@@ -549,7 +666,7 @@ class CalendarSyncManager {
     final String messageJson = jsonEncode({
       'calendar_sync': syncMessage.toJson(),
     });
-    _queueEnvelope(CalendarSyncOutbound(envelope: messageJson));
+    await _sendEnvelope(CalendarSyncOutbound(envelope: messageJson));
   }
 
   String _calculateChecksum(Map<String, dynamic> data) {
@@ -746,7 +863,6 @@ class CalendarSyncManager {
 
   void _queueEnvelope(CalendarSyncOutbound outbound) {
     _pendingEnvelopes.add(outbound);
-    _ensureBatchTimer();
   }
 
   Future<void> _sendEnvelope(CalendarSyncOutbound outbound) async {
@@ -756,41 +872,6 @@ class CalendarSyncManager {
       _queueEnvelope(outbound);
       rethrow;
     }
-  }
-
-  void _ensureBatchTimer() {
-    if (_batchFlushTimer != null) {
-      return;
-    }
-    _batchFlushTimer = Timer.periodic(
-      _calendarSyncBatchInterval,
-      _onBatchTimerTick,
-    );
-  }
-
-  Future<void> _onBatchTimerTick(Timer timer) async {
-    if (_pendingEnvelopes.isEmpty) {
-      _stopBatchTimer();
-      return;
-    }
-    try {
-      await _flushPendingEnvelopes();
-    } catch (error, stackTrace) {
-      _logBatchFlushError(error, stackTrace);
-    }
-  }
-
-  void _stopBatchTimer() {
-    _batchFlushTimer?.cancel();
-    _batchFlushTimer = null;
-  }
-
-  void _logBatchFlushError(Object error, StackTrace stackTrace) {
-    SafeLogging.debugLog(
-      '$_batchFlushFailedLog: $error',
-      name: 'CalendarSyncManager',
-      stackTrace: stackTrace,
-    );
   }
 
   Future<void> _flushPendingEnvelopes() async {
@@ -817,9 +898,6 @@ class CalendarSyncManager {
       }
     } finally {
       _pendingFlush = null;
-      if (_pendingEnvelopes.isEmpty) {
-        _stopBatchTimer();
-      }
     }
   }
 }
@@ -842,6 +920,9 @@ int _compareSyncInstants(DateTime first, DateTime second) {
 
 bool _isSyncInstantAfter(DateTime candidate, DateTime reference) =>
     _compareSyncInstants(candidate, reference) > 0;
+
+bool _isSameSyncInstant(DateTime candidate, DateTime reference) =>
+    _compareSyncInstants(candidate, reference) == 0;
 
 DateTime _boundSyncInstant(DateTime value) {
   final DateTime normalized = _normalizeSyncInstant(value);

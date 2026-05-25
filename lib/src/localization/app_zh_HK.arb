@@ -2372,6 +2372,8 @@
   "axiVersionTagAlpha": "alpha",
   "calendarSyncWarningSnapshotTitle": "日曆同步",
   "calendarSyncWarningSnapshotMessage": "日曆快照不可用。請從另一部裝置匯出日曆 JSON 並在此匯入以恢復。",
+  "calendarSyncWarningArchiveTitle": "日曆同步",
+  "calendarSyncWarningArchiveMessage": "日曆歷史同步未完成。Axichat 會自動重試。",
   "commonLabelValue": "{label}: {value}",
   "@commonLabelValue": {
     "placeholders": {

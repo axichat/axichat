@@ -5682,6 +5682,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Kalender-Schnappschuss nicht verfugbar. Exportiere dein Kalender-JSON von einem anderen Gerat und importiere es hier zur Wiederherstellung.';
 
   @override
+  String get calendarSyncWarningArchiveTitle => 'Kalendersynchronisierung';
+
+  @override
+  String get calendarSyncWarningArchiveMessage =>
+      'Kalenderverlauf-Synchronisierung unvollstandig. Axichat versucht es automatisch erneut.';
+
+  @override
   String commonLabelValue(String label, String value) {
     return '$label: $value';
   }

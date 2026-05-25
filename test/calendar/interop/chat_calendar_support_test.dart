@@ -1,4 +1,5 @@
 import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
@@ -11,12 +12,19 @@ const String _roomJid = 'room@conference.axi.im';
 const String _occupantId = 'me';
 const String _occupantNick = 'Me';
 
-Chat createChat({ChatType type = ChatType.chat, String jid = _axiJid}) {
+Chat createChat({
+  ChatType type = ChatType.chat,
+  String jid = _axiJid,
+  MessageTransport transport = MessageTransport.xmpp,
+  String? emailAddress,
+}) {
   return Chat(
     jid: jid,
     title: jid,
     type: type,
     lastChangeTimestamp: _lastChangeTimestamp,
+    transport: transport,
+    emailAddress: emailAddress,
   );
 }
 
@@ -48,7 +56,13 @@ void main() {
 
     test('blocks email-only chats', () {
       const policy = CalendarChatSupport();
-      final decision = policy.decisionForChat(chat: createChat(jid: _emailJid));
+      final decision = policy.decisionForChat(
+        chat: createChat(
+          jid: _emailJid,
+          transport: MessageTransport.email,
+          emailAddress: _emailJid,
+        ),
+      );
 
       expect(decision.canWrite, isFalse);
     });

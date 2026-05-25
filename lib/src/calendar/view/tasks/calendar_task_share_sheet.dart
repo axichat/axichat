@@ -20,9 +20,7 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
-const bool _taskShareReadOnlyDefault = true;
+import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
 
 Future<void> showCalendarTaskShareSheet({
   required BuildContext context,
@@ -75,7 +73,6 @@ class CalendarTaskShareSheet extends StatefulWidget {
 class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   List<ComposerRecipient> _recipients = <ComposerRecipient>[];
   bool _isSending = false;
-  bool _isReadOnly = _taskShareReadOnlyDefault;
   final TextEditingController _bodyController = TextEditingController();
   final Object _recipientTextInputTapRegionGroup = Object();
 
@@ -112,10 +109,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       ),
       hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
     );
-    final bool isReadOnly = _isReadOnly;
-    final String readOnlyHint = isReadOnly
-        ? l10n.calendarTaskShareReadOnlyHint
-        : l10n.calendarTaskShareEditableHint;
     const int messageMinLines = 2;
     const int messageMaxLines = 4;
     final EdgeInsets messageContentPadding = EdgeInsets.symmetric(
@@ -181,13 +174,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
               groupId: _recipientTextInputTapRegionGroup,
             ),
           ),
-          AxiSheetSection(
-            child: _TaskShareEditAccessToggle(
-              canEdit: !isReadOnly,
-              hint: readOnlyHint,
-              onChanged: _handleEditAccessChanged,
-            ),
-          ),
         ],
       ],
     );
@@ -216,13 +202,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     });
   }
 
-  void _handleEditAccessChanged(bool canEdit) {
-    if (!mounted) return;
-    setState(() {
-      _isReadOnly = !canEdit;
-    });
-  }
-
   Future<void> _handleSharePressed() async {
     final List<ComposerRecipient> includedRecipients = _recipients
         .where((recipient) => recipient.included)
@@ -239,7 +218,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     }
     setState(() => _isSending = true);
     final String shareText = _bodyController.text.trim();
-    final bool readOnly = _isReadOnly;
     final List<Contact> targets = includedRecipients
         .map((recipient) => recipient.target)
         .toList(growable: false);
@@ -249,7 +227,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         task: widget.task,
         recipients: targets,
         shareText: shareText,
-        readOnly: readOnly,
         completer: completer,
       ),
     );
@@ -296,42 +273,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         setState(() => _isSending = false);
       }
     }
-  }
-}
-
-class _TaskShareEditAccessToggle extends StatelessWidget {
-  const _TaskShareEditAccessToggle({
-    required this.canEdit,
-    required this.hint,
-    required this.onChanged,
-  });
-
-  final bool canEdit;
-  final String hint;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final sublabel = canEdit
-        ? l10n.calendarTaskShareEditableLabel
-        : l10n.calendarTaskShareReadOnlyLabel;
-    final TextStyle hintStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.mutedForeground,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ShadSwitch(
-          label: Text(l10n.calendarTaskShareEditAccess),
-          sublabel: Text(sublabel),
-          value: canEdit,
-          onChanged: onChanged,
-        ),
-        SizedBox(height: context.spacing.s),
-        Text(hint, style: hintStyle),
-      ],
-    );
   }
 }
 
