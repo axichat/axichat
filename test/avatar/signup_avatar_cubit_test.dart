@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
@@ -94,11 +95,56 @@ void main() {
       });
     },
   );
+
+  test(
+    'pauseOnPreviewAvatar preserves a shuffled background between rotations',
+    () {
+      fakeAsync((async) {
+        final colors = ShadColorScheme.fromName(
+          'zinc',
+          brightness: Brightness.light,
+        );
+        final cubit = SignupAvatarCubit(
+          templates: <AvatarTemplate>[
+            _fakeTemplate(id: 'preview-template-1', hasAlphaBackground: true),
+            _fakeTemplate(id: 'preview-template-2', hasAlphaBackground: true),
+          ],
+          pipeline: _ImmediateSignupAvatarPipeline(
+            backgrounds: const <Color>[Colors.red, Colors.green],
+          ),
+        );
+
+        unawaited(cubit.initialize(colors));
+        async.flushMicrotasks();
+
+        expect(cubit.state.canShuffleBackground, isTrue);
+
+        unawaited(cubit.shuffleBackground(colors));
+        async.flushMicrotasks();
+
+        final lockedBackground = cubit.state.lockedBackgroundColor;
+        expect(cubit.state.backgroundLocked, isTrue);
+        expect(lockedBackground, isNotNull);
+        expect(cubit.state.backgroundColor, lockedBackground);
+        expect(cubit.state.carouselAvatar?.backgroundColor, lockedBackground);
+
+        unawaited(cubit.pauseOnPreviewAvatar(colors));
+        async.flushMicrotasks();
+
+        expect(cubit.state.avatar, isNull);
+        expect(cubit.state.backgroundLocked, isTrue);
+        expect(cubit.state.lockedBackgroundColor, lockedBackground);
+        expect(cubit.state.backgroundColor, lockedBackground);
+        expect(cubit.state.carouselAvatar?.backgroundColor, lockedBackground);
+      });
+    },
+  );
 }
 
 class _ImmediateSignupAvatarPipeline extends AvatarPipeline {
-  _ImmediateSignupAvatarPipeline()
-    : super(
+  _ImmediateSignupAvatarPipeline({List<Color> backgrounds = const <Color>[]})
+    : _backgrounds = backgrounds,
+      super(
         config: const AvatarPipelineConfig(
           targetSize: 16,
           maxBytes: 1024,
@@ -109,6 +155,19 @@ class _ImmediateSignupAvatarPipeline extends AvatarPipeline {
           minCropSide: 8,
         ),
       );
+
+  final List<Color> _backgrounds;
+  int _backgroundIndex = 0;
+
+  @override
+  Color randomBackground(math.Random random) {
+    if (_backgrounds.isEmpty) {
+      return super.randomBackground(random);
+    }
+    final background = _backgrounds[_backgroundIndex % _backgrounds.length];
+    _backgroundIndex++;
+    return background;
+  }
 
   @override
   Future<EditableAvatar> buildFromTemplate({
@@ -134,11 +193,14 @@ class _ImmediateSignupAvatarPipeline extends AvatarPipeline {
   }
 }
 
-AvatarTemplate _fakeTemplate({required String id}) {
+AvatarTemplate _fakeTemplate({
+  required String id,
+  bool hasAlphaBackground = false,
+}) {
   return AvatarTemplate(
     id: id,
     category: AvatarTemplateCategory.misc,
-    hasAlphaBackground: false,
+    hasAlphaBackground: hasAlphaBackground,
     generator: (background, colors) async => GeneratedAvatar(
       bytes: Uint8List.fromList(const <int>[0, 1, 2, 3]),
       mimeType: 'image/png',

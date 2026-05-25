@@ -181,6 +181,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         carouselAvatar: previewAvatar,
         carouselRunning: false,
         carouselStartedAt: null,
+        backgroundColor: previewAvatar.backgroundColor ?? state.backgroundColor,
         clearError: true,
       ),
     );
@@ -566,7 +567,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     AvatarCarouselBuildContext context,
   ) {
     final resolvedBackground = template.hasAlphaBackground
-        ? _randomAvatarBackgroundColor()
+        ? _resolveTemplateBackground(template, context.colors)
         : context.currentBackground == Colors.transparent
         ? context.colors.accent
         : context.currentBackground;

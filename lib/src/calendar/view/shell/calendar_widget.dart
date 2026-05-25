@@ -439,12 +439,14 @@ class CalendarSurfaceNavigator extends StatefulWidget {
     required this.modalAnchorKey,
     required this.child,
     this.enablePop = _calendarSurfacePopEnabledDefault,
+    this.sheetBottomSafeAreaBehavior = AxiSheetBottomSafeAreaBehavior.none,
   });
 
   final GlobalKey<NavigatorState> navigatorKey;
   final GlobalKey modalAnchorKey;
   final Widget child;
   final bool enablePop;
+  final AxiSheetBottomSafeAreaBehavior sheetBottomSafeAreaBehavior;
 
   @override
   State<CalendarSurfaceNavigator> createState() =>
@@ -478,6 +480,7 @@ final class _CalendarSurfaceNavigatorState
       navigatorKey: widget.navigatorKey,
       modalAnchorKey: widget.modalAnchorKey,
       surfaceController: _surfaceController,
+      sheetBottomSafeAreaBehavior: widget.sheetBottomSafeAreaBehavior,
       child: NavigatorPopHandler<void>(
         enabled: widget.enablePop,
         onPopWithResult: (_) {
