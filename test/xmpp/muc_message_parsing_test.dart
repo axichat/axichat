@@ -62,6 +62,10 @@ mox.MessageEvent _createMessageEvent({
   );
 }
 
+mox.Stanza _stanzaWithSerializedNode(mox.XMLNode node) {
+  return mox.Stanza.message(children: [mox.XMLNode.fromString(node.toXml())]);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -119,6 +123,25 @@ void main() {
         node.attributes[_directInvitePasswordAttr],
         equals(_invitePasswordTrimmed),
       );
+    });
+
+    test('direct invite XML escapes serialized user text', () {
+      const special = 'A&B <C> "D" \'E\'';
+      const data = DirectMucInviteData(
+        roomJid: _roomJid,
+        reason: special,
+        password: special,
+      );
+      final node = data.toXml();
+      final xml = node.toXml();
+      final parsed = DirectMucInviteData.fromStanza(
+        _stanzaWithSerializedNode(node),
+      );
+
+      expect(xml, contains('A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;'));
+      expect(xml, isNot(contains('<C>')));
+      expect(parsed?.reason, special);
+      expect(parsed?.password, special);
     });
 
     test('DINV-015 [EC] continue=false omits the continue attribute', () {
@@ -219,6 +242,31 @@ void main() {
         node.attributes[_axiInvitePasswordAttr],
         equals(_invitePasswordTrimmed),
       );
+    });
+
+    test('axi invite XML escapes serialized user text', () {
+      const special = 'A&B <C> "D" \'E\'';
+      const payload = AxiMucInvitePayload(
+        roomJid: _roomJid,
+        token: special,
+        inviter: _inviterBareJid,
+        invitee: _inviteeBareJid,
+        roomName: special,
+        reason: special,
+        password: special,
+      );
+      final node = payload.toXml();
+      final xml = node.toXml();
+      final parsed = AxiMucInvitePayload.fromStanza(
+        _stanzaWithSerializedNode(node),
+      );
+
+      expect(xml, contains('A&amp;B &lt;C&gt; &quot;D&quot; &apos;E&apos;'));
+      expect(xml, isNot(contains('<C>')));
+      expect(parsed?.token, special);
+      expect(parsed?.roomName, special);
+      expect(parsed?.reason, special);
+      expect(parsed?.password, special);
     });
 
     test('DINV-020 [HP] revoked Axi invites serialize as revoke tags', () {
@@ -529,6 +577,44 @@ void main() {
       final message = Message.fromMox(event, accountJid: _accountBareJid);
 
       expect(message.pseudoMessageType, isNull);
+    });
+  });
+
+  group('App-owned message extension XML', () {
+    test('calendar task ICS payload escapes serialized text', () {
+      const ics = 'BEGIN:VCALENDAR\nSUMMARY:A&B <C>\nEND:VCALENDAR';
+      const payload = CalendarTaskIcsPayload(ics: ics);
+      final node = payload.toXml();
+      final xml = node.toXml();
+      final parsed = CalendarTaskIcsPayload.fromStanza(
+        _stanzaWithSerializedNode(node),
+      );
+
+      expect(xml, contains('A&amp;B &lt;C&gt;'));
+      expect(xml, isNot(contains('<C>')));
+      expect(parsed?.ics, ics);
+    });
+
+    test('pin mutation XML escapes serialized attributes', () {
+      const messageId = 'msg&A <B> "C" \'D\'\u0001';
+      final sanitizedMessageId =
+          'msg&A <B> "C" \'D\'${String.fromCharCode(0xfffd)}';
+      final payload = PinMessageMutationData(
+        messageId: messageId,
+        pinned: true,
+        timestamp: DateTime.utc(2026, 3, 12, 12),
+      );
+      final node = payload.toXml();
+      final xml = node.toXml();
+      final parsed = PinMessageMutationData.fromStanza(
+        _stanzaWithSerializedNode(node),
+      );
+
+      expect(xml, contains('msg&amp;A &lt;B&gt; &quot;C&quot; &apos;D&apos;'));
+      expect(xml, isNot(contains('<B>')));
+      expect(xml, isNot(contains('\u0001')));
+      expect(parsed?.messageId, sanitizedMessageId);
+      expect(parsed?.pinned, isTrue);
     });
   });
 

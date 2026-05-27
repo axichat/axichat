@@ -3,10 +3,14 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 
+import 'package:archive/archive_io.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -22,6 +26,7 @@ import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as p;
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:uuid/uuid.dart';
 
@@ -81,11 +86,205 @@ enum _EmailRuntimePhase { stopped, running, stopping, disposing }
 
 enum _EmailReconnectRestartPolicy { offlineOnly, foregroundResume }
 
+enum EmailShutdownMode { graceful, logout }
+
 enum EmailPasswordRefreshResult {
   confirmed,
   reconnectPending;
 
   bool get isConfirmed => this == confirmed;
+}
+
+enum EmailOutgoingEncryptionMode {
+  plaintextNoAutocrypt,
+  autocryptBeta;
+
+  bool get forcePlaintext => this == plaintextNoAutocrypt;
+
+  bool get skipAutocrypt => this == plaintextNoAutocrypt;
+}
+
+final class EmailEncryptionAccountInfo {
+  const EmailEncryptionAccountInfo({
+    required this.normalizedAddress,
+    required this.deltaAccountId,
+    this.hasSelfKey = false,
+  });
+
+  final String normalizedAddress;
+  final int deltaAccountId;
+  final bool hasSelfKey;
+}
+
+final class EmailEncryptionKeyExport {
+  const EmailEncryptionKeyExport({
+    required this.normalizedAddress,
+    required this.tempZipPath,
+    required this.operationDirectoryPath,
+  });
+
+  final String normalizedAddress;
+  final String tempZipPath;
+  final String operationDirectoryPath;
+}
+
+enum EmailOpenPgpKeyKind { public, private }
+
+enum EmailOpenPgpIdentityBinding { addressMatch, userConfirmed }
+
+final class EmailOpenPgpKeyMetadata {
+  const EmailOpenPgpKeyMetadata({
+    required this.kind,
+    required this.fingerprint,
+    required this.userIds,
+    required this.hasExpectedAddress,
+    required this.hasEncryptionCapability,
+  });
+
+  final EmailOpenPgpKeyKind kind;
+  final String fingerprint;
+  final List<String> userIds;
+  final bool hasExpectedAddress;
+  final bool hasEncryptionCapability;
+
+  bool get requiresIdentityConfirmation => !hasExpectedAddress;
+
+  EmailOpenPgpIdentityBinding get defaultIdentityBinding => hasExpectedAddress
+      ? EmailOpenPgpIdentityBinding.addressMatch
+      : EmailOpenPgpIdentityBinding.userConfirmed;
+}
+
+final class EmailTrustedContactKey {
+  const EmailTrustedContactKey({
+    required this.deltaAccountId,
+    required this.normalizedAddress,
+    required this.fingerprint,
+    required this.deltaContactId,
+    required this.deltaChatId,
+    required this.identityBinding,
+    required this.userIds,
+    required this.importedAt,
+  });
+
+  factory EmailTrustedContactKey.fromData(EmailTrustedContactKeyData data) {
+    final decodedUserIds = switch (data.userIdsJson) {
+      final String value when value.trim().isNotEmpty => jsonDecode(value),
+      _ => const <Object?>[],
+    };
+    return EmailTrustedContactKey(
+      deltaAccountId: data.deltaAccountId,
+      normalizedAddress: data.address,
+      fingerprint: data.fingerprint,
+      deltaContactId: data.deltaContactId,
+      deltaChatId: data.deltaChatId,
+      identityBinding: _emailOpenPgpIdentityBindingFromStorage(
+        data.identityBinding,
+      ),
+      userIds: switch (decodedUserIds) {
+        final List<Object?> values =>
+          values
+              .map((value) => value?.toString() ?? '')
+              .where((value) => value.trim().isNotEmpty)
+              .toList(growable: false),
+        _ => const <String>[],
+      },
+      importedAt: data.importedAt,
+    );
+  }
+
+  final int deltaAccountId;
+  final String normalizedAddress;
+  final String fingerprint;
+  final int deltaContactId;
+  final int deltaChatId;
+  final EmailOpenPgpIdentityBinding identityBinding;
+  final List<String> userIds;
+  final DateTime importedAt;
+
+  EmailTrustedContactKeyData toData() => EmailTrustedContactKeyData(
+    deltaAccountId: deltaAccountId,
+    address: normalizedAddress,
+    fingerprint: fingerprint,
+    deltaContactId: deltaContactId,
+    deltaChatId: deltaChatId,
+    identityBinding: identityBinding.name,
+    userIdsJson: jsonEncode(userIds),
+    importedAt: importedAt,
+  );
+}
+
+EmailOpenPgpIdentityBinding _emailOpenPgpIdentityBindingFromStorage(
+  String value,
+) {
+  for (final binding in EmailOpenPgpIdentityBinding.values) {
+    if (binding.name == value) {
+      return binding;
+    }
+  }
+  return EmailOpenPgpIdentityBinding.userConfirmed;
+}
+
+sealed class EmailEncryptionKeyException implements Exception {
+  const EmailEncryptionKeyException();
+}
+
+final class EmailEncryptionNoActiveAccountException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionNoActiveAccountException();
+}
+
+final class EmailEncryptionUnsupportedKeyFormatException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionUnsupportedKeyFormatException();
+}
+
+final class EmailEncryptionNoPrivateKeyFoundException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionNoPrivateKeyFoundException();
+}
+
+final class EmailEncryptionAmbiguousKeyArchiveException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionAmbiguousKeyArchiveException();
+}
+
+final class EmailEncryptionImportFailedException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionImportFailedException();
+}
+
+final class EmailEncryptionExportFailedException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionExportFailedException();
+}
+
+final class EmailEncryptionSaveFailedException
+    extends EmailEncryptionKeyException {
+  const EmailEncryptionSaveFailedException();
+}
+
+sealed class EmailContactKeyException implements Exception {
+  const EmailContactKeyException();
+}
+
+final class EmailContactKeyNoActiveAccountException
+    extends EmailContactKeyException {
+  const EmailContactKeyNoActiveAccountException();
+}
+
+final class EmailContactKeyUnsupportedFormatException
+    extends EmailContactKeyException {
+  const EmailContactKeyUnsupportedFormatException();
+}
+
+final class EmailContactKeyImportFailedException
+    extends EmailContactKeyException {
+  const EmailContactKeyImportFailedException();
+}
+
+final class EmailContactKeyRemoveFailedException
+    extends EmailContactKeyException {
+  const EmailContactKeyRemoveFailedException();
 }
 
 final class EmailConnectionConfigBuilder {
@@ -205,6 +404,11 @@ final class EmailServiceMissingRecipientMetadataException
   const EmailServiceMissingRecipientMetadataException();
 }
 
+final class EmailServiceTrustedContactKeyUnavailableException
+    extends EmailServiceException {
+  const EmailServiceTrustedContactKeyUnavailableException();
+}
+
 sealed class FanOutValidationException implements Exception {
   const FanOutValidationException();
 
@@ -257,6 +461,7 @@ class EmailService {
   static const int _emptyUnreadCount = 0;
   static const Duration _foregroundKeepaliveInterval = Duration(seconds: 45);
   static const Duration _foregroundFetchTimeout = Duration(seconds: 15);
+  static const Duration _connectivityProbeTimeout = Duration(seconds: 1);
   static const Duration _notificationFlushDelay = Duration(milliseconds: 500);
   static const Duration _contactsSyncDebounce = Duration(seconds: 2);
   static const int _connectivityConnectedMin = 4000;
@@ -266,13 +471,23 @@ class EmailService {
   static const Duration _connectivityLogInterval = Duration(
     seconds: _connectivityLogIntervalSeconds,
   );
+  static const int _connectivityDetailLogIntervalSeconds = 60;
+  static const Duration _connectivityDetailLogInterval = Duration(
+    seconds: _connectivityDetailLogIntervalSeconds,
+  );
+  static const int _connectivityDetailConnectingSampleThreshold = 4;
+  static const int _connectivityDetailMaxLength = 500;
   static const String _emailConnectivityLogPrefix = 'Email connectivity';
+  static const String _emailConnectivityDetailLogPrefix =
+      'Email connectivity detail';
   static const String _emailSyncLogPrefix = 'Email sync state';
   static const String _emailLogSourceLabel = 'source';
   static const String _emailLogValueLabel = 'value';
   static const String _emailLogStateLabel = 'state';
   static const String _emailLogConnectivityLabel = 'connectivity';
   static const String _emailLogHasMessageLabel = 'hasMessage';
+  static const String _emailLogIoRunningLabel = 'ioRunning';
+  static const String _emailLogDetailLabel = 'detail';
   static const String _emailLogUnknownValue = 'unknown';
   static const String _shareTokenInvalidLog =
       'Rejected invalid share identifier for subject token.';
@@ -305,6 +520,21 @@ class EmailService {
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
   static const String _mdnsEnabledValue = '1';
   static const String _mdnsDisabledValue = '0';
+  static const String _signUnencryptedConfigKey = 'sign_unencrypted';
+  static const String _signUnencryptedDisabledValue = '0';
+  static const String _openPgpKeyIdConfigKey = 'key_id';
+  static const String _privateKeyArmorBegin =
+      '-----BEGIN PGP PRIVATE KEY BLOCK-----';
+  static const String _publicKeyArmorBegin =
+      '-----BEGIN PGP PUBLIC KEY BLOCK-----';
+  static const String _emailEncryptionImportFileName = 'private-key.asc';
+  static const String _emailEncryptionExportArchiveName =
+      'axichat-email-openpgp-key.zip';
+  static const Set<String> _emailEncryptionDirectImportExtensions = {
+    '.asc',
+    '.pgp',
+    '.gpg',
+  };
   static const String _syncMsgsConfigKey = 'sync_msgs';
   static const String _mailServerConfigKey = 'mail_server';
   static const String _mailPortConfigKey = 'mail_port';
@@ -372,6 +602,7 @@ class EmailService {
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
     EmailDeltaTransport? transport,
+    EmailDeltaTransport Function()? transportFactory,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
     PinnedMessageMutator? pinnedMessages,
@@ -379,10 +610,25 @@ class EmailService {
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
     bool emailReadReceiptsEnabled = false,
+    bool autoDownloadImages = false,
+    bool autoDownloadVideos = false,
+    bool autoDownloadDocuments = false,
+    bool autoDownloadArchives = false,
+    Map<String, bool> emailEncryptionBetaEnabledByAddress =
+        const <String, bool>{},
+    String? Function()? xmppSelfJidProvider,
   }) : _credentialStore = credentialStore,
        _databaseBuilder = databaseBuilder,
        _endpointConfig = endpointConfig,
        _emailReadReceiptsEnabled = emailReadReceiptsEnabled,
+       _autoDownloadImages = autoDownloadImages,
+       _autoDownloadVideos = autoDownloadVideos,
+       _autoDownloadDocuments = autoDownloadDocuments,
+       _autoDownloadArchives = autoDownloadArchives,
+       _emailEncryptionBetaEnabledByAddress = _normalizedEncryptionBetaMap(
+         emailEncryptionBetaEnabledByAddress,
+       ),
+       _xmppSelfJidProvider = xmppSelfJidProvider,
        _connectionConfigBuilder =
            connectionConfigBuilder ??
            const EmailConnectionConfigBuilder(_defaultConnectionConfig),
@@ -390,22 +636,33 @@ class EmailService {
        _notificationService = notificationService,
        _pinnedMessages = pinnedMessages,
        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
-    _transport =
-        transport ??
-        EmailDeltaTransport(
-          databaseBuilder: databaseBuilder,
-          logger: logger,
+    _transportFactory =
+        transportFactory ??
+        () => EmailDeltaTransport(
+          databaseBuilder: _databaseBuilder,
+          logger: _log,
           localizationsProvider: () => _l10n,
+          xmppSelfJidProvider: _xmppSelfJidProvider,
         );
+    _transport = transport ?? _transportFactory();
+    _configureTransport(_transport);
     blocking = EmailBlockingService(
       databaseBuilder: databaseBuilder,
-      onBlock: DeltaChatBlockCallback(_transport.blockContact),
-      onUnblock: DeltaChatBlockCallback(_transport.unblockContact),
+      onBlock: DeltaChatBlockCallback(
+        (address) => _transport.blockContact(address),
+      ),
+      onUnblock: DeltaChatBlockCallback(
+        (address) => _transport.unblockContact(address),
+      ),
     );
     spam = EmailSpamService(
       databaseBuilder: databaseBuilder,
-      onMarkSpam: DeltaChatSpamCallback(_transport.blockContact),
-      onUnmarkSpam: DeltaChatSpamCallback(_transport.unblockContact),
+      onMarkSpam: DeltaChatSpamCallback(
+        (address) => _transport.blockContact(address),
+      ),
+      onUnmarkSpam: DeltaChatSpamCallback(
+        (address) => _transport.unblockContact(address),
+      ),
     );
     _eventListener = (event) {
       if (!_canProcessDeltaWork) {
@@ -416,17 +673,23 @@ class EmailService {
         operationName: _deltaQueueOperationNameProcessDeltaEvent,
       );
     };
-    _transport.addEventListener(_eventListener);
-    _listenerAttached = true;
+    _attachTransportListener();
   }
 
   final CredentialStore _credentialStore;
   final Future<XmppDatabase> Function() _databaseBuilder;
-  late final EmailDeltaTransport _transport;
+  late final EmailDeltaTransport Function() _transportFactory;
+  late EmailDeltaTransport _transport;
   final EmailConnectionConfigBuilder _connectionConfigBuilder;
   final Logger _log;
   EndpointConfig _endpointConfig;
   bool _emailReadReceiptsEnabled;
+  bool _autoDownloadImages;
+  bool _autoDownloadVideos;
+  bool _autoDownloadDocuments;
+  bool _autoDownloadArchives;
+  Map<String, bool> _emailEncryptionBetaEnabledByAddress;
+  final String? Function()? _xmppSelfJidProvider;
   final NotificationService? _notificationService;
   final PinnedMessageMutator? _pinnedMessages;
   final ForegroundTaskBridge? _foregroundBridge;
@@ -446,13 +709,15 @@ class EmailService {
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
   late final void Function(DeltaCoreEvent) _eventListener;
-  var _listenerAttached = false;
+  EmailDeltaTransport? _listenerTransport;
 
   Future<void> _deltaOperationQueue = Future<void>.value();
   int _deltaOperationQueueEpoch = 0;
 
   _EmailRuntimePhase _runtimePhase = _EmailRuntimePhase.stopped;
   Future<void>? _stopFuture;
+  EmailDeltaTransport? _stopFutureTransport;
+  Future<void>? _pendingNativeCleanup;
   final _authFailureController = StreamController<DeltaChatException>.broadcast(
     sync: true,
   );
@@ -475,6 +740,8 @@ class EmailService {
   int? _lastConnectivityValue;
   int? _lastLoggedConnectivityValue;
   DateTime? _lastConnectivityLoggedAt;
+  int _consecutiveConnectingSamples = 0;
+  DateTime? _lastConnectivityDetailLoggedAt;
   final EmailAsyncQueue _channelOverflowRecoveryQueue = EmailAsyncQueue();
   EmailImapCapabilities _imapCapabilities = const EmailImapCapabilities(
     idleSupported: false,
@@ -490,6 +757,8 @@ class EmailService {
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final EmailAsyncQueue _contactsSyncQueue = EmailAsyncQueue();
   final EmailAsyncQueue _chatlistSyncQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _readStateQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _mdnConfigQueue = EmailAsyncQueue();
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
@@ -500,11 +769,510 @@ class EmailService {
       return;
     }
     _emailReadReceiptsEnabled = enabled;
-    await _applyEmailReadReceiptPreference(enabled: enabled);
+    if (_nativeCleanupPending || !_acceptsRuntimeWork) {
+      return;
+    }
+    await _mdnConfigQueue.run(
+      () => _applyEmailReadReceiptPreference(enabled: enabled),
+    );
   }
 
-  void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
-    _transport.updateDefaultChatAttachmentAutoDownload(value);
+  void updateEmailEncryptionBetaSettings(Map<String, bool> enabledByAddress) {
+    _emailEncryptionBetaEnabledByAddress = _normalizedEncryptionBetaMap(
+      enabledByAddress,
+    );
+    _transport.updateEmailEncryptionBetaSettings(
+      _emailEncryptionBetaEnabledByAddress,
+    );
+  }
+
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  }) {
+    _autoDownloadImages = imagesEnabled;
+    _autoDownloadVideos = videosEnabled;
+    _autoDownloadDocuments = documentsEnabled;
+    _autoDownloadArchives = archivesEnabled;
+    _transport.updateAttachmentAutoDownloadSettings(
+      imagesEnabled: imagesEnabled,
+      videosEnabled: videosEnabled,
+      documentsEnabled: documentsEnabled,
+      archivesEnabled: archivesEnabled,
+    );
+  }
+
+  void _configureTransport(EmailDeltaTransport transport) {
+    transport.updateAttachmentAutoDownloadSettings(
+      imagesEnabled: _autoDownloadImages,
+      videosEnabled: _autoDownloadVideos,
+      documentsEnabled: _autoDownloadDocuments,
+      archivesEnabled: _autoDownloadArchives,
+    );
+    transport.updateEmailEncryptionBetaSettings(
+      _emailEncryptionBetaEnabledByAddress,
+    );
+  }
+
+  Future<EmailEncryptionAccountInfo?> activeEncryptionAccountInfo() async {
+    final scope = _activeCredentialScope;
+    if (_activeAccount == null || scope == null) {
+      return null;
+    }
+    final binding = await _accountBindingForScope(scope: scope);
+    final keyId = await _transport.getCoreConfig(
+      _openPgpKeyIdConfigKey,
+      accountId: binding.deltaAccountId,
+    );
+    return EmailEncryptionAccountInfo(
+      normalizedAddress: binding.address,
+      deltaAccountId: binding.deltaAccountId,
+      hasSelfKey: keyId != null && keyId.trim().isNotEmpty,
+    );
+  }
+
+  Future<EmailOpenPgpKeyMetadata> inspectEmailEncryptionPrivateKey(
+    File source,
+  ) async {
+    await _ensureReady();
+    final account = await _requireActiveEncryptionAccount();
+    final operationDirectory = await _createEmailEncryptionOperationDirectory();
+    try {
+      final importFile = await _prepareEmailEncryptionImportFile(
+        source: source,
+        operationDirectory: operationDirectory,
+      );
+      final metadata = await _inspectOpenPgpKeyFile(
+        file: importFile,
+        expectedAddress: account.address,
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      );
+      if (!metadata.hasEncryptionCapability) {
+        throw const EmailEncryptionUnsupportedKeyFormatException();
+      }
+      return metadata;
+    } on EmailEncryptionKeyException {
+      rethrow;
+    } on DeltaSafeException {
+      throw const EmailEncryptionUnsupportedKeyFormatException();
+    } on FileSystemException {
+      throw const EmailEncryptionUnsupportedKeyFormatException();
+    } on FormatException {
+      throw const EmailEncryptionUnsupportedKeyFormatException();
+    } finally {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+    }
+  }
+
+  Future<EmailEncryptionAccountInfo> importEmailEncryptionPrivateKey(
+    File source, {
+    required String expectedFingerprint,
+    required bool allowIdentityMismatch,
+  }) async {
+    await _ensureReady();
+    final account = await _requireActiveEncryptionAccount();
+    final operationDirectory = await _createEmailEncryptionOperationDirectory();
+    try {
+      final importFile = await _prepareEmailEncryptionImportFile(
+        source: source,
+        operationDirectory: operationDirectory,
+      );
+      final metadata = await _inspectOpenPgpKeyFile(
+        file: importFile,
+        expectedAddress: account.address,
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      );
+      if (!metadata.hasEncryptionCapability ||
+          metadata.fingerprint != expectedFingerprint ||
+          (!metadata.hasExpectedAddress && !allowIdentityMismatch)) {
+        throw const EmailEncryptionImportFailedException();
+      }
+      await _transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: importFile.path,
+        accountId: account.deltaAccountId,
+      );
+      await _verifyEmailEncryptionKey(
+        account,
+        failure: const EmailEncryptionImportFailedException(),
+      );
+      return EmailEncryptionAccountInfo(
+        normalizedAddress: account.address,
+        deltaAccountId: account.deltaAccountId,
+        hasSelfKey: true,
+      );
+    } on EmailEncryptionKeyException {
+      rethrow;
+    } on DeltaSafeException {
+      throw const EmailEncryptionImportFailedException();
+    } on EmailDeltaImexException {
+      throw const EmailEncryptionImportFailedException();
+    } on FileSystemException {
+      throw const EmailEncryptionImportFailedException();
+    } on FormatException {
+      throw const EmailEncryptionImportFailedException();
+    } finally {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+    }
+  }
+
+  Future<EmailTrustedContactKey?> trustedContactKeyForAddress(
+    String address,
+  ) async {
+    await _ensureReady();
+    final account = await _requireActiveEncryptionAccount();
+    final normalized = normalizedAddressValue(address);
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    final db = await _databaseBuilder();
+    final data = await db.getEmailTrustedContactKey(
+      deltaAccountId: account.deltaAccountId,
+      address: normalized,
+    );
+    return data == null ? null : EmailTrustedContactKey.fromData(data);
+  }
+
+  Future<EmailOpenPgpKeyMetadata> inspectContactPublicKey({
+    required String address,
+    required File source,
+  }) async {
+    await _ensureReady();
+    await _requireActiveEncryptionAccountForContactKey();
+    final normalized = normalizedAddressValue(address);
+    if (normalized == null || normalized.isEmpty) {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+    try {
+      final armored = await _readSingleArmoredPublicKey(source);
+      final metadata = await _inspectOpenPgpArmoredKey(
+        armored: armored,
+        expectedAddress: normalized,
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      );
+      if (!metadata.hasEncryptionCapability) {
+        throw const EmailContactKeyUnsupportedFormatException();
+      }
+      return metadata;
+    } on EmailContactKeyException {
+      rethrow;
+    } on DeltaSafeException {
+      throw const EmailContactKeyUnsupportedFormatException();
+    } on FileSystemException {
+      throw const EmailContactKeyUnsupportedFormatException();
+    } on FormatException {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+  }
+
+  Future<EmailTrustedContactKey> importTrustedContactPublicKey({
+    required String address,
+    required String displayName,
+    required File source,
+    required EmailOpenPgpIdentityBinding identityBinding,
+    required String expectedFingerprint,
+  }) async {
+    await _ensureReady();
+    final account = await _requireActiveEncryptionAccountForContactKey();
+    final normalized = normalizedAddressValue(address);
+    if (normalized == null || normalized.isEmpty) {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+    try {
+      final armored = await _readSingleArmoredPublicKey(source);
+      final metadata = await _inspectOpenPgpArmoredKey(
+        armored: armored,
+        expectedAddress: normalized,
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      );
+      if (!metadata.hasEncryptionCapability ||
+          metadata.fingerprint != expectedFingerprint ||
+          (!metadata.hasExpectedAddress &&
+              identityBinding != EmailOpenPgpIdentityBinding.userConfirmed)) {
+        throw const EmailContactKeyImportFailedException();
+      }
+      final imported = await _transport.importContactPublicKey(
+        address: normalized,
+        displayName: displayName,
+        armoredPublicKey: armored,
+        accountId: account.deltaAccountId,
+      );
+      if (imported.contactId <= DeltaContactId.lastSpecial ||
+          imported.chatId <= DeltaChatId.lastSpecial ||
+          imported.metadata.fingerprint.trim().isEmpty ||
+          imported.metadata.fingerprint != expectedFingerprint ||
+          !imported.metadata.hasEncryptionCapability) {
+        throw const EmailContactKeyImportFailedException();
+      }
+      final key = EmailTrustedContactKey(
+        deltaAccountId: account.deltaAccountId,
+        normalizedAddress: normalized,
+        fingerprint: imported.metadata.fingerprint,
+        deltaContactId: imported.contactId,
+        deltaChatId: imported.chatId,
+        identityBinding: identityBinding,
+        userIds: imported.metadata.userIds,
+        importedAt: DateTime.timestamp(),
+      );
+      final db = await _databaseBuilder();
+      await db.upsertEmailTrustedContactKey(key.toData());
+      return key;
+    } on EmailContactKeyException {
+      rethrow;
+    } on DeltaSafeException {
+      throw const EmailContactKeyImportFailedException();
+    } on FileSystemException {
+      throw const EmailContactKeyImportFailedException();
+    } on FormatException {
+      throw const EmailContactKeyImportFailedException();
+    }
+  }
+
+  Future<void> removeTrustedContactPublicKey(String address) async {
+    await _ensureReady();
+    final account = await _requireActiveEncryptionAccountForContactKey();
+    final normalized = normalizedAddressValue(address);
+    if (normalized == null || normalized.isEmpty) {
+      throw const EmailContactKeyRemoveFailedException();
+    }
+    final db = await _databaseBuilder();
+    final key = await db.getEmailTrustedContactKey(
+      deltaAccountId: account.deltaAccountId,
+      address: normalized,
+    );
+    if (key == null) {
+      return;
+    }
+    if (key.deltaContactId <= DeltaContactId.lastSpecial ||
+        key.deltaChatId <= DeltaChatId.lastSpecial) {
+      _log.warning(
+        'Clearing invalid trusted OpenPGP key mapping with special Delta ids '
+        'contact ${key.deltaContactId} chat ${key.deltaChatId} fingerprint '
+        '${key.fingerprint} for $normalized on account '
+        '${account.deltaAccountId}.',
+      );
+      await _deleteTrustedContactPublicKeyMapping(
+        db: db,
+        deltaAccountId: account.deltaAccountId,
+        address: normalized,
+        deltaChatId: key.deltaChatId,
+      );
+      return;
+    }
+    try {
+      await _transport.removeContactPublicKey(
+        address: normalized,
+        fingerprint: key.fingerprint,
+        contactId: key.deltaContactId,
+        chatId: key.deltaChatId,
+        accountId: account.deltaAccountId,
+      );
+    } on EmailContactKeyException {
+      rethrow;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.warning(
+        'Delta failed to remove trusted OpenPGP key contact '
+        '${key.deltaContactId} chat ${key.deltaChatId} fingerprint '
+        '${key.fingerprint} for $normalized on account '
+        '${account.deltaAccountId}; keeping local pinned key mapping.',
+        error,
+        stackTrace,
+      );
+      throw const EmailContactKeyRemoveFailedException();
+    }
+    await _deleteTrustedContactPublicKeyMapping(
+      db: db,
+      deltaAccountId: account.deltaAccountId,
+      address: normalized,
+      deltaChatId: key.deltaChatId,
+    );
+  }
+
+  Future<void> _deleteTrustedContactPublicKeyMapping({
+    required XmppDatabase db,
+    required int deltaAccountId,
+    required String address,
+    required int deltaChatId,
+  }) async {
+    await db.deleteEmailTrustedContactKey(
+      deltaAccountId: deltaAccountId,
+      address: address,
+    );
+    await db.deleteEmailChatAccountsForDeltaChat(
+      deltaAccountId: deltaAccountId,
+      deltaChatId: deltaChatId,
+    );
+  }
+
+  Future<EmailEncryptionKeyExport> createEmailEncryptionKeyExport() async {
+    await _ensureReady();
+    final account = await _requireActiveEncryptionAccount();
+    final operationDirectory = await _createEmailEncryptionOperationDirectory();
+    try {
+      await _transport.runImex(
+        mode: DeltaImexMode.exportSelfKeys,
+        path: operationDirectory.path,
+        accountId: account.deltaAccountId,
+      );
+      await _verifyEmailEncryptionKey(
+        account,
+        failure: const EmailEncryptionExportFailedException(),
+      );
+      final archive = await _zipEmailEncryptionExport(
+        operationDirectory: operationDirectory,
+        account: account,
+      );
+      return EmailEncryptionKeyExport(
+        normalizedAddress: account.address,
+        tempZipPath: archive.path,
+        operationDirectoryPath: operationDirectory.path,
+      );
+    } on EmailEncryptionKeyException {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+      rethrow;
+    } on EmailDeltaImexException {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+      throw const EmailEncryptionExportFailedException();
+    } on DeltaSafeException {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+      throw const EmailEncryptionExportFailedException();
+    } on FileSystemException {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+      throw const EmailEncryptionExportFailedException();
+    } on FormatException {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
+      throw const EmailEncryptionExportFailedException();
+    }
+  }
+
+  Future<void> saveEmailEncryptionKeyExport({
+    required String tempZipPath,
+    required String destinationPath,
+    required String operationDirectoryPath,
+    required String normalizedAddress,
+  }) async {
+    try {
+      final bytes = await readEmailEncryptionKeyExportBytes(
+        tempZipPath: tempZipPath,
+        normalizedAddress: normalizedAddress,
+      );
+      final destination = File(destinationPath);
+      await destination.writeAsBytes(bytes, flush: true);
+      if (!await destination.exists()) {
+        throw const EmailEncryptionSaveFailedException();
+      }
+      _validateEmailEncryptionExportArchiveBytes(
+        await destination.readAsBytes(),
+        normalizedAddress: normalizedAddress,
+        failure: const EmailEncryptionSaveFailedException(),
+      );
+    } on EmailEncryptionKeyException {
+      rethrow;
+    } on FileSystemException {
+      throw const EmailEncryptionSaveFailedException();
+    } finally {
+      await _cleanupEmailEncryptionOperationDirectory(
+        Directory(operationDirectoryPath),
+      );
+    }
+  }
+
+  Future<void> completeEmailEncryptionKeyExportAfterPlatformSave({
+    required String tempZipPath,
+    required String platformResultPath,
+    required String operationDirectoryPath,
+    required String normalizedAddress,
+  }) async {
+    try {
+      if (platformResultPath.trim().isEmpty) {
+        throw const EmailEncryptionSaveFailedException();
+      }
+      await readEmailEncryptionKeyExportBytes(
+        tempZipPath: tempZipPath,
+        normalizedAddress: normalizedAddress,
+      );
+    } on EmailEncryptionKeyException {
+      rethrow;
+    } on FileSystemException {
+      throw const EmailEncryptionSaveFailedException();
+    } finally {
+      await _cleanupEmailEncryptionOperationDirectory(
+        Directory(operationDirectoryPath),
+      );
+    }
+  }
+
+  Future<Uint8List> readEmailEncryptionKeyExportBytes({
+    required String tempZipPath,
+    required String normalizedAddress,
+  }) async {
+    try {
+      final normalized = normalizedAddressValue(normalizedAddress);
+      if (normalized == null || normalized.isEmpty) {
+        throw const EmailEncryptionSaveFailedException();
+      }
+      final bytes = await File(tempZipPath).readAsBytes();
+      _validateEmailEncryptionExportArchiveBytes(
+        bytes,
+        normalizedAddress: normalized,
+        failure: const EmailEncryptionSaveFailedException(),
+      );
+      return bytes;
+    } on EmailEncryptionKeyException {
+      rethrow;
+    } on FileSystemException {
+      throw const EmailEncryptionSaveFailedException();
+    }
+  }
+
+  Future<void> cleanupEmailEncryptionTempPath(String path) async {
+    final normalizedPath = p.normalize(path.trim());
+    if (normalizedPath.isEmpty || !p.isAbsolute(normalizedPath)) {
+      return;
+    }
+    final root = await appOwnedTemporaryDirectory(
+      emailEncryptionKeyTempDirectoryName,
+    );
+    if (!appOwnedPathIsChildOf(
+      rootPath: root.path,
+      candidatePath: normalizedPath,
+    )) {
+      return;
+    }
+    final entityType = await FileSystemEntity.type(
+      normalizedPath,
+      followLinks: false,
+    );
+    switch (entityType) {
+      case FileSystemEntityType.notFound:
+        return;
+      case FileSystemEntityType.directory:
+        await deleteAppOwnedDirectoryTree(
+          directory: Directory(normalizedPath),
+          expectedPath: normalizedPath,
+        );
+      case FileSystemEntityType.file:
+      case FileSystemEntityType.link:
+        await deleteAppOwnedFile(
+          file: File(normalizedPath),
+          expectedPath: normalizedPath,
+        );
+      case FileSystemEntityType.pipe:
+      case FileSystemEntityType.unixDomainSock:
+        return;
+    }
+  }
+
+  EmailOutgoingEncryptionMode outgoingEncryptionModeForAddress(String address) {
+    final normalized = normalizedAddressValue(address);
+    if (normalized == null || normalized.isEmpty) {
+      return EmailOutgoingEncryptionMode.plaintextNoAutocrypt;
+    }
+    return _emailEncryptionBetaEnabledByAddress[normalized] == true
+        ? EmailOutgoingEncryptionMode.autocryptBeta
+        : EmailOutgoingEncryptionMode.plaintextNoAutocrypt;
   }
 
   void cacheSessionCredentials({
@@ -689,6 +1457,10 @@ class EmailService {
       _runtimePhase == _EmailRuntimePhase.stopping ||
       _runtimePhase == _EmailRuntimePhase.disposing;
 
+  bool get _listenerAttached => _listenerTransport != null;
+
+  bool get _nativeCleanupPending => _pendingNativeCleanup != null;
+
   bool get _canProcessDeltaWork => _listenerAttached && !_blocksRuntimeReentry;
 
   bool get isRunning => _acceptsRuntimeWork;
@@ -743,6 +1515,9 @@ class EmailService {
   }
 
   Future<bool> canReconnectConfiguredSession({String? jid}) async {
+    if (_nativeCleanupPending || _blocksRuntimeReentry) {
+      return false;
+    }
     if (!hasActiveSession) {
       return false;
     }
@@ -817,6 +1592,10 @@ class EmailService {
     String? addressOverride,
     bool persistCredentials = true,
   }) async {
+    final pendingCleanup = _pendingNativeCleanup;
+    if (pendingCleanup != null) {
+      await pendingCleanup;
+    }
     _log.warning(
       'Email provisioning marker $_emailProvisioningBuildMarker '
       'entered ensureProvisioned for $jid',
@@ -835,15 +1614,11 @@ class EmailService {
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
       );
-      if (!_listenerAttached) {
-        _transport.addEventListener(_eventListener);
-        _listenerAttached = true;
-      }
+      _attachTransportListener();
     }
 
     if (!_listenerAttached) {
-      _transport.addEventListener(_eventListener);
-      _listenerAttached = true;
+      _attachTransportListener();
     }
 
     _activeCredentialScope = scope;
@@ -892,16 +1667,25 @@ class EmailService {
     final deltaAccountId = await _ensureEmailAccountSession(
       createIfMissing: true,
     );
-    var alreadyProvisioned =
+    final storedProvisioned =
         (await _credentialStore.read(key: provisionedKey)) ==
         _credentialTrueValue;
-    if (!shouldPersistCredentials &&
-        _credentialSession.isEphemerallyProvisioned(scope)) {
+    final ephemerallyProvisioned =
+        !shouldPersistCredentials &&
+        _credentialSession.isEphemerallyProvisioned(scope);
+    var alreadyProvisioned = storedProvisioned;
+    if (ephemerallyProvisioned) {
       alreadyProvisioned = true;
     }
     var transportConfigured = false;
+    final hasFreshPasswordOverride =
+        passwordOverride != null && passwordOverride.isNotEmpty;
     final shouldForceProvisioning =
-        shouldPersistCredentials && credentialsMutated;
+        credentialsMutated &&
+        !ephemerallyProvisioned &&
+        (shouldPersistCredentials ||
+            hasFreshPasswordOverride ||
+            !storedProvisioned);
     if (shouldForceProvisioning) {
       alreadyProvisioned = false;
       _credentialSession.clearEphemeralProvisioning(scope);
@@ -1014,6 +1798,12 @@ class EmailService {
           displayName: displayName,
           additional: configureOverrides,
           accountId: deltaAccountId,
+        );
+        await _applyOpenPgpBaseConfigForAccount(
+          _EmailAccountBinding(
+            address: address,
+            deltaAccountId: deltaAccountId,
+          ),
         );
         _resetImapCapabilities();
         await _markConnectionOverridesApplied(
@@ -1172,6 +1962,12 @@ class EmailService {
           additional: configureOverrides,
           accountId: deltaAccountId,
         );
+        await _applyOpenPgpBaseConfigForAccount(
+          _EmailAccountBinding(
+            address: address,
+            deltaAccountId: deltaAccountId,
+          ),
+        );
       } on DeltaSafeException catch (error, stackTrace) {
         if (!_isConfigureTimeout(error)) {
           rethrow;
@@ -1221,6 +2017,10 @@ class EmailService {
   }
 
   Future<void> start() async {
+    final pendingCleanup = _pendingNativeCleanup;
+    if (pendingCleanup != null) {
+      await pendingCleanup;
+    }
     if (_acceptsRuntimeWork) {
       return;
     }
@@ -1228,41 +2028,48 @@ class EmailService {
       throw const EmailServiceStoppingException();
     }
     if (!_listenerAttached) {
-      _transport.addEventListener(_eventListener);
-      _listenerAttached = true;
+      _attachTransportListener();
     }
+    await _applyOpenPgpBaseConfigForActiveAccounts();
     await _transport.start();
-    await _applyEmailReadReceiptPreference();
+    await _mdnConfigQueue.run(() => _applyEmailReadReceiptPreference());
     await _applyDeltaSelfSyncSuppression();
     _runtimePhase = _EmailRuntimePhase.running;
     _startImapSyncLoop();
   }
 
   Future<void> stop() async {
+    final pendingCleanup = _pendingNativeCleanup;
+    if (pendingCleanup != null) {
+      await pendingCleanup;
+    }
+    final transport = _transport;
     final existing = _stopFuture;
-    if (existing != null) {
+    if (existing != null && identical(_stopFutureTransport, transport)) {
       await existing;
       return;
     }
     if (!_acceptsRuntimeWork && !_listenerAttached) {
       return;
     }
-    final future = _runStop();
+    final future = _runStop(transport);
     _stopFuture = future;
+    _stopFutureTransport = transport;
     try {
       await future;
     } finally {
       if (identical(_stopFuture, future)) {
         _stopFuture = null;
+        _stopFutureTransport = null;
       }
     }
   }
 
-  Future<void> _runStop() async {
+  Future<void> _runStop(EmailDeltaTransport transport) async {
     if (_runtimePhase != _EmailRuntimePhase.disposing) {
       _runtimePhase = _EmailRuntimePhase.stopping;
     }
-    _detachTransportListener();
+    _detachTransportListener(transport: transport);
     await _stopForegroundKeepalive();
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
@@ -1270,17 +2077,22 @@ class EmailService {
     _clearNotificationQueue();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
+    _readStateQueue.reset();
     _imapSyncQueue.reset();
     _reconnectCatchUpQueue.reset();
     _reconnectRestartQueue.reset();
     _channelOverflowRecoveryQueue.reset();
     _credentialSession.invalidateBootstrapOperations();
-    await _deltaOperationQueue;
+    await _drainDeltaOperationQueueForShutdown();
     _resetDeltaOperationQueue();
-    await _transport.stop();
+    await transport.stop();
     if (_runtimePhase == _EmailRuntimePhase.stopping) {
       _runtimePhase = _EmailRuntimePhase.stopped;
     }
+  }
+
+  Future<void> _drainDeltaOperationQueueForShutdown() async {
+    await _deltaOperationQueue;
   }
 
   Future<void> ensureEventChannelActive() async {
@@ -1288,8 +2100,7 @@ class EmailService {
       return;
     }
     if (!_listenerAttached) {
-      _transport.addEventListener(_eventListener);
-      _listenerAttached = true;
+      _attachTransportListener();
     }
     final isInitialized =
         _databasePrefix != null && _databasePassphrase != null;
@@ -1302,7 +2113,19 @@ class EmailService {
     }
   }
 
-  Future<void> shutdown({String? jid, bool clearCredentials = false}) async {
+  Future<void> shutdown({
+    String? jid,
+    bool clearCredentials = false,
+    EmailShutdownMode mode = EmailShutdownMode.graceful,
+  }) async {
+    if (mode == EmailShutdownMode.logout) {
+      await _shutdownForLogout(jid: jid, clearCredentials: clearCredentials);
+      return;
+    }
+    final pendingCleanup = _pendingNativeCleanup;
+    if (pendingCleanup != null) {
+      await pendingCleanup;
+    }
     _runtimePhase = _EmailRuntimePhase.disposing;
     await stop();
     _resetImapCapabilities();
@@ -1321,6 +2144,159 @@ class EmailService {
     _credentialSession.clearRuntime();
     _pendingPushToken = null;
     _runtimePhase = _EmailRuntimePhase.stopped;
+  }
+
+  Future<void> _shutdownForLogout({
+    required String? jid,
+    required bool clearCredentials,
+  }) async {
+    _runtimePhase = _EmailRuntimePhase.disposing;
+    final transport = _transport;
+    final pendingRuntimeWork = _pendingRuntimeWorkForNativeCleanup();
+    final activeStop = identical(_stopFutureTransport, transport)
+        ? _stopFuture
+        : null;
+
+    _detachTransportListener(transport: transport);
+    await _stopForegroundKeepalive();
+    _stopImapSyncLoop();
+    _cancelContactsSyncTimer();
+    _cancelConnectivityDowngrade();
+    _clearNotificationQueue();
+    _resetRuntimeQueues();
+    _credentialSession.invalidateBootstrapOperations();
+    _resetDeltaOperationQueue();
+    _resetImapCapabilities();
+    _pendingPushToken = null;
+
+    Object? credentialError;
+    StackTrace? credentialStackTrace;
+    if (clearCredentials) {
+      final scope = _scopeForOptionalJid(jid);
+      if (scope != null) {
+        try {
+          await _clearCredentials(scope);
+        } on Exception catch (error, stackTrace) {
+          credentialError = error;
+          credentialStackTrace = stackTrace;
+        }
+      }
+    }
+    _credentialSession.clearRuntime(clearEphemeralState: true);
+    _startNativeLogoutCleanup(
+      transport: transport,
+      pendingRuntimeWork: pendingRuntimeWork,
+      activeStop: activeStop,
+      clearTransportCredentials: clearCredentials,
+    );
+    if (credentialError != null) {
+      Error.throwWithStackTrace(credentialError, credentialStackTrace!);
+    }
+  }
+
+  Future<void> _pendingRuntimeWorkForNativeCleanup() async {
+    await Future.wait<void>([
+      _deltaOperationQueue,
+      _foregroundKeepaliveQueue.pending,
+      _channelOverflowRecoveryQueue.pending,
+      _imapSyncQueue.pending,
+      _reconnectCatchUpQueue.pending,
+      _reconnectRestartQueue.pending,
+      _contactsSyncQueue.pending,
+      _chatlistSyncQueue.pending,
+      _readStateQueue.pending,
+      _mdnConfigQueue.pending,
+    ]);
+  }
+
+  void _resetRuntimeQueues() {
+    _foregroundKeepaliveQueue.reset();
+    _channelOverflowRecoveryQueue.reset();
+    _imapSyncQueue.reset();
+    _reconnectCatchUpQueue.reset();
+    _reconnectRestartQueue.reset();
+    _contactsSyncQueue.reset();
+    _chatlistSyncQueue.reset();
+    _readStateQueue.reset();
+    _mdnConfigQueue.reset();
+  }
+
+  void _startNativeLogoutCleanup({
+    required EmailDeltaTransport transport,
+    required Future<void> pendingRuntimeWork,
+    required Future<void>? activeStop,
+    required bool clearTransportCredentials,
+  }) {
+    if (_pendingNativeCleanup != null) {
+      return;
+    }
+    late final Future<void> cleanup;
+    cleanup =
+        _runNativeLogoutCleanup(
+          transport: transport,
+          pendingRuntimeWork: pendingRuntimeWork,
+          activeStop: activeStop,
+          clearTransportCredentials: clearTransportCredentials,
+        ).whenComplete(() {
+          if (!identical(_pendingNativeCleanup, cleanup)) {
+            return;
+          }
+          _pendingNativeCleanup = null;
+          if (identical(_transport, transport)) {
+            _replaceTransportAfterNativeCleanup(transport);
+          }
+          if (_runtimePhase == _EmailRuntimePhase.disposing) {
+            _runtimePhase = _EmailRuntimePhase.stopped;
+          }
+        });
+    _pendingNativeCleanup = cleanup;
+  }
+
+  Future<void> _runNativeLogoutCleanup({
+    required EmailDeltaTransport transport,
+    required Future<void> pendingRuntimeWork,
+    required Future<void>? activeStop,
+    required bool clearTransportCredentials,
+  }) async {
+    try {
+      await activeStop;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Email stop failed during logout cleanup',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await pendingRuntimeWork;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Pending email runtime work failed during logout cleanup',
+        error,
+        stackTrace,
+      );
+    }
+    if (clearTransportCredentials) {
+      try {
+        await transport.deconfigureAccount();
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Failed to deconfigure email account', error, stackTrace);
+      }
+    }
+    try {
+      await transport.dispose();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to dispose email transport', error, stackTrace);
+    }
+  }
+
+  void _replaceTransportAfterNativeCleanup(EmailDeltaTransport oldTransport) {
+    if (!identical(_transport, oldTransport)) {
+      return;
+    }
+    final nextTransport = _transportFactory();
+    _configureTransport(nextTransport);
+    _transport = nextTransport;
   }
 
   Future<Chat> ensureChatForAddress({
@@ -1426,6 +2402,7 @@ class EmailService {
     }
     final binding = await _bindEmailChat(chat);
     final chatId = binding.deltaChatId;
+    final mode = _outgoingEncryptionModeForAccount(binding.account);
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -1487,6 +2464,8 @@ class EmailService {
         htmlBody: normalizedHtml,
         quotingStanzaId: quotedStanzaId,
         accountId: binding.deltaAccountId,
+        forcePlaintext: mode.forcePlaintext,
+        skipAutocrypt: mode.skipAutocrypt,
       ),
     );
     if (shareId != null) {
@@ -1555,6 +2534,7 @@ class EmailService {
     }
     final binding = await _bindEmailChat(chat);
     final chatId = binding.deltaChatId;
+    final mode = _outgoingEncryptionModeForAccount(binding.account);
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(effectiveSubject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(effectiveHtmlCaption);
@@ -1601,6 +2581,8 @@ class EmailService {
         htmlCaption: normalizedHtml,
         quotingStanzaId: effectiveQuotedStanzaId,
         accountId: binding.deltaAccountId,
+        forcePlaintext: mode.forcePlaintext,
+        skipAutocrypt: mode.skipAutocrypt,
       ),
     );
     if (shareId != null) {
@@ -1764,6 +2746,7 @@ class EmailService {
       try {
         final binding = await _bindEmailChat(entry);
         final chatId = binding.deltaChatId;
+        final mode = _outgoingEncryptionModeForAccount(binding.account);
         int msgId;
         if (hasAttachment) {
           final updatedAttachment = attachment.copyWith(
@@ -1780,6 +2763,8 @@ class EmailService {
               htmlCaption: htmlCaptionWithToken,
               quotingStanzaId: quotedStanzaId,
               accountId: binding.deltaAccountId,
+              forcePlaintext: mode.forcePlaintext,
+              skipAutocrypt: mode.skipAutocrypt,
             ),
           );
         } else {
@@ -1794,6 +2779,8 @@ class EmailService {
               htmlBody: htmlBodyWithToken,
               quotingStanzaId: quotedStanzaId,
               accountId: binding.deltaAccountId,
+              forcePlaintext: mode.forcePlaintext,
+              skipAutocrypt: mode.skipAutocrypt,
             ),
           );
         }
@@ -2236,7 +3223,9 @@ class EmailService {
     final normalized = token.trim();
     if (normalized.isEmpty) return;
     _pendingPushToken = normalized;
-    if (_databasePrefix == null || _databasePassphrase == null) {
+    if (_nativeCleanupPending ||
+        _databasePrefix == null ||
+        _databasePassphrase == null) {
       return;
     }
     await _transport.registerPushToken(normalized);
@@ -2251,7 +3240,7 @@ class EmailService {
   Future<void> _handleNetworkAvailable(
     _EmailReconnectRestartPolicy restartPolicy,
   ) async {
-    if (_blocksRuntimeReentry) {
+    if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -2269,7 +3258,7 @@ class EmailService {
   }
 
   Future<void> handleNetworkLost() async {
-    if (_blocksRuntimeReentry) {
+    if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -2281,7 +3270,7 @@ class EmailService {
   Future<bool> performBackgroundFetch({
     Duration timeout = _imapSyncFetchTimeout,
   }) async {
-    if (_blocksRuntimeReentry) {
+    if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return false;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -2602,7 +3591,7 @@ class EmailService {
     DateTime? beforeTimestamp,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
-    if (chat.defaultTransport != MessageTransport.email) {
+    if (!chat.isEmailBacked) {
       return;
     }
     if (desiredWindow < _minimumHistoryWindow) {
@@ -2633,8 +3622,9 @@ class EmailService {
           accountId: account.deltaAccountId,
         ) ??
         resolvedChat;
-    final localCount = await db.countChatMessages(
+    final localCount = await db.countEmailBackedChatMessages(
       effectiveChat.jid,
+      deltaAccountId: account.deltaAccountId,
       filter: filter,
       includePseudoMessages: _includePseudoMessagesInBackfill,
     );
@@ -3101,7 +4091,8 @@ class EmailService {
     if (chat == null && chatId != null) {
       chat = await db.getChatByDeltaChatId(chatId, accountId: accountId);
     }
-    if (chat?.muted ?? false) {
+    final notificationBehavior = chat?.effectiveNotificationBehavior;
+    if (notificationBehavior?.isMuted ?? false) {
       return null;
     }
     final conversationTitle = _notificationConversationTitle(
@@ -3206,6 +4197,7 @@ class EmailService {
         conversationTitle: target.conversationTitle,
         sentAt: target.sentAt,
         isGroupConversation: target.isGroupConversation,
+        ignoreChannelMute: target.ignoreChannelMute,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
@@ -3261,6 +4253,7 @@ class EmailService {
         conversationTitle: target.conversationTitle,
         sentAt: target.sentAt,
         isGroupConversation: target.isGroupConversation,
+        ignoreChannelMute: target.ignoreChannelMute,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
@@ -3316,6 +4309,7 @@ class EmailService {
         conversationTitle: target.conversationTitle,
         sentAt: target.sentAt,
         isGroupConversation: target.isGroupConversation,
+        ignoreChannelMute: target.ignoreChannelMute,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
@@ -3376,9 +4370,16 @@ class EmailService {
       return null;
     }
     try {
-      final connectivity = await _transport.connectivity();
+      final connectivity = await _readTransportConnectivity(source: source);
+      if (!_acceptsRuntimeWork) {
+        return null;
+      }
       if (connectivity == null) return null;
       _recordConnectivitySample(connectivity: connectivity, source: source);
+      await _maybeLogConnectingConnectivityDetail(
+        connectivity: connectivity,
+        source: source,
+      );
       if (recoveryCompleted && connectivity >= _connectivityWorkingMin) {
         _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready(), source: source);
@@ -3409,9 +4410,26 @@ class EmailService {
         source: _EmailSyncSource.connectivityApply,
       );
       return connectivity;
+    } on TimeoutException {
+      return null;
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
       return null;
+    }
+  }
+
+  Future<int?> _readTransportConnectivity({
+    required _EmailSyncSource source,
+  }) async {
+    try {
+      return await _transport.connectivity().timeout(_connectivityProbeTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _log.warning(
+        'Timed out refreshing email connectivity. source=${source.name}',
+        error,
+        stackTrace,
+      );
+      rethrow;
     }
   }
 
@@ -3439,7 +4457,9 @@ class EmailService {
       return;
     }
     try {
-      final connectivity = await _transport.connectivity();
+      final connectivity = await _readTransportConnectivity(
+        source: _EmailSyncSource.connectivityConfirm,
+      );
       final connectivityLevel = connectivity ?? fallbackConnectivity;
       _recordConnectivitySample(
         connectivity: connectivityLevel,
@@ -3455,6 +4475,8 @@ class EmailService {
         connectivityLevel,
         source: _EmailSyncSource.connectivityConfirm,
       );
+    } on TimeoutException {
+      return;
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to confirm email connectivity', error, stackTrace);
     }
@@ -3513,6 +4535,74 @@ class EmailService {
       '$_emailLogValueLabel=$connectivity, '
       '$_emailLogStateLabel=${_syncState.status.name}',
     );
+  }
+
+  Future<void> _maybeLogConnectingConnectivityDetail({
+    required int connectivity,
+    required _EmailSyncSource source,
+  }) async {
+    if (connectivity != _connectivityConnectingMin) {
+      _consecutiveConnectingSamples = 0;
+      return;
+    }
+    _consecutiveConnectingSamples += 1;
+    if (_consecutiveConnectingSamples <
+        _connectivityDetailConnectingSampleThreshold) {
+      return;
+    }
+    final now = DateTime.timestamp();
+    final lastLoggedAt = _lastConnectivityDetailLoggedAt;
+    if (lastLoggedAt != null &&
+        now.difference(lastLoggedAt) < _connectivityDetailLogInterval) {
+      return;
+    }
+    _lastConnectivityDetailLoggedAt = now;
+    try {
+      final detail = _sanitizeConnectivityDetail(
+        await _transport.connectivityDetails(),
+      );
+      _log.warning(
+        '$_emailConnectivityDetailLogPrefix: '
+        '$_emailLogSourceLabel=${source.logLabel}, '
+        '$_emailLogValueLabel=$connectivity, '
+        '$_emailLogStateLabel=${_syncState.status.name}, '
+        '$_emailLogIoRunningLabel=${_transport.isIoRunning}, '
+        '$_emailLogDetailLabel=${detail ?? _emailLogUnknownValue}',
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.finer('Failed to read email connectivity detail', error, stackTrace);
+    }
+  }
+
+  String? _sanitizeConnectivityDetail(String? detail) {
+    if (detail == null) {
+      return null;
+    }
+    final withoutStyle = detail.replaceAll(
+      RegExp(r'<style\b[^>]*>.*?</style>', caseSensitive: false, dotAll: true),
+      ' ',
+    );
+    final withoutScript = withoutStyle.replaceAll(
+      RegExp(
+        r'<script\b[^>]*>.*?</script>',
+        caseSensitive: false,
+        dotAll: true,
+      ),
+      ' ',
+    );
+    final withoutTags = withoutScript.replaceAll(RegExp(r'<[^>]+>'), ' ');
+    final collapsed = withoutTags.trim().split(RegExp(r'\s+')).join(' ');
+    if (collapsed.isEmpty) {
+      return null;
+    }
+    final redacted = collapsed.replaceAll(
+      RegExp(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'),
+      '<email>',
+    );
+    if (redacted.length <= _connectivityDetailMaxLength) {
+      return redacted;
+    }
+    return redacted.substring(0, _connectivityDetailMaxLength);
   }
 
   void _logSyncStateTransition({
@@ -3593,10 +4683,22 @@ class EmailService {
     _logSyncStateTransition(previous: previous, next: next, source: source);
   }
 
-  void _detachTransportListener() {
-    if (!_listenerAttached) return;
-    _transport.removeEventListener(_eventListener);
-    _listenerAttached = false;
+  void _attachTransportListener([EmailDeltaTransport? transport]) {
+    final target = transport ?? _transport;
+    if (identical(_listenerTransport, target)) return;
+    _detachTransportListener();
+    target.addEventListener(_eventListener);
+    _listenerTransport = target;
+  }
+
+  void _detachTransportListener({EmailDeltaTransport? transport}) {
+    final attached = _listenerTransport;
+    if (attached == null) return;
+    if (transport != null && !identical(attached, transport)) return;
+    attached.removeEventListener(_eventListener);
+    if (identical(_listenerTransport, attached)) {
+      _listenerTransport = null;
+    }
   }
 
   void _clearNotificationQueue() {
@@ -3708,17 +4810,34 @@ class EmailService {
         !_foregroundKeepaliveServiceAcquired) {
       return;
     }
-    _foregroundKeepaliveEnabled = false;
-    _foregroundKeepaliveQueue.reset();
-    final bridge = _foregroundBridge;
-    if (bridge != null && _foregroundKeepaliveServiceAcquired) {
-      try {
-        await bridge.send([emailKeepalivePrefix, emailKeepaliveStopCommand]);
-      } on Exception catch (error, stackTrace) {
-        _log.finer('Failed to stop email keepalive', error, stackTrace);
+    final stopwatch = Stopwatch()..start();
+    _log.info(
+      'Stopping email foreground keepalive. '
+      'enabled=$_foregroundKeepaliveEnabled '
+      'listenerAttached=$_foregroundKeepaliveListenerAttached '
+      'serviceAcquired=$_foregroundKeepaliveServiceAcquired',
+    );
+    try {
+      _foregroundKeepaliveEnabled = false;
+      _foregroundKeepaliveQueue.reset();
+      final bridge = _foregroundBridge;
+      if (bridge != null && _foregroundKeepaliveServiceAcquired) {
+        try {
+          await bridge.send([emailKeepalivePrefix, emailKeepaliveStopCommand]);
+        } on Exception catch (error, stackTrace) {
+          _log.finer('Failed to stop email keepalive', error, stackTrace);
+        }
       }
+      await _releaseForegroundKeepaliveResources();
+    } finally {
+      stopwatch.stop();
+      _log.info(
+        'Stopped email foreground keepalive. '
+        'elapsedMs=${stopwatch.elapsedMilliseconds} '
+        'listenerAttached=$_foregroundKeepaliveListenerAttached '
+        'serviceAcquired=$_foregroundKeepaliveServiceAcquired',
+      );
     }
-    await _releaseForegroundKeepaliveResources();
   }
 
   void _attachForegroundKeepaliveListener() {
@@ -3744,7 +4863,17 @@ class EmailService {
       return;
     }
     if (_foregroundKeepaliveServiceAcquired) {
-      await bridge.release(foregroundClientEmailKeepalive);
+      final releaseStopwatch = Stopwatch()..start();
+      _log.info('Releasing email foreground keepalive lease.');
+      try {
+        await bridge.release(foregroundClientEmailKeepalive);
+      } finally {
+        releaseStopwatch.stop();
+        _log.info(
+          'Email foreground keepalive lease release finished. '
+          'elapsedMs=${releaseStopwatch.elapsedMilliseconds}',
+        );
+      }
       _foregroundKeepaliveServiceAcquired = false;
     }
     if (_foregroundKeepaliveListenerAttached) {
@@ -4070,6 +5199,9 @@ class EmailService {
     if (kEnableDemoChats) {
       return;
     }
+    if (_nativeCleanupPending) {
+      throw const EmailServiceStoppingException();
+    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       throw StateError('Call ensureProvisioned before using EmailService.');
     }
@@ -4082,7 +5214,7 @@ class EmailService {
   }
 
   Future<bool> _ensureBackgroundSyncReady() async {
-    if (_blocksRuntimeReentry || !hasActiveSession) {
+    if (_nativeCleanupPending || _blocksRuntimeReentry || !hasActiveSession) {
       return false;
     }
     await ensureEventChannelActive();
@@ -4592,11 +5724,23 @@ class EmailService {
     return normalized;
   }
 
+  bool _usesOwnEmailBackedThread(Chat chat) {
+    final String normalizedJid = normalizeEmailAddress(chat.jid);
+    if (chat.defaultTransport.isEmail ||
+        _isSyntheticEmailChatAddress(normalizedJid)) {
+      return false;
+    }
+    return chat.deltaChatId != null || _storedRealEmailAddress(chat) != null;
+  }
+
   Future<Chat> _storedEmailChatForAccount({
     required Chat chat,
     required int deltaAccountId,
   }) async {
     final db = await _databaseBuilder();
+    if (_usesOwnEmailBackedThread(chat)) {
+      return await db.getChat(chat.jid) ?? chat;
+    }
     final String? recipientAddress = chat.type == ChatType.chat
         ? _recipientAddressForChat(chat)
         : null;
@@ -4738,14 +5882,19 @@ class EmailService {
       accountId: deltaAccountId,
     );
     final db = await _databaseBuilder();
+    final xmppSelfJid = _xmppSelfJidProvider?.call();
+    await db.removeDeltaPlaceholderDuplicates(
+      deltaAccountId: deltaAccountId,
+      placeholderJids: deltaPlaceholderJids,
+      selfJid: xmppSelfJid,
+      emailSelfJid: normalizedAddress,
+    );
     await db.replaceDeltaPlaceholderSelfJids(
       deltaAccountId: deltaAccountId,
       resolvedAddress: normalizedAddress,
       placeholderJids: deltaPlaceholderJids,
-    );
-    await db.removeDeltaPlaceholderDuplicates(
-      deltaAccountId: deltaAccountId,
-      placeholderJids: deltaPlaceholderJids,
+      selfJid: xmppSelfJid,
+      emailSelfJid: normalizedAddress,
     );
   }
 
@@ -4789,6 +5938,469 @@ class EmailService {
     );
   }
 
+  EmailOutgoingEncryptionMode _outgoingEncryptionModeForAccount(
+    _EmailAccountBinding account,
+  ) {
+    return outgoingEncryptionModeForAddress(account.address);
+  }
+
+  Future<_EmailAccountBinding> _requireActiveEncryptionAccount() async {
+    final scope = _activeCredentialScope;
+    if (_activeAccount == null || scope == null) {
+      throw const EmailEncryptionNoActiveAccountException();
+    }
+    return _accountBindingForScope(scope: scope);
+  }
+
+  Future<_EmailAccountBinding>
+  _requireActiveEncryptionAccountForContactKey() async {
+    try {
+      return await _requireActiveEncryptionAccount();
+    } on EmailEncryptionNoActiveAccountException {
+      throw const EmailContactKeyNoActiveAccountException();
+    }
+  }
+
+  Future<Directory> _createEmailEncryptionOperationDirectory() async {
+    final root = await appOwnedTemporaryDirectory(
+      emailEncryptionKeyTempDirectoryName,
+    );
+    await root.create(recursive: true);
+    final operationName = normalizeAppOwnedPathSegment(
+      'op-${DateTime.timestamp().microsecondsSinceEpoch}-${const Uuid().v4()}',
+    );
+    final directory = Directory(p.join(root.path, operationName));
+    await directory.create();
+    return directory;
+  }
+
+  Future<EmailOpenPgpKeyMetadata> _inspectOpenPgpKeyFile({
+    required File file,
+    required String expectedAddress,
+    required DeltaOpenPgpKeyKind expectedKind,
+  }) async {
+    return _inspectOpenPgpArmoredKey(
+      armored: await file.readAsString(),
+      expectedAddress: expectedAddress,
+      expectedKind: expectedKind,
+    );
+  }
+
+  Future<EmailOpenPgpKeyMetadata> _inspectOpenPgpArmoredKey({
+    required String armored,
+    required String expectedAddress,
+    required DeltaOpenPgpKeyKind expectedKind,
+  }) async {
+    final metadata = await _transport.inspectOpenPgpKey(
+      armored: armored,
+      expectedAddress: expectedAddress,
+      expectedKind: expectedKind,
+    );
+    return EmailOpenPgpKeyMetadata(
+      kind: switch (metadata.kind) {
+        DeltaOpenPgpKeyKind.public => EmailOpenPgpKeyKind.public,
+        DeltaOpenPgpKeyKind.private => EmailOpenPgpKeyKind.private,
+      },
+      fingerprint: metadata.fingerprint,
+      userIds: metadata.userIds,
+      hasExpectedAddress: metadata.hasExpectedAddress,
+      hasEncryptionCapability: metadata.hasEncryptionCapability,
+    );
+  }
+
+  Future<String> _readSingleArmoredPublicKey(File source) async {
+    final sourceType = await FileSystemEntity.type(
+      source.path,
+      followLinks: false,
+    );
+    if (sourceType != FileSystemEntityType.file) {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+    final extension = p.extension(source.path).toLowerCase();
+    if (!_emailEncryptionDirectImportExtensions.contains(extension)) {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+    final text = await source.readAsString();
+    if (text.contains(_privateKeyArmorBegin)) {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+    final publicBlockCount = _armorMarkerCount(text, _publicKeyArmorBegin);
+    if (publicBlockCount != 1) {
+      throw const EmailContactKeyUnsupportedFormatException();
+    }
+    return text;
+  }
+
+  int _armorMarkerCount(String value, String marker) =>
+      marker.isEmpty ? 0 : marker.allMatches(value).length;
+
+  Future<File> _prepareEmailEncryptionImportFile({
+    required File source,
+    required Directory operationDirectory,
+  }) async {
+    final sourceType = await FileSystemEntity.type(
+      source.path,
+      followLinks: false,
+    );
+    if (sourceType != FileSystemEntityType.file) {
+      throw const EmailEncryptionUnsupportedKeyFormatException();
+    }
+    final extension = p.extension(source.path).toLowerCase();
+    if (extension == '.zip') {
+      return _prepareEmailEncryptionImportFileFromZip(
+        source: source,
+        operationDirectory: operationDirectory,
+      );
+    }
+    if (!_emailEncryptionDirectImportExtensions.contains(extension)) {
+      throw const EmailEncryptionUnsupportedKeyFormatException();
+    }
+    final bytes = await source.readAsBytes();
+    if (!_containsAsciiArmoredPrivateKey(bytes)) {
+      throw const EmailEncryptionUnsupportedKeyFormatException();
+    }
+    final importFile = File(
+      p.join(operationDirectory.path, _emailEncryptionImportFileName),
+    );
+    await importFile.writeAsBytes(bytes, flush: true);
+    return importFile;
+  }
+
+  Future<File> _prepareEmailEncryptionImportFileFromZip({
+    required File source,
+    required Directory operationDirectory,
+  }) async {
+    final archive = ZipDecoder().decodeBytes(await source.readAsBytes());
+    final candidates = <ArchiveFile>[];
+    for (final entry in archive.files) {
+      final name = entry.name.trim();
+      if (name.isEmpty ||
+          p.isAbsolute(name) ||
+          p.basename(name) != name ||
+          p.normalize(name) != name ||
+          entry.isSymbolicLink ||
+          !entry.isFile) {
+        throw const EmailEncryptionUnsupportedKeyFormatException();
+      }
+      final bytes = entry.readBytes();
+      if (bytes != null && _containsAsciiArmoredPrivateKey(bytes)) {
+        candidates.add(entry);
+      }
+    }
+    if (candidates.isEmpty) {
+      throw const EmailEncryptionNoPrivateKeyFoundException();
+    }
+    final selected = _selectEmailEncryptionImportCandidate(candidates);
+    final bytes = selected.readBytes();
+    if (bytes == null || !_containsAsciiArmoredPrivateKey(bytes)) {
+      throw const EmailEncryptionNoPrivateKeyFoundException();
+    }
+    final importFile = File(
+      p.join(operationDirectory.path, _emailEncryptionImportFileName),
+    );
+    await importFile.writeAsBytes(bytes, flush: true);
+    return importFile;
+  }
+
+  ArchiveFile _selectEmailEncryptionImportCandidate(
+    List<ArchiveFile> candidates,
+  ) {
+    if (candidates.length == 1) {
+      return candidates.single;
+    }
+    final defaultNamePattern = RegExp(
+      r'^private-key-.+-default-[0-9A-Fa-f]+\.asc$',
+    );
+    final defaultCandidates = candidates
+        .where((entry) => defaultNamePattern.hasMatch(p.basename(entry.name)))
+        .toList(growable: false);
+    if (defaultCandidates.length == 1) {
+      return defaultCandidates.single;
+    }
+    throw const EmailEncryptionAmbiguousKeyArchiveException();
+  }
+
+  bool _containsAsciiArmoredPrivateKey(List<int> bytes) {
+    final text = String.fromCharCodes(bytes);
+    return text.contains(_privateKeyArmorBegin);
+  }
+
+  bool _containsAsciiArmoredPublicKey(List<int> bytes) {
+    final text = String.fromCharCodes(bytes);
+    return text.contains(_publicKeyArmorBegin);
+  }
+
+  Future<void> _verifyEmailEncryptionKey(
+    _EmailAccountBinding account, {
+    required EmailEncryptionKeyException failure,
+  }) async {
+    final keyId = await _transport.getCoreConfig(
+      _openPgpKeyIdConfigKey,
+      accountId: account.deltaAccountId,
+    );
+    if (keyId == null || keyId.trim().isEmpty) {
+      throw failure;
+    }
+  }
+
+  Future<File> _zipEmailEncryptionExport({
+    required Directory operationDirectory,
+    required _EmailAccountBinding account,
+  }) async {
+    final ascFiles = <({String name, File file, Uint8List bytes})>[];
+    await for (final entity in operationDirectory.list(followLinks: false)) {
+      final entityPath = entity.path;
+      final entityType = await FileSystemEntity.type(
+        entityPath,
+        followLinks: false,
+      );
+      if (entityType != FileSystemEntityType.file ||
+          p.extension(entityPath).toLowerCase() != '.asc') {
+        continue;
+      }
+      final file = File(entityPath);
+      ascFiles.add((
+        name: p.basename(file.path),
+        file: file,
+        bytes: await file.readAsBytes(),
+      ));
+    }
+    ({String fingerprint, String name, Uint8List bytes})? privateKey;
+    for (final candidate in ascFiles) {
+      final privateFingerprint = _defaultEmailEncryptionExportKeyFingerprint(
+        candidate.name,
+        normalizedAddress: account.address,
+        kind: EmailOpenPgpKeyKind.private,
+      );
+      if (privateFingerprint == null) {
+        continue;
+      }
+      if (privateKey != null) {
+        throw const EmailEncryptionExportFailedException();
+      }
+      if (!_containsAsciiArmoredPrivateKey(candidate.bytes)) {
+        throw const EmailEncryptionExportFailedException();
+      }
+      final metadata = await _inspectOpenPgpKeyFile(
+        file: candidate.file,
+        expectedAddress: account.address,
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      );
+      if (!metadata.hasEncryptionCapability ||
+          metadata.fingerprint.toLowerCase() !=
+              privateFingerprint.toLowerCase()) {
+        throw const EmailEncryptionExportFailedException();
+      }
+      privateKey = (
+        fingerprint: privateFingerprint,
+        name: candidate.name,
+        bytes: candidate.bytes,
+      );
+    }
+    final privateKeyValue = privateKey;
+    if (privateKeyValue == null) {
+      throw const EmailEncryptionExportFailedException();
+    }
+    ({String name, Uint8List bytes})? publicKey;
+    for (final candidate in ascFiles) {
+      final publicFingerprint = _defaultEmailEncryptionExportKeyFingerprint(
+        candidate.name,
+        normalizedAddress: account.address,
+        kind: EmailOpenPgpKeyKind.public,
+      );
+      if (publicFingerprint == null ||
+          publicFingerprint.toLowerCase() !=
+              privateKeyValue.fingerprint.toLowerCase()) {
+        continue;
+      }
+      if (publicKey != null) {
+        throw const EmailEncryptionExportFailedException();
+      }
+      if (!_containsAsciiArmoredPublicKey(candidate.bytes)) {
+        throw const EmailEncryptionExportFailedException();
+      }
+      final metadata = await _inspectOpenPgpKeyFile(
+        file: candidate.file,
+        expectedAddress: account.address,
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      );
+      if (!metadata.hasEncryptionCapability ||
+          metadata.fingerprint.toLowerCase() !=
+              privateKeyValue.fingerprint.toLowerCase()) {
+        throw const EmailEncryptionExportFailedException();
+      }
+      publicKey = (name: candidate.name, bytes: candidate.bytes);
+    }
+    final archive = Archive()
+      ..addFile(ArchiveFile.bytes(privateKeyValue.name, privateKeyValue.bytes));
+    final publicKeyValue = publicKey;
+    if (publicKeyValue != null) {
+      archive.addFile(
+        ArchiveFile.bytes(publicKeyValue.name, publicKeyValue.bytes),
+      );
+    }
+    final archiveBytes = ZipEncoder().encode(archive);
+    _validateEmailEncryptionExportArchiveBytes(
+      archiveBytes,
+      normalizedAddress: account.address,
+      failure: const EmailEncryptionExportFailedException(),
+    );
+    final archivePath = p.join(
+      operationDirectory.path,
+      _emailEncryptionExportArchiveName,
+    );
+    final archiveFile = File(archivePath);
+    await archiveFile.writeAsBytes(archiveBytes, flush: true);
+    if (!await archiveFile.exists()) {
+      throw const EmailEncryptionExportFailedException();
+    }
+    _validateEmailEncryptionExportArchiveBytes(
+      await archiveFile.readAsBytes(),
+      normalizedAddress: account.address,
+      failure: const EmailEncryptionExportFailedException(),
+    );
+    return archiveFile;
+  }
+
+  String? _defaultEmailEncryptionExportKeyFingerprint(
+    String basename, {
+    required String normalizedAddress,
+    required EmailOpenPgpKeyKind kind,
+  }) {
+    final prefix = switch (kind) {
+      EmailOpenPgpKeyKind.public => 'public',
+      EmailOpenPgpKeyKind.private => 'private',
+    };
+    final match = RegExp(
+      '^$prefix-key-${RegExp.escape(normalizedAddress)}-default-'
+      r'([0-9A-Fa-f]+)\.asc$',
+    ).firstMatch(basename);
+    return match?.group(1);
+  }
+
+  void _validateEmailEncryptionExportArchiveBytes(
+    List<int> bytes, {
+    required String normalizedAddress,
+    required EmailEncryptionKeyException failure,
+  }) {
+    if (bytes.isEmpty) {
+      throw failure;
+    }
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes);
+      String? privateFingerprint;
+      final publicFingerprints = <String>[];
+      for (final entry in archive.files) {
+        final name = entry.name.trim();
+        if (name.isEmpty ||
+            p.isAbsolute(name) ||
+            p.basename(name) != name ||
+            p.normalize(name) != name ||
+            entry.isSymbolicLink ||
+            !entry.isFile) {
+          throw failure;
+        }
+        final privateEntryFingerprint =
+            _defaultEmailEncryptionExportKeyFingerprint(
+              name,
+              normalizedAddress: normalizedAddress,
+              kind: EmailOpenPgpKeyKind.private,
+            );
+        if (privateEntryFingerprint != null) {
+          final entryBytes = entry.readBytes();
+          if (entryBytes == null ||
+              !_containsAsciiArmoredPrivateKey(entryBytes)) {
+            throw failure;
+          }
+          if (privateFingerprint != null) {
+            throw failure;
+          }
+          privateFingerprint = privateEntryFingerprint;
+          continue;
+        }
+        final publicEntryFingerprint =
+            _defaultEmailEncryptionExportKeyFingerprint(
+              name,
+              normalizedAddress: normalizedAddress,
+              kind: EmailOpenPgpKeyKind.public,
+            );
+        if (publicEntryFingerprint == null) {
+          throw failure;
+        }
+        final entryBytes = entry.readBytes();
+        if (entryBytes == null || !_containsAsciiArmoredPublicKey(entryBytes)) {
+          throw failure;
+        }
+        publicFingerprints.add(publicEntryFingerprint);
+      }
+      final privateFingerprintValue = privateFingerprint;
+      if (privateFingerprintValue == null) {
+        throw failure;
+      }
+      for (final fingerprint in publicFingerprints) {
+        if (fingerprint.toLowerCase() !=
+            privateFingerprintValue.toLowerCase()) {
+          throw failure;
+        }
+      }
+      if (publicFingerprints.length > 1) {
+        throw failure;
+      }
+    } on FormatException {
+      throw failure;
+    }
+  }
+
+  Future<void> _cleanupEmailEncryptionOperationDirectory(
+    Directory directory,
+  ) async {
+    try {
+      await cleanupEmailEncryptionTempPath(directory.path);
+    } on FileSystemException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to clean email encryption key temp directory.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _applyOpenPgpBaseConfigForAccount(
+    _EmailAccountBinding account,
+  ) async {
+    final supported = await _transport.setCoreConfigIfSupported(
+      key: _signUnencryptedConfigKey,
+      value: _signUnencryptedDisabledValue,
+      accountId: account.deltaAccountId,
+    );
+    if (!supported) {
+      _log.fine(
+        'Delta config $_signUnencryptedConfigKey unsupported for '
+        'accountId=${account.deltaAccountId} address=${account.address}.',
+      );
+    }
+  }
+
+  Future<void> _applyOpenPgpBaseConfigForActiveAccounts() async {
+    final accountIds = await _transport.accountIds();
+    final targetAccountIds = accountIds.isEmpty
+        ? <int>[_transport.activeAccountId]
+        : accountIds;
+    for (final accountId in targetAccountIds) {
+      final address = _transport.selfJidForAccount(accountId);
+      final normalizedAddress = normalizedAddressValue(address);
+      if (normalizedAddress == null || normalizedAddress.isEmpty) {
+        continue;
+      }
+      await _applyOpenPgpBaseConfigForAccount(
+        _EmailAccountBinding(
+          address: normalizedAddress,
+          deltaAccountId: accountId,
+        ),
+      );
+    }
+  }
+
   Future<void> _ensureAccountConfigured({
     required String scope,
     required _EmailAccountBinding account,
@@ -4799,6 +6411,7 @@ class EmailService {
       accountId: account.deltaAccountId,
     );
     if (configured && !forceProvisioning) {
+      await _applyOpenPgpBaseConfigForAccount(account);
       return;
     }
     final EmailAccount? credentials = await _accountForScope(scope);
@@ -4819,6 +6432,7 @@ class EmailService {
         additional: configureOverrides,
         accountId: account.deltaAccountId,
       );
+      await _applyOpenPgpBaseConfigForAccount(account);
     } on DeltaSafeException catch (error, stackTrace) {
       final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
         error,
@@ -4871,6 +6485,51 @@ class EmailService {
         ? _recipientAddressForChat(resolvedChat)
         : null;
     if (recipientAddress != null) {
+      final trustedKey = await _trustedContactKeyForNewSend(
+        recipientAddress: recipientAddress,
+        deltaAccountId: deltaAccountId,
+      );
+      if (trustedKey != null) {
+        if (await _isEncryptedSendableDeltaChat(
+          chatId: trustedKey.deltaChatId,
+          deltaAccountId: deltaAccountId,
+        )) {
+          await db.upsertEmailChatAccount(
+            chatJid: resolvedChat.jid,
+            deltaAccountId: deltaAccountId,
+            deltaChatId: trustedKey.deltaChatId,
+          );
+          await _updateActiveChatDeltaReference(
+            chat: resolvedChat,
+            deltaAccountId: deltaAccountId,
+            deltaChatId: trustedKey.deltaChatId,
+            emailAddress: recipientAddress,
+          );
+          return trustedKey.deltaChatId;
+        }
+        _log.warning(
+          'Trusted OpenPGP chat ${trustedKey.deltaChatId} for '
+          '$recipientAddress on account $deltaAccountId because it is not '
+          'ready for encrypted sends; refusing plaintext fallback.',
+        );
+        throw const EmailServiceTrustedContactKeyUnavailableException();
+      }
+      if (existing != null &&
+          outgoingEncryptionModeForAddress(
+                _transport.selfJidForAccount(deltaAccountId) ?? '',
+              ) ==
+              EmailOutgoingEncryptionMode.autocryptBeta) {
+        if (await _isEncryptedSendableDeltaChat(
+          chatId: existing,
+          deltaAccountId: deltaAccountId,
+        )) {
+          return existing;
+        }
+        _log.fine(
+          'Ignoring stored Delta chat $existing for $recipientAddress on '
+          'account $deltaAccountId because it is not ready for encrypted sends.',
+        );
+      }
       final String displayName =
           resolvedChat.contactDisplayName ?? resolvedChat.title;
       try {
@@ -4882,9 +6541,13 @@ class EmailService {
             accountId: deltaAccountId,
           ),
         );
-        final Chat targetChat =
-            await db.getChatByDeltaChatId(chatId, accountId: deltaAccountId) ??
-            resolvedChat;
+        final Chat targetChat = !_usesOwnEmailBackedThread(resolvedChat)
+            ? await db.getChatByDeltaChatId(
+                    chatId,
+                    accountId: deltaAccountId,
+                  ) ??
+                  resolvedChat
+            : resolvedChat;
         await db.upsertEmailChatAccount(
           chatJid: targetChat.jid,
           deltaAccountId: deltaAccountId,
@@ -4934,6 +6597,41 @@ class EmailService {
     return null;
   }
 
+  Future<bool> _isEncryptedSendableDeltaChat({
+    required int chatId,
+    required int deltaAccountId,
+  }) async {
+    final capabilities = await _transport.chatSendCapabilities(
+      chatId: chatId,
+      accountId: deltaAccountId,
+    );
+    return capabilities.isEncryptedAndSendable;
+  }
+
+  Future<EmailTrustedContactKey?> _trustedContactKeyForNewSend({
+    required String recipientAddress,
+    required int deltaAccountId,
+  }) async {
+    final accountAddress = normalizedAddressValue(
+      _transport.selfJidForAccount(deltaAccountId),
+    );
+    if (accountAddress == null ||
+        outgoingEncryptionModeForAddress(accountAddress) !=
+            EmailOutgoingEncryptionMode.autocryptBeta) {
+      return null;
+    }
+    final normalizedRecipient = normalizedAddressValue(recipientAddress);
+    if (normalizedRecipient == null || normalizedRecipient.isEmpty) {
+      return null;
+    }
+    final db = await _databaseBuilder();
+    final data = await db.getEmailTrustedContactKey(
+      deltaAccountId: deltaAccountId,
+      address: normalizedRecipient,
+    );
+    return data == null ? null : EmailTrustedContactKey.fromData(data);
+  }
+
   Future<_EmailChatBinding> _bindEmailChat(Chat chat) async {
     await _ensureReady();
     final String scope = _requireActiveScope();
@@ -4971,6 +6669,9 @@ class EmailService {
     required String operation,
     required Future<T> Function() body,
   }) async {
+    if (_nativeCleanupPending) {
+      throw const EmailServiceStoppingException();
+    }
     try {
       return await body();
     } on DeltaSafeException catch (error) {
@@ -5029,27 +6730,27 @@ class EmailService {
   ///
   /// Call this when the user opens a chat.
   Future<bool> markNoticedChat(Chat chat) async {
-    await _ensureReady();
-    final account = await _accountBindingForChat(chat);
-    final Chat resolvedChat = await _storedEmailChatForAccount(
-      chat: chat,
-      deltaAccountId: account.deltaAccountId,
-    );
-    final chatId = await _deltaChatIdForAccount(
-      chat: resolvedChat,
-      deltaAccountId: account.deltaAccountId,
-    );
-    if (chatId == null) {
-      return false;
-    }
-    final noticed = await _transport.markNoticedChat(
-      chatId,
-      accountId: account.deltaAccountId,
-    );
-    if (!noticed) {
-      return false;
-    }
-    return true;
+    var noticed = false;
+    await _readStateQueue.run(() async {
+      await _ensureReady();
+      final account = await _accountBindingForChat(chat);
+      final Chat resolvedChat = await _storedEmailChatForAccount(
+        chat: chat,
+        deltaAccountId: account.deltaAccountId,
+      );
+      final chatId = await _deltaChatIdForAccount(
+        chat: resolvedChat,
+        deltaAccountId: account.deltaAccountId,
+      );
+      if (chatId == null) {
+        return;
+      }
+      noticed = await _transport.markNoticedChat(
+        chatId,
+        accountId: account.deltaAccountId,
+      );
+    });
+    return noticed;
   }
 
   /// Marks messages as seen, triggering MDN if enabled.
@@ -5071,21 +6772,32 @@ class EmailService {
       return true;
     }
     try {
-      await _ensureReady();
-      await _applyEmailReadReceiptPreference(
-        accountIds: idsByAccount.keys,
-        enabled: sendReadReceipts,
-      );
       var success = true;
-      for (final entry in idsByAccount.entries) {
-        final result = await _transport.markSeenMessages(
-          entry.value,
-          accountId: entry.key,
-        );
-        if (!result) {
-          success = false;
-        }
-      }
+      await _readStateQueue.run(() async {
+        await _mdnConfigQueue.run(() async {
+          await _ensureReady();
+          try {
+            await _applyEmailReadReceiptPreference(
+              accountIds: idsByAccount.keys,
+              enabled: sendReadReceipts,
+            );
+            for (final entry in idsByAccount.entries) {
+              final result = await _transport.markSeenMessages(
+                entry.value,
+                accountId: entry.key,
+              );
+              if (!result) {
+                success = false;
+              }
+            }
+          } finally {
+            await _applyEmailReadReceiptPreference(
+              accountIds: idsByAccount.keys,
+              enabled: _emailReadReceiptsEnabled,
+            );
+          }
+        });
+      });
       return success;
     } on DeltaChatException catch (error, stackTrace) {
       _log.fine('Email unread sync failed.', error, stackTrace);
@@ -5625,6 +7337,7 @@ class EmailService {
       );
     }
     await _ensureReady();
+    final mode = _outgoingEncryptionModeForAccount(binding.account);
     final normalizedSubject = _normalizeReplySubject(
       subject: subject,
       quotedSubject: quotedMessage.subject,
@@ -5649,6 +7362,8 @@ class EmailService {
         subject: normalizedSubject,
         htmlBody: normalizedHtml,
         accountId: binding.deltaAccountId,
+        forcePlaintext: mode.forcePlaintext,
+        skipAutocrypt: mode.skipAutocrypt,
       ),
     );
     return msgId;
@@ -5934,6 +7649,21 @@ int? _parseDeltaContactId(String nativeId) {
   return int.tryParse(nativeId.substring(prefix.length));
 }
 
+Map<String, bool> _normalizedEncryptionBetaMap(Map<String, bool> values) {
+  final normalized = <String, bool>{};
+  for (final entry in values.entries) {
+    if (!entry.value) {
+      continue;
+    }
+    final address = normalizedAddressValue(entry.key);
+    if (address == null || address.isEmpty || !address.isValidEmailAddress) {
+      continue;
+    }
+    normalized[address] = true;
+  }
+  return Map<String, bool>.unmodifiable(normalized);
+}
+
 String _stanzaId(int msgId, {required int accountId}) {
   return deltaMessageStanzaId(msgId);
 }
@@ -6015,7 +7745,7 @@ final class _EmailCredentialRuntimeSession {
     scopeState(scope).activeAccount = account;
   }
 
-  void clearRuntime() {
+  void clearRuntime({bool clearEphemeralState = false}) {
     databasePrefix = null;
     databasePassphrase = null;
     final activeScope = activeScopeState;
@@ -6023,6 +7753,12 @@ final class _EmailCredentialRuntimeSession {
       activeScope.activeAccount = null;
       activeScope.bootstrapFuture = null;
       activeScope.bootstrapOperationId = 0;
+    }
+    if (clearEphemeralState) {
+      for (final scopeState in _scopes.values) {
+        scopeState.isEphemerallyProvisioned = false;
+        scopeState.hasEphemeralConnectionOverride = false;
+      }
     }
     clearSessionCredentials();
     activeCredentialScope = null;
@@ -6207,4 +7943,7 @@ final class _EmailNotificationTarget {
   DateTime? get sentAt => message.timestamp;
 
   bool get isGroupConversation => chat?.type == ChatType.groupChat;
+
+  bool get ignoreChannelMute =>
+      chat?.effectiveNotificationBehavior?.isAlwaysNotify ?? false;
 }

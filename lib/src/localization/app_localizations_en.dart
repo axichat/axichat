@@ -103,30 +103,31 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not remove this message from the folder.';
 
   @override
-  String get contactFolderRuleAction => 'Send all to...';
+  String get contactFolderRuleAction => 'File incoming items in...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'Send all messages to...';
+  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Send all emails to...';
+  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'Send all messages and emails to...';
+      'File incoming messages and emails in...';
 
   @override
-  String get contactFolderRuleTitle => 'Send all to folder';
+  String get contactFolderRuleTitle => 'File incoming items in folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => 'Send all messages to folder';
+  String get contactFolderRuleMessagesTitle =>
+      'File incoming messages in folder';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Send all emails to folder';
+  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Send all messages and emails to folder';
+      'File incoming messages and emails in folder';
 
   @override
   String get contactFolderRuleClear => 'Clear rule';
@@ -1021,10 +1022,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatUnpinMessage => 'Unpin message';
 
   @override
+  String get chatPinMessageUnavailable => 'This message cannot be pinned yet.';
+
+  @override
+  String get chatMessagePinned => 'Message pinned.';
+
+  @override
+  String get chatMessageUnpinned => 'Message unpinned.';
+
+  @override
   String get chatPinnedEmptyState => 'No pinned messages yet.';
 
   @override
+  String get chatPinnedLoadFailure => 'Pinned messages failed to load.';
+
+  @override
   String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+
+  @override
+  String get chatPinnedNoticeBanner => 'New pinned message';
 
   @override
   String get importantMessagesEmpty => 'No important messages yet';
@@ -1424,6 +1440,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String signupErrorPrefix(Object message) {
     return 'Error: $message';
   }
+
+  @override
+  String get signupChooseServer => 'Choose server';
+
+  @override
+  String get signupCustomEndpointRequired =>
+      'Choose a custom server to sign up in the app. Create axi.im accounts on the website.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha unavailable';
@@ -3424,7 +3447,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get contactsUrlsLabel => 'Websites';
 
   @override
-  String get contactsPostalAddressesLabel => 'Postal addresses';
+  String get contactsPostalAddressesLabel => 'Addresses';
 
   @override
   String get contactsNoteLabel => 'Notes';
@@ -3467,7 +3490,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get jidInputPlaceholder => 'john@axi.im';
 
   @override
-  String get jidInputInvalid => 'Enter a valid JID';
+  String get jidInputInvalid => 'Enter a valid address.';
 
   @override
   String get sessionCapabilityChat => 'Chat';

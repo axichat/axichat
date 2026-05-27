@@ -67,6 +67,9 @@ enum ChatMessageKey {
   chatRoomAvatarUpdated,
   chatRoomAvatarUpdateFailed,
   chatPinPermissionDenied,
+  chatPinMessageUnavailable,
+  chatMessagePinned,
+  chatMessageUnpinned,
   chatForwardInviteForbidden,
   chatMessageSentAgain,
   chatMessageForwarded,
@@ -186,6 +189,9 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.chatRoomAvatarUpdateFailed =>
       l10n.chatRoomAvatarUpdateFailed,
     ChatMessageKey.chatPinPermissionDenied => l10n.chatPinPermissionDenied,
+    ChatMessageKey.chatPinMessageUnavailable => l10n.chatPinMessageUnavailable,
+    ChatMessageKey.chatMessagePinned => l10n.chatMessagePinned,
+    ChatMessageKey.chatMessageUnpinned => l10n.chatMessageUnpinned,
     ChatMessageKey.chatForwardInviteForbidden =>
       l10n.chatForwardInviteForbidden,
     ChatMessageKey.chatMessageSentAgain => l10n.chatMessageSentAgain,

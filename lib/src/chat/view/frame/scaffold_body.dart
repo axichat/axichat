@@ -538,6 +538,8 @@ class _ChatScaffoldBody extends StatelessWidget {
                                 context.l10n.accessibilityLoadingLabel,
                             unavailableEmailContentLabel:
                                 context.l10n.messageErrorServiceUnavailable,
+                            emailEncryptionStatusLabel:
+                                context.l10n.chatEmailEncryptionStatusLabel,
                             isGroupChat: isGroupChat,
                             isEmailChat: isEmailChat,
                             staleUnackedCutoff: DateTime.timestamp().subtract(
@@ -603,6 +605,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                             ),
                             ...timelineItems,
                           ];
+                    final locate = context.read;
                     late final MessageListOptions dashMessageListOptions;
                     dashMessageListOptions = MessageListOptions(
                       scrollController: owner._scrollController,
@@ -628,7 +631,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                           ? null
                           : () async {
                               final completer = Completer<void>();
-                              context.read<ChatBloc>().add(
+                              locate<ChatBloc>().add(
                                 ChatLoadEarlier(completer: completer),
                               );
                               await completer.future;
@@ -678,12 +681,16 @@ class _ChatScaffoldBody extends StatelessWidget {
                             composerErrorKey ==
                                 ChatMessageKey.messageErrorServiceUnavailable
                         ? null
-                        : () => context.read<ChatBloc>().add(
+                        : () => locate<ChatBloc>().add(
                             const ChatComposerErrorCleared(),
                           );
                     final composerNotices = _ComposerNotices(
                       composerError: composerErrorMessage,
                       onComposerErrorCleared: onComposerErrorCleared,
+                      showPinnedMessageBanner: state.showPinnedMessageBanner,
+                      onPinnedMessageBannerHidden: () => locate<ChatBloc>().add(
+                        const ChatPinnedMessageNoticeHidden(),
+                      ),
                       showAttachmentWarning: showAttachmentWarning,
                       retryReport: retryReport,
                       retryShareId: retryShareId,
@@ -691,6 +698,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                     );
                     final showComposerNotices =
                         composerErrorMessage?.isNotEmpty == true ||
+                        state.showPinnedMessageBanner ||
                         showAttachmentWarning ||
                         (retryReport != null &&
                             retryShareId != null &&
@@ -732,7 +740,14 @@ class _ChatScaffoldBody extends StatelessWidget {
                         selectedMessages,
                         growable: false,
                       );
-                      final canReact = !isEmailChat;
+                      final chat = state.chat;
+                      final canReact =
+                          chat != null &&
+                          targets.every(
+                            (message) => message.canSendXmppReaction(
+                              chatDefaultTransport: chat.defaultTransport,
+                            ),
+                          );
                       final canForward =
                           targets.length == 1 &&
                           targets.single.pseudoMessageType == null;

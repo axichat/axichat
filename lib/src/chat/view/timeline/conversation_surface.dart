@@ -525,8 +525,7 @@ class _ChatMainConversationSection extends StatelessWidget {
         maxHeight: pinnedPanelMaxHeight,
         accountJid: accountJidForPins,
         pinnedMessages: state.pinnedMessages,
-        pinnedMessagesLoaded: state.pinnedMessagesLoaded,
-        pinnedMessagesHydrating: state.pinnedMessagesHydrating,
+        pinnedMessagesStatus: state.pinnedMessagesStatus,
         onClose: onClosePinnedMessages,
         canTogglePins: canTogglePins,
         canShowCalendarTasks: chatCalendarAvailable,
@@ -678,8 +677,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
     required this.maxHeight,
     required this.accountJid,
     required this.pinnedMessages,
-    required this.pinnedMessagesLoaded,
-    required this.pinnedMessagesHydrating,
+    required this.pinnedMessagesStatus,
     required this.onClose,
     required this.canTogglePins,
     required this.canShowCalendarTasks,
@@ -731,8 +729,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
   final double maxHeight;
   final String? accountJid;
   final List<PinnedMessageItem> pinnedMessages;
-  final bool pinnedMessagesLoaded;
-  final bool pinnedMessagesHydrating;
+  final ChatPinnedMessagesStatus pinnedMessagesStatus;
   final VoidCallback onClose;
   final bool canTogglePins;
   final bool canShowCalendarTasks;
@@ -822,8 +819,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
       maxHeight: maxHeight,
       accountJid: accountJid,
       pinnedMessages: pinnedMessages,
-      pinnedMessagesLoaded: pinnedMessagesLoaded,
-      pinnedMessagesHydrating: pinnedMessagesHydrating,
+      pinnedMessagesStatus: pinnedMessagesStatus,
       onClose: onClose,
       canTogglePins: canTogglePins,
       canShowCalendarTasks: canShowCalendarTasks,

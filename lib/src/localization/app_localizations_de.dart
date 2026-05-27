@@ -107,31 +107,31 @@ class AppLocalizationsDe extends AppLocalizations {
       'Diese Nachricht konnte nicht aus dem Ordner entfernt werden.';
 
   @override
-  String get contactFolderRuleAction => 'Alles senden an...';
+  String get contactFolderRuleAction => 'File incoming items in...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'Alle Nachrichten senden an...';
+  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Alle E-Mails senden an...';
+  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'Alle Nachrichten und E-Mails senden an...';
+      'File incoming messages and emails in...';
 
   @override
-  String get contactFolderRuleTitle => 'Alles an Ordner senden';
+  String get contactFolderRuleTitle => 'File incoming items in folder';
 
   @override
   String get contactFolderRuleMessagesTitle =>
-      'Alle Nachrichten an Ordner senden';
+      'File incoming messages in folder';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'Alle E-Mails an Ordner senden';
+  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Alle Nachrichten und E-Mails an Ordner senden';
+      'File incoming messages and emails in folder';
 
   @override
   String get contactFolderRuleClear => 'Regel löschen';
@@ -1048,11 +1048,28 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatUnpinMessage => 'Anheften aufheben';
 
   @override
+  String get chatPinMessageUnavailable =>
+      'Diese Nachricht kann noch nicht angeheftet werden.';
+
+  @override
+  String get chatMessagePinned => 'Nachricht angeheftet.';
+
+  @override
+  String get chatMessageUnpinned => 'Nachricht nicht mehr angeheftet.';
+
+  @override
   String get chatPinnedEmptyState => 'Noch keine angehefteten Nachrichten.';
+
+  @override
+  String get chatPinnedLoadFailure =>
+      'Angeheftete Nachrichten konnten nicht geladen werden.';
 
   @override
   String get chatPinnedMissingMessage =>
       'Angeheftete Nachricht ist nicht verfügbar.';
+
+  @override
+  String get chatPinnedNoticeBanner => 'Neue angeheftete Nachricht';
 
   @override
   String get importantMessagesEmpty => 'Noch keine wichtigen Nachrichten';
@@ -1454,6 +1471,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String signupErrorPrefix(Object message) {
     return 'Fehler: $message';
   }
+
+  @override
+  String get signupChooseServer => 'Server wählen';
+
+  @override
+  String get signupCustomEndpointRequired =>
+      'Wähle einen eigenen Server, um dich in der App zu registrieren. Erstelle axi.im-Konten auf der Website.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha nicht verfügbar';
@@ -3490,7 +3514,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get contactsUrlsLabel => 'Webseiten';
 
   @override
-  String get contactsPostalAddressesLabel => 'Postanschriften';
+  String get contactsPostalAddressesLabel => 'Adressen';
 
   @override
   String get contactsNoteLabel => 'Notizen';
@@ -3534,7 +3558,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get jidInputPlaceholder => 'john@axi.im';
 
   @override
-  String get jidInputInvalid => 'Gültige JID eingeben';
+  String get jidInputInvalid => 'Gib eine gültige Adresse ein.';
 
   @override
   String get sessionCapabilityChat => 'Unterhaltung';

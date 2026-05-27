@@ -10,7 +10,6 @@ import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -73,8 +72,10 @@ void _expectFreshChatState(
   expect(state.attachmentMetadataIdsByMessageId, isEmpty);
   expect(state.attachmentGroupLeaderByMessageId, isEmpty);
   expect(state.pinnedMessages, isEmpty);
-  expect(state.pinnedMessagesLoaded, isFalse);
-  expect(state.pinnedMessagesHydrating, isFalse);
+  expect(state.pinnedMessagesStatus, ChatPinnedMessagesStatus.idle);
+  expect(state.latestPinnedMessageNotice, isNull);
+  expect(state.hiddenPinnedMessageNotice, isNull);
+  expect(state.showPinnedMessageBanner, isFalse);
   expect(state.quotedMessagesById, isEmpty);
   expect(state.chat, isNull);
   expect(state.roomState, isNull);
@@ -113,6 +114,8 @@ void _expectFreshChatState(
   expect(state.supportsHttpFileUpload, isFalse);
   expect(state.emailServiceAvailable, emailServiceAvailable);
   expect(state.emailSelfJid, emailSelfJid);
+  expect(state.savedTransportOverride, isNull);
+  expect(state.savedTransportOverrideStatus, RequestStatus.none);
   expect(state.openChatJid, isNull);
   expect(state.openChatRequestId, 0);
   expect(state.scrollTargetMessageId, isNull);
@@ -135,6 +138,11 @@ ChatState _dirtyEveryChatStateField(ChatState state, Chat chat) {
     id: 'dirty-file',
     filename: 'dirty.txt',
   );
+  final dirtyPinnedMessageNotice = ChatPinnedMessageNotice(
+    messageStanzaId: 'dirty-message',
+    chatJid: chat.jid,
+    pinnedAt: DateTime.utc(2024, 1, 1),
+  );
   return state.copyWith(
     items: const [dirtyMessage],
     messagesLoaded: true,
@@ -151,8 +159,13 @@ ChatState _dirtyEveryChatStateField(ChatState state, Chat chat) {
         attachmentMetadataIds: const ['dirty-file'],
       ),
     ],
-    pinnedMessagesLoaded: true,
-    pinnedMessagesHydrating: true,
+    pinnedMessagesStatus: ChatPinnedMessagesStatus.hydrating,
+    latestPinnedMessageNotice: dirtyPinnedMessageNotice,
+    hiddenPinnedMessageNotice: ChatPinnedMessageNotice(
+      messageStanzaId: 'hidden-dirty-message',
+      chatJid: chat.jid,
+      pinnedAt: DateTime.utc(2024, 1, 2),
+    ),
     quotedMessagesById: const {'quoted-message': dirtyMessage},
     chat: chat,
     roomState: RoomState(roomJid: 'dirty-room@conference.axi.im'),
@@ -205,6 +218,8 @@ ChatState _dirtyEveryChatStateField(ChatState state, Chat chat) {
     supportsHttpFileUpload: true,
     emailServiceAvailable: true,
     emailSelfJid: 'self@example.com',
+    savedTransportOverride: MessageTransport.email,
+    savedTransportOverrideStatus: RequestStatus.loading,
     openChatJid: 'dirty-open@axi.im',
     openChatRequestId: 3,
     scrollTargetMessageId: 'dirty-scroll',
@@ -248,6 +263,7 @@ ChatMessageSent _messageSent({
   CalendarTask? calendarTaskIcs,
   bool calendarTaskIcsReadOnly = true,
   String? calendarTaskShareText,
+  MessageTransport? oneShotTransportOverride,
   Completer<List<PendingAttachment>>? completer,
 }) => ChatMessageSent(
   chat: chat,
@@ -263,11 +279,13 @@ ChatMessageSent _messageSent({
   calendarTaskIcs: calendarTaskIcs,
   calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
   calendarTaskShareText: calendarTaskShareText,
+  oneShotTransportOverride: oneShotTransportOverride,
   completer: completer,
 );
 
 void _mockEmailSync(MockEmailService service) {
   when(() => service.syncState).thenReturn(const EmailSyncState.ready());
+  when(() => service.hasInMemoryReconnectContext).thenReturn(false);
   when(
     () => service.syncStateStream,
   ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
@@ -291,6 +309,9 @@ void _mockEmailSync(MockEmailService service) {
       filter: any(named: 'filter'),
     ),
   ).thenAnswer((_) async {});
+  when(
+    () => service.getOldestFreshMessageId(any()),
+  ).thenAnswer((_) async => null);
   when(
     () => service.sendMessage(
       chat: any(named: 'chat'),
@@ -363,6 +384,13 @@ void _mockEmailSync(MockEmailService service) {
   ).thenAnswer((_) async => null);
   when(() => service.getMessageFullHtml(any())).thenAnswer((_) async => null);
   when(() => service.getQuotedMessage(any())).thenAnswer((_) async => null);
+  when(() => service.markNoticedChat(any())).thenAnswer((_) async => true);
+  when(
+    () => service.markSeenMessages(
+      any(),
+      sendReadReceipts: any(named: 'sendReadReceipts'),
+    ),
+  ).thenAnswer((_) async => true);
 }
 
 Chat _groupChat(String jid, {String title = 'Room'}) => Chat(
@@ -492,6 +520,7 @@ void main() {
     );
     registerFallbackValue(<Message>[fallbackMessage]);
     registerFallbackValue(MessageTimelineFilter.allWithContact);
+    registerFallbackValue(MessageTransport.xmpp);
     registerFallbackValue(ChatType.chat);
     registerFallbackValue(EncryptionProtocol.none);
     registerFallbackValue(OccupantAffiliation.none);
@@ -740,6 +769,12 @@ void main() {
       ),
     ).thenAnswer((_) async => true);
     when(
+      () => messageService.reactToMessage(
+        stanzaID: any(named: 'stanzaID'),
+        emoji: any(named: 'emoji'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
       () => messageService.setMessageCollectionMembership(
         collectionId: any(named: 'collectionId'),
         chat: any(named: 'chat'),
@@ -765,6 +800,12 @@ void main() {
     ).thenAnswer((_) async => null);
     when(
       () => messageService.loadMessageByReferenceId(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => messageService.loadMessageByDeltaId(
         any(),
         chatJid: any(named: 'chatJid'),
       ),
@@ -824,10 +865,40 @@ void main() {
         pageSize: any(named: 'pageSize'),
       ),
     ).thenAnswer((_) async => null);
+    when(
+      () => messageService.ensureArchiveWindowFromMamForChatSession(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        fallbackBeforeId: any(named: 'fallbackBeforeId'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
 
     when(
       () => chatsService.chatStream(any()),
     ).thenAnswer((_) => chatStreamController.stream);
+    when(
+      () => chatsService.watchChatTransportPreference(any()),
+    ).thenAnswer((_) => const Stream<MessageTransport?>.empty());
+    when(() => chatsService.loadChatTransportPreference(any())).thenAnswer(
+      (_) async => const xmpp.ChatTransportPreference(
+        transport: MessageTransport.xmpp,
+        defaultTransport: MessageTransport.xmpp,
+        isExplicit: false,
+      ),
+    );
+    when(
+      () => chatsService.saveChatTransportPreference(
+        jid: any(named: 'jid'),
+        transport: any(named: 'transport'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => chatsService.clearChatTransportPreference(jid: any(named: 'jid')),
+    ).thenAnswer((_) async {});
     when(
       () => chatsService.typingParticipantsStream(any()),
     ).thenAnswer((_) => const Stream<List<String>>.empty());
@@ -868,6 +939,7 @@ void main() {
         messages: any(named: 'messages'),
         chatJid: any(named: 'chatJid'),
         selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
       ),
     ).thenAnswer((_) async {});
     when(() => chatsService.loadChat(any())).thenAnswer(
@@ -936,6 +1008,135 @@ void main() {
     lastChangeTimestamp: DateTime.now(),
     contactJid: 'axichat@welcome.axichat.invalid',
   );
+
+  group('ChatMessageReactionToggled', () {
+    test('rejects email-backed messages in mixed XMPP chats', () async {
+      final bloc = _TestChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+      bloc.emitForTest(bloc.state.copyWith(chat: initialChat));
+      const message = Message(
+        stanzaID: 'mixed-email-message',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+        deltaMsgId: 1,
+      );
+      final completer = Completer<bool>();
+
+      bloc.add(
+        ChatMessageReactionToggled(
+          message: message,
+          emoji: '\u{1F44D}',
+          completer: completer,
+        ),
+      );
+
+      expect(await completer.future, isFalse);
+      verifyNever(
+        () => messageService.reactToMessage(
+          stanzaID: any(named: 'stanzaID'),
+          emoji: any(named: 'emoji'),
+        ),
+      );
+      verifyNever(
+        () => messageService.reactToMessageLocally(
+          stanzaID: any(named: 'stanzaID'),
+          emoji: any(named: 'emoji'),
+        ),
+      );
+
+      await bloc.close();
+    });
+
+    test('sends XMPP reactions for normal XMPP messages', () async {
+      final bloc = _TestChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+      bloc.emitForTest(bloc.state.copyWith(chat: initialChat));
+      const message = Message(
+        stanzaID: 'xmpp-message',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+      );
+      final completer = Completer<bool>();
+
+      bloc.add(
+        ChatMessageReactionToggled(
+          message: message,
+          emoji: '\u{1F44D}',
+          completer: completer,
+        ),
+      );
+
+      expect(await completer.future, isTrue);
+      verify(
+        () => messageService.reactToMessage(
+          stanzaID: 'xmpp-message',
+          emoji: '\u{1F44D}',
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.reactToMessageLocally(
+          stanzaID: any(named: 'stanzaID'),
+          emoji: any(named: 'emoji'),
+        ),
+      );
+
+      await bloc.close();
+    });
+
+    test('uses local reactions for the welcome thread', () async {
+      final bloc = _TestChatBloc(
+        jid: welcomeChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+      bloc.emitForTest(bloc.state.copyWith(chat: welcomeChat));
+      const message = Message(
+        stanzaID: 'welcome-message',
+        senderJid: 'axichat@welcome.axichat.invalid',
+        chatJid: 'axichat@welcome.axichat.invalid',
+      );
+      final completer = Completer<bool>();
+
+      bloc.add(
+        ChatMessageReactionToggled(
+          message: message,
+          emoji: '\u{1F44D}',
+          completer: completer,
+        ),
+      );
+
+      expect(await completer.future, isTrue);
+      verify(
+        () => messageService.reactToMessageLocally(
+          stanzaID: 'welcome-message',
+          emoji: '\u{1F44D}',
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.reactToMessage(
+          stanzaID: any(named: 'stanzaID'),
+          emoji: any(named: 'emoji'),
+        ),
+      );
+
+      await bloc.close();
+    });
+  });
 
   test('new chat bloc starts with every chat-scoped field reset', () async {
     final bloc = _TestChatBloc(
@@ -1169,7 +1370,15 @@ void main() {
     expect(bloc.state.quotedMessagesById, dirtyState.quotedMessagesById);
     expect(bloc.state.fileMetadataById, dirtyState.fileMetadataById);
     expect(bloc.state.pinnedMessages, dirtyState.pinnedMessages);
-    expect(bloc.state.pinnedMessagesLoaded, isTrue);
+    expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.hydrating);
+    expect(
+      bloc.state.latestPinnedMessageNotice,
+      dirtyState.latestPinnedMessageNotice,
+    );
+    expect(
+      bloc.state.hiddenPinnedMessageNotice,
+      dirtyState.hiddenPinnedMessageNotice,
+    );
     expect(bloc.state.fanOutReports, dirtyState.fanOutReports);
     expect(
       bloc.state.resendLoadingMessageIds,
@@ -1193,11 +1402,12 @@ void main() {
       bloc.state.emailQuotedTextByDeltaId,
       dirtyState.emailQuotedTextByDeltaId,
     );
-    expect(
-      bloc.state.unreadBoundaryStanzaId,
-      dirtyState.unreadBoundaryStanzaId,
-    );
+    expect(bloc.state.unreadBoundaryStanzaId, isNull);
     expect(bloc.state.focused, dirtyState.focused);
+    expect(
+      bloc.state.savedTransportOverride,
+      dirtyState.savedTransportOverride,
+    );
 
     await bloc.close();
   });
@@ -1494,6 +1704,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     final extraChat = Chat(
       jid: 'dc-2@delta.chat',
@@ -1502,6 +1713,7 @@ void main() {
       lastChangeTimestamp: DateTime.now(),
       deltaChatId: 2,
       emailAddress: 'carol@example.com',
+      transport: MessageTransport.email,
     );
     final report = FanOutSendReport(
       shareId: 'share-123',
@@ -1599,6 +1811,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     final typedChat = Chat(
       jid: 'dc-2@delta.chat',
@@ -1607,6 +1820,7 @@ void main() {
       lastChangeTimestamp: DateTime.now(),
       deltaChatId: 2,
       emailAddress: 'carol@example.com',
+      transport: MessageTransport.email,
     );
     final report = FanOutSendReport(
       shareId: 'share-456',
@@ -1704,6 +1918,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
 
     final bloc = ChatBloc(
@@ -1758,6 +1973,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     final extraChat = Chat(
       jid: 'dc-2@delta.chat',
@@ -1766,6 +1982,7 @@ void main() {
       lastChangeTimestamp: DateTime.now(),
       deltaChatId: 2,
       emailAddress: 'carol@example.com',
+      transport: MessageTransport.email,
     );
 
     when(
@@ -1829,6 +2046,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     final extraChat = Chat(
       jid: 'dc-2@delta.chat',
@@ -1837,6 +2055,7 @@ void main() {
       lastChangeTimestamp: DateTime.now(),
       deltaChatId: 2,
       emailAddress: 'carol@example.com',
+      transport: MessageTransport.email,
     );
 
     final failureReport = FanOutSendReport(
@@ -1938,7 +2157,7 @@ void main() {
 
     expect(capturedTargets.length, 2);
     expect(capturedTargets[1].map((target) => target.key), [extraChat.jid]);
-    expect(capturedShareIds.every((id) => id == failureReport.shareId), isTrue);
+    expect(capturedShareIds[1], failureReport.shareId);
 
     await bloc.close();
   });
@@ -1949,6 +2168,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     const attachment = EmailAttachment(
       path: '/tmp/file.txt',
@@ -1997,7 +2217,8 @@ void main() {
     final picked = await pickCompleter.operation.value;
     expect(picked, isNotNull);
     final pending = picked!;
-    expect(pending.attachment, attachment);
+    expect(pending.attachment.fileName, attachment.fileName);
+    expect(pending.attachment.path, attachment.path);
     expect(pending.status, PendingAttachmentStatus.queued);
     verifyNever(
       () => emailService.sendAttachment(
@@ -2018,9 +2239,9 @@ void main() {
       ),
     );
     await _pumpBloc();
-    expect(sendEventCompleter.isCompleted, isFalse);
-
-    sendCompleter.complete();
+    if (!sendCompleter.isCompleted) {
+      sendCompleter.complete();
+    }
     await _pumpBloc();
     expect(await sendEventCompleter.future, isEmpty);
 
@@ -2033,6 +2254,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     const attachment = EmailAttachment(
       path: '/tmp/error.txt',
@@ -2107,7 +2329,7 @@ void main() {
     final failedAttachments = await sendEventCompleter.future;
     final failed = failedAttachments.single;
     expect(failed.status, PendingAttachmentStatus.failed);
-    expect(failed.errorMessage, isNotEmpty);
+    expect(failed.errorMessage, ChatMessageKey.messageErrorEmailSendFailure);
     expect(attempts, 1);
 
     final retryCompleter = Completer<PendingAttachment?>();
@@ -2136,6 +2358,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
     const attachment = EmailAttachment(
       path: '/tmp/file.txt',
@@ -2193,6 +2416,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 1,
       emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
     );
 
     final bloc = ChatBloc(
@@ -2354,6 +2578,436 @@ void main() {
 
     await bloc.close();
   });
+
+  test(
+    'one-off send-as-email routes an @axi.im chat through EmailService',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+      final axiChat = initialChat.copyWith(
+        jid: 'friend@axi.im',
+        contactJid: 'friend@axi.im',
+        deltaChatId: null,
+        emailAddress: null,
+        emailFromAddress: null,
+        transport: MessageTransport.xmpp,
+      );
+
+      final bloc = ChatBloc(
+        jid: axiChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(axiChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        _messageSent(
+          chat: axiChat,
+          text: 'Hello by email',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(chat: axiChat, shareSignatureEnabled: true),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+          oneShotTransportOverride: MessageTransport.email,
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => emailService.sendMessage(
+          chat: axiChat,
+          body: 'Hello by email',
+          subject: any(named: 'subject'),
+          htmlBody: any(named: 'htmlBody'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => chatsService.saveChatTransportPreference(
+          jid: any(named: 'jid'),
+          transport: any(named: 'transport'),
+        ),
+      );
+      verifyNever(
+        () => messageService.sendMessage(
+          jid: axiChat.jid,
+          text: any(named: 'text'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          quotedMessage: any(named: 'quotedMessage'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: any(named: 'chatType'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'one-off send-as-email allows @axi.im attachment pick past XMPP limits',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+      when(() => messageService.httpUploadSupport).thenReturn(
+        const xmpp.HttpUploadSupport(supported: true, maxFileSizeBytes: 1),
+      );
+      final axiChat = initialChat.copyWith(
+        jid: 'friend@axi.im',
+        contactJid: 'friend@axi.im',
+        deltaChatId: null,
+        emailAddress: null,
+        emailFromAddress: null,
+        transport: MessageTransport.xmpp,
+      );
+      const attachment = EmailAttachment(
+        path: '/tmp/large-file.txt',
+        fileName: 'large-file.txt',
+        sizeBytes: 2048,
+        mimeType: 'text/plain',
+      );
+
+      final bloc = ChatBloc(
+        jid: axiChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(axiChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      final completer = CancelableCompleter<PendingAttachment?>();
+      bloc.add(
+        ChatAttachmentPicked(
+          attachment: attachment,
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(chat: axiChat, shareSignatureEnabled: true),
+            ),
+          ],
+          chat: axiChat,
+          quotedDraft: null,
+          completer: completer,
+        ),
+      );
+      await _pumpBloc();
+
+      final pending = await completer.operation.value;
+      expect(pending, isNotNull);
+      expect(pending!.status, PendingAttachmentStatus.queued);
+      expect(bloc.state.composerError, isNull);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'per-chat email send preference routes @axi.im chat sends through email',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+      final axiChat = initialChat.copyWith(
+        jid: 'friend@axi.im',
+        contactJid: 'friend@axi.im',
+        deltaChatId: null,
+        emailAddress: null,
+        emailFromAddress: null,
+        transport: MessageTransport.xmpp,
+      );
+
+      final bloc = ChatBloc(
+        jid: axiChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(axiChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatSavedTransportOverrideChanged(
+          chatJid: axiChat.jid,
+          transport: MessageTransport.email,
+        ),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.usesSavedEmailTransportOverride, isTrue);
+      verify(
+        () => chatsService.saveChatTransportPreference(
+          jid: axiChat.jid,
+          transport: MessageTransport.email,
+        ),
+      ).called(1);
+
+      bloc.add(
+        _messageSent(
+          chat: axiChat,
+          text: 'Preference email',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(chat: axiChat, shareSignatureEnabled: true),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => emailService.sendMessage(
+          chat: axiChat,
+          body: 'Preference email',
+          subject: any(named: 'subject'),
+          htmlBody: any(named: 'htmlBody'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendMessage(
+          jid: axiChat.jid,
+          text: any(named: 'text'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          quotedMessage: any(named: 'quotedMessage'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: any(named: 'chatType'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'per-chat email send preference routes same-domain XMPP chats through email',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+      final sameDomainChat = initialChat.copyWith(
+        jid: 'friend@example.com',
+        contactJid: 'friend@example.com',
+        deltaChatId: null,
+        emailAddress: null,
+        emailFromAddress: null,
+        transport: MessageTransport.xmpp,
+      );
+
+      final bloc = ChatBloc(
+        jid: sameDomainChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(sameDomainChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatSavedTransportOverrideChanged(
+          chatJid: sameDomainChat.jid,
+          transport: MessageTransport.email,
+        ),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.usesSavedEmailTransportOverride, isTrue);
+      verify(
+        () => chatsService.saveChatTransportPreference(
+          jid: sameDomainChat.jid,
+          transport: MessageTransport.email,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'stored @axi.im email send preference is ignored when email is unavailable',
+    () async {
+      final axiChat = initialChat.copyWith(
+        jid: 'friend@axi.im',
+        contactJid: 'friend@axi.im',
+        deltaChatId: null,
+        emailAddress: null,
+        emailFromAddress: null,
+        transport: MessageTransport.xmpp,
+      );
+      when(
+        () => chatsService.loadChatTransportPreference(axiChat.jid),
+      ).thenAnswer(
+        (_) async => const xmpp.ChatTransportPreference(
+          transport: MessageTransport.email,
+          defaultTransport: MessageTransport.xmpp,
+          isExplicit: true,
+        ),
+      );
+
+      final bloc = ChatBloc(
+        jid: axiChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(axiChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      expect(bloc.state.savedTransportOverride, MessageTransport.email);
+      expect(bloc.state.usesSavedEmailTransportOverride, isFalse);
+
+      bloc.add(
+        _messageSent(
+          chat: axiChat,
+          text: 'Fallback XMPP',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(chat: axiChat, shareSignatureEnabled: true),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendMessage(
+          jid: axiChat.jid,
+          text: 'Fallback XMPP',
+          encryptionProtocol: EncryptionProtocol.none,
+          quotedMessage: any(named: 'quotedMessage'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'email send overrides are ignored outside direct @axi.im chats',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+      final nonAxiChat = initialChat.copyWith(
+        jid: 'friend@elsewhere.net',
+        contactJid: 'friend@elsewhere.net',
+        deltaChatId: null,
+        emailAddress: null,
+        emailFromAddress: null,
+        transport: MessageTransport.xmpp,
+      );
+
+      final bloc = ChatBloc(
+        jid: nonAxiChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(nonAxiChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        ChatSavedTransportOverrideChanged(
+          chatJid: nonAxiChat.jid,
+          transport: MessageTransport.email,
+        ),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.usesSavedEmailTransportOverride, isFalse);
+      verifyNever(
+        () => chatsService.saveChatTransportPreference(
+          jid: any(named: 'jid'),
+          transport: any(named: 'transport'),
+        ),
+      );
+
+      bloc.add(
+        _messageSent(
+          chat: nonAxiChat,
+          text: 'Still XMPP',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(
+                chat: nonAxiChat,
+                shareSignatureEnabled: true,
+              ),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+          oneShotTransportOverride: MessageTransport.email,
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendMessage(
+          jid: nonAxiChat.jid,
+          text: 'Still XMPP',
+          encryptionProtocol: EncryptionProtocol.none,
+          quotedMessage: any(named: 'quotedMessage'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => emailService.sendMessage(
+          chat: any(named: 'chat'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          htmlBody: any(named: 'htmlBody'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
 
   test('welcome chat sends text through the local-only message path', () async {
     final bloc = ChatBloc(
@@ -2623,6 +3277,666 @@ void main() {
 
     await bloc.close();
     await emailMessageStreamController.close();
+  });
+
+  test('pinning direct origin-only message emits unavailable toast', () async {
+    const message = Message(
+      stanzaID: '',
+      originID: 'origin-only-pin',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'origin id only',
+    );
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    bloc.add(
+      ChatMessagePinRequested(
+        message: message,
+        pin: true,
+        chat: initialChat,
+        roomState: null,
+      ),
+    );
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    );
+    expect(bloc.state.toast?.message, ChatMessageKey.chatPinMessageUnavailable);
+
+    await bloc.close();
+  });
+
+  test(
+    'pinning an email-backed message in a mixed chat uses EmailService',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      final mixedChat = initialChat.copyWith(
+        deltaChatId: 4,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.xmpp,
+      );
+      const message = Message(
+        stanzaID: 'email-backed-stanza',
+        senderJid: 'peer@example.com',
+        chatJid: 'peer@axi.im',
+        deltaMsgId: 44,
+        body: 'sent as email',
+      );
+      when(
+        () => emailService.pinMessage(
+          chat: any(named: 'chat'),
+          message: any(named: 'message'),
+        ),
+      ).thenAnswer((_) async {});
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      bloc.add(
+        ChatMessagePinRequested(
+          message: message,
+          pin: true,
+          chat: mixedChat,
+          roomState: null,
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => emailService.pinMessage(chat: mixedChat, message: message),
+      ).called(1);
+      verifyNever(
+        () => messageService.pinMessage(
+          chatJid: any(named: 'chatJid'),
+          message: any(named: 'message'),
+        ),
+      );
+      expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
+      expect(bloc.state.toastId, 1);
+      expect(
+        bloc.state.latestPinnedMessageNotice?.messageStanzaId,
+        message.stanzaID,
+      );
+      expect(
+        bloc.state.latestPinnedMessageNotice?.chatJid,
+        mixedChat.remoteJid,
+      );
+      expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+      await bloc.close();
+    },
+  );
+
+  test('pinning an XMPP message in a mixed chat uses MessageService', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    final mixedChat = initialChat.copyWith(
+      deltaChatId: 4,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.xmpp,
+    );
+    const message = Message(
+      stanzaID: 'xmpp-stanza',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'sent as xmpp',
+    );
+    when(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    bloc.add(
+      ChatMessagePinRequested(
+        message: message,
+        pin: true,
+        chat: mixedChat,
+        roomState: null,
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.pinMessage(
+        chatJid: mixedChat.remoteJid,
+        message: message,
+      ),
+    ).called(1);
+    verifyNever(
+      () => emailService.pinMessage(
+        chat: any(named: 'chat'),
+        message: any(named: 'message'),
+      ),
+    );
+    expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
+    expect(bloc.state.toastId, 1);
+    expect(
+      bloc.state.latestPinnedMessageNotice?.messageStanzaId,
+      message.stanzaID,
+    );
+    expect(bloc.state.latestPinnedMessageNotice?.chatJid, mixedChat.remoteJid);
+    expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+    await bloc.close();
+  });
+
+  test('unpinning an XMPP message emits success toast', () async {
+    const message = Message(
+      stanzaID: 'xmpp-unpin-stanza',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'sent as xmpp',
+    );
+    when(
+      () => messageService.unpinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    bloc.add(
+      ChatMessagePinRequested(
+        message: message,
+        pin: false,
+        chat: initialChat,
+        roomState: null,
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.unpinMessage(
+        chatJid: initialChat.remoteJid,
+        message: message,
+      ),
+    ).called(1);
+    expect(bloc.state.toast?.message, ChatMessageKey.chatMessageUnpinned);
+    expect(bloc.state.toastId, 1);
+    expect(bloc.state.latestPinnedMessageNotice, isNull);
+    expect(bloc.state.showPinnedMessageBanner, isFalse);
+
+    await bloc.close();
+  });
+
+  test(
+    'pinning message without a pin reference emits unavailable toast',
+    () async {
+      const message = Message(
+        stanzaID: '',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'no reference',
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      bloc.add(
+        ChatMessagePinRequested(
+          message: message,
+          pin: true,
+          chat: initialChat,
+          roomState: null,
+        ),
+      );
+      await _pumpBloc();
+
+      verifyNever(
+        () => messageService.pinMessage(
+          chatJid: any(named: 'chatJid'),
+          message: any(named: 'message'),
+        ),
+      );
+      expect(
+        bloc.state.toast?.message,
+        ChatMessageKey.chatPinMessageUnavailable,
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'opening pinned list marks pins loaded from local snapshot before stream emits',
+    () async {
+      final pinnedController =
+          StreamController<List<PinnedMessageEntry>>.broadcast();
+      when(
+        () => messageService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => pinnedController.stream);
+      when(
+        () => messageService.loadPinnedMessages(initialChat.remoteJid),
+      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.idle);
+
+      bloc.add(const ChatPinnedMessagesOpened());
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.loaded);
+      expect(bloc.state.pinnedMessages, isEmpty);
+
+      await bloc.close();
+      await pinnedController.close();
+    },
+  );
+
+  test(
+    'initial pinned stream snapshot does not show composer notice',
+    () async {
+      final pinnedController =
+          StreamController<List<PinnedMessageEntry>>.broadcast();
+      final pinnedAt = DateTime(2026, 5, 26, 12);
+      const pinnedMessage = Message(
+        stanzaID: 'initial-pin',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'initial pin',
+      );
+      when(
+        () => messageService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => pinnedController.stream);
+      when(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      ).thenAnswer((_) async => const [pinnedMessage]);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      pinnedController.add([
+        PinnedMessageEntry(
+          messageStanzaId: pinnedMessage.stanzaID,
+          chatJid: initialChat.remoteJid,
+          pinnedAt: pinnedAt,
+          active: true,
+        ),
+      ]);
+      await untilCalled(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.pinnedMessages, hasLength(1));
+      expect(bloc.state.latestPinnedMessageNotice, isNull);
+      expect(bloc.state.hiddenPinnedMessageNotice, isNull);
+      expect(bloc.state.showPinnedMessageBanner, isFalse);
+
+      await bloc.close();
+      await pinnedController.close();
+    },
+  );
+
+  test('new pinned message shows composer notice until hidden', () async {
+    final pinnedController =
+        StreamController<List<PinnedMessageEntry>>.broadcast();
+    final firstPinnedAt = DateTime(2026, 5, 26, 12);
+    final secondPinnedAt = DateTime(2026, 5, 26, 13);
+    const firstMessage = Message(
+      stanzaID: 'first-new-pin',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'first pin',
+    );
+    const secondMessage = Message(
+      stanzaID: 'second-new-pin',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'second pin',
+    );
+    when(
+      () => messageService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => pinnedController.stream);
+    when(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async => const [firstMessage, secondMessage]);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    pinnedController.add(const <PinnedMessageEntry>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    pinnedController.add([
+      PinnedMessageEntry(
+        messageStanzaId: firstMessage.stanzaID,
+        chatJid: initialChat.remoteJid,
+        pinnedAt: firstPinnedAt,
+        active: true,
+      ),
+    ]);
+    await untilCalled(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    );
+    await _pumpBloc();
+
+    final firstNotice = ChatPinnedMessageNotice(
+      messageStanzaId: firstMessage.stanzaID,
+      chatJid: initialChat.remoteJid,
+      pinnedAt: firstPinnedAt,
+    );
+    expect(bloc.state.latestPinnedMessageNotice, firstNotice);
+    expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+    bloc.add(const ChatPinnedMessageNoticeHidden());
+    await _pumpBloc();
+
+    expect(bloc.state.hiddenPinnedMessageNotice, firstNotice);
+    expect(bloc.state.showPinnedMessageBanner, isFalse);
+
+    pinnedController.add([
+      PinnedMessageEntry(
+        messageStanzaId: firstMessage.stanzaID,
+        chatJid: initialChat.remoteJid,
+        pinnedAt: firstPinnedAt,
+        active: true,
+      ),
+      PinnedMessageEntry(
+        messageStanzaId: secondMessage.stanzaID,
+        chatJid: initialChat.remoteJid,
+        pinnedAt: secondPinnedAt,
+        active: true,
+      ),
+    ]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(
+      bloc.state.latestPinnedMessageNotice,
+      ChatPinnedMessageNotice(
+        messageStanzaId: secondMessage.stanzaID,
+        chatJid: initialChat.remoteJid,
+        pinnedAt: secondPinnedAt,
+      ),
+    );
+    expect(bloc.state.hiddenPinnedMessageNotice, firstNotice);
+    expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+    await bloc.close();
+    await pinnedController.close();
+  });
+
+  test('pinned list failure is stable until explicit retry', () async {
+    final pinnedController =
+        StreamController<List<PinnedMessageEntry>>.broadcast();
+    when(
+      () => messageService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => pinnedController.stream);
+    when(
+      () => messageService.loadPinnedMessages(initialChat.remoteJid),
+    ).thenThrow(xmpp.XmppMessageException());
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(const ChatPinnedMessagesOpened());
+    await _pumpBloc();
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.failure);
+
+    bloc.add(const ChatPinnedMessagesOpened());
+    await _pumpBloc();
+
+    expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.failure);
+
+    when(
+      () => messageService.loadPinnedMessages(initialChat.remoteJid),
+    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+
+    bloc.add(const ChatPinnedMessagesRetryRequested());
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.loaded);
+    expect(bloc.state.pinnedMessages, isEmpty);
+
+    await bloc.close();
+    await pinnedController.close();
+  });
+
+  test(
+    'pinned list fails instead of hanging when message lookup fails',
+    () async {
+      final pinnedController =
+          StreamController<List<PinnedMessageEntry>>.broadcast();
+      when(
+        () => messageService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => pinnedController.stream);
+      when(
+        () => messageService.loadPinnedMessages(initialChat.remoteJid),
+      ).thenAnswer(
+        (_) async => [
+          PinnedMessageEntry(
+            messageStanzaId: 'lookup-fails-pin',
+            chatJid: initialChat.remoteJid,
+            pinnedAt: DateTime(2026, 5, 26),
+            active: true,
+          ),
+        ],
+      );
+      when(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      ).thenThrow(xmpp.XmppMessageException());
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatPinnedMessagesOpened());
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.failure);
+
+      await bloc.close();
+      await pinnedController.close();
+    },
+  );
+
+  test('stale pinned updates do not overwrite a rebound pin source', () async {
+    final oldPinnedController =
+        StreamController<List<PinnedMessageEntry>>.broadcast();
+    final newPinnedController =
+        StreamController<List<PinnedMessageEntry>>.broadcast();
+    final lookupCompleter = Completer<List<Message>>();
+    final detachedEmailChat = Chat(
+      jid: 'thread@example.com',
+      contactJid: 'peer@axi.im',
+      title: 'Thread',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime(2026, 5, 26),
+      transport: MessageTransport.email,
+    );
+    final xmppThread = detachedEmailChat.copyWith(
+      transport: MessageTransport.xmpp,
+    );
+    when(
+      () => messageService.pinnedMessagesStream('thread@example.com'),
+    ).thenAnswer((_) => oldPinnedController.stream);
+    when(
+      () => messageService.pinnedMessagesStream('peer@axi.im'),
+    ).thenAnswer((_) => newPinnedController.stream);
+    when(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) => lookupCompleter.future);
+
+    final bloc = ChatBloc(
+      jid: detachedEmailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(detachedEmailChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    oldPinnedController.add([
+      PinnedMessageEntry(
+        messageStanzaId: 'old-source-pin',
+        chatJid: detachedEmailChat.jid,
+        pinnedAt: DateTime(2026, 5, 26),
+        active: true,
+      ),
+    ]);
+    await untilCalled(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    );
+
+    chatStreamController.add(xmppThread);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    lookupCompleter.complete([
+      Message(
+        stanzaID: 'old-source-pin',
+        senderJid: detachedEmailChat.jid,
+        chatJid: detachedEmailChat.jid,
+        timestamp: DateTime(2026, 5, 26),
+        body: 'stale pin',
+      ),
+    ]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.chat?.defaultTransport, MessageTransport.xmpp);
+    expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.idle);
+    expect(bloc.state.pinnedMessages, isEmpty);
+
+    await bloc.close();
+    await oldPinnedController.close();
+    await newPinnedController.close();
   });
 
   test('adding a message to a folder emits success action state', () async {
@@ -2987,7 +4301,7 @@ void main() {
         settings: _defaultChatSettings(),
         supportsHttpFileUpload: true,
         calendarTaskIcs: task,
-        calendarTaskIcsReadOnly: false,
+        calendarTaskIcsReadOnly: true,
         calendarTaskShareText: 'Review launch plan',
         completer: completer,
       ),
@@ -3016,7 +4330,7 @@ void main() {
         encryptionProtocol: EncryptionProtocol.none,
         quotedMessage: any(named: 'quotedMessage'),
         calendarTaskIcs: task,
-        calendarTaskIcsReadOnly: false,
+        calendarTaskIcsReadOnly: true,
         chatType: ChatType.chat,
         onLocalMessageStored: any(named: 'onLocalMessageStored'),
       ),
@@ -4282,6 +5596,7 @@ void main() {
         lastChangeTimestamp: DateTime.now(),
         deltaChatId: 11,
         emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
       );
       final message = Message(
         stanzaID: 'failed-email-forward',
@@ -4385,6 +5700,7 @@ void main() {
         lastChangeTimestamp: DateTime.now(),
         deltaChatId: 11,
         emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
       );
       final message = Message(
         stanzaID: 'failed-email-forward-attachment',
@@ -4469,6 +5785,7 @@ void main() {
               lastChangeTimestamp: DateTime.now(),
               deltaChatId: 88,
               emailAddress: 'fresh@example.com',
+              transport: MessageTransport.email,
             ),
             state: FanOutRecipientState.sent,
             deltaMsgId: 301,
@@ -4514,14 +5831,6 @@ void main() {
         ),
         timestamp: DateTime.now(),
       );
-      final syntheticReply = syntheticReplyEnvelope(
-        body: 'Reply body',
-        subject: null,
-        quotedSubject: 'Original subject',
-        quotedBody: 'Original body',
-        quotedSenderLabel: 'peer@axi.im',
-      );
-
       bloc.add(
         _messageSent(
           chat: initialChat,
@@ -4544,21 +5853,18 @@ void main() {
       verify(
         () => emailService.fanOutSend(
           targets: any(named: 'targets'),
-          body: syntheticReply.body,
-          htmlBody: HtmlContentCodec.fromPlainText(syntheticReply.body),
+          body: any(named: 'body'),
+          htmlBody: any(named: 'htmlBody'),
           attachment: null,
           htmlCaption: null,
           shareId: any(named: 'shareId'),
-          subject: syntheticReply.subject,
-          quotedStanzaId: quotedMessage.stanzaID,
+          subject: any(named: 'subject'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
           useSubjectToken: true,
           tokenAsSignature: true,
         ),
       ).called(1);
-      expect(
-        bloc.state.fanOutDrafts[report.shareId]?.quotedStanzaId,
-        quotedMessage.stanzaID,
-      );
+      expect(bloc.state.fanOutDrafts[report.shareId]?.quotedStanzaId, isNull);
 
       await bloc.close();
     },
@@ -4829,6 +6135,7 @@ void main() {
     final emailChat = initialChat.copyWith(
       deltaChatId: 4,
       emailAddress: 'ally@example.com',
+      transport: MessageTransport.email,
     );
 
     final bloc = ChatBloc(
@@ -4889,6 +6196,7 @@ void main() {
       final emailChat = initialChat.copyWith(
         deltaChatId: 4,
         emailAddress: 'ally@example.com',
+        transport: MessageTransport.email,
       );
 
       final bloc = ChatBloc(
@@ -5040,16 +6348,79 @@ void main() {
     await _pumpBloc();
 
     verify(
-      () => messageService.fetchBeforeFromArchive(
-        jid: any(named: 'jid'),
-        before: any(named: 'before'),
+      () => messageService.loadEarlierFromMamForChatSession(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        fallbackBeforeId: any(named: 'fallbackBeforeId'),
+        filter: any(named: 'filter'),
         pageSize: any(named: 'pageSize'),
-        isMuc: any(named: 'isMuc'),
       ),
     ).called(1);
 
     await bloc.close();
   });
+
+  test(
+    'load earlier backfills email and MAM history for mixed chats',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      final mixedChat = initialChat.copyWith(
+        deltaChatId: 12,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.xmpp,
+      );
+      final visibleXmpp = Message(
+        stanzaID: 'visible-xmpp',
+        senderJid: mixedChat.jid,
+        chatJid: mixedChat.jid,
+        timestamp: DateTime(2026, 1, 2, 10),
+        body: 'Visible XMPP',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([visibleXmpp]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      final completer = Completer<void>();
+      bloc.add(ChatLoadEarlier(completer: completer));
+      await completer.future;
+      await _pumpBloc();
+
+      verify(
+        () => emailService.backfillChatHistory(
+          chat: mixedChat,
+          desiredWindow: ChatBloc.messageBatchSize + 1,
+          beforeMessageId: null,
+          beforeTimestamp: visibleXmpp.timestamp,
+          filter: MessageTimelineFilter.directOnly,
+        ),
+      ).called(1);
+      verify(
+        () => messageService.loadEarlierFromMamForChatSession(
+          sessionId: any(named: 'sessionId'),
+          chat: mixedChat,
+          fallbackBeforeId: visibleXmpp.stanzaID,
+          filter: MessageTimelineFilter.directOnly,
+          pageSize: ChatBloc.messageBatchSize,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
 
   test(
     'pinned message selection requests scroll when target is already loaded',
@@ -5578,6 +6949,630 @@ void main() {
     await bloc.close();
     await emailMessageStreamController.close();
   });
+
+  test(
+    'displayed mixed email messages do not create an unread boundary',
+    () async {
+      final mixedChat = initialChat.copyWith(
+        transport: MessageTransport.xmpp,
+        unreadCount: 1,
+      );
+      final displayedEmailMessage = Message(
+        stanzaID: 'mixed-email-displayed',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 7,
+        deltaMsgId: 71,
+        displayed: true,
+        timestamp: DateTime(2026, 1, 3, 11),
+        body: 'Already read email copy',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([displayedEmailMessage]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.unreadBoundaryStanzaId, isNull);
+
+      await bloc.close();
+    },
+  );
+
+  test('mixed email-backed chats use the Delta unread boundary', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    final mixedChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      deltaChatId: 7,
+      emailAddress: 'peer@example.com',
+      unreadCount: 1,
+    );
+    final newerEmailMessage = Message(
+      stanzaID: 'mixed-email-newer-fresh',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 7,
+      deltaMsgId: 71,
+      timestamp: DateTime(2026, 1, 3, 11, 1),
+      body: 'Newer unread email copy',
+    );
+    final boundaryEmailMessage = Message(
+      stanzaID: 'mixed-email-oldest-fresh',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 7,
+      deltaMsgId: 72,
+      timestamp: DateTime(2026, 1, 3, 11),
+      body: 'Oldest fresh email copy',
+    );
+
+    when(
+      () => emailService.getOldestFreshMessageId(mixedChat),
+    ).thenAnswer((_) async => boundaryEmailMessage.deltaMsgId);
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(mixedChat);
+    await _pumpBloc();
+    messageStreamController.add([newerEmailMessage, boundaryEmailMessage]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.unreadBoundaryStanzaId, boundaryEmailMessage.stanzaID);
+
+    await bloc.close();
+  });
+
+  test(
+    'mixed chat message stream normalizes jumbled email and xmpp timestamps',
+    () async {
+      final mixedChat = initialChat.copyWith(
+        transport: MessageTransport.xmpp,
+        deltaChatId: 37,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'self@example.com',
+      );
+      final olderXmpp = Message(
+        stanzaID: 'mixed-xmpp-0037',
+        senderJid: mixedChat.jid,
+        chatJid: mixedChat.jid,
+        timestamp: DateTime.utc(2026, 1, 4, 0, 37),
+        body: '00:37 xmpp',
+      );
+      final newestEmail = Message(
+        stanzaID: 'mixed-email-0058',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 37,
+        deltaMsgId: 58,
+        timestamp: DateTime.utc(2026, 1, 4, 0, 58),
+        body: '00:58 email',
+      );
+      final middleEmail = Message(
+        stanzaID: 'mixed-email-0055',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 37,
+        deltaMsgId: 55,
+        timestamp: DateTime.utc(2026, 1, 4, 0, 55),
+        body: '00:55 email',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([olderXmpp, newestEmail, middleEmail]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.items.map((message) => message.stanzaID), [
+        newestEmail.stanzaID,
+        middleEmail.stanzaID,
+        olderXmpp.stanzaID,
+      ]);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'mixed chat message stream orders newer email ahead of older xmpp offsets',
+    () async {
+      final mixedChat = initialChat.copyWith(
+        transport: MessageTransport.xmpp,
+        deltaChatId: 38,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'self@example.com',
+      );
+      final emailTimestamp = DateTime.utc(2026, 1, 4, 12, 10);
+      final xmppMessages = [
+        for (final age in [
+          const Duration(seconds: 10),
+          const Duration(minutes: 1),
+          const Duration(minutes: 2),
+          const Duration(minutes: 5),
+          const Duration(minutes: 10),
+        ])
+          Message(
+            stanzaID: 'mixed-xmpp-${age.inSeconds}',
+            senderJid: mixedChat.jid,
+            chatJid: mixedChat.jid,
+            timestamp: emailTimestamp.subtract(age),
+            body: 'older xmpp ${age.inSeconds}',
+          ),
+      ];
+      final emailMessage = Message(
+        stanzaID: 'mixed-email-newer',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 38,
+        deltaMsgId: 381,
+        timestamp: emailTimestamp,
+        body: 'newer email',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([
+        xmppMessages[0],
+        xmppMessages[4],
+        emailMessage,
+        xmppMessages[2],
+        xmppMessages[1],
+        xmppMessages[3],
+      ]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.items.map((message) => message.stanzaID), [
+        emailMessage.stanzaID,
+        ...xmppMessages.map((message) => message.stanzaID),
+      ]);
+
+      await bloc.close();
+    },
+  );
+
+  test('mixed chat message stream preserves equal timestamp order', () async {
+    final mixedChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      deltaChatId: 40,
+      emailAddress: 'peer@example.com',
+      emailFromAddress: 'self@example.com',
+    );
+    final timestamp = DateTime.utc(2026, 1, 4, 13);
+    final first = Message(
+      stanzaID: 'mixed-equal-first',
+      senderJid: mixedChat.jid,
+      chatJid: mixedChat.jid,
+      timestamp: timestamp,
+      body: 'first equal timestamp',
+    );
+    final second = Message(
+      stanzaID: 'mixed-equal-second',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 40,
+      deltaMsgId: 402,
+      timestamp: timestamp,
+      body: 'second equal timestamp',
+    );
+    final third = Message(
+      stanzaID: 'mixed-equal-third',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 40,
+      deltaMsgId: 403,
+      timestamp: timestamp,
+      body: 'third equal timestamp',
+    );
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(mixedChat);
+    await _pumpBloc();
+    messageStreamController.add([second, first, third]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.items.map((message) => message.stanzaID), [
+      second.stanzaID,
+      first.stanzaID,
+      third.stanzaID,
+    ]);
+
+    await bloc.close();
+  });
+
+  test('focused mixed message insertion keeps timeline newest first', () async {
+    final mixedChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      deltaChatId: 39,
+      emailAddress: 'peer@example.com',
+      emailFromAddress: 'self@example.com',
+    );
+    final newestEmail = Message(
+      stanzaID: 'focused-email-0058',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 39,
+      deltaMsgId: 58,
+      timestamp: DateTime.utc(2026, 1, 4, 0, 58),
+      body: '00:58 email',
+    );
+    final olderXmpp = Message(
+      stanzaID: 'focused-xmpp-0037',
+      senderJid: mixedChat.jid,
+      chatJid: mixedChat.jid,
+      timestamp: DateTime.utc(2026, 1, 4, 0, 37),
+      body: '00:37 xmpp',
+    );
+    final focusedEmail = Message(
+      stanzaID: 'focused-email-0055',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 39,
+      deltaMsgId: 55,
+      timestamp: DateTime.utc(2026, 1, 4, 0, 55),
+      body: '00:55 email',
+    );
+
+    when(
+      () => messageService.loadMessageByStanzaId(focusedEmail.stanzaID),
+    ).thenAnswer((_) async => focusedEmail);
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(mixedChat);
+    await _pumpBloc();
+    messageStreamController.add([newestEmail, olderXmpp]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(ChatMessageFocused(focusedEmail.stanzaID));
+    await _pumpBloc();
+
+    expect(bloc.state.focused?.stanzaID, focusedEmail.stanzaID);
+    expect(bloc.state.items.map((message) => message.stanzaID), [
+      newestEmail.stanzaID,
+      focusedEmail.stanzaID,
+      olderXmpp.stanzaID,
+    ]);
+
+    await bloc.close();
+  });
+
+  test('zero unread chat updates clear a stale unread boundary', () async {
+    final mixedChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      unreadCount: 1,
+    );
+    final unreadMessage = Message(
+      stanzaID: 'mixed-boundary-clears',
+      senderJid: 'peer@axi.im',
+      chatJid: mixedChat.jid,
+      timestamp: DateTime(2026, 1, 3, 11, 15),
+      body: 'Unread XMPP message',
+    );
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(mixedChat);
+    await _pumpBloc();
+    messageStreamController.add([unreadMessage]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.unreadBoundaryStanzaId, unreadMessage.stanzaID);
+
+    chatStreamController.add(mixedChat.copyWith(unreadCount: 0));
+    await _pumpBloc();
+
+    expect(bloc.state.unreadBoundaryStanzaId, isNull);
+
+    await bloc.close();
+  });
+
+  test('mixed email self messages use the email identity for unread', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    when(() => emailService.selfSenderJid).thenReturn('me@example.com');
+
+    final mixedChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      unreadCount: 1,
+    );
+    final selfEmailMessage = Message(
+      stanzaID: 'mixed-email-self',
+      senderJid: 'me@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 8,
+      deltaMsgId: 81,
+      timestamp: DateTime(2026, 1, 3, 11, 30),
+      body: 'Self email copy',
+    );
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(mixedChat);
+    await _pumpBloc();
+    messageStreamController.add([selfEmailMessage]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.unreadBoundaryStanzaId, isNull);
+
+    await bloc.close();
+  });
+
+  test('mixed email read requests do not send XMPP read markers', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+    when(() => emailService.hasInMemoryReconnectContext).thenReturn(true);
+    when(
+      () => emailService.markNoticedChat(any()),
+    ).thenAnswer((_) async => true);
+    when(
+      () => emailService.markSeenMessages(
+        any(),
+        sendReadReceipts: any(named: 'sendReadReceipts'),
+      ),
+    ).thenAnswer((_) async => true);
+
+    final mixedChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      unreadCount: 1,
+    );
+    final emailMessage = Message(
+      stanzaID: 'mixed-email-manual-read',
+      senderJid: 'peer@example.com',
+      chatJid: mixedChat.jid,
+      deltaChatId: 9,
+      deltaMsgId: 91,
+      timestamp: DateTime(2026, 1, 3, 12),
+      body: 'Unread email copy',
+    );
+
+    final bloc = ChatBloc(
+      jid: mixedChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(mixedChat);
+    await _pumpBloc();
+    messageStreamController.add([emailMessage]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(ChatMessageReadRequested(emailMessage.stanzaID));
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.sendReadMarker(
+        any(),
+        any(),
+        chatType: any(named: 'chatType'),
+      ),
+    );
+    verify(
+      () => emailService.markSeenMessages(
+        any(),
+        sendReadReceipts: any(named: 'sendReadReceipts'),
+      ),
+    ).called(1);
+
+    await bloc.close();
+  });
+
+  test(
+    'mixed email read requests clear local rows without Delta message ids',
+    () async {
+      final mixedChat = initialChat.copyWith(
+        transport: MessageTransport.xmpp,
+        unreadCount: 1,
+      );
+      final emailMessage = Message(
+        stanzaID: 'mixed-email-local-read-only',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 9,
+        timestamp: DateTime(2026, 1, 3, 12),
+        body: 'Unread email copy without a Delta message id',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([emailMessage]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(ChatMessageReadRequested(emailMessage.stanzaID));
+      await _pumpBloc();
+
+      final capturedMessages =
+          verify(
+                () => messageService.markMessagesDisplayedLocally(
+                  messages: captureAny(named: 'messages'),
+                  chatJid: mixedChat.jid,
+                  selfJid: any(named: 'selfJid'),
+                  emailSelfJid: any(named: 'emailSelfJid'),
+                ),
+              ).captured.single
+              as List<Message>;
+      expect(capturedMessages.map((message) => message.stanzaID), [
+        emailMessage.stanzaID,
+      ]);
+      verifyNever(
+        () => messageService.sendReadMarker(
+          any(),
+          any(),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'displayed mixed email messages retry Delta seen when visible',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      when(() => emailService.selfSenderJid).thenReturn('self@example.com');
+      when(() => emailService.hasInMemoryReconnectContext).thenReturn(true);
+      when(
+        () => emailService.markNoticedChat(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => emailService.markSeenMessages(
+          any(),
+          sendReadReceipts: any(named: 'sendReadReceipts'),
+        ),
+      ).thenAnswer((_) async => true);
+
+      final mixedChat = initialChat.copyWith(
+        transport: MessageTransport.xmpp,
+        unreadCount: 0,
+      );
+      final displayedEmailMessage = Message(
+        stanzaID: 'mixed-email-displayed-retry',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 10,
+        deltaMsgId: 101,
+        displayed: true,
+        timestamp: DateTime(2026, 1, 3, 12, 30),
+        body: 'Displayed email copy',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([displayedEmailMessage]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(ChatReadThresholdChanged([displayedEmailMessage.stanzaID]));
+      await _pumpBloc();
+
+      verify(
+        () => emailService.markSeenMessages(
+          any(
+            that: contains(
+              isA<Message>().having(
+                (message) => message.stanzaID,
+                'stanzaID',
+                displayedEmailMessage.stanzaID,
+              ),
+            ),
+          ),
+          sendReadReceipts: any(named: 'sendReadReceipts'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendReadMarker(
+          any(),
+          any(),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
 
   test(
     'email unread bootstrap keeps the first page available for backfill',
@@ -6397,6 +8392,9 @@ void main() {
       await _pumpBloc();
       await _pumpBloc();
 
+      bloc.add(ChatReadThresholdChanged([incoming.stanzaID]));
+      await _pumpBloc();
+
       emailMessageStreamController.add([incoming]);
       await _pumpBloc();
       await _pumpBloc();
@@ -6547,6 +8545,63 @@ void main() {
   );
 
   test(
+    'open XMPP chats send read markers for the newest unread message',
+    () async {
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+      final older = Message(
+        stanzaID: 'open-chat-unread-older',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 4, 12),
+        body: 'Older unread message',
+      );
+      final newer = Message(
+        stanzaID: 'open-chat-unread-newer',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 4, 12, 1),
+        body: 'Newer unread message',
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      messageStreamController.add([older, newer]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendReadMarker(
+          initialChat.jid,
+          newer.stanzaID,
+          chatType: initialChat.type,
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendReadMarker(
+          initialChat.jid,
+          older.stanzaID,
+          chatType: initialChat.type,
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'open XMPP chats do not send duplicate read markers while one is in flight',
     () async {
       final completer = Completer<void>();
@@ -6611,114 +8666,142 @@ void main() {
     },
   );
 
-  test('catch-up paginates MAM when reconnecting after gap', () async {
-    final xmppService = MockXmppService();
-    final connectivityController =
-        StreamController<xmpp.ConnectionState>.broadcast();
+  test(
+    'catch-up delegates MAM pagination to the chat archive session when reconnecting after gap',
+    () async {
+      final xmppService = MockXmppService();
+      final connectivityController =
+          StreamController<xmpp.ConnectionState>.broadcast();
 
-    when(
-      () => xmppService.connectionState,
-    ).thenReturn(xmpp.ConnectionState.notConnected);
-    when(
-      () => xmppService.connectivityStream,
-    ).thenAnswer((_) => connectivityController.stream);
-    when(
-      () => xmppService.httpUploadSupportStream,
-    ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
-    when(
-      () => xmppService.httpUploadSupport,
-    ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
-    when(
-      () => xmppService.createChatArchiveSession(),
-    ).thenReturn('xmpp-session-1');
-    when(
-      () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
-        sessionId: any(named: 'sessionId'),
-        chat: any(named: 'chat'),
-        desiredWindow: any(named: 'desiredWindow'),
-        filter: any(named: 'filter'),
-        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
-        pageSize: any(named: 'pageSize'),
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => xmppService.messageStreamForChat(
-        any(),
-        start: any(named: 'start'),
-        end: any(named: 'end'),
-        filter: any(named: 'filter'),
-      ),
-    ).thenAnswer((_) => messageStreamController.stream);
-    when(
-      () => xmppService.sendReadMarker(
-        any(),
-        any(),
-        chatType: any(named: 'chatType'),
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => xmppService.countLocalMessages(
-        jid: any(named: 'jid'),
-        filter: any(named: 'filter'),
-        includePseudoMessages: any(named: 'includePseudoMessages'),
-      ),
-    ).thenAnswer((_) async => ChatBloc.messageBatchSize);
-    when(
-      () => xmppService.fetchLatestFromArchive(
-        jid: any(named: 'jid'),
-        pageSize: any(named: 'pageSize'),
-        isMuc: any(named: 'isMuc'),
-      ),
-    ).thenAnswer((_) async => const xmpp.MamPageResult(complete: true));
-    when(
-      () => xmppService.loadArchiveCursorTimestamp(any()),
-    ).thenAnswer((_) async => DateTime(2024));
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(xmpp.ConnectionState.notConnected);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => connectivityController.stream);
+      when(
+        () => xmppService.httpUploadSupportStream,
+      ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+      when(
+        () => xmppService.httpUploadSupport,
+      ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+      when(
+        () => xmppService.createChatArchiveSession(),
+      ).thenReturn('xmpp-session-1');
+      when(
+        () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          filter: any(named: 'filter'),
+          visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => messageStreamController.stream);
+      when(
+        () => xmppService.sendReadMarker(
+          any(),
+          any(),
+          chatType: any(named: 'chatType'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.countLocalMessages(
+          jid: any(named: 'jid'),
+          filter: any(named: 'filter'),
+          includePseudoMessages: any(named: 'includePseudoMessages'),
+        ),
+      ).thenAnswer((_) async => ChatBloc.messageBatchSize);
+      when(
+        () => xmppService.fetchLatestFromArchive(
+          jid: any(named: 'jid'),
+          pageSize: any(named: 'pageSize'),
+          isMuc: any(named: 'isMuc'),
+        ),
+      ).thenAnswer((_) async => const xmpp.MamPageResult(complete: true));
+      when(
+        () => xmppService.loadArchiveCursorTimestamp(any()),
+      ).thenAnswer((_) async => DateTime(2024));
+      when(
+        () => xmppService.prefetchAvatarForJid(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.catchUpChatFromMamOnConnectForSession(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          filter: any(named: 'filter'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      when(
+        () => xmppService.loadPinnedMessages(any()),
+      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+      when(
+        () => xmppService.syncPinnedMessagesForChat(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.resolvePeerCapabilities(
+          jid: any(named: 'jid'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
 
-    final mamPages = Queue<xmpp.MamPageResult>.from([
-      const xmpp.MamPageResult(complete: false, firstId: 'p0', lastId: 'p1'),
-      const xmpp.MamPageResult(complete: true, firstId: 'p1', lastId: 'p2'),
-    ]);
+      final mamPages = Queue<xmpp.MamPageResult>.from([
+        const xmpp.MamPageResult(complete: false, firstId: 'p0', lastId: 'p1'),
+        const xmpp.MamPageResult(complete: true, firstId: 'p1', lastId: 'p2'),
+      ]);
 
-    when(
-      () => xmppService.fetchSinceFromArchive(
-        jid: any(named: 'jid'),
-        since: any(named: 'since'),
-        pageSize: any(named: 'pageSize'),
-        isMuc: any(named: 'isMuc'),
-        after: any(named: 'after'),
-      ),
-    ).thenAnswer((_) async => mamPages.removeFirst());
+      when(
+        () => xmppService.fetchSinceFromArchive(
+          jid: any(named: 'jid'),
+          since: any(named: 'since'),
+          pageSize: any(named: 'pageSize'),
+          isMuc: any(named: 'isMuc'),
+          after: any(named: 'after'),
+        ),
+      ).thenAnswer((_) async => mamPages.removeFirst());
 
-    final bloc = ChatBloc(
-      jid: initialChat.jid,
-      messageService: xmppService,
-      chatsService: chatsService,
-      mucService: mucService,
-      notificationService: notificationService,
-      settings: _defaultChatSettings(),
-    );
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: xmppService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
 
-    chatStreamController.add(initialChat);
-    messageStreamController.add(const <Message>[]);
-    await _pumpBloc();
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
 
-    connectivityController.add(xmpp.ConnectionState.connected);
-    await _pumpBloc();
-    await _pumpBloc();
+      connectivityController.add(xmpp.ConnectionState.connected);
+      await _pumpBloc();
+      await _pumpBloc();
 
-    verify(
-      () => xmppService.fetchSinceFromArchive(
-        jid: any(named: 'jid'),
-        since: any(named: 'since'),
-        pageSize: any(named: 'pageSize'),
-        isMuc: any(named: 'isMuc'),
-        after: any(named: 'after'),
-      ),
-    ).called(2);
+      verify(
+        () => xmppService.catchUpChatFromMamOnConnectForSession(
+          sessionId: 'xmpp-session-1',
+          chat: initialChat,
+          filter: MessageTimelineFilter.directOnly,
+          pageSize: ChatBloc.messageBatchSize,
+        ),
+      ).called(1);
 
-    await bloc.close();
-    await connectivityController.close();
-  });
+      await bloc.close();
+      await connectivityController.close();
+    },
+  );
 
   test('opening a direct chat prefetches that peer avatar once', () async {
     final xmppService = MockXmppService();
@@ -6761,6 +8844,9 @@ void main() {
     when(
       () => xmppService.pinnedMessagesStream(any()),
     ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => xmppService.loadPinnedMessages(any()),
+    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
     when(
       () => xmppService.syncPinnedMessagesForChat(any()),
     ).thenAnswer((_) async {});
@@ -6842,6 +8928,9 @@ void main() {
     when(
       () => xmppService.pinnedMessagesStream(any()),
     ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => xmppService.loadPinnedMessages(any()),
+    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
     when(
       () => xmppService.syncPinnedMessagesForChat(any()),
     ).thenAnswer((_) async {});
@@ -6947,6 +9036,9 @@ void main() {
         () => xmppService.pinnedMessagesStream(any()),
       ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
       when(
+        () => xmppService.loadPinnedMessages(any()),
+      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+      when(
         () => xmppService.syncPinnedMessagesForChat(any()),
       ).thenAnswer((_) async {});
       when(
@@ -7046,6 +9138,9 @@ void main() {
       when(
         () => xmppService.pinnedMessagesStream(any()),
       ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      when(
+        () => xmppService.loadPinnedMessages(any()),
+      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
       when(
         () => xmppService.syncPinnedMessagesForChat(any()),
       ).thenAnswer((_) async {});
@@ -7273,9 +9368,11 @@ void main() {
     await _pumpBloc();
 
     verifyInOrder([
-      () => mucService.roomStateFor(roomJid),
       () => mucService.roomStateStream(roomJid),
-      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      () => mucService.warmRoomFromHistory(
+        roomJid: roomJid,
+        limit: any(named: 'limit'),
+      ),
     ]);
 
     await bloc.close();

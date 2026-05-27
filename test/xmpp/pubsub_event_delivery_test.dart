@@ -1,5 +1,6 @@
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/chat_settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
@@ -9,6 +10,7 @@ import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart'
 import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/settings_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/spam_pubsub_manager.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -62,6 +64,9 @@ const _lastTsMinute = 30;
 const _lastTsSecond = 0;
 
 const mox.Stanza? _noStanza = null;
+
+mox.XMLNode _serializedNode(mox.XMLNode node) =>
+    mox.XMLNode.fromString(node.toXml());
 
 mox.XmppManagerAttributes _testAttributes({
   required List<mox.XmppEvent> sentEvents,
@@ -392,6 +397,143 @@ void main() {
     expect(update.payload.sourceId, 'device-a');
   });
 
+  test('app-owned pubsub payloads escape XML-sensitive data', () {
+    const special = 'A&B <C> "D" \'E\'';
+    const sourceId = 'device & <one> "two" \'three\'';
+    final updatedAt = DateTime.utc(2026, 3, 12, 12);
+    final settings = SettingsSyncPayload(
+      settings: const <String, dynamic>{'language': special},
+      updatedAt: updatedAt,
+      sourceId: sourceId,
+    );
+    final parsedSettings = SettingsSyncPayload.fromXml(
+      _serializedNode(settings.toXml()),
+      itemId: settings.itemId,
+    );
+    expect(parsedSettings?.settings['language'], special);
+    expect(parsedSettings?.sourceId, sourceId);
+
+    final chatSettings = ChatSettingsSyncPayload(
+      addressKey: _messageChatJid,
+      settings: const <String, dynamic>{'email_read_receipts': null},
+      updatedAt: updatedAt,
+      sourceId: sourceId,
+    );
+    final parsedChatSettings = ChatSettingsSyncPayload.fromXml(
+      _serializedNode(chatSettings.toXml()),
+      itemId: chatSettings.itemId,
+    );
+    expect(parsedChatSettings?.sourceId, sourceId);
+    expect(
+      parsedChatSettings?.settings,
+      containsPair('email_read_receipts', isNull),
+    );
+
+    final addressBlock = AddressBlockSyncPayload(
+      address: _messageChatJid,
+      updatedAt: updatedAt,
+      sourceId: sourceId,
+    );
+    final parsedAddressBlock = AddressBlockSyncPayload.fromXml(
+      _serializedNode(addressBlock.toXml()),
+      itemId: addressBlock.itemId,
+    );
+    expect(parsedAddressBlock?.address, _messageChatJid);
+    expect(parsedAddressBlock?.sourceId, sourceId);
+
+    final spam = SpamSyncPayload(
+      jid: _messageChatJid,
+      updatedAt: updatedAt,
+      sourceId: sourceId,
+    );
+    final parsedSpam = SpamSyncPayload.fromXml(
+      _serializedNode(spam.toXml()),
+      itemId: spam.itemId,
+    );
+    expect(parsedSpam?.jid, _messageChatJid);
+    expect(parsedSpam?.sourceId, sourceId);
+
+    final conversation = ConvItem(
+      peerBare: mox.JID.fromString(_messageChatJid).toBare(),
+      lastTimestamp: updatedAt,
+      lastId: special,
+      pinned: true,
+      archived: true,
+    );
+    final parsedConversation = ConvItem.fromXml(
+      _serializedNode(conversation.toXml()),
+    );
+    expect(parsedConversation?.peerBare.toString(), _messageChatJid);
+    expect(parsedConversation?.lastId, special);
+    expect(parsedConversation?.pinned, isTrue);
+    expect(parsedConversation?.archived, isTrue);
+
+    final contact = ContactSyncPayload(
+      addressKey: _contactFolderRuleAddress,
+      active: true,
+      manual: true,
+      favorited: false,
+      displayNameOverride: special,
+      folderCollectionId: special,
+      updatedAt: updatedAt,
+      sourceId: sourceId,
+      fields: [
+        ContactSyncFieldPayload(
+          fieldId: 'field-1',
+          kind: ContactDetailFieldKind.note,
+          label: special,
+          value: special,
+          sortOrder: 1,
+          active: true,
+          updatedAt: updatedAt,
+          sourceId: sourceId,
+        ),
+      ],
+    );
+    final parsedContact = ContactSyncPayload.fromXml(
+      _serializedNode(contact.toXml()),
+      itemId: contact.itemId,
+    );
+    expect(parsedContact?.displayNameOverride, special);
+    expect(parsedContact?.folderCollectionId, special);
+    expect(parsedContact?.fields.single.label, special);
+    expect(parsedContact?.fields.single.value, special);
+    expect(parsedContact?.fields.single.sourceId, sourceId);
+
+    final bookmark = MucBookmark(
+      roomBare: mox.JID.fromString(_roomJid).toBare(),
+      name: special,
+      nick: special,
+      password: special,
+      autojoin: true,
+    );
+    final parsedBookmark = MucBookmark.fromBookmarks2Xml(
+      _serializedNode(bookmark.toBookmarks2Xml()),
+      itemId: _roomJid,
+    );
+    expect(parsedBookmark?.name, special);
+    expect(parsedBookmark?.nick, special);
+    expect(parsedBookmark?.password, special);
+
+    final collection = MessageCollectionSyncPayload(
+      collectionId: special,
+      chatJid: _messageChatJid,
+      messageReferenceId: special,
+      messageOriginId: special,
+      updatedAt: updatedAt,
+      active: true,
+      sourceId: sourceId,
+    );
+    final parsedCollection = MessageCollectionSyncPayload.fromXml(
+      _serializedNode(collection.toXml()),
+      itemId: collection.itemId,
+    );
+    expect(parsedCollection?.collectionId, special);
+    expect(parsedCollection?.messageReferenceId, special);
+    expect(parsedCollection?.messageOriginId, special);
+    expect(parsedCollection?.sourceId, sourceId);
+  });
+
   test('ChatSettingsPubSubManager ignores malformed settings data', () async {
     final sentEvents = <mox.XmppEvent>[];
     final manager = ChatSettingsPubSubManager()
@@ -436,7 +578,9 @@ void main() {
         sourceId: 'device-a',
       );
 
-      final parsed = ChatSettingsSyncPayload.fromXml(payload.toXml());
+      final parsed = ChatSettingsSyncPayload.fromXml(
+        _serializedNode(payload.toXml()),
+      );
       final applied = parsed?.applyToChat(local);
 
       expect(parsed?.settings, containsPair('email_read_receipts', isNull));
@@ -492,14 +636,14 @@ void main() {
       quotingReferenceKind: MessageReferenceKind.originId,
     );
 
-    final parsed = DraftSyncPayload.fromXml(payload.toXml());
+    final parsed = DraftSyncPayload.fromXml(_serializedNode(payload.toXml()));
 
     expect(parsed, isNotNull);
     expect(parsed?.quotingStanzaId, 'quoted-origin-id');
     expect(parsed?.quotingReferenceKind, MessageReferenceKind.originId);
   });
 
-  test('DraftSyncPayload round-trips calendar task payload', () {
+  test('DraftSyncPayload normalizes calendar task payload to read-only', () {
     final task = CalendarTask(
       id: 'task-1',
       title: 'Review launch notes',
@@ -518,12 +662,12 @@ void main() {
       ),
     );
 
-    final parsed = DraftSyncPayload.fromXml(payload.toXml());
+    final parsed = DraftSyncPayload.fromXml(_serializedNode(payload.toXml()));
 
     expect(parsed, isNotNull);
     expect(parsed?.body, 'hello');
     expect(parsed?.calendarTaskIcsMessage?.task, task);
-    expect(parsed?.calendarTaskIcsMessage?.readOnly, isFalse);
+    expect(parsed?.calendarTaskIcsMessage?.readOnly, isTrue);
   });
 
   test('DraftSyncPayload round-trips forwarded blocks', () {
@@ -531,17 +675,18 @@ void main() {
       blockId: 'forward-block-1',
       sourceMessageId: 'source-message-1',
       senderJid: _peerBareJid,
-      senderLabel: 'Peer',
+      senderLabel: 'Peer <label> & "team" \'x\'',
       timestamp: DateTime.utc(2026, 3, 11, 8),
-      originalSubject: 'Original subject',
-      originalPlainText: 'Original text',
-      originalHtml: '<p>Original <strong>HTML</strong></p>',
+      originalSubject: 'Original <subject> & "code"',
+      originalPlainText: 'Original text & symbols',
+      originalHtml:
+          '<!doctype html><html xmlns=http://www.w3.org/1999/xhtml><body><p>Hey & welcome</p></body></html>',
       quotedContext: const DraftForwardedQuoteContext(
-        senderLabel: 'Original sender',
-        plainText: 'Quoted text',
+        senderLabel: 'Original sender <label> & "team"',
+        plainText: 'Quoted text <safe> & sound',
       ),
       conversionState: DraftForwardedBlockConversionState.convertedText,
-      convertedText: 'Edited forwarded text',
+      convertedText: 'Edited forwarded text <plain> & kept',
     );
     final payload = DraftSyncPayload(
       syncId: 'draft-sync-id',
@@ -552,10 +697,47 @@ void main() {
       forwardedBlocks: [block],
     );
 
-    final parsed = DraftSyncPayload.fromXml(payload.toXml());
+    final xml = payload.toXml().toXml();
+    final parsed = DraftSyncPayload.fromXml(mox.XMLNode.fromString(xml));
 
+    expect(xml, isNot(contains('<!doctype html>')));
+    expect(xml, contains('&lt;!doctype html&gt;'));
     expect(parsed, isNotNull);
     expect(parsed?.forwardedBlocks, [block]);
+  });
+
+  test('DraftSyncPayload replaces XML-invalid control characters', () {
+    const unsafe = 'visible\u0001text';
+    final sanitized = 'visible${String.fromCharCode(0xfffd)}text';
+    final payload = DraftSyncPayload(
+      syncId: 'draft-sync-id',
+      updatedAt: DateTime.utc(2026, 3, 11, 12),
+      sourceId: unsafe,
+      recipients: const [DraftRecipient(jid: _peerBareJid, role: 'to')],
+      subject: unsafe,
+      body: unsafe,
+      html: unsafe,
+      forwardedBlocks: const [
+        DraftForwardedBlock(
+          blockId: 'forward-block-1',
+          sourceMessageId: 'source-message-1',
+          senderJid: _peerBareJid,
+          senderLabel: unsafe,
+          originalPlainText: unsafe,
+        ),
+      ],
+    );
+
+    final xml = payload.toXml().toXml();
+    final parsed = DraftSyncPayload.fromXml(mox.XMLNode.fromString(xml));
+
+    expect(xml, isNot(contains('\u0001')));
+    expect(parsed?.sourceId, sanitized);
+    expect(parsed?.subject, sanitized);
+    expect(parsed?.body, sanitized);
+    expect(parsed?.html, sanitized);
+    expect(parsed?.forwardedBlocks.single.senderLabel, sanitized);
+    expect(parsed?.forwardedBlocks.single.originalPlainText, sanitized);
   });
 
   test('DraftSyncPayload ignores invalid calendar task payload only', () {

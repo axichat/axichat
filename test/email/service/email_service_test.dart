@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:archive/archive_io.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -21,10 +24,21 @@ import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import '../../mocks.dart';
 
 class MockEmailDeltaTransport extends Mock implements EmailDeltaTransport {}
+
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.temporaryPath);
+
+  final String temporaryPath;
+
+  @override
+  Future<String?> getTemporaryPath() async => temporaryPath;
+}
 
 class FakeForegroundBridge implements ForegroundTaskBridge {
   final Map<String, ForegroundTaskMessageHandler> _listeners = {};
@@ -32,6 +46,9 @@ class FakeForegroundBridge implements ForegroundTaskBridge {
   final List<List<Object>> sent = [];
 
   bool isClientAcquired(String clientId) => _acquiredClients.contains(clientId);
+
+  @override
+  Future<bool> isRunning() async => _acquiredClients.isNotEmpty;
 
   @override
   Future<void> acquire({
@@ -72,11 +89,15 @@ class FakeForegroundBridge implements ForegroundTaskBridge {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late MockCredentialStore credentialStore;
   late MockXmppDatabase database;
   late MockNotificationService notificationService;
   late MockEmailDeltaTransport transport;
   late FakeForegroundBridge foregroundBridge;
+  late PathProviderPlatform originalPathProvider;
+  late Directory temporaryDirectory;
 
   late void Function(DeltaCoreEvent) listener;
 
@@ -86,6 +107,7 @@ void main() {
     registerFallbackValue(<FutureOr<bool>>[]);
     registerFallbackValue(<Contact>[]);
     registerFallbackValue(<String>[]);
+    registerFallbackValue(<int>[]);
     registerFallbackValue(MessageTimelineFilter.directOnly);
     registerFallbackValue(<String, String>{});
     registerFallbackValue(Duration.zero);
@@ -117,9 +139,28 @@ void main() {
         timestamp: DateTime.fromMillisecondsSinceEpoch(0),
       ),
     );
+    registerFallbackValue(
+      EmailTrustedContactKeyData(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'fallback@example.com',
+        fingerprint: 'fallback',
+        deltaContactId: 1,
+        deltaChatId: 1,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+        userIdsJson: '[]',
+        importedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+    );
   });
 
-  setUp(() {
+  setUp(() async {
+    originalPathProvider = PathProviderPlatform.instance;
+    temporaryDirectory = await Directory.systemTemp.createTemp(
+      'email_service_test',
+    );
+    PathProviderPlatform.instance = _FakePathProviderPlatform(
+      temporaryDirectory.path,
+    );
     credentialStore = MockCredentialStore();
     database = MockXmppDatabase();
     notificationService = MockNotificationService();
@@ -167,6 +208,19 @@ void main() {
     when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {});
     when(() => transport.notifyNetworkLost()).thenAnswer((_) async {});
     when(() => transport.connectivity()).thenAnswer((_) async => 4000);
+    when(() => transport.connectivityDetails()).thenAnswer((_) async => null);
+    when(
+      () => transport.chatSendCapabilities(
+        chatId: any(named: 'chatId'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer(
+      (_) async => const DeltaChatSendCapabilities(
+        exists: true,
+        canSend: true,
+        isEncrypted: true,
+      ),
+    );
     when(
       () =>
           transport.refreshChatlistSnapshot(accountId: any(named: 'accountId')),
@@ -194,6 +248,17 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
+      () => transport.setCoreConfigIfSupported(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
+      () =>
+          transport.markSeenMessages(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => true);
+    when(
       () => transport.sendText(
         chatId: any(named: 'chatId'),
         body: any(named: 'body'),
@@ -203,6 +268,8 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
+        forcePlaintext: any(named: 'forcePlaintext'),
+        skipAutocrypt: any(named: 'skipAutocrypt'),
       ),
     ).thenAnswer((_) async => 1);
     when(
@@ -215,6 +282,21 @@ void main() {
         htmlCaption: any(named: 'htmlCaption'),
         quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
+        forcePlaintext: any(named: 'forcePlaintext'),
+        skipAutocrypt: any(named: 'skipAutocrypt'),
+      ),
+    ).thenAnswer((_) async => 1);
+    when(
+      () => transport.sendTextWithQuote(
+        chatId: any(named: 'chatId'),
+        body: any(named: 'body'),
+        quotedMessageId: any(named: 'quotedMessageId'),
+        quotedStanzaId: any(named: 'quotedStanzaId'),
+        subject: any(named: 'subject'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: any(named: 'accountId'),
+        forcePlaintext: any(named: 'forcePlaintext'),
+        skipAutocrypt: any(named: 'skipAutocrypt'),
       ),
     ).thenAnswer((_) async => 1);
     when(
@@ -276,12 +358,16 @@ void main() {
         deltaAccountId: any(named: 'deltaAccountId'),
         resolvedAddress: any(named: 'resolvedAddress'),
         placeholderJids: any(named: 'placeholderJids'),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
       ),
     ).thenAnswer((_) async {});
     when(
       () => database.removeDeltaPlaceholderDuplicates(
         deltaAccountId: any(named: 'deltaAccountId'),
         placeholderJids: any(named: 'placeholderJids'),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
       ),
     ).thenAnswer((_) async {});
     when(
@@ -290,6 +376,15 @@ void main() {
         deltaAccountId: any(named: 'deltaAccountId'),
       ),
     ).thenAnswer((_) async => null);
+    when(
+      () => database.getEmailTrustedContactKey(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        address: any(named: 'address'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.upsertEmailTrustedContactKey(any()),
+    ).thenAnswer((_) async {});
     when(
       () => database.upsertEmailChatAccount(
         chatJid: any(named: 'chatJid'),
@@ -340,8 +435,80 @@ void main() {
     ).thenAnswer((_) async {});
   });
 
+  tearDown(() async {
+    PathProviderPlatform.instance = originalPathProvider;
+    if (await temporaryDirectory.exists()) {
+      await temporaryDirectory.delete(recursive: true);
+    }
+  });
+
   Future<void> pumpMicrotasks() async {
     await Future<void>.delayed(Duration.zero);
+  }
+
+  EmailService createService() => EmailService(
+    credentialStore: credentialStore,
+    databaseBuilder: () async => database,
+    transport: transport,
+    notificationService: notificationService,
+    foregroundBridge: foregroundBridge,
+  );
+
+  Future<EmailService> createProvisionedService() async {
+    final service = createService();
+    addTearDown(service.shutdown);
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.com',
+      passwordOverride: 'password',
+      persistCredentials: false,
+    );
+    return service;
+  }
+
+  File temporaryFile(String name) =>
+      File(p.join(temporaryDirectory.path, name));
+
+  String privateKeyBlock(String label) =>
+      '-----BEGIN PGP PRIVATE KEY BLOCK-----\n'
+      '$label\n'
+      '-----END PGP PRIVATE KEY BLOCK-----\n';
+
+  String publicKeyBlock(String label) =>
+      '-----BEGIN PGP PUBLIC KEY BLOCK-----\n'
+      '$label\n'
+      '-----END PGP PUBLIC KEY BLOCK-----\n';
+
+  DeltaOpenPgpKeyMetadata privateKeyMetadata(String fingerprint) =>
+      DeltaOpenPgpKeyMetadata(
+        kind: DeltaOpenPgpKeyKind.private,
+        fingerprint: fingerprint,
+        userIds: const ['Alice <alice@example.com>'],
+        hasExpectedAddress: true,
+        hasEncryptionCapability: true,
+      );
+
+  DeltaOpenPgpKeyMetadata publicKeyMetadata(
+    String fingerprint, {
+    bool hasExpectedAddress = true,
+    bool hasEncryptionCapability = true,
+  }) => DeltaOpenPgpKeyMetadata(
+    kind: DeltaOpenPgpKeyKind.public,
+    fingerprint: fingerprint,
+    userIds: const ['Friend <friend@example.com>'],
+    hasExpectedAddress: hasExpectedAddress,
+    hasEncryptionCapability: hasEncryptionCapability,
+  );
+
+  Future<File> writeArchive(String name, Map<String, List<int>> entries) async {
+    final archive = Archive();
+    for (final entry in entries.entries) {
+      archive.addFile(ArchiveFile(entry.key, entry.value.length, entry.value));
+    }
+    final bytes = ZipEncoder().encode(archive);
+    return temporaryFile(name).writeAsBytes(bytes, flush: true);
   }
 
   void emitNetworkError() {
@@ -384,6 +551,22 @@ void main() {
       ),
     );
   }
+
+  test('active encryption account info reports an existing self key', () async {
+    final service = await createProvisionedService();
+    when(
+      () => transport.getCoreConfig(
+        'key_id',
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => 'self-key-id');
+
+    final account = await service.activeEncryptionAccountInfo();
+
+    expect(account?.normalizedAddress, 'alice@example.com');
+    expect(account?.deltaAccountId, DeltaAccountDefaults.legacyId);
+    expect(account?.hasSelfKey, isTrue);
+  });
 
   test(
     'marks chats as email and raises notifications on incoming events',
@@ -470,6 +653,848 @@ void main() {
       addTearDown(service.shutdown);
     },
   );
+
+  test('seeds attachment auto-download settings into injected transport', () {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      autoDownloadImages: true,
+      autoDownloadDocuments: true,
+    );
+    addTearDown(service.shutdown);
+
+    verify(
+      () => transport.updateAttachmentAutoDownloadSettings(
+        imagesEnabled: true,
+        videosEnabled: false,
+        documentsEnabled: true,
+        archivesEnabled: false,
+      ),
+    ).called(1);
+  });
+
+  test('per-chat MDN override restores global read receipt config', () async {
+    when(() => transport.accountIds()).thenAnswer((_) async => const <int>[1]);
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      emailReadReceiptsEnabled: true,
+    );
+    addTearDown(service.shutdown);
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'secret',
+      jid: 'alice@example.com',
+      passwordOverride: 'password',
+      persistCredentials: false,
+    );
+    clearInteractions(transport);
+
+    final marked = await service.markSeenMessages(const <Message>[
+      Message(
+        stanzaID: 'dc-msg-10',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 1,
+        deltaMsgId: 10,
+      ),
+    ], sendReadReceipts: false);
+
+    expect(marked, isTrue);
+    verifyInOrder([
+      () => transport.setCoreConfig(
+        key: 'mdns_enabled',
+        value: '0',
+        accountId: 1,
+      ),
+      () => transport.markSeenMessages(const <int>[10], accountId: 1),
+      () => transport.setCoreConfig(
+        key: 'mdns_enabled',
+        value: '1',
+        accountId: 1,
+      ),
+    ]);
+  });
+
+  test('imports BYOK private key from a copied temp file', () async {
+    final source = await temporaryFile(
+      'alice.asc',
+    ).writeAsString(privateKeyBlock('direct-source'), flush: true);
+    final service = await createProvisionedService();
+    String? importPath;
+    String? importedArmored;
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'alice@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      ),
+    ).thenAnswer((_) async => privateKeyMetadata('ABC123'));
+    when(
+      () => transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: any(named: 'path'),
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((invocation) async {
+      final path = invocation.namedArguments[#path] as String;
+      importPath = path;
+      importedArmored = await File(path).readAsString();
+      return const EmailDeltaImexResult(
+        accountId: DeltaAccountDefaults.legacyId,
+        exportedPaths: <String>[],
+      );
+    });
+    when(
+      () => transport.getCoreConfig(
+        'key_id',
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => 'self-key-id');
+
+    final account = await service.importEmailEncryptionPrivateKey(
+      source,
+      expectedFingerprint: 'ABC123',
+      allowIdentityMismatch: false,
+    );
+
+    expect(account.normalizedAddress, 'alice@example.com');
+    expect(importedArmored, privateKeyBlock('direct-source'));
+    expect(importPath, isNot(source.path));
+    expect(
+      p.isWithin(
+        p.join(temporaryDirectory.path, emailEncryptionKeyTempDirectoryName),
+        importPath!,
+      ),
+      isTrue,
+    );
+    expect(await File(importPath!).exists(), isFalse);
+    verify(
+      () => transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: importPath!,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).called(1);
+  });
+
+  test('rejects binary gpg before Delta import', () async {
+    final source = await temporaryFile(
+      'binary.gpg',
+    ).writeAsBytes(const <int>[0, 1, 2, 3], flush: true);
+    final service = await createProvisionedService();
+
+    await expectLater(
+      service.inspectEmailEncryptionPrivateKey(source),
+      throwsA(isA<EmailEncryptionUnsupportedKeyFormatException>()),
+    );
+
+    verifyNever(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'alice@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      ),
+    );
+    verifyNever(
+      () => transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: any(named: 'path'),
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    );
+  });
+
+  test('selects the single default private key from a zip archive', () async {
+    final defaultArmored = privateKeyBlock('default-key');
+    final source = await writeArchive('delta-export.zip', <String, List<int>>{
+      'other.asc': privateKeyBlock('other-key').codeUnits,
+      'private-key-alice@example.com-default-ABC123.asc':
+          defaultArmored.codeUnits,
+    });
+    final service = await createProvisionedService();
+    String? importedArmored;
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'alice@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      ),
+    ).thenAnswer((invocation) async {
+      final armored = invocation.namedArguments[#armored] as String;
+      expect(armored, defaultArmored);
+      return privateKeyMetadata('ABC123');
+    });
+    when(
+      () => transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: any(named: 'path'),
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((invocation) async {
+      importedArmored = await File(
+        invocation.namedArguments[#path] as String,
+      ).readAsString();
+      return const EmailDeltaImexResult(
+        accountId: DeltaAccountDefaults.legacyId,
+        exportedPaths: <String>[],
+      );
+    });
+    when(
+      () => transport.getCoreConfig(
+        'key_id',
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => 'self-key-id');
+
+    await service.importEmailEncryptionPrivateKey(
+      source,
+      expectedFingerprint: 'ABC123',
+      allowIdentityMismatch: false,
+    );
+
+    expect(importedArmored, defaultArmored);
+  });
+
+  test('rejects ambiguous zip private keys before Delta import', () async {
+    final source = await writeArchive('ambiguous.zip', <String, List<int>>{
+      'first.asc': privateKeyBlock('first-key').codeUnits,
+      'second.asc': privateKeyBlock('second-key').codeUnits,
+    });
+    final service = await createProvisionedService();
+
+    await expectLater(
+      service.inspectEmailEncryptionPrivateKey(source),
+      throwsA(isA<EmailEncryptionAmbiguousKeyArchiveException>()),
+    );
+
+    verifyNever(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'alice@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      ),
+    );
+    verifyNever(
+      () => transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: any(named: 'path'),
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    );
+  });
+
+  test('rejects unsafe nested zip key paths before Delta import', () async {
+    final source = await writeArchive('unsafe.zip', <String, List<int>>{
+      'nested/key.asc': privateKeyBlock('nested-key').codeUnits,
+    });
+    final service = await createProvisionedService();
+
+    await expectLater(
+      service.inspectEmailEncryptionPrivateKey(source),
+      throwsA(isA<EmailEncryptionUnsupportedKeyFormatException>()),
+    );
+
+    verifyNever(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'alice@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.private,
+      ),
+    );
+    verifyNever(
+      () => transport.runImex(
+        mode: DeltaImexMode.importSelfKeys,
+        path: any(named: 'path'),
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    );
+  });
+
+  test(
+    'create export zips the current operation default self key files',
+    () async {
+      final service = await createProvisionedService();
+      const privateName = 'private-key-alice@example.com-default-ABC123.asc';
+      const publicName = 'public-key-alice@example.com-default-ABC123.asc';
+      final privateArmored = privateKeyBlock('selected-private');
+      final publicArmored = publicKeyBlock('selected-public');
+
+      when(
+        () => transport.runImex(
+          mode: DeltaImexMode.exportSelfKeys,
+          path: any(named: 'path'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((invocation) async {
+        final operationDirectory = Directory(
+          invocation.namedArguments[#path] as String,
+        );
+        final privateKey = File(p.join(operationDirectory.path, privateName));
+        final publicKey = File(p.join(operationDirectory.path, publicName));
+        final ignored = File(
+          p.join(
+            operationDirectory.path,
+            'private-key-alice@example.com-2.asc',
+          ),
+        );
+        final parentOld = File(
+          p.join(operationDirectory.parent.path, 'old.asc'),
+        );
+        await privateKey.writeAsString(privateArmored, flush: true);
+        await publicKey.writeAsString(publicArmored, flush: true);
+        await ignored.writeAsString(privateKeyBlock('ignored'), flush: true);
+        await parentOld.writeAsString(privateKeyBlock('old'), flush: true);
+        return EmailDeltaImexResult(
+          accountId: DeltaAccountDefaults.legacyId,
+          exportedPaths: <String>[ignored.path],
+        );
+      });
+      when(
+        () => transport.inspectOpenPgpKey(
+          armored: privateArmored,
+          expectedAddress: 'alice@example.com',
+          expectedKind: DeltaOpenPgpKeyKind.private,
+        ),
+      ).thenAnswer((_) async => privateKeyMetadata('ABC123'));
+      when(
+        () => transport.inspectOpenPgpKey(
+          armored: publicArmored,
+          expectedAddress: 'alice@example.com',
+          expectedKind: DeltaOpenPgpKeyKind.public,
+        ),
+      ).thenAnswer((_) async => publicKeyMetadata('ABC123'));
+      when(
+        () => transport.getCoreConfig(
+          'key_id',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 'self-key-id');
+
+      final export = await service.createEmailEncryptionKeyExport();
+      final archive = ZipDecoder().decodeBytes(
+        await File(export.tempZipPath).readAsBytes(),
+      );
+
+      expect(archive.files.map((file) => file.name), [privateName, publicName]);
+      expect(archive.files.first.readBytes(), privateArmored.codeUnits);
+      await service.cleanupEmailEncryptionTempPath(
+        export.operationDirectoryPath,
+      );
+      expect(await Directory(export.operationDirectoryPath).exists(), isFalse);
+    },
+  );
+
+  test(
+    'create export fails when no default private key file is written',
+    () async {
+      final service = await createProvisionedService();
+      String? operationDirectoryPath;
+
+      when(
+        () => transport.runImex(
+          mode: DeltaImexMode.exportSelfKeys,
+          path: any(named: 'path'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((invocation) async {
+        final operationDirectory = Directory(
+          invocation.namedArguments[#path] as String,
+        );
+        operationDirectoryPath = operationDirectory.path;
+        await File(
+          p.join(
+            operationDirectory.path,
+            'public-key-alice@example.com-default-ABC123.asc',
+          ),
+        ).writeAsString(publicKeyBlock('public-only'), flush: true);
+        return const EmailDeltaImexResult(
+          accountId: DeltaAccountDefaults.legacyId,
+          exportedPaths: <String>[],
+        );
+      });
+      when(
+        () => transport.getCoreConfig(
+          'key_id',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 'self-key-id');
+
+      await expectLater(
+        service.createEmailEncryptionKeyExport(),
+        throwsA(isA<EmailEncryptionExportFailedException>()),
+      );
+
+      expect(await Directory(operationDirectoryPath!).exists(), isFalse);
+    },
+  );
+
+  test(
+    'create export cleans temp when default private key cannot be inspected',
+    () async {
+      final service = await createProvisionedService();
+      String? operationDirectoryPath;
+
+      when(
+        () => transport.runImex(
+          mode: DeltaImexMode.exportSelfKeys,
+          path: any(named: 'path'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((invocation) async {
+        final operationDirectory = Directory(
+          invocation.namedArguments[#path] as String,
+        );
+        operationDirectoryPath = operationDirectory.path;
+        await File(
+          p.join(
+            operationDirectory.path,
+            'private-key-alice@example.com-default-ABC123.asc',
+          ),
+        ).writeAsBytes(<int>[
+          ...privateKeyBlock('invalid-utf8').codeUnits,
+          0xff,
+        ], flush: true);
+        return const EmailDeltaImexResult(
+          accountId: DeltaAccountDefaults.legacyId,
+          exportedPaths: <String>[],
+        );
+      });
+      when(
+        () => transport.getCoreConfig(
+          'key_id',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 'self-key-id');
+
+      await expectLater(
+        service.createEmailEncryptionKeyExport(),
+        throwsA(isA<EmailEncryptionExportFailedException>()),
+      );
+
+      expect(await Directory(operationDirectoryPath!).exists(), isFalse);
+    },
+  );
+
+  test('read export bytes rejects an empty archive before save', () async {
+    final source = await writeArchive('empty-export.zip', const {});
+    final service = await createProvisionedService();
+
+    await expectLater(
+      service.readEmailEncryptionKeyExportBytes(
+        tempZipPath: source.path,
+        normalizedAddress: 'alice@example.com',
+      ),
+      throwsA(isA<EmailEncryptionSaveFailedException>()),
+    );
+  });
+
+  test(
+    'contact public key rejects private key material before Delta',
+    () async {
+      final source = await temporaryFile(
+        'friend.asc',
+      ).writeAsString(privateKeyBlock('not-public'), flush: true);
+      final service = await createProvisionedService();
+
+      await expectLater(
+        service.inspectContactPublicKey(
+          address: 'friend@example.com',
+          source: source,
+        ),
+        throwsA(isA<EmailContactKeyUnsupportedFormatException>()),
+      );
+
+      verifyNever(
+        () => transport.inspectOpenPgpKey(
+          armored: any(named: 'armored'),
+          expectedAddress: 'friend@example.com',
+          expectedKind: DeltaOpenPgpKeyKind.public,
+        ),
+      );
+    },
+  );
+
+  test('contact public key rejects missing key armor before Delta', () async {
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString('not an armored OpenPGP key', flush: true);
+    final service = await createProvisionedService();
+
+    await expectLater(
+      service.inspectContactPublicKey(
+        address: 'friend@example.com',
+        source: source,
+      ),
+      throwsA(isA<EmailContactKeyUnsupportedFormatException>()),
+    );
+
+    verifyNever(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    );
+  });
+
+  test('contact public key rejects multiple key blocks before Delta', () async {
+    final source = await temporaryFile('friend.asc').writeAsString(
+      '${publicKeyBlock('first')}\n${publicKeyBlock('second')}',
+      flush: true,
+    );
+    final service = await createProvisionedService();
+
+    await expectLater(
+      service.inspectContactPublicKey(
+        address: 'friend@example.com',
+        source: source,
+      ),
+      throwsA(isA<EmailContactKeyUnsupportedFormatException>()),
+    );
+
+    verifyNever(
+      () => transport.inspectOpenPgpKey(
+        armored: any(named: 'armored'),
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    );
+  });
+
+  test('imports and stores a matching contact public key', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+    EmailTrustedContactKeyData? storedKey;
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer((_) async => publicKeyMetadata('ABC123'));
+    when(
+      () => transport.importContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        armoredPublicKey: armored,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer(
+      (_) async => DeltaContactPublicKeyImport(
+        metadata: publicKeyMetadata('ABC123'),
+        contactId: 17,
+        chatId: 91,
+      ),
+    );
+    when(() => database.upsertEmailTrustedContactKey(any())).thenAnswer((
+      invocation,
+    ) async {
+      storedKey =
+          invocation.positionalArguments.first as EmailTrustedContactKeyData;
+    });
+
+    final key = await service.importTrustedContactPublicKey(
+      address: 'Friend@Example.COM',
+      displayName: 'Friend',
+      source: source,
+      identityBinding: EmailOpenPgpIdentityBinding.addressMatch,
+      expectedFingerprint: 'ABC123',
+    );
+
+    expect(key.normalizedAddress, 'friend@example.com');
+    expect(key.fingerprint, 'ABC123');
+    expect(key.deltaContactId, 17);
+    expect(key.deltaChatId, 91);
+    expect(key.identityBinding, EmailOpenPgpIdentityBinding.addressMatch);
+    expect(storedKey, isNotNull);
+    expect(storedKey!.deltaAccountId, DeltaAccountDefaults.legacyId);
+    expect(storedKey!.address, 'friend@example.com');
+    expect(storedKey!.fingerprint, 'ABC123');
+    expect(storedKey!.deltaContactId, 17);
+    expect(storedKey!.deltaChatId, 91);
+    expect(
+      storedKey!.identityBinding,
+      EmailOpenPgpIdentityBinding.addressMatch.name,
+    );
+  });
+
+  test('contact public key identity mismatch requires confirmation', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer(
+      (_) async => publicKeyMetadata('ABC123', hasExpectedAddress: false),
+    );
+
+    await expectLater(
+      service.importTrustedContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        source: source,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch,
+        expectedFingerprint: 'ABC123',
+      ),
+      throwsA(isA<EmailContactKeyImportFailedException>()),
+    );
+
+    verifyNever(
+      () => transport.importContactPublicKey(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+        armoredPublicKey: any(named: 'armoredPublicKey'),
+        accountId: any(named: 'accountId'),
+      ),
+    );
+    verifyNever(() => database.upsertEmailTrustedContactKey(any()));
+  });
+
+  test('confirmed contact public key identity mismatch is stored', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+    EmailTrustedContactKeyData? storedKey;
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer(
+      (_) async => publicKeyMetadata('ABC123', hasExpectedAddress: false),
+    );
+    when(
+      () => transport.importContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        armoredPublicKey: armored,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer(
+      (_) async => DeltaContactPublicKeyImport(
+        metadata: publicKeyMetadata('ABC123', hasExpectedAddress: false),
+        contactId: 17,
+        chatId: 91,
+      ),
+    );
+    when(() => database.upsertEmailTrustedContactKey(any())).thenAnswer((
+      invocation,
+    ) async {
+      storedKey =
+          invocation.positionalArguments.first as EmailTrustedContactKeyData;
+    });
+
+    final key = await service.importTrustedContactPublicKey(
+      address: 'friend@example.com',
+      displayName: 'Friend',
+      source: source,
+      identityBinding: EmailOpenPgpIdentityBinding.userConfirmed,
+      expectedFingerprint: 'ABC123',
+    );
+
+    expect(key.identityBinding, EmailOpenPgpIdentityBinding.userConfirmed);
+    expect(
+      storedKey!.identityBinding,
+      EmailOpenPgpIdentityBinding.userConfirmed.name,
+    );
+  });
+
+  test('contact public key Delta result mismatch is not persisted', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer((_) async => publicKeyMetadata('ABC123'));
+    when(
+      () => transport.importContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        armoredPublicKey: armored,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer(
+      (_) async => DeltaContactPublicKeyImport(
+        metadata: publicKeyMetadata('DIFFERENT'),
+        contactId: 17,
+        chatId: 91,
+      ),
+    );
+
+    await expectLater(
+      service.importTrustedContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        source: source,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch,
+        expectedFingerprint: 'ABC123',
+      ),
+      throwsA(isA<EmailContactKeyImportFailedException>()),
+    );
+
+    verifyNever(() => database.upsertEmailTrustedContactKey(any()));
+  });
+
+  test('contact public key invalid Delta ids are not persisted', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer((_) async => publicKeyMetadata('ABC123'));
+    when(
+      () => transport.importContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        armoredPublicKey: armored,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer(
+      (_) async => DeltaContactPublicKeyImport(
+        metadata: publicKeyMetadata('ABC123'),
+        contactId: 0,
+        chatId: 91,
+      ),
+    );
+
+    await expectLater(
+      service.importTrustedContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        source: source,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch,
+        expectedFingerprint: 'ABC123',
+      ),
+      throwsA(isA<EmailContactKeyImportFailedException>()),
+    );
+
+    verifyNever(() => database.upsertEmailTrustedContactKey(any()));
+  });
+
+  test('contact public key self Delta contact id is not persisted', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer((_) async => publicKeyMetadata('ABC123'));
+    when(
+      () => transport.importContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        armoredPublicKey: armored,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer(
+      (_) async => DeltaContactPublicKeyImport(
+        metadata: publicKeyMetadata('ABC123'),
+        contactId: DeltaContactId.self,
+        chatId: 91,
+      ),
+    );
+
+    await expectLater(
+      service.importTrustedContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        source: source,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch,
+        expectedFingerprint: 'ABC123',
+      ),
+      throwsA(isA<EmailContactKeyImportFailedException>()),
+    );
+
+    verifyNever(() => database.upsertEmailTrustedContactKey(any()));
+  });
+
+  test('contact public key special Delta chat id is not persisted', () async {
+    final armored = publicKeyBlock('friend-public-key');
+    final source = await temporaryFile(
+      'friend.asc',
+    ).writeAsString(armored, flush: true);
+    final service = await createProvisionedService();
+
+    when(
+      () => transport.inspectOpenPgpKey(
+        armored: armored,
+        expectedAddress: 'friend@example.com',
+        expectedKind: DeltaOpenPgpKeyKind.public,
+      ),
+    ).thenAnswer((_) async => publicKeyMetadata('ABC123'));
+    when(
+      () => transport.importContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        armoredPublicKey: armored,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer(
+      (_) async => DeltaContactPublicKeyImport(
+        metadata: publicKeyMetadata('ABC123'),
+        contactId: 17,
+        chatId: DeltaChatId.lastSpecial,
+      ),
+    );
+
+    await expectLater(
+      service.importTrustedContactPublicKey(
+        address: 'friend@example.com',
+        displayName: 'Friend',
+        source: source,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch,
+        expectedFingerprint: 'ABC123',
+      ),
+      throwsA(isA<EmailContactKeyImportFailedException>()),
+    );
+
+    verifyNever(() => database.upsertEmailTrustedContactKey(any()));
+  });
 
   test(
     'flushes multiple pending notifications immediately for a chat-scoped bunch',
@@ -1057,6 +2082,8 @@ void main() {
         htmlCaption: any(named: 'htmlCaption'),
         quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
+        forcePlaintext: any(named: 'forcePlaintext'),
+        skipAutocrypt: any(named: 'skipAutocrypt'),
       ),
     ).thenAnswer((_) async => 77);
 
@@ -1086,6 +2113,8 @@ void main() {
         htmlCaption: any(named: 'htmlCaption'),
         quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
+        forcePlaintext: true,
+        skipAutocrypt: true,
       ),
     ).called(1);
 
@@ -1178,6 +2207,8 @@ void main() {
           htmlBody: any(named: 'htmlBody'),
           quotingStanzaId: any(named: 'quotingStanzaId'),
           accountId: any(named: 'accountId'),
+          forcePlaintext: any(named: 'forcePlaintext'),
+          skipAutocrypt: any(named: 'skipAutocrypt'),
         ),
       ).thenAnswer(
         (invocation) async => (invocation.namedArguments[#chatId] as int) + 100,
@@ -1218,6 +2249,8 @@ void main() {
           htmlBody: any(named: 'htmlBody'),
           quotingStanzaId: 'quoted-stanza',
           accountId: any(named: 'accountId'),
+          forcePlaintext: true,
+          skipAutocrypt: true,
         ),
       ).called(1);
       verify(
@@ -1230,6 +2263,8 @@ void main() {
           htmlBody: any(named: 'htmlBody'),
           quotingStanzaId: 'quoted-stanza',
           accountId: any(named: 'accountId'),
+          forcePlaintext: true,
+          skipAutocrypt: true,
         ),
       ).called(1);
 
@@ -1567,6 +2602,399 @@ void main() {
   );
 
   test(
+    'removeTrustedContactPublicKey removes native pinned key before clearing local key',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final key = EmailTrustedContactKeyData(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'friend@example.com',
+        fingerprint: 'ABCD',
+        deltaContactId: 17,
+        deltaChatId: 91,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+        userIdsJson: '[]',
+        importedAt: DateTime.timestamp(),
+      );
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async => key);
+      when(
+        () => transport.removeContactPublicKey(
+          address: 'friend@example.com',
+          fingerprint: 'ABCD',
+          contactId: 17,
+          chatId: 91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => const DeltaContactPublicKeyRemoval(
+          contactId: 17,
+          chatId: 91,
+          fallbackContactId: 18,
+          fingerprint: 'ABCD',
+        ),
+      );
+      when(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).thenAnswer((_) async {});
+
+      await service.removeTrustedContactPublicKey('friend@example.com');
+
+      verifyInOrder([
+        () => transport.removeContactPublicKey(
+          address: 'friend@example.com',
+          fingerprint: 'ABCD',
+          contactId: 17,
+          chatId: 91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ]);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'removeTrustedContactPublicKey clears legacy self contact mapping locally',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final key = EmailTrustedContactKeyData(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'friend@example.com',
+        fingerprint: 'ABCD',
+        deltaContactId: DeltaContactId.self,
+        deltaChatId: 91,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+        userIdsJson: '[]',
+        importedAt: DateTime.timestamp(),
+      );
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async => key);
+      when(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).thenAnswer((_) async {});
+
+      await service.removeTrustedContactPublicKey('friend@example.com');
+
+      verifyNever(
+        () => transport.removeContactPublicKey(
+          address: any(named: 'address'),
+          fingerprint: any(named: 'fingerprint'),
+          contactId: any(named: 'contactId'),
+          chatId: any(named: 'chatId'),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      verify(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).called(1);
+      verify(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'removeTrustedContactPublicKey clears legacy special chat mapping locally',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final key = EmailTrustedContactKeyData(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'friend@example.com',
+        fingerprint: 'ABCD',
+        deltaContactId: 17,
+        deltaChatId: DeltaChatId.lastSpecial,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+        userIdsJson: '[]',
+        importedAt: DateTime.timestamp(),
+      );
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async => key);
+      when(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: DeltaChatId.lastSpecial,
+        ),
+      ).thenAnswer((_) async {});
+
+      await service.removeTrustedContactPublicKey('friend@example.com');
+
+      verifyNever(
+        () => transport.removeContactPublicKey(
+          address: any(named: 'address'),
+          fingerprint: any(named: 'fingerprint'),
+          contactId: any(named: 'contactId'),
+          chatId: any(named: 'chatId'),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      verify(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).called(1);
+      verify(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: DeltaChatId.lastSpecial,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'removeTrustedContactPublicKey keeps local key when native removal fails',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final key = EmailTrustedContactKeyData(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'friend@example.com',
+        fingerprint: 'ABCD',
+        deltaContactId: 17,
+        deltaChatId: 91,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+        userIdsJson: '[]',
+        importedAt: DateTime.timestamp(),
+      );
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async => key);
+      when(
+        () => transport.removeContactPublicKey(
+          address: 'friend@example.com',
+          fingerprint: 'ABCD',
+          contactId: 17,
+          chatId: 91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenThrow(
+        const DeltaOperationException(
+          'remove contact OpenPGP key: active_key_still_present',
+        ),
+      );
+
+      await expectLater(
+        service.removeTrustedContactPublicKey('friend@example.com'),
+        throwsA(isA<EmailContactKeyRemoveFailedException>()),
+      );
+
+      verify(
+        () => transport.removeContactPublicKey(
+          address: 'friend@example.com',
+          fingerprint: 'ABCD',
+          contactId: 17,
+          chatId: 91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: any(named: 'deltaAccountId'),
+          address: any(named: 'address'),
+        ),
+      );
+      verifyNever(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+      verifyNever(
+        () => transport.getContact(any(), accountId: any(named: 'accountId')),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'removeTrustedContactPublicKey keeps local key when native removal throws',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final key = EmailTrustedContactKeyData(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'friend@example.com',
+        fingerprint: 'ABCD',
+        deltaContactId: 17,
+        deltaChatId: 91,
+        identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+        userIdsJson: '[]',
+        importedAt: DateTime.timestamp(),
+      );
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'friend@example.com',
+        ),
+      ).thenAnswer((_) async => key);
+      when(
+        () => transport.removeContactPublicKey(
+          address: 'friend@example.com',
+          fingerprint: 'ABCD',
+          contactId: 17,
+          chatId: 91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenThrow(const DeltaOperationException('delete failed'));
+
+      await expectLater(
+        service.removeTrustedContactPublicKey('friend@example.com'),
+        throwsA(isA<EmailContactKeyRemoveFailedException>()),
+      );
+
+      verifyNever(
+        () => database.deleteEmailTrustedContactKey(
+          deltaAccountId: any(named: 'deltaAccountId'),
+          address: any(named: 'address'),
+        ),
+      );
+      verifyNever(
+        () => database.deleteEmailChatAccountsForDeltaChat(
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+      verifyNever(
+        () => transport.getContact(any(), accountId: any(named: 'accountId')),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'shutdown detaches the Delta listener before stopping transport',
     () async {
       final service = EmailService(
@@ -1592,6 +3020,142 @@ void main() {
         () => transport.stop(),
         () => transport.dispose(),
       ]);
+    },
+  );
+
+  test(
+    'logout shutdown returns while native dispose is still pending',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final disposeCompleter = Completer<void>();
+      when(
+        () => transport.dispose(),
+      ).thenAnswer((_) => disposeCompleter.future);
+
+      final stopwatch = Stopwatch()..start();
+      await service.shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout);
+      stopwatch.stop();
+
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(service.hasActiveSession, isFalse);
+      await untilCalled(() => transport.dispose());
+      expect(
+        service.ensureChatForAddress(address: 'friend@axi.im'),
+        throwsA(isA<EmailServiceStoppingException>()),
+      );
+
+      disposeCompleter.complete();
+      await pumpMicrotasks();
+    },
+  );
+
+  test('provisioning waits for pending logout native cleanup', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    final disposeCompleter = Completer<void>();
+    when(() => transport.dispose()).thenAnswer((_) => disposeCompleter.future);
+
+    await service.shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout);
+    await untilCalled(() => transport.dispose());
+    clearInteractions(transport);
+
+    final provisionFuture = service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob2',
+      databasePassphrase: 'secret2',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+    await pumpMicrotasks();
+
+    verifyNever(
+      () => transport.ensureInitialized(
+        databasePrefix: 'bob2',
+        databasePassphrase: 'secret2',
+      ),
+    );
+
+    disposeCompleter.complete();
+    await provisionFuture;
+
+    verify(
+      () => transport.ensureInitialized(
+        databasePrefix: 'bob2',
+        databasePassphrase: 'secret2',
+      ),
+    ).called(1);
+    await service.shutdown(jid: 'bob@axi.im');
+  });
+
+  test(
+    'logout shutdown blocks runtime re-entry while cleanup is pending',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final disposeCompleter = Completer<void>();
+      when(
+        () => transport.dispose(),
+      ).thenAnswer((_) => disposeCompleter.future);
+
+      await service.shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout);
+      await untilCalled(() => transport.dispose());
+      clearInteractions(transport);
+
+      await service.ensureEventChannelActive();
+      await service.handleNetworkAvailable();
+
+      verifyNever(() => transport.addEventListener(any()));
+      verifyNever(() => transport.start());
+      verifyNever(() => transport.notifyNetworkAvailable());
+
+      disposeCompleter.complete();
+      await pumpMicrotasks();
     },
   );
 
@@ -1627,6 +3191,44 @@ void main() {
     verifyNever(() => transport.connectivity());
     await service.shutdown(jid: 'bob@axi.im');
   });
+
+  test(
+    'shutdown does not hang behind active Delta connectivity work',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final connectivityCompleter = Completer<int>();
+      when(
+        () => transport.connectivity(),
+      ).thenAnswer((_) => connectivityCompleter.future);
+
+      emitConnectivityChanged();
+      await untilCalled(() => transport.connectivity());
+
+      final stopwatch = Stopwatch()..start();
+      await service.stop();
+      stopwatch.stop();
+
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
+      connectivityCompleter.complete(4000);
+      await pumpMicrotasks();
+      await service.shutdown(jid: 'bob@axi.im');
+    },
+  );
 
   test(
     'connectivityChanged at offline level stays offline without catch-up',
@@ -2176,6 +3778,66 @@ void main() {
     },
   );
 
+  test('timed out connectivity confirmation keeps ready sync state', () async {
+    when(() => credentialStore.read(key: any(named: 'key'))).thenAnswer((
+      invocation,
+    ) async {
+      final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+      if (key.value.contains('email_bootstrap_v1')) {
+        return 'true';
+      }
+      return null;
+    });
+
+    var connectivityCalls = 0;
+    final confirmation = Completer<int>();
+    when(() => transport.connectivity()).thenAnswer((_) {
+      connectivityCalls++;
+      if (connectivityCalls == 1) {
+        return Future<int>.value(1000);
+      }
+      return confirmation.future;
+    });
+
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    try {
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+      expect(service.syncState.status, EmailSyncStatus.ready);
+
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.connectivityChanged.code,
+          data1: 0,
+          data2: 0,
+        ),
+      );
+      await pumpMicrotasks();
+      expect(service.syncState.status, EmailSyncStatus.ready);
+
+      await Future<void>.delayed(const Duration(milliseconds: 3400));
+      await pumpMicrotasks();
+
+      expect(service.syncState.status, EmailSyncStatus.ready);
+      expect(connectivityCalls, greaterThanOrEqualTo(2));
+      confirmation.complete(1000);
+    } finally {
+      await service.shutdown(jid: 'bob@axi.im');
+    }
+  });
+
   test(
     'handleNetworkAvailable restarts transport when Delta stays offline',
     () async {
@@ -2458,41 +4120,46 @@ void main() {
     },
   );
 
-  test('shutdown blocks re-entry while dispose is in flight', () async {
-    final service = EmailService(
-      credentialStore: credentialStore,
-      databaseBuilder: () async => database,
-      transport: transport,
-      notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
-    );
+  test(
+    'credential-clearing shutdown blocks re-entry while dispose is in flight',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
 
-    await service.ensureProvisioned(
-      displayName: 'Bob',
-      databasePrefix: 'bob',
-      databasePassphrase: 'secret',
-      jid: 'bob@axi.im',
-      passwordOverride: 'password',
-    );
-    await service.ensureEventChannelActive();
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+      await service.ensureEventChannelActive();
 
-    clearInteractions(transport);
-    final disposeCompleter = Completer<void>();
-    when(() => transport.dispose()).thenAnswer((_) => disposeCompleter.future);
+      clearInteractions(transport);
+      final disposeCompleter = Completer<void>();
+      when(
+        () => transport.dispose(),
+      ).thenAnswer((_) => disposeCompleter.future);
 
-    final shutdownFuture = service.shutdown(jid: 'bob@axi.im');
-    await untilCalled(() => transport.dispose());
+      final shutdownFuture = service.shutdown(jid: 'bob@axi.im');
+      await untilCalled(() => transport.dispose());
 
-    await service.ensureEventChannelActive();
-    await service.handleNetworkAvailable();
+      await service.ensureEventChannelActive();
+      await service.handleNetworkAvailable();
 
-    verifyNever(() => transport.addEventListener(any()));
-    verifyNever(() => transport.start());
-    verifyNever(() => transport.notifyNetworkAvailable());
+      verifyNever(() => transport.addEventListener(any()));
+      verifyNever(() => transport.start());
+      verifyNever(() => transport.notifyNetworkAvailable());
 
-    disposeCompleter.complete();
-    await shutdownFuture;
-  });
+      disposeCompleter.complete();
+      await shutdownFuture;
+    },
+  );
 
   test('shutdown blocks re-entry while dispose is in flight', () async {
     final service = EmailService(
@@ -2638,6 +4305,8 @@ void main() {
           htmlBody: any(named: 'htmlBody'),
           quotingStanzaId: any(named: 'quotingStanzaId'),
           accountId: any(named: 'accountId'),
+          forcePlaintext: any(named: 'forcePlaintext'),
+          skipAutocrypt: any(named: 'skipAutocrypt'),
         ),
       ).thenAnswer((_) async => 202);
 
@@ -2753,6 +4422,8 @@ void main() {
         htmlBody: any(named: 'htmlBody'),
         quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: DeltaAccountDefaults.legacyId,
+        forcePlaintext: true,
+        skipAutocrypt: true,
       ),
     ).called(1);
 
@@ -2897,6 +4568,8 @@ void main() {
           htmlBody: HtmlContentCodec.fromPlainText(syntheticReply.body),
           quotingStanzaId: 'quoted-xmpp-stanza',
           accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
         ),
       ).called(1);
 
@@ -2942,6 +4615,8 @@ void main() {
           subject: any(named: 'subject'),
           htmlBody: any(named: 'htmlBody'),
           accountId: any(named: 'accountId'),
+          forcePlaintext: any(named: 'forcePlaintext'),
+          skipAutocrypt: any(named: 'skipAutocrypt'),
         ),
       ).thenAnswer((_) async => 1);
 
@@ -2980,6 +4655,8 @@ void main() {
           subject: 'Re: FWD: peer@axi.im',
           htmlBody: any(named: 'htmlBody'),
           accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
         ),
       ).called(1);
 
@@ -3061,6 +4738,8 @@ void main() {
           htmlBody: any(named: 'htmlBody'),
           quotingStanzaId: any(named: 'quotingStanzaId'),
           accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
         ),
       ).called(1);
       verify(
@@ -3083,6 +4762,382 @@ void main() {
           ),
         ),
       );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'beta send uses trusted contact public key chat when encrypted-sendable',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        emailEncryptionBetaEnabledByAddress: const {'alice@example.org': true},
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.selfJidForAccount(any()),
+      ).thenReturn('alice@example.org');
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'peer@example.com',
+        ),
+      ).thenAnswer(
+        (_) async => EmailTrustedContactKeyData(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'peer@example.com',
+          fingerprint: 'ABC123',
+          deltaContactId: 17,
+          deltaChatId: 77,
+          identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+          userIdsJson: '[]',
+          importedAt: DateTime.timestamp(),
+        ),
+      );
+      when(
+        () => transport.chatSendCapabilities(
+          chatId: 77,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => const DeltaChatSendCapabilities(
+          exists: true,
+          canSend: true,
+          isEncrypted: true,
+        ),
+      );
+
+      final chat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await service.sendMessage(chat: chat, body: 'Trusted key send');
+
+      verify(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'peer@example.com',
+        ),
+      ).called(1);
+      verify(
+        () => transport.chatSendCapabilities(
+          chatId: 77,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verifyNever(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      verify(
+        () => database.upsertEmailChatAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 77,
+        ),
+      ).called(1);
+      verify(
+        () => transport.sendText(
+          chatId: 77,
+          body: 'Trusted key send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: false,
+          skipAutocrypt: false,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'beta send fails closed when trusted contact public key chat is not encrypted-sendable',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        emailEncryptionBetaEnabledByAddress: const {'alice@example.org': true},
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.selfJidForAccount(any()),
+      ).thenReturn('alice@example.org');
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getEmailTrustedContactKey(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'peer@example.com',
+        ),
+      ).thenAnswer(
+        (_) async => EmailTrustedContactKeyData(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          address: 'peer@example.com',
+          fingerprint: 'ABC123',
+          deltaContactId: 17,
+          deltaChatId: 77,
+          identityBinding: EmailOpenPgpIdentityBinding.addressMatch.name,
+          userIdsJson: '[]',
+          importedAt: DateTime.timestamp(),
+        ),
+      );
+      when(
+        () => transport.chatSendCapabilities(
+          chatId: 77,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => const DeltaChatSendCapabilities(
+          exists: true,
+          canSend: true,
+          isEncrypted: false,
+        ),
+      );
+
+      final chat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await expectLater(
+        service.sendMessage(chat: chat, body: 'Trusted key send'),
+        throwsA(isA<EmailServiceTrustedContactKeyUnavailableException>()),
+      );
+      verifyNever(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      verifyNever(
+        () => transport.sendText(
+          chatId: any(named: 'chatId'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: any(named: 'accountId'),
+          forcePlaintext: any(named: 'forcePlaintext'),
+          skipAutocrypt: any(named: 'skipAutocrypt'),
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test('beta-off send ignores trusted contact public key mappings', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    when(
+      () => transport.selfJidForAccount(any()),
+    ).thenReturn('alice@example.org');
+    when(
+      () => transport.isConfigured(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => true);
+    when(
+      () => transport.ensureChatForAddress(
+        address: 'peer@example.com',
+        displayName: 'Peer',
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => 99);
+
+    final chat = Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      emailAddress: 'peer@example.com',
+      emailFromAddress: 'alice@example.org',
+    );
+
+    await service.sendMessage(chat: chat, body: 'Plain send');
+
+    verifyNever(
+      () => database.getEmailTrustedContactKey(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        address: 'peer@example.com',
+      ),
+    );
+    verify(
+      () => transport.ensureChatForAddress(
+        address: 'peer@example.com',
+        displayName: 'Peer',
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).called(1);
+    verify(
+      () => transport.sendText(
+        chatId: 99,
+        body: 'Plain send',
+        subject: any(named: 'subject'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
+        accountId: DeltaAccountDefaults.legacyId,
+        forcePlaintext: true,
+        skipAutocrypt: true,
+      ),
+    ).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test(
+    'beta send ignores stored mappings that are not encrypted sendable chats',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        emailEncryptionBetaEnabledByAddress: const {'alice@example.org': true},
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.selfJidForAccount(any()),
+      ).thenReturn('alice@example.org');
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getDeltaChatIdForAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 88);
+      when(
+        () => transport.chatSendCapabilities(
+          chatId: 88,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => const DeltaChatSendCapabilities(
+          exists: true,
+          canSend: true,
+          isEncrypted: false,
+        ),
+      );
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 99);
+
+      final chat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await service.sendMessage(chat: chat, body: 'Beta send');
+
+      verify(
+        () => transport.chatSendCapabilities(
+          chatId: 88,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verify(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verify(
+        () => transport.sendText(
+          chatId: 99,
+          body: 'Beta send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: false,
+          skipAutocrypt: false,
+        ),
+      ).called(1);
 
       addTearDown(service.shutdown);
     },
@@ -3478,7 +5533,7 @@ void main() {
   );
 
   test(
-    'forwardMessages keeps native forward provenance aligned by copy order for repeated bodies',
+    'forwardMessages prefers subject-matched native forward provenance for repeated bodies',
     () async {
       final service = EmailService(
         credentialStore: credentialStore,
@@ -3620,7 +5675,7 @@ void main() {
         () => database.updateMessage(
           any(
             that: isA<Message>()
-                .having((message) => message.deltaMsgId, 'deltaMsgId', 401)
+                .having((message) => message.deltaMsgId, 'deltaMsgId', 402)
                 .having(
                   (message) => message.forwardedFromJid,
                   'forwardedFromJid',
@@ -3633,7 +5688,7 @@ void main() {
         () => database.updateMessage(
           any(
             that: isA<Message>()
-                .having((message) => message.deltaMsgId, 'deltaMsgId', 402)
+                .having((message) => message.deltaMsgId, 'deltaMsgId', 401)
                 .having(
                   (message) => message.forwardedFromJid,
                   'forwardedFromJid',
@@ -4033,8 +6088,9 @@ void main() {
         ),
       ).thenAnswer((_) async => 91);
       when(
-        () => database.countChatMessages(
+        () => database.countEmailBackedChatMessages(
           'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
           filter: MessageTimelineFilter.directOnly,
           includePseudoMessages: false,
         ),
@@ -4066,15 +6122,17 @@ void main() {
       );
 
       verify(
-        () => database.countChatMessages(
+        () => database.countEmailBackedChatMessages(
           'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
           filter: MessageTimelineFilter.directOnly,
           includePseudoMessages: false,
         ),
       ).called(1);
       verifyNever(
-        () => database.countChatMessages(
+        () => database.countEmailBackedChatMessages(
           'dc-91@delta.chat',
+          deltaAccountId: any(named: 'deltaAccountId'),
           filter: any(named: 'filter'),
           includePseudoMessages: any(named: 'includePseudoMessages'),
         ),
@@ -4086,6 +6144,134 @@ void main() {
           desiredWindow: 5,
           beforeMessageId: 42,
           beforeTimestamp: null,
+          filter: MessageTimelineFilter.directOnly,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'backfillChatHistory runs for mixed XMPP chats with email backing',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      final mixedChat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        transport: MessageTransport.xmpp,
+        lastChangeTimestamp: DateTime.now(),
+        contactJid: 'peer@axi.im',
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+      final nativeEmailChat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer Email',
+        type: ChatType.chat,
+        transport: MessageTransport.email,
+        lastChangeTimestamp: DateTime.now(),
+        contactJid: 'peer@example.com',
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getChat(mixedChat.jid),
+      ).thenAnswer((_) async => mixedChat);
+      when(
+        () => database.getChat(nativeEmailChat.jid),
+      ).thenAnswer((_) async => nativeEmailChat);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 92);
+      when(
+        () => database.countEmailBackedChatMessages(
+          mixedChat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          filter: MessageTimelineFilter.directOnly,
+          includePseudoMessages: false,
+        ),
+      ).thenAnswer((_) async => 1);
+      when(
+        () => transport.backfillChatHistory(
+          chatId: any(named: 'chatId'),
+          chatJid: any(named: 'chatJid'),
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: any(named: 'filter'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await service.backfillChatHistory(
+        chat: mixedChat,
+        desiredWindow: 5,
+        beforeTimestamp: DateTime(2024, 1, 1),
+      );
+
+      verify(
+        () => database.countEmailBackedChatMessages(
+          mixedChat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          filter: MessageTimelineFilter.directOnly,
+          includePseudoMessages: false,
+        ),
+      ).called(1);
+      verifyNever(() => database.getChat(nativeEmailChat.jid));
+      verify(
+        () => database.upsertEmailChatAccount(
+          chatJid: mixedChat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 92,
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.upsertEmailChatAccount(
+          chatJid: nativeEmailChat.jid,
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+      verifyNever(
+        () => database.countChatMessages(
+          mixedChat.jid,
+          filter: any(named: 'filter'),
+          includePseudoMessages: any(named: 'includePseudoMessages'),
+        ),
+      );
+      verify(
+        () => transport.backfillChatHistory(
+          chatId: 92,
+          chatJid: mixedChat.jid,
+          desiredWindow: 5,
+          beforeMessageId: null,
+          beforeTimestamp: DateTime(2024, 1, 1),
           filter: MessageTimelineFilter.directOnly,
           accountId: DeltaAccountDefaults.legacyId,
         ),

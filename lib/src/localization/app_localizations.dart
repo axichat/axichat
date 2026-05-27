@@ -288,49 +288,49 @@ abstract class AppLocalizations {
   /// No description provided for @contactFolderRuleAction.
   ///
   /// In en, this message translates to:
-  /// **'Send all to...'**
+  /// **'File incoming items in...'**
   String get contactFolderRuleAction;
 
   /// No description provided for @contactFolderRuleMessagesAction.
   ///
   /// In en, this message translates to:
-  /// **'Send all messages to...'**
+  /// **'File incoming messages in...'**
   String get contactFolderRuleMessagesAction;
 
   /// No description provided for @contactFolderRuleEmailsAction.
   ///
   /// In en, this message translates to:
-  /// **'Send all emails to...'**
+  /// **'File incoming emails in...'**
   String get contactFolderRuleEmailsAction;
 
   /// No description provided for @contactFolderRuleMessagesAndEmailsAction.
   ///
   /// In en, this message translates to:
-  /// **'Send all messages and emails to...'**
+  /// **'File incoming messages and emails in...'**
   String get contactFolderRuleMessagesAndEmailsAction;
 
   /// No description provided for @contactFolderRuleTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send all to folder'**
+  /// **'File incoming items in folder'**
   String get contactFolderRuleTitle;
 
   /// No description provided for @contactFolderRuleMessagesTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send all messages to folder'**
+  /// **'File incoming messages in folder'**
   String get contactFolderRuleMessagesTitle;
 
   /// No description provided for @contactFolderRuleEmailsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send all emails to folder'**
+  /// **'File incoming emails in folder'**
   String get contactFolderRuleEmailsTitle;
 
   /// No description provided for @contactFolderRuleMessagesAndEmailsTitle.
   ///
   /// In en, this message translates to:
-  /// **'Send all messages and emails to folder'**
+  /// **'File incoming messages and emails in folder'**
   String get contactFolderRuleMessagesAndEmailsTitle;
 
   /// No description provided for @contactFolderRuleClear.
@@ -1927,17 +1927,47 @@ abstract class AppLocalizations {
   /// **'Unpin message'**
   String get chatUnpinMessage;
 
+  /// No description provided for @chatPinMessageUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This message cannot be pinned yet.'**
+  String get chatPinMessageUnavailable;
+
+  /// No description provided for @chatMessagePinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Message pinned.'**
+  String get chatMessagePinned;
+
+  /// No description provided for @chatMessageUnpinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Message unpinned.'**
+  String get chatMessageUnpinned;
+
   /// No description provided for @chatPinnedEmptyState.
   ///
   /// In en, this message translates to:
   /// **'No pinned messages yet.'**
   String get chatPinnedEmptyState;
 
+  /// No description provided for @chatPinnedLoadFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned messages failed to load.'**
+  String get chatPinnedLoadFailure;
+
   /// No description provided for @chatPinnedMissingMessage.
   ///
   /// In en, this message translates to:
   /// **'Pinned message is unavailable.'**
   String get chatPinnedMissingMessage;
+
+  /// No description provided for @chatPinnedNoticeBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'New pinned message'**
+  String get chatPinnedNoticeBanner;
 
   /// No description provided for @importantMessagesEmpty.
   ///
@@ -2634,6 +2664,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error: {message}'**
   String signupErrorPrefix(Object message);
+
+  /// No description provided for @signupChooseServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose server'**
+  String get signupChooseServer;
+
+  /// No description provided for @signupCustomEndpointRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a custom server to sign up in the app. Create axi.im accounts on the website.'**
+  String get signupCustomEndpointRequired;
 
   /// No description provided for @signupCaptchaUnavailable.
   ///
@@ -6183,7 +6225,7 @@ abstract class AppLocalizations {
   /// No description provided for @contactsPostalAddressesLabel.
   ///
   /// In en, this message translates to:
-  /// **'Postal addresses'**
+  /// **'Addresses'**
   String get contactsPostalAddressesLabel;
 
   /// No description provided for @contactsNoteLabel.
@@ -6261,7 +6303,7 @@ abstract class AppLocalizations {
   /// No description provided for @jidInputInvalid.
   ///
   /// In en, this message translates to:
-  /// **'Enter a valid JID'**
+  /// **'Enter a valid address.'**
   String get jidInputInvalid;
 
   /// No description provided for @sessionCapabilityChat.

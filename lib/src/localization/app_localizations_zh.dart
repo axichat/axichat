@@ -99,28 +99,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get folderRemoveMessageFailed => '无法从文件夹移除此消息。';
 
   @override
-  String get contactFolderRuleAction => '发送全部到...';
+  String get contactFolderRuleAction => 'File incoming items in...';
 
   @override
-  String get contactFolderRuleMessagesAction => '发送所有消息到...';
+  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
 
   @override
-  String get contactFolderRuleEmailsAction => '发送所有邮件到...';
+  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction => '发送所有消息和邮件到...';
+  String get contactFolderRuleMessagesAndEmailsAction =>
+      'File incoming messages and emails in...';
 
   @override
-  String get contactFolderRuleTitle => '发送全部到文件夹';
+  String get contactFolderRuleTitle => 'File incoming items in folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => '发送所有消息到文件夹';
+  String get contactFolderRuleMessagesTitle =>
+      'File incoming messages in folder';
 
   @override
-  String get contactFolderRuleEmailsTitle => '发送所有邮件到文件夹';
+  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle => '发送所有消息和邮件到文件夹';
+  String get contactFolderRuleMessagesAndEmailsTitle =>
+      'File incoming messages and emails in folder';
 
   @override
   String get contactFolderRuleClear => '清除规则';
@@ -978,10 +981,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatUnpinMessage => '取消置顶';
 
   @override
+  String get chatPinMessageUnavailable => '这条消息暂时无法置顶。';
+
+  @override
+  String get chatMessagePinned => '消息已置顶。';
+
+  @override
+  String get chatMessageUnpinned => '消息已取消置顶。';
+
+  @override
   String get chatPinnedEmptyState => '暂无置顶消息。';
 
   @override
+  String get chatPinnedLoadFailure => '置顶消息加载失败。';
+
+  @override
   String get chatPinnedMissingMessage => '置顶消息不可用。';
+
+  @override
+  String get chatPinnedNoticeBanner => '新的置顶消息';
 
   @override
   String get importantMessagesEmpty => '还没有重要消息';
@@ -1369,6 +1387,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String signupErrorPrefix(Object message) {
     return '错误：$message';
   }
+
+  @override
+  String get signupChooseServer => '选择服务器';
+
+  @override
+  String get signupCustomEndpointRequired =>
+      '请选择自定义服务器以在应用内注册。axi.im 账户需要在网站上创建。';
 
   @override
   String get signupCaptchaUnavailable => '验证码不可用';
@@ -3307,7 +3332,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contactsUrlsLabel => '网站';
 
   @override
-  String get contactsPostalAddressesLabel => '邮寄地址';
+  String get contactsPostalAddressesLabel => '地址';
 
   @override
   String get contactsNoteLabel => '备注';
@@ -3350,7 +3375,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get jidInputPlaceholder => 'john@axi.im';
 
   @override
-  String get jidInputInvalid => '请输入有效的 JID';
+  String get jidInputInvalid => '请输入有效的地址。';
 
   @override
   String get sessionCapabilityChat => '聊天';
@@ -6669,28 +6694,31 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get folderRemoveMessageFailed => '無法從資料夾移除此訊息。';
 
   @override
-  String get contactFolderRuleAction => '傳送全部到...';
+  String get contactFolderRuleAction => 'File incoming items in...';
 
   @override
-  String get contactFolderRuleMessagesAction => '傳送所有訊息到...';
+  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
 
   @override
-  String get contactFolderRuleEmailsAction => '傳送所有電郵到...';
+  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction => '傳送所有訊息和電郵到...';
+  String get contactFolderRuleMessagesAndEmailsAction =>
+      'File incoming messages and emails in...';
 
   @override
-  String get contactFolderRuleTitle => '傳送全部到資料夾';
+  String get contactFolderRuleTitle => 'File incoming items in folder';
 
   @override
-  String get contactFolderRuleMessagesTitle => '傳送所有訊息到資料夾';
+  String get contactFolderRuleMessagesTitle =>
+      'File incoming messages in folder';
 
   @override
-  String get contactFolderRuleEmailsTitle => '傳送所有電郵到資料夾';
+  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle => '傳送所有訊息和電郵到資料夾';
+  String get contactFolderRuleMessagesAndEmailsTitle =>
+      'File incoming messages and emails in folder';
 
   @override
   String get contactFolderRuleClear => '清除規則';
@@ -7548,10 +7576,25 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatUnpinMessage => '取消置頂';
 
   @override
+  String get chatPinMessageUnavailable => '此訊息暫時無法置頂。';
+
+  @override
+  String get chatMessagePinned => '訊息已置頂。';
+
+  @override
+  String get chatMessageUnpinned => '訊息已取消置頂。';
+
+  @override
   String get chatPinnedEmptyState => '暫無置頂訊息。';
 
   @override
+  String get chatPinnedLoadFailure => '置頂訊息載入失敗。';
+
+  @override
   String get chatPinnedMissingMessage => '置頂訊息不可用。';
+
+  @override
+  String get chatPinnedNoticeBanner => '新的置頂訊息';
 
   @override
   String get importantMessagesEmpty => '尚無重要訊息';
@@ -7940,6 +7983,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String signupErrorPrefix(Object message) {
     return '錯誤：$message';
   }
+
+  @override
+  String get signupChooseServer => '選擇伺服器';
+
+  @override
+  String get signupCustomEndpointRequired =>
+      '請選擇自訂伺服器以在應用程式內註冊。axi.im 帳戶需要在網站上建立。';
 
   @override
   String get signupCaptchaUnavailable => '驗證碼無法使用';
@@ -9880,7 +9930,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get contactsUrlsLabel => '網站';
 
   @override
-  String get contactsPostalAddressesLabel => '郵寄地址';
+  String get contactsPostalAddressesLabel => '地址';
 
   @override
   String get contactsNoteLabel => '備註';
@@ -9923,7 +9973,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get jidInputPlaceholder => 'john@axi.im';
 
   @override
-  String get jidInputInvalid => '請輸入有效的 JID';
+  String get jidInputInvalid => '請輸入有效的地址。';
 
   @override
   String get sessionCapabilityChat => '聊天';

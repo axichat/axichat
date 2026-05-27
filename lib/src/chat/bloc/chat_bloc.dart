@@ -258,6 +258,41 @@ const String _availabilitySendFailureLog =
 class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static final Set<String> _seededDemoPendingAttachmentJids = <String>{};
 
+  static List<Message> _messagesNewestFirst(Iterable<Message> messages) {
+    final indexedMessages = <({int index, Message message})>[];
+    var index = 0;
+    for (final message in messages) {
+      indexedMessages.add((index: index, message: message));
+      index += 1;
+    }
+    if (indexedMessages.length < 2) {
+      return [
+        for (final indexedMessage in indexedMessages) indexedMessage.message,
+      ];
+    }
+    indexedMessages.sort((a, b) {
+      final aTimestamp = a.message.timestamp;
+      final bTimestamp = b.message.timestamp;
+      if (aTimestamp == null && bTimestamp == null) {
+        return a.index.compareTo(b.index);
+      }
+      if (aTimestamp == null) {
+        return 1;
+      }
+      if (bTimestamp == null) {
+        return -1;
+      }
+      final timestampOrder = bTimestamp.compareTo(aTimestamp);
+      if (timestampOrder != 0) {
+        return timestampOrder;
+      }
+      return a.index.compareTo(b.index);
+    });
+    return [
+      for (final indexedMessage in indexedMessages) indexedMessage.message,
+    ];
+  }
+
   ChatBloc({
     required this.jid,
     required MessageService messageService,
@@ -303,8 +338,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onPinnedMessagesUpdated,
       transformer: restartable(),
     );
+    on<_PinnedMessagesLoadFailed>(_onPinnedMessagesLoadFailed);
     on<_FileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
-    on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
+    on<ChatPinnedMessagesOpened>(
+      _onChatPinnedMessagesOpened,
+      transformer: sequential(),
+    );
+    on<ChatPinnedMessagesRetryRequested>(
+      _onChatPinnedMessagesRetryRequested,
+      transformer: sequential(),
+    );
+    on<ChatPinnedMessageNoticeHidden>(_onChatPinnedMessageNoticeHidden);
     on<ChatPinnedMessageSelected>(_onChatPinnedMessageSelected);
     on<ChatImportantMessageSelected>(_onChatImportantMessageSelected);
     on<_RoomStateUpdated>(_onRoomStateUpdated, transformer: restartable());
@@ -324,6 +368,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
     on<ChatSettingsUpdated>(_onChatSettingsUpdated);
     on<ChatEmailServiceUpdated>(_onChatEmailServiceUpdated);
+    on<_ChatSavedTransportOverrideUpdated>(
+      _onChatSavedTransportOverrideUpdated,
+    );
     on<ChatMessageSent>(
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
@@ -346,6 +393,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatEmailReadReceiptsChanged>(_onChatEmailReadReceiptsChanged);
     on<ChatEmailSendConfirmationChanged>(_onChatEmailSendConfirmationChanged);
     on<ChatEmailComposerWatermarkChanged>(_onChatEmailComposerWatermarkChanged);
+    on<ChatSavedTransportOverrideChanged>(
+      _onChatSavedTransportOverrideChanged,
+      transformer: sequential(),
+    );
     on<ChatSettingSyncRetried>(
       _onChatSettingSyncRetried,
       transformer: sequential(),
@@ -416,6 +467,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         add(_ChatUpdated(chat));
       });
+      _transportPreferenceSubscription = _chatsService
+          .watchChatTransportPreference(chatLookupJid)
+          .listen(
+            (transport) => add(_ChatSavedTransportOverrideUpdated(transport)),
+          );
       add(const _ChatStarted());
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
@@ -478,6 +534,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<List<PinnedMessageEntry>>? _pinnedSubscription;
+  String? _pinnedMessagesSourceKey;
+  Map<String, DateTime>? _knownPinnedMessagePinnedAtByKey;
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<List<RosterItem>>? _roomRosterSubscription;
   StreamSubscription<List<Chat>>? _roomChatsSubscription;
@@ -486,6 +544,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
+  StreamSubscription<MessageTransport?>? _transportPreferenceSubscription;
   StreamSubscription<Map<String, FileMetadataData?>>? _fileMetadataSubscription;
   Set<String> _trackedFileMetadataIds = const <String>{};
   var _fileMetadataRetryAttempts = _emptyMessageCount;
@@ -496,7 +555,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   var _currentMessageLimit = messageBatchSize;
   ChatMessageKey? _emailSyncComposerMessage;
   bool _emailHistoryLoading = false;
-  bool _pinHydrationInFlight = false;
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
   final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
@@ -506,6 +564,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _roomSelfAvatarPath;
   String? _lastReadMarkerStanzaId;
   String? _pendingReadMarkerStanzaId;
+  String? _lastNoticedEmailSyncKey;
   String? _lastSeenEmailSyncKey;
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
@@ -530,13 +589,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     final chatJid = chat?.jid;
     if (chatJid == null || chatJid.isEmpty) return;
-    final selfJid = chat!.defaultTransport.isEmail
-        ? state.emailSelfJid
-        : _chatsService.myJid;
     await _messageService.markMessagesDisplayedLocally(
       messages: messages,
       chatJid: chatJid,
-      selfJid: selfJid,
+      selfJid: _chatsService.myJid,
+      emailSelfJid: state.emailSelfJid,
     );
   }
 
@@ -590,16 +647,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final message = state.items
         .where((item) => item.chatJid == chat.jid && item.stanzaID == messageId)
         .firstOrNull;
-    if (message == null || message.displayed || !_countsTowardUnread(message)) {
+    if (message == null || !_isUnreadCandidate(message)) {
       return;
     }
-    if (_xmppAllowedForChat(chat)) {
+    final shouldSyncXmppRead =
+        !message.isEmailBacked && _xmppAllowedForChat(chat);
+    if (shouldSyncXmppRead) {
       await _markMessagesDisplayedLocally([message]);
     }
     final shouldSendChatReadReceipts =
         chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
     if (shouldSendChatReadReceipts &&
-        _xmppAllowedForChat(chat) &&
+        shouldSyncXmppRead &&
         chat.type != ChatType.groupChat) {
       final pendingReadMarkerId = _pendingReadMarkerStanzaId;
       if (messageId != _lastReadMarkerStanzaId &&
@@ -619,18 +678,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
     }
-    final emailService = _emailService;
-    if (emailService == null || !chat.defaultTransport.isEmail) {
-      return;
+    if (message.isEmailBacked) {
+      await _markMessagesDisplayedLocally([message]);
     }
-    if (message.deltaMsgId == null) {
+    final emailService = _emailService;
+    if (emailService == null || message.deltaMsgId == null) {
       return;
     }
     if (kEnableDemoChats && _messageService.demoOfflineMode) {
-      await _markMessagesDisplayedLocally([message]);
       return;
     }
-    await _markMessagesDisplayedLocally([message]);
     if (!emailService.hasInMemoryReconnectContext) {
       return;
     }
@@ -654,27 +711,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((message) => message.chatJid == chat.jid)
         .toList(growable: false);
     final unreadCandidates = scopedItems
-        .where((message) => !message.displayed)
-        .where(_countsTowardUnread)
+        .where(_isUnreadCandidate)
         .toList(growable: false);
-    final unreadVisibleCandidates = chat.defaultTransport.isEmail
-        ? unreadCandidates
-              .where(
-                (message) =>
-                    _readThresholdMessageIds.contains(message.stanzaID),
-              )
-              .toList(growable: false)
-        : unreadCandidates;
-    if (_xmppAllowedForChat(chat) && unreadVisibleCandidates.isNotEmpty) {
-      await _markMessagesDisplayedLocally(unreadVisibleCandidates);
+    final thresholdVisibleItems = scopedItems
+        .where((message) => _readThresholdMessageIds.contains(message.stanzaID))
+        .toList(growable: false);
+    final thresholdVisibleUnreadCandidates = unreadCandidates
+        .where((message) => _readThresholdMessageIds.contains(message.stanzaID))
+        .toList(growable: false);
+    final xmppVisibleCandidates = chat.defaultTransport.isEmail
+        ? const <Message>[]
+        : unreadCandidates
+              .where((message) => !message.isEmailBacked)
+              .toList(growable: false);
+    if (_xmppAllowedForChat(chat) && xmppVisibleCandidates.isNotEmpty) {
+      await _markMessagesDisplayedLocally(xmppVisibleCandidates);
     }
-    final seenCandidates = chat.defaultTransport.isEmail
-        ? unreadVisibleCandidates
-              .where((message) => message.deltaMsgId != null)
-              .toList(growable: false)
-        : const <Message>[];
-    if (seenCandidates.isNotEmpty) {
-      await _markMessagesDisplayedLocally(seenCandidates);
+    final localEmailReadCandidates = thresholdVisibleUnreadCandidates
+        .where((message) => message.isEmailBacked)
+        .toList(growable: false);
+    if (localEmailReadCandidates.isNotEmpty) {
+      await _markMessagesDisplayedLocally(localEmailReadCandidates);
     }
     if (!allowSend) {
       return;
@@ -684,9 +741,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (shouldSendChatReadReceipts &&
         _xmppAllowedForChat(chat) &&
         chat.type != ChatType.groupChat) {
-      final latestUnread = unreadVisibleCandidates.isEmpty
+      final latestUnread = xmppVisibleCandidates.isEmpty
           ? null
-          : unreadVisibleCandidates.last;
+          : xmppVisibleCandidates.first;
       final latestId = latestUnread?.stanzaID;
       final pendingReadMarkerId = _pendingReadMarkerStanzaId;
       if (latestId != null &&
@@ -708,12 +765,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     final emailService = _emailService;
-    if (emailService == null || !chat.defaultTransport.isEmail) {
+    if (emailService == null) {
       return;
     }
     if (kEnableDemoChats && _messageService.demoOfflineMode) {
       return;
     }
+    final emailUnreadCandidates = unreadCandidates
+        .where((message) => message.isEmailBacked)
+        .toList(growable: false);
+    if (emailUnreadCandidates.isEmpty) {
+      _lastNoticedEmailSyncKey = null;
+    } else if (emailService.hasInMemoryReconnectContext) {
+      final noticedSyncKey = [
+        'noticed',
+        chat.jid.trim(),
+        ...emailUnreadCandidates.map(
+          (message) =>
+              message.deltaMsgId?.toString() ?? message.stanzaID.trim(),
+        ),
+      ].join('|');
+      if (noticedSyncKey != _lastNoticedEmailSyncKey) {
+        final noticed = await emailService.markNoticedChat(chat);
+        if (noticed) {
+          _lastNoticedEmailSyncKey = noticedSyncKey;
+        }
+      }
+    }
+    final seenCandidates = thresholdVisibleItems
+        .where((message) => message.deltaMsgId != null)
+        .where(_countsTowardUnread)
+        .toList(growable: false);
     if (seenCandidates.isEmpty) {
       _lastSeenEmailSyncKey = null;
       return;
@@ -753,7 +835,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _xmppAllowedForChat(Chat chat) {
-    if (chat.isEmailBacked || chat.isAxichatWelcomeThread) return false;
+    if (chat.defaultTransport.isEmail || chat.isAxichatWelcomeThread) {
+      return false;
+    }
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return candidate.trim().isNotEmpty;
   }
@@ -764,7 +848,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _canPageEmailHistory(Chat chat) {
-    if (!chat.defaultTransport.isEmail) return false;
+    if (!chat.isEmailBacked) return false;
     final status = state.emailSyncState.status;
     return status == EmailSyncStatus.ready ||
         status == EmailSyncStatus.recovering;
@@ -890,6 +974,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<Message?> _ensureEmailMessageAvailableLocally({
+    required Chat chat,
+    required String messageId,
+  }) async {
+    if (!_canPageEmailHistory(chat)) {
+      return null;
+    }
+    while (true) {
+      final previousCount = await _archivedMessageCount(chat);
+      await _loadEarlierFromEmail(
+        desiredWindow: previousCount + messageBatchSize,
+      );
+      final target = await _messageService.loadMessageByReferenceId(
+        messageId,
+        chatJid: chat.jid,
+      );
+      if (target != null) {
+        return target;
+      }
+      final nextCount = await _archivedMessageCount(chat);
+      if (nextCount <= previousCount) {
+        return null;
+      }
+    }
+  }
+
   bool _containsMessageId(Iterable<Message> messages, String messageId) {
     for (final message in messages) {
       if (_messageMatchesId(message, messageId)) {
@@ -959,27 +1069,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _refreshPinnedMessagesFromDatabase(chat);
       return target;
     }
-    if (chat.isEmailBacked) {
-      if (!_canPageEmailHistory(chat)) {
-        return null;
+    if (_canPageEmailHistory(chat)) {
+      target = await _ensureEmailMessageAvailableLocally(
+        chat: chat,
+        messageId: messageId,
+      );
+      if (target != null) {
+        await _refreshPinnedMessagesFromDatabase(chat);
+        return target;
       }
-      while (true) {
-        final previousCount = await _archivedMessageCount(chat);
-        await _loadEarlierFromEmail(
-          desiredWindow: previousCount + messageBatchSize,
-        );
-        target = await _messageService.loadMessageByReferenceId(
-          messageId,
-          chatJid: chat.jid,
-        );
-        if (target != null) {
-          await _refreshPinnedMessagesFromDatabase(chat);
-          return target;
-        }
-        final nextCount = await _archivedMessageCount(chat);
-        if (nextCount <= previousCount) {
-          return null;
-        }
+      if (chat.defaultTransport.isEmail) {
+        return null;
       }
     }
     if (!_xmppAllowedForChat(chat)) {
@@ -1016,26 +1116,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (target != null) {
       return target;
     }
-    if (chat.isEmailBacked) {
-      if (!_canPageEmailHistory(chat)) {
-        return null;
+    if (_canPageEmailHistory(chat)) {
+      target = await _ensureEmailMessageAvailableLocally(
+        chat: chat,
+        messageId: messageId,
+      );
+      if (target != null) {
+        return target;
       }
-      while (true) {
-        final previousCount = await _archivedMessageCount(chat);
-        await _loadEarlierFromEmail(
-          desiredWindow: previousCount + messageBatchSize,
-        );
-        target = await _messageService.loadMessageByReferenceId(
-          messageId,
-          chatJid: chat.jid,
-        );
-        if (target != null) {
-          return target;
-        }
-        final nextCount = await _archivedMessageCount(chat);
-        if (nextCount <= previousCount) {
-          return null;
-        }
+      if (chat.defaultTransport.isEmail) {
+        return null;
       }
     }
     if (!_xmppAllowedForChat(chat)) {
@@ -1088,16 +1178,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     var localCount = await _archivedMessageCount(chat);
-    if (chat.defaultTransport.isEmail) {
+    if (_canPageEmailHistory(chat)) {
       Message? boundaryMessage;
       if (emailBoundaryDeltaId != null) {
         boundaryMessage = await _loadEmailMessageByDeltaId(
           chat: chat,
           deltaMessageId: emailBoundaryDeltaId,
         );
-      }
-      if (!_canPageEmailHistory(chat)) {
-        return;
       }
       var shouldAttemptNetwork = true;
       while (localCount < desiredWindow ||
@@ -1120,7 +1207,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         localCount = refreshed;
       }
-      return;
+      if (chat.defaultTransport.isEmail) {
+        return;
+      }
     }
     if (!_xmppAllowedForChat(chat)) {
       return;
@@ -1175,6 +1264,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<void> _initializeSavedTransportOverride(
+    Emitter<ChatState> emit,
+  ) async {
+    final chatLookupJid = _chatLookupJid;
+    if (chatLookupJid == null) {
+      return;
+    }
+    final preference = await _chatsService.loadChatTransportPreference(
+      chatLookupJid,
+    );
+    if (state.savedTransportOverride != null ||
+        state.savedTransportOverrideStatus.isLoading) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        savedTransportOverride: preference.isExplicit
+            ? preference.transport
+            : null,
+      ),
+    );
+  }
+
   Future<void> _applyViewFilter(
     MessageTimelineFilter filter, {
     required Emitter<ChatState> emit,
@@ -1209,6 +1321,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       filter: state.viewFilter,
     );
     await _initializeViewFilter(emit);
+    await _initializeSavedTransportOverride(emit);
   }
 
   void _assertOwnsChat(Chat chat) {
@@ -1364,7 +1477,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     if (emit.isDone) return;
     _preChatInitialMessages = null;
-    emit(state.copyWith(items: verifiedItems, messagesLoaded: true));
+    emit(
+      state.copyWith(
+        items: _messagesNewestFirst(verifiedItems),
+        messagesLoaded: true,
+      ),
+    );
   }
 
   Future<void> _ensureMucMembership(Chat chat) async {
@@ -1474,31 +1592,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String? _resolvePinnedMessagesChatJid(Chat chat) {
-    final resolvedChatJid = chat.isEmailBacked ? chat.jid : chat.remoteJid;
-    final trimmedChatJid = resolvedChatJid.trim();
-    if (trimmedChatJid.isEmpty) {
-      return null;
-    }
-    return trimmedChatJid;
+    final resolvedChatJid = chat.defaultTransport.isEmail
+        ? chat.jid
+        : chat.remoteJid;
+    return normalizedBareAddressValue(resolvedChatJid);
   }
 
   Future<void> _subscribeToPinnedMessages(Chat chat) async {
     if (_isClosing || isClosed) {
       return;
     }
-    final trimmedChatJid = _resolvePinnedMessagesChatJid(chat);
+    final sourceKey = _resolvePinnedMessagesChatJid(chat);
+    if (_pinnedMessagesSourceKey != sourceKey) {
+      _knownPinnedMessagePinnedAtByKey = null;
+    }
+    _pinnedMessagesSourceKey = sourceKey;
     final previousSubscription = _pinnedSubscription;
     _pinnedSubscription = null;
     await _detachAndCancelSubscription(previousSubscription);
     if (_isClosing || isClosed) return;
-    if (trimmedChatJid == null) {
+    if (sourceKey == null) {
       _pinnedSubscription = null;
+      add(
+        const _PinnedMessagesUpdated(
+          sourceKey: null,
+          items: <PinnedMessageEntry>[],
+        ),
+      );
       return;
     }
     _pinnedSubscription = _messageService
-        .pinnedMessagesStream(trimmedChatJid)
-        .listen((items) => add(_PinnedMessagesUpdated(items)));
-    await _syncPinnedMessagesForChat(chat);
+        .pinnedMessagesStream(sourceKey)
+        .listen(
+          (items) =>
+              add(_PinnedMessagesUpdated(sourceKey: sourceKey, items: items)),
+          onError: (Object error, StackTrace stackTrace) {
+            _log.safeFine('Pinned messages stream failed.', error, stackTrace);
+            add(_PinnedMessagesLoadFailed(sourceKey));
+          },
+          onDone: () {
+            _log.safeFine('Pinned messages stream closed.');
+            add(_PinnedMessagesLoadFailed(sourceKey));
+          },
+        );
+    unawaited(_syncPinnedMessagesForChat(chat));
   }
 
   Future<void> _subscribeToTypingParticipants(Chat chat) async {
@@ -1583,6 +1720,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final httpUploadSupportSubscription = _httpUploadSupportSubscription;
     _httpUploadSupportSubscription = null;
     await _detachAndCancelSubscription(httpUploadSupportSubscription);
+    final transportPreferenceSubscription = _transportPreferenceSubscription;
+    _transportPreferenceSubscription = null;
+    await _detachAndCancelSubscription(transportPreferenceSubscription);
     final metadataSubscription = _fileMetadataSubscription;
     _fileMetadataSubscription = null;
     _trackedFileMetadataIds = const <String>{};
@@ -1614,8 +1754,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chatWasUninitialized = state.chat == null;
     final transportChanged =
         state.chat?.defaultTransport != event.chat.defaultTransport;
+    final previousPinnedSourceKey = state.chat == null
+        ? null
+        : _resolvePinnedMessagesChatJid(state.chat!);
+    final nextPinnedSourceKey = _resolvePinnedMessagesChatJid(event.chat);
     final typingContextChanged = chatWasUninitialized || transportChanged;
-    final pinnedContextChanged = chatWasUninitialized || transportChanged;
+    final pinnedContextChanged =
+        chatWasUninitialized || previousPinnedSourceKey != nextPinnedSourceKey;
+    final resetPinnedMessages = !chatWasUninitialized && pinnedContextChanged;
     final capabilitiesShouldReset = chatWasUninitialized || transportChanged;
     final showXmppCapabilities = _xmppAllowedForChat(event.chat);
     final typingShouldClear =
@@ -1636,6 +1782,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
       event.chat.jid,
     );
+    final shouldClearUnreadBoundary =
+        unreadCount <= _emptyMessageCount &&
+        (stagedUnreadCount == null || stagedUnreadCount <= _emptyMessageCount);
+    if (resetPinnedMessages) {
+      _knownPinnedMessagePinnedAtByKey = null;
+    }
     emit(
       state.copyWith(
         chat: event.chat,
@@ -1652,6 +1804,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             : state.typingParticipants,
         typing: event.chat.defaultTransport.isEmail ? false : state.typing,
         viewFilter: nextViewFilter,
+        pinnedMessages: resetPinnedMessages
+            ? const <PinnedMessageItem>[]
+            : state.pinnedMessages,
+        pinnedMessagesStatus: resetPinnedMessages
+            ? ChatPinnedMessagesStatus.idle
+            : state.pinnedMessagesStatus,
+        latestPinnedMessageNotice: resetPinnedMessages
+            ? null
+            : state.latestPinnedMessageNotice,
+        hiddenPinnedMessageNotice: resetPinnedMessages
+            ? null
+            : state.hiddenPinnedMessageNotice,
+        unreadBoundaryStanzaId: shouldClearUnreadBoundary
+            ? null
+            : state.unreadBoundaryStanzaId,
       ),
     );
     _retainMucPresence(event.chat);
@@ -1679,6 +1846,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       if (_pendingUnreadBoundaryCount == null) {
         _needsUnreadBootstrap = false;
+      }
+      if (shouldClearUnreadBoundary) {
+        _pendingUnreadBoundaryCount = null;
+        _needsUnreadBootstrap = false;
+        _emailUnreadBoundaryDeltaId = null;
+        _emailUnreadBoundaryUnreadCount = null;
       }
     }
     final roomSubscription = _roomSubscription;
@@ -1710,13 +1883,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _prefetchPeerAvatar(event.chat);
       if (emit.isDone) return;
     }
-    if (event.chat.defaultTransport.isEmail && !chatWasUninitialized) {
-      if (_emailUnreadBoundaryUnreadCount != unreadCount) {
-        _emailUnreadBoundaryDeltaId = null;
-        _emailUnreadBoundaryUnreadCount = unreadCount;
-      }
+    if (event.chat.isEmailBacked &&
+        !chatWasUninitialized &&
+        _emailUnreadBoundaryUnreadCount != unreadCount) {
+      _emailUnreadBoundaryDeltaId = null;
+      _emailUnreadBoundaryUnreadCount = null;
     }
-    if (chatWasUninitialized && unreadCount > _emptyMessageCount) {
+    if (event.chat.isEmailBacked &&
+        unreadCount > _emptyMessageCount &&
+        (chatWasUninitialized ||
+            _emailUnreadBoundaryUnreadCount != unreadCount)) {
       await _resolveEmailUnreadBoundaryDeltaId(event.chat);
       if (emit.isDone) return;
     }
@@ -2076,6 +2252,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       groupQuotedReferenceByMessageId:
           attachmentMaps.groupQuotedReferenceByMessageId,
     );
+    filteredItems = _messagesNewestFirst(filteredItems);
     final chat = state.chat;
     if (chat == null) {
       _preChatInitialMessages = filteredItems;
@@ -2092,6 +2269,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         groupQuotedReferenceByMessageId:
             attachmentMaps.groupQuotedReferenceByMessageId,
       );
+      filteredItems = _messagesNewestFirst(filteredItems);
       if (emit.isDone) {
         return _syncReadStateLocallyIfAvailable(
           chat: chat,
@@ -2393,7 +2571,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       allowOffWindow: event.allowOffWindowEmailContentHydration,
     );
 
-    if (state.chat?.supportsEmail == true) {
+    if (messages.any((message) => message.deltaMsgId != null)) {
       await _hydrateShareContexts(messages, emit);
       if (emit.isDone) return;
       await _hydrateShareReplies(
@@ -2428,12 +2606,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return null;
     }
-    if (chat.defaultTransport.isEmail && emailBoundaryDeltaId != null) {
+    if (chat.isEmailBacked && emailBoundaryDeltaId != null) {
       final boundaryMessage = _findMessageByDeltaId(
         messages,
         emailBoundaryDeltaId,
       );
-      if (boundaryMessage != null && _countsTowardUnread(boundaryMessage)) {
+      if (boundaryMessage != null && _isUnreadCandidate(boundaryMessage)) {
         final stanzaId = boundaryMessage.stanzaID.trim();
         return stanzaId.isEmpty ? null : stanzaId;
       }
@@ -2445,7 +2623,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     var remaining = unreadCount;
     for (final message in messages) {
-      if (!_countsTowardUnread(message)) {
+      if (!_isUnreadCandidate(message)) {
         continue;
       }
       remaining -= 1;
@@ -2484,8 +2662,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     for (final message in messages) {
-      if (message.stanzaID == previousBoundary &&
-          _countsTowardUnread(message)) {
+      if (message.stanzaID == previousBoundary && _isUnreadCandidate(message)) {
         return previousBoundary;
       }
     }
@@ -2501,7 +2678,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     var remaining = unreadCount;
     for (final message in messages) {
-      if (!_countsTowardUnread(message)) {
+      if (!_isUnreadCandidate(message)) {
         continue;
       }
       remaining -= 1;
@@ -2532,6 +2709,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (boundaryMessage == null) {
       return boundary;
     }
+    if (!_isUnreadCandidate(boundaryMessage)) {
+      return null;
+    }
     final boundaryMessageId = boundaryMessage.id;
     if (boundaryMessageId == null || boundaryMessageId.isEmpty) {
       return boundary;
@@ -2558,18 +2738,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return message.hasUnreadContent;
     }
-    final selfJid = chat.defaultTransport.isEmail
-        ? state.emailSelfJid
-        : _chatsService.myJid;
     return message.countsTowardUnread(
-      selfJid: selfJid,
+      selfJid: _selfJidForUnread(message),
       isGroupChat: chat.type == ChatType.groupChat,
       myOccupantJid: state.roomState?.myOccupantJid,
     );
   }
 
+  bool _isUnreadCandidate(Message message) =>
+      !message.displayed && _countsTowardUnread(message);
+
+  String? _selfJidForUnread(Message message) {
+    final chat = state.chat;
+    if (message.isEmailBacked || chat?.defaultTransport.isEmail == true) {
+      return state.emailSelfJid;
+    }
+    return _chatsService.myJid;
+  }
+
   Future<int?> _resolveEmailUnreadBoundaryDeltaId(Chat? chat) async {
-    if (chat == null || !chat.defaultTransport.isEmail) {
+    if (chat == null || !chat.isEmailBacked) {
       return null;
     }
     if (chat.unreadCount <= _emptyMessageCount) {
@@ -2631,9 +2819,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final desiredLimit = desiredWindow > messageBatchSize
         ? desiredWindow
         : messageBatchSize;
-    final canPageNetwork = chat.defaultTransport.isEmail
-        ? _canPageEmailHistory(chat)
-        : _xmppAllowedForChat(chat);
+    final canPageNetwork =
+        _canPageEmailHistory(chat) || _xmppAllowedForChat(chat);
     if (canPageNetwork) {
       await _ensureUnreadWindowLoaded(
         chat: chat,
@@ -2653,10 +2840,62 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _PinnedMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
+    if (!_isCurrentPinnedMessagesSource(event.sourceKey)) {
+      return;
+    }
+    try {
+      await _applyPinnedMessagesUpdated(
+        sourceKey: event.sourceKey,
+        entries: event.items,
+        emit: emit,
+      );
+    } on XmppException catch (error, stackTrace) {
+      _log.safeFine('Failed to apply pinned messages.', error, stackTrace);
+      if (!_isCurrentPinnedMessagesSource(event.sourceKey)) {
+        return;
+      }
+      _emitPinnedMessagesLoadFailureIfRelevant(emit);
+    }
+  }
+
+  void _onPinnedMessagesLoadFailed(
+    _PinnedMessagesLoadFailed event,
+    Emitter<ChatState> emit,
+  ) {
+    if (!_isCurrentPinnedMessagesSource(event.sourceKey)) {
+      return;
+    }
+    _emitPinnedMessagesLoadFailureIfRelevant(emit);
+  }
+
+  void _emitPinnedMessagesLoadFailureIfRelevant(Emitter<ChatState> emit) {
+    if (emit.isDone) {
+      return;
+    }
+    if (state.pinnedMessagesStatus.hasSnapshot) {
+      return;
+    }
+    if (!state.pinnedMessagesStatus.showsPanelLoading) {
+      return;
+    }
+    emit(
+      state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.failure),
+    );
+  }
+
+  bool _isCurrentPinnedMessagesSource(String? sourceKey) {
+    return sourceKey == _pinnedMessagesSourceKey;
+  }
+
+  Future<void> _applyPinnedMessagesUpdated({
+    required String? sourceKey,
+    required List<PinnedMessageEntry> entries,
+    required Emitter<ChatState> emit,
+  }) async {
     var pinnedItems = _emptyPinnedMessageItems;
-    if (event.items.isNotEmpty) {
+    if (entries.isNotEmpty) {
       final orderedIds = <String>{};
-      for (final entry in event.items) {
+      for (final entry in entries) {
         final messageId = entry.messageStanzaId.trim();
         if (messageId.isEmpty) {
           continue;
@@ -2668,6 +2907,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           orderedIds,
           chatJid: state.chat?.jid,
         );
+        if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) return;
         final messageByReference = <String, Message>{};
         for (final message in state.items) {
           _indexMessageByReference(messageByReference, message);
@@ -2676,8 +2916,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           _indexMessageByReference(messageByReference, message);
         }
         final attachmentMaps = await _loadAttachmentMaps(messages);
+        if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) return;
         pinnedItems = <PinnedMessageItem>[];
-        for (final entry in event.items) {
+        for (final entry in entries) {
           final messageId = entry.messageStanzaId.trim();
           if (messageId.isEmpty) {
             continue;
@@ -2706,17 +2947,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     if (emit.isDone) return;
     await _syncFileMetadataSubscriptions(nextMetadataIds);
-    if (emit.isDone) return;
-    emit(
-      state.copyWith(
-        pinnedMessages: pinnedItems,
-        pinnedMessagesLoaded: true,
-        fileMetadataById: _pruneFileMetadataById(
-          metadataIds: nextMetadataIds,
-          existing: state.fileMetadataById,
-        ),
+    if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) return;
+    final latestPinnedMessageNotice = _takePinnedMessageNoticeForEntries(
+      entries,
+    );
+    var nextState = state.copyWith(
+      pinnedMessages: pinnedItems,
+      pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded,
+      fileMetadataById: _pruneFileMetadataById(
+        metadataIds: nextMetadataIds,
+        existing: state.fileMetadataById,
       ),
     );
+    if (latestPinnedMessageNotice != null) {
+      nextState = nextState.copyWith(
+        latestPinnedMessageNotice: latestPinnedMessageNotice,
+      );
+    }
+    emit(nextState);
     _requestPresentationHydrationForMessages(
       pinnedItems.map((item) => item.message).whereType<Message>(),
     );
@@ -2854,28 +3102,177 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return;
     }
-    if (_pinHydrationInFlight) {
+    switch (state.pinnedMessagesStatus) {
+      case ChatPinnedMessagesStatus.idle:
+        emit(
+          state.copyWith(
+            pinnedMessagesStatus: ChatPinnedMessagesStatus.loading,
+          ),
+        );
+        await _refreshPinnedMessagesFromDatabase(chat);
+      case ChatPinnedMessagesStatus.loaded:
+        await _hydratePinnedMessagesIfNeeded(chat, emit);
+      case ChatPinnedMessagesStatus.loading:
+      case ChatPinnedMessagesStatus.hydrating:
+      case ChatPinnedMessagesStatus.failure:
+        return;
+    }
+  }
+
+  Future<void> _onChatPinnedMessagesRetryRequested(
+    ChatPinnedMessagesRetryRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || !state.pinnedMessagesStatus.canRetry) {
       return;
     }
-    var missing = _missingPinnedMessageIds(state.pinnedMessages);
+    emit(
+      state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.loading),
+    );
+    await _refreshPinnedMessagesFromDatabase(chat);
+  }
+
+  void _onChatPinnedMessageNoticeHidden(
+    ChatPinnedMessageNoticeHidden event,
+    Emitter<ChatState> emit,
+  ) {
+    final latest = state.latestPinnedMessageNotice;
+    if (latest == null || latest == state.hiddenPinnedMessageNotice) {
+      return;
+    }
+    emit(state.copyWith(hiddenPinnedMessageNotice: latest));
+  }
+
+  Future<void> _hydratePinnedMessagesIfNeeded(
+    Chat chat,
+    Emitter<ChatState> emit,
+  ) async {
+    final sourceKey = _pinnedMessagesSourceKey;
+    final missing = _missingPinnedMessageIds(state.pinnedMessages);
     if (missing.isEmpty) {
-      if (state.pinnedMessagesHydrating) {
-        emit(state.copyWith(pinnedMessagesHydrating: false));
-      }
       return;
     }
-    _pinHydrationInFlight = true;
-    emit(state.copyWith(pinnedMessagesHydrating: true));
-    try {
-      if (chat.isEmailBacked) {
-        await _hydratePinnedMessagesFromEmail(chat, missing);
-      } else {
-        await _hydratePinnedMessagesFromMam(chat, missing);
-      }
-    } finally {
-      _pinHydrationInFlight = false;
-      emit(state.copyWith(pinnedMessagesHydrating: false));
+    emit(
+      state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.hydrating),
+    );
+    if (chat.defaultTransport.isEmail) {
+      await _hydratePinnedMessagesFromEmail(chat, missing);
+    } else {
+      await _hydratePinnedMessagesFromMam(chat, missing);
     }
+    if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) {
+      return;
+    }
+    emit(state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded));
+  }
+
+  ChatPinnedMessageNotice? _takePinnedMessageNoticeForEntries(
+    List<PinnedMessageEntry> entries,
+  ) {
+    final currentNotices = _pinnedMessageNoticesForEntries(entries);
+    final knownPinnedAtByKey = _knownPinnedMessagePinnedAtByKey;
+    _knownPinnedMessagePinnedAtByKey = _pinnedMessageNoticePinnedAtByKey(
+      currentNotices,
+    );
+    if (knownPinnedAtByKey == null) {
+      return null;
+    }
+    final newNotices = <ChatPinnedMessageNotice>{};
+    for (final notice in currentNotices) {
+      final knownPinnedAt = knownPinnedAtByKey[_pinnedMessageNoticeKey(notice)];
+      if (knownPinnedAt == null || notice.pinnedAt.isAfter(knownPinnedAt)) {
+        newNotices.add(notice);
+      }
+    }
+    if (newNotices.isEmpty) {
+      return null;
+    }
+    return _latestPinnedMessageNotice(newNotices);
+  }
+
+  void _rememberPinnedMessageNotice(ChatPinnedMessageNotice notice) {
+    final knownPinnedAtByKey = _knownPinnedMessagePinnedAtByKey;
+    if (knownPinnedAtByKey == null) {
+      return;
+    }
+    final key = _pinnedMessageNoticeKey(notice);
+    final knownPinnedAt = knownPinnedAtByKey[key];
+    if (knownPinnedAt != null && !notice.pinnedAt.isAfter(knownPinnedAt)) {
+      return;
+    }
+    _knownPinnedMessagePinnedAtByKey = Map.unmodifiable({
+      ...knownPinnedAtByKey,
+      key: notice.pinnedAt,
+    });
+  }
+
+  Map<String, DateTime> _pinnedMessageNoticePinnedAtByKey(
+    Set<ChatPinnedMessageNotice> notices,
+  ) {
+    final pinnedAtByKey = <String, DateTime>{};
+    for (final notice in notices) {
+      final key = _pinnedMessageNoticeKey(notice);
+      final knownPinnedAt = pinnedAtByKey[key];
+      if (knownPinnedAt == null || notice.pinnedAt.isAfter(knownPinnedAt)) {
+        pinnedAtByKey[key] = notice.pinnedAt;
+      }
+    }
+    return Map.unmodifiable(pinnedAtByKey);
+  }
+
+  String _pinnedMessageNoticeKey(ChatPinnedMessageNotice notice) =>
+      '${notice.chatJid}\n${notice.messageStanzaId}';
+
+  Set<ChatPinnedMessageNotice> _pinnedMessageNoticesForEntries(
+    List<PinnedMessageEntry> entries,
+  ) {
+    if (entries.isEmpty) {
+      return const <ChatPinnedMessageNotice>{};
+    }
+    final notices = <ChatPinnedMessageNotice>{};
+    for (final entry in entries) {
+      if (!entry.active) {
+        continue;
+      }
+      final messageId = entry.messageStanzaId.trim();
+      final chatJid = entry.chatJid.trim();
+      if (messageId.isEmpty || chatJid.isEmpty) {
+        continue;
+      }
+      notices.add(
+        ChatPinnedMessageNotice(
+          messageStanzaId: messageId,
+          chatJid: chatJid,
+          pinnedAt: entry.pinnedAt,
+        ),
+      );
+    }
+    return Set<ChatPinnedMessageNotice>.unmodifiable(notices);
+  }
+
+  ChatPinnedMessageNotice _latestPinnedMessageNotice(
+    Set<ChatPinnedMessageNotice> notices,
+  ) {
+    ChatPinnedMessageNotice? latest;
+    for (final notice in notices) {
+      final current = latest;
+      if (current == null) {
+        latest = notice;
+        continue;
+      }
+      final timestampOrder = notice.pinnedAt.compareTo(current.pinnedAt);
+      final messageOrder = notice.messageStanzaId.compareTo(
+        current.messageStanzaId,
+      );
+      final chatOrder = notice.chatJid.compareTo(current.chatJid);
+      if (timestampOrder > 0 ||
+          (timestampOrder == 0 && messageOrder > 0) ||
+          (timestampOrder == 0 && messageOrder == 0 && chatOrder > 0)) {
+        latest = notice;
+      }
+    }
+    return latest!;
   }
 
   Future<void> _onChatPinnedMessageSelected(
@@ -3046,12 +3443,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _refreshPinnedMessagesFromDatabase(Chat chat) async {
-    final pinnedChatJid = _resolvePinnedMessagesChatJid(chat);
-    if (pinnedChatJid == null) {
+    final sourceKey = _resolvePinnedMessagesChatJid(chat);
+    _pinnedMessagesSourceKey ??= sourceKey;
+    if (!_isCurrentPinnedMessagesSource(sourceKey)) {
       return;
     }
-    final entries = await _messageService.loadPinnedMessages(pinnedChatJid);
-    add(_PinnedMessagesUpdated(entries));
+    if (sourceKey == null) {
+      add(
+        const _PinnedMessagesUpdated(
+          sourceKey: null,
+          items: <PinnedMessageEntry>[],
+        ),
+      );
+      return;
+    }
+    try {
+      final entries = await _messageService.loadPinnedMessages(sourceKey);
+      add(_PinnedMessagesUpdated(sourceKey: sourceKey, items: entries));
+    } on XmppException catch (error, stackTrace) {
+      _log.safeFine('Failed to load pinned messages.', error, stackTrace);
+      add(_PinnedMessagesLoadFailed(sourceKey));
+    }
   }
 
   Future<void> _onChatInviteRequested(
@@ -3571,7 +3983,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _applyEmailSyncState(EmailSyncState nextState, Emitter<ChatState> emit) {
-    if (!_isEmailChat) {
+    if (!_isEmailChat && !state.usesSavedEmailTransportOverride) {
       if (state.emailSyncState != nextState) {
         emit(state.copyWith(emailSyncState: nextState));
       }
@@ -3649,6 +4061,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  void _onChatSavedTransportOverrideUpdated(
+    _ChatSavedTransportOverrideUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    emit(state.copyWith(savedTransportOverride: event.transport));
+  }
+
   Future<void> _onChatMessageFocused(
     ChatMessageFocused event,
     Emitter<ChatState> emit,
@@ -3662,15 +4081,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (target == null) {
       final fetched = await _messageService.loadMessageByStanzaId(messageId);
       if (fetched != null) {
-        final updatedItems = List<Message>.from(state.items)
-          ..removeWhere((msg) => msg.stanzaID == fetched.stanzaID)
-          ..add(fetched)
-          ..sort(
-            (a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
-                .compareTo(
-                  a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0),
-                ),
-          );
+        final updatedItems = _messagesNewestFirst([
+          ...state.items.where((msg) => msg.stanzaID != fetched.stanzaID),
+          fetched,
+        ]);
         emit(state.copyWith(items: updatedItems, focused: fetched));
         _requestEmailFullHtml(fetched);
         _maybeRequestEmailQuotedText(fetched);
@@ -4057,6 +4471,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final settings = event.settings;
     final attachments = List<PendingAttachment>.from(event.pendingAttachments);
     if (event.recipients.isEmpty) {
+      emit(
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerSelectRecipient,
+        ),
+      );
       event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
@@ -4117,9 +4536,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.type == ChatType.groupChat) {
       await _ensureMucMembership(chat);
     }
+    final forceEmail = _shouldForceEmailForSend(
+      chat: chat,
+      oneShotTransportOverride: event.oneShotTransportOverride,
+    );
     final split = _splitRecipientsForSend(
+      chat: chat,
       recipients: event.recipients,
-      forceEmail: false,
+      forceEmail: forceEmail,
     );
     final isLocalOnlyChat = chat.isAxichatWelcomeThread;
     final emailRecipients = split.emailRecipients;
@@ -4235,7 +4659,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final invalidEmailRecipients = requiresEmail
         ? emailRecipients.where((recipient) {
-            return !recipient.target.supportsEmail;
+            return !_recipientSupportsEmailSend(
+              recipient: recipient,
+              forceEmail: forceEmail,
+            );
           })
         : const <ComposerRecipient>[];
     if (requiresEmail && emailRecipients.isEmpty) {
@@ -4993,6 +5420,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  Future<void> _onChatSavedTransportOverrideChanged(
+    ChatSavedTransportOverrideChanged event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null ||
+        !sameBareAddress(chat.jid, event.chatJid) ||
+        !state.canOfferEmailOutboundOverride) {
+      return;
+    }
+    if (state.savedTransportOverrideStatus.isLoading) return;
+    emit(state.copyWith(savedTransportOverrideStatus: RequestStatus.loading));
+    final transport = event.transport;
+    try {
+      if (transport == null || transport == chat.defaultTransport) {
+        await _chatsService.clearChatTransportPreference(jid: chat.jid);
+        emit(
+          state.copyWith(
+            savedTransportOverride: null,
+            savedTransportOverrideStatus: RequestStatus.none,
+          ),
+        );
+        return;
+      }
+      await _chatsService.saveChatTransportPreference(
+        jid: chat.jid,
+        transport: transport,
+      );
+      emit(
+        state.copyWith(
+          savedTransportOverride: transport,
+          savedTransportOverrideStatus: RequestStatus.none,
+        ),
+      );
+    } on XmppAbortedException {
+      emit(state.copyWith(savedTransportOverrideStatus: RequestStatus.none));
+    }
+  }
+
   Future<void> _onChatEncryptionChanged(
     ChatEncryptionChanged event,
     Emitter<ChatState> emit,
@@ -5038,14 +5504,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (state.chat?.jid != chatJid) {
           return;
         }
-        final canPageNetwork = chat.defaultTransport.isEmail
-            ? _canPageEmailHistory(chat)
-            : true;
-        if (!canPageNetwork) {
+        final canPageEmail = _canPageEmailHistory(chat);
+        final canPageXmpp = _xmppAllowedForChat(chat);
+        if (!canPageEmail && !canPageXmpp) {
           return;
         }
-        if (chat.defaultTransport.isEmail) {
+        if (canPageEmail) {
           await _loadEarlierFromEmail(desiredWindow: nextLimit);
+          if (state.chat?.jid != chatJid) {
+            return;
+          }
+        }
+        if (chat.defaultTransport.isEmail || !canPageXmpp) {
           return;
         }
         await _loadEarlierFromMam();
@@ -5115,7 +5585,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? chat.contactDisplayName!.trim()
         : chat.title;
     try {
-      if (chat.isEmailBacked) {
+      if (chat.defaultTransport.isEmail) {
         final emailService = _emailService;
         if (emailService == null) {
           acceptedCompleter?.complete(false);
@@ -5224,15 +5694,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chat = event.chat;
-    final stanzaId = event.message.stanzaID.trim();
-    if (stanzaId.isEmpty) {
-      return;
-    }
-    final isEmailBacked = chat.isEmailBacked;
-    if (event.message.awaitsMucReference(
+    final isEmailBacked =
+        chat.defaultTransport.isEmail || event.message.isEmailBacked;
+    final pinReference = event.message.pinReference(
       isGroupChat: chat.type == ChatType.groupChat,
-      isEmailBacked: isEmailBacked,
-    )) {
+    );
+    if (pinReference == null) {
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: ChatMessageKey.chatPinMessageUnavailable,
+            variant: ChatToastVariant.warning,
+          ),
+        ),
+      );
       return;
     }
     if (chat.type == ChatType.groupChat && !isEmailBacked) {
@@ -5262,27 +5738,83 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       }
     }
+    final successMessage = event.pin
+        ? ChatMessageKey.chatMessagePinned
+        : ChatMessageKey.chatMessageUnpinned;
     final emailService = _emailService;
     if (isEmailBacked) {
       if (emailService == null) {
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(
+              message: ChatMessageKey.chatPinMessageUnavailable,
+              variant: ChatToastVariant.warning,
+            ),
+          ),
+        );
         return;
       }
-      if (event.pin) {
-        await emailService.pinMessage(chat: chat, message: event.message);
-      } else {
-        await emailService.unpinMessage(chat: chat, message: event.message);
+      try {
+        if (event.pin) {
+          await emailService.pinMessage(chat: chat, message: event.message);
+        } else {
+          await emailService.unpinMessage(chat: chat, message: event.message);
+        }
+        var nextState = _attachToast(state, ChatToast(message: successMessage));
+        if (event.pin) {
+          nextState = _attachPinnedMessageNotice(
+            nextState,
+            chat: chat,
+            pinReference: pinReference,
+          );
+        }
+        emit(nextState);
+      } on EmailServiceException catch (error, stackTrace) {
+        _log.safeFine('Failed to update email pin.', error, stackTrace);
+        emit(
+          _attachToast(
+            state,
+            const ChatToast(
+              message: ChatMessageKey.chatPinMessageUnavailable,
+              variant: ChatToastVariant.warning,
+            ),
+          ),
+        );
       }
       return;
     }
-    if (event.pin) {
-      await _messageService.pinMessage(
-        chatJid: chat.remoteJid,
-        message: event.message,
-      );
-    } else {
-      await _messageService.unpinMessage(
-        chatJid: chat.remoteJid,
-        message: event.message,
+    try {
+      if (event.pin) {
+        await _messageService.pinMessage(
+          chatJid: chat.remoteJid,
+          message: event.message,
+        );
+      } else {
+        await _messageService.unpinMessage(
+          chatJid: chat.remoteJid,
+          message: event.message,
+        );
+      }
+      var nextState = _attachToast(state, ChatToast(message: successMessage));
+      if (event.pin) {
+        nextState = _attachPinnedMessageNotice(
+          nextState,
+          chat: chat,
+          pinReference: pinReference,
+        );
+      }
+      emit(nextState);
+    } on XmppException catch (error, stackTrace) {
+      _log.safeFine('Failed to update XMPP pin.', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: ChatMessageKey.chatPinMessageUnavailable,
+            variant: ChatToastVariant.warning,
+          ),
+        ),
       );
     }
   }
@@ -5298,7 +5830,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final messageReferenceId = messageReference?.value.trim() ?? '';
     if (event.message.awaitsMucReference(
           isGroupChat: event.chat.type == ChatType.groupChat,
-          isEmailBacked: event.chat.isEmailBacked,
+          isEmailBacked:
+              event.chat.defaultTransport.isEmail ||
+              event.message.isEmailBacked,
         ) ||
         collectionId.isEmpty ||
         event.chat.jid.trim().isEmpty ||
@@ -5380,18 +5914,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     var success = false;
     try {
-      if (event.isEmailChat) {
-        return;
-      }
       final chat = state.chat;
-      if (chat != null &&
-          event.message.awaitsMucReference(
-            isGroupChat: chat.type == ChatType.groupChat,
-            isEmailBacked: chat.isEmailBacked,
+      if (chat == null ||
+          !event.message.canSendXmppReaction(
+            chatDefaultTransport: chat.defaultTransport,
           )) {
         return;
       }
-      success = chat?.isAxichatWelcomeThread == true
+      if (event.message.awaitsMucReference(
+        isGroupChat: chat.type == ChatType.groupChat,
+        isEmailBacked:
+            chat.defaultTransport.isEmail || event.message.isEmailBacked,
+      )) {
+        return;
+      }
+      success = chat.isAxichatWelcomeThread
           ? await _messageService.reactToMessageLocally(
               stanzaID: event.message.stanzaID,
               emoji: event.emoji,
@@ -5834,22 +6371,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       event.completer.complete(null);
       return;
     }
+    final forceEmail = _shouldForceEmailForSend(chat: chat);
     final split = _splitRecipientsForSend(
-      recipients: event.recipients,
-      forceEmail: false,
-    );
-    final requiresXmpp = split.xmppRecipients.isNotEmpty;
-    final shouldUseEmail = _shouldSendAttachmentsViaEmail(
       chat: chat,
       recipients: event.recipients,
+      forceEmail: forceEmail,
     );
+    final requiresXmpp = split.xmppRecipients.isNotEmpty;
+    final canPickAttachmentForEmailOverride =
+        state.canOfferEmailOutboundOverride &&
+        chat.supportsAxiEmailOutboundOverride;
+    final shouldUseEmail =
+        forceEmail ||
+        _shouldSendAttachmentsViaEmail(
+          chat: chat,
+          recipients: event.recipients,
+        );
     final service = _emailService;
     if (shouldUseEmail && service == null) {
       event.completer.complete(null);
       return;
     }
     if (shouldUseEmail &&
-        !_hasEmailTarget(chat: chat, recipients: event.recipients)) {
+        !_hasEmailTarget(
+          chat: chat,
+          recipients: event.recipients,
+          forceEmail: forceEmail,
+        )) {
       const message =
           ChatMessageKey.chatComposerEmailAttachmentRecipientRequired;
       emit(
@@ -5907,7 +6455,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to optimize attachment', error, stackTrace);
     }
-    final uploadLimitBytes = requiresXmpp
+    final uploadLimitBytes = requiresXmpp && !canPickAttachmentForEmailOverride
         ? _messageService.httpUploadSupport.maxFileSizeBytes
         : null;
     final sizeBytes = preparedAttachment.sizeBytes;
@@ -5955,9 +6503,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       event.completer.complete(pending);
       return;
     }
+    final forceEmail = _shouldForceEmailForSend(chat: chat);
     final split = _splitRecipientsForSend(
+      chat: chat,
       recipients: event.recipients,
-      forceEmail: false,
+      forceEmail: forceEmail,
     );
     final emailRecipients = split.emailRecipients;
     final xmppRecipients = split.xmppRecipients;
@@ -6981,7 +7531,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final metadataById = <String, FileMetadataData>{
       for (final metadata in metadataList) metadata.id: metadata,
     };
-    final isEmailChat = chat.defaultTransport.isEmail;
     final downloads = <({String metadataId, String stanzaId})>[];
     final emailMessages = <Message>[];
 
@@ -6990,7 +7539,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final ids = messageKeys[key];
       if (ids == null || ids.isEmpty) continue;
 
-      if (isEmailChat) {
+      if (chat.defaultTransport.isEmail || message.isEmailBacked) {
         final metadataList = <FileMetadataData>[];
         for (final metadataId in ids) {
           final metadata = metadataById[metadataId];
@@ -7085,7 +7634,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    if (isEmailChat) {
+    if (emailMessages.isNotEmpty) {
       for (final message in emailMessages) {
         try {
           await downloadFullEmailMessage(message);
@@ -7097,7 +7646,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
         }
       }
-      return;
     }
     for (final download in downloads) {
       try {
@@ -7450,6 +7998,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatState _attachToast(ChatState base, ChatToast toast) =>
       base.copyWith(toast: toast, toastId: base.toastId + 1);
 
+  ChatState _attachPinnedMessageNotice(
+    ChatState base, {
+    required Chat chat,
+    required MessageReference pinReference,
+  }) {
+    final sourceKey = _resolvePinnedMessagesChatJid(chat);
+    if (sourceKey == null) {
+      return base;
+    }
+    final notice = ChatPinnedMessageNotice(
+      messageStanzaId: pinReference.value,
+      chatJid: sourceKey,
+      pinnedAt: DateTime.timestamp().toUtc(),
+    );
+    _rememberPinnedMessageNotice(notice);
+    return base.copyWith(latestPinnedMessageNotice: notice);
+  }
+
   void _clearEmailSubject(Emitter<ChatState> emit) {
     if (state.emailSubject?.isEmpty ?? true) {
       return;
@@ -7468,10 +8034,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     List<ComposerRecipient> xmppRecipients,
   })
   _splitRecipientsForSend({
+    required Chat chat,
     required List<ComposerRecipient> recipients,
     required bool forceEmail,
   }) {
-    if (forceEmail) {
+    if (forceEmail || _isEmailCapableChat(chat)) {
       return (
         emailRecipients: recipients.toList(growable: false),
         xmppRecipients: const <ComposerRecipient>[],
@@ -7481,6 +8048,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emailRecipients: recipients.emailRecipients(),
       xmppRecipients: recipients.xmppRecipients(),
     );
+  }
+
+  bool _shouldForceEmailForSend({
+    required Chat chat,
+    MessageTransport? oneShotTransportOverride,
+  }) {
+    if (!state.canOfferEmailOutboundOverride) {
+      return false;
+    }
+    return state
+        .activeTransportForSend(chat, oneShotOverride: oneShotTransportOverride)
+        .isEmail;
+  }
+
+  bool _recipientSupportsEmailSend({
+    required ComposerRecipient recipient,
+    required bool forceEmail,
+  }) {
+    if (recipient.target.supportsEmail) {
+      return true;
+    }
+    final targetChat = recipient.target.chat;
+    return forceEmail &&
+        targetChat != null &&
+        targetChat.supportsEmailOutboundOverrideForDomain(
+          addressDomainPart(state.emailSelfJid),
+        );
   }
 
   String? _resolvedXmppRecipientJid(ComposerRecipient recipient) {
@@ -7494,7 +8088,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _hasEmailTarget({
     required Chat chat,
     required List<ComposerRecipient> recipients,
+    bool forceEmail = false,
   }) {
+    if (forceEmail &&
+        chat.supportsEmailOutboundOverrideForDomain(
+          addressDomainPart(state.emailSelfJid),
+        )) {
+      return true;
+    }
     if (_isEmailCapableChat(chat)) {
       return true;
     }
@@ -7512,7 +8113,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _isEmailCapableChat(Chat chat) {
-    return chat.supportsEmail;
+    return chat.defaultTransport.isEmail;
   }
 
   bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) =>

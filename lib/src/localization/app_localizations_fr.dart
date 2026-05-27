@@ -107,34 +107,31 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de retirer ce message du dossier.';
 
   @override
-  String get contactFolderRuleAction => 'Envoyer tout vers...';
+  String get contactFolderRuleAction => 'File incoming items in...';
 
   @override
-  String get contactFolderRuleMessagesAction =>
-      'Envoyer tous les messages vers...';
+  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
 
   @override
-  String get contactFolderRuleEmailsAction =>
-      'Envoyer tous les e-mails vers...';
+  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'Envoyer tous les messages et e-mails vers...';
+      'File incoming messages and emails in...';
 
   @override
-  String get contactFolderRuleTitle => 'Envoyer tout vers un dossier';
+  String get contactFolderRuleTitle => 'File incoming items in folder';
 
   @override
   String get contactFolderRuleMessagesTitle =>
-      'Envoyer tous les messages vers un dossier';
+      'File incoming messages in folder';
 
   @override
-  String get contactFolderRuleEmailsTitle =>
-      'Envoyer tous les e-mails vers un dossier';
+  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Envoyer tous les messages et e-mails vers un dossier';
+      'File incoming messages and emails in folder';
 
   @override
   String get contactFolderRuleClear => 'Effacer la règle';
@@ -1051,10 +1048,27 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatUnpinMessage => 'Désépingler le message';
 
   @override
+  String get chatPinMessageUnavailable =>
+      'Ce message ne peut pas encore être épinglé.';
+
+  @override
+  String get chatMessagePinned => 'Message épinglé.';
+
+  @override
+  String get chatMessageUnpinned => 'Message désépinglé.';
+
+  @override
   String get chatPinnedEmptyState => 'Aucun message épinglé pour le moment.';
 
   @override
+  String get chatPinnedLoadFailure =>
+      'Impossible de charger les messages épinglés.';
+
+  @override
   String get chatPinnedMissingMessage => 'Le message épinglé est indisponible.';
+
+  @override
+  String get chatPinnedNoticeBanner => 'Nouveau message épinglé';
 
   @override
   String get importantMessagesEmpty => 'Aucun message important pour le moment';
@@ -1458,6 +1472,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String signupErrorPrefix(Object message) {
     return 'Erreur : $message';
   }
+
+  @override
+  String get signupChooseServer => 'Choisir un serveur';
+
+  @override
+  String get signupCustomEndpointRequired =>
+      'Choisissez un serveur personnalisé pour vous inscrire dans l’app. Créez les comptes axi.im sur le site web.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha indisponible';
@@ -3494,7 +3515,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get contactsUrlsLabel => 'Sites web';
 
   @override
-  String get contactsPostalAddressesLabel => 'Adresses postales';
+  String get contactsPostalAddressesLabel => 'Adresses';
 
   @override
   String get contactsNoteLabel => 'Notes';
@@ -3538,7 +3559,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get jidInputPlaceholder => 'john@axi.im';
 
   @override
-  String get jidInputInvalid => 'Saisissez un JID valide';
+  String get jidInputInvalid => 'Saisissez une adresse valide.';
 
   @override
   String get sessionCapabilityChat => 'Chat';

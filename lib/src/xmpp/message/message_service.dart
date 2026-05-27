@@ -3944,10 +3944,29 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     setPinSyncActiveForChat(normalizedChat, active: true);
     try {
-      yield* createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
-        watchFunction: (db) async => db.watchPinnedMessages(normalizedChat),
-        getFunction: (db) => db.getPinnedMessages(normalizedChat),
-      );
+      yield* databaseReloadStream
+          .startWith(null)
+          .switchMap((_) async* {
+            try {
+              final stream =
+                  await _dbOpReturning<
+                    XmppDatabase,
+                    Stream<List<PinnedMessageEntry>>
+                  >((db) async {
+                    final reset = databaseReloadStream.first;
+                    final watchStream = db.watchPinnedMessages(normalizedChat);
+                    final initial = await db.getPinnedMessages(normalizedChat);
+                    return watchStream.takeUntil(reset).startWith(initial);
+                  });
+              yield* stream;
+            } on XmppAbortedException {
+              return;
+            }
+          })
+          .handleError(
+            (_, _) {},
+            test: (error) => error is XmppAbortedException,
+          );
     } finally {
       setPinSyncActiveForChat(normalizedChat, active: false);
     }
@@ -4199,12 +4218,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       jid: normalizedChat,
       requestedChatType: ChatType.chat,
     );
-    final messageId = message.outboundReferenceId(
+    final reference = message.pinReference(
       isGroupChat: resolvedChatType == ChatType.groupChat,
     );
-    if (messageId == null) {
+    if (reference == null) {
       return;
     }
+    final messageId = reference.value;
     await _normalizePinAliasState(
       chatJid: normalizedChat,
       canonicalMessageStanzaId: messageId,
@@ -4223,7 +4243,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       return;
     }
     await _queuePinPublish(normalizedChat, messageId);
-    await _flushPendingPinSyncForChat(normalizedChat);
+    unawaited(
+      fireAndForget(
+        () => _flushPendingPinSyncForChat(normalizedChat),
+        operationName: _pinSyncFlushOperationName,
+      ),
+    );
   }
 
   @override
@@ -4239,12 +4264,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       jid: normalizedChat,
       requestedChatType: ChatType.chat,
     );
-    final messageId = message.outboundReferenceId(
+    final reference = message.pinReference(
       isGroupChat: resolvedChatType == ChatType.groupChat,
     );
-    if (messageId == null) {
+    if (reference == null) {
       return;
     }
+    final messageId = reference.value;
     await _normalizePinAliasState(
       chatJid: normalizedChat,
       canonicalMessageStanzaId: messageId,
@@ -4263,7 +4289,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       return;
     }
     await _queuePinRetraction(normalizedChat, messageId);
-    await _flushPendingPinSyncForChat(normalizedChat);
+    unawaited(
+      fireAndForget(
+        () => _flushPendingPinSyncForChat(normalizedChat),
+        operationName: _pinSyncFlushOperationName,
+      ),
+    );
   }
 
   Future<void> syncPinnedMessagesForChat(String chatJid) async {
@@ -5676,7 +5707,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (message == null) {
       return null;
     }
-    return message.outboundReferenceId(isGroupChat: true);
+    return message.pinReference(isGroupChat: true)?.value;
   }
 
   Future<void> _sendReactionUpdate({
@@ -13991,7 +14022,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   }
 
   Set<String> _pinMessageAliases(Message message) {
-    return message.referenceIds;
+    final aliases = <String>{};
+    final directReference = message.pinReference(isGroupChat: false);
+    if (directReference != null) {
+      aliases.add(directReference.value);
+    }
+    final groupReference = message.pinReference(isGroupChat: true);
+    if (groupReference != null) {
+      aliases.add(groupReference.value);
+    }
+    return aliases;
   }
 
   Future<void> _normalizeActivePinnedMessageAliasesForChat(
@@ -14051,7 +14091,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       return (canonicalId: trimmed, aliases: <String>{trimmed});
     }
     final aliases = _pinMessageAliases(message)..add(trimmed);
-    final canonicalId = _pinMessageReferenceId(message) ?? trimmed;
+    final canonicalId = _pinMessageReferenceId(message);
+    if (canonicalId == null) {
+      return (canonicalId: trimmed, aliases: aliases);
+    }
     return (canonicalId: canonicalId, aliases: aliases);
   }
 
@@ -14161,9 +14204,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   }
 
   String? _pinMessageReferenceId(Message message) {
-    return message.outboundReferenceId(isGroupChat: true) ??
-        message.trimmedStanzaId ??
-        message.trimmedOriginId;
+    return message
+        .pinReference(isGroupChat: message.trimmedMucStanzaId != null)
+        ?.value;
   }
 
   String _normalizeBase64(String input) {

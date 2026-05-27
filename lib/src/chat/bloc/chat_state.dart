@@ -5,6 +5,39 @@ part of 'chat_bloc.dart';
 
 enum ChatCollectionActionFailureReason { unsupported, updateFailed }
 
+enum ChatPinnedMessagesStatus {
+  idle,
+  loading,
+  loaded,
+  hydrating,
+  failure;
+
+  bool get hasSnapshot => this == loaded || this == hydrating;
+
+  bool get showsPanelLoading => this == loading;
+
+  bool get isHydrating => this == hydrating;
+
+  bool get canAutoLoadOnOpen => this == idle;
+
+  bool get canRetry => this == failure;
+}
+
+final class ChatPinnedMessageNotice extends Equatable {
+  const ChatPinnedMessageNotice({
+    required this.messageStanzaId,
+    required this.chatJid,
+    required this.pinnedAt,
+  });
+
+  final String messageStanzaId;
+  final String chatJid;
+  final DateTime pinnedAt;
+
+  @override
+  List<Object?> get props => [messageStanzaId, chatJid, pinnedAt];
+}
+
 final class ChatForwardDraft extends Equatable {
   const ChatForwardDraft({required this.sources});
 
@@ -149,8 +182,10 @@ abstract class ChatState with _$ChatState {
     @Default(<String, String>{})
     Map<String, String> attachmentGroupLeaderByMessageId,
     @Default(<PinnedMessageItem>[]) List<PinnedMessageItem> pinnedMessages,
-    @Default(false) bool pinnedMessagesLoaded,
-    @Default(false) bool pinnedMessagesHydrating,
+    @Default(ChatPinnedMessagesStatus.idle)
+    ChatPinnedMessagesStatus pinnedMessagesStatus,
+    ChatPinnedMessageNotice? latestPinnedMessageNotice,
+    ChatPinnedMessageNotice? hiddenPinnedMessageNotice,
     @Default(<String, Message>{}) Map<String, Message> quotedMessagesById,
     Chat? chat,
     RoomState? roomState,
@@ -194,6 +229,8 @@ abstract class ChatState with _$ChatState {
     @Default(false) bool supportsHttpFileUpload,
     @Default(false) bool emailServiceAvailable,
     String? emailSelfJid,
+    MessageTransport? savedTransportOverride,
+    @Default(RequestStatus.none) RequestStatus savedTransportOverrideStatus,
     String? openChatJid,
     @Default(0) int openChatRequestId,
     String? scrollTargetMessageId,
@@ -209,7 +246,40 @@ abstract class ChatState with _$ChatState {
   }) = _ChatState;
 }
 
+extension ChatStatePinnedMessageNoticeVisibility on ChatState {
+  bool get showPinnedMessageBanner {
+    final latest = latestPinnedMessageNotice;
+    return latest != null && latest != hiddenPinnedMessageNotice;
+  }
+}
+
 extension ChatStateSettingsSync on ChatState {
+  MessageTransport activeTransportForSend(
+    Chat chat, {
+    MessageTransport? oneShotOverride,
+  }) {
+    return oneShotOverride ?? savedTransportOverride ?? chat.defaultTransport;
+  }
+
+  bool get canOfferEmailOutboundOverride {
+    final currentChat = chat;
+    final trimmedSelfJid = emailSelfJid?.trim();
+    return emailServiceAvailable &&
+        trimmedSelfJid != null &&
+        trimmedSelfJid.isNotEmpty &&
+        currentChat != null &&
+        currentChat.supportsEmailOutboundOverrideForDomain(
+          addressDomainPart(trimmedSelfJid),
+        );
+  }
+
+  bool get usesSavedEmailTransportOverride {
+    final currentChat = chat;
+    return canOfferEmailOutboundOverride &&
+        currentChat != null &&
+        activeTransportForSend(currentChat).isEmail;
+  }
+
   bool isChatSettingLoading(ChatSettingId settingId) {
     return chatSettingStatuses[settingId]?.isLoading ?? false;
   }

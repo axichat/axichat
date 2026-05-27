@@ -13,9 +13,6 @@ const _calendarTaskIcsTag = 'calendar-task-ics';
 const _calendarTaskIcsPayloadTag = 'payload';
 const _calendarTaskIcsVersionAttr = 'version';
 const _calendarTaskIcsVersionValue = '1';
-const _calendarTaskIcsReadOnlyAttr = 'read-only';
-const _calendarTaskIcsReadOnlyTrueValue = 'true';
-const _calendarTaskIcsReadOnlyFalseValue = 'false';
 const bool _calendarTaskIcsReadOnlyDefault = true;
 const _calendarAvailabilityXmlns = 'urn:axichat:calendar-availability:1';
 const _calendarAvailabilityTag = 'calendar-availability';
@@ -96,11 +93,11 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
       tag: _directInviteTag,
       xmlns: _directInviteXmlns,
       attributes: {
-        _directInviteRoomAttr: roomJid,
+        _directInviteRoomAttr: escapeXmlAttribute(roomJid),
         if (trimmedReason?.isNotEmpty == true)
-          _directInviteReasonAttr: trimmedReason!,
+          _directInviteReasonAttr: escapeXmlAttribute(trimmedReason!),
         if (trimmedPassword?.isNotEmpty == true)
-          _directInvitePasswordAttr: trimmedPassword!,
+          _directInvitePasswordAttr: escapeXmlAttribute(trimmedPassword!),
         if (continueFlag == true) _directInviteContinueAttr: 'true',
       },
     );
@@ -211,19 +208,19 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
       tag: kind.tag,
       xmlns: _axiInviteXmlns,
       attributes: {
-        _axiInviteRoomAttr: roomJid,
+        _axiInviteRoomAttr: escapeXmlAttribute(roomJid),
         if (trimmedToken?.isNotEmpty == true)
-          _axiInviteTokenAttr: trimmedToken!,
+          _axiInviteTokenAttr: escapeXmlAttribute(trimmedToken!),
         if (trimmedInviter?.isNotEmpty == true)
-          _axiInviteInviterAttr: trimmedInviter!,
+          _axiInviteInviterAttr: escapeXmlAttribute(trimmedInviter!),
         if (trimmedInvitee?.isNotEmpty == true)
-          _axiInviteInviteeAttr: trimmedInvitee!,
+          _axiInviteInviteeAttr: escapeXmlAttribute(trimmedInvitee!),
         if (trimmedRoomName?.isNotEmpty == true)
-          _axiInviteRoomNameAttr: trimmedRoomName!,
+          _axiInviteRoomNameAttr: escapeXmlAttribute(trimmedRoomName!),
         if (!kind.isAcceptance && trimmedReason?.isNotEmpty == true)
-          _axiInviteReasonAttr: trimmedReason!,
+          _axiInviteReasonAttr: escapeXmlAttribute(trimmedReason!),
         if (!kind.isAcceptance && trimmedPassword?.isNotEmpty == true)
-          _axiInvitePasswordAttr: trimmedPassword!,
+          _axiInvitePasswordAttr: escapeXmlAttribute(trimmedPassword!),
       },
     );
   }
@@ -316,7 +313,12 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
       attributes: const {
         _calendarFragmentVersionAttr: _calendarFragmentVersionValue,
       },
-      children: [mox.XMLNode(tag: _calendarFragmentPayloadTag, text: payload)],
+      children: [
+        mox.XMLNode(
+          tag: _calendarFragmentPayloadTag,
+          text: escapeXmlText(payload),
+        ),
+      ],
     );
   }
 
@@ -353,8 +355,8 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
 final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
   const CalendarTaskIcsPayload({
     required this.ics,
-    this.readOnly = _calendarTaskIcsReadOnlyDefault,
-  });
+    bool readOnly = _calendarTaskIcsReadOnlyDefault,
+  }) : readOnly = _calendarTaskIcsReadOnlyDefault;
 
   final String ics;
   final bool readOnly;
@@ -364,12 +366,13 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     return mox.XMLNode.xmlns(
       tag: _calendarTaskIcsTag,
       xmlns: _calendarTaskIcsXmlns,
-      attributes: {
-        _calendarTaskIcsVersionAttr: _calendarTaskIcsVersionValue,
-        if (readOnly != _calendarTaskIcsReadOnlyDefault)
-          _calendarTaskIcsReadOnlyAttr: _calendarTaskIcsReadOnlyFalseValue,
-      },
-      children: [mox.XMLNode(tag: _calendarTaskIcsPayloadTag, text: payload)],
+      attributes: {_calendarTaskIcsVersionAttr: _calendarTaskIcsVersionValue},
+      children: [
+        mox.XMLNode(
+          tag: _calendarTaskIcsPayloadTag,
+          text: escapeXmlText(payload),
+        ),
+      ],
     );
   }
 
@@ -389,19 +392,10 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     if (payloadLength > _calendarTaskIcsPayloadMaxLength) {
       return null;
     }
-    final readOnlyAttr = node.attributes[_calendarTaskIcsReadOnlyAttr]
-        ?.toString();
-    final bool readOnly = _parseReadOnly(readOnlyAttr);
-    return CalendarTaskIcsPayload(ics: payloadText, readOnly: readOnly);
-  }
-
-  static bool _parseReadOnly(String? raw) {
-    final normalized = raw?.trim().toLowerCase();
-    return switch (normalized) {
-      _calendarTaskIcsReadOnlyTrueValue => true,
-      _calendarTaskIcsReadOnlyFalseValue => false,
-      _ => _calendarTaskIcsReadOnlyDefault,
-    };
+    return CalendarTaskIcsPayload(
+      ics: payloadText,
+      readOnly: _calendarTaskIcsReadOnlyDefault,
+    );
   }
 }
 
@@ -420,7 +414,10 @@ final class CalendarAvailabilityMessagePayload
         _calendarAvailabilityVersionAttr: _calendarAvailabilityVersionValue,
       },
       children: [
-        mox.XMLNode(tag: _calendarAvailabilityPayloadTag, text: payload),
+        mox.XMLNode(
+          tag: _calendarAvailabilityPayloadTag,
+          text: escapeXmlText(payload),
+        ),
       ],
     );
   }
@@ -472,7 +469,7 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       xmlns: _pinMutationXmlns,
       attributes: {
         _pinMutationVersionAttr: _pinMutationVersionValue,
-        _pinMutationMessageIdAttr: messageId,
+        _pinMutationMessageIdAttr: escapeXmlAttribute(messageId),
         _pinMutationPinnedAttr: pinned.toString(),
         _pinMutationTimestampAttr: timestamp.toUtc().toIso8601String(),
       },

@@ -40,7 +40,7 @@ final class _ChatPresentationHydrationRequested extends ChatEvent {
     required this.metadataIds,
     this.renderedMessages = const <Message>[],
     this.allowOffWindowEmailContentHydration = false,
-    this.syncFileMetadata = true,
+    required this.syncFileMetadata,
   });
 
   final Set<String> messageReferenceIds;
@@ -74,12 +74,22 @@ final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
 }
 
 final class _PinnedMessagesUpdated extends ChatEvent {
-  const _PinnedMessagesUpdated(this.items);
+  const _PinnedMessagesUpdated({required this.sourceKey, required this.items});
 
+  final String? sourceKey;
   final List<PinnedMessageEntry> items;
 
   @override
-  List<Object?> get props => [items];
+  List<Object?> get props => [sourceKey, items];
+}
+
+final class _PinnedMessagesLoadFailed extends ChatEvent {
+  const _PinnedMessagesLoadFailed(this.sourceKey);
+
+  final String? sourceKey;
+
+  @override
+  List<Object?> get props => [sourceKey];
 }
 
 final class _FileMetadataBatchUpdated extends ChatEvent {
@@ -93,6 +103,20 @@ final class _FileMetadataBatchUpdated extends ChatEvent {
 
 final class ChatPinnedMessagesOpened extends ChatEvent {
   const ChatPinnedMessagesOpened();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatPinnedMessagesRetryRequested extends ChatEvent {
+  const ChatPinnedMessagesRetryRequested();
+
+  @override
+  List<Object?> get props => [];
+}
+
+final class ChatPinnedMessageNoticeHidden extends ChatEvent {
+  const ChatPinnedMessageNoticeHidden();
 
   @override
   List<Object?> get props => [];
@@ -204,6 +228,15 @@ final class ChatEmailServiceUpdated extends ChatEvent {
   List<Object?> get props => [emailService];
 }
 
+final class _ChatSavedTransportOverrideUpdated extends ChatEvent {
+  const _ChatSavedTransportOverrideUpdated(this.transport);
+
+  final MessageTransport? transport;
+
+  @override
+  List<Object?> get props => [transport];
+}
+
 final class ChatReadThresholdChanged extends ChatEvent {
   const ChatReadThresholdChanged(this.messageIds);
 
@@ -305,6 +338,7 @@ final class ChatMessageSent extends ChatEvent {
     this.calendarTaskIcs,
     this.calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
     this.calendarTaskShareText,
+    this.oneShotTransportOverride,
     this.completer,
   });
 
@@ -321,6 +355,7 @@ final class ChatMessageSent extends ChatEvent {
   final CalendarTask? calendarTaskIcs;
   final bool calendarTaskIcsReadOnly;
   final String? calendarTaskShareText;
+  final MessageTransport? oneShotTransportOverride;
   final Completer<List<PendingAttachment>>? completer;
 
   @override
@@ -338,6 +373,7 @@ final class ChatMessageSent extends ChatEvent {
     calendarTaskIcs,
     calendarTaskIcsReadOnly,
     calendarTaskShareText,
+    oneShotTransportOverride,
     completer,
   ];
 }
@@ -510,6 +546,19 @@ final class ChatEmailComposerWatermarkChanged extends ChatEvent {
   List<Object?> get props => [chatJid, enabled];
 }
 
+final class ChatSavedTransportOverrideChanged extends ChatEvent {
+  const ChatSavedTransportOverrideChanged({
+    required this.chatJid,
+    required this.transport,
+  });
+
+  final String chatJid;
+  final MessageTransport? transport;
+
+  @override
+  List<Object?> get props => [chatJid, transport];
+}
+
 final class ChatSettingSyncRetried extends ChatEvent {
   const ChatSettingSyncRetried(this.settingId);
 
@@ -648,17 +697,15 @@ final class ChatMessageReactionToggled extends ChatEvent {
   const ChatMessageReactionToggled({
     required this.message,
     required this.emoji,
-    required this.isEmailChat,
     this.completer,
   });
 
   final Message message;
   final String emoji;
-  final bool isEmailChat;
   final Completer<bool>? completer;
 
   @override
-  List<Object?> get props => [message, emoji, isEmailChat, completer];
+  List<Object?> get props => [message, emoji, completer];
 }
 
 final class ChatMessageForwardRequested extends ChatEvent {

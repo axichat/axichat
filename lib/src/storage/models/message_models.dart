@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -185,7 +186,8 @@ extension MessageErrorLocalization on MessageError {
 enum EncryptionProtocol {
   none,
   omemo,
-  mls;
+  mls,
+  openPgp;
 
   bool get isNone => this == none;
 
@@ -194,6 +196,8 @@ enum EncryptionProtocol {
   bool get isOmemo => this == omemo;
 
   bool get isMls => this == mls;
+
+  bool get isOpenPgp => this == openPgp;
 }
 
 enum MessageTimelineFilter {
@@ -217,6 +221,7 @@ enum PseudoMessageType {
   calendarAvailabilityRequest,
   calendarAvailabilityResponse,
   mucInviteAccepted,
+  emailEncryptionStatus,
 }
 
 extension PseudoMessageTypeX on PseudoMessageType {
@@ -241,6 +246,25 @@ extension PseudoMessageTypeX on PseudoMessageType {
 
   bool get isCalendarAvailabilityResponse =>
       this == PseudoMessageType.calendarAvailabilityResponse;
+
+  bool get isSystemStatus => this == PseudoMessageType.emailEncryptionStatus;
+}
+
+String emailEncryptionStatusMarkerStanzaId(String chatJid) {
+  final normalized = normalizedAddressValue(chatJid);
+  final fallback = chatJid.trim().toLowerCase();
+  final identifier = normalized?.isNotEmpty == true ? normalized! : fallback;
+  return 'email-encryption-status:$identifier';
+}
+
+Map<String, dynamic> emailEncryptionStatusMarkerData({
+  required String anchorStanzaId,
+  required DateTime anchorTimestamp,
+}) {
+  return <String, dynamic>{
+    'anchorStanzaId': anchorStanzaId,
+    'anchorTimestampMicros': anchorTimestamp.microsecondsSinceEpoch,
+  };
 }
 
 typedef BTBVTrustState = omemo.BTBVTrustState;
@@ -392,14 +416,11 @@ abstract class Message with _$Message implements Insertable<Message> {
     final CalendarTask? calendarTaskIcs = taskIcsPayload == null
         ? null
         : _decodeCalendarTaskIcsPayload(taskIcsPayload);
-    final bool taskIcsReadOnly = taskIcsPayload == null
-        ? CalendarTaskIcsMessage.defaultReadOnly
-        : taskIcsPayload.readOnly;
     final CalendarTaskIcsMessage? taskIcsMessage = calendarTaskIcs == null
         ? null
         : CalendarTaskIcsMessage(
             task: calendarTaskIcs,
-            readOnly: taskIcsReadOnly,
+            readOnly: CalendarTaskIcsMessage.defaultReadOnly,
           );
     final availabilityPayload = get<CalendarAvailabilityMessagePayload>();
     final PseudoMessageType? availabilityType = _availabilityPseudoMessageType(
@@ -758,6 +779,9 @@ abstract class Message with _$Message implements Insertable<Message> {
 extension MessageContent on Message {
   bool get isEmailBacked => deltaChatId != null || deltaMsgId != null;
 
+  bool canSendXmppReaction({required MessageTransport chatDefaultTransport}) =>
+      chatDefaultTransport.isXmpp && !isEmailBacked;
+
   bool isStaleUnackedXmppSendAgainCandidate({
     required bool isSelf,
     required bool isEmailChat,
@@ -1037,6 +1061,13 @@ extension MessageReferenceIds on Message {
     return _originReference ?? _stanzaReference;
   }
 
+  MessageReference? pinReference({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return _mucStanzaReference;
+    }
+    return _stanzaReference;
+  }
+
   MessageReference? outboundReference({
     required bool isGroupChat,
     DirectMessageReferencePolicy directPolicy =
@@ -1148,6 +1179,50 @@ extension MessageForwardingX on Message {
       if (resolvedOriginalSender != null && resolvedOriginalSender.isNotEmpty)
         'forwardedOriginalSenderLabel': resolvedOriginalSender,
     };
+  }
+}
+
+extension MessageEmailEncryptionStatusX on Message {
+  bool get isEmailBackedOpenPgpContent {
+    if (pseudoMessageType != null || retracted) {
+      return false;
+    }
+    return encryptionProtocol.isOpenPgp &&
+        (deltaChatId != null || deltaMsgId != null);
+  }
+
+  bool get isEmailEncryptionStatusMarker {
+    return pseudoMessageType == PseudoMessageType.emailEncryptionStatus &&
+        stanzaID == emailEncryptionStatusMarkerStanzaId(chatJid);
+  }
+
+  String? get emailEncryptionStatusAnchorStanzaId {
+    final value = pseudoMessageData?['anchorStanzaId'];
+    if (value is! String) {
+      return null;
+    }
+    final anchor = value.trim();
+    return anchor.isEmpty ? null : anchor;
+  }
+
+  int? get emailEncryptionStatusAnchorTimestampMicros {
+    final value = pseudoMessageData?['anchorTimestampMicros'];
+    if (value is int) {
+      return value;
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
+  bool isRenderableEmailEncryptionStatusMarker({
+    required Set<String> loadedOpenPgpEmailStanzaIds,
+  }) {
+    final anchorStanzaId = emailEncryptionStatusAnchorStanzaId;
+    return isEmailEncryptionStatusMarker &&
+        anchorStanzaId != null &&
+        loadedOpenPgpEmailStanzaIds.contains(anchorStanzaId);
   }
 }
 

@@ -3069,6 +3069,7 @@ void main() {
           ),
         );
         await pumpEventQueue();
+        await xmppService.setMamSupportOverride(false);
         await xmppService.runBootstrapOperations(
           XmppBootstrapTrigger.resumedNegotiation,
         );
@@ -4443,6 +4444,81 @@ void main() {
   });
 
   group('pinMessage', () {
+    test('Uses stanza id as the canonical stored direct pin id', () async {
+      const chatJid = 'peer@axi.im';
+      const stanzaId = 'direct-stanza-id';
+      const originId = 'direct-origin-id';
+
+      await connectSuccessfully(xmppService);
+      final message = Message(
+        stanzaID: stanzaId,
+        originID: originId,
+        senderJid: chatJid,
+        chatJid: chatJid,
+        timestamp: DateTime.timestamp(),
+        body: 'hello',
+      );
+
+      await xmppService.pinMessage(chatJid: chatJid, message: message);
+
+      final pinned = await database.getPinnedMessage(
+        chatJid: chatJid,
+        messageStanzaId: stanzaId,
+      );
+      expect(pinned?.active, isTrue);
+      expect(
+        await database.getPinnedMessage(
+          chatJid: chatJid,
+          messageStanzaId: originId,
+        ),
+        isNull,
+      );
+    });
+
+    test('Uses stanza id for direct pins without origin id', () async {
+      const chatJid = 'peer@axi.im';
+      const stanzaId = 'direct-stanza-id';
+
+      await connectSuccessfully(xmppService);
+      final message = Message(
+        stanzaID: stanzaId,
+        senderJid: chatJid,
+        chatJid: chatJid,
+        timestamp: DateTime.timestamp(),
+        body: 'hello',
+      );
+
+      await xmppService.pinMessage(chatJid: chatJid, message: message);
+
+      final pinned = await database.getPinnedMessage(
+        chatJid: chatJid,
+        messageStanzaId: stanzaId,
+      );
+      expect(pinned?.active, isTrue);
+    });
+
+    test('Skips direct origin-only pins', () async {
+      const chatJid = 'peer@axi.im';
+      const originId = 'direct-origin-id';
+
+      await connectSuccessfully(xmppService);
+      const message = Message(
+        stanzaID: '',
+        originID: originId,
+        senderJid: chatJid,
+        chatJid: chatJid,
+        body: 'hello',
+      );
+
+      await xmppService.pinMessage(chatJid: chatJid, message: message);
+
+      final pinned = await database.getPinnedMessage(
+        chatJid: chatJid,
+        messageStanzaId: originId,
+      );
+      expect(pinned, isNull);
+    });
+
     test('Uses room stanza-id as the canonical stored MUC pin id', () async {
       const roomJid = 'room@conference.axi.im';
       const roomNick = 'me';
@@ -4585,6 +4661,7 @@ void main() {
         xmppService.setPinSyncActiveForChat(roomJid, active: true);
 
         await xmppService.pinMessage(chatJid: roomJid, message: message);
+        await untilCalled(() => mockConnection.sendMessage(any()));
 
         verify(
           () => mockConnection.sendMessage(
@@ -5253,6 +5330,7 @@ void main() {
           ),
         );
         await pumpEventQueue();
+        await xmppService.setMamSupportOverride(false);
         await xmppService.runBootstrapOperations(
           XmppBootstrapTrigger.resumedNegotiation,
         );
@@ -5325,6 +5403,7 @@ void main() {
           ),
         );
         await pumpEventQueue();
+        await xmppService.setMamSupportOverride(false);
         await xmppService.runBootstrapOperations(
           XmppBootstrapTrigger.resumedNegotiation,
         );

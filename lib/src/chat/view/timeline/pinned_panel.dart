@@ -10,8 +10,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.maxHeight,
     required this.accountJid,
     required this.pinnedMessages,
-    required this.pinnedMessagesLoaded,
-    required this.pinnedMessagesHydrating,
+    required this.pinnedMessagesStatus,
     required this.onClose,
     required this.canTogglePins,
     required this.canShowCalendarTasks,
@@ -39,8 +38,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final double maxHeight;
   final String? accountJid;
   final List<PinnedMessageItem> pinnedMessages;
-  final bool pinnedMessagesLoaded;
-  final bool pinnedMessagesHydrating;
+  final ChatPinnedMessagesStatus pinnedMessagesStatus;
   final VoidCallback onClose;
   final bool canTogglePins;
   final bool canShowCalendarTasks;
@@ -106,13 +104,22 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     final bool becameVisible = !oldWidget.visible && widget.visible;
     final bool pinnedChanged =
         oldWidget.pinnedMessages != widget.pinnedMessages;
-    if (becameVisible || (widget.visible && pinnedChanged)) {
+    final statusChanged =
+        oldWidget.pinnedMessagesStatus != widget.pinnedMessagesStatus;
+    if (becameVisible || (widget.visible && (pinnedChanged || statusChanged))) {
       _requestPinnedHydration();
     }
   }
 
   void _requestPinnedHydration() {
     if (!widget.visible) {
+      return;
+    }
+    if (widget.pinnedMessagesStatus.canAutoLoadOnOpen) {
+      context.read<ChatBloc>().add(const ChatPinnedMessagesOpened());
+      return;
+    }
+    if (widget.pinnedMessagesStatus != ChatPinnedMessagesStatus.loaded) {
       return;
     }
     final hasMissingMessage = widget.pinnedMessages.any(
@@ -134,7 +141,8 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final showPanel = widget.visible && widget.maxHeight > 0.0;
-    final showLoading = showPanel && !widget.pinnedMessagesLoaded;
+    final showLoading =
+        showPanel && widget.pinnedMessagesStatus.showsPanelLoading;
     final panelBody = LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth <= 0) {
@@ -144,6 +152,27 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
           return Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [AxiProgressIndicator(color: colors.mutedForeground)],
+          );
+        }
+        if (widget.pinnedMessagesStatus.canRetry) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                l10n.chatPinnedLoadFailure,
+                textAlign: TextAlign.center,
+                style: context.textTheme.muted.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              ),
+              SizedBox(height: spacing.s),
+              AxiButton.secondary(
+                onPressed: () => context.read<ChatBloc>().add(
+                  const ChatPinnedMessagesRetryRequested(),
+                ),
+                child: Text(l10n.commonRetry),
+              ),
+            ],
           );
         }
         final visiblePinnedMessages = widget.pinnedMessages
@@ -189,7 +218,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               onCopyCriticalPathToPersonalCalendar:
                   widget.onCopyCriticalPathToPersonalCalendar,
               locate: widget.locate,
-              isHydrating: widget.pinnedMessagesHydrating,
+              isHydrating: widget.pinnedMessagesStatus.isHydrating,
               accountJid: widget.accountJid,
               metadataFor: widget.metadataFor,
               metadataPendingFor: widget.metadataPendingFor,
@@ -1155,14 +1184,6 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
             isSelf: isSelf,
           );
-    if (unpinAction != null) {
-      if (contentChildren.isNotEmpty) {
-        contentChildren.add(SizedBox(height: spacing.s));
-      }
-      contentChildren.add(
-        Align(alignment: Alignment.centerRight, child: unpinAction),
-      );
-    }
     final bubble = ChatBubbleSurface(
       isSelf: isSelf,
       backgroundColor: bubbleColor,
@@ -1201,7 +1222,13 @@ class _PinnedMessageTile extends StatelessWidget {
         child: bubble,
       ),
     );
-    final previewMaxWidth = context.sizing.dialogMaxWidth;
+    final trailingActionWidth = unpinAction == null
+        ? 0.0
+        : context.sizing.menuItemHeight + spacing.s;
+    final previewMaxWidth = math.max(
+      0.0,
+      context.sizing.dialogMaxWidth - trailingActionWidth,
+    );
     final compactReactionMinimumBubbleWidth = showCompactReactions
         ? math.min(
             previewMaxWidth,
@@ -1248,6 +1275,17 @@ class _PinnedMessageTile extends StatelessWidget {
         ],
       ],
     );
+    final tileContent = unpinAction == null
+        ? bubbleColumn
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(child: bubbleColumn),
+              SizedBox(width: spacing.s),
+              unpinAction,
+            ],
+          );
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: spacing.m,
@@ -1257,7 +1295,7 @@ class _PinnedMessageTile extends StatelessWidget {
         alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
-          child: bubbleColumn,
+          child: tileContent,
         ),
       ),
     );

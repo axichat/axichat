@@ -896,7 +896,6 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
             onRecipientAdded: widget.onRecipientAdded,
             onRecipientRemoved: widget.onRecipientRemoved,
             visibilityLabel: widget.visibilityLabel,
-            tapRegionGroup: widget.tapRegionGroup,
           );
         },
       ),
@@ -1221,6 +1220,56 @@ class _RoomJoinFailureComposerBanner extends StatelessWidget {
   }
 }
 
+class _PinnedMessageComposerBanner extends StatelessWidget {
+  const _PinnedMessageComposerBanner({super.key, required this.onHide});
+
+  final VoidCallback onHide;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final textTheme = context.textTheme;
+    return _ComposerAttachedBannerSurface(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _ComposerBannerLeading(
+            child: Icon(
+              LucideIcons.pin,
+              size: context.sizing.menuItemIconSize,
+              color: colors.primary,
+            ),
+          ),
+          SizedBox(width: spacing.s),
+          Expanded(
+            child: Text(
+              l10n.chatPinnedNoticeBanner,
+              style: textTheme.p.copyWith(
+                color: colors.foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          _ComposerBannerTrailing(
+            child: AxiIconButton.ghost(
+              iconData: LucideIcons.x,
+              tooltip: l10n.commonHide,
+              onPressed: onHide,
+              color: colors.mutedForeground,
+              backgroundColor: Colors.transparent,
+              iconSize: context.sizing.menuItemIconSize,
+              buttonSize: context.sizing.menuItemHeight,
+              tapTargetSize: context.sizing.menuItemHeight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ComposerAttachedBannerSurface extends StatelessWidget {
   const _ComposerAttachedBannerSurface({
     super.key,
@@ -1499,6 +1548,8 @@ class _ComposerNotices extends StatelessWidget {
   const _ComposerNotices({
     required this.composerError,
     required this.onComposerErrorCleared,
+    required this.showPinnedMessageBanner,
+    required this.onPinnedMessageBannerHidden,
     required this.showAttachmentWarning,
     required this.retryReport,
     required this.retryShareId,
@@ -1507,6 +1558,8 @@ class _ComposerNotices extends StatelessWidget {
 
   final String? composerError;
   final VoidCallback? onComposerErrorCleared;
+  final bool showPinnedMessageBanner;
+  final VoidCallback onPinnedMessageBannerHidden;
   final bool showAttachmentWarning;
   final FanOutSendReport? retryReport;
   final String? retryShareId;
@@ -1523,6 +1576,14 @@ class _ComposerNotices extends StatelessWidget {
           type: _ComposerNoticeType.error,
           message: composerError,
           onDismiss: onComposerErrorCleared,
+        ),
+      );
+    }
+    if (showPinnedMessageBanner) {
+      notices.add(
+        _PinnedMessageComposerBanner(
+          key: const ValueKey<String>('composer-pinned-message-notice'),
+          onHide: onPinnedMessageBannerHidden,
         ),
       );
     }

@@ -1,3 +1,4 @@
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -104,6 +105,100 @@ void main() {
         message.resolveForwardedOriginalSenderLabel(),
         'original@example.com',
       );
+    });
+  });
+
+  group('Message.canSendXmppReaction', () {
+    test('allows normal XMPP messages in XMPP chats', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: directSenderJid,
+        chatJid: directChatJid,
+      );
+
+      expect(
+        message.canSendXmppReaction(
+          chatDefaultTransport: MessageTransport.xmpp,
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects normal messages in native email chats', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: directSenderJid,
+        chatJid: directChatJid,
+      );
+
+      expect(
+        message.canSendXmppReaction(
+          chatDefaultTransport: MessageTransport.email,
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects email-backed messages in mixed XMPP chats', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: directSenderJid,
+        chatJid: directChatJid,
+        deltaMsgId: 1,
+      );
+
+      expect(
+        message.canSendXmppReaction(
+          chatDefaultTransport: MessageTransport.xmpp,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('Message.pinReference', () {
+    test('uses stanza id for direct XMPP messages', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        originID: 'origin-id',
+        senderJid: directSenderJid,
+        chatJid: directChatJid,
+      );
+
+      final reference = message.pinReference(isGroupChat: false);
+
+      expect(reference?.kind, MessageReferenceKind.stanzaId);
+      expect(reference?.value, stanzaId);
+    });
+
+    test('uses room stanza id for groupchat messages', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        originID: 'origin-id',
+        mucStanzaId: 'muc-stanza-id',
+        senderJid: groupSenderJid,
+        chatJid: groupChatBareJid,
+      );
+
+      final reference = message.pinReference(isGroupChat: true);
+
+      expect(reference?.kind, MessageReferenceKind.mucStanzaId);
+      expect(reference?.value, 'muc-stanza-id');
+    });
+
+    test('uses stanza id for email-backed messages', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        originID: 'origin-id',
+        senderJid: directSenderJid,
+        chatJid: directChatJid,
+        deltaMsgId: 1,
+      );
+
+      final reference = message.pinReference(isGroupChat: false);
+
+      expect(reference?.kind, MessageReferenceKind.stanzaId);
+      expect(reference?.value, stanzaId);
     });
   });
 

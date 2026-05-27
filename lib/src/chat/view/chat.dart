@@ -243,6 +243,8 @@ BorderRadius _bubbleBorderRadius({
 
 enum _InlineComposerCloseAction { save, discard, cancel }
 
+enum _ComposerSendAction { saveDraft, sendAsEmail }
+
 class Chat extends StatefulWidget {
   const Chat({
     super.key,
@@ -454,24 +456,33 @@ class _ChatState extends State<Chat> {
 
   void _resetRecipientsForChat(chat_models.Chat? chat) {
     final jid = chat?.jid;
-    if (jid == _recipientsChatJid) {
-      return;
-    }
-    _recipientsChatJid = jid;
-    if (chat == null) {
-      _recipients = const [];
-    } else {
-      _recipients = [
-        ComposerRecipient(
-          target: Contact.chat(
+    final pinnedTarget = chat == null
+        ? null
+        : Contact.chat(
             chat: chat,
             shareSignatureEnabled:
                 chat.shareSignatureEnabled ??
                 context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
-          ),
-          included: true,
-          pinned: true,
-        ),
+          );
+    if (jid == _recipientsChatJid) {
+      if (pinnedTarget == null) {
+        return;
+      }
+      _recipients = [
+        for (final recipient in _recipients)
+          recipient.isPinned ? recipient.withTarget(pinnedTarget) : recipient,
+      ];
+      if (!mounted) return;
+      setState(() {});
+      _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
+      return;
+    }
+    _recipientsChatJid = jid;
+    if (pinnedTarget == null) {
+      _recipients = const [];
+    } else {
+      _recipients = [
+        ComposerRecipient(target: pinnedTarget, included: true, pinned: true),
       ];
     }
     if (!mounted) return;
@@ -547,7 +558,10 @@ class _ChatState extends State<Chat> {
     if (!supportsEmail && !supportsXmpp) {
       return null;
     }
-    final hinted = hintTransportForAddress(address);
+    final hinted = hintTransportForAddress(
+      address,
+      xmppDomainHints: {endpointConfig.domain},
+    );
     if (hinted != null) {
       return hinted;
     }
@@ -1300,8 +1314,7 @@ class _ChatState extends State<Chat> {
   }
 
   bool _usesBubbleReadThreshold(ChatState state) {
-    if ((state.chat?.isEmailBacked ?? false) ||
-        (state.chat?.defaultTransport.isEmail ?? false)) {
+    if (state.chat?.defaultTransport.isEmail ?? false) {
       return true;
     }
     return state.items.any((message) => message.isEmailBacked);
@@ -2464,6 +2477,18 @@ class _ChatState extends State<Chat> {
       colors.foreground,
       baseStyle: surfaceDetailStyle,
     );
+    final openPgpDetail =
+        timelineMessageItem.messageModel.encryptionProtocol.isOpenPgp
+        ? iconDetailSpan(LucideIcons.lock, textColor, baseStyle: detailStyle)
+        : null;
+    final surfaceOpenPgpDetail =
+        timelineMessageItem.messageModel.encryptionProtocol.isOpenPgp
+        ? iconDetailSpan(
+            LucideIcons.lock,
+            colors.foreground,
+            baseStyle: surfaceDetailStyle,
+          )
+        : null;
     final trusted = timelineMessageItem.trusted;
     final verification = trusted == null
         ? null
@@ -2502,6 +2527,7 @@ class _ChatState extends State<Chat> {
     final messageDetails = <InlineSpan>[
       time,
       transportDetail,
+      ?openPgpDetail,
       ?pinnedDetail,
       ?importantDetail,
       ?verification,
@@ -2513,6 +2539,7 @@ class _ChatState extends State<Chat> {
     final surfaceDetails = <InlineSpan>[
       surfaceTime,
       surfaceTransportDetail,
+      ?surfaceOpenPgpDetail,
       ?surfacePinnedDetail,
       ?surfaceImportantDetail,
       ?surfaceVerification,
@@ -2571,14 +2598,21 @@ class _ChatState extends State<Chat> {
     final recipientCutoutParticipants = timelineMessageItem.shareParticipants;
     final attachmentIds = timelineMessageItem.attachmentIds;
     final showReplyStrip = isEmailMessage && replyParticipants.isNotEmpty;
-    final canReact = !isEmailChat;
+    final chatDefaultTransport = isEmailChat
+        ? MessageTransport.email
+        : MessageTransport.xmpp;
+    final messageUsesEmailBackedProtocol =
+        isEmailChat || messageModel.isEmailBacked;
+    final canReact = messageModel.canSendXmppReaction(
+      chatDefaultTransport: chatDefaultTransport,
+    );
     final requiresMucReference = messageModel.awaitsMucReference(
       isGroupChat: isGroupChat,
-      isEmailBacked: isEmailChat,
+      isEmailBacked: messageUsesEmailBackedProtocol,
     );
     final loadingMucReference = messageModel.waitsForOwnMucReference(
       isGroupChat: isGroupChat,
-      isEmailBacked: isEmailChat,
+      isEmailBacked: messageUsesEmailBackedProtocol,
       selfJid: selfXmppJid,
       myOccupantJid: myOccupantJid,
     );
@@ -3233,10 +3267,14 @@ class _ChatState extends State<Chat> {
   }
 
   bool _hasEmailAttachmentTarget({
+    required ChatState chatState,
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
   }) {
-    if (chat.defaultTransport.isEmail || chat.isEmailBacked) {
+    if (chatState.canOfferEmailOutboundOverride) {
+      return true;
+    }
+    if (chat.defaultTransport.isEmail) {
       return true;
     }
     return recipients.hasEmailRecipients(allowHint: true);
@@ -3248,10 +3286,19 @@ class _ChatState extends State<Chat> {
   bool _isEmailComposerActive({
     required ChatState chatState,
     List<ComposerRecipient>? recipients,
+    MessageTransport? oneShotTransportOverride,
   }) {
-    if ((chatState.chat?.isEmailBacked ?? false) ||
-        (chatState.chat?.defaultTransport.isEmail ?? false)) {
-      return true;
+    final chat = chatState.chat;
+    if (chat != null) {
+      final activeTransport = chatState.canOfferEmailOutboundOverride
+          ? chatState.activeTransportForSend(
+              chat,
+              oneShotOverride: oneShotTransportOverride,
+            )
+          : chat.defaultTransport;
+      if (activeTransport.isEmail) {
+        return true;
+      }
     }
     return _hasEmailRecipient(recipients ?? _recipients);
   }
@@ -3281,7 +3328,7 @@ class _ChatState extends State<Chat> {
     SettingsState? settings,
   }) {
     final settingsState = settings ?? context.read<SettingsCubit>().state;
-    final isEmailComposer = _isEmailComposerActive(chatState: chatState);
+    final isEmailComposer = chatState.chat?.defaultTransport.isEmail ?? false;
     final watermarkEnabled =
         chatState.chat?.emailComposerWatermarkEnabled ??
         settingsState.emailComposerWatermarkEnabled;
@@ -3316,7 +3363,7 @@ class _ChatState extends State<Chat> {
     final watermarkLabel = _emailComposerWatermarkLabel();
     final watermarkSuffix = _emailComposerWatermarkSuffix();
     final legacyWatermarkSuffix = _legacyEmailComposerWatermarkSuffix();
-    final isEmailComposer = _isEmailComposerActive(chatState: chatState);
+    final isEmailComposer = chatState.chat?.defaultTransport.isEmail ?? false;
     final watermarkEnabled =
         chatState.chat?.emailComposerWatermarkEnabled ??
         settingsState.emailComposerWatermarkEnabled;
@@ -3447,7 +3494,7 @@ class _ChatState extends State<Chat> {
     if (entries.isEmpty) {
       return null;
     }
-    if (chat.isEmailBacked) {
+    if (chat.defaultTransport.isEmail) {
       final String? normalizedCandidate = normalizedAddressValue(
         chat.antiAbuseTargetAddress,
       );
@@ -3481,7 +3528,7 @@ class _ChatState extends State<Chat> {
   }
 
   String? _resolveChatBlockAddress({required chat_models.Chat chat}) {
-    if (chat.isEmailBacked) {
+    if (chat.defaultTransport.isEmail) {
       final candidate = chat.antiAbuseTargetAddress.trim();
       if (candidate.isEmpty) {
         return null;
@@ -3715,6 +3762,7 @@ class _ChatState extends State<Chat> {
   Future<void> _handleSendMessage({
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
+    MessageTransport? oneShotTransportOverride,
   }) async {
     final l10n = context.l10n;
     final initialComposerClearId = context
@@ -3760,6 +3808,11 @@ class _ChatState extends State<Chat> {
     if (chat == null) {
       return;
     }
+    final resolvedTransportOverride =
+        oneShotTransportOverride ??
+        (chatState.usesSavedEmailTransportOverride
+            ? MessageTransport.email
+            : null);
     final shouldSend = await _confirmEmailSendIfNeeded(
       chatState: chatState,
       chat: chat,
@@ -3767,6 +3820,7 @@ class _ChatState extends State<Chat> {
       attachmentNames: queuedAttachments
           .map((pending) => pending.attachment.fileName)
           .toList(growable: false),
+      oneShotTransportOverride: resolvedTransportOverride,
     );
     if (!shouldSend || !mounted) {
       return;
@@ -3794,6 +3848,7 @@ class _ChatState extends State<Chat> {
         calendarTaskIcs: _pendingCalendarTaskIcs,
         calendarTaskIcsReadOnly: _pendingCalendarTaskIcsReadOnly,
         calendarTaskShareText: calendarTaskShareText,
+        oneShotTransportOverride: resolvedTransportOverride,
         completer: completer,
       ),
     );
@@ -3815,10 +3870,12 @@ class _ChatState extends State<Chat> {
     required chat_models.Chat chat,
     required String body,
     required List<String> attachmentNames,
+    MessageTransport? oneShotTransportOverride,
   }) async {
     if (!_isEmailComposerActive(
       chatState: chatState,
       recipients: _recipients,
+      oneShotTransportOverride: oneShotTransportOverride,
     )) {
       return true;
     }
@@ -3850,18 +3907,56 @@ class _ChatState extends State<Chat> {
     return true;
   }
 
-  Future<void> _handleSendButtonLongPress() async {
+  Future<void> _handleSendButtonLongPress({
+    required ChatState chatState,
+    required ChatSettingsSnapshot settingsSnapshot,
+    required bool canSend,
+  }) async {
     if (widget.readOnly) return;
-    final approved = await confirm(
-      context,
-      title: context.l10n.commonActions,
-      message: '',
-      confirmLabel: context.l10n.chatSaveAsDraft,
-      cancelLabel: context.l10n.commonCancel,
-      destructiveConfirm: false,
+    final action = await showAdaptiveBottomSheet<_ComposerSendAction>(
+      context: context,
+      preferDialogOnMobile: true,
+      requestFocus: false,
+      surfacePadding: EdgeInsets.zero,
+      builder: (dialogContext) {
+        return AxiSheetScaffold.scroll(
+          header: AxiSheetHeader(
+            title: Text(dialogContext.l10n.commonActions),
+            onClose: () => Navigator.of(dialogContext).maybePop(),
+          ),
+          children: [
+            AxiListButton(
+              leading: const Icon(LucideIcons.save),
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(_ComposerSendAction.saveDraft),
+              child: Text(dialogContext.l10n.chatSaveAsDraft),
+            ),
+            if (canSend && chatState.canOfferEmailOutboundOverride)
+              AxiListButton(
+                leading: const Icon(LucideIcons.mail),
+                onPressed: () => Navigator.of(
+                  dialogContext,
+                ).pop(_ComposerSendAction.sendAsEmail),
+                child: Text(dialogContext.l10n.chatSendAsEmail),
+              ),
+          ],
+        );
+      },
     );
-    if (!mounted || approved != true) return;
-    await _saveComposerAsDraft();
+    if (!mounted) return;
+    _inlineComposerController.requestTextFocus();
+    if (action == null) return;
+    switch (action) {
+      case _ComposerSendAction.saveDraft:
+        await _saveComposerAsDraft();
+      case _ComposerSendAction.sendAsEmail:
+        await _handleSendMessage(
+          chatState: chatState,
+          settingsSnapshot: settingsSnapshot,
+          oneShotTransportOverride: MessageTransport.email,
+        );
+    }
   }
 
   Future<bool> _saveComposerAsDraft() async {
@@ -4182,7 +4277,8 @@ class _ChatState extends State<Chat> {
     final activeRecipients = _recipients.includedRecipients;
     final emailRecipientsUnavailable =
         !settings.endpointConfig.smtpEnabled &&
-        activeRecipients.emailRecipients().isNotEmpty;
+        (chatState.usesSavedEmailTransportOverride ||
+            activeRecipients.emailRecipients().isNotEmpty);
     if (emailRecipientsUnavailable) {
       return context.l10n.chatComposerEmailRecipientUnavailable;
     }
@@ -4274,15 +4370,17 @@ class _ChatState extends State<Chat> {
   }
 
   Future<bool> _handleInlineComposerCloseRequest(ChatState chatState) async {
-    if (!_hasInlineComposerDraftContent(chatState)) {
-      await _deleteEmptyInlineDraftIfNeeded(chatState);
-      return true;
-    }
     final savedSignature = _lastSavedInlineDraftSignature;
     if (savedSignature != null &&
         savedSignature == _currentInlineDraftSignature(chatState)) {
       _resetInlineComposer(clearInlineComposerDraftId: true);
       return true;
+    }
+    if (!_hasInlineComposerDraftContent(chatState)) {
+      if (savedSignature == null) {
+        _resetInlineComposer(clearInlineComposerDraftId: true);
+        return true;
+      }
     }
     final action = await _confirmInlineComposerClose();
     if (!mounted ||
@@ -4291,30 +4389,11 @@ class _ChatState extends State<Chat> {
       return false;
     }
     if (action == _InlineComposerCloseAction.discard) {
-      await _discardInlineComposer();
+      _resetInlineComposer(clearInlineComposerDraftId: true);
       return true;
     }
     _resetInlineComposer(clearInlineComposerDraftId: true);
     return true;
-  }
-
-  Future<void> _deleteEmptyInlineDraftIfNeeded(ChatState chatState) async {
-    final draftId = _inlineComposerDraftId;
-    if (draftId == null || _hasInlineComposerDraftContent(chatState)) {
-      return;
-    }
-    try {
-      await context.read<DraftCubit>().deleteDraft(id: draftId);
-    } on Exception {
-      return;
-    }
-    if (!mounted || _inlineComposerDraftId != draftId) {
-      return;
-    }
-    setState(() {
-      _inlineComposerDraftId = null;
-      _lastSavedInlineDraftSignature = null;
-    });
   }
 
   Future<void> _discardInlineComposer() async {
@@ -4468,7 +4547,13 @@ class _ChatState extends State<Chat> {
               chatState: chatState,
               settingsSnapshot: settingsSnapshot,
             ),
-            onLongPress: widget.readOnly ? null : _handleSendButtonLongPress,
+            onLongPress: widget.readOnly
+                ? null
+                : () => _handleSendButtonLongPress(
+                    chatState: chatState,
+                    settingsSnapshot: settingsSnapshot,
+                    canSend: canSend,
+                  ),
           ),
         ),
       ),
@@ -5467,722 +5552,756 @@ class _ChatState extends State<Chat> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ChatSearchCubit, ChatSearchState>(
-      builder: (context, searchState) {
-        final trimmedQuery = searchState.query.trim();
-        final hasSubjectFilter = searchState.subjectFilter?.isNotEmpty == true;
-        final searchFiltering =
-            searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
-        final searchResults = searchState.results;
-        final profileJid = context.watch<ProfileCubit>().state.jid;
-        final trimmedProfileJid = profileJid.trim();
-        final String? selfJid = trimmedProfileJid.isNotEmpty
-            ? trimmedProfileJid
-            : null;
-        final selfIdentity = SelfAvatar(
-          jid: selfJid,
-          avatar: Avatar.tryParseOrNull(
-            path: context.watch<ProfileCubit>().state.avatarPath,
-            hash: null,
-          ),
-          hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
-        );
-        final showToast = ShadToaster.maybeOf(context)?.show;
-        return MultiBlocListener(
-          listeners: [
-            BlocListener<SettingsCubit, SettingsState>(
-              listenWhen: (previous, current) =>
-                  previous.language != current.language ||
-                  previous.chatReadReceipts != current.chatReadReceipts ||
-                  previous.emailReadReceipts != current.emailReadReceipts ||
-                  previous.autoDownloadImages != current.autoDownloadImages ||
-                  previous.autoDownloadVideos != current.autoDownloadVideos ||
-                  previous.autoDownloadDocuments !=
-                      current.autoDownloadDocuments ||
-                  previous.autoDownloadArchives !=
-                      current.autoDownloadArchives ||
-                  previous.shareTokenSignatureEnabled !=
-                      current.shareTokenSignatureEnabled ||
-                  previous.emailComposerWatermarkEnabled !=
-                      current.emailComposerWatermarkEnabled,
-              listener: (context, settings) {
-                context.read<ChatBloc>().add(
-                  ChatSettingsUpdated(_settingsSnapshotFromState(settings)),
-                );
-                _syncEmailComposerWatermark(
-                  chatState: context.read<ChatBloc>().state,
-                  settings: settings,
-                );
-              },
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: BlocBuilder<ChatSearchCubit, ChatSearchState>(
+        builder: (context, searchState) {
+          final trimmedQuery = searchState.query.trim();
+          final hasSubjectFilter =
+              searchState.subjectFilter?.isNotEmpty == true;
+          final searchFiltering =
+              searchState.active &&
+              (trimmedQuery.isNotEmpty || hasSubjectFilter);
+          final searchResults = searchState.results;
+          final profileJid = context.watch<ProfileCubit>().state.jid;
+          final trimmedProfileJid = profileJid.trim();
+          final String? selfJid = trimmedProfileJid.isNotEmpty
+              ? trimmedProfileJid
+              : null;
+          final selfIdentity = SelfAvatar(
+            jid: selfJid,
+            avatar: Avatar.tryParseOrNull(
+              path: context.watch<ProfileCubit>().state.avatarPath,
+              hash: null,
             ),
-            BlocListener<SettingsCubit, SettingsState>(
-              listenWhen: (previous, current) =>
-                  previous.endpointConfig != current.endpointConfig,
-              listener: (context, settings) async {
-                final emailService = settings.endpointConfig.smtpEnabled
-                    ? context.read<EmailService>()
-                    : null;
-                context.read<ChatBloc>().add(
-                  ChatEmailServiceUpdated(emailService),
-                );
-                await context.read<ChatSearchCubit>().updateEmailService(
-                  emailService,
-                );
-              },
-            ),
-            BlocListener<ChatSearchCubit, ChatSearchState>(
-              listenWhen: (previous, current) =>
-                  previous.active != current.active ||
-                  !identical(previous.results, current.results),
-              listener: (context, searchState) {
-                if (!mounted) return;
-                _syncSelectionCaches(
-                  context.read<ChatBloc>().state,
-                  extraMessages: searchState.active
-                      ? searchState.results
-                      : const [],
-                );
-                if (searchState.active) {
+            hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
+          );
+          final showToast = ShadToaster.maybeOf(context)?.show;
+          return MultiBlocListener(
+            listeners: [
+              BlocListener<SettingsCubit, SettingsState>(
+                listenWhen: (previous, current) =>
+                    previous.language != current.language ||
+                    previous.chatReadReceipts != current.chatReadReceipts ||
+                    previous.emailReadReceipts != current.emailReadReceipts ||
+                    previous.autoDownloadImages != current.autoDownloadImages ||
+                    previous.autoDownloadVideos != current.autoDownloadVideos ||
+                    previous.autoDownloadDocuments !=
+                        current.autoDownloadDocuments ||
+                    previous.autoDownloadArchives !=
+                        current.autoDownloadArchives ||
+                    previous.shareTokenSignatureEnabled !=
+                        current.shareTokenSignatureEnabled ||
+                    previous.emailComposerWatermarkEnabled !=
+                        current.emailComposerWatermarkEnabled,
+                listener: (context, settings) {
                   context.read<ChatBloc>().add(
-                    ChatRenderedMessagesHydrationRequested(
-                      searchState.results,
-                    ),
+                    ChatSettingsUpdated(_settingsSnapshotFromState(settings)),
                   );
-                  _openChatSearch();
-                  return;
-                }
-                if (_chatRoute.isSearch) {
-                  _returnToMainRoute();
-                }
-              },
-            ),
-            BlocListener<CalendarBloc, CalendarState>(
-              listenWhen: (previous, current) =>
-                  previous.isLoading != current.isLoading,
-              listener: _handleCalendarImportStateChanged,
-            ),
-            BlocListener<ChatsCubit, ChatsState>(
-              listenWhen: (previous, current) =>
-                  previous.openChatRoute != current.openChatRoute,
-              listener: (context, chatsState) {
-                if (!widget.syncWithOpenChatRoute) {
-                  return;
-                }
-                if (!mounted) return;
-                final storedRoute = chatsState.openChatRoute;
-                if (_chatRoute == storedRoute) return;
-                final nextRoute = _resolvedStoredChatRoute(
-                  route: storedRoute,
-                  state: context.read<ChatBloc>().state,
-                );
-                if (nextRoute == _chatRoute) {
-                  if (nextRoute != storedRoute) {
-                    context.read<ChatsCubit>().setOpenChatRoute(
-                      route: nextRoute,
-                    );
-                  }
-                  return;
-                }
-                _setChatRoute(nextRoute);
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.toastId != current.toastId && current.toast != null,
-              listener: (context, state) {
-                final toast = state.toast;
-                final show = showToast;
-                if (toast == null || show == null) return;
-                final l10n = context.l10n;
-                const actionLabel = null;
-                const VoidCallback? onAction = null;
-                final toastTitle =
-                    toast.title ??
-                    switch (toast.variant) {
-                      ChatToastVariant.destructive => l10n.toastWhoopsTitle,
-                      ChatToastVariant.warning => l10n.toastHeadsUpTitle,
-                      ChatToastVariant.info => l10n.toastAllSetTitle,
-                    };
-                final toastMessage =
-                    toast.messageText ??
-                    toast.message?.label(
-                      l10n,
-                      moderationAction: toast.messageActionLabel,
-                      moderationTarget: toast.messageTargetLabel,
-                    );
-                final toastWidget = switch (toast.variant) {
-                  ChatToastVariant.destructive => FeedbackToast.error(
-                    title: toastTitle,
-                    message: toastMessage,
-                    actionLabel: actionLabel,
-                    onAction: onAction,
-                  ),
-                  ChatToastVariant.warning => FeedbackToast.warning(
-                    title: toastTitle,
-                    message: toastMessage,
-                    actionLabel: actionLabel,
-                    onAction: onAction,
-                  ),
-                  ChatToastVariant.info => FeedbackToast.success(
-                    title: toastTitle,
-                    message: toastMessage,
-                    actionLabel: actionLabel,
-                    onAction: onAction,
-                  ),
-                };
-                show(toastWidget);
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.pendingForwardDraft != current.pendingForwardDraft &&
-                  current.pendingForwardDraft != null,
-              listener: (context, state) {
-                final draft = state.pendingForwardDraft;
-                if (draft == null) {
-                  return;
-                }
-                openComposeDraft(
-                  context,
-                  jids: const [''],
-                  subject: _forwardDraftSubject(context.l10n, draft),
-                  forwardedBlocks: draft.forwardedBlocks,
-                  forwardedSourceAttachmentMetadataIds:
-                      draft.attachmentMetadataIds,
-                );
-                _clearMultiSelection();
-                context.read<ChatBloc>().add(const ChatForwardDraftConsumed());
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.openChatRequestId != current.openChatRequestId,
-              listener: (context, state) {
-                final targetJid = state.openChatJid;
-                if (targetJid == null || targetJid.trim().isEmpty) {
-                  return;
-                }
-                context.read<ChatsCubit>().openChat(jid: targetJid);
-              },
-            ),
-            BlocListener<ChatsCubit, ChatsState>(
-              listenWhen: (previous, current) =>
-                  previous.pendingOpenMessageRequestId !=
-                      current.pendingOpenMessageRequestId ||
-                  previous.pendingOpenMessageReferenceId !=
-                      current.pendingOpenMessageReferenceId ||
-                  previous.pendingOpenMessageChatJid !=
-                      current.pendingOpenMessageChatJid,
-              listener: (context, state) {
-                _consumePendingOpenMessageSelection(state);
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.chat?.jid != current.chat?.jid,
-              listener: (context, _) {
-                _consumePendingOpenMessageSelection(
-                  context.read<ChatsCubit>().state,
-                );
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.scrollTargetRequestId !=
-                      current.scrollTargetRequestId &&
-                  current.scrollTargetMessageId != null,
-              listener: (_, state) {
-                final messageId = state.scrollTargetMessageId;
-                if (messageId == null || messageId.trim().isEmpty) {
-                  return;
-                }
-                unawaited(_handleScrollTargetRequest(messageId));
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.chat?.jid != current.chat?.jid,
-              listener: (_, state) {
-                _animatedMessageIds.clear();
-                _hydratedAnimatedMessages = false;
-                _clearInlineComposerControllers();
-                _clearInlineComposerState(clearInlineComposerDraftId: true);
-                _resetRecipientsForChat(state.chat);
-                _syncEmailComposerWatermark(chatState: state);
-                _queueShareComposerSeedConsumption();
-                if (state.messagesLoaded) {
-                  _hydrateAnimatedMessages(state.items);
-                }
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.chat?.jid != current.chat?.jid,
-              listener: (_, state) {
-                final chat = state.chat;
-                if (chat == null) {
-                  return;
-                }
-                unawaited(_loadDemoPendingAttachments(chat));
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.focused?.stanzaID != current.focused?.stanzaID ||
-                  previous.chat?.jid != current.chat?.jid,
-              listener: (_, state) {
-                final nextRoute = _resolvedStoredChatRoute(
-                  route: _chatRoute,
-                  state: state,
-                );
-                if (nextRoute == _chatRoute) {
-                  return;
-                }
-                _setChatRoute(nextRoute);
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  !_hydratedAnimatedMessages &&
-                  current.messagesLoaded &&
-                  (previous.items != current.items ||
-                      previous.messagesLoaded != current.messagesLoaded),
-              listener: (_, state) => _hydrateAnimatedMessages(state.items),
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.items != current.items ||
-                  previous.quotedMessagesById != current.quotedMessagesById,
-              listener: (context, state) {
-                final searchState = context.read<ChatSearchCubit>().state;
-                _syncSelectionCaches(
-                  state,
-                  extraMessages: searchState.active
-                      ? searchState.results
-                      : const [],
-                );
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
-                  previous.chat?.jid != current.chat?.jid ||
-                  previous.items != current.items ||
-                  previous.messagesLoaded != current.messagesLoaded,
-              listener: (_, _) => _scheduleReadThresholdSync(),
-            ),
-          ],
-          child: BlocConsumer<ChatBloc, ChatState>(
-            listenWhen: (previous, current) {
-              if (current.composerHydrationId == 0) return false;
-              return previous.composerHydrationId !=
-                  current.composerHydrationId;
-            },
-            listener: (context, state) {
-              final text = state.composerHydrationText ?? '';
-              final subject = state.chat?.supportsEmail == true
-                  ? (state.emailSubject ?? '')
-                  : _emptyText;
-              _subjectChangeSuppressed = true;
-              _inlineComposerController.setSubjectText(subject);
-              _lastSubjectValue = subject;
-              _subjectChangeSuppressed = false;
-              _inlineComposerController.setTextValue(
-                TextEditingValue(
-                  text: text,
-                  selection: TextSelection.collapsed(offset: text.length),
-                  composing: TextRange.empty,
-                ),
-              );
-              _composerHasText =
-                  _isEmailComposerWatermarkOnly(text: text, chatState: state)
-                  ? false
-                  : text.trim().isNotEmpty;
-              final calendarTaskIcsMessage =
-                  state.composerHydrationCalendarTaskIcsMessage;
-              _pendingCalendarTaskIcs = calendarTaskIcsMessage?.task;
-              _pendingCalendarTaskIcsReadOnly =
-                  calendarTaskIcsMessage?.readOnly ??
-                  _calendarTaskIcsReadOnlyFallback;
-              _pendingCalendarSeedText = calendarTaskIcsMessage?.task
-                  .toShareText(context.l10n)
-                  .trim();
-              _syncEmailComposerWatermark(chatState: state, forceInsert: true);
-              if (!_inlineComposerController.hasTextFocus) {
-                _inlineComposerController.requestTextFocus();
-              }
-            },
-            builder: (context, state) {
-              ProfileState? profileState() =>
-                  context.watch<ProfileCubit>().state;
-              ChatsState? chatsState() => context.watch<ChatsCubit>().state;
-              final chatsCubitState = chatsState();
-              final readOnly = widget.readOnly;
-              final emailSelfJid = state.emailSelfJid;
-              final String? resolvedEmailSelfJid = emailSelfJid
-                  .resolveDeltaPlaceholderJid();
-              final chatEntity = state.chat;
-              final resolvedDirectChatDisplayName =
-                  _resolvedDirectChatDisplayName(
-                    chat: chatEntity,
-                    chatsState: chatsCubitState,
+                  _syncEmailComposerWatermark(
+                    chatState: context.read<ChatBloc>().state,
+                    settings: settings,
                   );
-              final isWelcomeChat = chatEntity?.isAxichatWelcomeThread == true;
-              final List<BlocklistEntry> blocklistEntries =
-                  _resolveBlocklistEntries(context);
-              final BlocklistEntry? chatBlocklistEntry = chatEntity == null
-                  ? null
-                  : _resolveChatBlocklistEntry(
-                      chat: chatEntity,
-                      entries: blocklistEntries,
-                    );
-              final bool isChatBlocked = chatBlocklistEntry != null;
-              final String? blockAddress = chatEntity == null
-                  ? null
-                  : _resolveChatBlockAddress(chat: chatEntity);
-              final bool attachmentsBlockedForChat =
-                  isChatBlocked || (chatEntity?.spam ?? false);
-              final jid = chatEntity?.jid;
-              final isDefaultEmail =
-                  chatEntity?.defaultTransport.isEmail ?? false;
-              final isGroupChat = chatEntity?.type == ChatType.groupChat;
-              final currentUserId = isDefaultEmail
-                  ? (resolvedEmailSelfJid ?? profileState()?.jid ?? '')
-                  : (profileState()?.jid ?? resolvedEmailSelfJid ?? '');
-              final String? trimmedProfileJid = profileState()?.jid.trim();
-              final String? selfXmppJid = trimmedProfileJid?.isNotEmpty == true
-                  ? trimmedProfileJid
-                  : null;
-              final String? accountJidForPins = isDefaultEmail
-                  ? (resolvedEmailSelfJid ?? selfXmppJid)
-                  : (selfXmppJid ?? resolvedEmailSelfJid);
-              final String? normalizedXmppSelfJid = normalizedAddressKey(
-                selfXmppJid,
-              );
-              final String? normalizedEmailSelfJid = normalizedAddressKey(
-                resolvedEmailSelfJid,
-              );
-              final String? normalizedChatJid = normalizedAddressKey(
-                chatEntity?.remoteJid,
-              );
-              final bool isSelfChat =
-                  normalizedChatJid != null &&
-                  ((normalizedXmppSelfJid != null &&
-                          normalizedChatJid == normalizedXmppSelfJid) ||
-                      (normalizedEmailSelfJid != null &&
-                          normalizedChatJid == normalizedEmailSelfJid));
-              final String? selfAvatarPath = profileState()?.avatarPath?.trim();
-              final myOccupantJid = state.roomState?.myOccupantJid;
-              final myOccupant = state.roomState?.selfOccupant;
-              final selfNick = (myOccupant?.nick ?? chatEntity?.myNickname)
-                  ?.trim();
-              final trimmedCurrentUserId = currentUserId.trim();
-              final String? availabilityActorId = isGroupChat
-                  ? state.roomState?.resolvedSelfJid(fallbackJid: currentUserId)
-                  : trimmedCurrentUserId.isEmpty
-                  ? null
-                  : trimmedCurrentUserId;
-              final roomBootstrapInProgress =
-                  isGroupChat && _isRoomBootstrapInProgress(state);
-              final roomJoinFailureState = isGroupChat
-                  ? _roomJoinFailureState(state)
-                  : null;
-              final roomJoinFailed = roomJoinFailureState != null;
-              final shareContexts = state.shareContexts;
-              final shareReplies = state.shareReplies;
-              final recipients = _recipients;
-              final isEmailComposer = _isEmailComposerActive(
-                chatState: state,
-                recipients: recipients,
-              );
-              final pendingAttachments = _pendingAttachments;
-              final settingsState = context.watch<SettingsCubit>().state;
-              final settingsSnapshot = _settingsSnapshotFromState(
-                settingsState,
-              );
-              final composerSendOnEnter = _resolveComposerSendOnEnter(
-                recipients: recipients,
-                settings: settingsState,
-              );
-              final canSendEmailAttachments =
-                  state.emailServiceAvailable &&
-                  chatEntity != null &&
-                  _hasEmailAttachmentTarget(
-                    chat: chatEntity,
-                    recipients: recipients,
-                  );
-              final attachmentsEnabled =
-                  isWelcomeChat ||
-                  state.supportsHttpFileUpload ||
-                  canSendEmailAttachments;
-              final latestStatuses = _latestRecipientStatuses(state);
-              final fanOutReports = state.fanOutReports;
-              final warningEntry = fanOutReports.entries.isEmpty
-                  ? null
-                  : fanOutReports.entries.last;
-              final showAttachmentWarning =
-                  warningEntry?.value.attachmentWarning ?? false;
-              final rosterItems =
-                  context.watch<RosterCubit>().state.items ??
-                  (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
-                      as List<RosterItem>?) ??
-                  const <RosterItem>[];
-              final chatItems =
-                  chatsState()?.items ?? const <chat_models.Chat>[];
-              _ensureAvatarPathCaches(
-                rosterItems: rosterItems,
-                chatItems: chatItems,
-                selfAvatarPath: selfAvatarPath,
-                normalizedXmppSelfJid: normalizedXmppSelfJid,
-                normalizedEmailSelfJid: normalizedEmailSelfJid,
-              );
-              final rosterAvatarPathsByJid = _cachedRosterAvatarPathsByJid;
-              final chatAvatarPathsByJid = _cachedChatAvatarPathsByJid;
-              String? avatarPathForBareJid(String jid) {
-                final normalized = normalizedAddressValue(jid);
-                if (normalized == null || normalized.isEmpty) return null;
-                return rosterAvatarPathsByJid[normalized] ??
-                    chatAvatarPathsByJid[normalized];
-              }
-
-              String? avatarPathForTypingParticipant(String participant) {
-                final trimmed = participant.trim();
-                if (trimmed.isEmpty) return null;
-                final bareParticipant = bareAddress(trimmed);
-                if (bareParticipant == null) return null;
-                if (bareParticipant == trimmed) {
-                  return avatarPathForBareJid(trimmed);
-                }
-                final roomJid = normalizedAddressValue(chatEntity?.jid);
-                final isRoomParticipant =
-                    normalizedAddressValue(bareParticipant) == roomJid;
-                if (!isRoomParticipant) {
-                  return avatarPathForBareJid(bareParticipant);
-                }
-                final roomState = state.roomState!;
-                final realJid = roomState.senderRealJid(trimmed);
-                if (realJid == null || realJid.isEmpty) return null;
-                final bareRealJid = bareAddress(realJid) ?? realJid;
-                return avatarPathForBareJid(bareRealJid);
-              }
-
-              final storageManager = context.watch<CalendarStorageManager>();
-              final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
-                storageManager: storageManager,
-              );
-              final storage = storageManager.authStorage;
-              final bool personalCalendarAvailable =
-                  storageManager.isAuthStorageReady;
-              final bool supportsChatCalendar =
-                  chatEntity?.supportsChatCalendar ?? false;
-              final bool chatCalendarReady =
-                  storageManager.isAuthStorageReady &&
-                  chatCalendarCoordinator != null;
-              final bool chatCalendarEnabled =
-                  supportsChatCalendar && chatCalendarReady;
-              final ChatCalendarSyncCoordinator?
-              resolvedChatCalendarCoordinator = chatCalendarCoordinator;
-              final bool chatCalendarAvailable =
-                  chatCalendarEnabled &&
-                  resolvedChatCalendarCoordinator != null &&
-                  storage != null &&
-                  chatEntity != null;
-              final retryEntry = _lastReportEntryWhere(
-                fanOutReports.entries,
-                (entry) => entry.value.hasFailures,
-              );
-              final retryReport = retryEntry?.value;
-              final retryShareId = retryEntry?.key;
-              VoidCallback? onFanOutRetry;
-              if (retryReport != null &&
-                  retryShareId != null &&
-                  chatEntity != null) {
-                final draft = state.fanOutDrafts[retryShareId];
-                if (draft != null) {
-                  final failedStatuses = retryReport.statuses
-                      .where(
-                        (status) => status.state == FanOutRecipientState.failed,
-                      )
-                      .toList();
-                  final settingsSnapshot = _settingsSnapshotFromState(
-                    context.read<SettingsCubit>().state,
-                  );
-                  final recipients = failedStatuses
-                      .map(
-                        (status) => ComposerRecipient(
-                          target: Contact.chat(
-                            chat: status.chat,
-                            shareSignatureEnabled:
-                                status.chat.shareSignatureEnabled ??
-                                settingsSnapshot.shareTokenSignatureEnabled,
-                          ),
-                          included: true,
-                        ),
-                      )
-                      .toList();
-                  if (recipients.isNotEmpty) {
-                    onFanOutRetry = () => context.read<ChatBloc>().add(
-                      ChatFanOutRetryRequested(
-                        draft: draft,
-                        recipients: recipients,
-                        chat: chatEntity,
-                        settings: settingsSnapshot,
-                      ),
-                    );
-                  }
-                }
-              }
-              final availableChats =
-                  (chatsState()?.items ?? const <chat_models.Chat>[])
-                      .where((chat) => chat.jid != chatEntity?.jid)
-                      .toList();
-              final openStack = chatsState()?.openStack ?? const <String>[];
-              final forwardStack =
-                  chatsState()?.forwardStack ?? const <String>[];
-              final bool openChatCalendar =
-                  chatsState()?.openChatCalendar ?? false;
-
-              final selfUserId = isGroupChat && myOccupantJid != null
-                  ? myOccupantJid
-                  : currentUserId;
-              final user = ChatUser(
-                id: selfUserId,
-                firstName:
-                    (isGroupChat ? myOccupant?.nick : null) ??
-                    profileState()?.username ??
-                    '',
-              );
-              final bool canShowSettings = !readOnly && jid != null;
-              final bool isSettingsRoute =
-                  canShowSettings && _chatRoute.isSettings;
-              final isEmailBacked = chatEntity?.isEmailBacked ?? false;
-              final canManagePins =
-                  !isGroupChat ||
-                  isEmailBacked ||
-                  (state.roomState?.myAffiliation.canManagePins ?? false);
-              final canTogglePins = !readOnly && canManagePins;
-              final int pinnedCount = state.pinnedMessages.length;
-              final bool calendarFirstRoom =
-                  chatEntity?.isCalendarFirstRoom ?? false;
-              final bool showingChatCalendar =
-                  openChatCalendar || _chatRoute.isCalendar;
-              final mediaQuery = MediaQuery.sizeOf(context);
-              final bool isCompactChat = mediaQuery.width < smallScreen;
-              final bool showCloseButton =
-                  !readOnly && (!isWelcomeChat || isCompactChat);
-              final List<AppBarActionItem> navigationActions =
-                  <AppBarActionItem>[
-                    if (!readOnly && openStack.length > 1)
-                      AppBarActionItem(
-                        label: context.l10n.chatBack,
-                        iconData: LucideIcons.arrowLeft,
-                        onPressed: () {
-                          unawaited(
-                            _handlePopChatRequested(
-                              openChatCalendar: openChatCalendar,
-                              chatState: state,
-                            ),
-                          );
-                        },
-                      ),
-                    if (!readOnly && forwardStack.isNotEmpty)
-                      AppBarActionItem(
-                        label: context.l10n.chatMessageOpenChat,
-                        iconData: LucideIcons.arrowRight,
-                        onPressed: () {
-                          unawaited(
-                            _handleRestoreChatRequested(
-                              openChatCalendar: openChatCalendar,
-                              chatState: state,
-                            ),
-                          );
-                        },
-                      ),
-                  ];
-              final int navigationActionCount = navigationActions.length;
-              final int chatActionCount =
-                  _chatBaseActionCount +
-                  (isEmailBacked ? 1 : 0) +
-                  (isGroupChat ? 1 : 0) +
-                  (chatCalendarAvailable ? 1 : 0) +
-                  (canShowSettings ? 1 : 0);
-              final scaffold = _ChatScaffoldLayout(
-                owner: this,
-                state: state,
-                chatEntity: chatEntity,
-                jid: jid,
-                readOnly: readOnly,
-                isWelcomeChat: isWelcomeChat,
-                isSelfChat: isSelfChat,
-                isGroupChat: isGroupChat,
-                isEmailBacked: isEmailBacked,
-                isEmailComposer: isEmailComposer,
-                chatCalendarAvailable: chatCalendarAvailable,
-                personalCalendarAvailable: personalCalendarAvailable,
-                showCloseButton: showCloseButton,
-                canShowSettings: canShowSettings,
-                isSettingsRoute: isSettingsRoute,
-                calendarFirstRoom: calendarFirstRoom,
-                showingChatCalendar: showingChatCalendar,
-                calendarSurfaceActive: widget.calendarSurfaceActive,
-                pinnedCount: pinnedCount,
-                navigationActions: navigationActions,
-                navigationActionCount: navigationActionCount,
-                chatActionCount: chatActionCount,
-                selfIdentity: selfIdentity,
-                user: user,
-                selfAvatarPath: selfAvatarPath,
-                selfXmppJid: selfXmppJid,
-                currentUserId: currentUserId,
-                myOccupantJid: myOccupantJid,
-                selfNick: selfNick,
-                normalizedXmppSelfJid: normalizedXmppSelfJid,
-                normalizedEmailSelfJid: normalizedEmailSelfJid,
-                resolvedEmailSelfJid: resolvedEmailSelfJid,
-                resolvedDirectChatDisplayName: resolvedDirectChatDisplayName,
-                availabilityActorId: availabilityActorId,
-                accountJidForPins: accountJidForPins,
-                attachmentsBlockedForChat: attachmentsBlockedForChat,
-                searchFiltering: searchFiltering,
-                searchResults: searchResults,
-                shareContexts: shareContexts,
-                shareReplies: shareReplies,
-                showAttachmentWarning: showAttachmentWarning,
-                retryReport: retryReport,
-                retryShareId: retryShareId,
-                onFanOutRetry: onFanOutRetry,
-                availableChats: availableChats,
-                recipients: recipients,
-                pendingAttachments: pendingAttachments,
-                settingsState: settingsState,
-                settingsSnapshot: settingsSnapshot,
-                composerSendOnEnter: composerSendOnEnter,
-                attachmentsEnabled: attachmentsEnabled,
-                canTogglePins: canTogglePins,
-                roomBootstrapInProgress: roomBootstrapInProgress,
-                roomJoinFailed: roomJoinFailed,
-                roomJoinFailureState: roomJoinFailureState,
-                latestStatuses: latestStatuses,
-                isChatBlocked: isChatBlocked,
-                chatBlocklistEntry: chatBlocklistEntry,
-                blockAddress: blockAddress,
-                profileJid: profileJid,
-                avatarPathForBareJid: avatarPathForBareJid,
-                avatarPathForTypingParticipant: avatarPathForTypingParticipant,
-                onToggleCollapseLongEmails: () {
-                  setState(() {
-                    _collapseLongEmailMessages = !_collapseLongEmailMessages;
-                  });
                 },
-                onClearQuote: _quotedDraft == null
-                    ? () {}
-                    : () => setState(() {
-                        _quotedDraft = null;
-                      }),
-                storageManager: storageManager,
-              );
-              return ScaffoldMessenger(
-                key: _scaffoldMessengerKey,
-                child: _ChatContentSurface(
+              ),
+              BlocListener<SettingsCubit, SettingsState>(
+                listenWhen: (previous, current) =>
+                    previous.endpointConfig != current.endpointConfig,
+                listener: (context, settings) async {
+                  final emailService = settings.endpointConfig.smtpEnabled
+                      ? context.read<EmailService>()
+                      : null;
+                  context.read<ChatBloc>().add(
+                    ChatEmailServiceUpdated(emailService),
+                  );
+                  await context.read<ChatSearchCubit>().updateEmailService(
+                    emailService,
+                  );
+                },
+              ),
+              BlocListener<ChatSearchCubit, ChatSearchState>(
+                listenWhen: (previous, current) =>
+                    previous.active != current.active ||
+                    !identical(previous.results, current.results),
+                listener: (context, searchState) {
+                  if (!mounted) return;
+                  _syncSelectionCaches(
+                    context.read<ChatBloc>().state,
+                    extraMessages: searchState.active
+                        ? searchState.results
+                        : const [],
+                  );
+                  if (searchState.active) {
+                    context.read<ChatBloc>().add(
+                      ChatRenderedMessagesHydrationRequested(
+                        searchState.results,
+                      ),
+                    );
+                    _openChatSearch();
+                    return;
+                  }
+                  if (_chatRoute.isSearch) {
+                    _returnToMainRoute();
+                  }
+                },
+              ),
+              BlocListener<CalendarBloc, CalendarState>(
+                listenWhen: (previous, current) =>
+                    previous.isLoading != current.isLoading,
+                listener: _handleCalendarImportStateChanged,
+              ),
+              BlocListener<ChatsCubit, ChatsState>(
+                listenWhen: (previous, current) =>
+                    previous.openChatRoute != current.openChatRoute,
+                listener: (context, chatsState) {
+                  if (!widget.syncWithOpenChatRoute) {
+                    return;
+                  }
+                  if (!mounted) return;
+                  final storedRoute = chatsState.openChatRoute;
+                  if (_chatRoute == storedRoute) return;
+                  final nextRoute = _resolvedStoredChatRoute(
+                    route: storedRoute,
+                    state: context.read<ChatBloc>().state,
+                  );
+                  if (nextRoute == _chatRoute) {
+                    if (nextRoute != storedRoute) {
+                      context.read<ChatsCubit>().setOpenChatRoute(
+                        route: nextRoute,
+                      );
+                    }
+                    return;
+                  }
+                  _setChatRoute(nextRoute);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.toastId != current.toastId &&
+                    current.toast != null,
+                listener: (context, state) {
+                  final toast = state.toast;
+                  final show = showToast;
+                  if (toast == null || show == null) return;
+                  final l10n = context.l10n;
+                  const actionLabel = null;
+                  const VoidCallback? onAction = null;
+                  final toastTitle =
+                      toast.title ??
+                      switch (toast.variant) {
+                        ChatToastVariant.destructive => l10n.toastWhoopsTitle,
+                        ChatToastVariant.warning => l10n.toastHeadsUpTitle,
+                        ChatToastVariant.info => l10n.toastAllSetTitle,
+                      };
+                  final toastMessage =
+                      toast.messageText ??
+                      toast.message?.label(
+                        l10n,
+                        moderationAction: toast.messageActionLabel,
+                        moderationTarget: toast.messageTargetLabel,
+                      );
+                  final toastWidget = switch (toast.variant) {
+                    ChatToastVariant.destructive => FeedbackToast.error(
+                      title: toastTitle,
+                      message: toastMessage,
+                      actionLabel: actionLabel,
+                      onAction: onAction,
+                    ),
+                    ChatToastVariant.warning => FeedbackToast.warning(
+                      title: toastTitle,
+                      message: toastMessage,
+                      actionLabel: actionLabel,
+                      onAction: onAction,
+                    ),
+                    ChatToastVariant.info => FeedbackToast.success(
+                      title: toastTitle,
+                      message: toastMessage,
+                      actionLabel: actionLabel,
+                      onAction: onAction,
+                    ),
+                  };
+                  show(toastWidget);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.pendingForwardDraft !=
+                        current.pendingForwardDraft &&
+                    current.pendingForwardDraft != null,
+                listener: (context, state) {
+                  final draft = state.pendingForwardDraft;
+                  if (draft == null) {
+                    return;
+                  }
+                  openComposeDraft(
+                    context,
+                    jids: const [''],
+                    subject: _forwardDraftSubject(context.l10n, draft),
+                    forwardedBlocks: draft.forwardedBlocks,
+                    forwardedSourceAttachmentMetadataIds:
+                        draft.attachmentMetadataIds,
+                  );
+                  _clearMultiSelection();
+                  context.read<ChatBloc>().add(
+                    const ChatForwardDraftConsumed(),
+                  );
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.openChatRequestId != current.openChatRequestId,
+                listener: (context, state) {
+                  final targetJid = state.openChatJid;
+                  if (targetJid == null || targetJid.trim().isEmpty) {
+                    return;
+                  }
+                  context.read<ChatsCubit>().openChat(jid: targetJid);
+                },
+              ),
+              BlocListener<ChatsCubit, ChatsState>(
+                listenWhen: (previous, current) =>
+                    previous.pendingOpenMessageRequestId !=
+                        current.pendingOpenMessageRequestId ||
+                    previous.pendingOpenMessageReferenceId !=
+                        current.pendingOpenMessageReferenceId ||
+                    previous.pendingOpenMessageChatJid !=
+                        current.pendingOpenMessageChatJid,
+                listener: (context, state) {
+                  _consumePendingOpenMessageSelection(state);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat?.jid != current.chat?.jid,
+                listener: (context, _) {
+                  _consumePendingOpenMessageSelection(
+                    context.read<ChatsCubit>().state,
+                  );
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.scrollTargetRequestId !=
+                        current.scrollTargetRequestId &&
+                    current.scrollTargetMessageId != null,
+                listener: (_, state) {
+                  final messageId = state.scrollTargetMessageId;
+                  if (messageId == null || messageId.trim().isEmpty) {
+                    return;
+                  }
+                  unawaited(_handleScrollTargetRequest(messageId));
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat?.jid != current.chat?.jid,
+                listener: (_, state) {
+                  _animatedMessageIds.clear();
+                  _hydratedAnimatedMessages = false;
+                  _clearInlineComposerControllers();
+                  _clearInlineComposerState(clearInlineComposerDraftId: true);
+                  _resetRecipientsForChat(state.chat);
+                  _syncEmailComposerWatermark(chatState: state);
+                  _queueShareComposerSeedConsumption();
+                  if (state.messagesLoaded) {
+                    _hydrateAnimatedMessages(state.items);
+                  }
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat != current.chat &&
+                    previous.chat?.jid == current.chat?.jid,
+                listener: (_, state) => _resetRecipientsForChat(state.chat),
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat?.jid != current.chat?.jid,
+                listener: (_, state) {
+                  final chat = state.chat;
+                  if (chat == null) {
+                    return;
+                  }
+                  unawaited(_loadDemoPendingAttachments(chat));
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.savedTransportOverride !=
+                        current.savedTransportOverride ||
+                    previous.emailServiceAvailable !=
+                        current.emailServiceAvailable,
+                listener: (_, state) {
+                  _syncEmailComposerWatermark(chatState: state);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.focused?.stanzaID != current.focused?.stanzaID ||
+                    previous.chat?.jid != current.chat?.jid,
+                listener: (_, state) {
+                  final nextRoute = _resolvedStoredChatRoute(
+                    route: _chatRoute,
+                    state: state,
+                  );
+                  if (nextRoute == _chatRoute) {
+                    return;
+                  }
+                  _setChatRoute(nextRoute);
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    !_hydratedAnimatedMessages &&
+                    current.messagesLoaded &&
+                    (previous.items != current.items ||
+                        previous.messagesLoaded != current.messagesLoaded),
+                listener: (_, state) => _hydrateAnimatedMessages(state.items),
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.items != current.items ||
+                    previous.quotedMessagesById != current.quotedMessagesById,
+                listener: (context, state) {
+                  final searchState = context.read<ChatSearchCubit>().state;
+                  _syncSelectionCaches(
+                    state,
+                    extraMessages: searchState.active
+                        ? searchState.results
+                        : const [],
+                  );
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat?.jid != current.chat?.jid ||
+                    previous.items != current.items ||
+                    previous.messagesLoaded != current.messagesLoaded,
+                listener: (_, _) => _scheduleReadThresholdSync(),
+              ),
+            ],
+            child: BlocConsumer<ChatBloc, ChatState>(
+              listenWhen: (previous, current) {
+                if (current.composerHydrationId == 0) return false;
+                return previous.composerHydrationId !=
+                    current.composerHydrationId;
+              },
+              listener: (context, state) {
+                final text = state.composerHydrationText ?? '';
+                final subject = state.chat?.defaultTransport.isEmail == true
+                    ? (state.emailSubject ?? '')
+                    : _emptyText;
+                _subjectChangeSuppressed = true;
+                _inlineComposerController.setSubjectText(subject);
+                _lastSubjectValue = subject;
+                _subjectChangeSuppressed = false;
+                _inlineComposerController.setTextValue(
+                  TextEditingValue(
+                    text: text,
+                    selection: TextSelection.collapsed(offset: text.length),
+                    composing: TextRange.empty,
+                  ),
+                );
+                _composerHasText =
+                    _isEmailComposerWatermarkOnly(text: text, chatState: state)
+                    ? false
+                    : text.trim().isNotEmpty;
+                final calendarTaskIcsMessage =
+                    state.composerHydrationCalendarTaskIcsMessage;
+                _pendingCalendarTaskIcs = calendarTaskIcsMessage?.task;
+                _pendingCalendarTaskIcsReadOnly =
+                    calendarTaskIcsMessage?.readOnly ??
+                    _calendarTaskIcsReadOnlyFallback;
+                _pendingCalendarSeedText = calendarTaskIcsMessage?.task
+                    .toShareText(context.l10n)
+                    .trim();
+                _syncEmailComposerWatermark(
+                  chatState: state,
+                  forceInsert: true,
+                );
+                if (!_inlineComposerController.hasTextFocus) {
+                  _inlineComposerController.requestTextFocus();
+                }
+              },
+              builder: (context, state) {
+                ProfileState? profileState() =>
+                    context.watch<ProfileCubit>().state;
+                ChatsState? chatsState() => context.watch<ChatsCubit>().state;
+                final chatsCubitState = chatsState();
+                final readOnly = widget.readOnly;
+                final emailSelfJid = state.emailSelfJid;
+                final String? resolvedEmailSelfJid = emailSelfJid
+                    .resolveDeltaPlaceholderJid();
+                final chatEntity = state.chat;
+                final resolvedDirectChatDisplayName =
+                    _resolvedDirectChatDisplayName(
+                      chat: chatEntity,
+                      chatsState: chatsCubitState,
+                    );
+                final isWelcomeChat =
+                    chatEntity?.isAxichatWelcomeThread == true;
+                final List<BlocklistEntry> blocklistEntries =
+                    _resolveBlocklistEntries(context);
+                final BlocklistEntry? chatBlocklistEntry = chatEntity == null
+                    ? null
+                    : _resolveChatBlocklistEntry(
+                        chat: chatEntity,
+                        entries: blocklistEntries,
+                      );
+                final bool isChatBlocked = chatBlocklistEntry != null;
+                final String? blockAddress = chatEntity == null
+                    ? null
+                    : _resolveChatBlockAddress(chat: chatEntity);
+                final bool attachmentsBlockedForChat =
+                    isChatBlocked || (chatEntity?.spam ?? false);
+                final jid = chatEntity?.jid;
+                final isDefaultEmail =
+                    chatEntity?.defaultTransport.isEmail ?? false;
+                final isGroupChat = chatEntity?.type == ChatType.groupChat;
+                final currentUserId = isDefaultEmail
+                    ? (resolvedEmailSelfJid ?? profileState()?.jid ?? '')
+                    : (profileState()?.jid ?? resolvedEmailSelfJid ?? '');
+                final String? trimmedProfileJid = profileState()?.jid.trim();
+                final String? selfXmppJid =
+                    trimmedProfileJid?.isNotEmpty == true
+                    ? trimmedProfileJid
+                    : null;
+                final String? accountJidForPins = isDefaultEmail
+                    ? (resolvedEmailSelfJid ?? selfXmppJid)
+                    : (selfXmppJid ?? resolvedEmailSelfJid);
+                final String? normalizedXmppSelfJid = normalizedAddressKey(
+                  selfXmppJid,
+                );
+                final String? normalizedEmailSelfJid = normalizedAddressKey(
+                  resolvedEmailSelfJid,
+                );
+                final String? normalizedChatJid = normalizedAddressKey(
+                  chatEntity?.remoteJid,
+                );
+                final bool isSelfChat =
+                    normalizedChatJid != null &&
+                    ((normalizedXmppSelfJid != null &&
+                            normalizedChatJid == normalizedXmppSelfJid) ||
+                        (normalizedEmailSelfJid != null &&
+                            normalizedChatJid == normalizedEmailSelfJid));
+                final String? selfAvatarPath = profileState()?.avatarPath
+                    ?.trim();
+                final myOccupantJid = state.roomState?.myOccupantJid;
+                final myOccupant = state.roomState?.selfOccupant;
+                final selfNick = (myOccupant?.nick ?? chatEntity?.myNickname)
+                    ?.trim();
+                final trimmedCurrentUserId = currentUserId.trim();
+                final String? availabilityActorId = isGroupChat
+                    ? state.roomState?.resolvedSelfJid(
+                        fallbackJid: currentUserId,
+                      )
+                    : trimmedCurrentUserId.isEmpty
+                    ? null
+                    : trimmedCurrentUserId;
+                final roomBootstrapInProgress =
+                    isGroupChat && _isRoomBootstrapInProgress(state);
+                final roomJoinFailureState = isGroupChat
+                    ? _roomJoinFailureState(state)
+                    : null;
+                final roomJoinFailed = roomJoinFailureState != null;
+                final shareContexts = state.shareContexts;
+                final shareReplies = state.shareReplies;
+                final recipients = _recipients;
+                final isEmailComposer = _isEmailComposerActive(
+                  chatState: state,
+                  recipients: recipients,
+                );
+                final pendingAttachments = _pendingAttachments;
+                final settingsState = context.watch<SettingsCubit>().state;
+                final settingsSnapshot = _settingsSnapshotFromState(
+                  settingsState,
+                );
+                final composerSendOnEnter = _resolveComposerSendOnEnter(
+                  recipients: recipients,
+                  settings: settingsState,
+                );
+                final canSendEmailAttachments =
+                    state.emailServiceAvailable &&
+                    chatEntity != null &&
+                    _hasEmailAttachmentTarget(
+                      chatState: state,
+                      chat: chatEntity,
+                      recipients: recipients,
+                    );
+                final attachmentsEnabled =
+                    isWelcomeChat ||
+                    state.supportsHttpFileUpload ||
+                    canSendEmailAttachments;
+                final latestStatuses = _latestRecipientStatuses(state);
+                final fanOutReports = state.fanOutReports;
+                final warningEntry = fanOutReports.entries.isEmpty
+                    ? null
+                    : fanOutReports.entries.last;
+                final showAttachmentWarning =
+                    warningEntry?.value.attachmentWarning ?? false;
+                final rosterItems =
+                    context.watch<RosterCubit>().state.items ??
+                    (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
+                        as List<RosterItem>?) ??
+                    const <RosterItem>[];
+                final chatItems =
+                    chatsState()?.items ?? const <chat_models.Chat>[];
+                _ensureAvatarPathCaches(
+                  rosterItems: rosterItems,
+                  chatItems: chatItems,
+                  selfAvatarPath: selfAvatarPath,
+                  normalizedXmppSelfJid: normalizedXmppSelfJid,
+                  normalizedEmailSelfJid: normalizedEmailSelfJid,
+                );
+                final rosterAvatarPathsByJid = _cachedRosterAvatarPathsByJid;
+                final chatAvatarPathsByJid = _cachedChatAvatarPathsByJid;
+                String? avatarPathForBareJid(String jid) {
+                  final normalized = normalizedAddressValue(jid);
+                  if (normalized == null || normalized.isEmpty) return null;
+                  return rosterAvatarPathsByJid[normalized] ??
+                      chatAvatarPathsByJid[normalized];
+                }
+
+                String? avatarPathForTypingParticipant(String participant) {
+                  final trimmed = participant.trim();
+                  if (trimmed.isEmpty) return null;
+                  final bareParticipant = bareAddress(trimmed);
+                  if (bareParticipant == null) return null;
+                  if (bareParticipant == trimmed) {
+                    return avatarPathForBareJid(trimmed);
+                  }
+                  final roomJid = normalizedAddressValue(chatEntity?.jid);
+                  final isRoomParticipant =
+                      normalizedAddressValue(bareParticipant) == roomJid;
+                  if (!isRoomParticipant) {
+                    return avatarPathForBareJid(bareParticipant);
+                  }
+                  final roomState = state.roomState!;
+                  final realJid = roomState.senderRealJid(trimmed);
+                  if (realJid == null || realJid.isEmpty) return null;
+                  final bareRealJid = bareAddress(realJid) ?? realJid;
+                  return avatarPathForBareJid(bareRealJid);
+                }
+
+                final storageManager = context.watch<CalendarStorageManager>();
+                final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
+                  storageManager: storageManager,
+                );
+                final storage = storageManager.authStorage;
+                final bool personalCalendarAvailable =
+                    storageManager.isAuthStorageReady;
+                final bool supportsChatCalendar =
+                    chatEntity?.supportsChatCalendar ?? false;
+                final bool chatCalendarReady =
+                    storageManager.isAuthStorageReady &&
+                    chatCalendarCoordinator != null;
+                final bool chatCalendarEnabled =
+                    supportsChatCalendar && chatCalendarReady;
+                final ChatCalendarSyncCoordinator?
+                resolvedChatCalendarCoordinator = chatCalendarCoordinator;
+                final bool chatCalendarAvailable =
+                    chatCalendarEnabled &&
+                    resolvedChatCalendarCoordinator != null &&
+                    storage != null &&
+                    chatEntity != null;
+                final retryEntry = _lastReportEntryWhere(
+                  fanOutReports.entries,
+                  (entry) => entry.value.hasFailures,
+                );
+                final retryReport = retryEntry?.value;
+                final retryShareId = retryEntry?.key;
+                VoidCallback? onFanOutRetry;
+                if (retryReport != null &&
+                    retryShareId != null &&
+                    chatEntity != null) {
+                  final draft = state.fanOutDrafts[retryShareId];
+                  if (draft != null) {
+                    final failedStatuses = retryReport.statuses
+                        .where(
+                          (status) =>
+                              status.state == FanOutRecipientState.failed,
+                        )
+                        .toList();
+                    final settingsSnapshot = _settingsSnapshotFromState(
+                      context.read<SettingsCubit>().state,
+                    );
+                    final recipients = failedStatuses
+                        .map(
+                          (status) => ComposerRecipient(
+                            target: Contact.chat(
+                              chat: status.chat,
+                              shareSignatureEnabled:
+                                  status.chat.shareSignatureEnabled ??
+                                  settingsSnapshot.shareTokenSignatureEnabled,
+                            ),
+                            included: true,
+                          ),
+                        )
+                        .toList();
+                    if (recipients.isNotEmpty) {
+                      onFanOutRetry = () => context.read<ChatBloc>().add(
+                        ChatFanOutRetryRequested(
+                          draft: draft,
+                          recipients: recipients,
+                          chat: chatEntity,
+                          settings: settingsSnapshot,
+                        ),
+                      );
+                    }
+                  }
+                }
+                final availableChats =
+                    (chatsState()?.items ?? const <chat_models.Chat>[])
+                        .where((chat) => chat.jid != chatEntity?.jid)
+                        .toList();
+                final openStack = chatsState()?.openStack ?? const <String>[];
+                final forwardStack =
+                    chatsState()?.forwardStack ?? const <String>[];
+                final bool openChatCalendar =
+                    chatsState()?.openChatCalendar ?? false;
+
+                final selfUserId = isGroupChat && myOccupantJid != null
+                    ? myOccupantJid
+                    : currentUserId;
+                final user = ChatUser(
+                  id: selfUserId,
+                  firstName:
+                      (isGroupChat ? myOccupant?.nick : null) ??
+                      profileState()?.username ??
+                      '',
+                );
+                final bool canShowSettings = !readOnly && jid != null;
+                final bool isSettingsRoute =
+                    canShowSettings && _chatRoute.isSettings;
+                final isEmailBacked =
+                    chatEntity?.defaultTransport.isEmail ?? false;
+                final canManagePins =
+                    !isGroupChat ||
+                    isEmailBacked ||
+                    (state.roomState?.myAffiliation.canManagePins ?? false);
+                final canTogglePins = !readOnly && canManagePins;
+                final int pinnedCount = state.pinnedMessages.length;
+                final bool calendarFirstRoom =
+                    chatEntity?.isCalendarFirstRoom ?? false;
+                final bool showingChatCalendar =
+                    openChatCalendar || _chatRoute.isCalendar;
+                final mediaQuery = MediaQuery.sizeOf(context);
+                final bool isCompactChat = mediaQuery.width < smallScreen;
+                final bool showCloseButton =
+                    !readOnly && (!isWelcomeChat || isCompactChat);
+                final List<AppBarActionItem> navigationActions =
+                    <AppBarActionItem>[
+                      if (!readOnly && openStack.length > 1)
+                        AppBarActionItem(
+                          label: context.l10n.chatBack,
+                          iconData: LucideIcons.arrowLeft,
+                          onPressed: () {
+                            unawaited(
+                              _handlePopChatRequested(
+                                openChatCalendar: openChatCalendar,
+                                chatState: state,
+                              ),
+                            );
+                          },
+                        ),
+                      if (!readOnly && forwardStack.isNotEmpty)
+                        AppBarActionItem(
+                          label: context.l10n.chatMessageOpenChat,
+                          iconData: LucideIcons.arrowRight,
+                          onPressed: () {
+                            unawaited(
+                              _handleRestoreChatRequested(
+                                openChatCalendar: openChatCalendar,
+                                chatState: state,
+                              ),
+                            );
+                          },
+                        ),
+                    ];
+                final int navigationActionCount = navigationActions.length;
+                final int chatActionCount =
+                    _chatBaseActionCount +
+                    (isEmailBacked ? 1 : 0) +
+                    (isGroupChat ? 1 : 0) +
+                    (chatCalendarAvailable ? 1 : 0) +
+                    (canShowSettings ? 1 : 0);
+                final scaffold = _ChatScaffoldLayout(
+                  owner: this,
+                  state: state,
+                  chatEntity: chatEntity,
+                  jid: jid,
+                  readOnly: readOnly,
+                  isWelcomeChat: isWelcomeChat,
+                  isSelfChat: isSelfChat,
+                  isGroupChat: isGroupChat,
+                  isEmailBacked: isEmailBacked,
+                  isEmailComposer: isEmailComposer,
+                  chatCalendarAvailable: chatCalendarAvailable,
+                  personalCalendarAvailable: personalCalendarAvailable,
+                  showCloseButton: showCloseButton,
+                  canShowSettings: canShowSettings,
+                  isSettingsRoute: isSettingsRoute,
+                  calendarFirstRoom: calendarFirstRoom,
+                  showingChatCalendar: showingChatCalendar,
+                  calendarSurfaceActive: widget.calendarSurfaceActive,
+                  pinnedCount: pinnedCount,
+                  navigationActions: navigationActions,
+                  navigationActionCount: navigationActionCount,
+                  chatActionCount: chatActionCount,
+                  selfIdentity: selfIdentity,
+                  user: user,
+                  selfAvatarPath: selfAvatarPath,
+                  selfXmppJid: selfXmppJid,
+                  currentUserId: currentUserId,
+                  myOccupantJid: myOccupantJid,
+                  selfNick: selfNick,
+                  normalizedXmppSelfJid: normalizedXmppSelfJid,
+                  normalizedEmailSelfJid: normalizedEmailSelfJid,
+                  resolvedEmailSelfJid: resolvedEmailSelfJid,
+                  resolvedDirectChatDisplayName: resolvedDirectChatDisplayName,
+                  availabilityActorId: availabilityActorId,
+                  accountJidForPins: accountJidForPins,
+                  attachmentsBlockedForChat: attachmentsBlockedForChat,
+                  searchFiltering: searchFiltering,
+                  searchResults: searchResults,
+                  shareContexts: shareContexts,
+                  shareReplies: shareReplies,
+                  showAttachmentWarning: showAttachmentWarning,
+                  retryReport: retryReport,
+                  retryShareId: retryShareId,
+                  onFanOutRetry: onFanOutRetry,
+                  availableChats: availableChats,
+                  recipients: recipients,
+                  pendingAttachments: pendingAttachments,
+                  settingsState: settingsState,
+                  settingsSnapshot: settingsSnapshot,
+                  composerSendOnEnter: composerSendOnEnter,
+                  attachmentsEnabled: attachmentsEnabled,
+                  canTogglePins: canTogglePins,
+                  roomBootstrapInProgress: roomBootstrapInProgress,
+                  roomJoinFailed: roomJoinFailed,
+                  roomJoinFailureState: roomJoinFailureState,
+                  latestStatuses: latestStatuses,
+                  isChatBlocked: isChatBlocked,
+                  chatBlocklistEntry: chatBlocklistEntry,
+                  blockAddress: blockAddress,
+                  profileJid: profileJid,
+                  avatarPathForBareJid: avatarPathForBareJid,
+                  avatarPathForTypingParticipant:
+                      avatarPathForTypingParticipant,
+                  onToggleCollapseLongEmails: () {
+                    setState(() {
+                      _collapseLongEmailMessages = !_collapseLongEmailMessages;
+                    });
+                  },
+                  onClearQuote: _quotedDraft == null
+                      ? () {}
+                      : () => setState(() {
+                          _quotedDraft = null;
+                        }),
+                  storageManager: storageManager,
+                );
+                return _ChatContentSurface(
                   chatEntity: chatEntity,
                   calendarAvailable: chatCalendarAvailable,
                   resolvedChatCalendarCoordinator:
@@ -6190,12 +6309,12 @@ class _ChatState extends State<Chat> {
                   storage: storage,
                   storageManager: storageManager,
                   child: scaffold,
-                ),
-              );
-            },
-          ),
-        );
-      },
+                );
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -6899,6 +7018,11 @@ class _ChatState extends State<Chat> {
       return;
     }
     final currentMessage = _cachedMessageById[message.stanzaID] ?? message;
+    if (!currentMessage.canSendXmppReaction(
+      chatDefaultTransport: chat.defaultTransport,
+    )) {
+      return;
+    }
     final nextReactions = _toggleReactionPreview(
       _reactionPreviewsForMessage(currentMessage),
       emoji: emoji,
@@ -6912,9 +7036,8 @@ class _ChatState extends State<Chat> {
     final completer = Completer<bool>();
     context.read<ChatBloc>().add(
       ChatMessageReactionToggled(
-        message: message,
+        message: currentMessage,
         emoji: emoji,
-        isEmailChat: chat.isEmailBacked,
         completer: completer,
       ),
     );

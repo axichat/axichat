@@ -104,33 +104,31 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo quitar este mensaje de la carpeta.';
 
   @override
-  String get contactFolderRuleAction => 'Enviar todo a...';
+  String get contactFolderRuleAction => 'File incoming items in...';
 
   @override
-  String get contactFolderRuleMessagesAction =>
-      'Enviar todos los mensajes a...';
+  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'Enviar todos los correos a...';
+  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'Enviar todos los mensajes y correos a...';
+      'File incoming messages and emails in...';
 
   @override
-  String get contactFolderRuleTitle => 'Enviar todo a una carpeta';
+  String get contactFolderRuleTitle => 'File incoming items in folder';
 
   @override
   String get contactFolderRuleMessagesTitle =>
-      'Enviar todos los mensajes a una carpeta';
+      'File incoming messages in folder';
 
   @override
-  String get contactFolderRuleEmailsTitle =>
-      'Enviar todos los correos a una carpeta';
+  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'Enviar todos los mensajes y correos a una carpeta';
+      'File incoming messages and emails in folder';
 
   @override
   String get contactFolderRuleClear => 'Borrar regla';
@@ -1042,11 +1040,27 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatUnpinMessage => 'Desfijar mensaje';
 
   @override
+  String get chatPinMessageUnavailable => 'Este mensaje aún no se puede fijar.';
+
+  @override
+  String get chatMessagePinned => 'Mensaje fijado.';
+
+  @override
+  String get chatMessageUnpinned => 'Mensaje desfijado.';
+
+  @override
   String get chatPinnedEmptyState => 'Aún no hay mensajes fijados.';
+
+  @override
+  String get chatPinnedLoadFailure =>
+      'No se pudieron cargar los mensajes fijados.';
 
   @override
   String get chatPinnedMissingMessage =>
       'El mensaje fijado no está disponible.';
+
+  @override
+  String get chatPinnedNoticeBanner => 'Nuevo mensaje fijado';
 
   @override
   String get importantMessagesEmpty => 'Todavía no hay mensajes importantes';
@@ -1452,6 +1466,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String signupErrorPrefix(Object message) {
     return 'Error de registro: $message';
   }
+
+  @override
+  String get signupChooseServer => 'Elegir servidor';
+
+  @override
+  String get signupCustomEndpointRequired =>
+      'Elige un servidor personalizado para registrarte en la app. Crea cuentas de axi.im en el sitio web.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha no disponible';
@@ -3479,7 +3500,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get contactsUrlsLabel => 'Sitios web';
 
   @override
-  String get contactsPostalAddressesLabel => 'Direcciones postales';
+  String get contactsPostalAddressesLabel => 'Direcciones';
 
   @override
   String get contactsNoteLabel => 'Notas';
@@ -3523,7 +3544,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get jidInputPlaceholder => 'john@axi.im';
 
   @override
-  String get jidInputInvalid => 'Introduce un JID válido';
+  String get jidInputInvalid => 'Introduce una dirección válida.';
 
   @override
   String get sessionCapabilityChat => 'Mensajería';
