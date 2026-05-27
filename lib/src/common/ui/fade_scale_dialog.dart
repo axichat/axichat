@@ -41,7 +41,9 @@ Future<T?> showFadeScaleDialog<T>({
         value: settingsCubit,
         child: ShadTheme(
           data: shadTheme,
-          child: KeyboardPopScope(child: builder(dialogContext)),
+          child: Builder(
+            builder: (context) => KeyboardPopScope(child: builder(context)),
+          ),
         ),
       );
       if (!useSafeArea) return child;

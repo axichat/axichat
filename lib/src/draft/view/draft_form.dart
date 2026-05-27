@@ -1325,6 +1325,7 @@ class DraftFormState extends State<DraftForm> {
 
   Future<void> _saveDraft({required bool autoSave}) async {
     final int saveEpoch = _saveEpoch;
+    bool shouldCommit() => mounted && saveEpoch == _saveEpoch;
     final bool wasNewDraft = id == null;
     final List<PendingAttachment> pendingAttachments = List.of(
       _pendingAttachments,
@@ -1350,17 +1351,24 @@ class DraftFormState extends State<DraftForm> {
       forwardedBlocks: _forwardedBlocks,
     );
     final draftCubit = context.read<DraftCubit>();
-    final draft = await draftCubit.saveDraft(
-      id: id,
-      jids: recipients,
-      body: body,
-      subject: subject,
-      quoteTarget: quoteTarget,
-      attachments: attachments,
-      calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
-      forwardedBlocks: _forwardedBlocks,
-      autoSave: autoSave,
-    );
+    final Draft draft;
+    try {
+      draft = await draftCubit.saveDraft(
+        id: id,
+        jids: recipients,
+        body: body,
+        subject: subject,
+        quoteTarget: quoteTarget,
+        attachments: attachments,
+        calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+        forwardedBlocks: _forwardedBlocks,
+        autoSave: autoSave,
+        shouldCommit: shouldCommit,
+      );
+    } on DraftSaveAbortedException {
+      return;
+    }
+    if (!mounted || saveEpoch != _saveEpoch) return;
     final draftCount = !autoSave && wasNewDraft
         ? await draftCubit.countDrafts()
         : null;
@@ -1479,6 +1487,16 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
+  Future<void> _drainDiscardedAutosave(Future<void> operation) async {
+    try {
+      await operation;
+    } on DraftSaveAbortedException {
+      return;
+    } on Exception {
+      // Autosave failures remain best-effort after the composer is closed.
+    }
+  }
+
   Future<void> _awaitAttachmentWorkIfNeeded({bool bestEffort = true}) async {
     while (true) {
       final hydrationOperation = _attachmentHydrationOperation;
@@ -1513,7 +1531,6 @@ class DraftFormState extends State<DraftForm> {
       return;
     }
     if (!_hasDraftableContent()) {
-      await _deleteEmptyDraftIfNeeded();
       return;
     }
     if (!_shouldAutosave()) {
@@ -1524,6 +1541,7 @@ class DraftFormState extends State<DraftForm> {
       return;
     }
     _autosaveInFlight = true;
+    final int attemptedSaveEpoch = _saveEpoch;
     final int attemptedSignature = signature;
     final operation = _saveDraft(autoSave: true);
     _autosaveOperation = operation;
@@ -1537,7 +1555,9 @@ class DraftFormState extends State<DraftForm> {
       }
       _autosaveInFlight = false;
     }
-    if (mounted && _currentDraftSignature() != attemptedSignature) {
+    if (mounted &&
+        _saveEpoch == attemptedSaveEpoch &&
+        _currentDraftSignature() != attemptedSignature) {
       _scheduleAutosave();
     }
   }
@@ -1547,29 +1567,6 @@ class DraftFormState extends State<DraftForm> {
       return false;
     }
     return _hasDraftableContent();
-  }
-
-  Future<void> _deleteEmptyDraftIfNeeded() async {
-    final draftId = id;
-    if (draftId == null || _hasDraftableContent()) {
-      return;
-    }
-    try {
-      await context.read<DraftCubit>().deleteDraft(id: draftId);
-    } on Exception {
-      return;
-    }
-    if (!mounted || id != draftId) {
-      return;
-    }
-    setState(() {
-      id = null;
-      _lastSavedSignature = null;
-      _lastAutosaveAt = null;
-    });
-    if (_hasDraftableContent()) {
-      _scheduleAutosave();
-    }
   }
 
   bool _hasDraftableContent() {
@@ -1778,17 +1775,48 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
+  Future<void> _discardUnsavedChangesAndClose() async {
+    final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
+    final draftCubit = context.read<DraftCubit>();
+    if (_discardingDraft) return;
+    final autosaveOperation = _autosaveOperation;
+    _autosaveTimer?.cancel();
+    _invalidatePendingSaves();
+    _invalidateAttachmentWork();
+    _autosaveOperation = null;
+    _autosaveInFlight = false;
+    setState(() => _discardingDraft = true);
+    final onDiscarded = widget.onDiscarded;
+    if (onDiscarded != null) {
+      onDiscarded();
+    } else {
+      _closeComposer();
+    }
+    if (autosaveOperation != null) {
+      unawaited(_drainDiscardedAutosave(autosaveOperation));
+    }
+    if (shouldCleanupSeedAttachments) {
+      await _cleanupSeedAttachmentMetadata(draftCubit);
+    }
+    if (mounted) {
+      setState(() => _discardingDraft = false);
+    }
+  }
+
   Future<bool> handleCloseRequest() async {
     if (_savingDraft || _sendingDraft || _discardingDraft) {
       return false;
     }
     _autosaveTimer?.cancel();
     if (!_shouldPromptBeforeClose()) {
-      await _deleteEmptyDraftIfNeeded();
-      if (!mounted) {
-        return false;
-      }
+      final autosaveOperation = _autosaveOperation;
+      _invalidatePendingSaves();
+      _autosaveOperation = null;
+      _autosaveInFlight = false;
       _closeComposer();
+      if (autosaveOperation != null) {
+        unawaited(_drainDiscardedAutosave(autosaveOperation));
+      }
       return true;
     }
     final action = await _confirmCloseAction();
@@ -1797,7 +1825,7 @@ class DraftFormState extends State<DraftForm> {
       return false;
     }
     if (action == _DraftFormCloseAction.discard) {
-      await _handleDiscard();
+      await _discardUnsavedChangesAndClose();
       return true;
     }
     final closed = await _saveDraftAndClose();
@@ -1808,18 +1836,14 @@ class DraftFormState extends State<DraftForm> {
   }
 
   bool _shouldPromptBeforeClose() {
-    if (_loadingAttachments || _autosaveInFlight) {
+    if (_loadingAttachments) {
       return true;
-    }
-    final hasDraftContent = _hasDraftableContent();
-    if (!hasDraftContent) {
-      return false;
     }
     final savedSignature = _lastSavedSignature;
-    if (savedSignature == null) {
-      return true;
+    if (savedSignature != null) {
+      return savedSignature != _currentDraftSignature();
     }
-    return savedSignature != _currentDraftSignature();
+    return _hasDraftableContent();
   }
 
   Future<_DraftFormCloseAction?> _confirmCloseAction() {

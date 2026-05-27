@@ -192,6 +192,67 @@ void main() {
     resetMocktailState();
   });
 
+  group('draft save aborts', () {
+    test(
+      'restores existing draft when stale save commits before abort',
+      () async {
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        await connectSuccessfully(xmppService);
+        final draftUpdatedAt = DateTime.utc(2026, 3, 11, 10);
+        final draftId = await database.saveDraft(
+          jids: const ['peer@axi.im'],
+          body: 'Saved body',
+          draftSyncId: 'sync-post-commit-existing',
+          draftUpdatedAt: draftUpdatedAt,
+          draftSourceId: 'source-existing',
+          draftRecipients: const [],
+        );
+        var checks = 0;
+
+        await expectLater(
+          xmppService.saveDraft(
+            id: draftId,
+            jids: const ['peer@axi.im'],
+            body: 'Discarded body',
+            shouldCommit: () {
+              checks += 1;
+              return checks < 8;
+            },
+          ),
+          throwsA(isA<DraftSaveAbortedException>()),
+        );
+
+        final saved = await database.getDraft(draftId);
+        expect(saved?.body, 'Saved body');
+        expect(saved?.draftUpdatedAt, draftUpdatedAt);
+        expect(await database.countDrafts(), 1);
+      },
+    );
+
+    test('deletes new draft when stale save commits before abort', () async {
+      when(() => mockStateStore.read(key: any(named: 'key'))).thenReturn(null);
+      await connectSuccessfully(xmppService);
+      var checks = 0;
+
+      await expectLater(
+        xmppService.saveDraft(
+          id: null,
+          jids: const ['peer@axi.im'],
+          body: 'Discarded body',
+          shouldCommit: () {
+            checks += 1;
+            return checks < 7;
+          },
+        ),
+        throwsA(isA<DraftSaveAbortedException>()),
+      );
+
+      expect(await database.countDrafts(), 0);
+    });
+  });
+
   group('messageStream', () {
     test(
       'When messages are added to the chat\'s database, emits the new message history in order.',

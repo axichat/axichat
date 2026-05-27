@@ -1474,10 +1474,35 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     List<Attachment> attachments = const <Attachment>[],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
+    bool Function()? shouldCommit,
   }) async {
+    Future<Never> abortDraftSave(
+      Iterable<String> newMetadataIds, {
+      XmppDatabase? db,
+    }) async {
+      try {
+        if (db == null) {
+          await _deleteDraftAttachmentMetadata(newMetadataIds);
+        } else {
+          for (final metadataId in newMetadataIds) {
+            await db.deleteFileMetadata(metadataId);
+          }
+        }
+      } on Exception {
+        // Best-effort cleanup for metadata created by an aborted draft save.
+      }
+      throw const DraftSaveAbortedException();
+    }
+
+    if (shouldCommit?.call() == false) {
+      await abortDraftSave(const <String>[]);
+    }
     final Draft? existingDraft = id == null
         ? null
         : await _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
+    if (shouldCommit?.call() == false) {
+      await abortDraftSave(const <String>[]);
+    }
     final draftUpdatedAt = DateTime.timestamp().toUtc();
     final draftSyncMetadata =
         (existingDraft?.syncMetadata ??
@@ -1502,35 +1527,87 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       referenceKind: quotingReferenceKind,
     );
     final metadataIds = <String>[];
+    final newMetadataIds = <String>[];
     for (final attachment in attachments) {
+      if (shouldCommit?.call() == false) {
+        await abortDraftSave(newMetadataIds);
+      }
       final metadataId = await _persistDraftAttachmentMetadata(attachment);
       metadataIds.add(metadataId);
+      if (attachment.metadataId == null) {
+        newMetadataIds.add(metadataId);
+      }
     }
     final attachmentMetadata = DraftAttachmentMetadataIds(metadataIds);
-    final savedId = await _dbOpReturning<XmppDatabase, int>(
-      (db) => db.saveDraft(
-        id: id,
-        jids: jids,
-        body: body,
-        draftSyncId: draftSyncMetadata.id,
-        draftUpdatedAt: draftSyncMetadata.updatedAt,
-        draftSourceId: draftSyncMetadata.sourceId,
-        draftRecipients: draftRecipients,
-        subject: subject,
-        quotingStanzaId: quoteTarget?.stanzaId,
-        quotingReferenceKind: quoteTarget?.referenceKind,
-        attachmentMetadataIds: attachmentMetadata.values,
-        calendarTaskIcsMessage: calendarTaskIcsMessage,
-        forwardedBlocks: forwardedBlocks,
-      ),
-    );
+    bool matchesCommittedDraftSave(Draft draft) {
+      return draft.draftSyncId == draftSyncMetadata.id &&
+          draft.draftSourceId == draftSyncMetadata.sourceId &&
+          draft.draftUpdatedAt.toUtc().isAtSameMomentAs(
+            draftSyncMetadata.updatedAt,
+          );
+    }
+
+    Future<Never> abortCommittedDraftSave(int savedId) async {
+      var shouldCleanupNewMetadata = false;
+      await _dbOp<XmppDatabase>((db) async {
+        final committedDraft = savedId > 0
+            ? await db.getDraft(savedId)
+            : await db.getDraftBySyncId(draftSyncMetadata.id);
+        if (committedDraft == null) {
+          shouldCleanupNewMetadata = true;
+          return;
+        }
+        if (!matchesCommittedDraftSave(committedDraft)) {
+          return;
+        }
+        if (existingDraft == null) {
+          await db.removeDraft(committedDraft.id);
+        } else if (committedDraft.id == existingDraft.id) {
+          await db.restoreDraft(existingDraft);
+        } else {
+          return;
+        }
+        shouldCleanupNewMetadata = true;
+      });
+      if (shouldCleanupNewMetadata) {
+        await abortDraftSave(newMetadataIds);
+      }
+      throw const DraftSaveAbortedException();
+    }
+
+    if (shouldCommit?.call() == false) {
+      await abortDraftSave(newMetadataIds);
+    }
+    final int savedId;
+    try {
+      savedId = await _dbOpReturning<XmppDatabase, int>(
+        (db) => db.saveDraft(
+          id: id,
+          jids: jids,
+          body: body,
+          draftSyncId: draftSyncMetadata.id,
+          draftUpdatedAt: draftSyncMetadata.updatedAt,
+          draftSourceId: draftSyncMetadata.sourceId,
+          draftRecipients: draftRecipients,
+          subject: subject,
+          quotingStanzaId: quoteTarget?.stanzaId,
+          quotingReferenceKind: quoteTarget?.referenceKind,
+          attachmentMetadataIds: attachmentMetadata.values,
+          calendarTaskIcsMessage: calendarTaskIcsMessage,
+          forwardedBlocks: forwardedBlocks,
+          shouldCommit: shouldCommit,
+        ),
+      );
+    } on DraftSaveAbortedException {
+      await abortDraftSave(newMetadataIds);
+    }
+    if (shouldCommit?.call() == false) {
+      await abortCommittedDraftSave(savedId);
+    }
     final staleMetadataIds =
         (existingDraft?.attachmentMetadata ??
                 DraftAttachmentMetadataIds(const <String>[]))
             .staleComparedTo(attachmentMetadata.values);
-    if (staleMetadataIds.isNotEmpty) {
-      await _deleteDraftAttachmentMetadata(staleMetadataIds);
-    }
     final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
       (db) => savedId > 0
           ? db.getDraft(savedId)
@@ -1554,8 +1631,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
           calendarTaskIcsMessage: calendarTaskIcsMessage,
           forwardedBlocks: forwardedBlocks,
         );
+    if (shouldCommit?.call() == false) {
+      await abortCommittedDraftSave(savedId);
+    }
     if (savedDraft != null) {
       await publishDraftSync(savedDraft);
+    }
+    if (staleMetadataIds.isNotEmpty) {
+      await _deleteDraftAttachmentMetadata(staleMetadataIds);
     }
     return resolvedDraft;
   }

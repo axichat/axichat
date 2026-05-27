@@ -120,6 +120,114 @@ void main() {
   );
 
   test(
+    'saveDraft propagates stale commit aborts without emitting save complete',
+    () async {
+      when(
+        () => messageService.saveDraft(
+          id: any(named: 'id'),
+          jids: any(named: 'jids'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          quotingReferenceKind: any(named: 'quotingReferenceKind'),
+          attachments: any(named: 'attachments'),
+          shouldCommit: any(named: 'shouldCommit'),
+        ),
+      ).thenAnswer((invocation) async {
+        final shouldCommit =
+            invocation.namedArguments[#shouldCommit] as bool Function();
+        expect(shouldCommit(), isFalse);
+        throw const DraftSaveAbortedException();
+      });
+
+      final cubit = DraftCubit(messageService: messageService);
+      addTearDown(cubit.close);
+
+      await expectLater(
+        cubit.saveDraft(
+          id: null,
+          jids: const <String>['peer@axi.im'],
+          body: 'Hello world',
+          subject: 'Subject',
+          shouldCommit: () => false,
+        ),
+        throwsA(isA<DraftSaveAbortedException>()),
+      );
+
+      expect(cubit.state, isA<DraftsAvailable>());
+      expect(cubit.state, isNot(isA<DraftSaveComplete>()));
+    },
+  );
+
+  test('saveDraft waits for fallback draft mirroring', () async {
+    final savedDraft = Draft(
+      id: 1,
+      jids: const <String>['peer@axi.im'],
+      body: 'Hello world',
+      subject: 'Subject',
+      draftSyncId: 'draft-1',
+      draftUpdatedAt: DateTime.utc(2025, 1, 1),
+      draftSourceId: 'source-1',
+    );
+    final emailService = MockEmailService();
+    final mirrorCompleter = Completer<void>();
+    when(
+      () => messageService.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
+        quotingReferenceKind: any(named: 'quotingReferenceKind'),
+        attachments: any(named: 'attachments'),
+      ),
+    ).thenAnswer((_) async => savedDraft);
+    when(
+      () => emailService.mirrorDraftForFallback(
+        jids: any(named: 'jids'),
+        text: any(named: 'text'),
+        subject: any(named: 'subject'),
+        attachments: any(named: 'attachments'),
+      ),
+    ).thenAnswer((_) => mirrorCompleter.future);
+
+    final cubit = DraftCubit(
+      messageService: messageService,
+      emailService: emailService,
+    );
+    addTearDown(cubit.close);
+
+    var completed = false;
+    final operation = cubit
+        .saveDraft(
+          id: null,
+          jids: const <String>['peer@axi.im'],
+          body: 'Hello world',
+          subject: 'Subject',
+        )
+        .then((draft) {
+          completed = true;
+          return draft;
+        });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(completed, isFalse);
+
+    mirrorCompleter.complete();
+    expect(await operation, savedDraft);
+    expect(completed, isTrue);
+    expect(cubit.state, isA<DraftSaveComplete>());
+    verify(
+      () => emailService.mirrorDraftForFallback(
+        jids: const <String>['peer@axi.im'],
+        text: 'Hello world',
+        subject: 'Subject',
+        attachments: const <Attachment>[],
+      ),
+    ).called(1);
+  });
+
+  test(
     'sendDraft still succeeds when deleting the saved draft fails',
     () async {
       when(

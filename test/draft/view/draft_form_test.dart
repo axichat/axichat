@@ -23,32 +23,33 @@ void main() {
     registerFallbackValue(<DraftForwardedBlock>[]);
   });
 
-  testWidgets('deletes tracked draft when autosaved form becomes empty', (
-    tester,
-  ) async {
-    final harness = _DraftFormHarness();
+  testWidgets(
+    'does not delete tracked draft when autosaved form becomes empty',
+    (tester) async {
+      final harness = _DraftFormHarness();
 
-    await tester.pumpWidget(
-      harness.wrap(
-        DraftForm(
-          id: 7,
-          locate: harness.locate,
-          jids: const ['peer@example.com'],
-          body: 'hello',
-          recipientCountAdjustment: 1,
+      await tester.pumpWidget(
+        harness.wrap(
+          DraftForm(
+            id: 7,
+            locate: harness.locate,
+            jids: const ['peer@example.com'],
+            body: 'hello',
+            recipientCountAdjustment: 1,
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    await _enterBodyText(tester, '');
-    await tester.pump(const Duration(seconds: 3));
+      await _enterBodyText(tester, '');
+      await tester.pump(const Duration(seconds: 3));
 
-    verify(() => harness.draftCubit.deleteDraft(id: 7)).called(1);
-  });
+      verifyNever(() => harness.draftCubit.deleteDraft(id: 7));
+    },
+  );
 
   testWidgets(
-    'deletes tracked draft after emptying during in-flight autosave',
+    'does not delete tracked draft after emptying during in-flight autosave',
     (tester) async {
       final harness = _DraftFormHarness();
       final saveCompleter = Completer<Draft>();
@@ -60,7 +61,10 @@ void main() {
           subject: any(named: 'subject'),
           quoteTarget: any(named: 'quoteTarget'),
           attachments: any(named: 'attachments'),
+          calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+          forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: any(named: 'autoSave'),
+          shouldCommit: any(named: 'shouldCommit'),
         ),
       ).thenAnswer((_) => saveCompleter.future);
 
@@ -87,7 +91,10 @@ void main() {
           subject: any(named: 'subject'),
           quoteTarget: any(named: 'quoteTarget'),
           attachments: any(named: 'attachments'),
+          calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+          forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: true,
+          shouldCommit: any(named: 'shouldCommit'),
         ),
       ).called(1);
 
@@ -99,11 +106,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
 
-      verify(() => harness.draftCubit.deleteDraft(id: 7)).called(1);
+      verifyNever(() => harness.draftCubit.deleteDraft(id: 7));
     },
   );
 
-  testWidgets('deletes empty tracked draft before closing without prompt', (
+  testWidgets('closes unchanged empty tracked draft without deleting', (
     tester,
   ) async {
     final harness = _DraftFormHarness();
@@ -128,9 +135,381 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(closeResult, isTrue);
-    verify(() => harness.draftCubit.deleteDraft(id: 7)).called(1);
+    verifyNever(() => harness.draftCubit.deleteDraft(id: 7));
     expect(closed, isTrue);
   });
+
+  testWidgets('discarding close prompt changes preserves the saved draft', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final formKey = GlobalKey<DraftFormState>();
+    var discarded = false;
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          key: formKey,
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+          recipientCountAdjustment: 1,
+          onDiscarded: () => discarded = true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _enterBodyText(tester, '');
+    final closeResult = formKey.currentState!.handleCloseRequest();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await tester.tap(find.text('Discard').last);
+    await tester.pumpAndSettle();
+
+    expect(await closeResult, isTrue);
+    verifyNever(() => harness.draftCubit.deleteDraft(id: 7));
+    expect(discarded, isTrue);
+  });
+
+  testWidgets('close prompt does not wait for in-flight autosave', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final formKey = GlobalKey<DraftFormState>();
+    final saveCompleter = Completer<Draft>();
+    when(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+        shouldCommit: any(named: 'shouldCommit'),
+      ),
+    ).thenAnswer((_) => saveCompleter.future);
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          key: formKey,
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _enterBodyText(tester, 'hello updated');
+    await tester.pump(const Duration(seconds: 3));
+    verify(
+      () => harness.draftCubit.saveDraft(
+        id: 7,
+        jids: any(named: 'jids'),
+        body: 'hello updated',
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: true,
+        shouldCommit: any(named: 'shouldCommit'),
+      ),
+    ).called(1);
+
+    final closeResult = formKey.currentState!.handleCloseRequest();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    expect(await closeResult, isFalse);
+
+    saveCompleter.complete(_draft(id: 7));
+    await tester.pump();
+  });
+
+  testWidgets('discarding during in-flight autosave ignores its completion', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final formKey = GlobalKey<DraftFormState>();
+    final saveCompleter = Completer<Draft>();
+    final savedDraftIds = <int>[];
+    bool Function()? shouldCommit;
+    var discarded = false;
+    when(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+        shouldCommit: any(named: 'shouldCommit'),
+      ),
+    ).thenAnswer((invocation) async {
+      shouldCommit =
+          invocation.namedArguments[#shouldCommit] as bool Function()?;
+      await saveCompleter.future;
+      if (shouldCommit?.call() == false) {
+        throw const DraftSaveAbortedException();
+      }
+      return _draft(id: 7);
+    });
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          key: formKey,
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+          recipientCountAdjustment: 1,
+          onDraftSaved: savedDraftIds.add,
+          onDiscarded: () => discarded = true,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _enterBodyText(tester, 'hello updated');
+    await tester.pump(const Duration(seconds: 3));
+    verify(
+      () => harness.draftCubit.saveDraft(
+        id: 7,
+        jids: any(named: 'jids'),
+        body: 'hello updated',
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: true,
+        shouldCommit: any(named: 'shouldCommit'),
+      ),
+    ).called(1);
+
+    final closeResult = formKey.currentState!.handleCloseRequest();
+    var closeCompleted = false;
+    unawaited(closeResult.then((value) => closeCompleted = value));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await tester.tap(find.text('Discard').last);
+    await tester.pumpAndSettle();
+
+    expect(closeCompleted, isTrue);
+    expect(await closeResult, isTrue);
+    expect(discarded, isTrue);
+    expect(shouldCommit?.call(), isFalse);
+    verifyNever(() => harness.draftCubit.deleteDraft(id: 7));
+
+    saveCompleter.complete(_draft(id: 7));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(savedDraftIds, isEmpty);
+  });
+
+  testWidgets(
+    'discarding during changed in-flight autosave does not reschedule',
+    (tester) async {
+      final harness = _DraftFormHarness();
+      final formKey = GlobalKey<DraftFormState>();
+      final saveCompleter = Completer<Draft>();
+      var saveCalls = 0;
+      when(
+        () => harness.draftCubit.saveDraft(
+          id: any(named: 'id'),
+          jids: any(named: 'jids'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          quoteTarget: any(named: 'quoteTarget'),
+          attachments: any(named: 'attachments'),
+          calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+          forwardedBlocks: any(named: 'forwardedBlocks'),
+          autoSave: any(named: 'autoSave'),
+          shouldCommit: any(named: 'shouldCommit'),
+        ),
+      ).thenAnswer((_) {
+        saveCalls += 1;
+        return saveCompleter.future;
+      });
+
+      await tester.pumpWidget(
+        harness.wrap(
+          DraftForm(
+            key: formKey,
+            id: 7,
+            locate: harness.locate,
+            jids: const ['peer@example.com'],
+            body: 'hello',
+            recipientCountAdjustment: 1,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await _enterBodyText(tester, 'hello updated');
+      await tester.pump(const Duration(seconds: 3));
+      expect(saveCalls, 1);
+
+      await _enterBodyText(tester, 'hello changed again');
+      final closeResult = formKey.currentState!.handleCloseRequest();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Unsaved changes'), findsOneWidget);
+      await tester.tap(find.text('Discard').last);
+      await tester.pumpAndSettle();
+      expect(await closeResult, isTrue);
+
+      saveCompleter.complete(_draft(id: 7));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(saveCalls, 1);
+    },
+  );
+
+  testWidgets('no-prompt close ignores stale in-flight autosave completion', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final formKey = GlobalKey<DraftFormState>();
+    final saveCompleter = Completer<Draft>();
+    final savedDraftIds = <int>[];
+    var closed = false;
+    when(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+        shouldCommit: any(named: 'shouldCommit'),
+      ),
+    ).thenAnswer((_) => saveCompleter.future);
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          key: formKey,
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+          recipientCountAdjustment: 1,
+          onClosed: () => closed = true,
+          onDraftSaved: savedDraftIds.add,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _enterBodyText(tester, 'hello updated');
+    await tester.pump(const Duration(seconds: 3));
+    await _enterBodyText(tester, 'hello');
+
+    final closeResult = await formKey.currentState!.handleCloseRequest();
+    await tester.pump();
+
+    expect(closeResult, isTrue);
+    expect(closed, isTrue);
+    expect(find.text('Unsaved changes'), findsNothing);
+
+    saveCompleter.complete(_draft(id: 7));
+    await tester.pump();
+
+    expect(savedDraftIds, isEmpty);
+  });
+
+  testWidgets(
+    'discarding close prompt changes preserves a newly autosaved draft',
+    (tester) async {
+      final harness = _DraftFormHarness();
+      final formKey = GlobalKey<DraftFormState>();
+      var discarded = false;
+      when(
+        () => harness.draftCubit.saveDraft(
+          id: any(named: 'id'),
+          jids: any(named: 'jids'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          quoteTarget: any(named: 'quoteTarget'),
+          attachments: any(named: 'attachments'),
+          calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+          forwardedBlocks: any(named: 'forwardedBlocks'),
+          autoSave: any(named: 'autoSave'),
+          shouldCommit: any(named: 'shouldCommit'),
+        ),
+      ).thenAnswer((_) async => _draft(id: 8));
+
+      await tester.pumpWidget(
+        harness.wrap(
+          DraftForm(
+            key: formKey,
+            locate: harness.locate,
+            jids: const ['peer@example.com'],
+            recipientCountAdjustment: 1,
+            onDiscarded: () => discarded = true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await _enterBodyText(tester, 'hello saved');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      await _enterBodyText(tester, 'hello unsaved');
+      final closeResult = formKey.currentState!.handleCloseRequest();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Unsaved changes'), findsOneWidget);
+      await tester.tap(find.text('Discard').last);
+      await tester.pumpAndSettle();
+
+      expect(await closeResult, isTrue);
+      verify(
+        () => harness.draftCubit.saveDraft(
+          id: null,
+          jids: any(named: 'jids'),
+          body: 'hello saved',
+          subject: any(named: 'subject'),
+          quoteTarget: any(named: 'quoteTarget'),
+          attachments: any(named: 'attachments'),
+          calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+          forwardedBlocks: any(named: 'forwardedBlocks'),
+          autoSave: true,
+          shouldCommit: any(named: 'shouldCommit'),
+        ),
+      ).called(1);
+      verifyNever(() => harness.draftCubit.deleteDraft(id: 8));
+      expect(discarded, isTrue);
+    },
+  );
 
   testWidgets('converting a forwarded block autosaves editable text', (
     tester,
@@ -148,6 +527,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: any(named: 'autoSave'),
+        shouldCommit: any(named: 'shouldCommit'),
       ),
     ).thenAnswer((invocation) async {
       savedBlocks.add(
@@ -187,6 +567,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: true,
+        shouldCommit: any(named: 'shouldCommit'),
       ),
     ).called(1);
     expect(savedBlocks.single.single.isConverted, isTrue);

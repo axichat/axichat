@@ -513,7 +513,10 @@ abstract interface class XmppDatabase implements Database {
     List<String> attachmentMetadataIds = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
+    bool Function()? shouldCommit,
   });
+
+  Future<void> restoreDraft(Draft draft);
 
   Future<void> updateDraftSyncMetadata({
     required int id,
@@ -5003,8 +5006,16 @@ WHERE stanza_i_d = ?
     List<String> attachmentMetadataIds = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
+    bool Function()? shouldCommit,
   }) async {
+    void abortIfStale() {
+      if (shouldCommit?.call() == false) {
+        throw const DraftSaveAbortedException();
+      }
+    }
+
     return transaction(() async {
+      abortIfStale();
       final draftId = await draftsAccessor.insertOrUpdateOne(
         DraftsCompanion(
           id: Value.absentIfNull(id),
@@ -5022,11 +5033,24 @@ WHERE stanza_i_d = ?
           forwardedBlocks: Value(forwardedBlocks),
         ),
       );
+      abortIfStale();
       await _replaceDraftAttachmentRefs(
         draftId: draftId,
         attachmentMetadataIds: attachmentMetadataIds,
       );
+      abortIfStale();
       return draftId;
+    });
+  }
+
+  @override
+  Future<void> restoreDraft(Draft draft) async {
+    await transaction(() async {
+      await draftsAccessor.updateOne(draft);
+      await _replaceDraftAttachmentRefs(
+        draftId: draft.id,
+        attachmentMetadataIds: draft.attachmentMetadataIds,
+      );
     });
   }
 

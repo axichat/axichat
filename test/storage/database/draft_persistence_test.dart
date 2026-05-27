@@ -74,6 +74,40 @@ void main() {
     expect(saved?.calendarTaskIcsMessage, isNull);
   });
 
+  test('saveDraft rolls back when commit becomes stale', () async {
+    final draftUpdatedAt = DateTime.utc(2026, 3, 11, 10);
+    final draftId = await database.saveDraft(
+      jids: const ['peer@axi.im'],
+      body: 'Saved body',
+      draftSyncId: 'sync-stale-save',
+      draftUpdatedAt: draftUpdatedAt,
+      draftSourceId: 'source',
+      draftRecipients: const [],
+    );
+    var checks = 0;
+
+    await expectLater(
+      database.saveDraft(
+        id: draftId,
+        jids: const ['peer@axi.im'],
+        body: 'Discarded body',
+        draftSyncId: 'sync-stale-save',
+        draftUpdatedAt: DateTime.utc(2026, 3, 11, 11),
+        draftSourceId: 'source',
+        draftRecipients: const [],
+        shouldCommit: () {
+          checks += 1;
+          return checks == 1;
+        },
+      ),
+      throwsA(isA<DraftSaveAbortedException>()),
+    );
+
+    final saved = await database.getDraft(draftId);
+    expect(saved?.body, 'Saved body');
+    expect(saved?.draftUpdatedAt, draftUpdatedAt);
+  });
+
   test('saveDraft persists forwarded block conversion state', () async {
     final block = forwardedBlock(
       conversionState: DraftForwardedBlockConversionState.convertedText,

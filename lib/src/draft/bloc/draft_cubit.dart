@@ -367,18 +367,35 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     bool autoSave = false,
+    bool Function()? shouldCommit,
   }) async {
-    final draft = await _messageService.saveDraft(
-      id: id,
-      jids: jids,
-      body: body,
-      subject: subject,
-      quotingStanzaId: quoteTarget?.stanzaId,
-      quotingReferenceKind: quoteTarget?.referenceKind,
-      attachments: attachments,
-      calendarTaskIcsMessage: calendarTaskIcsMessage,
-      forwardedBlocks: forwardedBlocks,
-    );
+    final Draft draft;
+    if (shouldCommit == null) {
+      draft = await _messageService.saveDraft(
+        id: id,
+        jids: jids,
+        body: body,
+        subject: subject,
+        quotingStanzaId: quoteTarget?.stanzaId,
+        quotingReferenceKind: quoteTarget?.referenceKind,
+        attachments: attachments,
+        calendarTaskIcsMessage: calendarTaskIcsMessage,
+        forwardedBlocks: forwardedBlocks,
+      );
+    } else {
+      draft = await _messageService.saveDraft(
+        id: id,
+        jids: jids,
+        body: body,
+        subject: subject,
+        quotingStanzaId: quoteTarget?.stanzaId,
+        quotingReferenceKind: quoteTarget?.referenceKind,
+        attachments: attachments,
+        calendarTaskIcsMessage: calendarTaskIcsMessage,
+        forwardedBlocks: forwardedBlocks,
+        shouldCommit: shouldCommit,
+      );
+    }
     try {
       await _emailService?.mirrorDraftForFallback(
         jids: jids,
@@ -390,7 +407,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         attachments: attachments,
       );
     } on Exception {
-      // Best-effort: core draft syncing should not block local saves.
+      // Best-effort: fallback mirroring should not fail local draft saves.
     }
     emit(
       DraftSaveComplete(

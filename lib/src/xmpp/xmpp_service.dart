@@ -3855,6 +3855,8 @@ class XmppService extends XmppBase
           }
         }
       }
+    } on DraftSaveAbortedException {
+      rethrow;
     } on XmppAbortedException catch (e, s) {
       _xmppLogger.finer('Owner called reset before $D initialized.', e, s);
       rethrow;
@@ -3913,6 +3915,8 @@ class XmppService extends XmppBase
         }
       }
       return;
+    } on DraftSaveAbortedException {
+      rethrow;
     } on XmppAbortedException catch (_) {
       return;
     } on XmppException {

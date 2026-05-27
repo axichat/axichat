@@ -18,6 +18,10 @@ final class DraftDefaults {
   static const String sourceLegacyId = 'legacy';
 }
 
+final class DraftSaveAbortedException implements Exception {
+  const DraftSaveAbortedException();
+}
+
 final class DraftRecipientData {
   const DraftRecipientData({required this.jid, required this.role});
 
