@@ -4917,10 +4917,141 @@ void main() {
     });
 
     test(
+      'Brand-new completed empty calendar archive does not emit warning',
+      () async {
+        await _openXmppStateStore('axichat_calendar_mam_empty_complete');
+        HydratedBloc.storage = _InMemoryStorage();
+        final warnings = <CalendarSyncWarning>[];
+        final subscription = xmppService.calendarSyncWarningStream.listen(
+          warnings.add,
+        );
+        addTearDown(subscription.cancel);
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: const [ScriptedMamPage(complete: true, count: 0)],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.completed,
+        );
+
+        expect(mamManager.queryCount, 1);
+        expect(warnings, isEmpty);
+        expect(CalendarSyncState.read().hasCompleteCoverage, isTrue);
+      },
+    );
+
+    test(
+      'Fresh local state incomplete calendar archive warns without sync envelopes',
+      () async {
+        await _openXmppStateStore('axichat_calendar_mam_empty_incomplete');
+        HydratedBloc.storage = _InMemoryStorage();
+        final warnings = <CalendarSyncWarning>[];
+        final subscription = xmppService.calendarSyncWarningStream.listen(
+          warnings.add,
+        );
+        addTearDown(subscription.cancel);
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: const [ScriptedMamPage(complete: false, count: 1)],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.incomplete,
+        );
+
+        expect(mamManager.queryCount, 1);
+        expect(
+          warnings.map((warning) => warning.type),
+          contains(CalendarSyncWarningType.archiveIncomplete),
+        );
+        expect(
+          CalendarSyncState.read().coverageStatus,
+          CalendarArchiveCoverageStatus.incomplete,
+        );
+      },
+    );
+
+    test(
+      'Incomplete calendar archive emits warning after processing sync envelope',
+      () async {
+        await _openXmppStateStore('axichat_calendar_mam_update_incomplete');
+        HydratedBloc.storage = _InMemoryStorage();
+        final warnings = <CalendarSyncWarning>[];
+        final subscription = xmppService.calendarSyncWarningStream.listen(
+          warnings.add,
+        );
+        addTearDown(subscription.cancel);
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final timestamp = DateTime.utc(2026, 5, 4, 15);
+        final task = _task(
+          id: 'incomplete-update-task',
+          title: 'Incomplete archive update',
+          timestamp: timestamp,
+        );
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'incomplete-update',
+                  timestamp: timestamp,
+                  message: _taskUpdate(task: task, operation: 'add'),
+                ),
+              ],
+              complete: false,
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.incomplete,
+        );
+
+        final state = CalendarSyncState.read();
+        final stored = jsonEncode(HydratedBloc.storage.read(authStoragePrefix));
+        expect(mamManager.queryCount, 1);
+        expect(state.coverageStatus, CalendarArchiveCoverageStatus.incomplete);
+        expect(state.lastHandledStanzaId, 'incomplete-update');
+        expect(
+          warnings.map((warning) => warning.type),
+          contains(CalendarSyncWarningType.archiveIncomplete),
+        );
+        expect(stored, contains('Incomplete archive update'));
+      },
+    );
+
+    test(
       'Unsupported snapshot leaves calendar MAM incomplete without advancing page resume',
       () async {
         await _openXmppStateStore('axichat_calendar_mam_bad_snapshot');
         HydratedBloc.storage = _InMemoryStorage();
+        final warnings = <CalendarSyncWarning>[];
+        final subscription = xmppService.calendarSyncWarningStream.listen(
+          warnings.add,
+        );
+        addTearDown(subscription.cancel);
         final selfBare = mox.JID
             .fromString(xmppService.myJid!)
             .toBare()
@@ -4976,6 +5107,10 @@ void main() {
         expect(state.coverageStatus, CalendarArchiveCoverageStatus.incomplete);
         expect(state.lastHandledStanzaId, 'unsupported-calendar-snapshot');
         expect(state.lastArchiveResumeId, isNot('bad-snapshot-last'));
+        expect(
+          warnings.map((warning) => warning.type),
+          contains(CalendarSyncWarningType.archiveIncomplete),
+        );
         expect(stored, isNot(contains('Unsupported snapshot task')));
       },
     );

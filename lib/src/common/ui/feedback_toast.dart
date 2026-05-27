@@ -381,7 +381,10 @@ class _FeedbackToastState extends State<FeedbackToast> {
                   ? double.infinity
                   : context.sizing.dialogMaxWidth,
               minHeight: context.sizing.menuItemHeight,
-              maxHeight: context.sizing.attachmentPreviewExtent,
+              maxHeight: compactWidth
+                  ? context.sizing.attachmentPreviewExtent +
+                        context.sizing.inputSuffixButtonSize
+                  : context.sizing.attachmentPreviewExtent,
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(

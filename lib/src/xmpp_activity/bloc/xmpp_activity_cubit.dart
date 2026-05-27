@@ -21,6 +21,9 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
        _failedRetention = failedRetention,
        super(const XmppActivityState()) {
     _subscription = _xmppBase.xmppOperationStream.listen(_handleEvent);
+    _connectivitySubscription = _xmppBase.connectivityStream.listen(
+      _handleConnectionState,
+    );
     _staleOperationTimer = Timer.periodic(
       _staleOperationCheckInterval,
       (_) => _reconcileStaleOperations(),
@@ -43,11 +46,27 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   final Map<String, Timer> _retentionTimers = {};
   final Map<String, Timer> _completionTimers = {};
   late final StreamSubscription<XmppOperationEvent> _subscription;
+  late final StreamSubscription<ConnectionState> _connectivitySubscription;
   late final Timer _staleOperationTimer;
 
   static final _logger = Logger('XmppActivityCubit');
 
+  void _handleConnectionState(ConnectionState connectionState) {
+    if (connectionState == ConnectionState.connected) {
+      return;
+    }
+    _clearInProgressOperations();
+  }
+
   void _handleEvent(XmppOperationEvent event) {
+    if (event.stage.isStart &&
+        _xmppBase.connectionState != ConnectionState.connected) {
+      _logger.fine(
+        'Ignoring XMPP activity start while disconnected: ${event.kind}.',
+      );
+      return;
+    }
+
     final key = _XmppOperationKey(kind: event.kind);
     final now = DateTime.now();
 
@@ -212,6 +231,26 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     timer?.cancel();
   }
 
+  void _clearInProgressOperations() {
+    if (_activeOperations.isEmpty &&
+        !state.operations.any(
+          (operation) => operation.status == XmppOperationStatus.inProgress,
+        )) {
+      return;
+    }
+    _activeOperations.clear();
+    for (final timer in _completionTimers.values.toList(growable: false)) {
+      timer.cancel();
+    }
+    _completionTimers.clear();
+    final operations = state.operations
+        .where(
+          (operation) => operation.status != XmppOperationStatus.inProgress,
+        )
+        .toList(growable: false);
+    emit(state.copyWith(operations: List.unmodifiable(operations)));
+  }
+
   void _refreshOperationStartTime(String id, {required DateTime startedAt}) {
     final operations = List<XmppOperation>.of(state.operations);
     final index = operations.indexWhere((item) => item.id == id);
@@ -317,6 +356,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     }
     _retentionTimers.clear();
     await _subscription.cancel();
+    await _connectivitySubscription.cancel();
     return super.close();
   }
 }
