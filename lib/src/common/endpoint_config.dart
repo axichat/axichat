@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 
 class EndpointConfig extends Equatable {
   const EndpointConfig({
@@ -43,6 +44,11 @@ class EndpointConfig extends Equatable {
   final bool apiUseTls;
   final String? emailProvisioningBaseUrl;
   final String? emailProvisioningPublicToken;
+
+  bool get isDefaultDomain => domain.trim().toLowerCase() == defaultDomain;
+
+  bool requiresCustomSignupEndpoint({bool allowDefaultEndpoint = kDebugMode}) =>
+      isDefaultDomain && !allowDefaultEndpoint;
 
   EndpointConfig copyWith({
     String? domain,

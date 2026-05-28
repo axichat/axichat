@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -636,6 +637,49 @@ void main() {
   });
 
   testWidgets(
+    'autocomplete ranks primary and contact domains before providers',
+    (tester) async {
+      await tester.pumpWidget(
+        _wrapWithTheme(
+          RecipientChipsBar(
+            recipients: const [],
+            availableChats: [
+              Chat(
+                jid: 'friend@conversations.im',
+                title: 'Friend',
+                type: ChatType.chat,
+                lastChangeTimestamp: DateTime(2024, 1, 1),
+                emailAddress: 'friend@conversations.im',
+              ),
+            ],
+            latestStatuses: const {},
+            selfIdentity: const SelfAvatar(),
+            onRecipientAdded: (_) => true,
+            onRecipientRemoved: (_) {},
+          ),
+          settingsState: const SettingsState(
+            endpointConfig: EndpointConfig(domain: 'example.net'),
+          ),
+        ),
+      );
+
+      final options = _autocompleteOptionsFor(tester, 'ca@');
+      expect(
+        options
+            .map((option) => option.address ?? option.displayName)
+            .take(4)
+            .toList(growable: false),
+        const <String>[
+          'ca@example.net',
+          'ca@axi.im',
+          'ca@conversations.im',
+          'ca@gmail.com',
+        ],
+      );
+    },
+  );
+
+  testWidgets(
     'empty recipient input stays on chip row when compact space fits',
     (tester) async {
       final recipient = _chatRecipient(title: 'Bob');
@@ -947,9 +991,12 @@ List<Contact> _autocompleteOptionsFor(WidgetTester tester, String raw) {
   return optionsBuilder(raw).toList(growable: false);
 }
 
-Widget _wrapWithTheme(Widget child) {
+Widget _wrapWithTheme(
+  Widget child, {
+  SettingsState settingsState = const SettingsState(),
+}) {
   final settingsCubit = _MockSettingsCubit();
-  when(() => settingsCubit.state).thenReturn(const SettingsState());
+  when(() => settingsCubit.state).thenReturn(settingsState);
   when(
     () => settingsCubit.stream,
   ).thenAnswer((_) => const Stream<SettingsState>.empty());

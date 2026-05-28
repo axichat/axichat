@@ -155,6 +155,10 @@ void main() {
           negotiators.whereType<mox.Sasl2Negotiator>(),
           hasLength(_expectedSingleNegotiator),
         );
+        expect(
+          negotiators.whereType<AxiSasl2Negotiator>(),
+          hasLength(_expectedSingleNegotiator),
+        );
       } finally {
         await harness.close();
       }

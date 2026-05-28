@@ -1503,6 +1503,12 @@ abstract class AppLocalizations {
   /// **'Autosaved'**
   String get draftAutosaved;
 
+  /// No description provided for @draftAutosave.
+  ///
+  /// In en, this message translates to:
+  /// **'Autosave'**
+  String get draftAutosave;
+
   /// No description provided for @draftErrorTitle.
   ///
   /// In en, this message translates to:
@@ -6096,6 +6102,12 @@ abstract class AppLocalizations {
   /// **'Details'**
   String get contactsDetailsSectionTitle;
 
+  /// No description provided for @contactsFolderRoutingDetailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Belongs in'**
+  String get contactsFolderRoutingDetailLabel;
+
   /// No description provided for @contactsAddressLabel.
   ///
   /// In en, this message translates to:
@@ -7935,7 +7947,7 @@ abstract class AppLocalizations {
   /// No description provided for @emailEncryptionBetaChip.
   ///
   /// In en, this message translates to:
-  /// **'Beta'**
+  /// **'Experimental'**
   String get emailEncryptionBetaChip;
 
   /// No description provided for @emailEncryptionBetaEnabledStatus.

@@ -26,6 +26,7 @@ class EndpointConfigSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      preferDialogOnMobile: true,
       showDragHandle: compact,
       dialogMaxWidth: sizing.dialogMaxWidth,
       surfacePadding: EdgeInsets.zero,
@@ -56,7 +57,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     if (_draftConfig != null) return;
     final config = context.read<SettingsCubit>().state.endpointConfig;
     _draftConfig = config;
-    _domainController.text = config.domain;
+    _domainController.text = config.isDefaultDomain ? '' : config.domain;
     _emailProvisioningPublicTokenController.text =
         config.emailProvisioningPublicToken ?? '';
   }
@@ -200,6 +201,30 @@ class EndpointSuffix extends StatelessWidget {
       onPressed: () => EndpointConfigSheet.show(context),
       child: Text(
         '@$server',
+        style: context.textTheme.small.copyWith(
+          color: context.colorScheme.foreground,
+        ),
+      ),
+    );
+  }
+}
+
+class SignupEndpointSuffix extends StatelessWidget {
+  const SignupEndpointSuffix({super.key, required this.config});
+
+  final EndpointConfig config;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = config.requiresCustomSignupEndpoint()
+        ? context.l10n.signupChooseServer
+        : '@${config.domain}';
+    return AxiButton.ghost(
+      size: AxiButtonSize.sm,
+      semanticLabel: context.l10n.authCustomServerOpenSettings,
+      onPressed: () => EndpointConfigSheet.show(context),
+      child: Text(
+        label,
         style: context.textTheme.small.copyWith(
           color: context.colorScheme.foreground,
         ),

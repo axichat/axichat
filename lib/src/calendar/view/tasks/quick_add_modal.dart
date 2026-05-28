@@ -1302,7 +1302,7 @@ Future<void> showQuickAddModal({
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,
-    bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth:
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth,

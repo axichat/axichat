@@ -57,11 +57,15 @@ class DraftComposerView extends StatelessWidget {
     required this.readyToSend,
     required this.sending,
     required this.onSendPressed,
+    this.onSendLongPressed,
     required this.showSendBlockerMessage,
     required this.sendBlockerMessage,
     required this.sendErrorMessage,
     required this.showSendingStatus,
     required this.showAutosaveHint,
+    this.autosaveEnabled = true,
+    this.autosaveUpdating = false,
+    this.onAutosaveChanged,
     required this.canDiscard,
     required this.canSave,
     required this.onDiscardPressed,
@@ -116,11 +120,15 @@ class DraftComposerView extends StatelessWidget {
   final bool sending;
   final String? disabledSendReason;
   final VoidCallback? onSendPressed;
+  final VoidCallback? onSendLongPressed;
   final bool showSendBlockerMessage;
   final String? sendBlockerMessage;
   final String? sendErrorMessage;
   final bool showSendingStatus;
   final bool showAutosaveHint;
+  final bool autosaveEnabled;
+  final bool autosaveUpdating;
+  final ValueChanged<bool>? onAutosaveChanged;
   final bool canDiscard;
   final bool canSave;
   final VoidCallback? onDiscardPressed;
@@ -136,6 +144,7 @@ class DraftComposerView extends StatelessWidget {
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.m;
     final smallGap = spacing.s;
+    final onAutosaveChanged = this.onAutosaveChanged;
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return _DraftTaskDropRegion(
@@ -238,6 +247,7 @@ class DraftComposerView extends StatelessWidget {
                       sending: sending,
                       disabledReason: disabledSendReason,
                       onPressed: sending ? null : onSendPressed,
+                      onLongPressed: sending ? null : onSendLongPressed,
                     ),
                   ],
                 ),
@@ -324,6 +334,22 @@ class DraftComposerView extends StatelessWidget {
                   Padding(
                     padding: EdgeInsets.only(bottom: spacing.s),
                     child: Text(l10n.draftAutosaved, style: textTheme.muted),
+                  ),
+                if (onAutosaveChanged != null)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: spacing.s),
+                    child: Row(
+                      children: [
+                        Text(l10n.draftAutosave, style: textTheme.muted),
+                        const Spacer(),
+                        ShadSwitch(
+                          value: autosaveEnabled,
+                          onChanged: enabled && !autosaveUpdating
+                              ? onAutosaveChanged
+                              : null,
+                        ),
+                      ],
+                    ),
                   ),
                 Row(
                   children: [
@@ -697,12 +723,14 @@ class _DraftSendIconButton extends StatelessWidget {
     required this.sending,
     this.disabledReason,
     required this.onPressed,
+    this.onLongPressed,
   });
 
   final bool readyToSend;
   final bool sending;
   final String? disabledReason;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -720,6 +748,7 @@ class _DraftSendIconButton extends StatelessWidget {
       tooltip: tooltip,
       icon: LucideIcons.send,
       onPressed: onPressed != null && !sending ? onPressed : null,
+      onLongPressed: onLongPressed != null && !sending ? onLongPressed : null,
       loading: sending,
       iconColorOverride: iconColor,
       borderColorOverride: borderColor,
@@ -823,6 +852,7 @@ class _DraftComposerIconButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     this.onPressed,
+    this.onLongPressed,
     this.loading = false,
     this.iconColorOverride,
     this.borderColorOverride,
@@ -831,6 +861,7 @@ class _DraftComposerIconButton extends StatelessWidget {
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPressed;
   final bool loading;
   final Color? iconColorOverride;
   final Color? borderColorOverride;
@@ -849,6 +880,7 @@ class _DraftComposerIconButton extends StatelessWidget {
       tooltip: tooltip,
       semanticLabel: tooltip,
       onPressed: onPressed,
+      onLongPress: onLongPressed,
       loading: loading,
       color: iconColor,
       backgroundColor: colors.card,

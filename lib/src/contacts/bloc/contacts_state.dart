@@ -26,6 +26,8 @@ enum ContactActionType {
   unfavorite,
   rename,
   resetRename,
+  setContactField,
+  removeContactField,
   setFolderRule,
   clearFolderRule,
 }

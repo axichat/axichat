@@ -11,6 +11,8 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_account.dart';
@@ -77,6 +79,7 @@ enum AuthMessageKey {
   emailSetupFailed,
   emailPasswordMissing,
   emailAuthFailed,
+  signupCustomEndpointRequired,
   signupCleanupInProgress,
   signupFailedTryAgain,
   passwordMismatch,
@@ -121,6 +124,8 @@ extension AuthMessageKeyLocalization on AuthMessageKey {
     AuthMessageKey.emailSetupFailed => l10n.authEmailSetupFailed,
     AuthMessageKey.emailPasswordMissing => l10n.authEmailPasswordMissing,
     AuthMessageKey.emailAuthFailed => l10n.authEmailAuthFailed,
+    AuthMessageKey.signupCustomEndpointRequired =>
+      l10n.signupCustomEndpointRequired,
     AuthMessageKey.signupCleanupInProgress => l10n.signupCleanupInProgress,
     AuthMessageKey.signupFailedTryAgain => l10n.signupFailedTryAgain,
     AuthMessageKey.passwordMismatch => l10n.authPasswordMismatch,
@@ -157,6 +162,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required CredentialStore credentialStore,
     required XmppService xmppService,
     EmailService? emailService,
+    ForegroundRuntimeController? foregroundRuntimeController,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -164,12 +170,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EndpointResolver endpointResolver = const EndpointResolver(),
     Duration authRequestTimeout = const Duration(minutes: 1),
     Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
+    bool allowDefaultSignupEndpoint = kDebugMode,
+    Future<void> Function()? beforeStickyReconnect,
+    Future<void> Function(String accountJid)? beforeXmppConnect,
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
+       _foregroundRuntimeController = foregroundRuntimeController,
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
+       _allowDefaultSignupEndpoint = allowDefaultSignupEndpoint,
+       _beforeStickyReconnect = beforeStickyReconnect,
+       _beforeXmppConnect = beforeXmppConnect,
        super(initialState ?? const AuthenticationNone()) {
     _ownedHttpClient = httpClient == null ? http.Client() : null;
     _httpClient = httpClient ?? _ownedHttpClient!;
@@ -241,6 +254,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   final _log = Logger('AuthenticationCubit');
+  final ForegroundRuntimeController? _foregroundRuntimeController;
 
   static const String _databasePrefixKeySuffix = '_database_prefix';
   static const String _databasePassphraseKeySuffix = '_database_passphrase';
@@ -265,6 +279,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     'skipped_password_raw_v1',
   );
   final rememberMeChoiceKey = CredentialStore.registerKey('remember_me_choice');
+  final pendingLogoutStorageKey = CredentialStore.registerKey(
+    'logout_in_progress_v1',
+  );
   final pendingSignupRollbacksKey = CredentialStore.registerKey(
     'pending_signup_rollbacks',
   );
@@ -310,8 +327,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   bool get passwordWasSkipped => _passwordWasSkipped;
 
   bool get _stickyAuthActive => state is AuthenticationComplete;
+  bool _requiresCustomSignupEndpoint(EndpointConfig config) =>
+      config.requiresCustomSignupEndpoint(
+        allowDefaultEndpoint: _allowDefaultSignupEndpoint,
+      );
+
   Completer<void>? _deferredEmailProvisioningCompleter;
   Future<void>? _activeLifecycleResume;
+  Future<void>? _pendingLogoutRecovery;
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
   final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
@@ -320,6 +343,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   DateTime? _lastEmailProvisioningRecoveryAt;
   final Duration _authRequestTimeout;
   final Duration _xmppReconnectPauseDelay;
+  final bool _allowDefaultSignupEndpoint;
+  final Future<void> Function()? _beforeStickyReconnect;
+  final Future<void> Function(String accountJid)? _beforeXmppConnect;
   Timer? _xmppReconnectPauseTimer;
   AppLifecycleState? _latestLifecycleState;
 
@@ -391,7 +417,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emailService?.updateEndpointConfig(config);
     emit(state.copyWithConfig(config));
     _syncXmppReconnectPauseTimer();
-    _updateEmailForegroundKeepalive();
   }
 
   Uri? _tryParseEmailProvisioningBaseUrl(String? value) {
@@ -814,6 +839,98 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _credentialStore.delete(key: passwordPreHashedStorageKey);
   }
 
+  Future<void> _clearStoredLoginCredentialsForLogout() async {
+    await _credentialStore.delete(key: jidStorageKey);
+    await _clearStoredPassword();
+    await _clearSkippedPasswordSecrets();
+  }
+
+  Future<String?> _readPendingLogoutBarrier() async {
+    final raw = await _credentialStore.read(key: pendingLogoutStorageKey);
+    if (raw == null) {
+      return null;
+    }
+    return raw.trim();
+  }
+
+  Future<bool> _hasPendingLogoutBarrier() async =>
+      await _readPendingLogoutBarrier() != null;
+
+  Future<void> _persistPendingLogoutBarrier(String? jid) async {
+    final trimmed = jid?.trim();
+    await _credentialStore.write(
+      key: pendingLogoutStorageKey,
+      value: trimmed == null || trimmed.isEmpty ? true.toString() : trimmed,
+    );
+  }
+
+  Future<void> _clearPendingLogoutBarrier() async {
+    await _credentialStore.delete(key: pendingLogoutStorageKey);
+  }
+
+  void beginPendingLogoutRecovery() {
+    fireAndForget(
+      recoverPendingLogoutBarrier,
+      operationName: 'AuthenticationCubit.recoverPendingLogoutBarrier',
+    );
+  }
+
+  Future<void> recoverPendingLogoutBarrier() {
+    final activeRecovery = _pendingLogoutRecovery;
+    if (activeRecovery != null) {
+      return activeRecovery;
+    }
+    late final Future<void> recovery;
+    recovery = _recoverPendingLogoutBarrierNow().whenComplete(() {
+      if (identical(_pendingLogoutRecovery, recovery)) {
+        _pendingLogoutRecovery = null;
+      }
+    });
+    _pendingLogoutRecovery = recovery;
+    return recovery;
+  }
+
+  Future<void> _recoverPendingLogoutBarrierNow() async {
+    final pendingLogout = await _readPendingLogoutBarrier();
+    if (pendingLogout == null) {
+      return;
+    }
+    final pendingJid = pendingLogout == true.toString() ? null : pendingLogout;
+    final accountJid = await _resolveLoginClearJid(pendingJid);
+    try {
+      await _xmppService.clearSessionTokens();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to clear XMPP session tokens during logout recovery.',
+        error,
+        stackTrace,
+      );
+    }
+    await _clearStoredLoginCredentialsForLogout();
+    if (accountJid != null) {
+      await _clearStoredSmtpCredentials(accountJid);
+    }
+    _emailService?.clearSessionCredentials();
+    await _clearPendingLogoutBarrier();
+  }
+
+  Future<T> _runTimedLogoutStep<T>(
+    String step,
+    Future<T> Function() operation,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    _log.info('Logout step started: $step');
+    try {
+      return await operation();
+    } finally {
+      stopwatch.stop();
+      _log.info(
+        'Logout step finished: $step '
+        'elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
+    }
+  }
+
   Future<void> _persistSkippedPasswordSecrets({
     required bool passwordWasSkipped,
     required String? rawPassword,
@@ -1195,6 +1312,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
 
+    await _beforeStickyReconnect?.call();
+    if (state is! AuthenticationComplete) {
+      return;
+    }
     await _triggerEmailReconnect(
       waitForNetworkAvailable: false,
       recovery: emailRecovery,
@@ -1223,17 +1344,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'Skipping sticky-session XMPP reconnect: source=$source xmppDisabled=true',
       );
       return;
-    }
-    if (withForeground && foregroundServiceActive.value) {
-      try {
-        _log.info(
-          'Checking foreground socket migration before sticky-session reconnect: '
-          'source=$source',
-        );
-        await _xmppService.ensureForegroundSocketIfActive();
-      } on Exception {
-        // Ignore: reconnection remains best-effort for sticky sessions.
-      }
     }
     if (_xmppService.connected) {
       _log.info(
@@ -1341,6 +1451,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool reuseExistingSession,
     required EndpointOverride? endpoint,
   }) async {
+    await _beforeXmppConnect?.call(jid);
     return _xmppService
         .connect(
           jid: jid,
@@ -1457,19 +1568,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> _handleForegroundServiceActiveChanged() async {
     _syncXmppReconnectPauseTimer();
-    await _updateEmailForegroundKeepalive();
-    if (!endpointConfig.xmppEnabled || !_stickyAuthActive) {
-      return;
-    }
-    if (!withForeground || !foregroundServiceActive.value) {
-      return;
-    }
-    await _xmppService.ensureForegroundSocketIfActive();
   }
 
   Future<bool> hasStoredLoginCredentials() async {
     final remember = await loadRememberMeChoice();
     if (!remember) return false;
+    if (await _hasPendingLogoutBarrier()) return false;
     final storedLogin = await _readStoredLoginCredentials();
     if (!storedLogin.hasUsableCredentials) {
       return false;
@@ -1694,7 +1798,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
     }
-    await _emailService?.setForegroundKeepalive(false);
+    await _foregroundRuntimeController?.refreshAfterSessionEnd();
     await _credentialStore.close();
     await _emailService?.shutdown();
     if (_injectedEmailProvisioningClient == null) {
@@ -1726,6 +1830,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final usingStoredCredentials = username == null && password == null;
+    if (await _hasPendingLogoutBarrier()) {
+      await recoverPendingLogoutBarrier();
+      if (usingStoredCredentials) {
+        _log.info('Stored login blocked by pending logout barrier.');
+        await _xmppService.disconnect();
+        _emit(const AuthenticationNone());
+        return;
+      }
+    }
     _StoredLoginCredentials? storedLogin;
     if (usingStoredCredentials) {
       storedLogin = await _readStoredLoginCredentials();
@@ -1963,6 +2076,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               databasePrefixStorageKey: databasePrefixStorageKey,
               databasePassphraseStorageKey: databasePassphraseStorageKey,
               pendingAvatar: pendingAvatar,
+              endpoint: xmppEndpoint,
             );
             if (resumeResult.isResumed) {
               authenticationCommitted = true;
@@ -2024,6 +2138,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               databasePrefixStorageKey: databasePrefixStorageKey,
               databasePassphraseStorageKey: databasePassphraseStorageKey,
               pendingAvatar: pendingAvatar,
+              endpoint: xmppEndpoint,
             );
             if (resumeResult.isResumed) {
               authenticationCommitted = true;
@@ -2289,6 +2404,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool passwordPreHashed,
     required String? skippedPasswordRaw,
     required AvatarUploadPayload? pendingAvatar,
+    EndpointOverride? endpoint,
     String? password,
     String? emailPassword,
     provisioning.EmailProvisioningCredentials? emailCredentials,
@@ -2298,6 +2414,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         jid: jid,
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
+        password: password,
+        preHashed: passwordPreHashed,
+        endpoint: endpoint,
       );
       await _markXmppConnected();
     } on Exception catch (error, stackTrace) {
@@ -2609,7 +2728,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emit(completedState);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
-    _updateEmailForegroundKeepalive();
     unawaited(_triggerEmailReconnect());
   }
 
@@ -2623,6 +2741,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       title: title,
       body: body,
     );
+  }
+
+  void beginSignupPostLoginWorkHold() {
+    _xmppService.beginSignupPostLoginWorkHold();
+  }
+
+  Future<void> releaseSignupPostLoginWorkHold() async {
+    await _xmppService.releaseSignupPostLoginWorkHold();
   }
 
   Future<void> _persistLoginSecrets({
@@ -2784,6 +2910,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _loginToDemoMode();
       return;
     }
+    await recoverPendingLogoutBarrier();
     final config = endpointConfig;
     _log.info(
       'Signup requested '
@@ -2791,6 +2918,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       'smtpEnabled: ${config.smtpEnabled})',
     );
     _emit(const AuthenticationSignUpInProgress());
+    if (_requiresCustomSignupEndpoint(config)) {
+      _emit(
+        const AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.signupCustomEndpointRequired),
+        ),
+      );
+      return;
+    }
     final host = config.domain;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
       username: username,
@@ -2806,26 +2941,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     _activeSignupCredentialKey = _normalizeSignupKey(username, host);
-    await _stageSignupRollback(
-      username: username,
-      host: host,
-      password: password,
-      rememberMe: rememberMe,
-    );
     var signupComplete = false;
+    var signupPostLoginWorkHoldStarted = false;
+    var xmppRegistrationSucceeded = false;
     provisioning.EmailProvisioningCredentials? emailProvisioningCredentials;
     try {
-      if (_emailService != null && config.smtpEnabled) {
-        emailProvisioningCredentials = await _emailProvisioningClient
-            .createAccount(localpart: username, password: password);
-        await _recordEmailProvisioning(
-          username: username,
-          host: host,
-          password: password,
-          credentials: emailProvisioningCredentials,
-          rememberMe: rememberMe,
-        );
-      }
       const captchaIdKey = 'id';
       const captchaKeyKey = 'key';
       const registerKey = 'register';
@@ -2852,6 +2972,26 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         return;
       }
+      xmppRegistrationSucceeded = true;
+      await _stageSignupRollback(
+        username: username,
+        host: host,
+        password: password,
+        rememberMe: rememberMe,
+      );
+      if (_emailService != null && config.smtpEnabled) {
+        emailProvisioningCredentials = await _emailProvisioningClient
+            .createAccount(localpart: username, password: password);
+        await _recordEmailProvisioning(
+          username: username,
+          host: host,
+          password: password,
+          credentials: emailProvisioningCredentials,
+          rememberMe: rememberMe,
+        );
+      }
+      beginSignupPostLoginWorkHold();
+      signupPostLoginWorkHoldStarted = true;
       await login(
         username: username,
         password: password,
@@ -2866,7 +3006,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       signupComplete = state is AuthenticationComplete;
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
       _log.warning(
-        'Email provisioning failed before signup',
+        'Email provisioning failed after signup registration',
         error,
         stackTrace,
       );
@@ -2886,14 +3026,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     } finally {
       _activeSignupCredentialKey = null;
+      if (!signupComplete && signupPostLoginWorkHoldStarted) {
+        await releaseSignupPostLoginWorkHold();
+      }
       if (signupComplete) {
         await _removePendingAccountDeletion(username: username, host: host);
       }
-      if (!signupComplete || _lastEmailProvisioningError != null) {
+      if (xmppRegistrationSucceeded &&
+          (!signupComplete || _lastEmailProvisioningError != null)) {
         await _rollbackSignup(
           username: username,
           host: host,
           password: password,
+          provisionedEmail: emailProvisioningCredentials?.email,
+          provisionedEmailPassword: emailProvisioningCredentials?.password,
           rememberMe: rememberMe,
         );
       }
@@ -2939,6 +3085,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       host: host,
       password: password,
       email: normalizedEmail,
+      emailPassword: credentials.password,
       rememberMe: rememberMe,
     );
     await _upsertPendingAccountDeletion(entry);
@@ -2948,6 +3095,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String username,
     required String host,
     required String password,
+    required String? provisionedEmail,
+    required String? provisionedEmailPassword,
     required bool rememberMe,
   }) async {
     const rollbackSkippedLog =
@@ -2955,18 +3104,24 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final normalizedKey = _normalizeSignupKey(username, host);
     if (await _hasCompletedAuthentication(normalizedKey)) {
       _log.info(rollbackSkippedLog);
+      await _removePendingAccountDeletion(username: username, host: host);
       return;
     }
     final deletion = _PendingAccountDeletion.fromSignup(
       username: username,
       host: host,
       password: password,
+      email: provisionedEmail,
+      emailPassword: provisionedEmailPassword,
       rememberMe: rememberMe,
     );
     final succeeded = await _performAccountDeletion(deletion);
     if (!succeeded) {
       await _enqueuePendingAccountDeletion(deletion);
+      _lastEmailProvisioningError = null;
+      return;
     }
+    await _removePendingAccountDeletion(username: username, host: host);
     _lastEmailProvisioningError = null;
   }
 
@@ -2991,6 +3146,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<String> fetchCaptchaHtml() async {
+    if (_requiresCustomSignupEndpoint(endpointConfig)) {
+      return '';
+    }
     try {
       const okStatus = 200;
       final response = await _httpClient
@@ -3038,6 +3196,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<String> fetchCaptchaSrcWithRetry() async {
+    if (_requiresCustomSignupEndpoint(endpointConfig)) {
+      return '';
+    }
     const retryDelay = Duration(seconds: 1);
     const maxAttempts = 3;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
@@ -3058,27 +3219,88 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Normal logout blocked for device-only password account.');
       return;
     }
+    String? logoutJid;
+    var normalCleanupSucceeded = true;
     if (severity == LogoutSeverity.normal) {
-      await _xmppService.clearSessionTokens();
-    }
-    if (endpointConfig.smtpEnabled) {
-      await _emailService?.shutdown(
-        clearCredentials: severity == LogoutSeverity.normal,
+      logoutJid = await _runTimedLogoutStep(
+        'resolve logout jid',
+        () => _resolveLoginClearJid(_xmppService.myJid),
       );
+      await _runTimedLogoutStep(
+        'persist logout barrier',
+        () => _persistPendingLogoutBarrier(logoutJid),
+      );
+      try {
+        await _runTimedLogoutStep(
+          'clear xmpp session tokens',
+          _xmppService.clearSessionTokens,
+        );
+      } on Exception catch (error, stackTrace) {
+        normalCleanupSucceeded = false;
+        _log.warning('Failed to clear XMPP session tokens.', error, stackTrace);
+      }
+    }
+    try {
+      if (endpointConfig.smtpEnabled) {
+        await _runTimedLogoutStep('email shutdown', () async {
+          await _emailService?.shutdown(
+            jid: logoutJid,
+            clearCredentials: severity == LogoutSeverity.normal,
+            mode: EmailShutdownMode.logout,
+          );
+        });
+      }
+    } on Exception catch (error, stackTrace) {
+      normalCleanupSucceeded = false;
+      _log.warning(
+        'Failed to shut down email during logout.',
+        error,
+        stackTrace,
+      );
+    } finally {
+      try {
+        await _runTimedLogoutStep('xmpp disconnect', _xmppService.disconnect);
+      } on Exception catch (error, stackTrace) {
+        normalCleanupSucceeded = false;
+        _log.warning(
+          'Failed to disconnect XMPP during logout.',
+          error,
+          stackTrace,
+        );
+      }
+      await _markForegroundInactiveIfStopped();
     }
 
-    await _xmppService.disconnect();
-
     if (severity == LogoutSeverity.normal) {
-      await _credentialStore.delete(key: jidStorageKey);
-      await _credentialStore.delete(key: passwordStorageKey);
-      await _credentialStore.delete(key: passwordPreHashedStorageKey);
-      await _clearSkippedPasswordSecrets();
+      try {
+        await _runTimedLogoutStep(
+          'clear stored login credentials',
+          _clearStoredLoginCredentialsForLogout,
+        );
+      } on Exception catch (error, stackTrace) {
+        normalCleanupSucceeded = false;
+        _log.warning(
+          'Failed to clear stored login credentials.',
+          error,
+          stackTrace,
+        );
+      }
+      if (normalCleanupSucceeded) {
+        await _runTimedLogoutStep(
+          'clear logout barrier',
+          _clearPendingLogoutBarrier,
+        );
+      } else {
+        _log.warning('Leaving logout barrier in place for recovery.');
+      }
     }
 
     _emailService?.clearSessionCredentials();
     _emit(const AuthenticationNone());
-    _updateEmailForegroundKeepalive();
+  }
+
+  Future<void> _markForegroundInactiveIfStopped() async {
+    await _foregroundRuntimeController?.refreshAfterSessionEnd();
   }
 
   Future<void> _disconnectForDelete({
@@ -3113,7 +3335,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emailService?.clearSessionCredentials();
     await _removeCompletedAccountRecord(user, host);
     _emit(const AuthenticationNone());
-    _updateEmailForegroundKeepalive();
   }
 
   Future<void> _stabilizeAfterEmailDelete(String jid) async {
@@ -3127,7 +3348,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _disconnectForDelete(jid: jid, clearEmail: true);
     await _clearStoredSmtpCredentials(jid);
     _emailService?.clearSessionCredentials();
-    _updateEmailForegroundKeepalive();
   }
 
   Future<void> _failUnregister({
@@ -3627,32 +3847,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> _updateEmailForegroundKeepalive() async {
-    final emailService = _emailService;
-    if (emailService == null) return;
-    final shouldRun =
-        endpointConfig.smtpEnabled &&
-        foregroundServiceActive.value &&
-        _xmppService.myJid != null &&
-        state is AuthenticationComplete;
-    await _setEmailForegroundKeepalive(emailService, shouldRun);
-  }
-
-  Future<void> _setEmailForegroundKeepalive(
-    EmailService service,
-    bool enabled,
-  ) async {
-    try {
-      await service.setForegroundKeepalive(enabled);
-    } catch (error, stackTrace) {
-      _log.finer(
-        'Failed to update email foreground keepalive',
-        error,
-        stackTrace,
-      );
-    }
-  }
-
   Future<void> _enqueuePendingAccountDeletion(
     _PendingAccountDeletion deletion,
   ) async {
@@ -3719,7 +3913,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final deletionError = await _deleteProvisionedEmailAccount(
       email: email,
-      password: deletion.password,
+      password: deletion.emailPassword ?? deletion.password,
       logContext: 'during rollback',
     );
     return deletionError == null;
@@ -4161,12 +4355,14 @@ class _PendingAccountDeletion {
   static const String _createdAtJsonKey = 'createdAt';
   static const String _expiresAtJsonKey = 'expiresAt';
   static const String _emailJsonKey = 'email';
+  static const String _emailPasswordJsonKey = 'emailPassword';
 
   _PendingAccountDeletion({
     required String username,
     required String host,
     required this.password,
     this.email,
+    this.emailPassword,
     required this.createdAt,
     required this.expiresAt,
   }) : username = username.trim().toLowerCase(),
@@ -4177,17 +4373,27 @@ class _PendingAccountDeletion {
     required String host,
     required String password,
     String? email,
+    String? emailPassword,
     required bool rememberMe,
   }) {
     final now = DateTime.now();
     const rememberedMaxAge = Duration(days: 7);
     const ephemeralMaxAge = Duration(hours: 24);
+    final normalizedEmail = email?.trim();
+    final normalizedEmailPassword = emailPassword?.trim();
     final expiry = now.add(rememberMe ? rememberedMaxAge : ephemeralMaxAge);
     return _PendingAccountDeletion(
       username: username,
       host: host,
       password: password,
-      email: email,
+      email: normalizedEmail == null || normalizedEmail.isEmpty
+          ? null
+          : normalizedEmail,
+      emailPassword: normalizedEmail == null || normalizedEmail.isEmpty
+          ? null
+          : normalizedEmailPassword == null || normalizedEmailPassword.isEmpty
+          ? password
+          : normalizedEmailPassword,
       createdAt: now.toIso8601String(),
       expiresAt: expiry.toIso8601String(),
     );
@@ -4196,6 +4402,7 @@ class _PendingAccountDeletion {
   factory _PendingAccountDeletion.fromJson(Map<String, dynamic> json) {
     const fallbackHost = EndpointConfig.defaultDomain;
     final rawEmail = json[_emailJsonKey] as String? ?? '';
+    final rawEmailPassword = json[_emailPasswordJsonKey] as String?;
     final rawCreatedAt = json[_createdAtJsonKey] as String?;
     final createdAt = (rawCreatedAt?.trim().isNotEmpty ?? false)
         ? rawCreatedAt!.trim()
@@ -4209,6 +4416,11 @@ class _PendingAccountDeletion {
       host: (json[_hostJsonKey] as String? ?? fallbackHost).trim(),
       password: json[_passwordJsonKey] as String? ?? '',
       email: rawEmail.trim().isEmpty ? null : rawEmail.trim(),
+      emailPassword: rawEmail.trim().isEmpty
+          ? null
+          : rawEmailPassword?.trim().isNotEmpty ?? false
+          ? rawEmailPassword!.trim()
+          : json[_passwordJsonKey] as String? ?? '',
       createdAt: createdAt,
       expiresAt: expiryIso,
     );
@@ -4218,6 +4430,7 @@ class _PendingAccountDeletion {
   final String host;
   final String password;
   final String? email;
+  final String? emailPassword;
   final String createdAt;
   final String expiresAt;
 
@@ -4228,11 +4441,14 @@ class _PendingAccountDeletion {
     _createdAtJsonKey: createdAt,
     _expiresAtJsonKey: expiresAt,
     if (email != null) _emailJsonKey: email,
+    if (email != null && emailPassword != null)
+      _emailPasswordJsonKey: emailPassword,
   };
 
   _PendingAccountDeletion copyWith({
     String? password,
     String? email,
+    String? emailPassword,
     String? createdAt,
     String? expiresAt,
   }) {
@@ -4241,6 +4457,7 @@ class _PendingAccountDeletion {
       host: host,
       password: password ?? this.password,
       email: email ?? this.email,
+      emailPassword: emailPassword ?? this.emailPassword,
       createdAt: createdAt ?? this.createdAt,
       expiresAt: expiresAt ?? this.expiresAt,
     );

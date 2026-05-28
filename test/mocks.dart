@@ -28,9 +28,66 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:moxxmpp/src/managers/attributes.dart';
 import 'package:uuid/uuid.dart';
 
-class MockXmppService extends Mock implements XmppService {}
+class MockXmppService extends Mock implements XmppService {
+  @override
+  XmppForegroundSocketState get foregroundSocketState {
+    final result = super.noSuchMethod(
+      Invocation.getter(#foregroundSocketState),
+    );
+    return result is XmppForegroundSocketState
+        ? result
+        : XmppForegroundSocketState.uninitialized;
+  }
 
-class MockXmppConnection extends Mock implements XmppConnection {}
+  @override
+  bool get usingForegroundSocket {
+    final result = super.noSuchMethod(
+      Invocation.getter(#usingForegroundSocket),
+    );
+    return result is bool ? result : false;
+  }
+
+  @override
+  bool get signupPostLoginWorkHeld {
+    final result = super.noSuchMethod(
+      Invocation.getter(#signupPostLoginWorkHeld),
+    );
+    return result is bool ? result : false;
+  }
+
+  @override
+  void beginSignupPostLoginWorkHold() {
+    super.noSuchMethod(
+      Invocation.method(#beginSignupPostLoginWorkHold, const []),
+    );
+  }
+
+  @override
+  Future<void> releaseSignupPostLoginWorkHold() {
+    final result = super.noSuchMethod(
+      Invocation.method(#releaseSignupPostLoginWorkHold, const []),
+    );
+    if (result is Future<void>) {
+      return result;
+    }
+    return Future<void>.value();
+  }
+}
+
+class MockXmppConnection extends Mock implements XmppConnection {
+  @override
+  Future<mox.XmppConnectionState> getConnectionState() {
+    final result = super.noSuchMethod(
+      Invocation.method(#getConnectionState, const []),
+    );
+    if (result is Future<mox.XmppConnectionState>) {
+      return result;
+    }
+    return Future<mox.XmppConnectionState>.value(
+      mox.XmppConnectionState.connected,
+    );
+  }
+}
 
 class MockCredentialStore extends Mock implements CredentialStore {}
 
@@ -392,12 +449,16 @@ Future<void> connectSuccessfully(
       deltaAccountId: any(named: 'deltaAccountId'),
       resolvedAddress: any(named: 'resolvedAddress'),
       placeholderJids: any(named: 'placeholderJids'),
+      selfJid: any(named: 'selfJid'),
+      emailSelfJid: any(named: 'emailSelfJid'),
     ),
   ).thenAnswer((_) async {});
   when(
     () => mockDatabase.removeDeltaPlaceholderDuplicates(
       deltaAccountId: any(named: 'deltaAccountId'),
       placeholderJids: any(named: 'placeholderJids'),
+      selfJid: any(named: 'selfJid'),
+      emailSelfJid: any(named: 'emailSelfJid'),
     ),
   ).thenAnswer((_) async {});
   when(
@@ -428,7 +489,10 @@ Future<void> connectSuccessfully(
   );
 }
 
-Future<void> connectUnsuccessfully(XmppService xmppService) async {
+Future<void> connectUnsuccessfully(
+  XmppService xmppService, {
+  mox.XmppError? error,
+}) async {
   when(
     () => mockNotificationService.notificationPreviewsEnabled,
   ).thenReturn(false);
@@ -497,7 +561,12 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
       waitForConnection: true,
       waitUntilLogin: true,
     ),
-  ).thenAnswer((_) async => const Result<bool, mox.XmppError>(false));
+  ).thenAnswer((_) async {
+    if (error != null) {
+      return Result<bool, mox.XmppError>(error);
+    }
+    return const Result<bool, mox.XmppError>(false);
+  });
 
   when(() => mockStateStore.close()).thenAnswer((_) async {});
   when(() => mockDatabase.close()).thenAnswer((_) async {});

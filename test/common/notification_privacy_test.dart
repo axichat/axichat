@@ -1,4 +1,5 @@
 import 'package:axichat/src/common/notification_privacy.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -45,13 +46,77 @@ void main() {
     });
 
     test('truncates long previews', () {
-      final longText = List.filled(maxPreviewLength + extraLength, 'a').join();
+      final longText = List.filled(
+        maxPreviewLength + extraLength,
+        'abcde',
+      ).join(' ');
       final preview = sanitizeNotificationPreview(longText);
       expect(preview, isNotNull);
       expect(preview!.length, maxPreviewLength + truncationSuffix.length);
       expect(
         preview,
         '${longText.substring(0, maxPreviewLength)}$truncationSuffix',
+      );
+    });
+  });
+
+  group('NotificationPreviewPlatformPolicy', () {
+    test('supports controls only on non-Apple notification platforms', () {
+      expect(
+        TargetPlatform.android.supportsNotificationPreviewControls,
+        isTrue,
+      );
+      expect(TargetPlatform.linux.supportsNotificationPreviewControls, isTrue);
+      expect(
+        TargetPlatform.windows.supportsNotificationPreviewControls,
+        isTrue,
+      );
+      expect(TargetPlatform.iOS.supportsNotificationPreviewControls, isFalse);
+      expect(TargetPlatform.macOS.supportsNotificationPreviewControls, isFalse);
+    });
+
+    test('forces previews off on Apple platforms', () {
+      expect(
+        resolveNotificationPreviewEnabled(
+          platform: TargetPlatform.iOS,
+          globalPreviewsEnabled: true,
+          previewOverride: true,
+        ),
+        isFalse,
+      );
+      expect(
+        resolveNotificationPreviewEnabled(
+          platform: TargetPlatform.macOS,
+          globalPreviewsEnabled: true,
+          previewOverride: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('honors global setting and overrides on supported platforms', () {
+      expect(
+        resolveNotificationPreviewEnabled(
+          platform: TargetPlatform.android,
+          globalPreviewsEnabled: true,
+        ),
+        isTrue,
+      );
+      expect(
+        resolveNotificationPreviewEnabled(
+          platform: TargetPlatform.linux,
+          globalPreviewsEnabled: true,
+          previewOverride: false,
+        ),
+        isFalse,
+      );
+      expect(
+        resolveNotificationPreviewEnabled(
+          platform: TargetPlatform.windows,
+          globalPreviewsEnabled: false,
+          previewOverride: true,
+        ),
+        isTrue,
       );
     });
   });

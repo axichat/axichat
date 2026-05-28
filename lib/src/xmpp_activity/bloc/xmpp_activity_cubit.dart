@@ -52,7 +52,8 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   static final _logger = Logger('XmppActivityCubit');
 
   void _handleConnectionState(ConnectionState connectionState) {
-    if (connectionState == ConnectionState.connected) {
+    if (connectionState == ConnectionState.connected ||
+        _xmppBase.demoOfflineMode) {
       return;
     }
     _clearInProgressOperations();
@@ -60,7 +61,8 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
 
   void _handleEvent(XmppOperationEvent event) {
     if (event.stage.isStart &&
-        _xmppBase.connectionState != ConnectionState.connected) {
+        _xmppBase.connectionState != ConnectionState.connected &&
+        !_xmppBase.demoOfflineMode) {
       _logger.fine(
         'Ignoring XMPP activity start while disconnected: ${event.kind}.',
       );

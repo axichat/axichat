@@ -25,6 +25,16 @@ sealed class ChatTimelineTailSpacerItem extends ChatTimelineSpecialItem {
   });
 }
 
+final class ChatTimelineSystemStatusItem extends ChatTimelineSpecialItem {
+  const ChatTimelineSystemStatusItem({
+    required super.id,
+    required super.createdAt,
+    required this.label,
+  });
+
+  final String label;
+}
+
 enum ChatTimelineMessageDelivery { none, pending, sent, received, read, failed }
 
 final class ChatTimelineMessageItem extends ChatTimelineItem {

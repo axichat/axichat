@@ -38,6 +38,8 @@ abstract class ChatTransport {
     String? shareId,
     String? localBodyOverride,
     String? htmlBody,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   });
 
   /// Sends an attachment message to an existing chat id.
@@ -48,6 +50,8 @@ abstract class ChatTransport {
     String? shareId,
     String? captionOverride,
     String? htmlCaption,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   });
 
   /// Ensures there is a 1:1 chat for the provided address and returns

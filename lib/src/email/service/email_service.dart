@@ -118,13 +118,11 @@ final class EmailEncryptionAccountInfo {
 final class EmailEncryptionKeyExport {
   const EmailEncryptionKeyExport({
     required this.normalizedAddress,
-    required this.tempZipPath,
-    required this.operationDirectoryPath,
+    required this.archiveBytes,
   });
 
   final String normalizedAddress;
-  final String tempZipPath;
-  final String operationDirectoryPath;
+  final Uint8List archiveBytes;
 }
 
 enum EmailOpenPgpKeyKind { public, private }
@@ -1120,88 +1118,34 @@ class EmailService {
         operationDirectory: operationDirectory,
         account: account,
       );
+      final archiveBytes = await archive.readAsBytes();
+      _validateEmailEncryptionExportArchiveBytes(
+        archiveBytes,
+        normalizedAddress: account.address,
+        failure: const EmailEncryptionExportFailedException(),
+      );
       return EmailEncryptionKeyExport(
         normalizedAddress: account.address,
-        tempZipPath: archive.path,
-        operationDirectoryPath: operationDirectory.path,
+        archiveBytes: archiveBytes,
       );
     } on EmailEncryptionKeyException {
-      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
       rethrow;
     } on EmailDeltaImexException {
-      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
       throw const EmailEncryptionExportFailedException();
     } on DeltaSafeException {
-      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
       throw const EmailEncryptionExportFailedException();
     } on FileSystemException {
-      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
       throw const EmailEncryptionExportFailedException();
     } on FormatException {
-      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
       throw const EmailEncryptionExportFailedException();
+    } finally {
+      await _cleanupEmailEncryptionOperationDirectory(operationDirectory);
     }
   }
 
   Future<void> saveEmailEncryptionKeyExport({
-    required String tempZipPath,
+    required Uint8List archiveBytes,
     required String destinationPath,
-    required String operationDirectoryPath,
-    required String normalizedAddress,
-  }) async {
-    try {
-      final bytes = await readEmailEncryptionKeyExportBytes(
-        tempZipPath: tempZipPath,
-        normalizedAddress: normalizedAddress,
-      );
-      final destination = File(destinationPath);
-      await destination.writeAsBytes(bytes, flush: true);
-      if (!await destination.exists()) {
-        throw const EmailEncryptionSaveFailedException();
-      }
-      _validateEmailEncryptionExportArchiveBytes(
-        await destination.readAsBytes(),
-        normalizedAddress: normalizedAddress,
-        failure: const EmailEncryptionSaveFailedException(),
-      );
-    } on EmailEncryptionKeyException {
-      rethrow;
-    } on FileSystemException {
-      throw const EmailEncryptionSaveFailedException();
-    } finally {
-      await _cleanupEmailEncryptionOperationDirectory(
-        Directory(operationDirectoryPath),
-      );
-    }
-  }
-
-  Future<void> completeEmailEncryptionKeyExportAfterPlatformSave({
-    required String tempZipPath,
-    required String platformResultPath,
-    required String operationDirectoryPath,
-    required String normalizedAddress,
-  }) async {
-    try {
-      if (platformResultPath.trim().isEmpty) {
-        throw const EmailEncryptionSaveFailedException();
-      }
-      await readEmailEncryptionKeyExportBytes(
-        tempZipPath: tempZipPath,
-        normalizedAddress: normalizedAddress,
-      );
-    } on EmailEncryptionKeyException {
-      rethrow;
-    } on FileSystemException {
-      throw const EmailEncryptionSaveFailedException();
-    } finally {
-      await _cleanupEmailEncryptionOperationDirectory(
-        Directory(operationDirectoryPath),
-      );
-    }
-  }
-
-  Future<Uint8List> readEmailEncryptionKeyExportBytes({
-    required String tempZipPath,
     required String normalizedAddress,
   }) async {
     try {
@@ -1209,18 +1153,55 @@ class EmailService {
       if (normalized == null || normalized.isEmpty) {
         throw const EmailEncryptionSaveFailedException();
       }
-      final bytes = await File(tempZipPath).readAsBytes();
       _validateEmailEncryptionExportArchiveBytes(
-        bytes,
+        archiveBytes,
         normalizedAddress: normalized,
         failure: const EmailEncryptionSaveFailedException(),
       );
-      return bytes;
+      final destination = File(destinationPath);
+      await destination.writeAsBytes(archiveBytes, flush: true);
+      if (!await destination.exists()) {
+        throw const EmailEncryptionSaveFailedException();
+      }
+      _validateEmailEncryptionExportArchiveBytes(
+        await destination.readAsBytes(),
+        normalizedAddress: normalized,
+        failure: const EmailEncryptionSaveFailedException(),
+      );
     } on EmailEncryptionKeyException {
       rethrow;
     } on FileSystemException {
       throw const EmailEncryptionSaveFailedException();
     }
+  }
+
+  Future<void> completeEmailEncryptionKeyExportAfterPlatformSave({
+    required Uint8List archiveBytes,
+    required String platformResultPath,
+    required String normalizedAddress,
+  }) async {
+    try {
+      if (platformResultPath.trim().isEmpty) {
+        throw const EmailEncryptionSaveFailedException();
+      }
+      final normalized = normalizedAddressValue(normalizedAddress);
+      if (normalized == null || normalized.isEmpty) {
+        throw const EmailEncryptionSaveFailedException();
+      }
+      _validateEmailEncryptionExportArchiveBytes(
+        archiveBytes,
+        normalizedAddress: normalized,
+        failure: const EmailEncryptionSaveFailedException(),
+      );
+    } on EmailEncryptionKeyException {
+      rethrow;
+    } on FormatException {
+      throw const EmailEncryptionSaveFailedException();
+    }
+  }
+
+  Future<void> cancelEmailEncryptionKeyExport() {
+    return _transport.cancelImex();
   }
 
   Future<void> cleanupEmailEncryptionTempPath(String path) async {

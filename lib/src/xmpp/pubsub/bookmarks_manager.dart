@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
@@ -168,14 +169,15 @@ final class MucBookmark {
       tag: _conferenceTag,
       xmlns: _bookmarksNode,
       attributes: {
-        if (trimmedName?.isNotEmpty == true) _conferenceNameAttr: trimmedName!,
+        if (trimmedName?.isNotEmpty == true)
+          _conferenceNameAttr: escapeXmlAttribute(trimmedName!),
         if (autojoin) _conferenceAutojoinAttr: 'true',
       },
       children: [
         if (trimmedNick?.isNotEmpty == true)
-          mox.XMLNode(tag: _nickTag, text: trimmedNick),
+          mox.XMLNode(tag: _nickTag, text: escapeXmlText(trimmedNick!)),
         if (trimmedPassword?.isNotEmpty == true)
-          mox.XMLNode(tag: _passwordTag, text: trimmedPassword),
+          mox.XMLNode(tag: _passwordTag, text: escapeXmlText(trimmedPassword!)),
         if (extensions.isNotEmpty)
           mox.XMLNode(
             tag: _extensionsTag,

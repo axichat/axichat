@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -128,9 +129,10 @@ final class ConvItem {
       tag: _convTag,
       xmlns: conversationIndexNode,
       attributes: {
-        _peerAttr: peerBare.toBare().toString(),
+        _peerAttr: escapeXmlAttribute(peerBare.toBare().toString()),
         _lastTsAttr: lastTs,
-        if (trimmedLastId?.isNotEmpty == true) _lastIdAttr: trimmedLastId!,
+        if (trimmedLastId?.isNotEmpty == true)
+          _lastIdAttr: escapeXmlAttribute(trimmedLastId!),
         _pinnedAttr: pinned.toString(),
         _archivedAttr: archived.toString(),
         if (mutedUntilIso?.isNotEmpty == true) _mutedUntilAttr: mutedUntilIso!,

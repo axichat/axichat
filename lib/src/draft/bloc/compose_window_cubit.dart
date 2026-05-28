@@ -3,6 +3,7 @@
 
 import 'package:bloc/bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +26,8 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     List<String> forwardedSourceAttachmentMetadataIds = const <String>[],
+    Map<String, MessageTransport> recipientTransportOverrides = const {},
+    bool autosaveEnabled = true,
   }) {
     final entry = ComposeWindowEntry(
       id: _nextId++,
@@ -40,6 +43,8 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
         forwardedBlocks: forwardedBlocks,
         forwardedSourceAttachmentMetadataIds:
             forwardedSourceAttachmentMetadataIds,
+        recipientTransportOverrides: recipientTransportOverrides,
+        autosaveEnabled: autosaveEnabled,
       ),
       session: _nextSession++,
     );

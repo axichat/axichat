@@ -115,6 +115,68 @@ mixin ContactDirectoryStorage
     }
   }
 
+  Future<void> setContactDetailField({
+    required String address,
+    required String fieldId,
+    required ContactDetailFieldKind kind,
+    required String? label,
+    required String value,
+    required int sortOrder,
+  }) async {
+    final key = contactDirectoryAddressKey(address);
+    final normalizedFieldId = fieldId.trim();
+    final trimmedValue = value.trim();
+    if (key.isEmpty || normalizedFieldId.isEmpty || trimmedValue.isEmpty) {
+      throw XmppContactDirectoryException();
+    }
+    final now = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyPrivateContactDetailFieldMutation(
+        addressKey: key,
+        fieldId: normalizedFieldId,
+        kind: kind,
+        label: label?.trim(),
+        value: trimmedValue,
+        sortOrder: sortOrder,
+        active: true,
+        updatedAt: now,
+      ),
+      awaitDatabase: true,
+    );
+    final record = await _loadPrivateContactRecord(key);
+    if (record != null) {
+      await _publishContactSyncEntry(record);
+    }
+  }
+
+  Future<void> removeContactDetailField({
+    required String address,
+    required ContactDetailFieldEntry field,
+  }) async {
+    final key = contactDirectoryAddressKey(address);
+    if (key.isEmpty || field.fieldId.trim().isEmpty) {
+      throw XmppContactDirectoryException();
+    }
+    final now = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyPrivateContactDetailFieldMutation(
+        addressKey: key,
+        fieldId: field.fieldId,
+        kind: field.kind,
+        label: field.label,
+        value: field.value,
+        sortOrder: field.sortOrder,
+        active: false,
+        updatedAt: now,
+      ),
+      awaitDatabase: true,
+    );
+    final record = await _loadPrivateContactRecord(key);
+    if (record != null) {
+      await _publishContactSyncEntry(record);
+    }
+  }
+
   Future<void> setContactFolderRule({
     required String address,
     required String collectionId,

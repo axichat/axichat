@@ -803,6 +803,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get draftAutosaved => 'Automatisch gespeichert';
 
   @override
+  String get draftAutosave => 'Automatisch speichern';
+
+  @override
   String get draftErrorTitle => 'Hoppla';
 
   @override
@@ -3451,6 +3454,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get contactsDetailsSectionTitle => 'Einzelheiten';
 
   @override
+  String get contactsFolderRoutingDetailLabel => 'Gehört in';
+
+  @override
   String get contactsAddressLabel => 'Adresse';
 
   @override
@@ -4508,7 +4514,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get emailEncryptionBetaLabel => 'E-Mail-Verschlüsselung';
 
   @override
-  String get emailEncryptionBetaChip => 'Beta';
+  String get emailEncryptionBetaChip => 'Experimentell';
 
   @override
   String emailEncryptionBetaEnabledStatus(Object address) {

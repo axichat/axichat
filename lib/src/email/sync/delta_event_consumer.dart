@@ -2,6 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:axichat/src/common/chat_subject_codec.dart';
@@ -16,7 +18,8 @@ import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
 import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/email_address.dart';
-import 'package:axichat/src/email/util/email_header_safety.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart'
+    as email_headers;
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
@@ -93,6 +96,8 @@ enum DeltaEventType {
   chatDeleted(DeltaEventCode.chatDeleted),
   contactsChanged(DeltaEventCode.contactsChanged),
   configureProgress(DeltaEventCode.configureProgress),
+  imexProgress(DeltaEventCode.imexProgress),
+  imexFileWritten(DeltaEventCode.imexFileWritten),
   accountsBackgroundFetchDone(DeltaEventCode.accountsBackgroundFetchDone),
   connectivityChanged(DeltaEventCode.connectivityChanged),
   channelOverflow(DeltaEventCode.channelOverflow);
@@ -168,7 +173,7 @@ extension DeltaMessageStateChecks on DeltaMessage {
       }
       return _deltaOutgoingPendingStatus;
     }
-    if (isIncomingSeen) {
+    if (isIncomingSeen || isIncomingNoticed) {
       return _deltaIncomingSeenStatus;
     }
     return _deltaIncomingUnseenStatus;
@@ -281,27 +286,137 @@ bool _deepEquals(Object? first, Object? second) {
   return first == second;
 }
 
+String? _autocryptPublicKeyFromHeaders(
+  String? headers, {
+  required String expectedAddress,
+}) {
+  if (headers == null || headers.trim().isEmpty) {
+    return null;
+  }
+  final expected = normalizedAddressValue(expectedAddress);
+  if (expected == null || expected.isEmpty) {
+    return null;
+  }
+  final unfolded = <String>[];
+  String? current;
+  for (final rawLine
+      in headers.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n')) {
+    if (rawLine.startsWith(' ') || rawLine.startsWith('\t')) {
+      current = current == null ? rawLine.trim() : '$current ${rawLine.trim()}';
+      continue;
+    }
+    if (current != null) {
+      unfolded.add(current);
+    }
+    current = rawLine;
+  }
+  if (current != null) {
+    unfolded.add(current);
+  }
+  for (final line in unfolded.reversed) {
+    final separatorIndex = line.indexOf(':');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    if (line.substring(0, separatorIndex).trim().toLowerCase() != 'autocrypt') {
+      continue;
+    }
+    final attributes = <String, String>{};
+    for (final part in line.substring(separatorIndex + 1).split(';')) {
+      final valueSeparatorIndex = part.indexOf('=');
+      if (valueSeparatorIndex <= 0) {
+        continue;
+      }
+      final name = part.substring(0, valueSeparatorIndex).trim().toLowerCase();
+      var value = part.substring(valueSeparatorIndex + 1).trim();
+      if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+        value = value.substring(1, value.length - 1).replaceAll(r'\"', '"');
+      }
+      attributes[name] = value;
+    }
+    if (normalizedAddressValue(attributes['addr'] ?? '') != expected) {
+      continue;
+    }
+    final keydata = attributes['keydata']?.replaceAll(RegExp(r'\s+'), '');
+    if (keydata == null || keydata.isEmpty) {
+      continue;
+    }
+    final Uint8List keyBytes;
+    try {
+      keyBytes = base64.decode(keydata);
+    } on FormatException {
+      continue;
+    }
+    final encoded = base64.encode(keyBytes);
+    final wrapped = <String>[];
+    for (var index = 0; index < encoded.length; index += 64) {
+      final end = index + 64 > encoded.length ? encoded.length : index + 64;
+      wrapped.add(encoded.substring(index, end));
+    }
+    final checksum = _openPgpArmorChecksum(keyBytes);
+    return '-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n'
+        '${wrapped.join('\n')}\n'
+        '=$checksum\n'
+        '-----END PGP PUBLIC KEY BLOCK-----\n';
+  }
+  return null;
+}
+
+String _openPgpArmorChecksum(Uint8List bytes) {
+  var crc = 0xB704CE;
+  for (final byte in bytes) {
+    crc ^= byte << 16;
+    for (var bit = 0; bit < 8; bit += 1) {
+      crc <<= 1;
+      if ((crc & 0x1000000) != 0) {
+        crc ^= 0x1864CFB;
+      }
+    }
+  }
+  crc &= 0xFFFFFF;
+  return base64.encode(
+    Uint8List.fromList([(crc >> 16) & 0xFF, (crc >> 8) & 0xFF, crc & 0xFF]),
+  );
+}
+
 class DeltaEventConsumer {
   DeltaEventConsumer({
     required Future<XmppDatabase> Function() databaseBuilder,
     required DeltaContextHandle context,
-    AttachmentAutoDownload defaultChatAttachmentAutoDownload =
-        AttachmentAutoDownload.blocked,
+    bool autoDownloadImages = false,
+    bool autoDownloadVideos = false,
+    bool autoDownloadDocuments = false,
+    bool autoDownloadArchives = false,
     AppLocalizations Function()? localizationsProvider,
     String? Function()? selfJidProvider,
+    String? Function()? xmppSelfJidProvider,
+    bool Function(int accountId, String address)?
+    emailEncryptionBetaEnabledForAddress,
     Logger? logger,
   }) : _databaseBuilder = databaseBuilder,
        _context = context,
-       _defaultChatAttachmentAutoDownload = defaultChatAttachmentAutoDownload,
+       _autoDownloadImages = autoDownloadImages,
+       _autoDownloadVideos = autoDownloadVideos,
+       _autoDownloadDocuments = autoDownloadDocuments,
+       _autoDownloadArchives = autoDownloadArchives,
        _localizationsProvider = localizationsProvider,
        _selfJidProvider = selfJidProvider,
+       _xmppSelfJidProvider = xmppSelfJidProvider,
+       _emailEncryptionBetaEnabledForAddress =
+           emailEncryptionBetaEnabledForAddress,
        _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
-  AttachmentAutoDownload _defaultChatAttachmentAutoDownload;
+  bool _autoDownloadImages;
+  bool _autoDownloadVideos;
+  bool _autoDownloadDocuments;
+  bool _autoDownloadArchives;
   final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _selfJidProvider;
+  final String? Function()? _xmppSelfJidProvider;
+  final bool Function(int accountId, String address)?
+  _emailEncryptionBetaEnabledForAddress;
   final Logger _log;
   Future<void>? _chatlistRefreshInFlight;
   Future<Set<int>>? _archivedChatlistInFlight;
@@ -310,17 +425,28 @@ class DeltaEventConsumer {
   final EmailAsyncQueue _autoDownloadQueue = EmailAsyncQueue();
   final EmailAsyncQueue _originIdHydrationQueue = EmailAsyncQueue();
   final Set<int> _originIdHydrationPending = <int>{};
+  final Map<String, int> _learnedAutocryptContactKeyChatIds = <String, int>{};
 
   AppLocalizations get _l10n =>
       _localizationsProvider?.call() ??
       lookupAppLocalizations(const Locale('en'));
 
-  void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
-    _defaultChatAttachmentAutoDownload = value;
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  }) {
+    _autoDownloadImages = imagesEnabled;
+    _autoDownloadVideos = videosEnabled;
+    _autoDownloadDocuments = documentsEnabled;
+    _autoDownloadArchives = archivesEnabled;
   }
 
   String get _selfJid =>
       _selfJidProvider?.call().resolveDeltaPlaceholderJid() ?? _emptyJid;
+
+  String? get _xmppSelfJid => _xmppSelfJidProvider?.call();
 
   int get _deltaAccountId =>
       _context.accountId ?? DeltaAccountDefaults.legacyId;
@@ -496,9 +622,11 @@ class DeltaEventConsumer {
           jid: chat.jid,
           maxMessages: 0,
           deltaAccountId: deltaAccountId,
+          selfJid: _xmppSelfJid,
+          emailSelfJid: _selfJid,
         );
         final remaining = await db.countEmailChatAccounts(chat.jid);
-        if (remaining == 0) {
+        if (remaining == 0 && chat.defaultTransport.isEmail) {
           await db.removeChat(chat.jid);
         }
       }
@@ -569,7 +697,8 @@ class DeltaEventConsumer {
       }
       var storedUnreadCount = await db.countUnreadMessagesForChat(
         updated.jid,
-        selfJid: _selfJid,
+        selfJid: _xmppSelfJid,
+        emailSelfJid: _selfJid,
       );
       final freshCount = await _context.getFreshMessageCountSafe(chatId);
       if (storedUnreadCount > 0 ||
@@ -579,7 +708,8 @@ class DeltaEventConsumer {
         hydratedMessages = true;
         storedUnreadCount = await db.countUnreadMessagesForChat(
           updated.jid,
-          selfJid: _selfJid,
+          selfJid: _xmppSelfJid,
+          emailSelfJid: _selfJid,
         );
       }
       if (hydratedMessages) {
@@ -631,8 +761,9 @@ class DeltaEventConsumer {
       return _deltaMessageIdUnset;
     }
     final db = await _db();
-    final localCount = await db.countChatMessages(
+    final localCount = await db.countEmailBackedChatMessages(
       chatJid,
+      deltaAccountId: _deltaAccountId,
       filter: filter,
       includePseudoMessages: false,
     );
@@ -717,6 +848,12 @@ class DeltaEventConsumer {
         break;
       case DeltaEventType.msgDelivered:
       case DeltaEventType.msgFailed:
+        _log.fine(
+          'Email outgoing core event: '
+          'type=${eventType.name}, chatId=${event.data1}, msgId=${event.data2}',
+        );
+        await _handleMessageStateChanged(event.data1, event.data2);
+        break;
       case DeltaEventType.msgRead:
         await _handleMessageStateChanged(event.data1, event.data2);
         break;
@@ -838,9 +975,11 @@ class DeltaEventConsumer {
       jid: chat.jid,
       maxMessages: 0,
       deltaAccountId: deltaAccountId,
+      selfJid: _xmppSelfJid,
+      emailSelfJid: _selfJid,
     );
     final remaining = await db.countEmailChatAccounts(chat.jid);
-    if (remaining == 0) {
+    if (remaining == 0 && chat.defaultTransport.isEmail) {
       await db.removeChat(chat.jid);
     }
   }
@@ -852,13 +991,11 @@ class DeltaEventConsumer {
       accountId: _deltaAccountId,
     );
     if (chat == null) return;
-    final unreadCount = await db.countUnreadMessagesForChat(
+    await db.repairUnreadCountForChat(
       chat.jid,
-      selfJid: _selfJid,
+      selfJid: _xmppSelfJid,
+      emailSelfJid: _selfJid,
     );
-    if (unreadCount != chat.unreadCount) {
-      await db.updateChat(chat.copyWith(unreadCount: unreadCount));
-    }
   }
 
   Future<void> _syncChatMessages(int chatId) async {
@@ -878,11 +1015,6 @@ class DeltaEventConsumer {
         .where((id) => !_isDeltaMessageMarkerId(id))
         .toList();
     if (filteredIds.isEmpty) {
-      await db.trimChatMessages(
-        jid: chat.jid,
-        maxMessages: 0,
-        deltaAccountId: _deltaAccountId,
-      );
       return;
     }
     const int startIndex = 0;
@@ -891,18 +1023,15 @@ class DeltaEventConsumer {
         .where((id) => id > _deltaMessageIdUnset)
         .toList(growable: false);
     if (visibleIds.isEmpty) {
-      await db.trimChatMessages(
-        jid: chat.jid,
-        maxMessages: 0,
-        deltaAccountId: _deltaAccountId,
-      );
       return;
     }
     final visibleIdSet = visibleIds.toSet();
-    final snapshots = await db.getMessageDeltaSnapshot(chat.jid);
+    final snapshots = await db.getMessageDeltaSnapshot(
+      chat.jid,
+      deltaAccountId: _deltaAccountId,
+    );
     final localDeltaIds = <int>{};
     final refreshIds = <int>{};
-    final staleStanzaIds = <String>[];
     for (final snapshot in snapshots) {
       final deltaId = snapshot.deltaMsgId;
       if (deltaId == null) {
@@ -913,12 +1042,7 @@ class DeltaEventConsumer {
         if (!snapshot.displayed) {
           refreshIds.add(deltaId);
         }
-      } else {
-        staleStanzaIds.add(snapshot.stanzaId);
       }
-    }
-    if (staleStanzaIds.isNotEmpty) {
-      await db.deleteMessagesByStanzaIds(staleStanzaIds);
     }
     final missingIds = <int>[];
     for (final deltaId in visibleIds) {
@@ -974,6 +1098,10 @@ class DeltaEventConsumer {
     final int deltaAccountId = _deltaAccountId;
     final stanzaId = _stanzaId(msg.id);
     final db = await _db();
+    if (msg.isEncryptionStatusSystemMessage) {
+      await db.ensureEmailEncryptionStatusMarkerForChat(resolvedChat.jid);
+      return;
+    }
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
       await _updateExistingMessage(existing: existing, msg: msg);
@@ -982,6 +1110,13 @@ class DeltaEventConsumer {
         msgId: msg.id,
         accountId: deltaAccountId,
       );
+      if (!msg.isOutgoing) {
+        await _learnAutocryptContactKeyForIncomingMessage(
+          db: db,
+          chat: resolvedChat,
+          msg: msg,
+        );
+      }
       return;
     }
     final existingByDeltaId = await db.getMessageByDeltaId(
@@ -995,6 +1130,13 @@ class DeltaEventConsumer {
         msgId: msg.id,
         accountId: deltaAccountId,
       );
+      if (!msg.isOutgoing) {
+        await _learnAutocryptContactKeyForIncomingMessage(
+          db: db,
+          chat: resolvedChat,
+          msg: msg,
+        );
+      }
       return;
     }
     final existingByChat = await db.getMessageByDeltaId(
@@ -1008,6 +1150,13 @@ class DeltaEventConsumer {
         msgId: msg.id,
         accountId: deltaAccountId,
       );
+      if (!msg.isOutgoing) {
+        await _learnAutocryptContactKeyForIncomingMessage(
+          db: db,
+          chat: resolvedChat,
+          msg: msg,
+        );
+      }
       return;
     }
     final Message? persistedPending = msg.isOutgoing
@@ -1067,9 +1216,7 @@ class DeltaEventConsumer {
       );
     }
     final deliveryStatus = msg.deliveryStatus;
-    final resolvedError = msg.isOutgoingFailed
-        ? DeltaErrorMapper.resolve(msg.error)
-        : MessageError.none;
+    final resolvedError = _messageErrorForDelta(msg);
     var message = Message(
       stanzaID: stanzaId,
       senderJid: senderJid,
@@ -1078,7 +1225,7 @@ class DeltaEventConsumer {
       originID: originId,
       error: resolvedError,
       warning: warning,
-      encryptionProtocol: EncryptionProtocol.none,
+      encryptionProtocol: _encryptionProtocolForDelta(msg),
       received: deliveryStatus.received,
       acked: deliveryStatus.acked,
       displayed: deliveryStatus.displayed,
@@ -1093,19 +1240,52 @@ class DeltaEventConsumer {
       msg: msg,
     );
     await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
+    await _ensureEmailEncryptionStatusMarkerForMessage(
+      db: db,
+      message: message,
+    );
+    if (!isOutgoing) {
+      await _learnAutocryptContactKeyForIncomingMessage(
+        db: db,
+        chat: resolvedChat,
+        msg: msg,
+      );
+    }
     await _refreshStoredChatSummary(chatJid: resolvedChat.jid, db: db);
     await _scheduleOriginIdHydration(msgId: msg.id, accountId: deltaAccountId);
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
-    final fileSize = msg.fileSize;
+    final blockAddress = normalizedAddressValue(
+      resolvedChat.emailFromAddress ??
+          resolvedChat.emailAddress ??
+          resolvedChat.jid,
+    );
+    final isBlocklisted =
+        blockAddress != null &&
+        await db.getEmailBlocklistEntry(blockAddress) != null;
     final shouldAutoDownloadPartial =
-        !isOutgoing && msg.needsDownload && !isSpamQuarantined;
+        !isOutgoing &&
+        msg.needsDownload &&
+        !isSpamQuarantined &&
+        !isBlocklisted;
     if (shouldAutoDownloadPartial) {
+      final metadataId = message.fileMetadataID?.trim();
+      final attachmentMetadata = metadataId == null || metadataId.isEmpty
+          ? null
+          : await db.getFileMetadata(metadataId);
       final shouldDownload = msg.hasFile
-          ? (resolvedChat.attachmentAutoDownload ??
-                        _defaultChatAttachmentAutoDownload)
-                    .isAllowed &&
-                (fileSize == null || fileSize <= maxAttachmentAutoDownloadBytes)
+          ? attachmentMetadata != null &&
+                allowsAttachmentAutoDownload(
+                  chat: resolvedChat,
+                  metadata: attachmentMetadata,
+                  imagesEnabled: _autoDownloadImages,
+                  videosEnabled: _autoDownloadVideos,
+                  documentsEnabled: _autoDownloadDocuments,
+                  archivesEnabled: _autoDownloadArchives,
+                  chatBlocked: isBlocklisted,
+                  requireKnownSize: true,
+                  maxBytes: maxAttachmentAutoDownloadBytes,
+                )
           : true;
       if (shouldDownload) {
         fireAndForget(
@@ -1116,7 +1296,83 @@ class DeltaEventConsumer {
         );
       }
     }
-    await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
+  }
+
+  Future<void> _learnAutocryptContactKeyForIncomingMessage({
+    required XmppDatabase db,
+    required Chat chat,
+    required DeltaMessage msg,
+  }) async {
+    final selfAddress = normalizedAddressValue(_selfJid);
+    if (selfAddress == null ||
+        _emailEncryptionBetaEnabledForAddress?.call(
+              _deltaAccountId,
+              selfAddress,
+            ) !=
+            true) {
+      return;
+    }
+    final contactAddress = normalizedAddressValue(
+      chat.emailAddress ?? chat.contactJid ?? chat.jid,
+    );
+    if (contactAddress == null || contactAddress.isEmpty) {
+      return;
+    }
+    final headers = await _context.getMessageMimeHeaders(msg.id);
+    final publicKey = _autocryptPublicKeyFromHeaders(
+      headers,
+      expectedAddress: contactAddress,
+    );
+    if (publicKey == null) {
+      return;
+    }
+    final learnedKey = '$_deltaAccountId:$contactAddress:$publicKey';
+    final learnedChatId = _learnedAutocryptContactKeyChatIds[learnedKey];
+    if (learnedChatId != null) {
+      await db.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: _deltaAccountId,
+        deltaChatId: learnedChatId,
+      );
+      if (chat.deltaChatId != learnedChatId) {
+        await db.updateChat(chat.copyWith(deltaChatId: learnedChatId));
+      }
+      return;
+    }
+    try {
+      final imported = await _context.importContactPublicKey(
+        address: contactAddress,
+        displayName: chat.contactDisplayName ?? chat.title,
+        armoredPublicKey: publicKey,
+      );
+      final capabilities = await _context.chatSendCapabilities(imported.chatId);
+      if (!capabilities.isEncryptedAndSendable) {
+        _log.fine(
+          'Ignoring Autocrypt contact key for $contactAddress '
+          'on account $_deltaAccountId because imported chat '
+          '${imported.chatId} is not ready for encrypted sends.',
+        );
+        return;
+      }
+      await db.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: _deltaAccountId,
+        deltaChatId: imported.chatId,
+      );
+      if (chat.deltaChatId != imported.chatId) {
+        await db.updateChat(chat.copyWith(deltaChatId: imported.chatId));
+      }
+      _learnedAutocryptContactKeyChatIds[learnedKey] = imported.chatId;
+      _log.fine(
+        'Learned Autocrypt contact key for $contactAddress '
+        'on account $_deltaAccountId.',
+      );
+    } on DeltaSafeException catch (error) {
+      _log.fine(
+        'Ignoring unusable Autocrypt contact key for $contactAddress '
+        'on account $_deltaAccountId: ${error.message}',
+      );
+    }
   }
 
   Future<Message?> _matchPersistedOutgoingMessage({
@@ -1243,6 +1499,23 @@ class DeltaEventConsumer {
     return isMultiDeviceSyncMessage(subject: msg.subject, body: inferredBody);
   }
 
+  MessageError _messageErrorForDelta(DeltaMessage msg) {
+    if (!msg.isOutgoing &&
+        msg.downloadState == DeltaDownloadState.undecipherable) {
+      return MessageError.notEncryptedForDevice;
+    }
+    if (msg.isOutgoingFailed) {
+      return DeltaErrorMapper.resolve(msg.error);
+    }
+    return MessageError.none;
+  }
+
+  EncryptionProtocol _encryptionProtocolForDelta(DeltaMessage msg) {
+    return msg.showPadlock
+        ? EncryptionProtocol.openPgp
+        : EncryptionProtocol.none;
+  }
+
   Future<void> _updateExistingMessage({
     required Message existing,
     required DeltaMessage msg,
@@ -1259,13 +1532,14 @@ class DeltaEventConsumer {
     }
     if (msg.hasKnownState) {
       final deliveryStatus = msg.deliveryStatus;
+      final displayed = existing.displayed || deliveryStatus.displayed;
       if (deliveryStatus.acked != existing.acked ||
           deliveryStatus.received != existing.received ||
-          deliveryStatus.displayed != existing.displayed) {
+          displayed != existing.displayed) {
         next = next.copyWith(
           acked: deliveryStatus.acked,
           received: deliveryStatus.received,
-          displayed: deliveryStatus.displayed,
+          displayed: displayed,
         );
       }
       if (msg.isOutgoingFailed) {
@@ -1276,6 +1550,19 @@ class DeltaEventConsumer {
         if (existing.error != MessageError.none) {
           next = next.copyWith(error: MessageError.none);
         }
+      }
+    }
+    final encryptionProtocol = _encryptionProtocolForDelta(msg);
+    if (next.encryptionProtocol != encryptionProtocol) {
+      next = next.copyWith(encryptionProtocol: encryptionProtocol);
+    }
+    if (!msg.isOutgoing) {
+      final incomingError = _messageErrorForDelta(msg);
+      if (incomingError != MessageError.none && next.error != incomingError) {
+        next = next.copyWith(error: incomingError);
+      } else if (incomingError == MessageError.none &&
+          next.error == MessageError.notEncryptedForDevice) {
+        next = next.copyWith(error: MessageError.none);
       }
     }
     next = await _buildDeltaMessageContent(
@@ -1290,6 +1577,7 @@ class DeltaEventConsumer {
       existing: existing,
       updatedFields: updatedFields,
     )) {
+      await _ensureEmailEncryptionStatusMarkerForMessage(db: db, message: next);
       return;
     }
     if (updatedFields.isNotEmpty) {
@@ -1304,8 +1592,16 @@ class DeltaEventConsumer {
         _log.log(Level.FINE, 'Message update diff: $updateSummary');
       }
       await db.updateMessage(next);
+      if (updatedFields.contains(MessageDiffField.displayed)) {
+        await db.repairUnreadCountForChat(
+          next.chatJid,
+          selfJid: _xmppSelfJid,
+          emailSelfJid: _selfJid,
+        );
+      }
       await _refreshStoredChatSummary(chatJid: next.chatJid, db: db);
     }
+    await _ensureEmailEncryptionStatusMarkerForMessage(db: db, message: next);
   }
 
   bool _shouldSkipHtmlOnlyUpdate({
@@ -1415,7 +1711,11 @@ class DeltaEventConsumer {
             originId: originId,
           );
           await db.updateMessage(merged);
-          await db.deleteMessage(secondary.stanzaID);
+          await db.deleteMessage(
+            secondary.stanzaID,
+            selfJid: _xmppSelfJid,
+            emailSelfJid: _selfJid,
+          );
           return;
         }
         await db.updateMessage(existing.copyWith(originID: originId));
@@ -1519,7 +1819,9 @@ class DeltaEventConsumer {
     if (chat != null && _isHiddenMultiDeviceSyncMessage(message, chat: chat)) {
       return null;
     }
-    final sanitizedSubject = sanitizeEmailSubjectValue(message.subject);
+    final sanitizedSubject = email_headers.sanitizeEmailSubjectValue(
+      message.subject,
+    );
     final previewText = ChatSubjectCodec.previewEmailText(
       body: message.text,
       subject: sanitizedSubject,
@@ -1568,7 +1870,6 @@ class DeltaEventConsumer {
             existingByAddress.emailFromAddress ?? chat.emailFromAddress,
         contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
-        transport: MessageTransport.email,
       );
       await db.updateChat(merged);
       await db.upsertEmailChatAccount(
@@ -1702,21 +2003,6 @@ class DeltaEventConsumer {
         .toSet();
   }
 
-  Future<void> _updateChatTimestamp({
-    required int chatId,
-    required DateTime timestamp,
-  }) async {
-    final db = await _db();
-    final chat = await db.getChatByDeltaChatId(
-      chatId,
-      accountId: _deltaAccountId,
-    );
-    if (chat == null) return;
-    if (!chat.lastChangeTimestamp.isBefore(timestamp)) return;
-    await db.updateChat(chat.copyWith(lastChangeTimestamp: timestamp));
-    await db.repairChatSummaryPreservingTimestamp(chat.jid);
-  }
-
   ChatType _mapChatType(int? type) {
     switch (type) {
       case DeltaChatType.group:
@@ -1742,7 +2028,9 @@ class DeltaEventConsumer {
     final rawText = clampMessageText(msg.text);
     final rawHtml = clampMessageHtml(msg.html);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(rawHtml);
-    final sanitizedSubject = sanitizeEmailSubjectValue(msg.subject);
+    final sanitizedSubject = email_headers.sanitizeEmailSubjectValue(
+      msg.subject,
+    );
     final resolvedBody = rawText?.trim().isNotEmpty == true
         ? rawText!
         : (normalizedHtml == null
@@ -1822,6 +2110,16 @@ class DeltaEventConsumer {
     await db.saveMessage(message, selfJid: _selfJid);
   }
 
+  Future<void> _ensureEmailEncryptionStatusMarkerForMessage({
+    required XmppDatabase db,
+    required Message message,
+  }) async {
+    if (!message.isEmailBackedOpenPgpContent) {
+      return;
+    }
+    await db.ensureEmailEncryptionStatusMarkerForChat(message.chatJid);
+  }
+
   Future<Message> _attachFileMetadata({
     required XmppDatabase db,
     required Message message,
@@ -1856,7 +2154,9 @@ class DeltaEventConsumer {
   }) {
     final path = delta.filePath?.trim();
     final sanitizedPath = path == null || path.isEmpty ? null : path;
-    final sanitizedMimeType = sanitizeEmailMimeType(delta.fileMime);
+    final sanitizedMimeType = email_headers.sanitizeEmailMimeType(
+      delta.fileMime,
+    );
     return FileMetadataData(
       id: metadataId,
       filename: _resolvedFilename(
@@ -1897,7 +2197,7 @@ class DeltaEventConsumer {
   }) {
     const fallbackPrefix = 'attachment-';
     final fallbackName = '$fallbackPrefix$deltaId';
-    return sanitizeEmailAttachmentFilename(
+    return email_headers.sanitizeEmailAttachmentFilename(
       explicitName,
       fallbackPath: fallbackPath,
       fallbackName: fallbackName,

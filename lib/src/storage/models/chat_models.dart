@@ -890,6 +890,36 @@ class EmailChatAccounts extends Table {
   ];
 }
 
+@DataClassName('EmailTrustedContactKeyData')
+class EmailTrustedContactKeys extends Table {
+  IntColumn get deltaAccountId =>
+      integer().withDefault(const Constant(DeltaAccountDefaults.legacyId))();
+
+  TextColumn get address => text()();
+
+  TextColumn get fingerprint => text()();
+
+  IntColumn get deltaContactId => integer()();
+
+  IntColumn get deltaChatId => integer()();
+
+  TextColumn get identityBinding => text()();
+
+  TextColumn get userIdsJson => text().nullable()();
+
+  DateTimeColumn get importedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {deltaAccountId, address};
+
+  List<Index> get indexes => [
+    Index(
+      'idx_email_trusted_contact_keys_chat',
+      'delta_account_id, delta_chat_id',
+    ),
+  ];
+}
+
 class Contact extends Equatable implements Insertable<Contact> {
   const Contact._({
     this.nativeID,
@@ -1151,9 +1181,6 @@ class Contact extends Equatable implements Insertable<Contact> {
   }
 
   bool usesEmailTransport({bool allowHint = false}) {
-    if (chat?.isEmailBacked ?? false) {
-      return true;
-    }
     final resolvedTransport =
         configuredTransport ?? (allowHint ? hintedTransport : null);
     return resolvedTransport?.isEmail ?? false;
@@ -1285,17 +1312,32 @@ extension ChatPrimaryViewExtension on Chat {
 }
 
 extension ChatTransportExtension on Chat {
-  bool get supportsEmail => isEmailBacked;
+  bool get supportsEmail => defaultTransport.isEmail || isEmailBacked;
 
   bool get isAxiContact {
     return remoteJid.isAxiJid;
+  }
+
+  bool get supportsAxiEmailOutboundOverride =>
+      supportsEmailOutboundOverrideForDomain(null);
+
+  bool supportsEmailOutboundOverrideForDomain(String? domain) {
+    if (type != ChatType.chat ||
+        defaultTransport.isEmail ||
+        isAxichatWelcomeThread) {
+      return false;
+    }
+    if (remoteJid.isAxiJid) {
+      return true;
+    }
+    return isAxiJid(remoteJid, axiDomain: domain);
   }
 
   bool get isEmailOnlyContact {
     if (type != ChatType.chat) {
       return false;
     }
-    return isEmailBacked;
+    return defaultTransport.isEmail;
   }
 
   bool get isEmailBacked {

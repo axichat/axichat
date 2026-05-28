@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:flutter/foundation.dart';
+
 const int _notificationPreviewMaxLength = 160;
 const int _notificationTokenMinLength = 20;
 const int _notificationHexTokenMinLength = 32;
@@ -28,6 +30,30 @@ final RegExp _notificationNumericTokenRegex = RegExp(
 final RegExp _notificationWhitespaceRegex = RegExp(
   _notificationWhitespacePattern,
 );
+
+extension NotificationPreviewPlatformPolicy on TargetPlatform {
+  bool get supportsNotificationPreviewControls {
+    return switch (this) {
+      TargetPlatform.android ||
+      TargetPlatform.linux ||
+      TargetPlatform.windows => true,
+      TargetPlatform.fuchsia ||
+      TargetPlatform.iOS ||
+      TargetPlatform.macOS => false,
+    };
+  }
+}
+
+bool resolveNotificationPreviewEnabled({
+  required TargetPlatform platform,
+  required bool globalPreviewsEnabled,
+  bool? previewOverride,
+}) {
+  if (!platform.supportsNotificationPreviewControls) {
+    return false;
+  }
+  return previewOverride ?? globalPreviewsEnabled;
+}
 
 String? sanitizeNotificationPreview(String? body) {
   final String trimmed = body?.trim() ?? '';

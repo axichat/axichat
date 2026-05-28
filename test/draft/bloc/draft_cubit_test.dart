@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
@@ -13,6 +14,7 @@ import 'package:axichat/src/email/models/fan_out_recipient_status.dart';
 import 'package:axichat/src/email/models/fan_out_send_report.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -28,6 +30,9 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
   Future<String?> getTemporaryPath() async => temporaryPath;
 }
 
+class _MockXmppAttachmentUpload extends Mock
+    implements xmpp.XmppAttachmentUpload {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -39,6 +44,14 @@ void main() {
     registerFallbackValue(
       const Attachment(path: 'fallback', fileName: 'fallback', sizeBytes: 0),
     );
+    registerFallbackValue(
+      const MessageReference(
+        kind: MessageReferenceKind.originId,
+        value: 'fallback-origin',
+      ),
+    );
+    registerFallbackValue(EncryptionProtocol.none);
+    registerFallbackValue(ChatType.chat);
   });
 
   setUp(() {
@@ -97,6 +110,7 @@ void main() {
           quotingStanzaId: any(named: 'quotingStanzaId'),
           quotingReferenceKind: any(named: 'quotingReferenceKind'),
           attachments: any(named: 'attachments'),
+          autosaveEnabled: any(named: 'autosaveEnabled'),
         ),
       ).thenAnswer((_) async {
         draftsController.add([savedDraft]);
@@ -119,45 +133,70 @@ void main() {
     },
   );
 
-  test(
-    'saveDraft propagates stale commit aborts without emitting save complete',
-    () async {
-      when(
-        () => messageService.saveDraft(
-          id: any(named: 'id'),
-          jids: any(named: 'jids'),
-          body: any(named: 'body'),
-          subject: any(named: 'subject'),
-          quotingStanzaId: any(named: 'quotingStanzaId'),
-          quotingReferenceKind: any(named: 'quotingReferenceKind'),
-          attachments: any(named: 'attachments'),
-          shouldCommit: any(named: 'shouldCommit'),
-        ),
-      ).thenAnswer((invocation) async {
-        final shouldCommit =
-            invocation.namedArguments[#shouldCommit] as bool Function();
-        expect(shouldCommit(), isFalse);
-        throw const DraftSaveAbortedException();
-      });
+  test('saveDraft forwards the autosave preference', () async {
+    final savedDraft = Draft(
+      id: 1,
+      jids: const <String>['peer@axi.im'],
+      body: 'Hello world',
+      draftSyncId: 'draft-1',
+      draftUpdatedAt: DateTime.utc(2025, 1, 1),
+      draftSourceId: 'source-1',
+      autosaveEnabled: false,
+    );
+    when(
+      () => messageService.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
+        quotingReferenceKind: any(named: 'quotingReferenceKind'),
+        attachments: any(named: 'attachments'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
+      ),
+    ).thenAnswer((_) async => savedDraft);
 
-      final cubit = DraftCubit(messageService: messageService);
-      addTearDown(cubit.close);
+    final cubit = DraftCubit(messageService: messageService);
+    addTearDown(cubit.close);
 
-      await expectLater(
-        cubit.saveDraft(
-          id: null,
-          jids: const <String>['peer@axi.im'],
-          body: 'Hello world',
-          subject: 'Subject',
-          shouldCommit: () => false,
-        ),
-        throwsA(isA<DraftSaveAbortedException>()),
-      );
+    await cubit.saveDraft(
+      id: null,
+      jids: const <String>['peer@axi.im'],
+      body: 'Hello world',
+      autosaveEnabled: false,
+    );
 
-      expect(cubit.state, isA<DraftsAvailable>());
-      expect(cubit.state, isNot(isA<DraftSaveComplete>()));
-    },
-  );
+    verify(
+      () => messageService.saveDraft(
+        id: null,
+        jids: const <String>['peer@axi.im'],
+        body: 'Hello world',
+        subject: null,
+        quotingStanzaId: null,
+        quotingReferenceKind: null,
+        attachments: const <Attachment>[],
+        autosaveEnabled: false,
+      ),
+    ).called(1);
+  });
+
+  test('updateDraftAutosaveEnabled delegates to the message service', () async {
+    when(
+      () => messageService.updateDraftAutosaveEnabled(
+        id: any(named: 'id'),
+        enabled: any(named: 'enabled'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final cubit = DraftCubit(messageService: messageService);
+    addTearDown(cubit.close);
+
+    await cubit.updateDraftAutosaveEnabled(id: 7, enabled: false);
+
+    verify(
+      () => messageService.updateDraftAutosaveEnabled(id: 7, enabled: false),
+    ).called(1);
+  });
 
   test('saveDraft waits for fallback draft mirroring', () async {
     final savedDraft = Draft(
@@ -180,6 +219,7 @@ void main() {
         quotingStanzaId: any(named: 'quotingStanzaId'),
         quotingReferenceKind: any(named: 'quotingReferenceKind'),
         attachments: any(named: 'attachments'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
       ),
     ).thenAnswer((_) async => savedDraft);
     when(
@@ -415,6 +455,81 @@ void main() {
       expect(outcome.completedTransports, {DraftSendTransport.xmpp});
       verifyNever(() => messageService.deleteDraft(id: 1));
       expect(cubit.state, isA<DraftFailure>());
+    },
+  );
+
+  test(
+    'sendDraft sends subject-only mixed drafts through XMPP and email',
+    () async {
+      final emailService = MockEmailService();
+      final sentXmppTexts = <String>[];
+      final fanOutCalls = <Map<Symbol, dynamic>>[];
+      when(
+        () => messageService.sendMessage(
+          jid: 'xmpp@axi.im',
+          text: any(named: 'text'),
+          htmlBody: null,
+          encryptionProtocol: EncryptionProtocol.none,
+          quotedReference: null,
+          calendarTaskIcs: null,
+          calendarTaskIcsReadOnly: CalendarTaskIcsMessage.defaultReadOnly,
+          chatType: ChatType.chat,
+        ),
+      ).thenAnswer((invocation) async {
+        sentXmppTexts.add(invocation.namedArguments[#text] as String);
+      });
+      when(
+        () => emailService.fanOutSend(
+          targets: any(named: 'targets'),
+          body: any(named: 'body'),
+          htmlBody: any(named: 'htmlBody'),
+          attachment: any(named: 'attachment'),
+          htmlCaption: any(named: 'htmlCaption'),
+          shareId: any(named: 'shareId'),
+          subject: any(named: 'subject'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+          useSubjectToken: any(named: 'useSubjectToken'),
+          tokenAsSignature: any(named: 'tokenAsSignature'),
+        ),
+      ).thenAnswer((invocation) async {
+        fanOutCalls.add(Map<Symbol, dynamic>.from(invocation.namedArguments));
+        return const FanOutSendReport(shareId: 'share', statuses: []);
+      });
+      final cubit = DraftCubit(
+        messageService: messageService,
+        emailService: emailService,
+      );
+      addTearDown(cubit.close);
+
+      final outcome = await cubit.sendDraft(
+        id: null,
+        xmppTargets: const [
+          DraftXmppTarget(
+            jid: 'xmpp@axi.im',
+            encryptionProtocol: EncryptionProtocol.none,
+            chatType: ChatType.chat,
+          ),
+        ],
+        emailTargets: [
+          Contact.address(address: 'mail@example.com', displayName: 'Mail'),
+        ],
+        body: '',
+        subject: 'Subject only',
+        shareTokenSignatureEnabled: false,
+      );
+
+      expect(outcome.succeeded, isTrue);
+      expect(outcome.completedTransports, {
+        DraftSendTransport.xmpp,
+        DraftSendTransport.email,
+      });
+      expect(sentXmppTexts, hasLength(1));
+      final split = ChatSubjectCodec.splitXmppBody(sentXmppTexts.single);
+      expect(split.subject, 'Subject only');
+      expect(split.body, isEmpty);
+      expect(fanOutCalls, hasLength(1));
+      expect(fanOutCalls.single[#body], isEmpty);
+      expect(fanOutCalls.single[#subject], 'Subject only');
     },
   );
 
@@ -890,8 +1005,128 @@ void main() {
     },
   );
 
+  test('sendDraft preserves quote on attachment-only XMPP draft', () async {
+    final upload = _MockXmppAttachmentUpload();
+    final attachmentCalls = <Map<Symbol, dynamic>>[];
+    when(
+      () => messageService.sendAttachment(
+        jid: any(named: 'jid'),
+        attachment: any(named: 'attachment'),
+        encryptionProtocol: any(named: 'encryptionProtocol'),
+        htmlCaption: any(named: 'htmlCaption'),
+        transportGroupId: any(named: 'transportGroupId'),
+        attachmentOrder: any(named: 'attachmentOrder'),
+        quotedReference: any(named: 'quotedReference'),
+        groupQuotedReference: any(named: 'groupQuotedReference'),
+        chatType: any(named: 'chatType'),
+        upload: any(named: 'upload'),
+      ),
+    ).thenAnswer((invocation) async {
+      attachmentCalls.add(Map<Symbol, dynamic>.from(invocation.namedArguments));
+      return upload;
+    });
+    final cubit = DraftCubit(messageService: messageService);
+    addTearDown(cubit.close);
+
+    final outcome = await cubit.sendDraft(
+      id: null,
+      xmppTargets: const [
+        DraftXmppTarget(
+          jid: 'peer@axi.im',
+          encryptionProtocol: EncryptionProtocol.none,
+          chatType: ChatType.chat,
+        ),
+      ],
+      emailTargets: const [],
+      body: '',
+      quoteTarget: const DraftQuoteTarget(
+        stanzaId: 'quoted-origin',
+        referenceKind: MessageReferenceKind.originId,
+      ),
+      attachments: const [
+        Attachment(path: '/tmp/one.txt', fileName: 'one.txt', sizeBytes: 1),
+      ],
+      shareTokenSignatureEnabled: false,
+    );
+
+    expect(outcome.succeeded, isTrue);
+    expect(attachmentCalls, hasLength(1));
+    final quotedReference =
+        attachmentCalls.single[#quotedReference] as MessageReference?;
+    expect(quotedReference?.value, 'quoted-origin');
+    expect(quotedReference?.kind, MessageReferenceKind.originId);
+    expect(attachmentCalls.single[#groupQuotedReference], isNull);
+  });
+
   test(
-    'sendDraft sends calendar task payload through XMPP message path',
+    'sendDraft stores grouped XMPP quote metadata without duplicating quotes',
+    () async {
+      final upload = _MockXmppAttachmentUpload();
+      final attachmentCalls = <Map<Symbol, dynamic>>[];
+      when(
+        () => messageService.sendAttachment(
+          jid: any(named: 'jid'),
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          htmlCaption: any(named: 'htmlCaption'),
+          transportGroupId: any(named: 'transportGroupId'),
+          attachmentOrder: any(named: 'attachmentOrder'),
+          quotedReference: any(named: 'quotedReference'),
+          groupQuotedReference: any(named: 'groupQuotedReference'),
+          chatType: any(named: 'chatType'),
+          upload: any(named: 'upload'),
+        ),
+      ).thenAnswer((invocation) async {
+        attachmentCalls.add(
+          Map<Symbol, dynamic>.from(invocation.namedArguments),
+        );
+        return upload;
+      });
+      final cubit = DraftCubit(messageService: messageService);
+      addTearDown(cubit.close);
+
+      final outcome = await cubit.sendDraft(
+        id: null,
+        xmppTargets: const [
+          DraftXmppTarget(
+            jid: 'peer@axi.im',
+            encryptionProtocol: EncryptionProtocol.none,
+            chatType: ChatType.chat,
+          ),
+        ],
+        emailTargets: const [],
+        body: '',
+        quoteTarget: const DraftQuoteTarget(
+          stanzaId: 'quoted-origin',
+          referenceKind: MessageReferenceKind.originId,
+        ),
+        attachments: const [
+          Attachment(path: '/tmp/one.txt', fileName: 'one.txt', sizeBytes: 1),
+          Attachment(path: '/tmp/two.txt', fileName: 'two.txt', sizeBytes: 1),
+        ],
+        shareTokenSignatureEnabled: false,
+      );
+
+      expect(outcome.succeeded, isTrue);
+      expect(attachmentCalls, hasLength(2));
+      final firstQuotedReference =
+          attachmentCalls.first[#quotedReference] as MessageReference?;
+      final secondQuotedReference =
+          attachmentCalls.last[#quotedReference] as MessageReference?;
+      expect(firstQuotedReference?.value, 'quoted-origin');
+      expect(firstQuotedReference?.kind, MessageReferenceKind.originId);
+      expect(secondQuotedReference, isNull);
+      for (final call in attachmentCalls) {
+        final groupQuotedReference =
+            call[#groupQuotedReference] as MessageReference?;
+        expect(groupQuotedReference?.value, 'quoted-origin');
+        expect(groupQuotedReference?.kind, MessageReferenceKind.originId);
+      }
+    },
+  );
+
+  test(
+    'sendDraft sends calendar task payload as read-only through XMPP message path',
     () async {
       final task = CalendarTask(
         id: 'task-1',
@@ -906,7 +1141,7 @@ void main() {
           encryptionProtocol: EncryptionProtocol.none,
           quotedReference: null,
           calendarTaskIcs: task,
-          calendarTaskIcsReadOnly: false,
+          calendarTaskIcsReadOnly: CalendarTaskIcsMessage.defaultReadOnly,
           chatType: ChatType.chat,
         ),
       ).thenAnswer((_) async {});
@@ -940,7 +1175,7 @@ void main() {
           encryptionProtocol: EncryptionProtocol.none,
           quotedReference: null,
           calendarTaskIcs: task,
-          calendarTaskIcsReadOnly: false,
+          calendarTaskIcsReadOnly: CalendarTaskIcsMessage.defaultReadOnly,
           chatType: ChatType.chat,
         ),
       ).called(1);

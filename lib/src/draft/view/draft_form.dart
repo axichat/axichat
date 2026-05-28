@@ -16,10 +16,12 @@ import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/draft_forwarded_content.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
@@ -53,6 +55,8 @@ class DraftForm extends StatefulWidget {
     this.calendarTaskIcsMessage,
     this.forwardedBlocks = const <DraftForwardedBlock>[],
     this.forwardedSourceAttachmentMetadataIds = const <String>[],
+    this.recipientTransportOverrides = const <String, MessageTransport>{},
+    this.autosaveEnabled = true,
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
     required this.locate,
@@ -74,6 +78,8 @@ class DraftForm extends StatefulWidget {
   final CalendarTaskIcsMessage? calendarTaskIcsMessage;
   final List<DraftForwardedBlock> forwardedBlocks;
   final List<String> forwardedSourceAttachmentMetadataIds;
+  final Map<String, MessageTransport> recipientTransportOverrides;
+  final bool autosaveEnabled;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
   final T Function<T>() locate;
@@ -90,6 +96,8 @@ class DraftForm extends StatefulWidget {
 }
 
 enum _DraftFormCloseAction { save, discard, cancel }
+
+enum _DraftSendAction { sendAsEmail }
 
 final class _ConvertedForwardRange {
   const _ConvertedForwardRange({required this.start, required this.end});
@@ -128,7 +136,6 @@ class DraftFormState extends State<DraftForm> {
       <String, _ConvertedForwardRange>{};
   final Map<String, bool> _forwardPreviewShowImages = <String, bool>{};
   final Map<String, bool> _forwardPreviewUnblockedOriginal = <String, bool>{};
-  bool _recipientsInitialized = false;
   bool _hydrationScheduled = false;
   bool _forwardAttachmentCloneScheduled = false;
 
@@ -141,6 +148,8 @@ class DraftFormState extends State<DraftForm> {
   bool _discardingDraft = false;
   bool _sendCompletionHandled = false;
   bool _seedAttachmentCleanupHandled = false;
+  bool _autosaveEnabled = true;
+  bool _updatingAutosavePreference = false;
   Timer? _autosaveTimer;
   int? _lastSavedSignature;
   DateTime? _lastAutosaveAt;
@@ -150,6 +159,7 @@ class DraftFormState extends State<DraftForm> {
   Future<void>? _attachmentPreparationOperation;
   CancelableCompleter<void>? _attachmentHydrationCancellation;
   CancelableCompleter<void>? _attachmentPreparationCancellation;
+  Future<void> Function(String)? _deleteDraftAttachmentMetadata;
   int _saveEpoch = 0;
 
   @override
@@ -176,8 +186,30 @@ class DraftFormState extends State<DraftForm> {
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
     _pendingCalendarTaskIcsMessage = widget.calendarTaskIcsMessage;
-    _recipients = const [];
+    _recipients = _initialRecipients(
+      chats: widget.locate<ChatsCubit>().state.items ?? const <Chat>[],
+      shareSignatureEnabled: widget
+          .locate<SettingsCubit>()
+          .state
+          .shareTokenSignatureEnabled,
+    );
+    _autosaveEnabled = widget.autosaveEnabled;
     _lastSavedSignature = _savedSignatureFromSeed();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final draftCubit = widget.locate<DraftCubit>();
+    _deleteDraftAttachmentMetadata = draftCubit.deleteDraftAttachmentMetadata;
+    if (_hydrationScheduled ||
+        (_seedAttachmentMetadataIds.isEmpty &&
+            widget.forwardedSourceAttachmentMetadataIds.isEmpty)) {
+      return;
+    }
+    _hydrationScheduled = true;
+    _loadingAttachments = true;
+    unawaited(_hydrateAttachments(draftCubit));
   }
 
   @override
@@ -201,7 +233,12 @@ class DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
-      unawaited(_cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>()));
+      final deleteDraftAttachmentMetadata = _deleteDraftAttachmentMetadata;
+      if (deleteDraftAttachmentMetadata != null) {
+        unawaited(
+          _cleanupSeedAttachmentMetadata(deleteDraftAttachmentMetadata),
+        );
+      }
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -247,7 +284,7 @@ class DraftFormState extends State<DraftForm> {
     final retainedBlocks = <DraftForwardedBlock>[];
     var bodyText = introText;
     for (final block in _forwardedBlocks) {
-      if (block.originalHtml?.trim().isNotEmpty == true) {
+      if (_shouldPreviewForwardedBlock(block)) {
         retainedBlocks.add(block);
         continue;
       }
@@ -262,6 +299,18 @@ class DraftFormState extends State<DraftForm> {
     }
     _forwardedBlocks = retainedBlocks;
     return bodyText;
+  }
+
+  bool _shouldPreviewForwardedBlock(DraftForwardedBlock block) {
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(block.originalHtml);
+    if (normalizedHtml == null) {
+      return false;
+    }
+    return HtmlContentCodec.shouldRenderRichEmailHtml(
+      normalizedHtmlBody: normalizedHtml,
+      normalizedHtmlText: HtmlContentCodec.toPlainText(normalizedHtml).trim(),
+      renderedText: block.originalPlainText,
+    );
   }
 
   void _bodyListener() {
@@ -385,21 +434,6 @@ class DraftFormState extends State<DraftForm> {
     _bodyFocusNode.requestFocus();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_hydrationScheduled ||
-        (_seedAttachmentMetadataIds.isEmpty &&
-            widget.forwardedSourceAttachmentMetadataIds.isEmpty)) {
-      return;
-    }
-    _hydrationScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _hydrateAttachments();
-    });
-  }
-
   void _handleTaskDrop(CalendarDragPayload payload) {
     setState(() {
       _latestEmailRecipientStatuses = const {};
@@ -476,6 +510,17 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleForwardUnblockOriginal(String blockId) async {
+    final l10n = context.l10n;
+    final confirmed = await confirm(
+      context,
+      title: l10n.chatEmailOriginalContentConfirmTitle,
+      message: l10n.chatEmailOriginalContentConfirmMessage,
+      confirmLabel: l10n.chatEmailUnblockInteractiveContentButton,
+      destructiveConfirm: false,
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
     setState(() {
       _forwardPreviewUnblockedOriginal[blockId] = true;
     });
@@ -643,7 +688,6 @@ class DraftFormState extends State<DraftForm> {
               bloc: locate<ChatsCubit>(),
               builder: (context, chatsState) {
                 final chats = chatsState.items ?? const <Chat>[];
-                _scheduleRecipientsInitialization(chats);
                 final autovalidateMode = _showValidationMessages
                     ? AutovalidateMode.always
                     : AutovalidateMode.disabled;
@@ -770,6 +814,12 @@ class DraftFormState extends State<DraftForm> {
                             !_addingAttachment &&
                             !_loadingAttachments &&
                             !hasPreparingAttachments;
+                        final canSendAsEmail =
+                            readyToSend &&
+                            _canForceSendRecipientsAsEmail(
+                              recipients: activeRecipients,
+                              endpointConfig: endpointConfig,
+                            );
                         final bool showAutosaveHint =
                             _lastAutosaveAt != null &&
                             _lastSavedSignature == _currentDraftSignature();
@@ -818,6 +868,14 @@ class DraftFormState extends State<DraftForm> {
                                   hasPreparingAttachments
                               ? null
                               : _handleSendDraft,
+                          onSendLongPressed:
+                              sendFlowActive ||
+                                  _addingAttachment ||
+                                  _loadingAttachments ||
+                                  hasPreparingAttachments ||
+                                  !canSendAsEmail
+                              ? null
+                              : _handleSendButtonLongPress,
                           showSendBlockerMessage: showSendBlockerMessage,
                           sendBlockerMessage: sendBlocker,
                           sendErrorMessage: sendBlocker == null
@@ -825,6 +883,9 @@ class DraftFormState extends State<DraftForm> {
                               : null,
                           showSendingStatus: isSending,
                           showAutosaveHint: showAutosaveHint,
+                          autosaveEnabled: _autosaveEnabled,
+                          autosaveUpdating: _updatingAutosavePreference,
+                          onAutosaveChanged: _handleAutosaveEnabledChanged,
                           canDiscard: canDiscard,
                           canSave: canSave,
                           onDiscardPressed: _handleDiscard,
@@ -844,21 +905,16 @@ class DraftFormState extends State<DraftForm> {
     );
   }
 
-  void _scheduleRecipientsInitialization(List<Chat> chats) {
-    if (_recipientsInitialized) return;
-    _recipientsInitialized = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _recipients = _initialRecipients(chats));
-      _notifyRecipientAddressesChanged();
-    });
-  }
-
-  List<ComposerRecipient> _initialRecipients(List<Chat> chats) {
+  List<ComposerRecipient> _initialRecipients({
+    required List<Chat> chats,
+    required bool shareSignatureEnabled,
+  }) {
     final recipients = <ComposerRecipient>[];
     for (final value in widget.jids) {
       final trimmed = value.trim();
       if (trimmed.isEmpty) continue;
+      final transportOverride = widget
+          .recipientTransportOverrides[contactDirectoryAddressKey(trimmed)];
       Chat? match;
       for (final chat in chats) {
         if (chat.jid == trimmed) {
@@ -866,17 +922,26 @@ class DraftFormState extends State<DraftForm> {
           break;
         }
       }
+      if (transportOverride != null) {
+        recipients.add(
+          ComposerRecipient(
+            target: Contact.address(
+              address: trimmed,
+              displayName: match?.displayName,
+              shareSignatureEnabled: shareSignatureEnabled,
+              transport: transportOverride,
+            ),
+          ),
+        );
+        continue;
+      }
       if (match != null) {
         recipients.add(
           ComposerRecipient(
             target: Contact.chat(
               chat: match,
               shareSignatureEnabled:
-                  match.shareSignatureEnabled ??
-                  context
-                      .read<SettingsCubit>()
-                      .state
-                      .shareTokenSignatureEnabled,
+                  match.shareSignatureEnabled ?? shareSignatureEnabled,
             ),
           ),
         );
@@ -885,10 +950,7 @@ class DraftFormState extends State<DraftForm> {
           ComposerRecipient(
             target: Contact.address(
               address: trimmed,
-              shareSignatureEnabled: context
-                  .read<SettingsCubit>()
-                  .state
-                  .shareTokenSignatureEnabled,
+              shareSignatureEnabled: shareSignatureEnabled,
             ),
           ),
         );
@@ -897,9 +959,12 @@ class DraftFormState extends State<DraftForm> {
     return recipients;
   }
 
-  Future<void> _hydrateAttachments() async {
+  Future<void> _hydrateAttachments(DraftCubit draftCubit) async {
     final cancellation = CancelableCompleter<void>();
-    final operation = _performAttachmentHydration(cancellation: cancellation);
+    final operation = _performAttachmentHydration(
+      cancellation: cancellation,
+      draftCubit: draftCubit,
+    );
     _attachmentHydrationCancellation = cancellation;
     _attachmentHydrationOperation = operation;
     try {
@@ -919,24 +984,22 @@ class DraftFormState extends State<DraftForm> {
 
   Future<void> _performAttachmentHydration({
     required CancelableCompleter<void> cancellation,
+    required DraftCubit draftCubit,
   }) async {
     if (_seedAttachmentMetadataIds.isEmpty &&
         widget.forwardedSourceAttachmentMetadataIds.isEmpty) {
       return;
     }
-    setState(() => _loadingAttachments = true);
     try {
       if (!_forwardAttachmentCloneScheduled &&
           widget.forwardedSourceAttachmentMetadataIds.isNotEmpty) {
         _forwardAttachmentCloneScheduled = true;
-        final clonedIds = await context
-            .read<DraftCubit>()
-            .cloneDraftAttachmentMetadata(
-              widget.forwardedSourceAttachmentMetadataIds,
-            );
+        final clonedIds = await draftCubit.cloneDraftAttachmentMetadata(
+          widget.forwardedSourceAttachmentMetadataIds,
+        );
         if (!mounted || cancellation.isCanceled) {
           await _deleteAttachmentMetadataIds(
-            widget.locate<DraftCubit>(),
+            draftCubit.deleteDraftAttachmentMetadata,
             clonedIds,
           );
           return;
@@ -951,6 +1014,7 @@ class DraftFormState extends State<DraftForm> {
       }
       final pending = await _pendingAttachmentsFromMetadata(
         _seedAttachmentMetadataIds,
+        draftCubit,
       );
       if (!mounted || cancellation.isCanceled) return;
       setState(() => _pendingAttachments = pending);
@@ -964,9 +1028,10 @@ class DraftFormState extends State<DraftForm> {
 
   Future<List<PendingAttachment>> _pendingAttachmentsFromMetadata(
     Iterable<String> metadataIds,
+    DraftCubit draftCubit,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final hydrated = await context.read<DraftCubit>().loadDraftAttachments(
+    final hydrated = await draftCubit.loadDraftAttachments(
       metadataIds.toList(),
     );
     final List<PendingAttachment> pending = <PendingAttachment>[];
@@ -1032,6 +1097,70 @@ class DraftFormState extends State<DraftForm> {
     return true;
   }
 
+  bool _canForceSendRecipientsAsEmail({
+    required List<ComposerRecipient> recipients,
+    required EndpointConfig endpointConfig,
+  }) {
+    if (recipients.isEmpty || !endpointConfig.smtpEnabled) {
+      return false;
+    }
+    for (final recipient in recipients) {
+      if (_emailRecipientForOneShotSend(
+            recipient: recipient,
+            endpointConfig: endpointConfig,
+          ) ==
+          null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  List<ComposerRecipient>? _forceEmailRecipients({
+    required List<ComposerRecipient> recipients,
+    required EndpointConfig endpointConfig,
+  }) {
+    final forced = <ComposerRecipient>[];
+    for (final recipient in recipients) {
+      final target = _emailRecipientForOneShotSend(
+        recipient: recipient,
+        endpointConfig: endpointConfig,
+      );
+      if (target == null) {
+        return null;
+      }
+      forced.add(recipient.withTarget(target));
+    }
+    return forced;
+  }
+
+  Contact? _emailRecipientForOneShotSend({
+    required ComposerRecipient recipient,
+    required EndpointConfig endpointConfig,
+  }) {
+    final target = recipient.target;
+    if (target.usesEmailTransport()) {
+      return target;
+    }
+    final address = target.preferredEmailAddress?.trim();
+    if (address == null || normalizedAddressValue(address) == null) {
+      return null;
+    }
+    final chat = target.chat;
+    if (chat != null &&
+        !chat.supportsEmail &&
+        !chat.supportsEmailOutboundOverrideForDomain(endpointConfig.domain)) {
+      return null;
+    }
+    return Contact.address(
+      nativeID: target.nativeID,
+      address: address,
+      displayName: target.displayName,
+      shareSignatureEnabled: target.shareSignatureEnabled,
+      transport: MessageTransport.email,
+    );
+  }
+
   String? _recipientAddError(Contact target) {
     if (!exceedsComposeRecipientLimit(
       recipients: _recipients,
@@ -1082,7 +1211,10 @@ class DraftFormState extends State<DraftForm> {
     if (!supportsEmail && !supportsXmpp) {
       return null;
     }
-    final hinted = hintTransportForAddress(address);
+    final hinted = hintTransportForAddress(
+      address,
+      xmppDomainHints: {endpointConfig.domain},
+    );
     if (hinted != null) {
       return hinted;
     }
@@ -1323,9 +1455,45 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
+  Future<void> _handleAutosaveEnabledChanged(bool enabled) async {
+    if (_autosaveEnabled == enabled || _updatingAutosavePreference) {
+      return;
+    }
+    final previous = _autosaveEnabled;
+    final draftId = id;
+    final draftCubit = widget.locate<DraftCubit>();
+    setState(() {
+      _autosaveEnabled = enabled;
+      _updatingAutosavePreference = draftId != null;
+    });
+    _autosaveTimer?.cancel();
+    if (enabled) {
+      _scheduleAutosave();
+    }
+    if (draftId == null) {
+      return;
+    }
+    try {
+      await draftCubit.updateDraftAutosaveEnabled(
+        id: draftId,
+        enabled: enabled,
+      );
+    } on Exception {
+      if (!mounted) return;
+      setState(() => _autosaveEnabled = previous);
+      _autosaveTimer?.cancel();
+      if (previous) {
+        _scheduleAutosave();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _updatingAutosavePreference = false);
+      }
+    }
+  }
+
   Future<void> _saveDraft({required bool autoSave}) async {
     final int saveEpoch = _saveEpoch;
-    bool shouldCommit() => mounted && saveEpoch == _saveEpoch;
     final bool wasNewDraft = id == null;
     final List<PendingAttachment> pendingAttachments = List.of(
       _pendingAttachments,
@@ -1351,23 +1519,18 @@ class DraftFormState extends State<DraftForm> {
       forwardedBlocks: _forwardedBlocks,
     );
     final draftCubit = context.read<DraftCubit>();
-    final Draft draft;
-    try {
-      draft = await draftCubit.saveDraft(
-        id: id,
-        jids: recipients,
-        body: body,
-        subject: subject,
-        quoteTarget: quoteTarget,
-        attachments: attachments,
-        calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
-        forwardedBlocks: _forwardedBlocks,
-        autoSave: autoSave,
-        shouldCommit: shouldCommit,
-      );
-    } on DraftSaveAbortedException {
-      return;
-    }
+    final draft = await draftCubit.saveDraft(
+      id: id,
+      jids: recipients,
+      body: body,
+      subject: subject,
+      quoteTarget: quoteTarget,
+      attachments: attachments,
+      calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+      forwardedBlocks: _forwardedBlocks,
+      autoSave: autoSave,
+      autosaveEnabled: _autosaveEnabled,
+    );
     if (!mounted || saveEpoch != _saveEpoch) return;
     final draftCount = !autoSave && wasNewDraft
         ? await draftCubit.countDrafts()
@@ -1406,9 +1569,7 @@ class DraftFormState extends State<DraftForm> {
       if (staleMetadataIds.isNotEmpty) {
         for (final metadataId in staleMetadataIds) {
           try {
-            await context.read<DraftCubit>().deleteDraftAttachmentMetadata(
-              metadataId,
-            );
+            await draftCubit.deleteDraftAttachmentMetadata(metadataId);
           } on Exception {
             // Best-effort cleanup for share intent attachment metadata.
           }
@@ -1419,6 +1580,10 @@ class DraftFormState extends State<DraftForm> {
   }
 
   void _scheduleAutosave() {
+    if (!_autosaveEnabled) {
+      _autosaveTimer?.cancel();
+      return;
+    }
     if (_sendingDraft || _savingDraft || _discardingDraft) {
       return;
     }
@@ -1490,8 +1655,6 @@ class DraftFormState extends State<DraftForm> {
   Future<void> _drainDiscardedAutosave(Future<void> operation) async {
     try {
       await operation;
-    } on DraftSaveAbortedException {
-      return;
     } on Exception {
       // Autosave failures remain best-effort after the composer is closed.
     }
@@ -1530,6 +1693,9 @@ class DraftFormState extends State<DraftForm> {
     if (!mounted || _autosaveInFlight) {
       return;
     }
+    if (!_autosaveEnabled) {
+      return;
+    }
     if (!_hasDraftableContent()) {
       return;
     }
@@ -1563,6 +1729,9 @@ class DraftFormState extends State<DraftForm> {
   }
 
   bool _shouldAutosave() {
+    if (!_autosaveEnabled) {
+      return false;
+    }
     if (_pendingAttachments.any((pending) => pending.isPreparing)) {
       return false;
     }
@@ -1687,6 +1856,8 @@ class DraftFormState extends State<DraftForm> {
           block.originalSubject,
           block.originalPlainText,
           block.originalHtml,
+          block.quotedContext?.senderLabel,
+          block.quotedContext?.plainText,
           block.conversionState,
           block.convertedText,
         ),
@@ -1767,7 +1938,9 @@ class DraftFormState extends State<DraftForm> {
       }
     }
     if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(draftCubit);
+      await _cleanupSeedAttachmentMetadata(
+        draftCubit.deleteDraftAttachmentMetadata,
+      );
     }
     if (mounted) {
       _showToast(context.l10n.draftDiscarded);
@@ -1796,7 +1969,9 @@ class DraftFormState extends State<DraftForm> {
       unawaited(_drainDiscardedAutosave(autosaveOperation));
     }
     if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(draftCubit);
+      await _cleanupSeedAttachmentMetadata(
+        draftCubit.deleteDraftAttachmentMetadata,
+      );
     }
     if (mounted) {
       setState(() => _discardingDraft = false);
@@ -1920,7 +2095,9 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
-  Future<void> _cleanupSeedAttachmentMetadata(DraftCubit draftCubit) async {
+  Future<void> _cleanupSeedAttachmentMetadata(
+    Future<void> Function(String) deleteDraftAttachmentMetadata,
+  ) async {
     if (!_shouldCleanupSeedAttachments) {
       return;
     }
@@ -1931,7 +2108,7 @@ class DraftFormState extends State<DraftForm> {
     }
     for (final metadataId in metadataIds) {
       try {
-        await draftCubit.deleteDraftAttachmentMetadata(metadataId);
+        await deleteDraftAttachmentMetadata(metadataId);
       } on Exception {
         // Best-effort cleanup for share intent attachment metadata.
       }
@@ -1939,12 +2116,12 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _deleteAttachmentMetadataIds(
-    DraftCubit draftCubit,
+    Future<void> Function(String) deleteDraftAttachmentMetadata,
     Iterable<String> metadataIds,
   ) async {
     for (final metadataId in metadataIds) {
       try {
-        await draftCubit.deleteDraftAttachmentMetadata(metadataId);
+        await deleteDraftAttachmentMetadata(metadataId);
       } on Exception {
         // Best-effort cleanup for abandoned compose attachment metadata.
       }
@@ -1975,7 +2152,39 @@ class DraftFormState extends State<DraftForm> {
     return true;
   }
 
-  Future<void> _handleSendDraft() async {
+  Future<void> _handleSendButtonLongPress() async {
+    final action = await showAdaptiveBottomSheet<_DraftSendAction>(
+      context: context,
+      preferDialogOnMobile: true,
+      requestFocus: false,
+      surfacePadding: EdgeInsets.zero,
+      builder: (dialogContext) {
+        return AxiSheetScaffold.scroll(
+          header: AxiSheetHeader(
+            title: Text(dialogContext.l10n.commonActions),
+            onClose: () => Navigator.of(dialogContext).maybePop(),
+          ),
+          children: [
+            AxiListButton(
+              leading: const Icon(LucideIcons.mail),
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(_DraftSendAction.sendAsEmail),
+              child: Text(dialogContext.l10n.chatSendAsEmail),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) {
+      return;
+    }
+    _bodyFocusNode.requestFocus();
+    if (action == _DraftSendAction.sendAsEmail) {
+      await _handleSendDraft(forceEmail: true);
+    }
+  }
+
+  Future<void> _handleSendDraft({bool forceEmail = false}) async {
     if (_sendingDraft) {
       return;
     }
@@ -2008,26 +2217,43 @@ class DraftFormState extends State<DraftForm> {
       });
       return;
     }
-    final transportsReady = await _ensureRecipientTransports();
-    if (!mounted) return;
-    if (!transportsReady) {
+    final settingsCubit = context.read<SettingsCubit>();
+    final settingsState = settingsCubit.state;
+    final endpointConfig = settingsState.endpointConfig;
+    if (!forceEmail) {
+      final transportsReady = await _ensureRecipientTransports();
+      if (!mounted) return;
+      if (!transportsReady) {
+        setState(() {
+          _sendingDraft = false;
+          _pendingAttachments = _resetUploadingPendingAttachments();
+        });
+        return;
+      }
+    }
+    _syncConvertedForwardBlocksFromBody();
+    final includedRecipients = _recipients.includedRecipients;
+    final activeRecipients = forceEmail
+        ? _forceEmailRecipients(
+            recipients: includedRecipients,
+            endpointConfig: endpointConfig,
+          )
+        : includedRecipients;
+    if (activeRecipients == null) {
       setState(() {
         _sendingDraft = false;
+        _sendErrorMessage = context.l10n.chatComposerEmailRecipientUnavailable;
         _pendingAttachments = _resetUploadingPendingAttachments();
       });
       return;
     }
-    final settingsCubit = context.read<SettingsCubit>();
-    final settingsState = settingsCubit.state;
-    final endpointConfig = settingsState.endpointConfig;
-    _syncConvertedForwardBlocksFromBody();
-    final activeRecipients = _recipients.includedRecipients;
     final emailRecipients = activeRecipients.emailRecipients();
     final validationMessage = _sendValidationMessage(
       hasActiveRecipients: activeRecipients.isNotEmpty,
       hasContent: _hasContent(),
       emailRecipientsUnavailable:
           !endpointConfig.smtpEnabled && emailRecipients.isNotEmpty,
+      recipients: activeRecipients,
     );
     final formValid = _formKey.currentState?.validate() ?? false;
     if (validationMessage != null || !formValid) {
@@ -2073,7 +2299,7 @@ class DraftFormState extends State<DraftForm> {
     late final DraftSendOutcome outcome;
     try {
       _syncConvertedForwardBlocksFromBody();
-      final sendRecipients = _recipients.includedRecipients;
+      final sendRecipients = activeRecipients;
       final sendEmailRecipients = sendRecipients.emailRecipients();
       final xmppTargets = sendRecipients
           .xmppRecipients()
@@ -2258,8 +2484,9 @@ class DraftFormState extends State<DraftForm> {
     required bool hasActiveRecipients,
     required bool hasContent,
     required bool emailRecipientsUnavailable,
+    Iterable<ComposerRecipient>? recipients,
   }) {
-    final emailRecipientCount = _recipients
+    final emailRecipientCount = (recipients ?? _recipients)
         .where((recipient) => recipient.usesEmailTransport(allowHint: true))
         .length;
     if (emailRecipientCount > composeRecipientLimit) {
@@ -2435,9 +2662,7 @@ class _DraftForwardedBlockPreview extends StatelessWidget {
               onRemoteImagesApproved: onShowImages,
               onOriginalContentUnblocked: onUnblockOriginal,
               onLinkTap: onLinkTap,
-            )
-          else
-            SelectableText(block.originalPlainText, style: context.textTheme.p),
+            ),
         ],
       ],
     );

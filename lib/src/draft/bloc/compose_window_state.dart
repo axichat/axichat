@@ -17,6 +17,8 @@ class ComposeDraftSeed extends Equatable {
     this.calendarTaskIcsMessage,
     this.forwardedBlocks = const <DraftForwardedBlock>[],
     this.forwardedSourceAttachmentMetadataIds = const <String>[],
+    this.recipientTransportOverrides = const <String, MessageTransport>{},
+    this.autosaveEnabled = true,
   });
 
   final int? id;
@@ -28,6 +30,8 @@ class ComposeDraftSeed extends Equatable {
   final CalendarTaskIcsMessage? calendarTaskIcsMessage;
   final List<DraftForwardedBlock> forwardedBlocks;
   final List<String> forwardedSourceAttachmentMetadataIds;
+  final Map<String, MessageTransport> recipientTransportOverrides;
+  final bool autosaveEnabled;
 
   ComposeDraftSeed copyWith({
     int? id,
@@ -39,6 +43,8 @@ class ComposeDraftSeed extends Equatable {
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock>? forwardedBlocks,
     List<String>? forwardedSourceAttachmentMetadataIds,
+    Map<String, MessageTransport>? recipientTransportOverrides,
+    bool? autosaveEnabled,
   }) {
     return ComposeDraftSeed(
       id: id ?? this.id,
@@ -54,6 +60,9 @@ class ComposeDraftSeed extends Equatable {
       forwardedSourceAttachmentMetadataIds:
           forwardedSourceAttachmentMetadataIds ??
           this.forwardedSourceAttachmentMetadataIds,
+      recipientTransportOverrides:
+          recipientTransportOverrides ?? this.recipientTransportOverrides,
+      autosaveEnabled: autosaveEnabled ?? this.autosaveEnabled,
     );
   }
 
@@ -68,6 +77,8 @@ class ComposeDraftSeed extends Equatable {
     calendarTaskIcsMessage,
     forwardedBlocks,
     forwardedSourceAttachmentMetadataIds,
+    recipientTransportOverrides,
+    autosaveEnabled,
   ];
 }
 

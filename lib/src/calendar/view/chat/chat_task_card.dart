@@ -172,7 +172,6 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       await showAdaptiveBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        bottomSafeAreaBehavior: AxiSheetBottomSafeAreaBehavior.insideSurface,
         surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {

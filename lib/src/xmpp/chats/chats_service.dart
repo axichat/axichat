@@ -740,7 +740,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required Chat? chat,
     required mox.ChatState state,
   }) async {
-    if (chat == null || chat.isEmailBacked || chat.defaultTransport.isEmail) {
+    if (chat == null || chat.defaultTransport.isEmail) {
       return;
     }
     final targetJid = chat.remoteJid.trim().isNotEmpty

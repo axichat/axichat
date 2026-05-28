@@ -1253,7 +1253,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final DateTime? picked = await showAdaptiveBottomSheet<DateTime>(
       context: modalContext,
       isScrollControlled: true,
-      bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
+      useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         return _SplitTaskPickerSheet(
@@ -1552,7 +1552,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
+        useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
         surfacePadding: EdgeInsets.zero,
         showCloseButton: false,
         builder: (sheetContext) {

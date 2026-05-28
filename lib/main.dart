@@ -18,7 +18,6 @@ import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/common/ui/ui.dart' show compactDeviceBreakpoint;
 import 'package:axichat/src/notifications/notification_service.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
@@ -58,8 +57,6 @@ Future<void> main(List<String> args) async {
 
   final NotificationService notificationService = NotificationService();
   final Future<void> notificationInitFuture = notificationService.init();
-  final Future<bool> notificationPermissionsFuture = notificationService
-      .hasAllNotificationPermissions();
 
   final Future<Directory> storageDirectoryFuture = prepareAppStorageDirectory();
   const bool isWeb = kIsWeb;
@@ -90,27 +87,13 @@ Future<void> main(List<String> args) async {
   registerCalendarHiveAdapters();
   await storageManager.ensureGuestStorage();
 
-  final SettingsCubit startupSettingsCubit = SettingsCubit(
-    capability: capability,
-  );
-  final bool backgroundMessagingEnabled =
-      startupSettingsCubit.state.backgroundMessagingEnabled;
-  await startupSettingsCubit.close();
-
   await notificationInitFuture;
   if (capability.canForegroundService) {
     await resetForegroundServiceIfRunning();
   }
 
-  final bool hasNotificationPermissions = await notificationPermissionsFuture;
-  withForeground =
-      capability.canForegroundService &&
-      backgroundMessagingEnabled &&
-      hasNotificationPermissions;
-  foregroundServiceActive.value = withForeground;
-  if (withForeground) {
-    initForegroundService();
-  }
+  withForeground = false;
+  foregroundServiceActive.value = false;
 
   final bool hasStoredLoginCredentials = await storedCredentialsFuture;
   final AuthBootstrap authBootstrap = AuthBootstrap(

@@ -22,6 +22,16 @@ enum HomeSearchSlot {
   };
 }
 
+enum HomeRefreshFailure {
+  email,
+  xmpp;
+
+  String resolve(AppLocalizations l10n) => switch (this) {
+    HomeRefreshFailure.email => l10n.chatEmailSyncFailed,
+    HomeRefreshFailure.xmpp => l10n.xmppOperationPubSubFetchFailure,
+  };
+}
+
 class HomeSearchFilter extends Equatable {
   const HomeSearchFilter({required this.id, required this.label});
 
@@ -112,6 +122,7 @@ class HomeState extends Equatable {
     required this.activeTab,
     required this.searchStates,
     required this.refreshStatus,
+    this.refreshFailure,
     this.lastSyncedAt,
   });
 
@@ -150,6 +161,7 @@ class HomeState extends Equatable {
   final HomeTab? activeTab;
   final Map<HomeSearchSlot, TabSearchState> searchStates;
   final RequestStatus refreshStatus;
+  final HomeRefreshFailure? refreshFailure;
   final DateTime? lastSyncedAt;
 
   TabSearchState? get currentTabState =>
@@ -168,6 +180,7 @@ class HomeState extends Equatable {
     Object? activeTab = _homeStateUnset,
     Map<HomeSearchSlot, TabSearchState>? searchStates,
     RequestStatus? refreshStatus,
+    Object? refreshFailure = _homeStateUnset,
     Object? lastSyncedAt = _homeStateUnset,
   }) {
     return HomeState(
@@ -178,6 +191,9 @@ class HomeState extends Equatable {
           : activeTab as HomeTab?,
       searchStates: searchStates ?? this.searchStates,
       refreshStatus: refreshStatus ?? this.refreshStatus,
+      refreshFailure: refreshFailure == _homeStateUnset
+          ? this.refreshFailure
+          : refreshFailure as HomeRefreshFailure?,
       lastSyncedAt: lastSyncedAt == _homeStateUnset
           ? this.lastSyncedAt
           : lastSyncedAt as DateTime?,
@@ -191,6 +207,7 @@ class HomeState extends Equatable {
     activeTab,
     searchStates,
     refreshStatus,
+    refreshFailure,
     lastSyncedAt,
   ];
 }

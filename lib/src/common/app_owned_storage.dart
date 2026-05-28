@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 const String emailAttachmentTempDirectoryName = 'email_attachments';
+const String emailEncryptionKeyTempDirectoryName = 'email_encryption_keys';
 const String attachmentShareTempDirectoryName = 'attachment_shares';
 const String chatHistoryExportTempDirectoryName = 'chat_history_exports';
 const String contactExportTempDirectoryName = 'contact_exports';

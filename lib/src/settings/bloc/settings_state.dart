@@ -74,6 +74,7 @@ enum GlobalSettingId {
   messageTextSize,
   emailImageAutoload,
   emailComposerWatermark,
+  emailEncryptionBeta,
   donationPromptTracking,
   attachmentAutoDownloadImages,
   attachmentAutoDownloadVideos,
@@ -115,6 +116,7 @@ enum GlobalSettingId {
     emailNotificationsMuted,
     notificationPreviews,
     emailForwardingGuideSeen,
+    emailEncryptionBeta,
     donationPromptTracking,
   };
 
@@ -222,6 +224,8 @@ abstract class SettingsState with _$SettingsState {
     @Default(false) bool autoDownloadVideos,
     @Default(false) bool autoDownloadDocuments,
     @Default(false) bool autoDownloadArchives,
+    @Default(<String, bool>{})
+    Map<String, bool> emailEncryptionBetaEnabledByAddress,
     // ignore: invalid_annotation_target
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<GlobalSettingId, RequestStatus>{})

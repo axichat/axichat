@@ -249,6 +249,7 @@
   "chatComposerSemantics": "Nachrichteneingabe",
   "draftSaved": "Entwurf gespeichert",
   "draftAutosaved": "Automatisch gespeichert",
+  "draftAutosave": "Automatisch speichern",
   "draftErrorTitle": "Hoppla",
   "draftNoRecipients": "Keine Empfänger",
   "draftSubjectSemantics": "E-Mail-Betreff",
@@ -1768,7 +1769,7 @@
   "settingsAutoDownloadScopeAlways": "Immer",
   "settingsAutoDownloadScopeTrustedContacts": "Nur für vertrauenswürdige Kontakte.",
   "emailEncryptionBetaLabel": "E-Mail-Verschlüsselung",
-  "emailEncryptionBetaChip": "Beta",
+  "emailEncryptionBetaChip": "Experimentell",
   "emailEncryptionBetaEnabledStatus": "Aktiviert für {address}",
   "@emailEncryptionBetaEnabledStatus": {
     "placeholders": {
@@ -3231,6 +3232,7 @@
   "mucDestroyRoomConfirmTitle": "Raum löschen?",
   "mucDestroyRoomConfirmBody": "Dadurch wird der Raum für alle entfernt, die sich derzeit darin befinden.",
   "contactsDetailsSectionTitle": "Einzelheiten",
+  "contactsFolderRoutingDetailLabel": "Gehört in",
   "contactsAddressLabel": "Adresse",
   "contactsMessagesLabel": "Nachrichten",
   "contactsMessagesNameLabel": "Name für Nachrichten",

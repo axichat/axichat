@@ -174,6 +174,135 @@ void main() {
     },
   );
 
+  test('email-backed message counts ignore native XMPP rows', () async {
+    final chat = Chat(
+      jid: 'mixed@axi.im',
+      title: 'Mixed',
+      type: ChatType.chat,
+      transport: MessageTransport.xmpp,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      emailAddress: 'mixed@example.com',
+    );
+    await db.createChat(chat);
+
+    await db.saveMessage(
+      Message(
+        stanzaID: 'native-xmpp',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'Native XMPP',
+      ),
+    );
+    await db.saveMessage(
+      Message(
+        stanzaID: 'email-account-zero',
+        senderJid: 'mixed@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 11),
+        body: 'Email account zero',
+        deltaChatId: 10,
+        deltaMsgId: 100,
+      ),
+    );
+    await db.saveMessage(
+      Message(
+        stanzaID: 'email-account-one',
+        senderJid: 'mixed@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        body: 'Email account one',
+        deltaAccountId: 1,
+        deltaChatId: 20,
+        deltaMsgId: 200,
+      ),
+    );
+    await db.saveMessage(
+      Message(
+        stanzaID: 'email-pending-account-zero',
+        senderJid: 'self@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 13),
+        body: 'Pending email',
+        deltaChatId: 10,
+      ),
+    );
+
+    expect(await db.countChatMessages(chat.jid), 4);
+    expect(await db.countEmailBackedChatMessages(chat.jid), 3);
+    expect(
+      await db.countEmailBackedChatMessages(
+        chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      ),
+      2,
+    );
+    expect(
+      await db.countEmailBackedChatMessages(chat.jid, deltaAccountId: 1),
+      1,
+    );
+  });
+
+  test(
+    'email chat account upsert can move a Delta chat between rows',
+    () async {
+      const deltaChatId = 42;
+      final nativeEmail = Chat(
+        jid: 'mixed@example.com',
+        title: 'Mixed Email',
+        type: ChatType.chat,
+        transport: MessageTransport.email,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        deltaChatId: deltaChatId,
+        emailAddress: 'mixed@example.com',
+      );
+      final mixedXmpp = Chat(
+        jid: 'mixed@axi.im',
+        title: 'Mixed XMPP',
+        type: ChatType.chat,
+        transport: MessageTransport.xmpp,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        deltaChatId: deltaChatId,
+        emailAddress: 'mixed@example.com',
+      );
+      await db.createChat(nativeEmail);
+      await db.createChat(mixedXmpp);
+
+      await db.upsertEmailChatAccount(
+        chatJid: nativeEmail.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: deltaChatId,
+      );
+      await db.upsertEmailChatAccount(
+        chatJid: mixedXmpp.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: deltaChatId,
+      );
+
+      expect(
+        await db.getDeltaChatIdForAccount(
+          chatJid: nativeEmail.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+        isNull,
+      );
+      expect(
+        await db.getDeltaChatIdForAccount(
+          chatJid: mixedXmpp.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+        deltaChatId,
+      );
+      expect(
+        (await db.getChatByDeltaChatId(
+          deltaChatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ))?.jid,
+        mixedXmpp.jid,
+      );
+    },
+  );
+
   test(
     'saveMessage does not increment unread for direct self messages',
     () async {
@@ -645,6 +774,69 @@ void main() {
       final updatedChat = await db.getChat(jid);
       expect(updatedChat?.lastMessage, 'newest imported message');
       expect(updatedChat?.lastChangeTimestamp, externalTimestamp);
+    },
+  );
+
+  test(
+    'mixed chats order newer email messages after older XMPP messages',
+    () async {
+      final contact = Chat(
+        jid: 'mixed-order@axi.im',
+        title: 'Mixed Order',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: 7,
+        emailAddress: 'mixed-order@example.com',
+        emailFromAddress: 'me@example.com',
+      );
+      await db.createChat(contact);
+
+      final emailTimestamp = DateTime.utc(2024, 1, 2, 12, 10);
+      final xmppMessages = [
+        for (final age in [
+          const Duration(seconds: 10),
+          const Duration(minutes: 1),
+          const Duration(minutes: 2),
+          const Duration(minutes: 5),
+          const Duration(minutes: 10),
+        ])
+          Message(
+            stanzaID: 'xmpp-old-${age.inSeconds}',
+            senderJid: contact.jid,
+            chatJid: contact.jid,
+            timestamp: emailTimestamp.subtract(age),
+            body: 'older xmpp ${age.inSeconds}',
+            encryptionProtocol: EncryptionProtocol.none,
+          ),
+      ];
+      final emailMessage = Message(
+        stanzaID: 'dc-msg-77',
+        senderJid: 'mixed-order@example.com',
+        chatJid: contact.jid,
+        timestamp: emailTimestamp,
+        body: 'newer email',
+        encryptionProtocol: EncryptionProtocol.none,
+        received: true,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 77,
+      );
+
+      for (final message in xmppMessages.reversed) {
+        await db.saveMessage(message);
+      }
+      await db.saveMessage(emailMessage);
+
+      final messages = await db.getChatMessages(contact.jid, start: 0, end: 10);
+      final updatedChat = await db.getChat(contact.jid);
+
+      expect(messages.map((message) => message.stanzaID), [
+        emailMessage.stanzaID,
+        ...xmppMessages.map((message) => message.stanzaID),
+      ]);
+      expect(updatedChat?.lastMessage, 'newer email');
+      expect(updatedChat?.lastChangeTimestamp, emailMessage.timestamp);
     },
   );
 

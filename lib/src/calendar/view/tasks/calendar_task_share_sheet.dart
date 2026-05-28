@@ -40,7 +40,7 @@ Future<void> showCalendarTaskShareSheet({
   final result = await showAdaptiveBottomSheet<bool>(
     context: modalContext,
     isScrollControlled: true,
-    bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,

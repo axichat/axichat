@@ -23,6 +23,9 @@ void main() {
     when(
       () => xmppService.demoResetStream,
     ).thenAnswer((_) => const Stream<void>.empty());
+    when(
+      () => xmppService.contactFolderRulesStream(),
+    ).thenAnswer((_) => const Stream<Map<String, String>>.empty());
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
     when(
       () => xmppService.setSpamStatus(

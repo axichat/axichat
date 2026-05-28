@@ -51,3 +51,22 @@ Future<bool?> showNotificationDialog(
         },
       ),
 );
+
+Future<void> showNotificationRestartDialog(BuildContext context) =>
+    showFadeScaleDialog<void>(
+      context: context,
+      builder: (context) => AxiDialog(
+        constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+        title: Text(
+          context.l10n.notificationsRestartTitle,
+          style: context.modalHeaderTextStyle,
+        ),
+        actions: [
+          AxiButton.primary(
+            onPressed: () => context.pop(),
+            child: Text(context.l10n.commonDone),
+          ),
+        ],
+        child: Text(context.l10n.notificationsRestartSubtitle),
+      ),
+    );

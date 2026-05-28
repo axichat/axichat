@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:io';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
+import 'package:axichat/src/email/bloc/email_contact_key_cubit.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
@@ -20,6 +24,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -36,6 +41,9 @@ Future<void> showContactDetailsSheet({
   required ContactDirectoryEntry contact,
 }) async {
   final locate = context.read;
+  final emailService = locate<SettingsCubit>().state.endpointConfig.smtpEnabled
+      ? _maybeLocateEmailService(locate)
+      : null;
   final action = await showAdaptiveBottomSheet<_ContactDetailsSheetAction>(
     context: context,
     isScrollControlled: true,
@@ -47,8 +55,19 @@ Future<void> showContactDetailsSheet({
           BlocProvider.value(value: locate<ContactsCubit>()),
           BlocProvider.value(value: locate<BlocklistCubit>()),
           BlocProvider.value(value: locate<FoldersCubit>()),
+          if (emailService != null)
+            BlocProvider(
+              create: (_) => EmailContactKeyCubit(emailService: emailService)
+                ..load(
+                  address: contact.address,
+                  displayName: contact.displayName,
+                ),
+            ),
         ],
-        child: _ContactDetailsSheet(contact: contact),
+        child: _ContactDetailsSheet(
+          contact: contact,
+          emailContactKeysAvailable: emailService != null,
+        ),
       );
     },
   );
@@ -62,6 +81,9 @@ Future<void> showContactDetailsSheet({
       openComposeDraft(
         context,
         jids: [contact.address],
+        recipientTransportOverrides: {
+          contactDirectoryAddressKey(contact.address): MessageTransport.email,
+        },
         attachmentMetadataIds: const <String>[],
       );
     case null:
@@ -70,6 +92,14 @@ Future<void> showContactDetailsSheet({
 }
 
 enum _ContactDetailsSheetAction { openChat, composeEmail }
+
+EmailService? _maybeLocateEmailService(T Function<T>() locate) {
+  try {
+    return locate<EmailService>();
+  } on ProviderNotFoundException {
+    return null;
+  }
+}
 
 class _ContactsListState extends State<ContactsList> {
   @override
@@ -403,6 +433,9 @@ class _ContactListTile extends StatelessWidget {
               onPressed: () => openComposeDraft(
                 context,
                 jids: [address],
+                recipientTransportOverrides: {
+                  addressKey: MessageTransport.email,
+                },
                 attachmentMetadataIds: const <String>[],
               ),
             ),
@@ -492,15 +525,33 @@ class _ContactsAddDialog extends StatefulWidget {
 }
 
 class _ContactsAddDialogState extends State<_ContactsAddDialog> {
-  String _address = '';
+  late final TextEditingController _addressController = TextEditingController();
+  late final FocusNode _addressFocusNode = FocusNode();
+  late final FocusNode _displayNameFocusNode = FocusNode();
   String _displayName = '';
   String _submittedAddress = '';
+  bool _showAddressValidationError = false;
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _addressFocusNode.dispose();
+    _displayNameFocusNode.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit({
     required bool supportsEmail,
     required bool supportsXmpp,
   }) async {
+    final normalizedAddress = _normalizedContactAddress();
+    if (normalizedAddress == null) {
+      setState(() => _showAddressValidationError = true);
+      _addressFocusNode.requestFocus();
+      return;
+    }
     final resolvedTransport = await _resolveTransport(
+      address: normalizedAddress,
       supportsEmail: supportsEmail,
       supportsXmpp: supportsXmpp,
     );
@@ -508,15 +559,16 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
       return;
     }
     final title = _displayName.trim().isEmpty ? null : _displayName.trim();
-    setState(() => _submittedAddress = _address);
+    setState(() => _submittedAddress = normalizedAddress);
     await context.read<ContactsCubit>().addContact(
-      address: _address,
+      address: normalizedAddress,
       displayName: title,
       transport: resolvedTransport,
     );
   }
 
   Future<MessageTransport?> _resolveTransport({
+    required String address,
     required bool supportsEmail,
     required bool supportsXmpp,
   }) async {
@@ -531,7 +583,7 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
     }
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final hinted = hintTransportForAddress(
-      _address,
+      address,
       xmppDomainHints: {endpointConfig.domain},
     );
     if (hinted != null) {
@@ -539,9 +591,35 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
     }
     return showTransportChoiceDialog(
       context,
-      address: _address.trim(),
+      address: address,
       defaultTransport: hinted,
     );
+  }
+
+  String? _normalizedContactAddress() {
+    final bare = bareAddressOrNull(_addressController.text);
+    if (bare == null || bare.trim().isEmpty) {
+      return null;
+    }
+    final local = addressLocalPart(bare);
+    final domain = addressDomainPart(bare);
+    if (local == null || local.isEmpty || domain == null || domain.isEmpty) {
+      return null;
+    }
+    if (!bare.isValidEmailAddress) {
+      return null;
+    }
+    return normalizedAddressValue(bare);
+  }
+
+  void _handleAddressSubmitted(String _) {
+    if (_normalizedContactAddress() == null) {
+      setState(() => _showAddressValidationError = true);
+      _addressFocusNode.requestFocus();
+      return;
+    }
+    setState(() => _showAddressValidationError = false);
+    _displayNameFocusNode.requestFocus();
   }
 
   bool _matchesSubmittedAddress(String address) {
@@ -559,6 +637,9 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
     );
     final supportsXmpp = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.endpointConfig.xmppEnabled,
+    );
+    final endpointDomain = context.select<SettingsCubit, String>(
+      (cubit) => cubit.state.endpointConfig.domain,
     );
     return BlocListener<ContactsCubit, ContactsState>(
       listenWhen: (previous, current) =>
@@ -592,11 +673,15 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
               _contactFailureMessage(context, reason),
             _ => null,
           };
+          final addressErrorMessage = _showAddressValidationError
+              ? l10n.blocklistInvalidJid
+              : errorMessage;
+          final normalizedAddress = _normalizedContactAddress();
           return AxiInputDialog(
             title: Text(l10n.rosterAddTitle),
             loading: loading,
             callback:
-                _address.trim().isEmpty ||
+                normalizedAddress == null ||
                     loading ||
                     (!supportsEmail && !supportsXmpp)
                 ? null
@@ -607,25 +692,40 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                JidInput(
+                AddressAutocompleteField(
+                  controller: _addressController,
+                  focusNode: _addressFocusNode,
                   enabled: !loading,
-                  error: errorMessage,
-                  jidOptions:
+                  error: addressErrorMessage,
+                  placeholder: Text(l10n.accessibilityNewContactLabel),
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: _handleAddressSubmitted,
+                  knownAddresses:
                       (contactsState.items ?? const <ContactDirectoryEntry>[])
                           .map((item) => item.address)
                           .toList(growable: false),
+                  primaryDomain: endpointDomain,
+                  suggestionDomains: knownMessageTransportDomainHints(
+                    xmppDomainHints: {endpointDomain},
+                  ),
                   onChanged: (value) {
                     setState(() {
-                      _address = value;
                       _submittedAddress = '';
+                      _showAddressValidationError = false;
                     });
                   },
                 ),
                 SizedBox(height: spacing.s),
                 AxiTextFormField(
+                  focusNode: _displayNameFocusNode,
                   enabled: !loading,
                   placeholder: Text(l10n.contactsDisplayNameLabel),
+                  textInputAction: TextInputAction.done,
                   onChanged: (value) => setState(() => _displayName = value),
+                  onSubmitted: (_) => _submit(
+                    supportsEmail: supportsEmail,
+                    supportsXmpp: supportsXmpp,
+                  ),
                 ),
               ],
             ),
@@ -637,9 +737,13 @@ class _ContactsAddDialogState extends State<_ContactsAddDialog> {
 }
 
 class _ContactDetailsSheet extends StatelessWidget {
-  const _ContactDetailsSheet({required this.contact});
+  const _ContactDetailsSheet({
+    required this.contact,
+    required this.emailContactKeysAvailable,
+  });
 
   final ContactDirectoryEntry contact;
+  final bool emailContactKeysAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -699,25 +803,64 @@ class _ContactDetailsSheet extends StatelessWidget {
             currentContact,
             emailEnabled: emailEnabled,
           );
-          return AxiSheetScaffold.scroll(
+          final emailContactKeyManagementEnabled =
+              _emailContactKeyManagementEnabled(
+                contact: currentContact,
+                emailEnabled: emailEnabled,
+                emailContactKeysAvailable: emailContactKeysAvailable,
+              );
+          final emailContactKeyState = emailContactKeyManagementEnabled
+              ? context.watch<EmailContactKeyCubit>().state
+              : null;
+          return AxiSheetScaffold.sections(
             header: AxiSheetHeader(
               title: Text(context.l10n.contactsDetailsSectionTitle),
               onClose: () => Navigator.of(context).maybePop(),
             ),
-            children: [
-              _ContactSummaryCard(contact: currentContact),
-              SizedBox(height: spacing.m),
-              if (detailRows.isNotEmpty) ...[
-                _ContactDetailsInfoCard(
-                  contact: currentContact,
-                  rows: detailRows,
+            sections: [
+              AxiSheetSection(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ContactSummaryCard(contact: currentContact),
+                    if (detailRows.isNotEmpty) ...[
+                      SizedBox(height: spacing.m),
+                      _ContactDetailsInfoCard(
+                        contact: currentContact,
+                        rows: detailRows,
+                        disabled: state.isContactAddressLoading(
+                          contactDirectoryAddressKey(currentContact.address),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                SizedBox(height: spacing.m),
-              ],
-              _ContactDetailsActions(
-                contact: currentContact,
-                emailEnabled: emailEnabled,
               ),
+              AxiSheetSection(
+                child: _ContactDetailsActions(
+                  contact: currentContact,
+                  emailEnabled: emailEnabled,
+                  group: _ContactDetailsActionGroup.primary,
+                ),
+              ),
+              if (_contactDestructiveActionsEnabled(currentContact)) ...[
+                AxiSheetSection(
+                  child: _ContactDetailsActions(
+                    contact: currentContact,
+                    emailEnabled: emailEnabled,
+                    group: _ContactDetailsActionGroup.destructive,
+                  ),
+                ),
+              ],
+              if (emailContactKeyState != null &&
+                  (emailContactKeyState is! EmailContactKeyIdle ||
+                      emailContactKeyState.account != null)) ...[
+                AxiSheetSection(
+                  child: _ContactEmailEncryptionSection(
+                    contact: currentContact,
+                  ),
+                ),
+              ],
             ],
           );
         },
@@ -826,10 +969,24 @@ class _ContactIdentityContent extends StatelessWidget {
 }
 
 class _ContactDetailsInfoCard extends StatelessWidget {
-  const _ContactDetailsInfoCard({required this.contact, required this.rows});
+  const _ContactDetailsInfoCard({
+    required this.contact,
+    required this.rows,
+    required this.disabled,
+  });
 
   final ContactDirectoryEntry contact;
-  final List<({IconData icon, String label, String value})> rows;
+  final bool disabled;
+  final List<
+    ({
+      IconData icon,
+      String label,
+      String value,
+      ContactDetailFieldKind? kind,
+      ContactDetailFieldEntry? field,
+    })
+  >
+  rows;
 
   @override
   Widget build(BuildContext context) {
@@ -842,9 +999,13 @@ class _ContactDetailsInfoCard extends StatelessWidget {
           for (var index = 0; index < rows.length; index += 1) ...[
             if (index > 0) SizedBox(height: context.spacing.m),
             _ContactDetailRow(
+              contact: contact,
               icon: rows[index].icon,
               label: rows[index].label,
               value: rows[index].value,
+              kind: rows[index].kind,
+              field: rows[index].field,
+              disabled: disabled,
             ),
           ],
         ],
@@ -853,19 +1014,298 @@ class _ContactDetailsInfoCard extends StatelessWidget {
   }
 }
 
-class _ContactDetailRow extends StatelessWidget {
-  const _ContactDetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+class _ContactEmailEncryptionSection extends StatelessWidget {
+  const _ContactEmailEncryptionSection({required this.contact});
 
-  final IconData icon;
-  final String label;
-  final String value;
+  final ContactDirectoryEntry contact;
 
   @override
   Widget build(BuildContext context) {
+    return BlocConsumer<EmailContactKeyCubit, EmailContactKeyState>(
+      listener: _handleState,
+      builder: (context, state) {
+        return AxiModalSurface(
+          key: ValueKey('contact-email-encryption-${contact.address}'),
+          borderColor: context.borderSide.color,
+          padding: EdgeInsets.all(context.spacing.m),
+          child: _ContactEmailEncryptionContent(contact: contact, state: state),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleState(
+    BuildContext context,
+    EmailContactKeyState state,
+  ) async {
+    switch (state) {
+      case EmailContactKeyConfirmationRequired():
+        await _confirmKeyIdentity(context, state);
+      case EmailContactKeySuccess(:final kind):
+        ShadToaster.maybeOf(context)?.show(
+          FeedbackToast.success(
+            message: switch (kind) {
+              EmailContactKeySuccessKind.imported =>
+                context.l10n.contactEmailEncryptionImportSuccess,
+              EmailContactKeySuccessKind.removed =>
+                context.l10n.contactEmailEncryptionRemoveSuccess,
+            },
+          ),
+        );
+      case EmailContactKeyFailure(:final reason):
+        ShadToaster.maybeOf(
+          context,
+        )?.show(FeedbackToast.error(message: _failureMessage(context, reason)));
+      default:
+        return;
+    }
+  }
+
+  Future<void> _confirmKeyIdentity(
+    BuildContext context,
+    EmailContactKeyConfirmationRequired state,
+  ) async {
+    final identities = state.metadata.userIds.isEmpty
+        ? context.l10n.emailEncryptionKeyIdentityNoIdentities
+        : state.metadata.userIds.join(', ');
+    final confirmed = await confirm(
+      context,
+      title: context.l10n.contactEmailEncryptionIdentityWarningTitle,
+      message: context.l10n.contactEmailEncryptionIdentityWarningBody(
+        contact.address,
+        state.metadata.fingerprint,
+        identities,
+      ),
+      confirmLabel: context.l10n.commonContinue,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (confirmed == true) {
+      await context.read<EmailContactKeyCubit>().confirmImport();
+      return;
+    }
+    await context.read<EmailContactKeyCubit>().cancelImport();
+  }
+
+  String _failureMessage(
+    BuildContext context,
+    EmailContactKeyFailureReason reason,
+  ) => switch (reason) {
+    EmailContactKeyFailureReason.noActiveAccount =>
+      context.l10n.contactEmailEncryptionNoActiveAccount,
+    EmailContactKeyFailureReason.unsupportedFormat =>
+      context.l10n.contactEmailEncryptionUnsupportedFormat,
+    EmailContactKeyFailureReason.importFailed =>
+      context.l10n.contactEmailEncryptionImportFailed,
+    EmailContactKeyFailureReason.removeFailed =>
+      context.l10n.contactEmailEncryptionRemoveFailed,
+  };
+}
+
+class _ContactEmailEncryptionContent extends StatelessWidget {
+  const _ContactEmailEncryptionContent({
+    required this.contact,
+    required this.state,
+  });
+
+  final ContactDirectoryEntry contact;
+  final EmailContactKeyState state;
+
+  Future<void> _pickPublicKey(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      allowedExtensions: const ['asc', 'pgp', 'gpg'],
+    );
+    if (!context.mounted || result == null || result.files.isEmpty) {
+      return;
+    }
+    final path = result.files.single.path;
+    if (path == null || path.trim().isEmpty) {
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.error(
+          message: context.l10n.contactEmailEncryptionImportFailed,
+        ),
+      );
+      return;
+    }
+    await context.read<EmailContactKeyCubit>().inspectPublicKey(File(path));
+  }
+
+  Future<void> _removePublicKey(BuildContext context) async {
+    final confirmed = await confirm(
+      context,
+      text: context.l10n.contactEmailEncryptionRemoveConfirm(contact.address),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    await context.read<EmailContactKeyCubit>().remove();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final idle = state is EmailContactKeyIdle
+        ? state as EmailContactKeyIdle
+        : const EmailContactKeyIdle();
+    final accountAddress = idle.account?.normalizedAddress;
+    final betaEnabled =
+        accountAddress != null &&
+        context
+                .watch<SettingsCubit>()
+                .state
+                .emailEncryptionBetaEnabledByAddress[accountAddress] ==
+            true;
+    final trustedKey = idle.trustedKey;
+    final busy = state.isBusy;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              LucideIcons.keyRound,
+              size: context.sizing.menuItemIconSize,
+              color: context.colorScheme.mutedForeground,
+            ),
+            SizedBox(width: spacing.s),
+            Expanded(
+              child: Text(
+                context.l10n.contactEmailEncryptionTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small.strong,
+              ),
+            ),
+            if (trustedKey != null)
+              AxiStatusChip(
+                label: betaEnabled
+                    ? context.l10n.contactEmailEncryptionActive
+                    : context.l10n.contactEmailEncryptionInactiveBetaOff,
+                tone: betaEnabled
+                    ? AxiStatusChipTone.info
+                    : AxiStatusChipTone.neutral,
+              ),
+          ],
+        ),
+        SizedBox(height: spacing.s),
+        if (trustedKey == null)
+          Text(
+            idle.account == null
+                ? context.l10n.contactEmailEncryptionNoActiveAccount
+                : context.l10n.contactEmailEncryptionNoKey,
+            style: context.textTheme.muted,
+          )
+        else
+          _ContactEmailEncryptionKeyDetails(keyData: trustedKey),
+        SizedBox(height: spacing.m),
+        Wrap(
+          spacing: spacing.s,
+          runSpacing: spacing.s,
+          children: [
+            AxiButton.outline(
+              onPressed: idle.account == null || busy
+                  ? null
+                  : () => _pickPublicKey(context),
+              child: Text(
+                trustedKey == null
+                    ? context.l10n.contactEmailEncryptionAddPublicKey
+                    : context.l10n.contactEmailEncryptionReplacePublicKey,
+              ),
+            ),
+            if (trustedKey != null)
+              AxiButton.destructive(
+                onPressed: busy ? null : () => _removePublicKey(context),
+                child: Text(context.l10n.contactEmailEncryptionRemovePublicKey),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ContactEmailEncryptionKeyDetails extends StatelessWidget {
+  const _ContactEmailEncryptionKeyDetails({required this.keyData});
+
+  final EmailTrustedContactKey keyData;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.l10n.contactEmailEncryptionFingerprint(keyData.fingerprint),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.muted,
+        ),
+      ],
+    );
+  }
+}
+
+class _ContactDetailRow extends StatelessWidget {
+  const _ContactDetailRow({
+    required this.contact,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.disabled,
+    this.kind,
+    this.field,
+  });
+
+  final ContactDirectoryEntry contact;
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool disabled;
+  final ContactDetailFieldKind? kind;
+  final ContactDetailFieldEntry? field;
+
+  Future<void> _editField(BuildContext context) async {
+    final currentKind = field?.kind ?? kind;
+    if (currentKind == null) {
+      return;
+    }
+    final value = await _showContactDetailFieldDialog(
+      context: context,
+      kind: currentKind,
+      initialValue: field?.value,
+    );
+    if (!context.mounted || value == null) {
+      return;
+    }
+    await context.read<ContactsCubit>().saveContactDetailField(
+      contact: contact,
+      field: field,
+      kind: currentKind,
+      value: value,
+    );
+  }
+
+  Future<void> _removeField(BuildContext context) async {
+    final currentField = field;
+    if (currentField == null) {
+      return;
+    }
+    await context.read<ContactsCubit>().removeContactDetailField(
+      contact: contact,
+      field: currentField,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentField = field;
+    final editable = currentField != null || kind != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -898,6 +1338,24 @@ class _ContactDetailRow extends StatelessWidget {
             ],
           ),
         ),
+        if (editable) ...[
+          SizedBox(width: context.spacing.xs),
+          AxiIconButton.ghost(
+            iconData: currentField == null
+                ? LucideIcons.plus
+                : LucideIcons.pencil,
+            tooltip: currentField == null
+                ? context.l10n.commonAdd
+                : context.l10n.chatActionEdit,
+            onPressed: disabled ? null : () => _editField(context),
+          ),
+          if (currentField != null)
+            AxiIconButton.ghost(
+              iconData: LucideIcons.trash,
+              tooltip: context.l10n.commonRemove,
+              onPressed: disabled ? null : () => _removeField(context),
+            ),
+        ],
       ],
     );
   }
@@ -994,10 +1452,12 @@ class _ContactDetailsActions extends StatelessWidget {
   const _ContactDetailsActions({
     required this.contact,
     required this.emailEnabled,
+    required this.group,
   });
 
   final ContactDirectoryEntry contact;
   final bool emailEnabled;
+  final _ContactDetailsActionGroup group;
 
   Future<void> _removeContact(BuildContext context) async {
     final l10n = context.l10n;
@@ -1078,11 +1538,10 @@ class _ContactDetailsActions extends StatelessWidget {
           action: ContactActionType.resetRename,
           address: addressKey,
         );
-    return Padding(
-      padding: EdgeInsets.only(bottom: spacing.xs),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: switch (group) {
+        _ContactDetailsActionGroup.primary => [
           AxiButton.outline(
             widthBehavior: AxiButtonWidth.expand,
             onPressed: disabled
@@ -1113,13 +1572,14 @@ class _ContactDetailsActions extends StatelessWidget {
             leading: const Icon(LucideIcons.folder),
             child: _ContactRuleButtonLabel(contact: contact),
           ),
-          SizedBox(height: spacing.s),
-          if (contact.hasXmppRoster)
+          if (contact.hasXmppRoster) ...[
+            SizedBox(height: spacing.s),
             AxiButton.outline(
               widthBehavior: AxiButtonWidth.expand,
               onPressed: disabled ? null : () => _openChat(context),
               child: Text(l10n.commonOpen),
             ),
+          ],
           if (_emailComposeEnabled(
             contact: contact,
             emailEnabled: emailEnabled,
@@ -1131,8 +1591,9 @@ class _ContactDetailsActions extends StatelessWidget {
               child: Text(l10n.contactsComposeEmail),
             ),
           ],
-          if (contact.hasXmppRoster || contact.hasEmailContact) ...[
-            SizedBox(height: spacing.s),
+        ],
+        _ContactDetailsActionGroup.destructive => [
+          if (contact.hasXmppRoster || contact.hasEmailContact)
             AxiButton.destructive(
               widthBehavior: AxiButtonWidth.expand,
               loading: isBlocking,
@@ -1140,22 +1601,32 @@ class _ContactDetailsActions extends StatelessWidget {
               leading: const Icon(LucideIcons.userX),
               child: Text(l10n.blocklistBlock),
             ),
-          ],
+          if ((contact.hasXmppRoster || contact.hasEmailContact) &&
+              (contact.hasPrivateContact ||
+                  contact.hasXmppRoster ||
+                  contact.hasEmailContact))
+            SizedBox(height: spacing.s),
           if (contact.hasPrivateContact ||
               contact.hasXmppRoster ||
-              contact.hasEmailContact) ...[
-            SizedBox(height: spacing.s),
+              contact.hasEmailContact)
             AxiButton.destructive(
               widthBehavior: AxiButtonWidth.expand,
               loading: isRemoving,
               onPressed: disabled ? null : () => _removeContact(context),
               child: Text(l10n.contactsRemoveContactLabel),
             ),
-          ],
         ],
-      ),
+      },
     );
   }
+}
+
+enum _ContactDetailsActionGroup { primary, destructive }
+
+bool _contactDestructiveActionsEnabled(ContactDirectoryEntry contact) {
+  return contact.hasPrivateContact ||
+      contact.hasXmppRoster ||
+      contact.hasEmailContact;
 }
 
 String _contactFailureMessage(
@@ -1164,12 +1635,109 @@ String _contactFailureMessage(
 ) {
   final l10n = context.l10n;
   return switch (reason) {
-    ContactFailureReason.invalidAddress => l10n.jidInputInvalid,
+    ContactFailureReason.invalidAddress => l10n.blocklistInvalidJid,
     ContactFailureReason.unavailable => l10n.contactsEmailUnavailableLabel,
     ContactFailureReason.addFailed ||
     ContactFailureReason.removeFailed ||
     ContactFailureReason.updateFailed => l10n.authGenericError,
   };
+}
+
+class _ContactDetailFieldDialog extends StatefulWidget {
+  const _ContactDetailFieldDialog({required this.kind, this.initialValue});
+
+  final ContactDetailFieldKind kind;
+  final String? initialValue;
+
+  @override
+  State<_ContactDetailFieldDialog> createState() =>
+      _ContactDetailFieldDialogState();
+}
+
+class _ContactDetailFieldDialogState extends State<_ContactDetailFieldDialog> {
+  late final TextEditingController _controller;
+  var _canSubmit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+    _controller.addListener(_handleChanged);
+    _canSubmit = widget.initialValue?.trim().isNotEmpty == true;
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_handleChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleChanged() {
+    final canSubmit = _controller.text.trim().isNotEmpty;
+    if (canSubmit == _canSubmit) {
+      return;
+    }
+    setState(() {
+      _canSubmit = canSubmit;
+    });
+  }
+
+  void _submit() {
+    if (!_canSubmit) {
+      return;
+    }
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AxiDialog(
+      title: Text(_contactDetailFieldLabel(l10n, widget.kind)),
+      actions: [
+        AxiButton.outline(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.commonCancel),
+        ),
+        AxiButton.primary(
+          onPressed: _canSubmit ? _submit : null,
+          child: Text(l10n.commonSave),
+        ),
+      ],
+      child: AxiTextFormField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: widget.kind == ContactDetailFieldKind.phone
+            ? TextInputType.phone
+            : TextInputType.multiline,
+        minLines: widget.kind == ContactDetailFieldKind.address ? 2 : null,
+        maxLines: widget.kind == ContactDetailFieldKind.address ? 4 : 1,
+        textInputAction: widget.kind == ContactDetailFieldKind.address
+            ? TextInputAction.newline
+            : TextInputAction.done,
+        placeholder: Text(_contactDetailFieldLabel(l10n, widget.kind)),
+        onSubmitted: (_) {
+          if (widget.kind != ContactDetailFieldKind.address) {
+            _submit();
+          }
+        },
+      ),
+    );
+  }
+}
+
+Future<String?> _showContactDetailFieldDialog({
+  required BuildContext context,
+  required ContactDetailFieldKind kind,
+  String? initialValue,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) =>
+        _ContactDetailFieldDialog(kind: kind, initialValue: initialValue),
+  );
 }
 
 List<String> _contactSecondaryValues(
@@ -1210,6 +1778,14 @@ bool _emailComposeEnabled({
   required bool emailEnabled,
 }) => emailEnabled && normalizedAddressValue(contact.address) != null;
 
+bool _emailContactKeyManagementEnabled({
+  required ContactDirectoryEntry contact,
+  required bool emailEnabled,
+  required bool emailContactKeysAvailable,
+}) =>
+    emailContactKeysAvailable &&
+    _emailComposeEnabled(contact: contact, emailEnabled: emailEnabled);
+
 ContactDirectoryEntry _currentContactForSheet(
   List<ContactDirectoryEntry>? items,
   ContactDirectoryEntry fallback,
@@ -1237,7 +1813,16 @@ List<({IconData icon, String label})> _contactSourceItems(
   ];
 }
 
-List<({IconData icon, String label, String value})> _contactDetailRows(
+List<
+  ({
+    IconData icon,
+    String label,
+    String value,
+    ContactDetailFieldKind? kind,
+    ContactDetailFieldEntry? field,
+  })
+>
+_contactDetailRows(
   AppLocalizations l10n,
   ContactDirectoryEntry contact, {
   required bool emailEnabled,
@@ -1247,20 +1832,92 @@ List<({IconData icon, String label, String value})> _contactDetailRows(
       ? null
       : SystemMessageCollection.fromId(folderCollectionId)?.label(l10n) ??
             folderCollectionId;
-  return <({IconData icon, String label, String value})>[
+  return <
+    ({
+      IconData icon,
+      String label,
+      String value,
+      ContactDetailFieldKind? kind,
+      ContactDetailFieldEntry? field,
+    })
+  >[
     if (folderCollectionLabel != null)
       (
         icon: LucideIcons.folder,
-        label: l10n.homeTabFolders,
+        label: l10n.contactsFolderRoutingDetailLabel,
         value: folderCollectionLabel,
+        kind: null,
+        field: null,
       ),
     if (contact.hasEmailContact && !emailEnabled)
       (
         icon: LucideIcons.mailWarning,
         label: l10n.contactsEmailLabel,
         value: l10n.contactsEmailUnavailableLabel,
+        kind: null,
+        field: null,
+      ),
+    for (final field in contact.detailFields)
+      if (_contactDetailFieldSupported(field.kind))
+        (
+          icon: _contactDetailFieldIcon(field.kind),
+          label: field.label?.trim().isNotEmpty == true
+              ? field.label!
+              : _contactDetailFieldLabel(l10n, field.kind),
+          value: field.value,
+          kind: field.kind,
+          field: field,
+        ),
+    if (!_hasContactDetailField(contact, ContactDetailFieldKind.phone))
+      (
+        icon: _contactDetailFieldIcon(ContactDetailFieldKind.phone),
+        label: _contactDetailFieldLabel(l10n, ContactDetailFieldKind.phone),
+        value: l10n.commonAdd,
+        kind: ContactDetailFieldKind.phone,
+        field: null,
+      ),
+    if (!_hasContactDetailField(contact, ContactDetailFieldKind.address))
+      (
+        icon: _contactDetailFieldIcon(ContactDetailFieldKind.address),
+        label: _contactDetailFieldLabel(l10n, ContactDetailFieldKind.address),
+        value: l10n.commonAdd,
+        kind: ContactDetailFieldKind.address,
+        field: null,
       ),
   ];
+}
+
+bool _hasContactDetailField(
+  ContactDirectoryEntry contact,
+  ContactDetailFieldKind kind,
+) {
+  return contact.detailFields.any(
+    (field) => field.kind == kind && field.value.trim().isNotEmpty,
+  );
+}
+
+bool _contactDetailFieldSupported(ContactDetailFieldKind kind) {
+  return kind == ContactDetailFieldKind.phone ||
+      kind == ContactDetailFieldKind.address;
+}
+
+IconData _contactDetailFieldIcon(ContactDetailFieldKind kind) {
+  return switch (kind) {
+    ContactDetailFieldKind.phone => LucideIcons.phone,
+    ContactDetailFieldKind.address => LucideIcons.mapPin,
+    _ => LucideIcons.info,
+  };
+}
+
+String _contactDetailFieldLabel(
+  AppLocalizations l10n,
+  ContactDetailFieldKind kind,
+) {
+  return switch (kind) {
+    ContactDetailFieldKind.phone => l10n.contactsPhonesLabel,
+    ContactDetailFieldKind.address => l10n.contactsPostalAddressesLabel,
+    _ => l10n.contactsDetailsSectionTitle,
+  };
 }
 
 String? _trimmedContactDetail(String? value) {

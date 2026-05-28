@@ -382,6 +382,11 @@ abstract interface class XmppDatabase implements Database {
     required String actorJid,
   });
 
+  Future<DateTime?> getPinnedMessageClearAllTimestamp({
+    required String chatJid,
+    required MessageReference reference,
+  });
+
   Future<PinnedMessageEntry?> getPinnedMessage({
     required String chatJid,
     required String messageStanzaId,
@@ -546,16 +551,19 @@ abstract interface class XmppDatabase implements Database {
     List<String> attachmentMetadataIds = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
-    bool Function()? shouldCommit,
+    bool autosaveEnabled = true,
   });
-
-  Future<void> restoreDraft(Draft draft);
 
   Future<void> updateDraftSyncMetadata({
     required int id,
     required String draftSyncId,
     required DateTime draftUpdatedAt,
     required String draftSourceId,
+  });
+
+  Future<void> updateDraftAutosaveEnabled({
+    required int id,
+    required bool enabled,
   });
 
   Future<int> upsertDraftFromSync({
@@ -1955,7 +1963,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 55;
+  int get schemaVersion => 56;
 
   @override
   MigrationStrategy get migration {
@@ -2409,6 +2417,13 @@ WHERE transport = ${MessageTransport.email.index}
       AND messages.pseudo_message_type IS NULL
   )
 ''');
+        }
+        if (from < 56 &&
+            !await _tableHasColumn(
+              drafts.actualTableName,
+              'autosave_enabled',
+            )) {
+          await m.addColumn(drafts, drafts.autosaveEnabled);
         }
       },
       beforeOpen: (_) async {
@@ -5073,16 +5088,9 @@ WHERE stanza_i_d = ?
     List<String> attachmentMetadataIds = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
-    bool Function()? shouldCommit,
+    bool autosaveEnabled = true,
   }) async {
-    void abortIfStale() {
-      if (shouldCommit?.call() == false) {
-        throw const DraftSaveAbortedException();
-      }
-    }
-
     return transaction(() async {
-      abortIfStale();
       final draftId = await draftsAccessor.insertOrUpdateOne(
         DraftsCompanion(
           id: Value.absentIfNull(id),
@@ -5098,26 +5106,16 @@ WHERE stanza_i_d = ?
           attachmentMetadataIds: Value(attachmentMetadataIds),
           calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
           forwardedBlocks: Value(forwardedBlocks),
+          autosaveEnabled: id == null
+              ? Value(autosaveEnabled)
+              : const Value.absent(),
         ),
       );
-      abortIfStale();
       await _replaceDraftAttachmentRefs(
         draftId: draftId,
         attachmentMetadataIds: attachmentMetadataIds,
       );
-      abortIfStale();
       return draftId;
-    });
-  }
-
-  @override
-  Future<void> restoreDraft(Draft draft) async {
-    await transaction(() async {
-      await draftsAccessor.updateOne(draft);
-      await _replaceDraftAttachmentRefs(
-        draftId: draft.id,
-        attachmentMetadataIds: draft.attachmentMetadataIds,
-      );
     });
   }
 
@@ -5135,6 +5133,16 @@ WHERE stanza_i_d = ?
         draftUpdatedAt: Value(draftUpdatedAt),
         draftSourceId: Value(draftSourceId),
       ),
+    );
+  }
+
+  @override
+  Future<void> updateDraftAutosaveEnabled({
+    required int id,
+    required bool enabled,
+  }) {
+    return draftsAccessor.updateOne(
+      DraftsCompanion(id: Value(id), autosaveEnabled: Value(enabled)),
     );
   }
 
@@ -6426,6 +6434,18 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       reference: reference,
       actorJid: _pinnedMessageClearAllMarkerActorJid,
     );
+  }
+
+  @override
+  Future<DateTime?> getPinnedMessageClearAllTimestamp({
+    required String chatJid,
+    required MessageReference reference,
+  }) async {
+    final marker = await _getPinnedMessageClearAllMarker(
+      chatJid: chatJid,
+      reference: reference,
+    );
+    return marker?.pinnedAt.toUtc();
   }
 
   @override

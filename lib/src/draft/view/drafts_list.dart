@@ -158,6 +158,7 @@ class _DraftsListBody extends StatelessWidget {
                 attachmentMetadataIds: item.attachmentMetadataIds,
                 calendarTaskIcsMessage: item.calendarTaskIcsMessage,
                 forwardedBlocks: item.forwardedBlocks,
+                autosaveEnabled: item.autosaveEnabled,
               ),
               menuItems: [
                 AxiDeleteMenuItem(

@@ -347,6 +347,9 @@ class _NoReplyForegroundTaskBridge implements ForegroundTaskBridge {
   var releaseCalls = 0;
 
   @override
+  Future<bool> isRunning() async => false;
+
+  @override
   Future<void> acquire({
     required String clientId,
     ForegroundServiceConfig? config,

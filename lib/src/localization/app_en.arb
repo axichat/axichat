@@ -304,6 +304,7 @@
   "chatComposerSemantics": "Message input",
   "draftSaved": "Draft saved",
   "draftAutosaved": "Autosaved",
+  "draftAutosave": "Autosave",
   "draftErrorTitle": "Whoops",
   "draftNoRecipients": "No recipients",
   "draftSubjectSemantics": "Email subject",
@@ -1442,6 +1443,7 @@
   "contactsNewLabel": "New",
   "contactsLocalOnlyLabel": "On this device",
   "contactsDetailsSectionTitle": "Details",
+  "contactsFolderRoutingDetailLabel": "Belongs in",
   "contactsAddressLabel": "Address",
   "contactsStoredLabel": "Stored",
   "contactsChatContactLabel": "Chat contact",
@@ -1920,7 +1922,7 @@
   "settingsAutoDownloadScopeAlways": "Always",
   "settingsAutoDownloadScopeTrustedContacts": "Only for trusted contacts.",
   "emailEncryptionBetaLabel": "Email encryption",
-  "emailEncryptionBetaChip": "Beta",
+  "emailEncryptionBetaChip": "Experimental",
   "emailEncryptionBetaEnabledStatus": "On for {address}",
   "@emailEncryptionBetaEnabledStatus": {
     "placeholders": {

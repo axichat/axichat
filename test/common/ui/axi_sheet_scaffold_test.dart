@@ -8,55 +8,52 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
-  testWidgets('zero-padding sheet safe area stays inside the sheet surface', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    tester.view.viewPadding = const FakeViewPadding(bottom: 24);
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-      tester.view.resetViewPadding();
-    });
+  testWidgets(
+    'zero-padding sheet defaults to bottom safe area inside surface',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(bottom: 24);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+        tester.view.resetPadding();
+      });
 
-    await tester.pumpWidget(
-      const _AxiSheetScaffoldTestApp(
-        child: _AdaptiveSheetOpenButton(
-          bottomSafeAreaBehavior: AxiSheetBottomSafeAreaBehavior.insideSurface,
-        ),
-      ),
-    );
+      await tester.pumpWidget(
+        const _AxiSheetScaffoldTestApp(child: _AdaptiveSheetOpenButton()),
+      );
 
-    await tester.tap(find.text('Open sheet'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Open sheet'));
+      await tester.pumpAndSettle();
 
-    final Rect surfaceRect = tester.getRect(find.byType(AxiModalSurface).last);
-    final Rect contentRect = tester.getRect(
-      find.byKey(const ValueKey<String>('adaptiveSheetContent')),
-    );
+      final Rect surfaceRect = tester.getRect(
+        find.byType(AxiModalSurface).last,
+      );
+      final Rect contentRect = tester.getRect(
+        find.byKey(const ValueKey<String>('adaptiveSheetContent')),
+      );
 
-    expect(surfaceRect.bottom, 844);
-    expect(contentRect.bottom, 820);
-  });
+      expect(surfaceRect.bottom, 844);
+      expect(contentRect.bottom, 820);
+    },
+  );
 
   testWidgets('zero-padding sheet can opt out of bottom safe area', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
-    tester.view.viewPadding = const FakeViewPadding(bottom: 24);
+    tester.view.padding = const FakeViewPadding(bottom: 24);
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
-      tester.view.resetViewPadding();
+      tester.view.resetPadding();
     });
 
     await tester.pumpWidget(
       const _AxiSheetScaffoldTestApp(
-        child: _AdaptiveSheetOpenButton(
-          bottomSafeAreaBehavior: AxiSheetBottomSafeAreaBehavior.none,
-        ),
+        child: _AdaptiveSheetOpenButton(useBottomSafeArea: false),
       ),
     );
 
@@ -70,6 +67,44 @@ void main() {
 
     expect(surfaceRect.bottom, 844);
     expect(contentRect.bottom, 844);
+  });
+
+  testWidgets('sheet bottom safe area follows the selected navigator context', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 24);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetPadding();
+    });
+
+    await tester.pumpWidget(
+      const _AxiSheetScaffoldTestApp(child: _NestedNavigatorSheetHarness()),
+    );
+
+    await tester.tap(find.text('Open nested sheet'));
+    await tester.pumpAndSettle();
+
+    Rect contentRect = tester.getRect(
+      find.byKey(const ValueKey<String>('adaptiveSheetContent')),
+    );
+
+    expect(contentRect.bottom, 844);
+
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open root sheet'));
+    await tester.pumpAndSettle();
+
+    contentRect = tester.getRect(
+      find.byKey(const ValueKey<String>('adaptiveSheetContent')),
+    );
+
+    expect(contentRect.bottom, 820);
   });
 
   testWidgets(
@@ -198,9 +233,15 @@ void main() {
 }
 
 class _AdaptiveSheetOpenButton extends StatelessWidget {
-  const _AdaptiveSheetOpenButton({required this.bottomSafeAreaBehavior});
+  const _AdaptiveSheetOpenButton({
+    this.label = 'Open sheet',
+    this.useBottomSafeArea = true,
+    this.useRootNavigator = false,
+  });
 
-  final AxiSheetBottomSafeAreaBehavior bottomSafeAreaBehavior;
+  final String label;
+  final bool useBottomSafeArea;
+  final bool useRootNavigator;
 
   @override
   Widget build(BuildContext context) {
@@ -211,7 +252,8 @@ class _AdaptiveSheetOpenButton extends StatelessWidget {
             context: context,
             isScrollControlled: true,
             surfacePadding: EdgeInsets.zero,
-            bottomSafeAreaBehavior: bottomSafeAreaBehavior,
+            useBottomSafeArea: useBottomSafeArea,
+            useRootNavigator: useRootNavigator,
             builder: (context) {
               return SizedBox(
                 key: const ValueKey<String>('adaptiveSheetContent'),
@@ -220,7 +262,39 @@ class _AdaptiveSheetOpenButton extends StatelessWidget {
             },
           );
         },
-        child: const Text('Open sheet'),
+        child: Text(label),
+      ),
+    );
+  }
+}
+
+class _NestedNavigatorSheetHarness extends StatelessWidget {
+  const _NestedNavigatorSheetHarness();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: MediaQuery.removePadding(
+        context: context,
+        removeBottom: true,
+        child: Navigator(
+          onGenerateRoute: (_) {
+            return MaterialPageRoute<void>(
+              builder: (_) {
+                return const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _AdaptiveSheetOpenButton(label: 'Open nested sheet'),
+                    _AdaptiveSheetOpenButton(
+                      label: 'Open root sheet',
+                      useRootNavigator: true,
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

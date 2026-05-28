@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/address_autocomplete.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -12,18 +13,24 @@ class JidInput extends StatelessWidget {
     super.key,
     required this.onChanged,
     required this.jidOptions,
+    this.suggestionDomains = const <String>{},
     this.initialValue,
     this.error,
     this.enabled = true,
     this.describe = true,
+    this.textInputAction,
+    this.onSubmitted,
   });
 
   final void Function(String) onChanged;
   final List<String> jidOptions;
+  final Set<String> suggestionDomains;
   final String? initialValue;
   final String? error;
   final bool enabled;
   final bool describe;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -33,22 +40,20 @@ class JidInput extends StatelessWidget {
           : TextEditingValue(text: initialValue!),
       onSelected: onChanged,
       optionsBuilder: (value) {
-        if (value.text.isEmpty) return const [];
-        return jidOptions
-            .where(
-              (e) =>
-                  e.toLowerCase().contains(value.text.toLowerCase()) &&
-                  e.toLowerCase() != value.text.toLowerCase(),
-            )
-            .toList();
+        if (value.text.isEmpty) {
+          return const <String>[];
+        }
+        return addressAutocompleteSuggestions(
+          input: value.text,
+          knownDomains: suggestionDomains,
+          knownAddresses: jidOptions,
+          requireEmailAddress: false,
+        );
       },
       optionsViewBuilder: (context, onSelected, options) => Align(
         alignment: Alignment.topLeft,
-        child: Material(
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: context.colorScheme.border),
-            borderRadius: context.radius,
-          ),
+        child: AxiModalSurface(
+          borderColor: context.borderSide.color,
           child: IntrinsicWidth(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -59,9 +64,11 @@ class JidInput extends StatelessWidget {
                     cursor: SystemMouseCursors.click,
                     hoverStrategies: mobileHoverStrategies,
                     onTap: () => onSelected(option),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Text(option),
+                    child: AxiTapBounce(
+                      child: Padding(
+                        padding: EdgeInsets.all(context.spacing.m),
+                        child: Text(option, style: context.textTheme.small),
+                      ),
                     ),
                   ),
               ],
@@ -70,11 +77,12 @@ class JidInput extends StatelessWidget {
         ),
       ),
       fieldViewBuilder: (context, controller, focus, _) {
-        Widget child = AxiTextInput(
+        final input = AxiTextInput(
           controller: controller,
           focusNode: focus,
           autocorrect: false,
           keyboardType: TextInputType.emailAddress,
+          textInputAction: textInputAction,
           enabled: enabled,
           placeholder: Text(context.l10n.jidInputPlaceholder),
           // description: describe
@@ -84,6 +92,7 @@ class JidInput extends StatelessWidget {
           //       )
           //     : null,
           onChanged: onChanged,
+          onSubmitted: onSubmitted,
           // validator: (text) {
           //   if (text.isEmpty) {
           //     return 'Enter a JID';
@@ -96,26 +105,30 @@ class JidInput extends StatelessWidget {
           //   return null;
           // },
         );
-        if (error != null ||
+        final errorText =
+            error ??
             (!focus.hasFocus &&
-                controller.text.isNotEmpty &&
-                !AddressStringExtensions(controller.text).isValidJid)) {
-          child = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              child,
+                    controller.text.isNotEmpty &&
+                    !AddressStringExtensions(controller.text).isValidJid
+                ? context.l10n.jidInputInvalid
+                : null);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            input,
+            if (errorText != null)
               Padding(
                 padding: inputSubtextInsets,
                 child: Text(
-                  error ?? context.l10n.jidInputInvalid,
-                  style: TextStyle(color: context.colorScheme.destructive),
+                  errorText,
+                  style: context.textTheme.small.copyWith(
+                    color: context.colorScheme.destructive,
+                  ),
                 ),
               ),
-            ],
-          );
-        }
-        return child;
+          ],
+        );
       },
     );
   }

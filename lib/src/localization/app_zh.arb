@@ -249,6 +249,7 @@
   "chatComposerSemantics": "消息输入框",
   "draftSaved": "草稿已保存",
   "draftAutosaved": "已自动保存",
+  "draftAutosave": "自动保存",
   "draftErrorTitle": "糟糕",
   "draftNoRecipients": "没有收件人",
   "draftSubjectSemantics": "邮件主题",
@@ -1768,7 +1769,7 @@
   "settingsAutoDownloadScopeAlways": "始终",
   "settingsAutoDownloadScopeTrustedContacts": "仅限可信联系人。",
   "emailEncryptionBetaLabel": "电子邮件加密",
-  "emailEncryptionBetaChip": "测试版",
+  "emailEncryptionBetaChip": "实验性",
   "emailEncryptionBetaEnabledStatus": "已为 {address} 开启",
   "@emailEncryptionBetaEnabledStatus": {
     "placeholders": {
@@ -3231,6 +3232,7 @@
   "mucDestroyRoomConfirmTitle": "删除群组？",
   "mucDestroyRoomConfirmBody": "这会为当前在群组内的所有人移除此群组。",
   "contactsDetailsSectionTitle": "详细信息",
+  "contactsFolderRoutingDetailLabel": "属于",
   "contactsAddressLabel": "地址",
   "contactsMessagesLabel": "消息",
   "contactsMessagesNameLabel": "消息名称",

@@ -17,12 +17,7 @@ final class DraftForwardedContent {
   }) {
     final trimmedIntro = introText.trim();
     if (forwardedBlocks.isEmpty) {
-      return DraftForwardedContent(
-        plainText: trimmedIntro,
-        htmlBody: trimmedIntro.isEmpty
-            ? null
-            : HtmlContentCodec.fromPlainText(trimmedIntro),
-      );
+      return DraftForwardedContent(plainText: trimmedIntro);
     }
     final plainParts = <String>[];
     final htmlParts = <String>[];
@@ -50,7 +45,7 @@ final class DraftForwardedContent {
       );
       final htmlBlock = normalizedOriginalHtml == null
           ? HtmlContentCodec.fromPlainText(plainBlock)
-          : '$htmlHeader<br /><br />'
+          : '$htmlHeader${_htmlQuotedContext(block)}<br /><br />'
                 '${injectSyntheticForwardHtmlMarker(normalizedOriginalHtml)}';
       if (htmlBlock.trim().isNotEmpty) {
         htmlParts.add(htmlBlock);
@@ -71,6 +66,14 @@ final class DraftForwardedContent {
 
   static String plainForwardedBlock(DraftForwardedBlock block) {
     final lines = <String>[..._plainForwardedHeaderLines(block), ''];
+    final quotedContext = block.quotedContext;
+    if (quotedContext != null) {
+      lines.add('Quoted reply from ${quotedContext.senderLabel.trim()}:');
+      for (final line in quotedContext.plainText.trim().split('\n')) {
+        lines.add('> ${line.trimRight()}');
+      }
+      lines.add('');
+    }
     final body = block.originalPlainText.trim();
     if (body.isNotEmpty) {
       lines.add(body);
@@ -93,6 +96,15 @@ final class DraftForwardedContent {
     return HtmlContentCodec.fromPlainText(
       _plainForwardedHeaderLines(block).join('\n'),
     );
+  }
+
+  static String _htmlQuotedContext(DraftForwardedBlock block) {
+    final quotedContext = block.quotedContext;
+    if (quotedContext == null) {
+      return '';
+    }
+    return '<br /><br />${HtmlContentCodec.fromPlainText('Quoted reply from ${quotedContext.senderLabel.trim()}:\n'
+    '${quotedContext.plainText.trim()}')}';
   }
 
   static String _senderLine(DraftForwardedBlock block) {

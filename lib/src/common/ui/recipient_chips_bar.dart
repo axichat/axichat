@@ -7,9 +7,10 @@ import 'dart:math' as math;
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/address_autocomplete.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/email_validation.dart';
-import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -101,7 +102,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   List<Chat> _availableAutocompleteChats = const <Chat>[];
   Set<String> _knownDomains = const <String>{};
   Set<String> _knownAddresses = const <String>{};
-  Set<String> _knownAddressesLower = const <String>{};
 
   @override
   void initState() {
@@ -130,7 +130,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _availableAutocompleteChats = pools.availableChats;
     _knownDomains = pools.domains;
     _knownAddresses = pools.addresses;
-    _knownAddressesLower = pools.addressesLower;
     _updateOwnJid(widget.selfJid);
   }
 
@@ -250,6 +249,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         : Icons.keyboard_arrow_up;
     final shareTokenSignatureEnabled = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.shareTokenSignatureEnabled,
+    );
+    final primaryDomain = context.select<SettingsCubit, String>(
+      (cubit) => cubit.state.endpointConfig.domain,
     );
     return ChipsBarSurface(
       backgroundColor: barBackground,
@@ -410,6 +412,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             availableAutocompleteChats,
                             knownDomains,
                             knownAddresses,
+                            primaryDomain: primaryDomain,
                             shareTokenSignatureEnabled:
                                 shareTokenSignatureEnabled,
                             excludedKeys: _recipientNormalizedKeys(),
@@ -485,12 +488,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     });
   }
 
-  ({
-    List<Chat> availableChats,
-    Set<String> domains,
-    Set<String> addresses,
-    Set<String> addressesLower,
-  })
+  ({List<Chat> availableChats, Set<String> domains, Set<String> addresses})
   _computeSuggestionPools() {
     final allowAddressTargets = widget.allowAddressTargets;
     final hiddenAddresses = widget.availableChats
@@ -517,7 +515,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       nextDomains = const <String>{};
       nextAddresses = const <String>{};
     } else {
-      final domains = <String>{EndpointConfig.defaultDomain}
+      final domains = knownMessageTransportDomainHints()
         ..addAll(widget.suggestionDomains);
       void addDomainFrom(String? address) {
         if (_isRoomNick(address)) return;
@@ -581,14 +579,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       nextDomains = domains;
       nextAddresses = addresses;
     }
-    final lowerAddresses = nextAddresses
-        .map((address) => address.toLowerCase())
-        .toSet();
     return (
       availableChats: nextAvailable,
       domains: nextDomains,
       addresses: nextAddresses,
-      addressesLower: lowerAddresses,
     );
   }
 
@@ -596,15 +590,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final pools = _computeSuggestionPools();
     if (listEquals(pools.availableChats, _availableAutocompleteChats) &&
         setEquals(pools.domains, _knownDomains) &&
-        setEquals(pools.addresses, _knownAddresses) &&
-        setEquals(pools.addressesLower, _knownAddressesLower)) {
+        setEquals(pools.addresses, _knownAddresses)) {
       return;
     }
     setState(() {
       _availableAutocompleteChats = pools.availableChats;
       _knownDomains = pools.domains;
       _knownAddresses = pools.addresses;
-      _knownAddressesLower = pools.addressesLower;
     });
   }
 
@@ -990,11 +982,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     List<Chat> candidates,
     Set<String> knownDomains,
     Set<String> knownAddresses, {
+    required String primaryDomain,
     required bool shareTokenSignatureEnabled,
     required Set<String> excludedKeys,
   }) {
     const maxSuggestions = 8;
-    final knownAddressesLower = _knownAddressesLower;
     Contact chatTarget(Chat chat) => Contact.chat(
       chat: chat,
       shareSignatureEnabled:
@@ -1038,11 +1030,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           return results;
         }
       }
-      if (results.length < maxSuggestions) {
-        for (final address in knownAddresses) {
-          if (addAddressTarget(address)) {
-            return results;
-          }
+      for (final address in addressAutocompleteSuggestions(
+        input: trimmed,
+        knownDomains: knownDomains,
+        knownAddresses: knownAddresses,
+        excludedAddresses: excludedKeys,
+        primaryDomain: primaryDomain,
+        limit: maxSuggestions - results.length,
+      )) {
+        if (addAddressTarget(address)) {
+          return results;
         }
       }
       return results;
@@ -1056,44 +1053,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       }
     }
 
-    for (final address in knownAddresses) {
-      if (address.toLowerCase().startsWith(query) &&
-          addAddressTarget(address)) {
+    for (final address in addressAutocompleteSuggestions(
+      input: trimmed,
+      knownDomains: knownDomains,
+      knownAddresses: knownAddresses,
+      excludedAddresses: excludedKeys,
+      primaryDomain: primaryDomain,
+      limit: maxSuggestions - results.length,
+    )) {
+      if (addAddressTarget(address)) {
         if (results.length >= maxSuggestions) {
-          return results;
-        }
-      }
-    }
-
-    final parts = addressAutocompleteParts(trimmed);
-    if (parts != null) {
-      final localPart = parts.localPart;
-      final typedDomain = parts.domainPart.toLowerCase();
-      final normalizedLocal = localPart.toLowerCase();
-      final domainEntries =
-          knownDomains
-              .map(
-                (domain) => _DomainCompletion(
-                  domain: domain,
-                  hasExactAddress: knownAddressesLower.contains(
-                    '$normalizedLocal@$domain',
-                  ),
-                ),
-              )
-              .where(
-                (entry) =>
-                    typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
-              )
-              .toList()
-            ..sort((a, b) {
-              if (a.hasExactAddress != b.hasExactAddress) {
-                return a.hasExactAddress ? -1 : 1;
-              }
-              return a.domain.compareTo(b.domain);
-            });
-      for (final entry in domainEntries) {
-        final suggestion = '$localPart@${entry.domain}';
-        if (addAddressTarget(suggestion)) {
           return results;
         }
       }
@@ -1122,16 +1091,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         (email.isNotEmpty && email.startsWith(query)) ||
         (display.isNotEmpty && display.startsWith(query));
   }
-}
-
-class _DomainCompletion {
-  const _DomainCompletion({
-    required this.domain,
-    required this.hasExactAddress,
-  });
-
-  final String domain;
-  final bool hasExactAddress;
 }
 
 class _RecipientChip extends StatelessWidget {

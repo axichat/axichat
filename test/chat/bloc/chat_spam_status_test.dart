@@ -35,6 +35,14 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(MessageTimelineFilter.directOnly);
+    registerFallbackValue(
+      Chat(
+        jid: 'fallback@example.com',
+        title: 'Fallback',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime(2024),
+      ),
+    );
   });
 
   setUp(() {
@@ -55,6 +63,16 @@ void main() {
       () => chatsService.loadChatViewFilter(any()),
     ).thenAnswer((_) async => MessageTimelineFilter.directOnly);
     when(
+      () => chatsService.watchChatTransportPreference(any()),
+    ).thenAnswer((_) => const Stream<MessageTransport?>.empty());
+    when(() => chatsService.loadChatTransportPreference(any())).thenAnswer(
+      (_) async => const xmpp.ChatTransportPreference(
+        transport: MessageTransport.xmpp,
+        defaultTransport: MessageTransport.xmpp,
+        isExplicit: false,
+      ),
+    );
+    when(
       () => xmppService.messageStreamForChat(
         any(),
         start: any(named: 'start'),
@@ -74,6 +92,17 @@ void main() {
     when(
       () => xmppService.httpUploadSupport,
     ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(() => xmppService.createChatArchiveSession()).thenReturn('session-1');
+    when(
+      () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: any(named: 'sessionId'),
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        filter: any(named: 'filter'),
+        visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+        pageSize: any(named: 'pageSize'),
+      ),
+    ).thenAnswer((_) async {});
     when(
       () => xmppService.setSpamStatus(
         jid: any(named: 'jid'),

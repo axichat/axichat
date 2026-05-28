@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -59,12 +63,24 @@ void main() {
       () => database.repairChatSummaryPreservingTimestamp(any()),
     ).thenAnswer((_) async {});
     when(
+      () => database.ensureEmailEncryptionStatusMarkerForChat(any()),
+    ).thenAnswer((_) async {});
+    when(
       () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
     ).thenAnswer((_) async {});
-    when(() => database.deleteMessage(any())).thenAnswer((_) async {});
+    when(
+      () => database.deleteMessage(
+        any(),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async {});
     when(
       () => database.isEmailAddressBlocked(any()),
     ).thenAnswer((_) async => false);
+    when(
+      () => database.getEmailBlocklistEntry(any()),
+    ).thenAnswer((_) async => null);
     when(
       () => database.isEmailAddressSpam(any()),
     ).thenAnswer((_) async => false);
@@ -80,6 +96,14 @@ void main() {
       () => database.countUnreadMessagesForChat(
         any(),
         selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async => 0);
+    when(
+      () => database.repairUnreadCountForChat(
+        any(),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
       ),
     ).thenAnswer((_) async => 0);
     when(
@@ -98,6 +122,13 @@ void main() {
     when(
       () => context.getMessageMimeHeaders(any()),
     ).thenAnswer((_) async => 'Message-ID: <test@example.com>');
+    when(() => context.chatSendCapabilities(any())).thenAnswer(
+      (_) async => const DeltaChatSendCapabilities(
+        exists: true,
+        canSend: true,
+        isEncrypted: true,
+      ),
+    );
   });
 
   test('persists incoming timestamps from Delta core', () async {
@@ -144,6 +175,420 @@ void main() {
             ).captured.first
             as Message;
     expect(persistedMessage.timestamp, timestamp);
+  });
+
+  test(
+    'ensures the email encryption marker after storing OpenPGP mail',
+    () async {
+      const chatId = 7;
+      const msgId = 26;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Encrypted hello',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        showPadlock: true,
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Alice',
+        contactAddress: 'alice@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persistedMessage =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.first
+              as Message;
+      expect(persistedMessage.encryptionProtocol, EncryptionProtocol.openPgp);
+      verify(
+        () => database.ensureEmailEncryptionStatusMarkerForChat(
+          'alice@example.com',
+        ),
+      ).called(1);
+    },
+  );
+
+  test('ingests newer inbound mixed email after older XMPP messages', () async {
+    const chatId = 37;
+    const msgId = 137;
+    final tempDir = await Directory.systemTemp.createTemp(
+      'delta_mixed_order_test',
+    );
+    final realDb = XmppDrift(
+      file: File('${tempDir.path}/db.sqlite'),
+      passphrase: 'passphrase',
+      executor: NativeDatabase.memory(),
+    );
+    try {
+      final chat = Chat(
+        jid: 'mixed-order@axi.im',
+        title: 'Mixed Order',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        emailAddress: 'mixed-order@example.com',
+        emailFromAddress: 'me@example.com',
+      );
+      await realDb.createChat(chat);
+      await realDb.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      );
+
+      final emailTimestamp = DateTime.utc(2024, 1, 2, 12, 10);
+      final xmppMessages = [
+        for (final age in [
+          const Duration(seconds: 10),
+          const Duration(minutes: 1),
+          const Duration(minutes: 2),
+          const Duration(minutes: 5),
+          const Duration(minutes: 10),
+        ])
+          Message(
+            stanzaID: 'mixed-xmpp-${age.inSeconds}',
+            senderJid: chat.jid,
+            chatJid: chat.jid,
+            timestamp: emailTimestamp.subtract(age),
+            body: 'older xmpp ${age.inSeconds}',
+            encryptionProtocol: EncryptionProtocol.none,
+          ),
+      ];
+      for (final message in xmppMessages.reversed) {
+        await realDb.saveMessage(message, selfJid: 'me@axi.im');
+      }
+
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'newer email',
+        timestamp: emailTimestamp,
+      );
+      final realConsumer = DeltaEventConsumer(
+        databaseBuilder: () async => realDb,
+        context: context,
+        selfJidProvider: () => 'me@example.com',
+        xmppSelfJidProvider: () => 'me@axi.im',
+      );
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => context.getMessageMimeHeaders(msgId),
+      ).thenAnswer((_) async => 'Message-ID: <mixed-newer@example.com>');
+
+      await realConsumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final messages = await realDb.getChatMessages(
+        chat.jid,
+        start: 0,
+        end: 10,
+      );
+      expect(messages.map((message) => message.stanzaID), [
+        'dc-msg-$msgId',
+        ...xmppMessages.map((message) => message.stanzaID),
+      ]);
+      expect(messages.first.timestamp, emailTimestamp);
+      expect(messages.first.deltaMsgId, msgId);
+      final updatedChat = await realDb.getChat(chat.jid);
+      expect(updatedChat?.lastMessage, 'newer email');
+      expect(updatedChat?.lastChangeTimestamp, emailTimestamp);
+
+      await realConsumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final rehydratedMessages = await realDb.getChatMessages(
+        chat.jid,
+        start: 0,
+        end: 10,
+      );
+      expect(rehydratedMessages.map((message) => message.stanzaID), [
+        'dc-msg-$msgId',
+        ...xmppMessages.map((message) => message.stanzaID),
+      ]);
+      expect(
+        rehydratedMessages.where((message) => message.deltaMsgId == msgId),
+        hasLength(1),
+      );
+    } finally {
+      await realDb.close();
+      await tempDir.delete(recursive: true);
+    }
+  });
+
+  test(
+    'uses Delta encryption info messages as email status marker triggers',
+    () async {
+      const chatId = 7;
+      const msgId = 25;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Messages are end-to-end encrypted.',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        infoType: DeltaMessageInfo.chatE2ee,
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Alice',
+        contactAddress: 'alice@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.ensureEmailEncryptionStatusMarkerForChat(
+          'alice@example.com',
+        ),
+      ).called(1);
+      verifyNever(
+        () =>
+            database.saveMessage(captureAny(), selfJid: any(named: 'selfJid')),
+      );
+    },
+  );
+
+  test(
+    'learns incoming Autocrypt keys when email encryption beta is enabled',
+    () async {
+      const chatId = 7;
+      const msgId = 124;
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Autocrypt hello',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Alice',
+        contactAddress: 'alice@example.com',
+      );
+      consumer = DeltaEventConsumer(
+        databaseBuilder: () async => database,
+        context: context,
+        selfJidProvider: () => 'me@example.com',
+        emailEncryptionBetaEnabledForAddress: (_, address) =>
+            address == 'me@example.com',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(() => context.getMessageMimeHeaders(msgId)).thenAnswer(
+        (_) async =>
+            'Message-ID: <autocrypt@example.com>\n'
+            'Autocrypt: addr=alice@example.com; prefer-encrypt=mutual; '
+            'keydata=AQID',
+      );
+      when(
+        () => context.importContactPublicKey(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          armoredPublicKey: any(named: 'armoredPublicKey'),
+        ),
+      ).thenAnswer(
+        (_) async => const DeltaContactPublicKeyImport(
+          metadata: DeltaOpenPgpKeyMetadata(
+            kind: DeltaOpenPgpKeyKind.public,
+            fingerprint: 'ABC123',
+            userIds: <String>['Alice <alice@example.com>'],
+            hasExpectedAddress: true,
+            hasEncryptionCapability: true,
+          ),
+          contactId: 42,
+          chatId: 99,
+        ),
+      );
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final capturedKey =
+          verify(
+                () => context.importContactPublicKey(
+                  address: 'alice@example.com',
+                  displayName: 'Alice',
+                  armoredPublicKey: captureAny(named: 'armoredPublicKey'),
+                ),
+              ).captured.single
+              as String;
+      expect(capturedKey, contains('-----BEGIN PGP PUBLIC KEY BLOCK-----'));
+      verify(
+        () => database.upsertEmailChatAccount(
+          chatJid: 'alice@example.com',
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: 99,
+        ),
+      ).called(1);
+    },
+  );
+
+  test('learns changed incoming Autocrypt keys for the same sender', () async {
+    const chatId = 7;
+    const firstMsgId = 124;
+    const secondMsgId = 125;
+    const deltaChat = DeltaChat(
+      id: chatId,
+      name: 'Alice',
+      contactAddress: 'alice@example.com',
+    );
+    consumer = DeltaEventConsumer(
+      databaseBuilder: () async => database,
+      context: context,
+      selfJidProvider: () => 'me@example.com',
+      emailEncryptionBetaEnabledForAddress: (_, address) =>
+          address == 'me@example.com',
+    );
+    when(() => context.getMessage(any())).thenAnswer((invocation) async {
+      final msgId = invocation.positionalArguments.first as int;
+      return DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Autocrypt hello',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+      );
+    });
+    when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+    when(() => context.getMessageMimeHeaders(any())).thenAnswer((invocation) {
+      final msgId = invocation.positionalArguments.first as int;
+      final keyData = msgId == firstMsgId ? 'AQID' : 'BAUG';
+      return Future.value(
+        'Message-ID: <autocrypt-$msgId@example.com>\n'
+        'Autocrypt: addr=alice@example.com; prefer-encrypt=mutual; '
+        'keydata=$keyData',
+      );
+    });
+    var importCount = 0;
+    when(
+      () => context.importContactPublicKey(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+        armoredPublicKey: any(named: 'armoredPublicKey'),
+      ),
+    ).thenAnswer((_) async {
+      importCount += 1;
+      return DeltaContactPublicKeyImport(
+        metadata: DeltaOpenPgpKeyMetadata(
+          kind: DeltaOpenPgpKeyKind.public,
+          fingerprint: 'ABC$importCount',
+          userIds: const <String>['Alice <alice@example.com>'],
+          hasExpectedAddress: true,
+          hasEncryptionCapability: true,
+        ),
+        contactId: 42,
+        chatId: 98 + importCount,
+      );
+    });
+    when(
+      () => database.getMessageByStanzaID(any()),
+    ).thenAnswer((_) async => null);
+    when(() => database.createChat(any())).thenAnswer((_) async {});
+    when(() => database.updateChat(any())).thenAnswer((_) async {});
+    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+    when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+    await consumer.handle(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
+        data1: chatId,
+        data2: firstMsgId,
+      ),
+    );
+    await consumer.handle(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
+        data1: chatId,
+        data2: secondMsgId,
+      ),
+    );
+
+    final capturedKeys = verify(
+      () => context.importContactPublicKey(
+        address: 'alice@example.com',
+        displayName: 'Alice',
+        armoredPublicKey: captureAny(named: 'armoredPublicKey'),
+      ),
+    ).captured.cast<String>().toList();
+    expect(capturedKeys, hasLength(2));
+    expect(capturedKeys.first, isNot(capturedKeys.last));
+    verify(
+      () => database.upsertEmailChatAccount(
+        chatJid: 'alice@example.com',
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: 100,
+      ),
+    ).called(1);
   });
 
   test(
@@ -436,6 +881,176 @@ void main() {
     expect(updatedChat.type, ChatType.groupChat);
   });
 
+  test(
+    'chatDeleted detaches Delta metadata without removing mixed XMPP chats',
+    () async {
+      const chatId = 40;
+      final chat = Chat(
+        jid: 'alice@axi.im',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        emailAddress: 'alice@example.com',
+      );
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.deleteEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.trimChatMessages(
+          jid: chat.jid,
+          maxMessages: 0,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.countEmailChatAccounts(chat.jid),
+      ).thenAnswer((_) async => 0);
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.chatDeleted.code,
+          data1: chatId,
+          data2: 0,
+        ),
+      );
+
+      verify(
+        () => database.deleteEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verifyNever(() => database.removeChat(chat.jid));
+    },
+  );
+
+  test(
+    'chatDeleted removes native email chats after the last Delta account detaches',
+    () async {
+      const chatId = 41;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        emailAddress: 'alice@example.com',
+      );
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.deleteEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.trimChatMessages(
+          jid: chat.jid,
+          maxMessages: 0,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.countEmailChatAccounts(chat.jid),
+      ).thenAnswer((_) async => 0);
+      when(() => database.removeChat(chat.jid)).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.chatDeleted.code,
+          data1: chatId,
+          data2: 0,
+        ),
+      );
+
+      verify(() => database.removeChat(chat.jid)).called(1);
+    },
+  );
+
+  test(
+    'merging Delta metadata preserves an existing XMPP chat transport',
+    () async {
+      const chatId = 31;
+      const msgId = 91;
+      final existingChat = Chat(
+        jid: 'alice@axi.im',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        contactJid: 'alice@axi.im',
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Email copy',
+        timestamp: DateTime.utc(2024, 1, 2, 3),
+      );
+      const deltaChat = DeltaChat(
+        id: chatId,
+        name: 'Alice Mail',
+        contactName: 'Alice Mail',
+        contactAddress: 'alice@axi.im',
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getChat(chatId)).thenAnswer((_) async => deltaChat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-91'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getChat(existingChat.jid),
+      ).thenAnswer((_) async => existingChat);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final updatedChat =
+          verify(() => database.updateChat(captureAny())).captured.single
+              as Chat;
+      expect(updatedChat.transport, MessageTransport.xmpp);
+      expect(updatedChat.deltaChatId, chatId);
+      expect(updatedChat.emailAddress, 'alice@axi.im');
+      expect(updatedChat.contactJid, 'alice@axi.im');
+      verify(
+        () =>
+            database.saveMessage(captureAny(), selfJid: any(named: 'selfJid')),
+      ).called(1);
+    },
+  );
+
   test('updates existing message timestamp from Delta core', () async {
     const chatId = 7;
     const msgId = 24;
@@ -505,6 +1120,71 @@ void main() {
         verify(() => database.updateMessage(captureAny())).captured.single
             as Message;
     expect(updated.stanzaID, existing.stanzaID);
+    expect(updated.timestamp, deltaTimestamp);
+  });
+
+  test('accepts newer Delta timestamps for pending outgoing email', () async {
+    const chatId = 33;
+    const msgId = 93;
+    final chat = Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: chatId,
+    );
+    final deltaTimestamp = DateTime.utc(2024, 1, 1, 12, 10);
+    final existing = Message(
+      stanzaID: 'dc-pending-local-newer',
+      senderJid: 'me@example.com',
+      chatJid: chat.jid,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+      originID: 'existing-origin',
+      body: 'Hello',
+      deltaAccountId: DeltaAccountDefaults.legacyId,
+      deltaChatId: chatId,
+      deltaMsgId: msgId,
+    );
+    final deltaMessage = DeltaMessage(
+      id: msgId,
+      chatId: chatId,
+      text: 'Hello',
+      timestamp: deltaTimestamp,
+      isOutgoing: true,
+    );
+
+    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+    when(
+      () => database.getChatByDeltaChatId(
+        chatId,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => chat);
+    when(
+      () => database.getMessageByStanzaID('dc-msg-93'),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => existing);
+    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+    when(() => database.updateMessage(any())).thenAnswer((_) async {});
+
+    await consumer.handle(
+      DeltaCoreEvent(
+        type: DeltaEventType.msgsChanged.code,
+        data1: chatId,
+        data2: msgId,
+      ),
+    );
+
+    final updated =
+        verify(() => database.updateMessage(captureAny())).captured.single
+            as Message;
     expect(updated.timestamp, deltaTimestamp);
   });
 
@@ -584,6 +1264,222 @@ void main() {
     expect(updated.displayed, isTrue);
   });
 
+  test('repairs mixed unread counts with both transport identities', () async {
+    const chatId = 7;
+    const msgId = 124;
+    final timestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+    final mixedConsumer = DeltaEventConsumer(
+      databaseBuilder: () async => database,
+      context: context,
+      selfJidProvider: () => 'me@example.com',
+      xmppSelfJidProvider: () => 'me@axi.im',
+    );
+    final chat = Chat(
+      jid: 'alice@axi.im',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.xmpp,
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: chatId,
+      emailAddress: 'alice@example.com',
+      emailFromAddress: 'me@example.com',
+    );
+    final existing = Message(
+      stanzaID: 'dc-msg-$msgId',
+      senderJid: 'alice@example.com',
+      chatJid: chat.jid,
+      timestamp: timestamp,
+      originID: 'existing-origin',
+      body: 'Hello',
+      received: true,
+      displayed: false,
+      deltaAccountId: DeltaAccountDefaults.legacyId,
+      deltaChatId: chatId,
+      deltaMsgId: msgId,
+    );
+    final deltaMessage = DeltaMessage(
+      id: msgId,
+      chatId: chatId,
+      text: 'Hello',
+      timestamp: timestamp,
+      state: DeltaMessageState.inNoticed,
+    );
+
+    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+    when(
+      () => database.getChatByDeltaChatId(
+        chatId,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => chat);
+    when(
+      () => database.getMessageByStanzaID('dc-msg-$msgId'),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => existing);
+    when(() => database.updateMessage(any())).thenAnswer((_) async {});
+    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+
+    await mixedConsumer.handle(
+      DeltaCoreEvent(
+        type: DeltaEventType.msgsChanged.code,
+        data1: chatId,
+        data2: msgId,
+      ),
+    );
+
+    verify(
+      () => database.repairUnreadCountForChat(
+        chat.jid,
+        selfJid: 'me@axi.im',
+        emailSelfJid: 'me@example.com',
+      ),
+    ).called(1);
+  });
+
+  test(
+    'does not regress locally displayed incoming messages to fresh',
+    () async {
+      const chatId = 7;
+      const msgId = 25;
+      final timestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final existing = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'alice@example.com',
+        chatJid: chat.jid,
+        timestamp: timestamp,
+        originID: 'existing-origin',
+        body: 'Hello',
+        received: true,
+        displayed: true,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Hello',
+        timestamp: timestamp,
+        state: DeltaMessageState.inFresh,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.upsertEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => existing);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verifyNever(() => database.updateMessage(any()));
+    },
+  );
+
+  test(
+    'refreshChatlistSnapshot detaches missing Delta chats without removing mixed XMPP chats',
+    () async {
+      const chatId = 16;
+      final chat = Chat(
+        jid: 'alice@axi.im',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        emailAddress: 'alice@example.com',
+      );
+      when(() => context.getChatlist()).thenAnswer(
+        (_) async => const [
+          DeltaChatlistEntry(chatId: 99, msgId: DeltaMessageId.dayMarker),
+        ],
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(() => context.getChat(99)).thenAnswer(
+        (_) async => const DeltaChat(
+          id: 99,
+          name: 'System',
+          contactAddress: 'chat-99@delta.chat',
+        ),
+      );
+      when(
+        () => database.getDeltaChats(accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer((_) async => [chat]);
+      when(
+        () => database.deleteEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.trimChatMessages(
+          jid: chat.jid,
+          maxMessages: 0,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.countEmailChatAccounts(chat.jid),
+      ).thenAnswer((_) async => 0);
+
+      await consumer.refreshChatlistSnapshot();
+
+      verify(
+        () => database.deleteEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verifyNever(() => database.removeChat(chat.jid));
+    },
+  );
+
   test(
     'refreshChatlistSnapshot hydrates fresh unread messages when chatlist points to a marker',
     () async {
@@ -633,7 +1529,10 @@ void main() {
         () => context.getMessage(msgId),
       ).thenAnswer((_) async => deltaMessage);
       when(
-        () => database.getMessageDeltaSnapshot(chat.jid),
+        () => database.getMessageDeltaSnapshot(
+          chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
       ).thenAnswer((_) async => []);
       when(
         () => database.getMessageByStanzaID('dc-msg-$msgId'),
@@ -737,7 +1636,10 @@ void main() {
         () => context.getMessage(msgId),
       ).thenAnswer((_) async => deltaMessage);
       when(
-        () => database.getMessageDeltaSnapshot(chat.jid),
+        () => database.getMessageDeltaSnapshot(
+          chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
       ).thenAnswer((_) async => []);
       when(
         () => database.getMessageByStanzaID('dc-msg-$msgId'),
@@ -774,6 +1676,160 @@ void main() {
 
       expect(updatedChats, isNotEmpty);
       expect(updatedChats.every((updated) => updated.unreadCount == 0), isTrue);
+    },
+  );
+
+  test(
+    'msgsChanged keeps local Delta messages when core returns a partial snapshot',
+    () async {
+      const chatId = 20;
+      const visibleMsgId = 202;
+      final chat = Chat(
+        jid: 'mixed@axi.im',
+        title: 'Mixed',
+        type: ChatType.chat,
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        deltaChatId: chatId,
+        emailAddress: 'mixed@example.com',
+      );
+
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(
+        () => context.getChatMessageIds(chatId: chatId),
+      ).thenAnswer((_) async => const [visibleMsgId]);
+      when(
+        () => database.getMessageDeltaSnapshot(
+          chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => const [
+          MessageDeltaSnapshot(
+            stanzaId: 'dc-msg-101',
+            deltaMsgId: 101,
+            displayed: true,
+          ),
+        ],
+      );
+      when(
+        () => context.getMessage(visibleMsgId),
+      ).thenAnswer((_) async => null);
+      when(() => context.getChat(chatId)).thenAnswer(
+        (_) async => const DeltaChat(
+          id: chatId,
+          name: 'Mixed',
+          contactAddress: 'mixed@example.com',
+        ),
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(
+        () => database.deleteMessagesByStanzaIds(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.trimChatMessages(
+          jid: any(named: 'jid'),
+          maxMessages: any(named: 'maxMessages'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: 0,
+        ),
+      );
+
+      verifyNever(() => database.deleteMessagesByStanzaIds(any()));
+      verifyNever(
+        () => database.trimChatMessages(
+          jid: any(named: 'jid'),
+          maxMessages: any(named: 'maxMessages'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
+    },
+  );
+
+  test(
+    'msgsChanged does not trim local history on an empty core snapshot',
+    () async {
+      const chatId = 21;
+      final chat = Chat(
+        jid: 'empty-snapshot@axi.im',
+        title: 'Empty Snapshot',
+        type: ChatType.chat,
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        deltaChatId: chatId,
+        emailAddress: 'empty-snapshot@example.com',
+      );
+
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(
+        () => context.getChatMessageIds(chatId: chatId),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => context.getChat(chatId)).thenAnswer(
+        (_) async => const DeltaChat(
+          id: chatId,
+          name: 'Empty Snapshot',
+          contactAddress: 'empty-snapshot@example.com',
+        ),
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(
+        () => database.trimChatMessages(
+          jid: any(named: 'jid'),
+          maxMessages: any(named: 'maxMessages'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: 0,
+        ),
+      );
+
+      verifyNever(
+        () => database.trimChatMessages(
+          jid: any(named: 'jid'),
+          maxMessages: any(named: 'maxMessages'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
     },
   );
 

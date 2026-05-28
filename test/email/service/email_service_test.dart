@@ -928,6 +928,7 @@ void main() {
       const publicName = 'public-key-alice@example.com-default-ABC123.asc';
       final privateArmored = privateKeyBlock('selected-private');
       final publicArmored = publicKeyBlock('selected-public');
+      String? operationDirectoryPath;
 
       when(
         () => transport.runImex(
@@ -939,6 +940,7 @@ void main() {
         final operationDirectory = Directory(
           invocation.namedArguments[#path] as String,
         );
+        operationDirectoryPath = operationDirectory.path;
         final privateKey = File(p.join(operationDirectory.path, privateName));
         final publicKey = File(p.join(operationDirectory.path, publicName));
         final ignored = File(
@@ -981,16 +983,11 @@ void main() {
       ).thenAnswer((_) async => 'self-key-id');
 
       final export = await service.createEmailEncryptionKeyExport();
-      final archive = ZipDecoder().decodeBytes(
-        await File(export.tempZipPath).readAsBytes(),
-      );
+      final archive = ZipDecoder().decodeBytes(export.archiveBytes);
 
       expect(archive.files.map((file) => file.name), [privateName, publicName]);
       expect(archive.files.first.readBytes(), privateArmored.codeUnits);
-      await service.cleanupEmailEncryptionTempPath(
-        export.operationDirectoryPath,
-      );
-      expect(await Directory(export.operationDirectoryPath).exists(), isFalse);
+      expect(await Directory(operationDirectoryPath!).exists(), isFalse);
     },
   );
 
@@ -1085,18 +1082,22 @@ void main() {
     },
   );
 
-  test('read export bytes rejects an empty archive before save', () async {
-    final source = await writeArchive('empty-export.zip', const {});
-    final service = await createProvisionedService();
+  test(
+    'platform export completion rejects an empty archive before activation',
+    () async {
+      final source = await writeArchive('empty-export.zip', const {});
+      final service = await createProvisionedService();
 
-    await expectLater(
-      service.readEmailEncryptionKeyExportBytes(
-        tempZipPath: source.path,
-        normalizedAddress: 'alice@example.com',
-      ),
-      throwsA(isA<EmailEncryptionSaveFailedException>()),
-    );
-  });
+      await expectLater(
+        service.completeEmailEncryptionKeyExportAfterPlatformSave(
+          archiveBytes: await source.readAsBytes(),
+          platformResultPath: '/document/axichat-email-openpgp-key.zip',
+          normalizedAddress: 'alice@example.com',
+        ),
+        throwsA(isA<EmailEncryptionSaveFailedException>()),
+      );
+    },
+  );
 
   test(
     'contact public key rejects private key material before Delta',

@@ -32,6 +32,7 @@ void main() {
       when(
         () => xmppService.connectionState,
       ).thenAnswer((_) => connectionState);
+      when(() => xmppService.demoOfflineMode).thenReturn(false);
 
       final cubit = XmppActivityCubit(xmppBase: xmppService);
 
@@ -60,6 +61,71 @@ void main() {
     });
   });
 
+  test('allows demo offline operations without XMPP connection', () {
+    fakeAsync((async) {
+      final operationEvents = StreamController<XmppOperationEvent>.broadcast(
+        sync: true,
+      );
+      final connectionStates = StreamController<ConnectionState>.broadcast(
+        sync: true,
+      );
+      final xmppService = MockXmppService();
+      when(
+        () => xmppService.xmppOperationStream,
+      ).thenAnswer((_) => operationEvents.stream);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => connectionStates.stream);
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(ConnectionState.notConnected);
+      when(() => xmppService.demoOfflineMode).thenReturn(true);
+
+      final cubit = XmppActivityCubit(
+        xmppBase: xmppService,
+        completedRetention: const Duration(milliseconds: 1),
+      );
+
+      operationEvents.add(
+        XmppOperationEvent(
+          kind: XmppOperationKind.pubSubConversations,
+          stage: XmppOperationStage.start,
+        ),
+      );
+      connectionStates.add(ConnectionState.notConnected);
+
+      expect(
+        cubit.state.operations.single.status,
+        XmppOperationStatus.inProgress,
+      );
+
+      operationEvents.add(
+        XmppOperationEvent(
+          kind: XmppOperationKind.pubSubConversations,
+          stage: XmppOperationStage.end,
+        ),
+      );
+
+      expect(
+        cubit.state.operations.single.status,
+        XmppOperationStatus.inProgress,
+      );
+
+      async.elapse(const Duration(milliseconds: 350));
+
+      expect(cubit.state.operations.single.status, XmppOperationStatus.success);
+
+      async.elapse(const Duration(milliseconds: 1));
+
+      expect(cubit.state.operations, isEmpty);
+
+      unawaited(cubit.close());
+      unawaited(operationEvents.close());
+      unawaited(connectionStates.close());
+      async.flushMicrotasks();
+    });
+  });
+
   test('completed operations retain success before teardown', () {
     fakeAsync((async) {
       final operationEvents = StreamController<XmppOperationEvent>.broadcast(
@@ -78,6 +144,7 @@ void main() {
       when(
         () => xmppService.connectionState,
       ).thenReturn(ConnectionState.connected);
+      when(() => xmppService.demoOfflineMode).thenReturn(false);
 
       final cubit = XmppActivityCubit(
         xmppBase: xmppService,

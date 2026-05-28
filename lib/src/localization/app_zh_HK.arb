@@ -249,6 +249,7 @@
   "chatComposerSemantics": "訊息輸入框",
   "draftSaved": "草稿已儲存",
   "draftAutosaved": "已自動儲存",
+  "draftAutosave": "自動儲存",
   "draftErrorTitle": "糟了",
   "draftNoRecipients": "沒有收件者",
   "draftSubjectSemantics": "電郵主旨",
@@ -1761,7 +1762,7 @@
   "settingsAutoDownloadScopeAlways": "始終",
   "settingsAutoDownloadScopeTrustedContacts": "僅限受信任聯絡人。",
   "emailEncryptionBetaLabel": "電郵加密",
-  "emailEncryptionBetaChip": "測試版",
+  "emailEncryptionBetaChip": "實驗性",
   "emailEncryptionBetaEnabledStatus": "已為 {address} 開啟",
   "@emailEncryptionBetaEnabledStatus": {
     "placeholders": {
@@ -3230,6 +3231,7 @@
   "mucDestroyRoomConfirmTitle": "刪除聊天室？",
   "mucDestroyRoomConfirmBody": "這會為目前在聊天室內的所有人移除此聊天室。",
   "contactsDetailsSectionTitle": "詳細資料",
+  "contactsFolderRoutingDetailLabel": "屬於",
   "contactsAddressLabel": "地址",
   "contactsMessagesLabel": "訊息",
   "contactsMessagesNameLabel": "訊息名稱",

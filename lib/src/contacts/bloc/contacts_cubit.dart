@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -12,6 +13,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:uuid/uuid.dart';
 
 part 'contacts_state.dart';
 
@@ -64,13 +66,13 @@ class ContactsCubit extends Cubit<ContactsState> {
     String? displayName,
     required MessageTransport transport,
   }) async {
-    final normalized = bareAddress(address) ?? address.trim();
-    if (!normalized.isValidJid) {
+    final normalized = _normalizedContactAddress(address);
+    if (normalized == null) {
       emit(
         state.copyWith(
           actionState: ContactActionFailure(
             action: ContactActionType.addContact,
-            address: normalized,
+            address: address.trim(),
             reason: ContactFailureReason.invalidAddress,
           ),
         ),
@@ -157,6 +159,27 @@ class ContactsCubit extends Cubit<ContactsState> {
                   action: ContactActionType.addContact,
                   address: normalized,
                   reason: ContactFailureReason.addFailed,
+                ),
+              ),
+        );
+        return;
+      }
+    }
+    if (title != null) {
+      try {
+        await _xmppService.setContactDisplayNameOverride(
+          address: normalized,
+          displayName: title,
+        );
+      } on XmppContactDirectoryException {
+        emit(
+          state
+              .clearContactActionLoading(loading)
+              .copyWith(
+                actionState: ContactActionFailure(
+                  action: ContactActionType.addContact,
+                  address: normalized,
+                  reason: ContactFailureReason.updateFailed,
                 ),
               ),
         );
@@ -309,13 +332,13 @@ class ContactsCubit extends Cubit<ContactsState> {
     required String address,
     String? displayName,
   }) async {
-    final normalized = bareAddress(address) ?? address.trim();
-    if (!normalized.isValidJid) {
+    final normalized = _normalizedContactAddress(address);
+    if (normalized == null) {
       emit(
         state.copyWith(
           actionState: ContactActionFailure(
             action: ContactActionType.addManual,
-            address: normalized,
+            address: address.trim(),
             reason: ContactFailureReason.invalidAddress,
           ),
         ),
@@ -414,13 +437,13 @@ class ContactsCubit extends Cubit<ContactsState> {
     required String address,
     String? displayName,
   }) async {
-    final normalized = bareAddress(address) ?? address.trim();
-    if (!normalized.isValidJid) {
+    final normalized = _normalizedContactAddress(address);
+    if (normalized == null) {
       emit(
         state.copyWith(
           actionState: ContactActionFailure(
             action: ContactActionType.addEmail,
-            address: normalized,
+            address: address.trim(),
             reason: ContactFailureReason.invalidAddress,
           ),
         ),
@@ -907,6 +930,138 @@ class ContactsCubit extends Cubit<ContactsState> {
     );
   }
 
+  Future<void> saveContactDetailField({
+    required ContactDirectoryEntry contact,
+    ContactDetailFieldEntry? field,
+    required ContactDetailFieldKind kind,
+    required String value,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    final trimmed = value.trim();
+    if (normalized.isEmpty || trimmed.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.setContactField,
+            address: normalized,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    final fieldId = field?.fieldId ?? const Uuid().v4();
+    final loading = ContactActionLoading(
+      action: ContactActionType.setContactField,
+      address: normalized,
+      collectionId: fieldId,
+    );
+    if (state.isContactActionLoading(
+      action: ContactActionType.setContactField,
+      address: normalized,
+      collectionId: fieldId,
+    )) {
+      return;
+    }
+    emit(state.markContactActionLoading(loading));
+    try {
+      await _xmppService.setContactDetailField(
+        address: normalized,
+        fieldId: fieldId,
+        kind: kind,
+        label: field?.label,
+        value: trimmed,
+        sortOrder: field?.sortOrder ?? contact.detailFields.length,
+      );
+    } on XmppContactDirectoryException {
+      emit(
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.setContactField,
+                address: normalized,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
+      );
+      return;
+    }
+    emit(
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.setContactField,
+              address: normalized,
+              collectionId: fieldId,
+            ),
+          ),
+    );
+  }
+
+  Future<void> removeContactDetailField({
+    required ContactDirectoryEntry contact,
+    required ContactDetailFieldEntry field,
+  }) async {
+    final normalized = contactDirectoryAddressKey(contact.address);
+    if (normalized.isEmpty) {
+      emit(
+        state.copyWith(
+          actionState: ContactActionFailure(
+            action: ContactActionType.removeContactField,
+            address: normalized,
+            reason: ContactFailureReason.updateFailed,
+          ),
+        ),
+      );
+      return;
+    }
+    final loading = ContactActionLoading(
+      action: ContactActionType.removeContactField,
+      address: normalized,
+      collectionId: field.fieldId,
+    );
+    if (state.isContactActionLoading(
+      action: ContactActionType.removeContactField,
+      address: normalized,
+      collectionId: field.fieldId,
+    )) {
+      return;
+    }
+    emit(state.markContactActionLoading(loading));
+    try {
+      await _xmppService.removeContactDetailField(
+        address: normalized,
+        field: field,
+      );
+    } on XmppContactDirectoryException {
+      emit(
+        state
+            .clearContactActionLoading(loading)
+            .copyWith(
+              actionState: ContactActionFailure(
+                action: ContactActionType.removeContactField,
+                address: normalized,
+                reason: ContactFailureReason.updateFailed,
+              ),
+            ),
+      );
+      return;
+    }
+    emit(
+      state
+          .clearContactActionLoading(loading)
+          .copyWith(
+            actionState: ContactActionSuccess(
+              action: ContactActionType.removeContactField,
+              address: normalized,
+              collectionId: field.fieldId,
+            ),
+          ),
+    );
+  }
+
   ContactDirectoryEntry _currentContactOrFallback(
     ContactDirectoryEntry fallback,
   ) {
@@ -991,4 +1146,24 @@ String? _trimmedOrNull(String? value) {
     return null;
   }
   return trimmed;
+}
+
+String? _normalizedContactAddress(String address) {
+  final bare = bareAddressOrNull(address);
+  if (bare == null || bare.trim().isEmpty) {
+    return null;
+  }
+  final local = addressLocalPart(bare);
+  final domain = addressDomainPart(bare);
+  if (local == null || local.isEmpty || domain == null || domain.isEmpty) {
+    return null;
+  }
+  final normalized = normalizedAddressValue(bare);
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  if (!normalized.isValidEmailAddress) {
+    return null;
+  }
+  return normalized;
 }

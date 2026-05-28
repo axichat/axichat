@@ -93,6 +93,7 @@ void main() {
         RequestStatus.loading,
         RequestStatus.success,
       ]);
+      expect(emittedStates.last.refreshFailure, isNull);
       verify(() => emailService.syncSessionState()).called(1);
       verify(() => xmppService.syncSessionState()).called(1);
     },
@@ -104,7 +105,10 @@ void main() {
       emailService: emailService,
       tabs: const [HomeTab.chats],
     );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
     addTearDown(bloc.close);
+    addTearDown(subscription.cancel);
 
     await pumpEventQueue();
     emailReadyTransitionController.add(null);
@@ -113,6 +117,72 @@ void main() {
     verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
     verifyNever(() => emailService.syncSessionState());
     verifyNever(() => xmppService.syncSessionState());
+    expect(emittedStates, isEmpty);
+  });
+
+  test('email ready refresh failure stays silent', () async {
+    when(
+      () => emailService.refreshUnreadForHomeRefresh(),
+    ).thenAnswer((_) async => false);
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(bloc.close);
+    addTearDown(subscription.cancel);
+
+    await pumpEventQueue();
+    emailReadyTransitionController.add(null);
+    await pumpEventQueue();
+
+    verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
+    expect(emittedStates, isEmpty);
+  });
+
+  test('manual refresh runs after pending silent unread refresh', () async {
+    final unreadStarted = Completer<void>();
+    final unreadComplete = Completer<bool>();
+    when(() => emailService.refreshUnreadForHomeRefresh()).thenAnswer((_) {
+      if (!unreadStarted.isCompleted) {
+        unreadStarted.complete();
+      }
+      return unreadComplete.future;
+    });
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(bloc.close);
+    addTearDown(subscription.cancel);
+
+    await pumpEventQueue();
+    emailReadyTransitionController.add(null);
+    await unreadStarted.future;
+
+    bloc.add(const HomeRefreshRequested());
+    bloc.add(const HomeRefreshRequested());
+    await pumpEventQueue();
+    verifyNever(() => emailService.syncSessionState());
+    verifyNever(() => xmppService.syncSessionState());
+
+    unreadComplete.complete(true);
+    await pumpEventQueue(times: 10);
+
+    expect(emittedStates.map((state) => state.refreshStatus), [
+      RequestStatus.loading,
+      RequestStatus.success,
+    ]);
+    verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
+    verify(() => emailService.syncSessionState()).called(1);
+    verify(() => xmppService.syncSessionState()).called(1);
   });
 
   test(
@@ -323,8 +393,36 @@ void main() {
       RequestStatus.loading,
       RequestStatus.failure,
     ]);
+    expect(emittedStates.last.refreshFailure, HomeRefreshFailure.email);
     verify(() => emailService.syncSessionState()).called(1);
     verifyNever(() => xmppService.syncSessionState());
+  });
+
+  test('xmpp sync failure reports an xmpp refresh failure', () async {
+    when(() => xmppService.syncSessionState()).thenAnswer((_) async => false);
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(() async {
+      await subscription.cancel();
+      await bloc.close();
+    });
+
+    bloc.add(const HomeRefreshRequested());
+    await pumpEventQueue();
+
+    expect(emittedStates.map((state) => state.refreshStatus), [
+      RequestStatus.loading,
+      RequestStatus.failure,
+    ]);
+    expect(emittedStates.last.refreshFailure, HomeRefreshFailure.xmpp);
+    verify(() => emailService.syncSessionState()).called(1);
+    verify(() => xmppService.syncSessionState()).called(1);
   });
 
   test(

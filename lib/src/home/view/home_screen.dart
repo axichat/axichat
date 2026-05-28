@@ -2351,8 +2351,13 @@ class _HomeBlocScope extends StatelessWidget {
               if (!state.refreshStatus.isFailure) {
                 return;
               }
+              final failure = state.refreshFailure;
+              if (failure == null) {
+                locate<HomeBloc>().add(const HomeRefreshStatusCleared());
+                return;
+              }
               ShadToaster.maybeOf(context)?.show(
-                FeedbackToast.error(message: context.l10n.chatsRefreshFailed),
+                FeedbackToast.error(message: failure.resolve(context.l10n)),
               );
               locate<HomeBloc>().add(const HomeRefreshStatusCleared());
             },

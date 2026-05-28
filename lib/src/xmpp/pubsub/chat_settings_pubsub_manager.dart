@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
@@ -184,11 +185,16 @@ final class ChatSettingsSyncPayload {
       tag: _chatSettingsTag,
       xmlns: chatSettingsPubSubNode,
       attributes: {
-        _addressAttr: addressKey,
+        _addressAttr: escapeXmlAttribute(addressKey),
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
-        _sourceIdAttr: _normalizeSourceId(sourceId),
+        _sourceIdAttr: escapeXmlAttribute(_normalizeSourceId(sourceId)),
       },
-      children: [mox.XMLNode(tag: _chatSettingsDataTag, text: encodedSettings)],
+      children: [
+        mox.XMLNode(
+          tag: _chatSettingsDataTag,
+          text: escapeXmlText(encodedSettings),
+        ),
+      ],
     );
   }
 

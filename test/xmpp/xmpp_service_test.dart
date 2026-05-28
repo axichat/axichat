@@ -898,10 +898,46 @@ void main() {
       expect(xmppService.saltedPassword, isNull);
       expect(xmppService.bookmarksManager, isNull);
       expect(xmppService.conversationIndexManager, isNull);
+      expect(
+        xmppService.foregroundSocketState,
+        XmppForegroundSocketState.uninitialized,
+      );
+      expect(xmppService.usingForegroundSocket, isFalse);
+      expect(await xmppService.disableForegroundSocketIfActive(), isTrue);
       expect(xmppService.pubSubSupport, isNotNull);
       expect(() => xmppService.pubSubSupportStream, returnsNormally);
     },
   );
+
+  test('successful foreground socket login marks the runtime active', () async {
+    final originalBridge = foregroundTaskBridge;
+    final bridge = _FakeForegroundBridge();
+
+    foregroundTaskBridge = bridge;
+    withForeground = true;
+    foregroundServiceActive.value = false;
+    when(
+      () => mockConnection.socketWrapper,
+    ).thenReturn(ForegroundSocketWrapper(bridge: bridge));
+    when(() => mockConnection.reset()).thenAnswer((_) async {});
+    addTearDown(() {
+      foregroundTaskBridge = originalBridge;
+      withForeground = false;
+      foregroundServiceActive.value = false;
+    });
+
+    xmppService = XmppService(
+      buildConnection: () => mockConnection,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
+      notificationService: mockNotificationService,
+    );
+
+    await connectSuccessfully(xmppService);
+
+    expect(foregroundServiceActive.value, isTrue);
+    await xmppService.close();
+  });
 
   group('XmppService event handler', () {
     late mox.MessageEvent messageEvent;
@@ -954,6 +990,38 @@ void main() {
 
       verify(() => mockConnection.requestRoster()).called(1);
     });
+
+    test(
+      'Signup post-login hold defers carbons and bootstrap until released.',
+      () async {
+        when(() => mockConnection.carbonsEnabled).thenReturn(false);
+        when(
+          () => mockConnection.enableCarbons(),
+        ).thenAnswer((_) async => true);
+        when(
+          () => mockConnection.requestRoster(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestBlocklist(),
+        ).thenAnswer((_) async => null);
+
+        xmppService.beginSignupPostLoginWorkHold();
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+
+        await pumpEventQueue();
+
+        expect(xmppService.signupPostLoginWorkHeld, isTrue);
+        verifyNever(() => mockConnection.enableCarbons());
+        verifyNever(() => mockConnection.requestRoster());
+
+        await xmppService.releaseSignupPostLoginWorkHold();
+        await pumpEventQueue(times: 10);
+
+        expect(xmppService.signupPostLoginWorkHeld, isFalse);
+        verify(() => mockConnection.enableCarbons()).called(1);
+        verify(() => mockConnection.requestRoster()).called(1);
+      },
+    );
 
     test(
       'When stream negotiations resume, does not request the roster.',
@@ -6597,6 +6665,42 @@ void main() {
     );
 
     test(
+      'Foreground disable releases a disconnected foreground socket.',
+      () async {
+        final originalBridge = foregroundTaskBridge;
+        final bridge = _FakeForegroundBridge();
+        final foregroundSocket = ForegroundSocketWrapper(bridge: bridge);
+
+        foregroundTaskBridge = bridge;
+        withForeground = true;
+        foregroundServiceActive.value = true;
+        when(() => mockConnection.socketWrapper).thenReturn(foregroundSocket);
+        when(() => mockConnection.disconnect()).thenAnswer((_) async {});
+        when(() => mockConnection.reset()).thenAnswer((_) async {
+          await bridge.release(foregroundClientXmpp);
+        });
+        addTearDown(() {
+          foregroundTaskBridge = originalBridge;
+          withForeground = false;
+          foregroundServiceActive.value = false;
+        });
+
+        await connectSuccessfully(xmppService);
+        clearInteractions(mockConnection);
+        await bridge.acquire(clientId: foregroundClientXmpp);
+
+        final disabled = await xmppService.disableForegroundSocketIfActive();
+
+        expect(disabled, isTrue);
+        expect(bridge.acquiredClients, isEmpty);
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        verify(() => mockConnection.setShouldReconnect(false)).called(1);
+        verify(() => mockConnection.disconnect()).called(1);
+        verify(() => mockConnection.reset()).called(1);
+      },
+    );
+
+    test(
       'Foreground migration is skipped while stream negotiations are still in progress.',
       () async {
         final originalBridge = foregroundTaskBridge;
@@ -7274,9 +7378,11 @@ void main() {
       await pumpEventQueue();
       TestWidgetsFlutterBinding.ensureInitialized()
           .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      foregroundServiceActive.value = true;
 
-      await xmppService.ensureForegroundSocketIfActive();
+      await expectLater(
+        xmppService.ensureForegroundSocketIfActive(),
+        throwsA(isA<XmppAuthenticationException>()),
+      );
 
       expect(bridge.acquiredClients, isEmpty);
       verify(
@@ -7287,6 +7393,14 @@ void main() {
         ),
       ).called(1);
       verify(() => foregroundConnection.reset()).called(1);
+      expect(connectionBuilds, 2);
+      verifyNever(
+        () => fallbackConnection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        ),
+      );
 
       await xmppService.close();
     },

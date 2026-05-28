@@ -105,7 +105,11 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.seed.id == widget.seed.id &&
         oldWidget.seed.quoteTarget == widget.seed.quoteTarget &&
-        listEquals(oldWidget.seed.jids, widget.seed.jids)) {
+        listEquals(oldWidget.seed.jids, widget.seed.jids) &&
+        mapEquals(
+          oldWidget.seed.recipientTransportOverrides,
+          widget.seed.recipientTransportOverrides,
+        )) {
       return;
     }
     _quoteDismissed = false;
@@ -142,6 +146,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
           key: widget.draftFormKey,
           id: widget.seed.id,
           jids: widget.seed.jids,
+          recipientTransportOverrides: widget.seed.recipientTransportOverrides,
           body: widget.seed.body,
           subject: widget.seed.subject,
           quoteTarget: _effectiveQuoteTarget,
@@ -150,6 +155,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
           forwardedBlocks: widget.seed.forwardedBlocks,
           forwardedSourceAttachmentMetadataIds:
               widget.seed.forwardedSourceAttachmentMetadataIds,
+          autosaveEnabled: widget.seed.autosaveEnabled,
           suggestionAddresses: suggestionAddresses,
           suggestionDomains: suggestionDomains,
           locate: widget.locate,

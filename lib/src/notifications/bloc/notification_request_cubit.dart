@@ -3,9 +3,8 @@
 
 import 'package:async/async.dart';
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
-import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 part 'notification_request_state.dart';
@@ -13,22 +12,23 @@ part 'notification_request_state.dart';
 class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   NotificationRequestCubit({
     required NotificationService notificationService,
-    required XmppService xmppService,
+    required ForegroundRuntimeController foregroundRuntimeController,
   }) : _notificationService = notificationService,
-       _xmppService = xmppService,
+       _foregroundRuntimeController = foregroundRuntimeController,
        super(
          NotificationRequestState(
-           foregroundServiceActive: foregroundServiceActive.value,
+           foregroundServiceActive: foregroundRuntimeController.isActive,
          ),
        ) {
     foregroundServiceActive.addListener(_handleForegroundServiceChanged);
   }
 
   final NotificationService _notificationService;
-  final XmppService _xmppService;
+  final ForegroundRuntimeController _foregroundRuntimeController;
   CancelableOperation<bool>? _refreshPermissionsOperation;
   CancelableOperation<bool>? _requestPermissionsOperation;
-  CancelableOperation<bool>? _enableForegroundOperation;
+  CancelableOperation<ForegroundActivationResult>? _enableForegroundOperation;
+  CancelableOperation<bool>? _disableForegroundOperation;
 
   Future<void> refreshPermissions() async {
     _refreshPermissionsOperation?.cancel();
@@ -77,50 +77,81 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     return hasPermissions ?? state.hasPermissions ?? false;
   }
 
-  Future<bool> enableForegroundService() async {
-    if (state.foregroundServiceActive) {
-      return true;
-    }
+  Future<ForegroundActivationResult> enableForegroundService({
+    bool emailKeepaliveEnabled = true,
+    bool allowCurrentSessionMigration = false,
+  }) async {
     final existing = _enableForegroundOperation;
     if (existing != null) {
-      final enabled = await existing.valueOrCancellation();
-      return enabled ?? foregroundServiceActive.value;
+      final result = await existing.valueOrCancellation();
+      return result ?? ForegroundActivationResult.failed;
     }
     emit(state.copyWith(isEnablingForeground: true));
-    final operation = CancelableOperation<bool>.fromFuture(
-      _enableForegroundService(),
-    );
+    final operation =
+        CancelableOperation<ForegroundActivationResult>.fromFuture(
+          _enableForegroundService(
+            emailKeepaliveEnabled: emailKeepaliveEnabled,
+            allowCurrentSessionMigration: allowCurrentSessionMigration,
+          ),
+        );
     _enableForegroundOperation = operation;
-    bool? enabled;
+    ForegroundActivationResult? result;
     try {
-      enabled = await operation.valueOrCancellation();
+      result = await operation.valueOrCancellation();
     } finally {
       if (_enableForegroundOperation == operation) {
         _enableForegroundOperation = null;
         emit(
           state.copyWith(
             isEnablingForeground: false,
-            foregroundServiceActive: enabled ?? foregroundServiceActive.value,
+            foregroundServiceActive: foregroundServiceActive.value,
           ),
         );
       }
     }
-    return enabled ?? foregroundServiceActive.value;
+    return result ?? ForegroundActivationResult.failed;
   }
 
-  Future<bool> _enableForegroundService() async {
-    withForeground = true;
-    foregroundServiceActive.value = true;
-    initForegroundService();
-    await _xmppService.ensureForegroundSocketIfActive();
-    return foregroundServiceActive.value;
+  Future<ForegroundActivationResult> _enableForegroundService({
+    required bool emailKeepaliveEnabled,
+    required bool allowCurrentSessionMigration,
+  }) async {
+    return _foregroundRuntimeController.enableForUserToggle(
+      emailKeepaliveEnabled: emailKeepaliveEnabled,
+      allowCurrentSessionMigration: allowCurrentSessionMigration,
+    );
   }
 
-  void disableForegroundService() {
-    if (!foregroundServiceActive.value) {
-      return;
+  Future<bool> disableForegroundService() async {
+    final existing = _disableForegroundOperation;
+    if (existing != null) {
+      final disabled = await existing.valueOrCancellation();
+      return disabled ?? !foregroundServiceActive.value;
     }
-    foregroundServiceActive.value = false;
+    emit(state.copyWith(isDisablingForeground: true));
+    final operation = CancelableOperation<bool>.fromFuture(
+      _disableForegroundService(),
+    );
+    _disableForegroundOperation = operation;
+    bool? disabled;
+    try {
+      disabled = await operation.valueOrCancellation();
+    } finally {
+      if (_disableForegroundOperation == operation) {
+        _disableForegroundOperation = null;
+        emit(
+          state.copyWith(
+            isDisablingForeground: false,
+            foregroundServiceActive: foregroundServiceActive.value,
+          ),
+        );
+      }
+    }
+    return disabled ?? !foregroundServiceActive.value;
+  }
+
+  Future<bool> _disableForegroundService() async {
+    return _foregroundRuntimeController.disableForUserToggle();
   }
 
   void _handleForegroundServiceChanged() {
@@ -132,16 +163,18 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   @override
   Future<void> close() async {
     foregroundServiceActive.removeListener(_handleForegroundServiceChanged);
-    final operations = <CancelableOperation<bool>?>[
+    final operations = <CancelableOperation<Object?>?>[
       _refreshPermissionsOperation,
       _requestPermissionsOperation,
       _enableForegroundOperation,
+      _disableForegroundOperation,
     ];
     _refreshPermissionsOperation = null;
     _requestPermissionsOperation = null;
     _enableForegroundOperation = null;
+    _disableForegroundOperation = null;
     await Future.wait(
-      operations.whereType<CancelableOperation<bool>>().map(
+      operations.whereType<CancelableOperation<Object?>>().map(
         (operation) => operation.cancel(),
       ),
     );

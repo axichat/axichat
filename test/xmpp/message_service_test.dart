@@ -10,6 +10,7 @@ import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
+import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
@@ -192,64 +193,26 @@ void main() {
     resetMocktailState();
   });
 
-  group('draft save aborts', () {
-    test(
-      'restores existing draft when stale save commits before abort',
-      () async {
-        when(
-          () => mockStateStore.read(key: any(named: 'key')),
-        ).thenReturn(null);
-        await connectSuccessfully(xmppService);
-        final draftUpdatedAt = DateTime.utc(2026, 3, 11, 10);
-        final draftId = await database.saveDraft(
-          jids: const ['peer@axi.im'],
-          body: 'Saved body',
-          draftSyncId: 'sync-post-commit-existing',
-          draftUpdatedAt: draftUpdatedAt,
-          draftSourceId: 'source-existing',
-          draftRecipients: const [],
-        );
-        var checks = 0;
-
-        await expectLater(
-          xmppService.saveDraft(
-            id: draftId,
-            jids: const ['peer@axi.im'],
-            body: 'Discarded body',
-            shouldCommit: () {
-              checks += 1;
-              return checks < 8;
-            },
-          ),
-          throwsA(isA<DraftSaveAbortedException>()),
-        );
-
-        final saved = await database.getDraft(draftId);
-        expect(saved?.body, 'Saved body');
-        expect(saved?.draftUpdatedAt, draftUpdatedAt);
-        expect(await database.countDrafts(), 1);
-      },
-    );
-
-    test('deletes new draft when stale save commits before abort', () async {
+  group('draft autosave preference', () {
+    test('updates the local draft without changing draft content', () async {
       when(() => mockStateStore.read(key: any(named: 'key'))).thenReturn(null);
       await connectSuccessfully(xmppService);
-      var checks = 0;
-
-      await expectLater(
-        xmppService.saveDraft(
-          id: null,
-          jids: const ['peer@axi.im'],
-          body: 'Discarded body',
-          shouldCommit: () {
-            checks += 1;
-            return checks < 7;
-          },
-        ),
-        throwsA(isA<DraftSaveAbortedException>()),
+      final draftId = await database.saveDraft(
+        jids: const ['peer@axi.im'],
+        body: 'Saved body',
+        draftSyncId: 'sync-autosave-toggle',
+        draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+        draftSourceId: 'source',
+        draftRecipients: const [],
+        subject: 'Saved subject',
       );
 
-      expect(await database.countDrafts(), 0);
+      await xmppService.updateDraftAutosaveEnabled(id: draftId, enabled: false);
+
+      final saved = await database.getDraft(draftId);
+      expect(saved?.body, 'Saved body');
+      expect(saved?.subject, 'Saved subject');
+      expect(saved?.autosaveEnabled, isFalse);
     });
   });
 
@@ -5184,6 +5147,135 @@ void main() {
         messageStanzaId: mucStanzaId,
       );
       expect(legacy?.active, isFalse);
+    });
+
+    test('Pending MUC clear-all flushes before a newer re-pin', () async {
+      const roomJid = 'room@conference.axi.im';
+      const roomNick = 'me';
+      const occupantId = '$roomJid/$roomNick';
+      const stanzaId = 'pin-local-stanza-id';
+      const mucStanzaId = 'pin-room-stanza-id';
+      const selfActorJid = 'jid@axi.im';
+      const peerActorJid = 'peer@axi.im';
+      final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
+      var generatedId = 0;
+
+      await connectSuccessfully(xmppService);
+      await xmppService.setMucServiceHost('conference.axi.im');
+      await xmppService.setMamSupportOverride(false);
+      when(
+        () => mockStateStore.read(
+          key: XmppStateStore.registerKey(
+            'pin_sync_archive_bootstrap_$roomJid',
+          ),
+        ),
+      ).thenReturn(DateTime.timestamp().toUtc().toIso8601String());
+      when(
+        () => mockConnection.getManager<MUCManager>(),
+      ).thenReturn(mucManager);
+      final managerRoomState = mox.RoomState(
+        roomJid: mox.JID.fromString(roomJid),
+        joined: true,
+        nick: roomNick,
+      );
+      when(
+        () => mucManager.getRoomState(mox.JID.fromString(roomJid)),
+      ).thenAnswer((_) async => managerRoomState);
+      when(
+        () => mockConnection.generateId(),
+      ).thenAnswer((_) => 'pin-mutation-${generatedId++}');
+      when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {
+        return true;
+      });
+      await database.createChat(
+        Chat(
+          jid: roomJid,
+          title: 'Room',
+          type: ChatType.groupChat,
+          myNickname: roomNick,
+          lastChangeTimestamp: pinnedAt,
+          contactJid: roomJid,
+        ),
+      );
+      final message = Message(
+        stanzaID: stanzaId,
+        mucStanzaId: mucStanzaId,
+        senderJid: '$roomJid/friend',
+        occupantID: '$roomJid/friend',
+        chatJid: roomJid,
+        timestamp: pinnedAt,
+        body: 'hello',
+      );
+      await database.saveMessage(
+        message,
+        chatType: ChatType.groupChat,
+        selfJid: xmppService.myJid,
+      );
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: occupantId,
+        nick: roomNick,
+        realJid: xmppService.myJid,
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.moderator,
+        isPresent: true,
+        fromPresence: true,
+      );
+      const reference = MessageReference(
+        kind: MessageReferenceKind.mucStanzaId,
+        value: mucStanzaId,
+      );
+      await database.applyActorPinnedMessageMutation(
+        chatJid: roomJid,
+        reference: reference,
+        actorJid: selfActorJid,
+        pinnedAt: pinnedAt,
+        active: true,
+        identityVerified: true,
+      );
+      await database.applyActorPinnedMessageMutation(
+        chatJid: roomJid,
+        reference: reference,
+        actorJid: peerActorJid,
+        pinnedAt: pinnedAt,
+        active: true,
+        identityVerified: true,
+      );
+      xmppService.setPinSyncActiveForChat(roomJid, active: true);
+      when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+
+      await xmppService.unpinMessage(chatJid: roomJid, message: message);
+      final clearAllTombstone = await database.getPinnedMessage(
+        chatJid: roomJid,
+        messageStanzaId: mucStanzaId,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await xmppService.pinMessage(chatJid: roomJid, message: message);
+      final activeAggregate = await database.getPinnedMessage(
+        chatJid: roomJid,
+        messageStanzaId: mucStanzaId,
+      );
+      when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+
+      await xmppService.syncPinnedMessagesForChat(roomJid);
+
+      final sentEvents = verify(
+        () => mockConnection.sendMessage(captureAny()),
+      ).captured.cast<mox.MessageEvent>().toList();
+      final mutations = sentEvents
+          .map((event) => event.extensions.get<PinMessageMutationData>())
+          .toList(growable: false);
+
+      expect(clearAllTombstone?.active, isFalse);
+      expect(activeAggregate?.active, isTrue);
+      expect(sentEvents, hasLength(2));
+      expect(mutations.first?.messageId, mucStanzaId);
+      expect(mutations.first?.pinned, isFalse);
+      expect(mutations.first?.scope, PinMessageMutationScope.all);
+      expect(mutations.first?.timestamp, clearAllTombstone?.pinnedAt);
+      expect(mutations.last?.messageId, mucStanzaId);
+      expect(mutations.last?.pinned, isTrue);
+      expect(mutations.last?.scope, PinMessageMutationScope.own);
     });
 
     test('Rejects participant MUC pins for peer-authored messages', () async {

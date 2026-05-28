@@ -13,6 +13,7 @@ const _rememberMeChoiceKeyName = 'remember_me_choice';
 const _jidKeyName = 'jid';
 const _passwordKeyName = 'password';
 const _passwordPreHashedKeyName = 'password_prehashed_v1';
+const _pendingLogoutKeyName = 'logout_in_progress_v1';
 const bool _defaultRememberMeChoice = true;
 
 Future<bool> resolveHasStoredLoginCredentials(
@@ -27,6 +28,13 @@ Future<bool> resolveHasStoredLoginCredentials(
   final bool rememberMe =
       _parseBoolOrNull(rememberMeRaw) ?? _defaultRememberMeChoice;
   if (!rememberMe) return false;
+
+  final RegisteredCredentialKey pendingLogoutKey = CredentialStore.registerKey(
+    _pendingLogoutKeyName,
+  );
+  if (await credentialStore.read(key: pendingLogoutKey) != null) {
+    return false;
+  }
 
   final RegisteredCredentialKey jidKey = CredentialStore.registerKey(
     _jidKeyName,

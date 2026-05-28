@@ -56,6 +56,7 @@ class _LoginScreenState extends State<LoginScreen>
         ? _AuthFlow.login
         : _AuthFlow.signup;
     _authProgressController = AuthProgressController(vsync: this);
+    context.read<AuthenticationCubit>().beginPendingLogoutRecovery();
     _maybeAutoLogin();
   }
 

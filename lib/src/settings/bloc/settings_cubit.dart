@@ -2,41 +2,71 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/app_language.dart';
+import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:logging/logging.dart';
 
 part 'settings_cubit.freezed.dart';
 part 'settings_cubit.g.dart';
 part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
-  SettingsCubit({XmppService? xmppService, Capability? capability})
-    : _xmppService = xmppService,
-      _capability = capability,
-      super(const SettingsState()) {
+  SettingsCubit({
+    XmppService? xmppService,
+    Capability? capability,
+    CredentialStore? credentialStore,
+  }) : _xmppService = xmppService,
+       _capability = capability,
+       _credentialStore = credentialStore,
+       super(const SettingsState()) {
+    _initialStoredLoginJid = _readStoredLoginJid();
     _applyAttachmentAutoDownloadSettings(state);
     final service = _xmppService;
     if (service != null) {
       _settingsSyncSubscription = service.settingsSyncUpdateStream.listen(
         _handleRemoteSettingsSync,
       );
-      unawaited(service.seedSettingsSyncSnapshot(state.syncedSettingsJson));
     }
   }
 
+  static const int _settingsEnvelopeVersion = 1;
+  static const String _settingsEnvelopeVersionKey = 'version';
+  static const String _settingsEnvelopeBootstrapKey = 'bootstrap';
+  static const String _settingsEnvelopeAccountsKey = 'accounts';
+  static const String _endpointConfigJsonKey = 'endpoint_config';
+  static const String _storedLoginJidKeyName = 'jid';
+
   final XmppService? _xmppService;
   final Capability? _capability;
+  final CredentialStore? _credentialStore;
+  late final Future<String?> _initialStoredLoginJid;
+  final Logger _log = Logger('SettingsCubit');
   StreamSubscription<Map<String, dynamic>>? _settingsSyncSubscription;
+  final RegisteredCredentialKey _storedLoginJidKey =
+      CredentialStore.registerKey(_storedLoginJidKeyName);
+  final RegisteredCredentialKey _backgroundMessagingPreferencesKey =
+      CredentialStore.registerKey('background_messaging_by_address_v1');
+  SettingsState _bootstrapState = const SettingsState();
+  final Map<String, Map<String, dynamic>> _accountSettingsJsonByKey =
+      <String, Map<String, dynamic>>{};
+  final Map<String, Map<String, dynamic>> _pendingRemoteSettingsSyncByKey =
+      <String, Map<String, dynamic>>{};
+  Map<String, dynamic>? _legacyAccountSettingsJson;
+  String? _activeAccountKey;
 
   bool get canForegroundService => _capability?.canForegroundService ?? false;
 
@@ -80,11 +110,100 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     await updateEndpointConfig(const EndpointConfig());
   }
 
-  Future<void> toggleBackgroundMessaging(bool enabled) async {
+  Future<void> toggleBackgroundMessaging(
+    bool enabled, {
+    String? accountJid,
+  }) async {
+    final accountKey = _accountKeyForJid(accountJid);
+    if (_activeAccountKey == null) {
+      if (accountKey == null) return;
+      await activateAccountSettings(accountJid);
+    } else if (accountKey != null && accountKey != _activeAccountKey) {
+      await activateAccountSettings(accountJid);
+    }
     await _emitLocalSettingsState(
       state.copyWith(backgroundMessagingEnabled: enabled),
       changedSettingIds: const {GlobalSettingId.backgroundMessaging},
     );
+  }
+
+  Future<void> activateAccountSettings(String? accountJid) async {
+    _persistVisibleState(state);
+    final accountKey = _accountKeyForJid(accountJid);
+    _activeAccountKey = accountKey;
+    if (accountKey == null) {
+      final nextState = _bootstrapState;
+      if (nextState != state) {
+        emit(nextState);
+      }
+      _applySettingsSideEffects(nextState);
+      return;
+    }
+
+    final storedJson = _accountSettingsJsonByKey[accountKey];
+    var nextState = storedJson == null
+        ? _newAccountSettingsState()
+        : _accountStateFromJson(storedJson);
+    if (storedJson == null) {
+      final legacyAccountJson = await _legacyAccountSettingsJsonFor(accountJid);
+      if (legacyAccountJson != null) {
+        nextState = _accountStateFromJson(legacyAccountJson);
+      }
+      final legacyBackgroundPreference =
+          await _legacyBackgroundMessagingPreference(accountJid);
+      if (legacyBackgroundPreference != null) {
+        nextState = nextState.copyWith(
+          backgroundMessagingEnabled: legacyBackgroundPreference,
+        );
+      }
+    }
+    final pendingRemoteSettings = _pendingRemoteSettingsSyncByKey.remove(
+      accountKey,
+    );
+    if (pendingRemoteSettings != null) {
+      nextState = nextState
+          .mergeSyncedSettingsJson(pendingRemoteSettings)
+          .clearGlobalSettingsLoading(
+            GlobalSettingId.syncedSettings,
+            confirmedSnapshot: pendingRemoteSettings,
+          );
+    }
+    nextState = _withBootstrapEndpoint(nextState);
+    _accountSettingsJsonByKey[accountKey] = _accountJsonFromState(nextState);
+    if (nextState != state) {
+      emit(nextState);
+    }
+    _applySettingsSideEffects(nextState);
+    await _seedSettingsSyncSnapshotIfActive();
+  }
+
+  Future<void> activateBackgroundMessagingAccount(String? accountJid) async {
+    await activateAccountSettings(accountJid);
+  }
+
+  Future<bool> backgroundMessagingEnabledForAccount(String? accountJid) async {
+    final accountKey = _accountKeyForJid(accountJid);
+    if (accountKey == null) {
+      return false;
+    }
+    final storedJson = _accountSettingsJsonByKey[accountKey];
+    if (storedJson != null) {
+      return _accountStateFromJson(storedJson).backgroundMessagingEnabled;
+    }
+    final legacyBackgroundPreference =
+        await _legacyBackgroundMessagingPreference(accountJid);
+    if (legacyBackgroundPreference != null) {
+      return legacyBackgroundPreference;
+    }
+    final legacyAccountJson = await _matchingLegacyAccountSettingsJsonFor(
+      accountJid,
+    );
+    if (legacyAccountJson != null) {
+      return _accountStateFromJson(
+        legacyAccountJson,
+      ).backgroundMessagingEnabled;
+    }
+    return false;
   }
 
   Future<void> toggleChatNotificationsMuted(bool muted) async {
@@ -198,6 +317,34 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     await _emitLocalSettingsState(
       state.copyWith(emailComposerWatermarkEnabled: enabled),
       changedSettingIds: const {GlobalSettingId.emailComposerWatermark},
+    );
+  }
+
+  Future<void> setEmailEncryptionBetaEnabled(
+    String address,
+    bool enabled,
+  ) async {
+    final normalized = normalizedAddressValue(address);
+    if (normalized == null ||
+        normalized.isEmpty ||
+        !normalized.isValidEmailAddress) {
+      throw ArgumentError.value(
+        address,
+        'address',
+        'Expected a valid email address.',
+      );
+    }
+    final nextMap = Map<String, bool>.from(
+      state.emailEncryptionBetaEnabledByAddress,
+    );
+    if (enabled) {
+      nextMap[normalized] = true;
+    } else {
+      nextMap.remove(normalized);
+    }
+    await _emitLocalSettingsState(
+      state.copyWith(emailEncryptionBetaEnabledByAddress: nextMap),
+      changedSettingIds: const {GlobalSettingId.emailEncryptionBeta},
     );
   }
 
@@ -333,7 +480,6 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       autoDownloadDocuments: documentsEnabled,
       autoDownloadArchives: archivesEnabled,
     );
-    _applyAttachmentAutoDownloadSettings(nextState);
     await _emitLocalSettingsState(
       nextState,
       changedSettingIds: const {
@@ -347,7 +493,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   Future<void> retrySettingsSync() async {
     final service = _xmppService;
-    if (service == null) {
+    if (service == null || _activeAccountKey == null) {
       return;
     }
     final changedSettingIds = state.unsyncedGlobalSettingIds.toSet();
@@ -372,6 +518,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     SettingsState nextState, {
     Iterable<GlobalSettingId> changedSettingIds = const {},
   }) async {
+    final changedSettingIdsSet = changedSettingIds.toSet();
+    nextState = _scopeNextState(nextState, changedSettingIdsSet);
     if (nextState == state) {
       return;
     }
@@ -381,10 +529,12 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         .changedGlobalSettingIds(nextState, hints: changedSettingIds)
         .where((settingId) => settingId.isSynced)
         .toSet();
-    final shouldPublish = !const DeepCollectionEquality().equals(
-      previousState.syncedSettingsJson,
-      nextState.syncedSettingsJson,
-    );
+    final shouldPublish =
+        _activeAccountKey != null &&
+        !const DeepCollectionEquality().equals(
+          previousState.syncedSettingsJson,
+          nextState.syncedSettingsJson,
+        );
     final emittedState = service == null || !shouldPublish
         ? nextState
         : nextState.markGlobalSettingsLoading(
@@ -394,6 +544,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
                 : previousState.syncedSettingsJson,
           );
     emit(emittedState);
+    _persistVisibleState(emittedState);
+    _applySettingsSideEffects(emittedState);
     if (!shouldPublish) {
       return;
     }
@@ -412,11 +564,18 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     required Map<String, dynamic> snapshot,
     required Set<GlobalSettingId> changedSettingIds,
   }) async {
+    final publishingAccountKey = _activeAccountKey;
+    if (publishingAccountKey == null) {
+      return;
+    }
     if (changedSettingIds.isEmpty) {
       return;
     }
     emit(state.markGlobalSettingsLoading(changedSettingIds));
     final published = await service.updateSettingsSyncSnapshot(snapshot);
+    if (_activeAccountKey != publishingAccountKey) {
+      return;
+    }
     final currentState = state;
     final stillCurrentSettingIds = changedSettingIds
         .where(
@@ -446,6 +605,19 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   void _handleRemoteSettingsSync(Map<String, dynamic> syncedSettings) {
+    final eventAccountKey = _accountKeyForJid(_xmppService?.myJid);
+    if (_activeAccountKey == null) {
+      if (eventAccountKey != null) {
+        _pendingRemoteSettingsSyncByKey[eventAccountKey] =
+            Map<String, dynamic>.from(syncedSettings);
+      }
+      return;
+    }
+    if (eventAccountKey != null && eventAccountKey != _activeAccountKey) {
+      _pendingRemoteSettingsSyncByKey[eventAccountKey] =
+          Map<String, dynamic>.from(syncedSettings);
+      return;
+    }
     final nextState = state
         .mergeSyncedSettingsJson(syncedSettings)
         .clearGlobalSettingsLoading(
@@ -456,6 +628,11 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       return;
     }
     emit(nextState);
+    _persistVisibleState(nextState);
+    _applySettingsSideEffects(nextState);
+  }
+
+  void _applySettingsSideEffects(SettingsState nextState) {
     _applyAttachmentAutoDownloadSettings(nextState);
   }
 
@@ -468,6 +645,183 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     );
   }
 
+  SettingsState _scopeNextState(
+    SettingsState nextState,
+    Set<GlobalSettingId> changedSettingIds,
+  ) {
+    if (changedSettingIds.contains(GlobalSettingId.endpointConfig)) {
+      _bootstrapState = _bootstrapState.copyWith(
+        endpointConfig: nextState.endpointConfig,
+      );
+    }
+    if (_activeAccountKey != null) {
+      return _withBootstrapEndpoint(nextState);
+    }
+    return _bootstrapStateFrom(nextState);
+  }
+
+  SettingsState _bootstrapStateFrom(SettingsState state) {
+    return SettingsState(
+      language: state.language,
+      themeMode: state.themeMode,
+      shadColor: state.shadColor,
+      endpointConfig: state.endpointConfig,
+      lowMotion: state.lowMotion,
+    );
+  }
+
+  SettingsState _newAccountSettingsState() {
+    const defaults = SettingsState();
+    return defaults.copyWith(
+      language: _bootstrapState.language,
+      themeMode: _bootstrapState.themeMode,
+      shadColor: _bootstrapState.shadColor,
+      endpointConfig: _bootstrapState.endpointConfig,
+      lowMotion: _bootstrapState.lowMotion,
+    );
+  }
+
+  SettingsState _withBootstrapEndpoint(SettingsState state) {
+    if (state.endpointConfig == _bootstrapState.endpointConfig) {
+      return state;
+    }
+    return state.copyWith(endpointConfig: _bootstrapState.endpointConfig);
+  }
+
+  void _persistVisibleState(SettingsState visibleState) {
+    final accountKey = _activeAccountKey;
+    if (accountKey == null) {
+      _bootstrapState = _bootstrapStateFrom(visibleState);
+      return;
+    }
+    _accountSettingsJsonByKey[accountKey] = _accountJsonFromState(
+      _withBootstrapEndpoint(visibleState),
+    );
+  }
+
+  Map<String, dynamic> _accountJsonFromState(SettingsState state) {
+    return Map<String, dynamic>.from(state.toJson())
+      ..remove(_endpointConfigJsonKey);
+  }
+
+  Map<String, dynamic> _bootstrapJsonFromState(SettingsState state) {
+    return _bootstrapStateFrom(state).toJson();
+  }
+
+  SettingsState _accountStateFromJson(Map<String, dynamic> json) {
+    return _withBootstrapEndpoint(_settingsStateFromStoredJson(json));
+  }
+
+  Future<void> _seedSettingsSyncSnapshotIfActive() async {
+    final service = _xmppService;
+    if (service == null || _activeAccountKey == null) {
+      return;
+    }
+    try {
+      await service.seedSettingsSyncSnapshot(state.syncedSettingsJson);
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to seed settings sync snapshot for active account.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  String? _accountKeyForJid(String? accountJid) {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    return crypto.sha256.convert(utf8.encode(normalized)).toString();
+  }
+
+  String? _normalizedAccountJid(String? accountJid) {
+    final normalized = normalizedAddressValue(accountJid);
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  Future<String?> _readStoredLoginJid() async {
+    final credentialStore = _credentialStore;
+    if (credentialStore == null) {
+      return null;
+    }
+    final storedJid = await credentialStore.read(key: _storedLoginJidKey);
+    return _normalizedAccountJid(storedJid);
+  }
+
+  Future<Map<String, dynamic>?> _legacyAccountSettingsJsonFor(
+    String? accountJid,
+  ) async {
+    final legacyJson = await _matchingLegacyAccountSettingsJsonFor(accountJid);
+    if (legacyJson == null) {
+      return null;
+    }
+    _legacyAccountSettingsJson = null;
+    return legacyJson;
+  }
+
+  Future<Map<String, dynamic>?> _matchingLegacyAccountSettingsJsonFor(
+    String? accountJid,
+  ) async {
+    final legacyJson = _legacyAccountSettingsJson;
+    if (legacyJson == null) {
+      return null;
+    }
+    final normalizedAccountJid = _normalizedAccountJid(accountJid);
+    if (normalizedAccountJid == null) {
+      return null;
+    }
+    if (await _initialStoredLoginJid != normalizedAccountJid) {
+      return null;
+    }
+    return Map<String, dynamic>.from(legacyJson);
+  }
+
+  Future<bool?> _legacyBackgroundMessagingPreference(String? accountJid) async {
+    final normalizedAccountJid = _normalizedAccountJid(accountJid);
+    if (normalizedAccountJid == null) {
+      return null;
+    }
+    final preferences = await _readBackgroundMessagingPreferences();
+    return preferences[normalizedAccountJid];
+  }
+
+  Future<Map<String, bool>> _readBackgroundMessagingPreferences() async {
+    final credentialStore = _credentialStore;
+    if (credentialStore == null) {
+      return const {};
+    }
+    final serialized = await credentialStore.read(
+      key: _backgroundMessagingPreferencesKey,
+    );
+    if (serialized == null || serialized.trim().isEmpty) {
+      return const {};
+    }
+    try {
+      final decoded = jsonDecode(serialized);
+      if (decoded is! Map<String, dynamic>) {
+        await credentialStore.delete(key: _backgroundMessagingPreferencesKey);
+        return const {};
+      }
+      final preferences = <String, bool>{};
+      for (final entry in decoded.entries) {
+        final key = entry.key.trim().toLowerCase();
+        final value = entry.value;
+        if (key.isNotEmpty && value is bool) {
+          preferences[key] = value;
+        }
+      }
+      return preferences;
+    } on FormatException {
+      await credentialStore.delete(key: _backgroundMessagingPreferencesKey);
+      return const {};
+    }
+  }
+
   @override
   Future<void> close() async {
     await _settingsSyncSubscription?.cancel();
@@ -477,6 +831,76 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   @override
   SettingsState? fromJson(Map<String, dynamic> json) {
+    try {
+      if (json.containsKey(_settingsEnvelopeBootstrapKey) ||
+          json.containsKey(_settingsEnvelopeAccountsKey)) {
+        return _fromEnvelopeJson(json);
+      }
+      final legacyState = _settingsStateFromStoredJson(json);
+      _bootstrapState = _bootstrapStateFrom(legacyState);
+      _accountSettingsJsonByKey.clear();
+      _pendingRemoteSettingsSyncByKey.clear();
+      _legacyAccountSettingsJson = _accountJsonFromState(legacyState);
+      _activeAccountKey = null;
+      return _bootstrapState;
+    } catch (_) {
+      _bootstrapState = const SettingsState(
+        themeMode: ThemeMode.light,
+        shadColor: ShadColor.neutral,
+      );
+      _accountSettingsJsonByKey.clear();
+      _pendingRemoteSettingsSyncByKey.clear();
+      _legacyAccountSettingsJson = null;
+      _activeAccountKey = null;
+      return _bootstrapState;
+    }
+  }
+
+  SettingsState _fromEnvelopeJson(Map<String, dynamic> json) {
+    final bootstrapJson = _mapFromJsonObject(
+      json[_settingsEnvelopeBootstrapKey],
+    );
+    _bootstrapState = _bootstrapStateFrom(
+      _settingsStateFromStoredJson(bootstrapJson),
+    );
+    _accountSettingsJsonByKey
+      ..clear()
+      ..addAll(_accountsFromJson(json[_settingsEnvelopeAccountsKey]));
+    _pendingRemoteSettingsSyncByKey.clear();
+    _legacyAccountSettingsJson = null;
+    _activeAccountKey = null;
+    return _bootstrapState;
+  }
+
+  Map<String, Map<String, dynamic>> _accountsFromJson(Object? value) {
+    if (value is! Map) {
+      return const {};
+    }
+    final accounts = <String, Map<String, dynamic>>{};
+    for (final entry in value.entries) {
+      final key = entry.key;
+      if (key is! String || key.trim().isEmpty) {
+        continue;
+      }
+      final accountJson = _mapFromJsonObject(entry.value);
+      if (accountJson.isNotEmpty) {
+        accounts[key] = accountJson;
+      }
+    }
+    return accounts;
+  }
+
+  Map<String, dynamic> _mapFromJsonObject(Object? value) {
+    if (value is! Map) {
+      return <String, dynamic>{};
+    }
+    return <String, dynamic>{
+      for (final entry in value.entries)
+        if (entry.key is String) entry.key as String: entry.value,
+    };
+  }
+
+  SettingsState _settingsStateFromStoredJson(Map<String, dynamic> json) {
     try {
       final migrated = Map<String, dynamic>.from(json);
       const keyMap = <String, String>{
@@ -569,5 +993,15 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   @override
-  Map<String, dynamic>? toJson(SettingsState state) => state.toJson();
+  Map<String, dynamic>? toJson(SettingsState state) {
+    _persistVisibleState(state);
+    return <String, dynamic>{
+      _settingsEnvelopeVersionKey: _settingsEnvelopeVersion,
+      _settingsEnvelopeBootstrapKey: _bootstrapJsonFromState(_bootstrapState),
+      _settingsEnvelopeAccountsKey: <String, Map<String, dynamic>>{
+        for (final entry in _accountSettingsJsonByKey.entries)
+          entry.key: Map<String, dynamic>.from(entry.value),
+      },
+    };
+  }
 }

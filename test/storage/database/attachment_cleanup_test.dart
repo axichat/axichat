@@ -35,6 +35,9 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
 
   @override
   Future<String?> getApplicationSupportPath() async => supportPath;
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => supportPath;
 }
 
 void main() {
@@ -184,7 +187,7 @@ void main() {
     PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
 
     try {
-      final dbFile = File(p.join(tempDir.path, _dbFileName));
+      final dbFile = File(p.join(supportDir.path, _dbFileName));
       await dbFile.writeAsString(_sampleContents, flush: true);
       final database = XmppDrift(
         file: dbFile,

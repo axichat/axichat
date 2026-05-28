@@ -747,6 +747,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftAutosaved => '已自动保存';
 
   @override
+  String get draftAutosave => '自动保存';
+
+  @override
   String get draftErrorTitle => '糟糕';
 
   @override
@@ -3269,6 +3272,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get contactsDetailsSectionTitle => '详细信息';
 
   @override
+  String get contactsFolderRoutingDetailLabel => '属于';
+
+  @override
   String get contactsAddressLabel => '地址';
 
   @override
@@ -4276,7 +4282,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailEncryptionBetaLabel => '电子邮件加密';
 
   @override
-  String get emailEncryptionBetaChip => '测试版';
+  String get emailEncryptionBetaChip => '实验性';
 
   @override
   String emailEncryptionBetaEnabledStatus(Object address) {
@@ -7342,6 +7348,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get draftAutosaved => '已自動儲存';
 
   @override
+  String get draftAutosave => '自動儲存';
+
+  @override
   String get draftErrorTitle => '糟了';
 
   @override
@@ -9867,6 +9876,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get contactsDetailsSectionTitle => '詳細資料';
 
   @override
+  String get contactsFolderRoutingDetailLabel => '屬於';
+
+  @override
   String get contactsAddressLabel => '地址';
 
   @override
@@ -10874,7 +10886,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get emailEncryptionBetaLabel => '電郵加密';
 
   @override
-  String get emailEncryptionBetaChip => '測試版';
+  String get emailEncryptionBetaChip => '實驗性';
 
   @override
   String emailEncryptionBetaEnabledStatus(Object address) {

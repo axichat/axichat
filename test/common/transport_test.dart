@@ -7,6 +7,16 @@ void main() {
       expect(hintTransportForAddress('person@axi.im'), MessageTransport.xmpp);
     });
 
+    test('returns xmpp for configured same-domain addresses', () {
+      expect(
+        hintTransportForAddress(
+          'person@example.net',
+          xmppDomainHints: {'example.net'},
+        ),
+        MessageTransport.xmpp,
+      );
+    });
+
     test('returns xmpp for conversations.im addresses', () {
       expect(
         hintTransportForAddress('person@conversations.im'),

@@ -29,6 +29,10 @@ void main() {
       originalSubject: 'Original subject',
       originalPlainText: 'Original text',
       originalHtml: '<p>Original <strong>HTML</strong></p>',
+      quotedContext: const DraftForwardedQuoteContext(
+        senderLabel: 'Original sender',
+        plainText: 'Quoted text',
+      ),
       conversionState: conversionState,
       convertedText: convertedText,
     );
@@ -74,38 +78,68 @@ void main() {
     expect(saved?.calendarTaskIcsMessage, isNull);
   });
 
-  test('saveDraft rolls back when commit becomes stale', () async {
-    final draftUpdatedAt = DateTime.utc(2026, 3, 11, 10);
+  test('saveDraft persists the autosave preference', () async {
     final draftId = await database.saveDraft(
       jids: const ['peer@axi.im'],
       body: 'Saved body',
-      draftSyncId: 'sync-stale-save',
-      draftUpdatedAt: draftUpdatedAt,
+      draftSyncId: 'sync-autosave-preference',
+      draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
       draftSourceId: 'source',
       draftRecipients: const [],
-    );
-    var checks = 0;
-
-    await expectLater(
-      database.saveDraft(
-        id: draftId,
-        jids: const ['peer@axi.im'],
-        body: 'Discarded body',
-        draftSyncId: 'sync-stale-save',
-        draftUpdatedAt: DateTime.utc(2026, 3, 11, 11),
-        draftSourceId: 'source',
-        draftRecipients: const [],
-        shouldCommit: () {
-          checks += 1;
-          return checks == 1;
-        },
-      ),
-      throwsA(isA<DraftSaveAbortedException>()),
+      autosaveEnabled: false,
     );
 
     final saved = await database.getDraft(draftId);
-    expect(saved?.body, 'Saved body');
-    expect(saved?.draftUpdatedAt, draftUpdatedAt);
+    expect(saved?.autosaveEnabled, isFalse);
+  });
+
+  test(
+    'updateDraftAutosaveEnabled changes only the autosave preference',
+    () async {
+      final draftId = await database.saveDraft(
+        jids: const ['peer@axi.im'],
+        body: 'Saved body',
+        draftSyncId: 'sync-autosave-toggle',
+        draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+        draftSourceId: 'source',
+        draftRecipients: const [],
+        subject: 'Saved subject',
+      );
+
+      await database.updateDraftAutosaveEnabled(id: draftId, enabled: false);
+
+      final saved = await database.getDraft(draftId);
+      expect(saved?.body, 'Saved body');
+      expect(saved?.subject, 'Saved subject');
+      expect(saved?.autosaveEnabled, isFalse);
+    },
+  );
+
+  test('saveDraft preserves autosave preference for existing drafts', () async {
+    final draftId = await database.saveDraft(
+      jids: const ['peer@axi.im'],
+      body: 'Saved body',
+      draftSyncId: 'sync-autosave-preserve',
+      draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+      draftSourceId: 'source',
+      draftRecipients: const [],
+      autosaveEnabled: false,
+    );
+
+    await database.saveDraft(
+      id: draftId,
+      jids: const ['peer@axi.im'],
+      body: 'Updated body',
+      draftSyncId: 'sync-autosave-preserve',
+      draftUpdatedAt: DateTime.utc(2026, 3, 11, 11),
+      draftSourceId: 'source',
+      draftRecipients: const [],
+      autosaveEnabled: true,
+    );
+
+    final saved = await database.getDraft(draftId);
+    expect(saved?.body, 'Updated body');
+    expect(saved?.autosaveEnabled, isFalse);
   });
 
   test('saveDraft persists forwarded block conversion state', () async {
@@ -179,5 +213,27 @@ void main() {
 
     final saved = await database.getDraft(draftId);
     expect(saved?.forwardedBlocks, isEmpty);
+  });
+
+  test('message attachment group quote metadata persists', () async {
+    await database.addMessageAttachment(
+      messageId: 'message-1',
+      fileMetadataId: 'file-1',
+      transportGroupId: 'attachment-group',
+      sortOrder: 0,
+      groupQuotedReference: const MessageReference(
+        kind: MessageReferenceKind.originId,
+        value: 'quoted-origin',
+      ),
+    );
+
+    final attachments = await database.getMessageAttachments('message-1');
+
+    expect(attachments, hasLength(1));
+    expect(attachments.single.groupQuotedReference, 'quoted-origin');
+    expect(
+      attachments.single.groupQuotedReferenceKind,
+      MessageReferenceKind.originId,
+    );
   });
 }

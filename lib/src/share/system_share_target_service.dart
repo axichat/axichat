@@ -234,11 +234,27 @@ class SystemShareTargetService {
     Future<Uint8List?> Function(String path)? loadAvatarBytes,
   }) async {
     final values = <Map<String, Object?>>[];
+    final avatarLoadsByPath = <String, Future<Uint8List?>>{};
     for (final target in targets) {
       final avatarPath = target.avatarPath;
-      final avatarBytes = avatarPath == null || loadAvatarBytes == null
+      final normalizedPath = avatarPath?.trim();
+      final avatarBytes =
+          normalizedPath == null ||
+              normalizedPath.isEmpty ||
+              loadAvatarBytes == null
           ? null
-          : await loadAvatarBytes(avatarPath);
+          : await avatarLoadsByPath.putIfAbsent(normalizedPath, () async {
+              try {
+                return await loadAvatarBytes(normalizedPath);
+              } on Exception catch (error, stackTrace) {
+                _logger.fine(
+                  'Failed to hydrate share target avatar.',
+                  error,
+                  stackTrace,
+                );
+                return null;
+              }
+            });
       values.add(
         target.toChannelValueWithAvatarBytes(avatarBytes: avatarBytes),
       );

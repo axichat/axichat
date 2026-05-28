@@ -5,7 +5,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
+import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -136,21 +138,63 @@ class _DeltaAccountSession {
   final DeltaEventConsumer consumer;
 }
 
+class _DeltaBackgroundFetchEventSubscriptions {
+  const _DeltaBackgroundFetchEventSubscriptions({
+    required this.hadAccountsSubscription,
+    required this.existingAccountSubscriptions,
+  });
+
+  final bool hadAccountsSubscription;
+  final Set<int> existingAccountSubscriptions;
+}
+
+class EmailDeltaImexResult {
+  const EmailDeltaImexResult({
+    required this.accountId,
+    required this.exportedPaths,
+  });
+
+  final int accountId;
+  final List<String> exportedPaths;
+}
+
+final class EmailDeltaImexException implements Exception {
+  const EmailDeltaImexException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'EmailDeltaImexException: $message';
+}
+
+final class EmailDeltaImexTimeoutException extends EmailDeltaImexException {
+  const EmailDeltaImexTimeoutException()
+    : super('Delta import/export timed out.');
+}
+
+final class EmailDeltaImexCancelledException extends EmailDeltaImexException {
+  const EmailDeltaImexCancelledException()
+    : super('Delta import/export was cancelled.');
+}
+
 class EmailDeltaTransport implements ChatTransport {
   EmailDeltaTransport({
     required Future<XmppDatabase> Function() databaseBuilder,
     DeltaSafe? deltaSafe,
     Logger? logger,
     AppLocalizations Function()? localizationsProvider,
+    String? Function()? xmppSelfJidProvider,
   }) : _databaseBuilder = databaseBuilder,
        _deltaSafe = deltaSafe ?? DeltaSafe(),
        _log = logger ?? Logger('EmailDeltaTransport'),
-       _localizationsProvider = localizationsProvider;
+       _localizationsProvider = localizationsProvider,
+       _xmppSelfJidProvider = xmppSelfJidProvider;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaSafe _deltaSafe;
   final Logger _log;
   final AppLocalizations Function()? _localizationsProvider;
+  final String? Function()? _xmppSelfJidProvider;
 
   DeltaAccountsHandle? _accounts;
   DeltaContextHandle? _context;
@@ -159,23 +203,64 @@ class EmailDeltaTransport implements ChatTransport {
   bool _ioRunning = false;
   bool _accountsSupported = true;
   final Map<int, _DeltaAccountSession> _accountSessions = {};
-  var _defaultChatAttachmentAutoDownload = AttachmentAutoDownload.blocked;
+  var _autoDownloadImages = false;
+  var _autoDownloadVideos = false;
+  var _autoDownloadDocuments = false;
+  var _autoDownloadArchives = false;
+  Map<String, bool> _emailEncryptionBetaEnabledByAddress =
+      const <String, bool>{};
 
   AppLocalizations get _l10n =>
       _localizationsProvider?.call() ??
       lookupAppLocalizations(const Locale('en'));
 
-  void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
-    if (_defaultChatAttachmentAutoDownload == value) return;
-    _defaultChatAttachmentAutoDownload = value;
-    for (final session in _accountSessions.values) {
-      session.consumer.updateDefaultChatAttachmentAutoDownload(value);
+  void updateAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+  }) {
+    if (_autoDownloadImages == imagesEnabled &&
+        _autoDownloadVideos == videosEnabled &&
+        _autoDownloadDocuments == documentsEnabled &&
+        _autoDownloadArchives == archivesEnabled) {
+      return;
     }
+    _autoDownloadImages = imagesEnabled;
+    _autoDownloadVideos = videosEnabled;
+    _autoDownloadDocuments = documentsEnabled;
+    _autoDownloadArchives = archivesEnabled;
+    for (final session in _accountSessions.values) {
+      session.consumer.updateAttachmentAutoDownloadSettings(
+        imagesEnabled: imagesEnabled,
+        videosEnabled: videosEnabled,
+        documentsEnabled: documentsEnabled,
+        archivesEnabled: archivesEnabled,
+      );
+    }
+  }
+
+  void updateEmailEncryptionBetaSettings(Map<String, bool> enabledByAddress) {
+    final normalized = <String, bool>{};
+    for (final entry in enabledByAddress.entries) {
+      if (!entry.value) {
+        continue;
+      }
+      final address = normalizedAddressValue(entry.key);
+      if (address == null || address.isEmpty || !address.isValidEmailAddress) {
+        continue;
+      }
+      normalized[address] = true;
+    }
+    _emailEncryptionBetaEnabledByAddress = Map<String, bool>.unmodifiable(
+      normalized,
+    );
   }
 
   final Map<int, StreamSubscription<DeltaCoreEvent>> _eventSubscriptions = {};
   final Map<int, Future<void>> _accountOpening = {};
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
+  final Set<int> _activeImexAccountIds = <int>{};
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
   Future<void> _originIdHydrationQueue = Future<void>.value();
   final Set<String> _originIdHydrationPending = <String>{};
@@ -252,14 +337,19 @@ class EmailDeltaTransport implements ChatTransport {
     }
     hydrateAccountAddress(address: normalizedAddress, accountId: accountId);
     final db = await _databaseBuilder();
+    final xmppSelfJid = _xmppSelfJidProvider?.call();
+    await db.removeDeltaPlaceholderDuplicates(
+      deltaAccountId: accountId,
+      placeholderJids: deltaPlaceholderJids,
+      selfJid: xmppSelfJid,
+      emailSelfJid: normalizedAddress,
+    );
     await db.replaceDeltaPlaceholderSelfJids(
       deltaAccountId: accountId,
       resolvedAddress: normalizedAddress,
       placeholderJids: deltaPlaceholderJids,
-    );
-    await db.removeDeltaPlaceholderDuplicates(
-      deltaAccountId: accountId,
-      placeholderJids: deltaPlaceholderJids,
+      selfJid: xmppSelfJid,
+      emailSelfJid: normalizedAddress,
     );
   }
 
@@ -654,12 +744,52 @@ class EmailDeltaTransport implements ChatTransport {
       return false;
     }
     await _ensureContextReady();
+    final temporarySubscriptions =
+        await _attachBackgroundFetchEventSubscriptions();
     final accounts = _accounts;
-    if (accounts == null) {
-      await _context?.maybeNetworkAvailable();
-      return false;
+    try {
+      if (accounts == null) {
+        await _context?.maybeNetworkAvailable();
+        return false;
+      }
+      return await accounts.backgroundFetch(timeout);
+    } finally {
+      await _detachBackgroundFetchEventSubscriptions(temporarySubscriptions);
     }
-    return accounts.backgroundFetch(timeout);
+  }
+
+  Future<_DeltaBackgroundFetchEventSubscriptions>
+  _attachBackgroundFetchEventSubscriptions() async {
+    final hadAccountsSubscription = _accountsEventSubscription != null;
+    final existingAccountSubscriptions = Set<int>.of(_eventSubscriptions.keys);
+    if (_accounts != null) {
+      _ensureAccountsEventSubscription();
+    } else {
+      final sessions = await _resolveSessions();
+      for (final session in sessions) {
+        _attachEventSubscription(session);
+      }
+    }
+    return _DeltaBackgroundFetchEventSubscriptions(
+      hadAccountsSubscription: hadAccountsSubscription,
+      existingAccountSubscriptions: existingAccountSubscriptions,
+    );
+  }
+
+  Future<void> _detachBackgroundFetchEventSubscriptions(
+    _DeltaBackgroundFetchEventSubscriptions subscriptions,
+  ) async {
+    await _awaitActiveCoreOperations();
+    if (!subscriptions.hadAccountsSubscription) {
+      await _cancelAccountsEventSubscription();
+    }
+    for (final accountId in _eventSubscriptions.keys.toList(growable: false)) {
+      if (subscriptions.existingAccountSubscriptions.contains(accountId)) {
+        continue;
+      }
+      final subscription = _eventSubscriptions.remove(accountId);
+      await subscription?.cancel();
+    }
   }
 
   Future<void> backfillChatHistory({
@@ -698,6 +828,52 @@ class EmailDeltaTransport implements ChatTransport {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
     return session?.context.connectivity();
+  }
+
+  Future<String?> connectivityDetails({int? accountId}) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return null;
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    return session?.context.connectivityDetails();
+  }
+
+  Future<DeltaChatSendCapabilities> chatSendCapabilities({
+    required int chatId,
+    int? accountId,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return const DeltaChatSendCapabilities(exists: false);
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return const DeltaChatSendCapabilities(exists: false);
+    }
+    return context.chatSendCapabilities(chatId);
+  }
+
+  Future<DeltaContactPublicKeyRemoval> removeContactPublicKey({
+    required String address,
+    required String fingerprint,
+    required int contactId,
+    required int chatId,
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      throw const DeltaOperationException('Delta account is unavailable');
+    }
+    return context.removeContactPublicKey(
+      address: address,
+      fingerprint: fingerprint,
+      contactId: contactId,
+      chatId: chatId,
+    );
   }
 
   bool get accountsSupported => _accountsSupported;
@@ -806,6 +982,161 @@ class EmailDeltaTransport implements ChatTransport {
     await context.setConfig(key: key, value: value);
   }
 
+  Future<bool> setCoreConfigIfSupported({
+    required String key,
+    required String value,
+    int? accountId,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return false;
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return false;
+    }
+    return context.setConfigIfSupported(key: key, value: value);
+  }
+
+  Future<DeltaOpenPgpKeyMetadata> inspectOpenPgpKey({
+    required String armored,
+    required String expectedAddress,
+    required DeltaOpenPgpKeyKind expectedKind,
+    int? accountId,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      throw StateError('Transport not initialized');
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      throw StateError('Transport not initialized');
+    }
+    return context.inspectOpenPgpKey(
+      armored: armored,
+      expectedAddress: expectedAddress,
+      expectedKind: expectedKind,
+    );
+  }
+
+  Future<DeltaContactPublicKeyImport> importContactPublicKey({
+    required String address,
+    required String displayName,
+    required String armoredPublicKey,
+    int? accountId,
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      throw StateError('Transport not initialized');
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      throw StateError('Transport not initialized');
+    }
+    return context.importContactPublicKey(
+      address: address,
+      displayName: displayName,
+      armoredPublicKey: armoredPublicKey,
+    );
+  }
+
+  Future<EmailDeltaImexResult> runImex({
+    required int mode,
+    required String path,
+    int? accountId,
+    Duration timeout = const Duration(minutes: 2),
+  }) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      throw StateError('Transport not initialized');
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    if (session == null) {
+      throw StateError('Transport not initialized');
+    }
+    final resolvedAccountId = session.accountId;
+    if (!_activeImexAccountIds.add(resolvedAccountId)) {
+      throw EmailDeltaImexException(
+        'Delta import/export already running for account $resolvedAccountId.',
+      );
+    }
+    final context = session.context;
+    final exportedPaths = <String>[];
+    final completer = Completer<EmailDeltaImexResult>();
+    final subscription = context.events().listen(
+      (event) {
+        if (!_imexEventBelongsToAccount(event, resolvedAccountId)) {
+          return;
+        }
+        final eventType = DeltaEventType.fromCode(event.type);
+        switch (eventType) {
+          case DeltaEventType.imexFileWritten:
+            final path = event.data2Text?.trim();
+            if (path != null && path.isNotEmpty) {
+              exportedPaths.add(path);
+            }
+          case DeltaEventType.imexProgress:
+            if (event.data1 == 1000) {
+              if (!completer.isCompleted) {
+                completer.complete(
+                  EmailDeltaImexResult(
+                    accountId: resolvedAccountId,
+                    exportedPaths: List<String>.unmodifiable(exportedPaths),
+                  ),
+                );
+              }
+            } else if (event.data1 == 0 && !completer.isCompleted) {
+              completer.completeError(
+                EmailDeltaImexException(
+                  event.data2Text ??
+                      event.data1Text ??
+                      'Delta import/export failed.',
+                ),
+              );
+            }
+          default:
+            break;
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            const EmailDeltaImexException(
+              'Delta import/export event stream failed.',
+            ),
+            stackTrace,
+          );
+        }
+      },
+    );
+    try {
+      await context.startImex(mode: mode, path: path);
+      return await completer.future.timeout(timeout);
+    } on TimeoutException {
+      await context.stopOngoingProcess();
+      throw const EmailDeltaImexTimeoutException();
+    } finally {
+      await subscription.cancel();
+      _activeImexAccountIds.remove(resolvedAccountId);
+    }
+  }
+
+  Future<void> cancelImex({int? accountId}) async {
+    if (_databasePrefix == null || _databasePassphrase == null) {
+      return;
+    }
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return;
+    }
+    await context.stopOngoingProcess();
+  }
+
   Future<void> registerPushToken(String token) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -901,9 +1232,18 @@ class EmailDeltaTransport implements ChatTransport {
     final consumer = DeltaEventConsumer(
       databaseBuilder: _databaseBuilder,
       context: context,
-      defaultChatAttachmentAutoDownload: _defaultChatAttachmentAutoDownload,
+      autoDownloadImages: _autoDownloadImages,
+      autoDownloadVideos: _autoDownloadVideos,
+      autoDownloadDocuments: _autoDownloadDocuments,
+      autoDownloadArchives: _autoDownloadArchives,
       localizationsProvider: _localizationsProvider,
       selfJidProvider: () => _selfJidForAccount(accountId),
+      xmppSelfJidProvider: _xmppSelfJidProvider,
+      emailEncryptionBetaEnabledForAddress: (_, address) {
+        final normalized = normalizedAddressValue(address);
+        return normalized != null &&
+            _emailEncryptionBetaEnabledByAddress[normalized] == true;
+      },
       logger: _log,
     );
     final session = _DeltaAccountSession(
@@ -1021,6 +1361,13 @@ class EmailDeltaTransport implements ChatTransport {
       return _accountSessions.keys.first;
     }
     return null;
+  }
+
+  bool _imexEventBelongsToAccount(DeltaCoreEvent event, int accountId) {
+    final eventAccountId = event.accountId;
+    return eventAccountId == null ||
+        eventAccountId == DeltaAccountDefaults.legacyId ||
+        eventAccountId == accountId;
   }
 
   Future<void> _handleAccountsEvent(DeltaCoreEvent event) async {
@@ -1296,6 +1643,8 @@ class EmailDeltaTransport implements ChatTransport {
     String? htmlBody,
     String? quotingStanzaId,
     int? accountId,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   }) async {
     final session = await _ensureSession(accountId: accountId);
     if (session == null) {
@@ -1332,6 +1681,8 @@ class EmailDeltaTransport implements ChatTransport {
         message: body,
         subject: coreSubject,
         html: htmlBody,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
       );
     } on Exception {
       await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
@@ -1345,6 +1696,7 @@ class EmailDeltaTransport implements ChatTransport {
       chatId: chatId,
       shareId: shareId,
       timestamp: deltaMessage?.timestamp,
+      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
     );
     await _scheduleOriginIdHydration(
       context: context,
@@ -1364,6 +1716,8 @@ class EmailDeltaTransport implements ChatTransport {
     String? htmlCaption,
     String? quotingStanzaId,
     int? accountId,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   }) async {
     final session = await _ensureSession(accountId: accountId);
     if (session == null) {
@@ -1414,6 +1768,8 @@ class EmailDeltaTransport implements ChatTransport {
         text: attachment.caption,
         subject: coreSubject,
         html: htmlCaption,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
       );
     } on Exception {
       await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
@@ -1429,6 +1785,7 @@ class EmailDeltaTransport implements ChatTransport {
       shareId: shareId,
       metadata: metadata,
       timestamp: deltaMessage?.timestamp,
+      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
     );
     await _scheduleOriginIdHydration(
       context: context,
@@ -1608,6 +1965,7 @@ class EmailDeltaTransport implements ChatTransport {
     String? shareId,
     FileMetadataData? metadata,
     DateTime? timestamp,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
   }) async {
     final XmppDatabase db = await _databaseBuilder();
     final Message? existing = await db.getMessageByStanzaID(stanzaId);
@@ -1631,12 +1989,14 @@ class EmailDeltaTransport implements ChatTransport {
     if (existing.deltaMsgId != msgId ||
         existing.deltaChatId != chatId ||
         existing.deltaAccountId != accountId ||
+        existing.encryptionProtocol != encryptionProtocol ||
         (timestamp != null && existing.timestamp != timestamp) ||
         (metadata != null && existing.fileMetadataID != metadata.id)) {
       next = existing.copyWith(
         deltaMsgId: msgId,
         deltaChatId: chatId,
         deltaAccountId: accountId,
+        encryptionProtocol: encryptionProtocol,
         fileMetadataID: metadata?.id ?? existing.fileMetadataID,
       );
       if (timestamp != null && next.timestamp != timestamp) {
@@ -1787,8 +2147,7 @@ class EmailDeltaTransport implements ChatTransport {
         emailAddress: chat.emailAddress,
         contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
-        contactJid: chat.contactJid,
-        transport: MessageTransport.email,
+        contactJid: existingByAddress.contactJid ?? chat.contactJid,
       );
       await db.updateChat(merged);
       await db.upsertEmailChatAccount(
@@ -2001,7 +2360,11 @@ class EmailDeltaTransport implements ChatTransport {
             originId: originId,
           );
           await db.updateMessage(merged);
-          await db.deleteMessage(secondary.stanzaID);
+          await db.deleteMessage(
+            secondary.stanzaID,
+            selfJid: _xmppSelfJidProvider?.call(),
+            emailSelfJid: selfJid,
+          );
           return;
         }
         await db.updateMessage(existing.copyWith(originID: originId));
@@ -2106,6 +2469,12 @@ class EmailDeltaTransport implements ChatTransport {
     if (attachment.isVideo) return DeltaMessageType.video;
     if (attachment.isAudio) return DeltaMessageType.audio;
     return DeltaMessageType.file;
+  }
+
+  EncryptionProtocol _encryptionProtocolForDelta(DeltaMessage? message) {
+    return message?.showPadlock == true
+        ? EncryptionProtocol.openPgp
+        : EncryptionProtocol.none;
   }
 
   Future<DeltaAccountsHandle> _createAccounts(String prefix) async {
@@ -2414,6 +2783,8 @@ class EmailDeltaTransport implements ChatTransport {
     String? subject,
     String? htmlBody,
     int? accountId,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   }) async {
     final session = await _ensureSession(accountId: accountId);
     if (session == null) {
@@ -2449,6 +2820,8 @@ class EmailDeltaTransport implements ChatTransport {
         quotedMessageId: quotedMessageId,
         subject: coreSubject,
         html: htmlBody,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
       );
     } on Exception {
       await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
@@ -2461,6 +2834,7 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: resolvedAccountId,
       chatId: chatId,
       timestamp: deltaMessage?.timestamp,
+      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
     );
     await _scheduleOriginIdHydration(
       context: context,

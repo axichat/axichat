@@ -50,9 +50,7 @@ class _ChatSettingsButtons extends StatelessWidget {
     final bool hasBlockEntry = blocklistEntry != null;
     final bool showXmppCapabilities =
         chat.defaultTransport.isXmpp && !chat.isAxichatWelcomeThread;
-    final blockTransport = chat.isEmailBacked
-        ? MessageTransport.email
-        : chat.defaultTransport;
+    final blockTransport = chat.defaultTransport;
     final itemPadding = EdgeInsets.all(context.spacing.m);
     final bool blockActionInFlight = switch (blocklistState) {
       BlocklistLoading state =>
@@ -83,6 +81,24 @@ class _ChatSettingsButtons extends StatelessWidget {
           child: _ChatCapabilitiesSection(
             capabilities: state.xmppCapabilities,
             isGroupChat: chat.type == ChatType.groupChat,
+          ),
+        ),
+      if (state.canOfferEmailOutboundOverride)
+        Padding(
+          padding: itemPadding,
+          child: _ChatSettingsSwitchRow(
+            title: l10n.chatEmailOutboundOverrideTitle,
+            subtitle: l10n.chatEmailOutboundOverrideSubtitle,
+            value: state.usesSavedEmailTransportOverride,
+            loading: state.savedTransportOverrideStatus.isLoading,
+            onChanged: state.savedTransportOverrideStatus.isLoading
+                ? null
+                : (enabled) => context.read<ChatBloc>().add(
+                    ChatSavedTransportOverrideChanged(
+                      chatJid: chat.jid,
+                      transport: enabled ? MessageTransport.email : null,
+                    ),
+                  ),
           ),
         ),
       if (showAttachmentToggle)
@@ -120,7 +136,7 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ),
         ),
-      if (chat.supportsEmail)
+      if (chat.defaultTransport.isEmail)
         Padding(
           padding: itemPadding,
           child: _ChatInheritedBoolControl(
@@ -135,7 +151,7 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ),
         ),
-      if (chat.supportsEmail)
+      if (chat.defaultTransport.isEmail)
         Padding(
           padding: itemPadding,
           child: _ChatInheritedBoolControl(
@@ -153,7 +169,7 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ),
         ),
-      if (chat.supportsEmail)
+      if (chat.defaultTransport.isEmail)
         Padding(
           padding: itemPadding,
           child: _ChatInheritedBoolControl(
@@ -171,7 +187,7 @@ class _ChatSettingsButtons extends StatelessWidget {
             ),
           ),
         ),
-      if (chat.supportsEmail)
+      if (chat.defaultTransport.isEmail)
         Padding(
           padding: itemPadding,
           child: _ChatInheritedBoolControl(
@@ -204,18 +220,22 @@ class _ChatSettingsButtons extends StatelessWidget {
           onChanged: onNotificationBehaviorChanged,
         ),
       ),
-      Padding(
-        padding: itemPadding,
-        child: _ChatNotificationPreviewControl(
-          state: state,
-          setting: chat.notificationPreviewSetting,
-          inheritedPreviewsEnabled: settingsState.notificationPreviewsEnabled,
-          onChanged: (setting) => context.read<ChatBloc>().add(
-            ChatNotificationPreviewSettingChanged(chat: chat, setting: setting),
+      if (defaultTargetPlatform.supportsNotificationPreviewControls)
+        Padding(
+          padding: itemPadding,
+          child: _ChatNotificationPreviewControl(
+            state: state,
+            setting: chat.notificationPreviewSetting,
+            inheritedPreviewsEnabled: settingsState.notificationPreviewsEnabled,
+            onChanged: (setting) => context.read<ChatBloc>().add(
+              ChatNotificationPreviewSettingChanged(
+                chat: chat,
+                setting: setting,
+              ),
+            ),
           ),
         ),
-      ),
-      if (chat.supportsEmail)
+      if (chat.defaultTransport.isEmail)
         Padding(
           padding: itemPadding,
           child: _ChatInheritedBoolControl(
@@ -583,23 +603,29 @@ class _ChatSettingTrailingControl extends StatelessWidget {
 class _ChatSettingsSwitchRow extends StatelessWidget {
   const _ChatSettingsSwitchRow({
     required this.title,
+    this.subtitle,
     this.titleColor,
     this.checkedTrackColor,
     required this.value,
     required this.onChanged,
+    this.loading = false,
   });
 
   final String title;
+  final String? subtitle;
   final Color? titleColor;
   final Color? checkedTrackColor;
   final bool value;
   final ValueChanged<bool>? onChanged;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
     return _ChatSettingsRow(
       title: title,
+      subtitle: subtitle,
       titleColor: titleColor,
+      loading: loading,
       trailing: ShadSwitch(
         value: value,
         onChanged: onChanged,

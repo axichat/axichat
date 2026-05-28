@@ -2692,12 +2692,19 @@ Future<void> _confirmNewContact(BuildContext context) async {
   } else if (!supportsEmail && supportsXmpp) {
     resolved = MessageTransport.xmpp;
   } else if (supportsEmail && supportsXmpp) {
-    final hinted = hintTransportForAddress(address);
-    resolved = await showTransportChoiceDialog(
-      context,
-      address: address,
-      defaultTransport: hinted,
+    final hinted = hintTransportForAddress(
+      address,
+      xmppDomainHints: {endpointConfig.domain},
     );
+    if (hinted != null) {
+      resolved = hinted;
+    } else {
+      resolved = await showTransportChoiceDialog(
+        context,
+        address: address,
+        defaultTransport: hinted,
+      );
+    }
   }
   if (!context.mounted || resolved == null) return;
   context.read<AccessibilityActionBloc>().add(

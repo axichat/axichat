@@ -18,11 +18,22 @@ part 'home_state.dart';
 
 enum _HomeRefreshOutcome {
   success,
+  emailFailure,
+  xmppFailure,
   failure;
 
   bool get isSuccess => this == success;
 
-  bool get isFailure => this == failure;
+  bool get isFailure => this != success;
+
+  HomeRefreshFailure get visibleFailure => switch (this) {
+    _HomeRefreshOutcome.emailFailure => HomeRefreshFailure.email,
+    _HomeRefreshOutcome.xmppFailure ||
+    _HomeRefreshOutcome.failure => HomeRefreshFailure.xmpp,
+    _HomeRefreshOutcome.success => throw StateError(
+      'Successful refresh has no failure.',
+    ),
+  };
 }
 
 enum _HomeRefreshTargetOutcome {
@@ -66,6 +77,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   EmailService? _emailSyncSubscriptionService;
   Future<void>? _emailSyncSubscriptionTask;
   Future<_HomeRefreshOutcome>? _syncTask;
+  Future<void>? _silentSyncTask;
 
   void _onActiveTabChanged(
     HomeActiveTabChanged event,
@@ -138,49 +150,90 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     HomeRefreshRequested event,
     Emitter<HomeState> emit,
   ) async {
-    await _runSync(emit, _runRefreshGesture);
+    await _runSync(emit, _runRefreshGesture, visibleFailure: true);
   }
 
   Future<void> _onEmailUnreadRefreshRequested(
     _HomeEmailUnreadRefreshRequested event,
     Emitter<HomeState> emit,
   ) async {
-    await _runSync(emit, _runEmailUnreadRefreshGesture);
+    await _runSilentSync(_runEmailUnreadRefreshGesture);
   }
 
   Future<void> _runSync(
     Emitter<HomeState> emit,
-    Future<_HomeRefreshOutcome> Function() action,
-  ) async {
+    Future<_HomeRefreshOutcome> Function() action, {
+    required bool visibleFailure,
+  }) async {
     final pending = _syncTask;
     if (pending != null) {
       await pending;
       return;
     }
 
-    emit(state.copyWith(refreshStatus: RequestStatus.loading));
+    emit(
+      state.copyWith(
+        refreshStatus: RequestStatus.loading,
+        refreshFailure: null,
+      ),
+    );
 
-    final task = _runAfterRefreshLoadingTick(action);
+    final task = _runAfterSilentSync(action);
     _syncTask = task;
 
     try {
       final outcome = await task;
       if (outcome.isFailure) {
-        emit(state.copyWith(refreshStatus: RequestStatus.failure));
+        emit(
+          state.copyWith(
+            refreshStatus: RequestStatus.failure,
+            refreshFailure: visibleFailure ? outcome.visibleFailure : null,
+          ),
+        );
         return;
       }
       emit(
         state.copyWith(
           refreshStatus: RequestStatus.success,
+          refreshFailure: null,
           lastSyncedAt: DateTime.timestamp(),
         ),
       );
     } on Exception catch (error, stackTrace) {
       _log.fine('Home refresh failed.', error, stackTrace);
-      emit(state.copyWith(refreshStatus: RequestStatus.failure));
+      emit(
+        state.copyWith(
+          refreshStatus: RequestStatus.failure,
+          refreshFailure: visibleFailure ? HomeRefreshFailure.xmpp : null,
+        ),
+      );
     } finally {
       if (identical(_syncTask, task)) {
         _syncTask = null;
+      }
+    }
+  }
+
+  Future<void> _runSilentSync(
+    Future<_HomeRefreshOutcome> Function() action,
+  ) async {
+    if (_syncTask != null) {
+      return;
+    }
+    final pending = _silentSyncTask;
+    if (pending != null) {
+      await pending;
+      return;
+    }
+
+    final task = _runSilentSyncTask(action);
+    _silentSyncTask = task;
+
+    try {
+      await task;
+    } finally {
+      if (identical(_silentSyncTask, task)) {
+        _silentSyncTask = null;
       }
     }
   }
@@ -192,6 +245,26 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     return action();
   }
 
+  Future<_HomeRefreshOutcome> _runAfterSilentSync(
+    Future<_HomeRefreshOutcome> Function() action,
+  ) async {
+    await _silentSyncTask;
+    return _runAfterRefreshLoadingTick(action);
+  }
+
+  Future<void> _runSilentSyncTask(
+    Future<_HomeRefreshOutcome> Function() action,
+  ) async {
+    try {
+      final outcome = await _runAfterRefreshLoadingTick(action);
+      if (outcome.isFailure) {
+        _log.fine('Background home refresh failed: $outcome.');
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Background home refresh failed.', error, stackTrace);
+    }
+  }
+
   void _onRefreshStatusCleared(
     HomeRefreshStatusCleared event,
     Emitter<HomeState> emit,
@@ -199,7 +272,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (state.refreshStatus.isNone) {
       return;
     }
-    emit(state.copyWith(refreshStatus: RequestStatus.none));
+    emit(
+      state.copyWith(refreshStatus: RequestStatus.none, refreshFailure: null),
+    );
   }
 
   Future<void> _onEmailServiceChanged(
@@ -306,7 +381,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<void> _runEmailReconnectSync() async {
-    if (_syncTask != null) {
+    if (_syncTask != null || _silentSyncTask != null) {
       return;
     }
     add(const _HomeEmailUnreadRefreshRequested());
@@ -321,10 +396,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final xmppOutcome = outcomes.last;
 
     if (xmppOutcome.isFailure) {
-      return _HomeRefreshOutcome.failure;
+      return _HomeRefreshOutcome.xmppFailure;
     }
     if (emailOutcome.isFailure && xmppOutcome.isSkipped) {
-      return _HomeRefreshOutcome.failure;
+      return _HomeRefreshOutcome.emailFailure;
     }
     return _HomeRefreshOutcome.success;
   }
@@ -358,6 +433,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final didRefresh = await emailService.refreshUnreadForHomeRefresh();
     return didRefresh
         ? _HomeRefreshOutcome.success
-        : _HomeRefreshOutcome.failure;
+        : _HomeRefreshOutcome.emailFailure;
   }
 }

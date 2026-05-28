@@ -18,10 +18,6 @@ final class DraftDefaults {
   static const String sourceLegacyId = 'legacy';
 }
 
-final class DraftSaveAbortedException implements Exception {
-  const DraftSaveAbortedException();
-}
-
 final class DraftRecipientData {
   const DraftRecipientData({required this.jid, required this.role});
 
@@ -753,6 +749,7 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
     @Default(<String>[]) List<String> attachmentMetadataIds,
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     @Default(<DraftForwardedBlock>[]) List<DraftForwardedBlock> forwardedBlocks,
+    @Default(true) bool autosaveEnabled,
   }) = _Draft;
 
   const Draft._();
@@ -839,6 +836,7 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
       attachmentMetadataIds: Value(attachmentMetadataIds),
       calendarTaskIcsMessage: nullableValue(calendarTaskIcsMessage),
       forwardedBlocks: Value(forwardedBlocks),
+      autosaveEnabled: Value(autosaveEnabled),
     ).toColumns(nullToAbsent);
   }
 }
@@ -882,6 +880,9 @@ class Drafts extends Table {
       .named('forwarded_blocks')
       .map(const DraftForwardedBlockListConverter())
       .withDefault(const Constant('[]'))();
+
+  BoolColumn get autosaveEnabled =>
+      boolean().named('autosave_enabled').withDefault(const Constant(true))();
 }
 
 @DataClassName('DraftAttachmentRef')

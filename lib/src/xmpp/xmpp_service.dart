@@ -466,6 +466,8 @@ final serverLookup = <String, IOEndpoint>{
 
 typedef ConnectionState = mox.XmppConnectionState;
 
+enum XmppForegroundSocketState { uninitialized, direct, foreground }
+
 abstract interface class XmppBase {
   XmppBase();
 
@@ -581,6 +583,17 @@ abstract interface class XmppBase {
 
   Future<void> runBootstrapOperations(XmppBootstrapTrigger trigger) async {}
 
+  void beginSignupPostLoginWorkHold() {}
+
+  Future<void> releaseSignupPostLoginWorkHold() async {}
+
+  bool get signupPostLoginWorkHeld => false;
+
+  XmppForegroundSocketState get foregroundSocketState =>
+      XmppForegroundSocketState.uninitialized;
+
+  bool get usingForegroundSocket => false;
+
   void resetEventHandlers() {
     _eventManagerInstance?.unregisterAllHandlers();
     _eventManagerInstance = null;
@@ -611,6 +624,9 @@ abstract interface class XmppBase {
     required String jid,
     required String databasePrefix,
     required String databasePassphrase,
+    String? password,
+    bool preHashed = false,
+    EndpointOverride? endpoint,
   });
 
   Future<void> disconnect();
@@ -1357,6 +1373,7 @@ class XmppService extends XmppBase
   Future<void> _handleRootStreamNegotiationsDone(
     mox.StreamNegotiationsDoneEvent event,
   ) async {
+    _ensureNetworkAvailabilityListener();
     _hasMamNegotiatedStream = true;
     _mamNegotiationResumed = event.resumed;
     _mamGlobalSyncCompletedSinceConnect = false;
@@ -1366,6 +1383,24 @@ class XmppService extends XmppBase
       _streamNegotiationsDone.complete();
     }
     await _connection.completeReconnect();
+    final trigger = event.resumed
+        ? XmppBootstrapTrigger.resumedNegotiation
+        : XmppBootstrapTrigger.fullNegotiation;
+    if (_signupPostLoginWorkHeld) {
+      _deferredSignupPostLoginTrigger = trigger;
+      _xmppLogger.info(
+        'Deferring signup post-login XMPP work until welcome flow releases it. '
+        'trigger=$trigger',
+      );
+      return;
+    }
+    await _runAutomaticPostNegotiationWork(trigger);
+    // Connection handling is automatic in moxxmpp v0.5.0.
+  }
+
+  Future<void> _runAutomaticPostNegotiationWork(
+    XmppBootstrapTrigger trigger,
+  ) async {
     try {
       if (_connection.carbonsEnabled != true) {
         _xmppLogger.info('Enabling carbons...');
@@ -1376,9 +1411,6 @@ class XmppService extends XmppBase
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
     }
-    final trigger = event.resumed
-        ? XmppBootstrapTrigger.resumedNegotiation
-        : XmppBootstrapTrigger.fullNegotiation;
     if (_bootstrapOperations.values.any(
       (operation) => operation.triggers.contains(trigger),
     )) {
@@ -1386,8 +1418,47 @@ class XmppService extends XmppBase
       _activeBootstrapPass = pass;
       unawaited(_runBootstrapOperations(trigger, pass: pass));
     }
-    // Connection handling is automatic in moxxmpp v0.5.0.
   }
+
+  @override
+  void beginSignupPostLoginWorkHold() {
+    _signupPostLoginWorkHeld = true;
+    _deferredSignupPostLoginTrigger = null;
+  }
+
+  @override
+  Future<void> releaseSignupPostLoginWorkHold() async {
+    final trigger = _deferredSignupPostLoginTrigger;
+    if (!_signupPostLoginWorkHeld && trigger == null) {
+      return;
+    }
+    _signupPostLoginWorkHeld = false;
+    _deferredSignupPostLoginTrigger = null;
+    if (trigger == null || connectionState != ConnectionState.connected) {
+      return;
+    }
+    fireAndForget(
+      () async => await _runAutomaticPostNegotiationWork(trigger),
+      operationName: 'XmppService.releaseSignupPostLoginWorkHold',
+    );
+  }
+
+  @override
+  bool get signupPostLoginWorkHeld => _signupPostLoginWorkHeld;
+
+  @override
+  XmppForegroundSocketState get foregroundSocketState {
+    if (!_hasInitializedConnection) {
+      return XmppForegroundSocketState.uninitialized;
+    }
+    return _connection.socketWrapper is ForegroundSocketWrapper
+        ? XmppForegroundSocketState.foreground
+        : XmppForegroundSocketState.direct;
+  }
+
+  @override
+  bool get usingForegroundSocket =>
+      foregroundSocketState == XmppForegroundSocketState.foreground;
 
   @override
   void resetBootstrapOperations() {
@@ -1636,7 +1707,8 @@ class XmppService extends XmppBase
   final int _staleConnectionTimeoutThreshold = 3;
   var _consecutiveConnectTimeouts = 0;
   DateTime? _lastForegroundSocketMigrationAttempt;
-  Timer? _foregroundSocketMigrationTimer;
+  bool _signupPostLoginWorkHeld = false;
+  XmppBootstrapTrigger? _deferredSignupPostLoginTrigger;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
 
@@ -1699,8 +1771,7 @@ class XmppService extends XmppBase
     return await deferToError(
       defer: _reset,
       operation: () async {
-        final attemptForeground =
-            withForeground && foregroundServiceActive.value;
+        final attemptForeground = withForeground;
         try {
           return await _establishConnection(
             jid: jid,
@@ -1744,25 +1815,25 @@ class XmppService extends XmppBase
             preHashed: preHashed,
             endpoint: endpoint,
           );
-          _scheduleForegroundSocketMigration();
           return saltedPassword;
         }
       },
     );
   }
 
-  static const _foregroundSocketMigrationDelay = Duration(seconds: 3);
   static const _foregroundSocketMigrationCooldown = Duration(seconds: 30);
   static const _foregroundSocketWarmupClientId =
       '${foregroundClientXmpp}_warmup';
   static const String _foregroundNotificationFailedLog =
       'Failed to send foreground migration notification.';
-  static const String _foregroundMigrationFailedLog =
-      'Foreground socket migration failed.';
   static const String _connectivityNotificationFailedLog =
       'Failed to update connectivity notification.';
 
   String _socketWrapperLabel([XmppConnection? connection]) {
+    if (connection == null &&
+        foregroundSocketState == XmppForegroundSocketState.uninitialized) {
+      return XmppForegroundSocketState.uninitialized.name;
+    }
     final socketWrapper = (connection ?? _connection).socketWrapper;
     if (socketWrapper is ForegroundSocketWrapper) {
       return 'foreground';
@@ -1777,13 +1848,14 @@ class XmppService extends XmppBase
     final lifecycle =
         lifecycleState ?? SchedulerBinding.instance.lifecycleState;
     return 'socket=${_socketWrapperLabel(connection)} '
+        'socketState=$foregroundSocketState '
         'serviceActive=${foregroundServiceActive.value} '
         'connectionState=$connectionState '
         'lifecycle=$lifecycle '
         'sessionReconnectEnabled=$_sessionReconnectEnabled '
         'connectInFlight=$_connectInFlight '
         'reconnectBlocked=$_reconnectBlocked '
-        'hasSettings=${_connection.hasConnectionSettings} '
+        'hasSettings=$hasConnectionSettings '
         'messageSubscription=${_messageSubscription != null}';
   }
 
@@ -1797,54 +1869,19 @@ class XmppService extends XmppBase
     );
   }
 
-  void _scheduleForegroundSocketMigration() {
-    if (!withForeground) {
-      _xmppLogger.fine(
-        'Not scheduling foreground socket migration because withForeground is false.',
-      );
-      return;
-    }
-    if (!foregroundServiceActive.value) {
-      _xmppLogger.fine(
-        'Not scheduling foreground socket migration because foreground service is inactive.',
-      );
-      return;
-    }
-    _xmppLogger.info(
-      'Scheduling foreground socket migration: '
-      'delay=${_foregroundSocketMigrationDelay.inSeconds}s. '
-      '${_foregroundMigrationStateSummary()}',
-    );
-    _foregroundSocketMigrationTimer?.cancel();
-    _foregroundSocketMigrationTimer = Timer(
-      _foregroundSocketMigrationDelay,
-      _runForegroundSocketMigration,
-    );
-  }
-
-  Future<void> _runForegroundSocketMigration() async {
-    _foregroundSocketMigrationTimer = null;
-    _xmppLogger.info(
-      'Running scheduled foreground socket migration. '
-      '${_foregroundMigrationStateSummary()}',
-    );
-    try {
-      await ensureForegroundSocketIfActive();
-    } catch (error, stackTrace) {
-      _xmppLogger.fine(_foregroundMigrationFailedLog, error, stackTrace);
-    }
-  }
-
   @override
   Future<void> resumeOfflineSession({
     required String jid,
     required String databasePrefix,
     required String databasePassphrase,
+    String? password,
+    bool preHashed = false,
+    EndpointOverride? endpoint,
   }) async {
     _databasePrefix = databasePrefix;
     _reconnectBlocked = false;
     _automaticReconnectPaused = false;
-    _ensureNetworkAvailabilityListener();
+    _sessionReconnectEnabled = false;
     final targetJid = mox.JID.fromString(jid);
     final activeJid = _myJid?.toBare().toString();
     if (activeJid != null && activeJid != targetJid.toBare().toString()) {
@@ -1859,6 +1896,10 @@ class XmppService extends XmppBase
     _setConnection(await _connectionFactory());
     _configureSocketCallbacks();
     _myJid = targetJid;
+    final bareDomain = _myJid?.domain.trim();
+    if (bareDomain != null && bareDomain.isNotEmpty && endpoint != null) {
+      serverLookup[bareDomain] = IOEndpoint(endpoint.host, endpoint.port);
+    }
     if (!_stateStore.isCompleted) {
       _stateStore.complete(
         await _stateStoreFactory(databasePrefix, databasePassphrase),
@@ -1872,6 +1913,19 @@ class XmppService extends XmppBase
     _notifyDatabaseReloaded();
     await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
+    if (password != null && password.isNotEmpty) {
+      _connectionPasswordPreHashed = preHashed;
+      await _attachOmemoActivityStream();
+      await _initConnection(preHashed: preHashed);
+      await _attachXmppEventStream();
+      _connection.connectionSettings = XmppConnectionSettings(
+        jid: targetJid.toBare(),
+        password: password,
+      );
+      await _attachMessageNotificationSubscription();
+      _sessionReconnectEnabled = true;
+      _ensureNetworkAvailabilityListener();
+    }
     _setConnectionState(ConnectionState.notConnected);
     await _seedDemoChatsIfNeeded();
   }
@@ -1885,19 +1939,15 @@ class XmppService extends XmppBase
     required bool preHashed,
     EndpointOverride? endpoint,
   }) async {
-    _xmppLogger.info(
-      foregroundServiceActive.value
-          ? 'Attempting login with foreground service socket...'
-          : 'Attempting login with direct socket...',
-    );
-
     _connectionPasswordPreHashed = preHashed;
     _setConnection(connectionOverride ?? await _connectionFactory());
     _configureSocketCallbacks();
-    _omemoActivitySubscription?.cancel();
-    _omemoActivitySubscription = _connection.omemoActivityStream.listen(
-      _omemoActivityController.add,
+    _xmppLogger.info(
+      _connection.socketWrapper is ForegroundSocketWrapper
+          ? 'Attempting login with foreground service socket...'
+          : 'Attempting login with direct socket...',
     );
+    await _attachOmemoActivityStream();
 
     if (!_stateStore.isCompleted) {
       _stateStore.complete(
@@ -1913,10 +1963,7 @@ class XmppService extends XmppBase
 
     await _initConnection(preHashed: preHashed);
 
-    await _eventSubscription?.cancel();
-    _eventSubscription = _connection.asBroadcastStream().listen(
-      _handleXmppEvent,
-    );
+    await _attachXmppEventStream();
 
     _connection.connectionSettings = XmppConnectionSettings(
       jid: _myJid!.toBare(),
@@ -1948,9 +1995,41 @@ class XmppService extends XmppBase
       throw XmppAuthenticationException();
     }
 
+    _markForegroundServiceActiveForSocketIfNeeded();
     await _connection.setShouldReconnect(true);
     _sessionReconnectEnabled = true;
 
+    await _attachMessageNotificationSubscription();
+
+    fireAndForget(
+      _resolveMamSupportForAccount,
+      operationName: 'XmppService.resolveMamSupportForAccount',
+    );
+    _xmppLogger.info('Login successful. Initializing databases...');
+    await _initDatabases(databasePrefix, databasePassphrase);
+    fireAndForget(
+      _verifyMamSupportOnLogin,
+      operationName: 'XmppService.verifyMamSupportOnLogin',
+    );
+
+    return _connection.saltedPassword;
+  }
+
+  Future<void> _attachOmemoActivityStream() async {
+    await _omemoActivitySubscription?.cancel();
+    _omemoActivitySubscription = _connection.omemoActivityStream.listen(
+      _omemoActivityController.add,
+    );
+  }
+
+  Future<void> _attachXmppEventStream() async {
+    await _eventSubscription?.cancel();
+    _eventSubscription = _connection.asBroadcastStream().listen(
+      _handleXmppEvent,
+    );
+  }
+
+  Future<void> _attachMessageNotificationSubscription() async {
     await _messageSubscription?.cancel();
     _messageSubscription = _messageStream.stream.listen((message) async {
       if (_consumeSuppressedNotificationForMessage(message) ||
@@ -1995,19 +2074,6 @@ class XmppService extends XmppBase
         channel: MessageNotificationChannel.chat,
       );
     });
-
-    fireAndForget(
-      _resolveMamSupportForAccount,
-      operationName: 'XmppService.resolveMamSupportForAccount',
-    );
-    _xmppLogger.info('Login successful. Initializing databases...');
-    await _initDatabases(databasePrefix, databasePassphrase);
-    fireAndForget(
-      _verifyMamSupportOnLogin,
-      operationName: 'XmppService.verifyMamSupportOnLogin',
-    );
-
-    return _connection.saltedPassword;
   }
 
   String _notificationConversationTitle({
@@ -2061,9 +2127,7 @@ class XmppService extends XmppBase
       return _isAuthenticationError(error.error);
     }
     if (error is mox.SaslError) {
-      return error is mox.SaslNotAuthorizedError ||
-          error is mox.SaslCredentialsExpiredError ||
-          error is mox.SaslAccountDisabledError;
+      return true;
     }
     if (error is mox.InvalidHandshakeCredentialsError) {
       return true;
@@ -2093,7 +2157,7 @@ class XmppService extends XmppBase
       SaslScramNegotiator(preHashed: preHashed),
       mox.CarbonsNegotiator(),
       if (_enableStreamManagement) smNegotiator,
-      mox.Sasl2Negotiator(),
+      AxiSasl2Negotiator(),
       mox.Bind2Negotiator()..tag = 'axichat',
       mox.FASTSaslNegotiator(),
     ];
@@ -3276,10 +3340,6 @@ class XmppService extends XmppBase
       _logForegroundMigrationSkip('withForeground disabled');
       return;
     }
-    if (!foregroundServiceActive.value) {
-      _logForegroundMigrationSkip('foreground service inactive');
-      return;
-    }
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
     if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
       _logForegroundMigrationSkip(
@@ -3290,6 +3350,10 @@ class XmppService extends XmppBase
     }
     if (connectionState == ConnectionState.connecting) {
       _logForegroundMigrationSkip('connection already connecting');
+      return;
+    }
+    if (connectionState != ConnectionState.connected) {
+      _logForegroundMigrationSkip('connection not connected');
       return;
     }
     if (_reconnectBlocked) {
@@ -3449,22 +3513,31 @@ class XmppService extends XmppBase
         throw XmppAuthenticationException();
       }
 
+      _markForegroundServiceActiveForSocketIfNeeded();
       await _connection.setShouldReconnect(true);
       _xmppLogger.info(
         'Foreground socket migration completed. '
         '${_foregroundMigrationStateSummary(connection: _connection)}',
       );
-      _foregroundSocketMigrationTimer?.cancel();
-      _foregroundSocketMigrationTimer = null;
     } catch (error, stackTrace) {
       _xmppLogger.warning(
-        'Foreground socket migration failed; reconnecting on direct socket.',
+        'Foreground socket migration failed.',
         error.runtimeType,
         stackTrace,
       );
       if (foregroundAttemptConnection != null) {
         await _disposeForegroundMigrationAttempt(foregroundAttemptConnection);
         foregroundAttemptConnection = null;
+      }
+      if (error is XmppAuthenticationException) {
+        _xmppLogger.warning(
+          'Foreground socket migration hit an authentication failure; '
+          'not retrying credentials on a direct socket.',
+        );
+        _setConnection(XmppConnection());
+        _configureSocketCallbacks();
+        _setConnectionState(ConnectionState.error);
+        Error.throwWithStackTrace(error, stackTrace);
       }
       try {
         final XmppConnection fallbackConnection = XmppConnection();
@@ -3544,6 +3617,176 @@ class XmppService extends XmppBase
     }
   }
 
+  Future<bool> disableForegroundSocketIfActive() async {
+    _xmppLogger.info(
+      'disableForegroundSocketIfActive invoked. '
+      '${_foregroundMigrationStateSummary()}',
+    );
+    switch (foregroundSocketState) {
+      case XmppForegroundSocketState.uninitialized:
+      case XmppForegroundSocketState.direct:
+        return true;
+      case XmppForegroundSocketState.foreground:
+        break;
+    }
+    if (_connectInFlight || connectionState == ConnectionState.connecting) {
+      _xmppLogger.fine(
+        'Foreground socket disable skipped because a connection attempt is active.',
+      );
+      return false;
+    }
+
+    final oldConnection = _connection;
+    if (connectionState != ConnectionState.connected) {
+      await _releaseForegroundConnection(oldConnection);
+      _setConnection(XmppConnection());
+      _configureSocketCallbacks();
+      _setConnectionState(ConnectionState.notConnected);
+      return true;
+    }
+    if (!_sessionReconnectEnabled ||
+        _reconnectBlocked ||
+        !oldConnection.hasConnectionSettings) {
+      _xmppLogger.fine(
+        'Foreground socket disable skipped because reconnect context is unavailable.',
+      );
+      return false;
+    }
+
+    final existingSettings = oldConnection.connectionSettings;
+    final existingJid = existingSettings.jid.toBare();
+    final existingPassword = existingSettings.password;
+    var foregroundReleased = false;
+    try {
+      _setConnectionState(
+        ConnectionState.connecting,
+        scheduleConnectingWatchdog: false,
+      );
+      await _clearSelfPresenceOnDisconnect();
+      await _eventSubscription?.cancel();
+      _eventSubscription = null;
+      await _omemoActivitySubscription?.cancel();
+      _omemoActivitySubscription = null;
+
+      await _releaseForegroundConnection(oldConnection);
+      foregroundReleased = true;
+
+      final nextConnection = XmppConnection();
+      _setConnection(nextConnection);
+      _configureSocketCallbacks();
+      _omemoActivitySubscription = _connection.omemoActivityStream.listen(
+        _omemoActivityController.add,
+      );
+      _myJid = existingJid;
+      await _initConnection(preHashed: _connectionPasswordPreHashed);
+      _eventSubscription = _connection.asBroadcastStream().listen(
+        _handleXmppEvent,
+      );
+      _connection.connectionSettings = XmppConnectionSettings(
+        jid: existingJid,
+        password: existingPassword,
+      );
+
+      _connectInFlight = true;
+      late final moxlib.Result<bool, mox.XmppError> result;
+      try {
+        result = await _connection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        );
+      } finally {
+        _connectInFlight = false;
+      }
+      if (result.isType<mox.XmppError>()) {
+        final error = result.get<mox.XmppError>();
+        if (_isAuthenticationError(error)) {
+          throw XmppAuthenticationException(error is Exception ? error : null);
+        }
+        throw XmppNetworkException(error is Exception ? error : null);
+      }
+      if (!result.get<bool>()) {
+        throw XmppAuthenticationException();
+      }
+      await _connection.setShouldReconnect(true);
+      _xmppLogger.info(
+        'Foreground socket disabled; XMPP reconnected on direct socket. '
+        '${_foregroundMigrationStateSummary(connection: _connection)}',
+      );
+      return true;
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to reconnect XMPP on direct socket while disabling foreground.',
+        error,
+        stackTrace,
+      );
+      if (error is XmppAuthenticationException) {
+        _setConnectionState(ConnectionState.error);
+        return foregroundReleased;
+      }
+      try {
+        await _connection.setShouldReconnect(true);
+      } on Exception catch (reconnectError, reconnectStackTrace) {
+        _xmppLogger.fine(
+          'Failed to restore reconnect policy after foreground disable failure.',
+          reconnectError,
+          reconnectStackTrace,
+        );
+      }
+      if (foregroundReleased && connectionState == ConnectionState.connecting) {
+        _setConnectionState(ConnectionState.notConnected);
+      }
+      await requestReconnect(ReconnectTrigger.foregroundMigration);
+      return foregroundReleased;
+    }
+  }
+
+  void _markForegroundServiceActiveForSocketIfNeeded() {
+    if (_connection.socketWrapper is ForegroundSocketWrapper &&
+        !foregroundServiceActive.value) {
+      foregroundServiceActive.value = true;
+    }
+  }
+
+  Future<void> _releaseForegroundConnection(XmppConnection connection) async {
+    try {
+      await connection.setShouldReconnect(false);
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to disable reconnection before releasing foreground socket.',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await connection.disconnect();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Graceful disconnect failed while releasing foreground socket.',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await connection.reset();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Foreground socket reset failed while disabling foreground.',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await connection.socketWrapper.closeStreams();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to close foreground socket streams.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   Future<void> _disposeForegroundMigrationAttempt(
     XmppConnection connection,
   ) async {
@@ -3580,19 +3823,9 @@ class XmppService extends XmppBase
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
-    final shouldSendUnavailablePresence =
-        connected && _myJid != null && _synchronousConnection.isCompleted;
-    if (shouldSendUnavailablePresence) {
-      try {
-        await sendUnavailablePresenceForDisconnect();
-      } catch (error, stackTrace) {
-        _xmppLogger.fine(
-          'Failed to send unavailable presence before reset.',
-          error,
-          stackTrace,
-        );
-      }
-    }
+    final wasConnected = connected;
+    final shouldDisconnectMox =
+        wasConnected || await _moxConnectionStateIsConnectedForReset();
 
     _lifecycleEpoch += 1;
     _myJid = null;
@@ -3618,8 +3851,8 @@ class XmppService extends XmppBase
     _xmppLogger.info(
       'Resetting${e == null ? '' : ' due to ${e.runtimeType}'}...',
     );
-    _foregroundSocketMigrationTimer?.cancel();
-    _foregroundSocketMigrationTimer = null;
+    _signupPostLoginWorkHeld = false;
+    _deferredSignupPostLoginTrigger = null;
     _demoSeedAttempted = false;
     _demoOfflineMode = false;
     _resetDemoScript();
@@ -3650,7 +3883,7 @@ class XmppService extends XmppBase
 
     await _closeManagerStreams();
 
-    if (connected) {
+    if (shouldDisconnectMox) {
       try {
         await _connection.setShouldReconnect(false);
         await _connection.disconnect();
@@ -3663,7 +3896,7 @@ class XmppService extends XmppBase
         );
       }
     }
-    if (withForeground) {
+    if (_connection.socketWrapper is ForegroundSocketWrapper) {
       await _connection.reset();
     }
     await _connection.socketWrapper.closeStreams();
@@ -3720,6 +3953,20 @@ class XmppService extends XmppBase
     }
 
     assert(residuals.isEmpty);
+  }
+
+  Future<bool> _moxConnectionStateIsConnectedForReset() async {
+    try {
+      return await _connection.getConnectionState() ==
+          ConnectionState.connected;
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to read mox connection state before reset.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
   }
 
   Future<void> _closeManagerStreams() async {
@@ -3856,8 +4103,6 @@ class XmppService extends XmppBase
           }
         }
       }
-    } on DraftSaveAbortedException {
-      rethrow;
     } on XmppAbortedException catch (e, s) {
       _xmppLogger.finer('Owner called reset before $D initialized.', e, s);
       rethrow;
@@ -3916,8 +4161,6 @@ class XmppService extends XmppBase
         }
       }
       return;
-    } on DraftSaveAbortedException {
-      rethrow;
     } on XmppAbortedException catch (_) {
       return;
     } on XmppException {
@@ -4859,4 +5102,44 @@ class SaslScramNegotiator extends mox.SaslScramNegotiator {
         ? base64Decode(attributes.getConnectionSettings().password)
         : await super.calculateSaltedPassword(salt, iterations);
   }
+
+  @override
+  Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
+    mox.XMLNode nonza,
+  ) async {
+    return _makeSaslFailuresNonRecoverable(await super.negotiate(nonza));
+  }
+}
+
+class AxiSasl2Negotiator extends mox.Sasl2Negotiator {
+  AxiSasl2Negotiator() : super();
+
+  @override
+  Future<moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>> negotiate(
+    mox.XMLNode nonza,
+  ) async {
+    return _makeSaslFailuresNonRecoverable(await super.negotiate(nonza));
+  }
+}
+
+moxlib.Result<mox.NegotiatorState, mox.NegotiatorError>
+_makeSaslFailuresNonRecoverable(
+  moxlib.Result<mox.NegotiatorState, mox.NegotiatorError> result,
+) {
+  if (!result.isType<mox.SaslError>()) {
+    return result;
+  }
+  return moxlib.Result(_NonRecoverableSaslError(result.get<mox.SaslError>()));
+}
+
+class _NonRecoverableSaslError extends mox.SaslError {
+  _NonRecoverableSaslError(this.inner);
+
+  final mox.SaslError inner;
+
+  @override
+  bool isRecoverable() => false;
+
+  @override
+  String toString() => inner.toString();
 }

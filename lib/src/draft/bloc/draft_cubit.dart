@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/draft_forwarded_content.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
@@ -258,6 +259,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         await _sendXmppDraft(
           targets: xmppTargets,
           body: body,
+          subject: subject,
           quoteTarget: quoteTarget,
           attachments: attachments,
           calendarTaskIcsMessage: calendarTaskIcsMessage,
@@ -367,35 +369,20 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     bool autoSave = false,
-    bool Function()? shouldCommit,
+    bool autosaveEnabled = true,
   }) async {
-    final Draft draft;
-    if (shouldCommit == null) {
-      draft = await _messageService.saveDraft(
-        id: id,
-        jids: jids,
-        body: body,
-        subject: subject,
-        quotingStanzaId: quoteTarget?.stanzaId,
-        quotingReferenceKind: quoteTarget?.referenceKind,
-        attachments: attachments,
-        calendarTaskIcsMessage: calendarTaskIcsMessage,
-        forwardedBlocks: forwardedBlocks,
-      );
-    } else {
-      draft = await _messageService.saveDraft(
-        id: id,
-        jids: jids,
-        body: body,
-        subject: subject,
-        quotingStanzaId: quoteTarget?.stanzaId,
-        quotingReferenceKind: quoteTarget?.referenceKind,
-        attachments: attachments,
-        calendarTaskIcsMessage: calendarTaskIcsMessage,
-        forwardedBlocks: forwardedBlocks,
-        shouldCommit: shouldCommit,
-      );
-    }
+    final draft = await _messageService.saveDraft(
+      id: id,
+      jids: jids,
+      body: body,
+      subject: subject,
+      quotingStanzaId: quoteTarget?.stanzaId,
+      quotingReferenceKind: quoteTarget?.referenceKind,
+      attachments: attachments,
+      calendarTaskIcsMessage: calendarTaskIcsMessage,
+      forwardedBlocks: forwardedBlocks,
+      autosaveEnabled: autosaveEnabled,
+    );
     try {
       await _emailService?.mirrorDraftForFallback(
         jids: jids,
@@ -417,6 +404,13 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       ),
     );
     return draft;
+  }
+
+  Future<void> updateDraftAutosaveEnabled({
+    required int id,
+    required bool enabled,
+  }) {
+    return _messageService.updateDraftAutosaveEnabled(id: id, enabled: enabled);
   }
 
   Future<void> deleteDraft({required int id}) async {
@@ -583,6 +577,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   Future<void> _sendXmppDraft({
     required List<DraftXmppTarget> targets,
     required String body,
+    String? subject,
     DraftQuoteTarget? quoteTarget,
     required List<Attachment> attachments,
     required CalendarTaskIcsMessage? calendarTaskIcsMessage,
@@ -592,7 +587,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       introText: body,
       forwardedBlocks: forwardedBlocks,
     );
-    final trimmedBody = assembled.plainText.trim();
+    final trimmedBody = ChatSubjectCodec.composeXmppBody(
+      body: assembled.plainText,
+      subject: subject,
+    ).trim();
     final htmlBody = assembled.htmlBody;
     final hasBody = trimmedBody.isNotEmpty;
     final hasAttachments = attachments.isNotEmpty;
@@ -606,6 +604,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final attachmentGroupId = hasAttachments && attachments.length > 1
         ? uuid.v4()
         : null;
+    final groupQuotedReference = attachmentGroupId == null || hasCalendarTask
+        ? null
+        : quoteTarget?.messageReference;
     final uploads = List<XmppAttachmentUpload?>.filled(
       attachments.length,
       null,
@@ -627,9 +628,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           quotedReference: quoteTarget?.messageReference,
           chatType: chatType,
           calendarTaskIcs: calendarTaskIcsMessage?.task,
-          calendarTaskIcsReadOnly:
-              calendarTaskIcsMessage?.readOnly ??
-              CalendarTaskIcsMessage.defaultReadOnly,
+          calendarTaskIcsReadOnly: CalendarTaskIcsMessage.defaultReadOnly,
         );
         if (!hasAttachments) {
           return;
@@ -638,6 +637,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       for (var index = 0; index < attachments.length; index += 1) {
         final attachment = attachments[index];
         final shouldApplyCaption = hasBody && !hasCalendarTask && index == 0;
+        final quotedReference = !hasCalendarTask && index == 0
+            ? quoteTarget?.messageReference
+            : null;
         final resolvedAttachment = shouldApplyCaption
             ? attachment.copyWith(caption: trimmedBody)
             : attachment;
@@ -647,9 +649,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           attachment: resolvedAttachment,
           encryptionProtocol: encryption,
           chatType: chatType,
-          quotedReference: shouldApplyCaption
-              ? quoteTarget?.messageReference
-              : null,
+          quotedReference: quotedReference,
+          groupQuotedReference: groupQuotedReference,
           htmlCaption: shouldApplyCaption ? htmlBody : null,
           transportGroupId: attachmentGroupId,
           attachmentOrder: index,

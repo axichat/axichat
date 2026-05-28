@@ -254,6 +254,87 @@ class DeltaChatBindings {
       _axichat_dc_accounts_stop_background_fetchPtr
           .asFunction<int Function(ffi.Pointer<dc_accounts_t>)>();
 
+  ffi.Pointer<ffi.Char> axichat_dc_inspect_openpgp_key(
+    ffi.Pointer<ffi.Char> armored,
+    ffi.Pointer<ffi.Char> expected_addr,
+    int expected_kind,
+  ) {
+    return _axichat_dc_inspect_openpgp_key(
+      armored,
+      expected_addr,
+      expected_kind,
+    );
+  }
+
+  late final _axichat_dc_inspect_openpgp_keyPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Int32)>>('axichat_dc_inspect_openpgp_key');
+  late final _axichat_dc_inspect_openpgp_key =
+      _axichat_dc_inspect_openpgp_keyPtr.asFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int)>();
+
+  ffi.Pointer<ffi.Char> axichat_dc_import_contact_public_key(
+    ffi.Pointer<dc_context_t> ctx,
+    ffi.Pointer<ffi.Char> address,
+    ffi.Pointer<ffi.Char> display_name,
+    ffi.Pointer<ffi.Char> armored_public_key,
+  ) {
+    return _axichat_dc_import_contact_public_key(
+      ctx,
+      address,
+      display_name,
+      armored_public_key,
+    );
+  }
+
+  late final _axichat_dc_import_contact_public_keyPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_context_t>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>)>>('axichat_dc_import_contact_public_key');
+  late final _axichat_dc_import_contact_public_key =
+      _axichat_dc_import_contact_public_keyPtr.asFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_context_t>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>)>();
+
+  ffi.Pointer<ffi.Char> axichat_dc_remove_contact_public_key(
+    ffi.Pointer<dc_context_t> ctx,
+    ffi.Pointer<ffi.Char> address,
+    ffi.Pointer<ffi.Char> fingerprint,
+    int contact_id,
+    int chat_id,
+  ) {
+    return _axichat_dc_remove_contact_public_key(
+      ctx,
+      address,
+      fingerprint,
+      contact_id,
+      chat_id,
+    );
+  }
+
+  late final _axichat_dc_remove_contact_public_keyPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_context_t>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Pointer<ffi.Char>,
+              ffi.Uint32,
+              ffi.Uint32)>>('axichat_dc_remove_contact_public_key');
+  late final _axichat_dc_remove_contact_public_key =
+      _axichat_dc_remove_contact_public_keyPtr.asFunction<
+          ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>, int, int)>();
+
   void dc_accounts_set_push_device_token(
     ffi.Pointer<dc_accounts_t> accounts,
     ffi.Pointer<ffi.Char> token,
@@ -434,6 +515,42 @@ class DeltaChatBindings {
   late final _dc_set_config = _dc_set_configPtr.asFunction<
       int Function(ffi.Pointer<dc_context_t>, ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>)>();
+
+  void dc_imex(
+    ffi.Pointer<dc_context_t> ctx,
+    int what,
+    ffi.Pointer<ffi.Char> param1,
+    ffi.Pointer<ffi.Char> param2,
+  ) {
+    return _dc_imex(
+      ctx,
+      what,
+      param1,
+      param2,
+    );
+  }
+
+  late final _dc_imexPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Int,
+              ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>>('dc_imex');
+  late final _dc_imex = _dc_imexPtr.asFunction<
+      void Function(ffi.Pointer<dc_context_t>, int, ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>)>();
+
+  void dc_stop_ongoing_process(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _dc_stop_ongoing_process(
+      ctx,
+    );
+  }
+
+  late final _dc_stop_ongoing_processPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_context_t>)>>(
+          'dc_stop_ongoing_process');
+  late final _dc_stop_ongoing_process = _dc_stop_ongoing_processPtr
+      .asFunction<void Function(ffi.Pointer<dc_context_t>)>();
 
   void dc_start_io(
     ffi.Pointer<dc_context_t> ctx,
@@ -1321,6 +1438,20 @@ class DeltaChatBindings {
   late final _dc_msg_get_state =
       _dc_msg_get_statePtr.asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
 
+  int dc_msg_get_showpadlock(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_get_showpadlock(
+      msg,
+    );
+  }
+
+  late final _dc_msg_get_showpadlockPtr =
+      _lookup<ffi.NativeFunction<ffi.Int32 Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_get_showpadlock');
+  late final _dc_msg_get_showpadlock = _dc_msg_get_showpadlockPtr
+      .asFunction<int Function(ffi.Pointer<dc_msg_t>)>();
+
   ffi.Pointer<dc_msg_t> dc_msg_new(
     ffi.Pointer<dc_context_t> ctx,
     int viewtype,
@@ -1388,6 +1519,34 @@ class DeltaChatBindings {
               ffi.Pointer<ffi.Char>)>>('dc_msg_set_subject');
   late final _dc_msg_set_subject = _dc_msg_set_subjectPtr.asFunction<
       void Function(ffi.Pointer<dc_msg_t>, ffi.Pointer<ffi.Char>)>();
+
+  void dc_msg_force_plaintext(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_force_plaintext(
+      msg,
+    );
+  }
+
+  late final _dc_msg_force_plaintextPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_force_plaintext');
+  late final _dc_msg_force_plaintext = _dc_msg_force_plaintextPtr
+      .asFunction<void Function(ffi.Pointer<dc_msg_t>)>();
+
+  void dc_msg_skip_autocrypt(
+    ffi.Pointer<dc_msg_t> msg,
+  ) {
+    return _dc_msg_skip_autocrypt(
+      msg,
+    );
+  }
+
+  late final _dc_msg_skip_autocryptPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<dc_msg_t>)>>(
+          'dc_msg_skip_autocrypt');
+  late final _dc_msg_skip_autocrypt = _dc_msg_skip_autocryptPtr
+      .asFunction<void Function(ffi.Pointer<dc_msg_t>)>();
 
   void dc_msg_set_file_and_deduplicate(
     ffi.Pointer<dc_msg_t> msg,

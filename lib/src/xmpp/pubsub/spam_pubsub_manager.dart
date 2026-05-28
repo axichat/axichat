@@ -7,6 +7,7 @@ import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -100,9 +101,9 @@ final class SpamSyncPayload {
       tag: _spamTag,
       xmlns: spamPubSubNode,
       attributes: {
-        _spamJidAttr: jid,
+        _spamJidAttr: escapeXmlAttribute(jid),
         _spamUpdatedAtAttr: updatedAt.toUtc().toIso8601String(),
-        _spamSourceIdAttr: sourceId,
+        _spamSourceIdAttr: escapeXmlAttribute(sourceId),
       },
     );
   }

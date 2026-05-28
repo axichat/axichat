@@ -51,6 +51,12 @@ const Set<String> _emailDomainHints = <String>{
   'protonmail.com',
   'proton.me',
   'tuta.com',
+  'tutanota.com',
+  'fastmail.com',
+  'hey.com',
+  'mail.com',
+  'zoho.com',
+  'gmx.com',
 };
 
 const Set<String> _xmppDomainHints = <String>{
@@ -59,6 +65,17 @@ const Set<String> _xmppDomainHints = <String>{
   'disroot.org',
   'jabber.org',
 };
+
+Set<String> knownMessageTransportDomainHints({
+  Iterable<String> xmppDomainHints = const <String>[],
+}) {
+  return <String>{
+    EndpointConfig.defaultDomain,
+    ..._emailDomainHints,
+    ..._xmppDomainHints,
+    ..._normalizedHintDomains(xmppDomainHints),
+  };
+}
 
 MessageTransport? hintTransportForAddress(
   String? address, {

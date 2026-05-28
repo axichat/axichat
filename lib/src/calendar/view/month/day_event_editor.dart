@@ -76,7 +76,7 @@ Future<DayEventEditorResult?> showDayEventEditor({
   return showAdaptiveBottomSheet<DayEventEditorResult>(
     context: modalContext,
     isScrollControlled: true,
-    bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     dialogMaxWidth: context.sizing.dialogMaxWidth,
     surfacePadding: EdgeInsets.zero,
     showCloseButton: false,

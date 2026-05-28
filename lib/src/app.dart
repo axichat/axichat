@@ -17,6 +17,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -99,7 +100,7 @@ class _AxichatState extends State<Axichat> {
     _xmppService =
         widget._xmppService ??
         XmppService(
-          buildConnection: () => withForeground && foregroundServiceActive.value
+          buildConnection: () => withForeground
               ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
               : XmppConnection(),
           buildStateStore: (prefix, passphrase) async {
@@ -178,6 +179,7 @@ class _AxichatState extends State<Axichat> {
         create: (context) => SettingsCubit(
           xmppService: _xmppService,
           capability: widget._capability,
+          credentialStore: context.read<CredentialStore>(),
         )..primeAttachmentAutoDownloadSettings(),
         child: Builder(
           builder: (context) {
@@ -193,167 +195,240 @@ class _AxichatState extends State<Axichat> {
                   autoDownloadVideos: settingsState.autoDownloadVideos,
                   autoDownloadDocuments: settingsState.autoDownloadDocuments,
                   autoDownloadArchives: settingsState.autoDownloadArchives,
+                  emailEncryptionBetaEnabledByAddress:
+                      settingsState.emailEncryptionBetaEnabledByAddress,
+                  xmppSelfJidProvider: () => _xmppService.myJid,
                 );
               },
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider(
-                    create: (context) => UpdateCubit(
-                      updateService: UpdateService(
-                        httpClient: context.read<http.Client>(),
+              child: RepositoryProvider<ForegroundRuntimeController>(
+                create: (context) => ForegroundRuntimeController(
+                  capability: context.read<Capability>(),
+                  notificationService: context.read<NotificationService>(),
+                  xmppService: context.read<XmppService>(),
+                  emailService: context.read<EmailService>(),
+                ),
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider(
+                      create: (context) => UpdateCubit(
+                        updateService: UpdateService(
+                          httpClient: context.read<http.Client>(),
+                        ),
+                      )..initialize(),
+                    ),
+                    BlocProvider(
+                      create: (context) => AuthenticationCubit(
+                        credentialStore: context.read<CredentialStore>(),
+                        xmppService: context.read<XmppService>(),
+                        emailService: context.read<EmailService>(),
+                        foregroundRuntimeController: context
+                            .read<ForegroundRuntimeController>(),
+                        initialEndpointConfig: context
+                            .read<SettingsCubit>()
+                            .state
+                            .endpointConfig,
+                        beforeStickyReconnect: () async {
+                          await context
+                              .read<ForegroundRuntimeController>()
+                              .restoreIfPreferred(
+                                desired: context
+                                    .read<SettingsCubit>()
+                                    .state
+                                    .backgroundMessagingEnabled,
+                                emailKeepaliveEnabled: context
+                                    .read<SettingsCubit>()
+                                    .state
+                                    .endpointConfig
+                                    .smtpEnabled,
+                              );
+                        },
+                        beforeXmppConnect: (accountJid) async {
+                          final settingsCubit = context.read<SettingsCubit>();
+                          await context
+                              .read<ForegroundRuntimeController>()
+                              .prepareForNextXmppConnection(
+                                desired: await settingsCubit
+                                    .backgroundMessagingEnabledForAccount(
+                                      accountJid,
+                                    ),
+                                emailKeepaliveEnabled: settingsCubit
+                                    .state
+                                    .endpointConfig
+                                    .smtpEnabled,
+                              );
+                        },
                       ),
-                    )..initialize(),
-                  ),
-                  BlocProvider(
-                    create: (context) => AuthenticationCubit(
-                      credentialStore: context.read<CredentialStore>(),
-                      xmppService: context.read<XmppService>(),
-                      emailService: context.read<EmailService>(),
-                      initialEndpointConfig: context
-                          .read<SettingsCubit>()
-                          .state
-                          .endpointConfig,
                     ),
-                  ),
-                  BlocProvider(
-                    create: (context) => OmemoActivityCubit(
-                      xmppBase: context.read<XmppService>(),
-                    ),
-                  ),
-                  BlocProvider(
-                    create: (context) => XmppActivityCubit(
-                      xmppBase: context.read<XmppService>(),
-                    ),
-                  ),
-                  BlocProvider(
-                    create: (context) => ShareIntentCubit()..initialize(),
-                  ),
-                  BlocProvider(
-                    create: (context) {
-                      final xmppService = context.read<XmppService>();
-                      final OmemoService? omemoService =
-                          xmppService is OmemoService
-                          ? xmppService as OmemoService
-                          : null;
-                      return ProfileCubit(
-                        xmppService: xmppService,
-                        omemoService: omemoService,
-                      );
-                    },
-                  ),
-                  BlocProvider(
-                    create: (context) => BlocklistCubit(
-                      xmppService: context.read<XmppService>(),
-                    ),
-                  ),
-                  BlocProvider(
-                    create: (context) => ChatsCubit(
-                      xmppService: context.read<XmppService>(),
-                      emailService:
-                          context
-                              .read<SettingsCubit>()
-                              .state
-                              .endpointConfig
-                              .smtpEnabled
-                          ? context.read<EmailService>()
-                          : null,
-                    ),
-                  ),
-                  BlocProvider(
-                    create: (context) => RosterCubit(
-                      rosterService:
-                          context.read<XmppService>() as RosterService,
-                    ),
-                  ),
-                  BlocProvider(
-                    create: (context) => DraftCubit(
-                      messageService: context.read<MessageService>(),
-                      emailService:
-                          context
-                              .read<SettingsCubit>()
-                              .state
-                              .endpointConfig
-                              .smtpEnabled
-                          ? context.read<EmailService>()
-                          : null,
-                    ),
-                  ),
-                  BlocProvider(
-                    create: (context) {
-                      final endpointConfig = context
-                          .read<SettingsCubit>()
-                          .state
-                          .endpointConfig;
-                      final emailEnabled = endpointConfig.smtpEnabled;
-                      return ConnectivityCubit(
+                    BlocProvider(
+                      create: (context) => OmemoActivityCubit(
                         xmppBase: context.read<XmppService>(),
-                        emailEnabled: emailEnabled,
-                        emailService: emailEnabled
+                      ),
+                    ),
+                    BlocProvider(
+                      create: (context) => XmppActivityCubit(
+                        xmppBase: context.read<XmppService>(),
+                      ),
+                    ),
+                    BlocProvider(
+                      create: (context) => ShareIntentCubit()..initialize(),
+                    ),
+                    BlocProvider(
+                      create: (context) {
+                        final xmppService = context.read<XmppService>();
+                        final OmemoService? omemoService =
+                            xmppService is OmemoService
+                            ? xmppService as OmemoService
+                            : null;
+                        return ProfileCubit(
+                          xmppService: xmppService,
+                          omemoService: omemoService,
+                        );
+                      },
+                    ),
+                    BlocProvider(
+                      create: (context) => BlocklistCubit(
+                        xmppService: context.read<XmppService>(),
+                      ),
+                    ),
+                    BlocProvider(
+                      create: (context) => ChatsCubit(
+                        xmppService: context.read<XmppService>(),
+                        emailService:
+                            context
+                                .read<SettingsCubit>()
+                                .state
+                                .endpointConfig
+                                .smtpEnabled
                             ? context.read<EmailService>()
                             : null,
-                      );
-                    },
-                  ),
-                  BlocProvider(create: (context) => ComposeWindowCubit()),
-                  if (widget._storageManager.guestStorage != null)
+                      ),
+                    ),
                     BlocProvider(
-                      create: (context) => GuestCalendarBloc(
-                        storage: widget._storageManager.guestStorage!,
-                        reminderController: _reminderController,
-                      )..add(const CalendarStarted()),
-                      key: const Key('guest_calendar_bloc'),
+                      create: (context) => RosterCubit(
+                        rosterService:
+                            context.read<XmppService>() as RosterService,
+                      ),
                     ),
-                ],
-                child: MultiBlocListener(
-                  listeners: [
-                    BlocListener<SettingsCubit, SettingsState>(
-                      listenWhen: (previous, current) =>
-                          previous.endpointConfig != current.endpointConfig,
-                      listener: (context, settings) async {
-                        final config = settings.endpointConfig;
-                        final emailService = context.read<EmailService>();
-                        final EmailService? activeEmailService =
-                            config.smtpEnabled ? emailService : null;
-                        context
-                            .read<AuthenticationCubit>()
-                            .updateEndpointConfig(config);
-                        await context
-                            .read<AuthenticationCubit>()
-                            .updateEmailService(activeEmailService);
-                        if (!context.mounted) return;
-                        context.read<ChatsCubit>().updateEmailService(
-                          activeEmailService,
+                    BlocProvider(
+                      create: (context) => DraftCubit(
+                        messageService: context.read<MessageService>(),
+                        emailService:
+                            context
+                                .read<SettingsCubit>()
+                                .state
+                                .endpointConfig
+                                .smtpEnabled
+                            ? context.read<EmailService>()
+                            : null,
+                      ),
+                    ),
+                    BlocProvider(
+                      create: (context) {
+                        final endpointConfig = context
+                            .read<SettingsCubit>()
+                            .state
+                            .endpointConfig;
+                        final emailEnabled = endpointConfig.smtpEnabled;
+                        return ConnectivityCubit(
+                          xmppBase: context.read<XmppService>(),
+                          emailEnabled: emailEnabled,
+                          emailService: emailEnabled
+                              ? context.read<EmailService>()
+                              : null,
                         );
-                        context.read<DraftCubit>().updateEmailService(
-                          activeEmailService,
-                        );
-                        emailService.updateEndpointConfig(config);
-                        context.read<ConnectivityCubit>().updateEmailContext(
-                          emailEnabled: config.smtpEnabled,
-                          emailService: activeEmailService,
-                        );
-                        if (!config.smtpEnabled) {
-                          await emailService.shutdown(clearCredentials: false);
-                          await emailService.handleNetworkLost();
-                        } else {
-                          await emailService.handleNetworkAvailable();
-                        }
                       },
                     ),
-                    BlocListener<SettingsCubit, SettingsState>(
-                      listenWhen: (previous, current) =>
-                          previous.emailReadReceipts !=
-                          current.emailReadReceipts,
-                      listener: (context, settings) async {
-                        await context
-                            .read<EmailService>()
-                            .updateEmailReadReceiptsEnabled(
-                              settings.emailReadReceipts,
-                            );
-                      },
-                    ),
+                    BlocProvider(create: (context) => ComposeWindowCubit()),
+                    if (widget._storageManager.guestStorage != null)
+                      BlocProvider(
+                        create: (context) => GuestCalendarBloc(
+                          storage: widget._storageManager.guestStorage!,
+                          reminderController: _reminderController,
+                        )..add(const CalendarStarted()),
+                        key: const Key('guest_calendar_bloc'),
+                      ),
                   ],
-                  child: const MaterialAxichat(),
+                  child: MultiBlocListener(
+                    listeners: [
+                      BlocListener<SettingsCubit, SettingsState>(
+                        listenWhen: (previous, current) =>
+                            previous.endpointConfig != current.endpointConfig,
+                        listener: (context, settings) async {
+                          final config = settings.endpointConfig;
+                          final authenticationCubit = context
+                              .read<AuthenticationCubit>();
+                          final chatsCubit = context.read<ChatsCubit>();
+                          final draftCubit = context.read<DraftCubit>();
+                          final connectivityCubit = context
+                              .read<ConnectivityCubit>();
+                          final emailService = context.read<EmailService>();
+                          final foregroundRuntimeController = context
+                              .read<ForegroundRuntimeController>();
+                          final EmailService? activeEmailService =
+                              config.smtpEnabled ? emailService : null;
+                          authenticationCubit.updateEndpointConfig(config);
+                          await authenticationCubit.updateEmailService(
+                            activeEmailService,
+                          );
+                          if (!context.mounted) return;
+                          chatsCubit.updateEmailService(activeEmailService);
+                          draftCubit.updateEmailService(activeEmailService);
+                          emailService.updateEndpointConfig(config);
+                          connectivityCubit.updateEmailContext(
+                            emailEnabled: config.smtpEnabled,
+                            emailService: activeEmailService,
+                          );
+                          if (!config.smtpEnabled) {
+                            await emailService.shutdown(
+                              clearCredentials: false,
+                            );
+                            await emailService.handleNetworkLost();
+                          } else {
+                            await emailService.handleNetworkAvailable();
+                          }
+                          if (authenticationCubit.state
+                              is AuthenticationComplete) {
+                            await foregroundRuntimeController
+                                .restoreIfPreferred(
+                                  desired: settings.backgroundMessagingEnabled,
+                                  emailKeepaliveEnabled: config.smtpEnabled,
+                                );
+                          } else {
+                            await foregroundRuntimeController
+                                .prepareForNextXmppConnection(
+                                  desired: settings.backgroundMessagingEnabled,
+                                  emailKeepaliveEnabled: config.smtpEnabled,
+                                );
+                          }
+                        },
+                      ),
+                      BlocListener<SettingsCubit, SettingsState>(
+                        listenWhen: (previous, current) =>
+                            previous.emailEncryptionBetaEnabledByAddress !=
+                            current.emailEncryptionBetaEnabledByAddress,
+                        listener: (context, settings) {
+                          context
+                              .read<EmailService>()
+                              .updateEmailEncryptionBetaSettings(
+                                settings.emailEncryptionBetaEnabledByAddress,
+                              );
+                        },
+                      ),
+                      BlocListener<SettingsCubit, SettingsState>(
+                        listenWhen: (previous, current) =>
+                            previous.emailReadReceipts !=
+                            current.emailReadReceipts,
+                        listener: (context, settings) async {
+                          await context
+                              .read<EmailService>()
+                              .updateEmailReadReceiptsEnabled(
+                                settings.emailReadReceipts,
+                              );
+                        },
+                      ),
+                    ],
+                    child: const MaterialAxichat(),
+                  ),
                 ),
               ),
             );
@@ -443,6 +518,17 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     _router.routerDelegate.removeListener(_handleRouteChange);
     _router.dispose();
     super.dispose();
+  }
+
+  Future<void> _restoreForegroundRuntimeIfPreferredForContext(
+    BuildContext context,
+  ) async {
+    final locate = context.read;
+    await locate<ForegroundRuntimeController>().restoreIfPreferred(
+      desired: locate<SettingsCubit>().state.backgroundMessagingEnabled,
+      emailKeepaliveEnabled:
+          locate<SettingsCubit>().state.endpointConfig.smtpEnabled,
+    );
   }
 
   @override
@@ -768,6 +854,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
                       profileCubit.clearSessionIdentity();
+                      await settingsCubit.activateAccountSettings(null);
+                      if (!context.mounted) {
+                        return;
+                      }
                       if (!onLoginRoute && authRequired) {
                         _router.go(const LoginRoute().location);
                       }
@@ -775,39 +865,49 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       if (state is AuthenticationComplete &&
                           previousAuthState is! AuthenticationComplete) {
                         profileCubit.syncSessionIdentity();
-                      }
-                      if (state is AuthenticationComplete &&
-                          previousAuthState is! AuthenticationComplete &&
-                          onGuestRoute) {
-                        _pendingAuthNavigation?.cancel();
-                        _pendingAuthNavigation = null;
-                        void navigateHome() {
-                          final latestAuthState = _lastAuthState;
-                          if (latestAuthState is! AuthenticationComplete) {
-                            return;
-                          }
-                          final currentMatchList =
-                              _router.routerDelegate.currentConfiguration;
-                          final currentMatchedLocation =
-                              currentMatchList.matches.isEmpty
-                              ? null
-                              : currentMatchList.uri.path;
-                          if (currentMatchedLocation ==
-                              const HomeRoute().location) {
-                            _pendingAuthNavigation = null;
-                            return;
-                          }
-                          _router.go(const HomeRoute().location);
+                        if (onGuestRoute) {
+                          _pendingAuthNavigation?.cancel();
                           _pendingAuthNavigation = null;
-                        }
+                          void navigateHome() {
+                            final latestAuthState = _lastAuthState;
+                            if (latestAuthState is! AuthenticationComplete) {
+                              return;
+                            }
+                            final currentMatchList =
+                                _router.routerDelegate.currentConfiguration;
+                            final currentMatchedLocation =
+                                currentMatchList.matches.isEmpty
+                                ? null
+                                : currentMatchList.uri.path;
+                            if (currentMatchedLocation ==
+                                const HomeRoute().location) {
+                              _pendingAuthNavigation = null;
+                              return;
+                            }
+                            _router.go(const HomeRoute().location);
+                            _pendingAuthNavigation = null;
+                          }
 
-                        if (authCompletionDuration == Duration.zero) {
-                          navigateHome();
-                        } else {
-                          _pendingAuthNavigation = Timer(
-                            authCompletionDuration,
-                            navigateHome,
-                          );
+                          if (authCompletionDuration == Duration.zero) {
+                            navigateHome();
+                          } else {
+                            _pendingAuthNavigation = Timer(
+                              authCompletionDuration,
+                              navigateHome,
+                            );
+                          }
+                        }
+                        await settingsCubit.activateAccountSettings(
+                          locate<XmppService>().myJid,
+                        );
+                        if (!context.mounted) {
+                          return;
+                        }
+                        await _restoreForegroundRuntimeIfPreferredForContext(
+                          context,
+                        );
+                        if (!context.mounted) {
+                          return;
                         }
                       }
                     }

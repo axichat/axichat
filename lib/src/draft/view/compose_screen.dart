@@ -10,13 +10,13 @@ import 'package:axichat/src/draft/view/compose_draft_content.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ComposeScreen extends StatefulWidget {
-  const ComposeScreen({super.key, required this.seed, required this.locate});
+  const ComposeScreen({super.key, required this.seed});
 
   final ComposeDraftSeed seed;
-  final T Function<T>() locate;
 
   @override
   State<ComposeScreen> createState() => _ComposeScreenState();
@@ -47,6 +47,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locate = context.read;
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
@@ -106,7 +107,7 @@ class _ComposeScreenState extends State<ComposeScreen> {
               child: AxiModalSurface(
                 child: ComposeDraftContent(
                   seed: widget.seed,
-                  locate: widget.locate,
+                  locate: locate,
                   draftFormKey: _draftFormKey,
                   onClosed: _popScreen,
                   onDiscarded: _popScreen,

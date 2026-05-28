@@ -108,9 +108,15 @@ void main() {
     ]);
   });
 
-  test('adds XMPP contacts through roster only', () async {
+  test('adds XMPP contacts and persists display name override', () async {
     when(
       () => xmppService.addToRoster(jid: 'alice@example.com', title: 'Alice'),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.setContactDisplayNameOverride(
+        address: 'alice@example.com',
+        displayName: 'Alice',
+      ),
     ).thenAnswer((_) async {});
 
     await cubit.addContact(
@@ -121,6 +127,12 @@ void main() {
 
     verify(
       () => xmppService.addToRoster(jid: 'alice@example.com', title: 'Alice'),
+    ).called(1);
+    verify(
+      () => xmppService.setContactDisplayNameOverride(
+        address: 'alice@example.com',
+        displayName: 'Alice',
+      ),
     ).called(1);
     verifyNever(
       () => xmppService.addManualContact(
@@ -139,6 +151,64 @@ void main() {
       const ContactActionSuccess(
         action: ContactActionType.addContact,
         address: 'alice@example.com',
+      ),
+    );
+  });
+
+  test('rejects invalid contact addresses before service calls', () async {
+    await cubit.addContact(
+      address: 'not an address',
+      displayName: 'Invalid',
+      transport: MessageTransport.xmpp,
+    );
+
+    verifyNever(
+      () => xmppService.addToRoster(
+        jid: any(named: 'jid'),
+        title: any(named: 'title'),
+      ),
+    );
+    verifyNever(
+      () => emailService.addContactAddress(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+      ),
+    );
+    expect(
+      cubit.state.actionState,
+      const ContactActionFailure(
+        action: ContactActionType.addContact,
+        address: 'not an address',
+        reason: ContactFailureReason.invalidAddress,
+      ),
+    );
+  });
+
+  test('rejects JID-shaped non-email contact addresses', () async {
+    await cubit.addContact(
+      address: 'alice@localhost',
+      displayName: 'Invalid',
+      transport: MessageTransport.xmpp,
+    );
+
+    verifyNever(
+      () => xmppService.addToRoster(
+        jid: any(named: 'jid'),
+        title: any(named: 'title'),
+      ),
+    );
+    verifyNever(
+      () => emailService.addContactAddress(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+      ),
+    );
+    expect(
+      cubit.state.actionState,
+      const ContactActionFailure(
+        action: ContactActionType.addContact,
+        address: 'alice@localhost',
+        reason: ContactFailureReason.invalidAddress,
       ),
     );
   });
@@ -255,9 +325,15 @@ void main() {
     );
   });
 
-  test('adds email contacts through email contact service only', () async {
+  test('adds email contacts and persists display name override', () async {
     when(
       () => emailService.addContactAddress(
+        address: 'mail@example.com',
+        displayName: 'Mail',
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.setContactDisplayNameOverride(
         address: 'mail@example.com',
         displayName: 'Mail',
       ),
@@ -271,6 +347,12 @@ void main() {
 
     verify(
       () => emailService.addContactAddress(
+        address: 'mail@example.com',
+        displayName: 'Mail',
+      ),
+    ).called(1);
+    verify(
+      () => xmppService.setContactDisplayNameOverride(
         address: 'mail@example.com',
         displayName: 'Mail',
       ),
@@ -692,6 +774,91 @@ void main() {
       const ContactActionSuccess(
         action: ContactActionType.resetRename,
         address: 'alpha@example.com',
+      ),
+    );
+  });
+
+  test('saves contact phone detail fields through contact directory', () async {
+    final contact = const ContactDirectoryEntry(
+      address: 'friend@example.com',
+      hasXmppRoster: false,
+      hasEmailContact: false,
+      emailNativeIds: <String>[],
+    );
+    when(
+      () => xmppService.setContactDetailField(
+        address: 'friend@example.com',
+        fieldId: any(named: 'fieldId'),
+        kind: ContactDetailFieldKind.phone,
+        label: null,
+        value: '+15551234567',
+        sortOrder: 0,
+      ),
+    ).thenAnswer((_) async {});
+
+    await cubit.saveContactDetailField(
+      contact: contact,
+      kind: ContactDetailFieldKind.phone,
+      value: ' +15551234567 ',
+    );
+
+    verify(
+      () => xmppService.setContactDetailField(
+        address: 'friend@example.com',
+        fieldId: any(named: 'fieldId'),
+        kind: ContactDetailFieldKind.phone,
+        label: null,
+        value: '+15551234567',
+        sortOrder: 0,
+      ),
+    ).called(1);
+    expect(
+      cubit.state.actionState,
+      isA<ContactActionSuccess>().having(
+        (state) => state.action,
+        'action',
+        ContactActionType.setContactField,
+      ),
+    );
+  });
+
+  test('removes contact detail fields through contact directory', () async {
+    final field = ContactDetailFieldEntry(
+      fieldId: 'phone-1',
+      kind: ContactDetailFieldKind.phone,
+      value: '+15551234567',
+      sortOrder: 0,
+      active: true,
+      updatedAt: DateTime.utc(2026),
+    );
+    final contact = ContactDirectoryEntry(
+      address: 'friend@example.com',
+      hasXmppRoster: false,
+      hasEmailContact: false,
+      emailNativeIds: const <String>[],
+      detailFields: <ContactDetailFieldEntry>[field],
+    );
+    when(
+      () => xmppService.removeContactDetailField(
+        address: 'friend@example.com',
+        field: field,
+      ),
+    ).thenAnswer((_) async {});
+
+    await cubit.removeContactDetailField(contact: contact, field: field);
+
+    verify(
+      () => xmppService.removeContactDetailField(
+        address: 'friend@example.com',
+        field: field,
+      ),
+    ).called(1);
+    expect(
+      cubit.state.actionState,
+      const ContactActionSuccess(
+        action: ContactActionType.removeContactField,
+        address: 'friend@example.com',
+        collectionId: 'phone-1',
       ),
     );
   });

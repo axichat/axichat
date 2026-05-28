@@ -11,13 +11,13 @@ class CalendarModalScope extends InheritedWidget {
     required this.modalAnchorKey,
     required this.surfaceController,
     required super.child,
-    this.sheetBottomSafeAreaBehavior = AxiSheetBottomSafeAreaBehavior.none,
+    this.useSheetBottomSafeArea = false,
   });
 
   final GlobalKey<NavigatorState> navigatorKey;
   final GlobalKey modalAnchorKey;
   final AxiSurfaceController surfaceController;
-  final AxiSheetBottomSafeAreaBehavior sheetBottomSafeAreaBehavior;
+  final bool useSheetBottomSafeArea;
 
   static CalendarModalScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<CalendarModalScope>();
@@ -33,7 +33,7 @@ class CalendarModalScope extends InheritedWidget {
     return navigatorKey != oldWidget.navigatorKey ||
         modalAnchorKey != oldWidget.modalAnchorKey ||
         surfaceController != oldWidget.surfaceController ||
-        sheetBottomSafeAreaBehavior != oldWidget.sheetBottomSafeAreaBehavior;
+        useSheetBottomSafeArea != oldWidget.useSheetBottomSafeArea;
   }
 }
 
@@ -44,8 +44,7 @@ extension CalendarModalContext on BuildContext {
     return navigatorContext ?? this;
   }
 
-  AxiSheetBottomSafeAreaBehavior get calendarSheetBottomSafeAreaBehavior {
-    return CalendarModalScope.maybeOf(this)?.sheetBottomSafeAreaBehavior ??
-        AxiSheetBottomSafeAreaBehavior.insideSurface;
+  bool get calendarUseSheetBottomSafeArea {
+    return CalendarModalScope.maybeOf(this)?.useSheetBottomSafeArea ?? true;
   }
 }

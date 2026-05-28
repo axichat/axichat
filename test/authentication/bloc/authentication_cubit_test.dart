@@ -6,6 +6,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -36,6 +37,12 @@ const _welcomeChatJid = 'axichat@welcome.axichat.invalid';
 const _welcomeStanzaId = 'signup-welcome.axichat';
 const bool clearEmailCredentialsOnLogout = true;
 const _xmppOnlyEndpointConfig = EndpointConfig(smtpEnabled: false);
+const _signupEndpointConfig = EndpointConfig(domain: 'selfhosted.example');
+const _signupXmppOnlyEndpointConfig = EndpointConfig(
+  domain: 'selfhosted.example',
+  smtpEnabled: false,
+);
+const _signupJid = '$validUsername@selfhosted.example';
 
 Uri _registrationMatcher() =>
     any<Uri>(that: predicate((Uri uri) => uri.path.contains('/register/new/')));
@@ -59,6 +66,7 @@ void main() {
     registerFallbackValue(fallbackChat);
     registerFallbackValue(fallbackMessage);
     registerFallbackValue(ChatType.chat);
+    registerFallbackValue(EmailShutdownMode.graceful);
     registerFallbackValue(
       SpamSyncUpdate(
         address: 'fallback@example.com',
@@ -203,9 +211,11 @@ void main() {
     when(
       () => mockXmppService.pauseAutomaticReconnect(),
     ).thenAnswer((_) async {});
-    when(
-      () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
-    ).thenAnswer((_) async => true);
+    for (final trigger in ReconnectTrigger.values) {
+      when(
+        () => mockXmppService.requestReconnect(trigger),
+      ).thenAnswer((_) async => true);
+    }
     when(
       () => mockXmppService.ensureForegroundSocketIfActive(),
     ).thenAnswer((_) async {});
@@ -278,6 +288,13 @@ void main() {
       () => mockEmailService.shutdown(
         jid: any(named: 'jid'),
         clearCredentials: any(named: 'clearCredentials'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.shutdown(
+        jid: any(named: 'jid'),
+        clearCredentials: any(named: 'clearCredentials'),
+        mode: any(named: 'mode'),
       ),
     ).thenAnswer((_) async {});
     when(
@@ -415,9 +432,12 @@ void main() {
       wait: const Duration(milliseconds: 20),
       expect: () => const [
         AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
-        AuthenticationFailure(AuthKeyMessage(AuthMessageKey.genericError)),
+        AuthenticationFailure(
+          AuthKeyMessage(AuthMessageKey.genericError),
+          config: _xmppOnlyEndpointConfig,
+        ),
       ],
-      verify: (_) {
+      verify: (bloc) {
         verify(() => mockXmppService.disconnect()).called(1);
       },
     );
@@ -465,7 +485,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
-      verify: (_) {
+      verify: (bloc) {
         expect(credentialStorage['partial_unregister_jid_v1'], isNull);
         expect(
           credentialStorage['partial_unregister_database_prefix_v1'],
@@ -483,6 +503,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -510,6 +531,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -537,6 +559,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -564,7 +587,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
-      verify: (_) {
+      verify: (bloc) {
         final prefix = credentialStorage['${validJid}_database_prefix'];
         expect(prefix, isNotNull);
         final passphraseKey = '${prefix}_database_passphrase';
@@ -580,6 +603,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -606,6 +630,7 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -687,7 +712,7 @@ void main() {
         const AuthenticationLogInInProgress(),
         const AuthenticationComplete(),
       ],
-      verify: (_) {
+      verify: (bloc) {
         verify(
           () => mockEmailService.ensureProvisioned(
             displayName: any(named: 'displayName'),
@@ -779,7 +804,7 @@ void main() {
         const AuthenticationComplete(),
       ],
       verify: (_) {
-        verify(() => mockEmailService.handleNetworkAvailable()).called(2);
+        verify(() => mockEmailService.handleNetworkAvailable()).called(1);
       },
     );
 
@@ -858,6 +883,7 @@ void main() {
         AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
       verify: (_) {
@@ -963,7 +989,7 @@ void main() {
       act: (bloc) => bloc.login(),
       expect: () => [
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
-        const AuthenticationNone(),
+        const AuthenticationNone(config: _xmppOnlyEndpointConfig),
       ],
       verify: (bloc) {
         verifyNever(
@@ -1000,7 +1026,7 @@ void main() {
       },
       expect: () => const [
         AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
-        AuthenticationNone(),
+        AuthenticationNone(config: _xmppOnlyEndpointConfig),
         AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
@@ -1037,6 +1063,9 @@ void main() {
             jid: any(named: 'jid'),
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
+            password: any(named: 'password'),
+            preHashed: any(named: 'preHashed'),
+            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async {});
       },
@@ -1056,6 +1085,9 @@ void main() {
             jid: validJid,
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
+            password: validPassword,
+            preHashed: true,
+            endpoint: any(named: 'endpoint'),
           ),
         ).called(1);
         expect(bloc.state, isA<AuthenticationComplete>());
@@ -1111,8 +1143,9 @@ void main() {
           () => mockEmailService.shutdown(
             jid: any(named: 'jid'),
             clearCredentials: false,
+            mode: EmailShutdownMode.logout,
           ),
-        ).called(2);
+        ).called(1);
       },
       tearDown: () async {
         await authFailureController.close();
@@ -1157,11 +1190,97 @@ void main() {
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Rejects default axi.im signup before provisioning or registration.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        allowDefaultSignupEndpoint: false,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: true,
+        passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.signupCustomEndpointRequired),
+        ),
+      ],
+      verify: (bloc) {
+        verifyNever(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
+          ),
+        );
+        verifyNever(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        );
+        expect(credentialStorage[bloc.pendingSignupRollbacksKey.value], isNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Rejects default axi.im signup case-insensitively.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(domain: ' AXI.IM '),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        allowDefaultSignupEndpoint: false,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: true,
+        passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(
+          config: EndpointConfig(domain: ' AXI.IM '),
+        ),
+        AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.signupCustomEndpointRequired),
+          config: EndpointConfig(domain: ' AXI.IM '),
+        ),
+      ],
+      verify: (_) {
+        verifyNever(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        );
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'Emits AuthenticationCompleteFromSignup after successful signup.',
       setUp: () {
         when(
           () => mockXmppService.connect(
-            jid: validJid,
+            jid: _signupJid,
             password: validPassword,
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
@@ -1173,8 +1292,9 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
+        emailService: mockEmailService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -1190,9 +1310,81 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(fromSignup: true),
-        AuthenticationCompleteFromSignup(),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
+        AuthenticationCompleteFromSignup(config: _signupEndpointConfig),
+      ],
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Provisions email only after captcha registration succeeds.',
+      setUp: () {
+        final order = <String>[];
+        when(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer((_) async {
+          order.add('registration');
+          return Response('', 200);
+        });
+        when(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async {
+          order.add('email');
+          return const provisioning.EmailProvisioningCredentials(
+            email: 'prov@axi.im',
+            password: validPassword,
+          );
+        });
+        when(
+          () => mockXmppService.connect(
+            jid: _signupJid,
+            password: validPassword,
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenAnswer((_) async => saltedPassword);
+        addTearDown(() {
+          expect(order, equals(<String>['registration', 'email']));
+        });
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _signupEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: true,
+        passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
+        AuthenticationCompleteFromSignup(config: _signupEndpointConfig),
       ],
     );
 
@@ -1201,7 +1393,7 @@ void main() {
       const welcomeBody = 'Localized welcome body';
       final bloc = AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1223,7 +1415,7 @@ void main() {
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Rolls back the provisioned email account after captcha rejection.',
+      'Captcha rejection never provisions email or stages rollback.',
       setUp: () {
         when(
           () => mockHttpClient.post(
@@ -1239,7 +1431,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
         emailService: mockEmailService,
         httpClient: mockHttpClient,
@@ -1257,14 +1449,177 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationSignupFailure(AuthRawMessage('Incorrect captcha')),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationSignupFailure(
+          AuthRawMessage('Incorrect captcha'),
+          config: _signupEndpointConfig,
+        ),
+      ],
+      verify: (bloc) {
+        verifyNever(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
+          ),
+        );
+        verifyNever(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        );
+        verifyNever(
+          () => mockHttpClient.post(
+            any(
+              that: predicate(
+                (Uri uri) =>
+                    uri.path.contains('/register/delete/') ||
+                    uri.path.contains('/register/unregister/'),
+              ),
+            ),
+            body: any(named: 'body'),
+          ),
+        );
+        expect(credentialStorage[bloc.pendingSignupRollbacksKey.value], isNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Retry after captcha rejection can complete with a clean state.',
+      setUp: () {
+        var registrationAttempts = 0;
+        when(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer((_) async {
+          registrationAttempts += 1;
+          return registrationAttempts == 1
+              ? Response(
+                  'There was an error registering the account: Incorrect captcha',
+                  400,
+                )
+              : Response('', 200);
+        });
+        when(
+          () => mockXmppService.connect(
+            jid: _signupJid,
+            password: validPassword,
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenAnswer((_) async => saltedPassword);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _signupEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) async {
+        await bloc.signup(
+          username: validUsername,
+          password: validPassword,
+          confirmPassword: validPassword,
+          captchaID: captchaId,
+          captcha: 'wrong-captcha',
+          rememberMe: true,
+          passwordWasSkipped: false,
+          welcomeTitle: signupWelcomeTitle,
+          welcomeBody: signupWelcomeBody,
+        );
+        await bloc.signup(
+          username: validUsername,
+          password: validPassword,
+          confirmPassword: validPassword,
+          captchaID: captchaId,
+          captcha: captchaText,
+          rememberMe: true,
+          passwordWasSkipped: false,
+          welcomeTitle: signupWelcomeTitle,
+          welcomeBody: signupWelcomeBody,
+        );
+      },
+      expect: () => const [
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationSignupFailure(
+          AuthRawMessage('Incorrect captcha'),
+          config: _signupEndpointConfig,
+        ),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
+        AuthenticationCompleteFromSignup(config: _signupEndpointConfig),
+      ],
+      verify: (bloc) {
+        verify(
+          () => mockProvisioningClient.createAccount(
+            localpart: validUsername,
+            password: validPassword,
+          ),
+        ).called(1);
+        expect(credentialStorage[bloc.pendingSignupRollbacksKey.value], isNull);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Uses the provisioned email password when rolling back after login failure.',
+      setUp: () {
+        when(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer(
+          (_) async => const provisioning.EmailProvisioningCredentials(
+            email: 'prov@axi.im',
+            password: 'provisioned-email-password',
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _signupEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+        passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
+        AuthenticationFailure(
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _signupEndpointConfig,
+        ),
       ],
       verify: (_) {
         verify(
           () => mockProvisioningClient.deleteAccount(
             email: 'prov@axi.im',
-            password: validPassword,
+            password: 'provisioned-email-password',
           ),
         ).called(1);
       },
@@ -1274,8 +1629,9 @@ void main() {
       'Rolls back the account if login fails after registration.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
+        emailService: mockEmailService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -1291,10 +1647,14 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(fromSignup: true),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
         AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _signupEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -1310,6 +1670,7 @@ void main() {
             body: any(named: 'body'),
           ),
         ).called(1);
+        expect(credentialStorage[bloc.pendingSignupRollbacksKey.value], isNull);
       },
     );
 
@@ -1337,8 +1698,9 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
+        emailService: mockEmailService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -1354,27 +1716,96 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(fromSignup: true),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
         AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _signupEndpointConfig,
         ),
       ],
       verify: (bloc) {
-        verify(
-          () => mockCredentialStore.write(
-            key: bloc.pendingSignupRollbacksKey,
-            value: any(named: 'value'),
+        final payload = credentialStorage[bloc.pendingSignupRollbacksKey.value];
+        expect(payload, isNotNull);
+        final decoded = jsonDecode(payload!) as List<dynamic>;
+        expect(decoded, hasLength(1));
+        final entry = decoded.first as Map<String, dynamic>;
+        expect(entry['email'], equals('prov@axi.im'));
+        expect(entry['emailPassword'], equals(validPassword));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Queues the provisioned email password when email rollback fails.',
+      setUp: () {
+        when(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
           ),
-        ).called(2);
+        ).thenAnswer(
+          (_) async => const provisioning.EmailProvisioningCredentials(
+            email: 'prov@axi.im',
+            password: 'provisioned-email-password',
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(Exception('offline'));
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _signupEndpointConfig,
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+        passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
+        AuthenticationFailure(
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _signupEndpointConfig,
+        ),
+      ],
+      verify: (bloc) {
+        final payload = credentialStorage[bloc.pendingSignupRollbacksKey.value];
+        expect(payload, isNotNull);
+        final decoded = jsonDecode(payload!) as List<dynamic>;
+        expect(decoded, hasLength(1));
+        final entry = decoded.first as Map<String, dynamic>;
+        expect(entry['email'], equals('prov@axi.im'));
+        expect(entry['password'], equals(validPassword));
+        expect(entry['emailPassword'], equals('provisioned-email-password'));
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Never sends rollback for accounts that completed authentication.',
       setUp: () {
-        credentialStorage['${validJid}_database_prefix'] = 'prefix';
-        credentialStorage['validusername@axi.im_database_prefix'] = 'prefix';
+        credentialStorage['${_signupJid}_database_prefix'] = 'prefix';
+        credentialStorage['validusername@selfhosted.example_database_prefix'] =
+            'prefix';
         credentialStorage['prefix_database_passphrase'] = 'passphrase';
         when(
           () => mockHttpClient.post(
@@ -1384,7 +1815,7 @@ void main() {
         ).thenAnswer((_) async => Response('', 200));
         when(
           () => mockXmppService.connect(
-            jid: validJid,
+            jid: _signupJid,
             password: validPassword,
             databasePrefix: any(named: 'databasePrefix'),
             databasePassphrase: any(named: 'databasePassphrase'),
@@ -1396,7 +1827,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1413,10 +1844,14 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(fromSignup: true),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
         AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _signupEndpointConfig,
         ),
       ],
       verify: (_) {
@@ -1436,11 +1871,11 @@ void main() {
         credentialStorage['pending_signup_rollbacks'] = jsonEncode([
           {
             'username': validUsername,
-            'host': EndpointConfig.defaultDomain,
+            'host': _signupEndpointConfig.domain,
             'password': 'stale',
             'createdAt': '2024-01-01T00:00:00.000Z',
             'expiresAt': '2099-01-01T00:00:00.000Z',
-            'email': 'user@axi.im',
+            'email': 'user@selfhosted.example',
           },
         ]);
         when(
@@ -1452,7 +1887,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1469,10 +1904,11 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => [
-        const AuthenticationSignUpInProgress(),
+        const AuthenticationSignUpInProgress(config: _signupEndpointConfig),
         const AuthenticationSignupFailure(
           AuthKeyMessage(AuthMessageKey.signupCleanupInProgress),
           isCleanupBlocked: true,
+          config: _signupEndpointConfig,
         ),
       ],
       verify: (bloc) {
@@ -1491,7 +1927,7 @@ void main() {
         credentialStorage['pending_signup_rollbacks'] = jsonEncode([
           {
             'username': validUsername,
-            'host': EndpointConfig.defaultDomain,
+            'host': _signupEndpointConfig.domain,
             'password': 'stale',
             'createdAt': '2024-01-01T00:00:00.000Z',
             'expiresAt': '2099-01-01T00:00:00.000Z',
@@ -1500,7 +1936,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1517,25 +1953,23 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
-        AuthenticationLogInInProgress(fromSignup: true),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
+        AuthenticationLogInInProgress(
+          fromSignup: true,
+          config: _signupEndpointConfig,
+        ),
         AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.invalidCredentials),
+          config: _signupEndpointConfig,
         ),
       ],
       verify: (bloc) {
-        final payload = credentialStorage['pending_signup_rollbacks'];
-        expect(payload, isNotNull);
-        final decoded = jsonDecode(payload!) as List<dynamic>;
-        expect(decoded, hasLength(1));
-        final entry = decoded.first as Map<String, dynamic>;
-        expect(entry['username'], equals(validUsername.toLowerCase()));
-        expect(entry['password'], equals(validPassword));
+        expect(credentialStorage[bloc.pendingSignupRollbacksKey.value], isNull);
       },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Surfaces email signup conflicts as account already exists.',
+      'Surfaces email signup conflicts and rolls back registered XMPP account.',
       setUp: () {
         when(
           () => mockProvisioningClient.createAccount(
@@ -1550,8 +1984,9 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
+        emailService: mockEmailService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -1567,18 +2002,32 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
         AuthenticationSignupFailure(
           AuthKeyMessage(AuthMessageKey.accountAlreadyExists),
+          config: _signupEndpointConfig,
         ),
       ],
-      verify: (_) {
-        verifyNever(
+      verify: (bloc) {
+        verify(
           () => mockHttpClient.post(
             _registrationMatcher(),
             body: any(named: 'body'),
           ),
-        );
+        ).called(1);
+        verify(
+          () => mockHttpClient.post(
+            any(
+              that: predicate(
+                (Uri uri) =>
+                    uri.path.contains('/register/delete/') ||
+                    uri.path.contains('/register/unregister/'),
+              ),
+            ),
+            body: any(named: 'body'),
+          ),
+        ).called(1);
+        expect(credentialStorage[bloc.pendingSignupRollbacksKey.value], isNull);
       },
     );
 
@@ -1599,7 +2048,7 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(smtpEnabled: false),
+        initialEndpointConfig: _signupXmppOnlyEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
@@ -1616,9 +2065,10 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
+        AuthenticationSignUpInProgress(config: _signupXmppOnlyEndpointConfig),
         AuthenticationSignupFailure(
           AuthKeyMessage(AuthMessageKey.accountAlreadyExists),
+          config: _signupXmppOnlyEndpointConfig,
         ),
       ],
     );
@@ -1640,8 +2090,9 @@ void main() {
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
+        initialEndpointConfig: _signupEndpointConfig,
         xmppService: mockXmppService,
+        emailService: mockEmailService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
       ),
@@ -1657,12 +2108,79 @@ void main() {
         welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
-        AuthenticationSignUpInProgress(),
+        AuthenticationSignUpInProgress(config: _signupEndpointConfig),
         AuthenticationSignupFailure(
           AuthRawMessage('Mailbox policy rejected this username.'),
+          config: _signupEndpointConfig,
         ),
       ],
     );
+  });
+
+  group('signup captcha', () {
+    test('Default endpoint does not fetch signup captcha.', () async {
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        allowDefaultSignupEndpoint: false,
+      );
+
+      expect(await bloc.fetchCaptchaSrcWithRetry(), isEmpty);
+      verifyNever(() => mockHttpClient.get(_registrationMatcher()));
+
+      await bloc.close();
+    });
+
+    test('Allowed default endpoint fetches signup captcha.', () async {
+      when(() => mockHttpClient.get(_registrationMatcher())).thenAnswer(
+        (_) async => Response(
+          '<html><body><img src="/captcha/example" /></body></html>',
+          200,
+        ),
+      );
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      );
+
+      expect(
+        await bloc.fetchCaptchaSrcWithRetry(),
+        'https://axi.im:5443/captcha/example',
+      );
+      verify(() => mockHttpClient.get(_registrationMatcher())).called(1);
+
+      await bloc.close();
+    });
+
+    test('Custom endpoint fetches signup captcha.', () async {
+      when(() => mockHttpClient.get(_registrationMatcher())).thenAnswer(
+        (_) async => Response(
+          '<html><body><img src="/captcha/example" /></body></html>',
+          200,
+        ),
+      );
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _signupEndpointConfig,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      );
+
+      expect(
+        await bloc.fetchCaptchaSrcWithRetry(),
+        'https://selfhosted.example:5443/captcha/example',
+      );
+      verify(() => mockHttpClient.get(_registrationMatcher())).called(1);
+
+      await bloc.close();
+    });
   });
 
   group('changePassword', () {
@@ -1696,9 +2214,10 @@ void main() {
         password2: 'newPassword',
       ),
       expect: () => const [
-        AuthenticationPasswordChangeInProgress(),
+        AuthenticationPasswordChangeInProgress(config: _xmppOnlyEndpointConfig),
         AuthenticationPasswordChangeFailure(
           AuthKeyMessage(AuthMessageKey.accountNotFound),
+          config: _xmppOnlyEndpointConfig,
         ),
       ],
     );
@@ -2028,9 +2547,7 @@ void main() {
       ),
       expect: () => const [
         AuthenticationUnregisterInProgress(),
-        AuthenticationUnregisterFailure(
-          AuthRawMessage("The account doesn't exist"),
-        ),
+        AuthenticationUnregisterFailure(AuthRawMessage('server error')),
       ],
       verify: (bloc) {
         verifyInOrder([
@@ -2457,6 +2974,13 @@ void main() {
           () => mockEmailService.shutdown(
             jid: any(named: 'jid'),
             clearCredentials: any(named: 'clearCredentials'),
+          ),
+        ).thenAnswer((_) => shutdownCompleter.future);
+        when(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: any(named: 'clearCredentials'),
+            mode: any(named: 'mode'),
           ),
         ).thenAnswer((_) => shutdownCompleter.future);
         when(
@@ -2977,19 +3501,43 @@ void main() {
     });
   });
 
+  group('auth bootstrap', () {
+    test('Pending logout barrier blocks stored login bootstrap.', () async {
+      credentialStorage
+        ..['remember_me_choice'] = true.toString()
+        ..['jid'] = validJid
+        ..['password'] = validPassword
+        ..['password_prehashed_v1'] = true.toString()
+        ..['logout_in_progress_v1'] = validJid;
+
+      expect(
+        await resolveHasStoredLoginCredentials(mockCredentialStore),
+        isFalse,
+      );
+    });
+  });
+
   group('logout', () {
     setUp(() {
       when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
       when(
         () => mockCredentialStore.delete(key: any(named: 'key')),
-      ).thenAnswer((_) async => true);
-      when(
-        () => mockCredentialStore.delete(key: any(named: 'key')),
-      ).thenAnswer((_) async => true);
+      ).thenAnswer((invocation) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        credentialStorage.remove(key.value);
+        return true;
+      });
       when(
         () => mockEmailService.shutdown(
           jid: any(named: 'jid'),
           clearCredentials: any(named: 'clearCredentials'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => mockEmailService.shutdown(
+          jid: any(named: 'jid'),
+          clearCredentials: any(named: 'clearCredentials'),
+          mode: any(named: 'mode'),
         ),
       ).thenAnswer((_) async {});
     });
@@ -3037,6 +3585,9 @@ void main() {
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'User initiated logout disconnects the xmpp service, forgets credentials and emits [AuthenticationNone].',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+      },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         initialEndpointConfig: const EndpointConfig(),
@@ -3058,8 +3609,48 @@ void main() {
           () =>
               mockCredentialStore.delete(key: bloc.passwordPreHashedStorageKey),
         ).called(1);
+        expect(credentialStorage, isNot(contains('logout_in_progress_v1')));
         verify(() => mockXmppService.clearSessionTokens()).called(1);
         verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    test(
+      'User initiated logout writes a durable barrier before slow teardown.',
+      () async {
+        credentialStorage['jid'] = validJid;
+        final shutdownCompleter = Completer<void>();
+        when(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: any(named: 'clearCredentials'),
+            mode: any(named: 'mode'),
+          ),
+        ).thenAnswer((_) => shutdownCompleter.future);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+
+        final logoutFuture = bloc.logout(severity: LogoutSeverity.normal);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(credentialStorage['logout_in_progress_v1'], validJid);
+        expect(credentialStorage['jid'], validJid);
+
+        shutdownCompleter.complete();
+        await logoutFuture;
+
+        expect(credentialStorage, isNot(contains('logout_in_progress_v1')));
+        expect(credentialStorage, isNot(contains('jid')));
+
+        await bloc.close();
       },
     );
 
@@ -3072,6 +3663,7 @@ void main() {
           () => mockEmailService.shutdown(
             jid: any(named: 'jid'),
             clearCredentials: any(named: 'clearCredentials'),
+            mode: any(named: 'mode'),
           ),
         ).thenAnswer((_) => shutdownCompleter.future);
         when(
@@ -3144,6 +3736,40 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Stored login recovers an interrupted logout instead of auto-login.',
+      setUp: () {
+        credentialStorage
+          ..['jid'] = validJid
+          ..['password'] = validPassword
+          ..['password_prehashed_v1'] = true.toString()
+          ..['logout_in_progress_v1'] = validJid;
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.login(),
+      expect: () => [],
+      verify: (bloc) {
+        expect(credentialStorage, isNot(contains('logout_in_progress_v1')));
+        expect(credentialStorage, isNot(contains('jid')));
+        expect(credentialStorage, isNot(contains('password')));
+        verify(() => mockXmppService.clearSessionTokens()).called(1);
+        verify(() => mockXmppService.disconnect()).called(1);
+        verify(
+          () => mockEmailService.clearStoredCredentials(
+            jid: validJid,
+            preserveActiveSession: false,
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
@@ -3161,6 +3787,7 @@ void main() {
           () => mockEmailService.shutdown(
             jid: any(named: 'jid'),
             clearCredentials: clearEmailCredentialsOnLogout,
+            mode: EmailShutdownMode.logout,
           ),
         ).called(1);
       },

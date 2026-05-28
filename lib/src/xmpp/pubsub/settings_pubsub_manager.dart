@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -150,9 +151,14 @@ final class SettingsSyncPayload {
       xmlns: settingsPubSubNode,
       attributes: {
         _settingsUpdatedAtAttr: updatedAt.toUtc().toIso8601String(),
-        _settingsSourceIdAttr: _normalizeSourceId(sourceId),
+        _settingsSourceIdAttr: escapeXmlAttribute(_normalizeSourceId(sourceId)),
       },
-      children: [mox.XMLNode(tag: _settingsDataTag, text: encodedSettings)],
+      children: [
+        mox.XMLNode(
+          tag: _settingsDataTag,
+          text: escapeXmlText(encodedSettings),
+        ),
+      ],
     );
   }
 

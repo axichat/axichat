@@ -70,6 +70,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';

@@ -150,6 +150,14 @@ class _SignupFormState extends State<SignupForm>
       text: context.l10n.authUsernameCaseInsensitive,
       style: context.textTheme.small,
     );
+    if (context
+        .read<AuthenticationCubit>()
+        .state
+        .config
+        .requiresCustomSignupEndpoint()) {
+      _clearCaptcha();
+      return;
+    }
     if (_captchaLoadState != _CaptchaLoadState.idle) {
       return;
     }
@@ -222,6 +230,17 @@ class _SignupFormState extends State<SignupForm>
   void _onPressed(BuildContext context) async {
     if (context.read<SignupAvatarCubit>().state.processing) return;
     FocusManager.instance.primaryFocus?.unfocus();
+    if (context
+        .read<AuthenticationCubit>()
+        .state
+        .config
+        .requiresCustomSignupEndpoint()) {
+      _goToSignupStep(0);
+      setState(() {
+        _errorText = context.l10n.signupCustomEndpointRequired;
+      });
+      return;
+    }
     final captchaSrc = _captchaSrcUrl?.trim() ?? '';
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
       return;
@@ -274,11 +293,37 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<String> _loadCaptchaSrc() async {
+    if (context
+        .read<AuthenticationCubit>()
+        .state
+        .config
+        .requiresCustomSignupEndpoint()) {
+      return '';
+    }
     _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
     return context.read<AuthenticationCubit>().fetchCaptchaSrcWithRetry();
   }
 
+  void _clearCaptcha() {
+    _captchaRequestSerial++;
+    _captchaTextController.clear();
+    _captchaLoadState = _CaptchaLoadState.idle;
+    _captchaSrcUrl = null;
+    _captchaAutoRetryAttempts = 0;
+  }
+
   void _reloadCaptcha() {
+    if (context
+        .read<AuthenticationCubit>()
+        .state
+        .config
+        .requiresCustomSignupEndpoint()) {
+      _clearCaptcha();
+      if (mounted) {
+        setState(() {});
+      }
+      return;
+    }
     _captchaTextController.clear();
     unawaited(_startCaptchaLoad(resetAutoRetry: true));
   }
@@ -591,10 +636,18 @@ class _SignupFormState extends State<SignupForm>
       listener: (context, state) {
         if (_lastCaptchaServer != state.server) {
           _lastCaptchaServer = state.server;
-          _reloadCaptcha();
+          if (state.config.requiresCustomSignupEndpoint()) {
+            _clearCaptcha();
+          } else {
+            _reloadCaptcha();
+          }
         }
         if (state is AuthenticationSignupFailure) {
-          _reloadCaptcha();
+          if (state.config.requiresCustomSignupEndpoint()) {
+            _clearCaptcha();
+          } else {
+            _reloadCaptcha();
+          }
           setState(() {
             _errorText = state.message.resolve(context.l10n);
           });
@@ -790,10 +843,16 @@ class _SignupFormState extends State<SignupForm>
                                             onEditingComplete: () => unawaited(
                                               _handleContinuePressed(context),
                                             ),
-                                            trailing: EndpointSuffix(
-                                              server: state.server,
+                                            trailing: SignupEndpointSuffix(
+                                              config: state.config,
                                             ),
                                             validator: (text) {
+                                              if (state.config
+                                                  .requiresCustomSignupEndpoint()) {
+                                                return context
+                                                    .l10n
+                                                    .signupCustomEndpointRequired;
+                                              }
                                               if (text.isEmpty) {
                                                 return context
                                                     .l10n

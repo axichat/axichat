@@ -250,6 +250,7 @@
   "chatComposerSemantics": "Saisie du message",
   "draftSaved": "Brouillon enregistré",
   "draftAutosaved": "Enregistré automatiquement",
+  "draftAutosave": "Enregistrement automatique",
   "draftErrorTitle": "Oups",
   "draftNoRecipients": "Aucun destinataire",
   "draftSubjectSemantics": "Objet de l’e-mail",
@@ -1764,7 +1765,7 @@
   "settingsAutoDownloadScopeAlways": "Toujours",
   "settingsAutoDownloadScopeTrustedContacts": "Uniquement pour les contacts de confiance.",
   "emailEncryptionBetaLabel": "Chiffrement des e-mails",
-  "emailEncryptionBetaChip": "Bêta",
+  "emailEncryptionBetaChip": "Expérimental",
   "emailEncryptionBetaEnabledStatus": "Activé pour {address}",
   "@emailEncryptionBetaEnabledStatus": {
     "placeholders": {
@@ -3230,6 +3231,7 @@
   "mucDestroyRoomConfirmTitle": "Supprimer le salon ?",
   "mucDestroyRoomConfirmBody": "Cela supprime le salon pour toutes les personnes qui s’y trouvent actuellement.",
   "contactsDetailsSectionTitle": "Détails",
+  "contactsFolderRoutingDetailLabel": "Appartient à",
   "contactsAddressLabel": "Adresse",
   "contactsMessagesLabel": "Messages",
   "contactsMessagesNameLabel": "Nom dans les messages",

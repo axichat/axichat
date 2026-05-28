@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
   return showAdaptiveBottomSheet<CalendarExportFormat>(
     context: context,
     useSafeArea: true,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     preferDialogOnMobile: true,
     showDragHandle: true,
     surfacePadding: EdgeInsets.zero,

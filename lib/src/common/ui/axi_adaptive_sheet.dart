@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:math' as math;
-
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/fade_scale_dialog.dart';
@@ -10,8 +8,6 @@ import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/modal_close_button.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-
-enum AxiSheetBottomSafeAreaBehavior { none, insideSurface, outsideSurface }
 
 /// Shows a bottom sheet on mobile form factors and a dialog on desktop/tablet.
 ///
@@ -36,7 +32,6 @@ Future<T?> showAdaptiveBottomSheet<T>({
   double? dialogMaxWidth,
   double? dialogMaxHeightFraction,
   EdgeInsetsGeometry? surfacePadding,
-  AxiSheetBottomSafeAreaBehavior? bottomSafeAreaBehavior,
 }) {
   final commandSurface = preferDialogOnMobile
       ? CommandSurface.menu
@@ -62,7 +57,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: isScrollControlled,
-      useSafeArea: false,
+      useSafeArea: useSafeArea,
       showDragHandle: false,
       enableDrag: enableDrag,
       isDismissible: isDismissible,
@@ -71,48 +66,13 @@ Future<T?> showAdaptiveBottomSheet<T>({
       useRootNavigator: useRootNavigator,
       requestFocus: requestFocus,
       builder: (sheetContext) {
-        final MediaQueryData mediaQuery = MediaQuery.of(sheetContext);
-        final MediaQueryData viewMediaQuery = MediaQueryData.fromView(
-          View.of(sheetContext),
-        );
         final bool transparentSurface = resolvedBackground.a == 0;
-        const double zeroInset = 0;
-        final double topInset = useSafeArea
-            ? viewMediaQuery.viewPadding.top
-            : zeroInset;
         final EdgeInsets baseSurfacePadding = resolvedSurfacePadding.resolve(
           Directionality.of(sheetContext),
         );
-        final AxiSheetBottomSafeAreaBehavior resolvedBottomSafeAreaBehavior =
-            bottomSafeAreaBehavior ??
-            (useBottomSafeArea
-                ? AxiSheetBottomSafeAreaBehavior.insideSurface
-                : AxiSheetBottomSafeAreaBehavior.none);
-        final double bottomSafeInset =
-            useSafeArea &&
-                resolvedBottomSafeAreaBehavior !=
-                    AxiSheetBottomSafeAreaBehavior.none
-            ? math.max(
-                viewMediaQuery.viewPadding.bottom -
-                    mediaQuery.viewInsets.bottom,
-                zeroInset,
-              )
-            : zeroInset;
-        final double surfaceBottomSafeInset =
-            resolvedBottomSafeAreaBehavior ==
-                AxiSheetBottomSafeAreaBehavior.insideSurface
-            ? bottomSafeInset
-            : zeroInset;
-        final double externalBottomSafeInset =
-            resolvedBottomSafeAreaBehavior ==
-                AxiSheetBottomSafeAreaBehavior.outsideSurface
-            ? bottomSafeInset
-            : zeroInset;
         final EdgeInsets resolvedSheetSurfacePadding = transparentSurface
             ? EdgeInsets.zero
-            : baseSurfacePadding.copyWith(
-                bottom: baseSurfacePadding.bottom + surfaceBottomSafeInset,
-              );
+            : baseSurfacePadding;
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,
           showCloseButton: showCloseButton,
@@ -127,23 +87,16 @@ Future<T?> showAdaptiveBottomSheet<T>({
             padding: resolvedSheetSurfacePadding,
             borderRadius: sheetRadius,
             shadows: transparentSurface ? const <BoxShadow>[] : null,
-            child: child,
-          ),
-        );
-        final Widget scopedSurface = KeyboardPopScope(child: surface);
-        return Padding(
-          padding: EdgeInsets.only(
-            top: topInset,
-            bottom: externalBottomSafeInset,
-          ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight:
-                  mediaQuery.size.height - topInset - externalBottomSafeInset,
+            child: SafeArea(
+              top: false,
+              left: false,
+              right: false,
+              bottom: useSafeArea && useBottomSafeArea,
+              child: child,
             ),
-            child: scopedSurface,
           ),
         );
+        return KeyboardPopScope(child: surface);
       },
     );
   }

@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/tasks/schedule_range_fields.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -53,6 +54,7 @@ Future<CalendarAvailabilityRequest?> showCalendarAvailabilityRequestSheet({
   return showAdaptiveBottomSheet<CalendarAvailabilityRequest>(
     context: context,
     isScrollControlled: true,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarAvailabilityRequestSheet(
       share: share,
@@ -72,6 +74,7 @@ Future<CalendarAvailabilityDecision?> showCalendarAvailabilityDecisionSheet({
   return showAdaptiveBottomSheet<CalendarAvailabilityDecision>(
     context: context,
     isScrollControlled: true,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarAvailabilityDecisionSheet(
       request: request,

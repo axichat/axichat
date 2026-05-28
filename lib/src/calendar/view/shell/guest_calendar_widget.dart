@@ -152,7 +152,7 @@ class _GuestCalendarWidgetState
     final Widget content = CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
       modalAnchorKey: _calendarModalAnchorKey,
-      sheetBottomSafeAreaBehavior: AxiSheetBottomSafeAreaBehavior.insideSurface,
+      useSheetBottomSafeArea: true,
       child: CalendarHoverTitleScope(
         controller: _hoverTitleController,
         child: SafeArea(

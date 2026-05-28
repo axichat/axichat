@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
+import 'package:axichat/src/chat/view/timeline/message/email_html_web_view.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
+import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -48,6 +54,121 @@ void main() {
     },
   );
 
+  testWidgets('autosave switch persists for an existing draft', (tester) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.widget<ShadSwitch>(find.byType(ShadSwitch)).value, isTrue);
+    tester.widget<ShadSwitch>(find.byType(ShadSwitch)).onChanged?.call(false);
+    await tester.pump();
+
+    verify(
+      () =>
+          harness.draftCubit.updateDraftAutosaveEnabled(id: 7, enabled: false),
+    ).called(1);
+    expect(tester.widget<ShadSwitch>(find.byType(ShadSwitch)).value, isFalse);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('autosave switch off prevents scheduled autosave', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+          autosaveEnabled: false,
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _enterBodyText(tester, 'hello updated');
+    await tester.pump(const Duration(seconds: 3));
+
+    verifyNever(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
+      ),
+    );
+  });
+
+  testWidgets('seeds recipients before the first post-build pump', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    when(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
+      ),
+    ).thenAnswer((_) async => _draft(id: 7));
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          id: 7,
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Save draft'));
+    await tester.pump();
+
+    verify(
+      () => harness.draftCubit.saveDraft(
+        id: 7,
+        jids: const ['peer@example.com'],
+        body: 'hello',
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: false,
+        autosaveEnabled: true,
+      ),
+    ).called(1);
+  });
+
   testWidgets(
     'does not delete tracked draft after emptying during in-flight autosave',
     (tester) async {
@@ -64,7 +185,7 @@ void main() {
           calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
           forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: any(named: 'autoSave'),
-          shouldCommit: any(named: 'shouldCommit'),
+          autosaveEnabled: any(named: 'autosaveEnabled'),
         ),
       ).thenAnswer((_) => saveCompleter.future);
 
@@ -94,7 +215,7 @@ void main() {
           calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
           forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: true,
-          shouldCommit: any(named: 'shouldCommit'),
+          autosaveEnabled: true,
         ),
       ).called(1);
 
@@ -192,7 +313,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: any(named: 'autoSave'),
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
       ),
     ).thenAnswer((_) => saveCompleter.future);
 
@@ -223,7 +344,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: true,
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: true,
       ),
     ).called(1);
 
@@ -247,7 +368,6 @@ void main() {
     final formKey = GlobalKey<DraftFormState>();
     final saveCompleter = Completer<Draft>();
     final savedDraftIds = <int>[];
-    bool Function()? shouldCommit;
     var discarded = false;
     when(
       () => harness.draftCubit.saveDraft(
@@ -260,15 +380,10 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: any(named: 'autoSave'),
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
       ),
-    ).thenAnswer((invocation) async {
-      shouldCommit =
-          invocation.namedArguments[#shouldCommit] as bool Function()?;
+    ).thenAnswer((_) async {
       await saveCompleter.future;
-      if (shouldCommit?.call() == false) {
-        throw const DraftSaveAbortedException();
-      }
       return _draft(id: 7);
     });
 
@@ -301,7 +416,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: true,
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: true,
       ),
     ).called(1);
 
@@ -318,7 +433,6 @@ void main() {
     expect(closeCompleted, isTrue);
     expect(await closeResult, isTrue);
     expect(discarded, isTrue);
-    expect(shouldCommit?.call(), isFalse);
     verifyNever(() => harness.draftCubit.deleteDraft(id: 7));
 
     saveCompleter.complete(_draft(id: 7));
@@ -346,7 +460,7 @@ void main() {
           calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
           forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: any(named: 'autoSave'),
-          shouldCommit: any(named: 'shouldCommit'),
+          autosaveEnabled: any(named: 'autosaveEnabled'),
         ),
       ).thenAnswer((_) {
         saveCalls += 1;
@@ -408,7 +522,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: any(named: 'autoSave'),
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
       ),
     ).thenAnswer((_) => saveCompleter.future);
 
@@ -462,7 +576,7 @@ void main() {
           calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
           forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: any(named: 'autoSave'),
-          shouldCommit: any(named: 'shouldCommit'),
+          autosaveEnabled: any(named: 'autosaveEnabled'),
         ),
       ).thenAnswer((_) async => _draft(id: 8));
 
@@ -503,7 +617,7 @@ void main() {
           calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
           forwardedBlocks: any(named: 'forwardedBlocks'),
           autoSave: true,
-          shouldCommit: any(named: 'shouldCommit'),
+          autosaveEnabled: true,
         ),
       ).called(1);
       verifyNever(() => harness.draftCubit.deleteDraft(id: 8));
@@ -527,7 +641,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: any(named: 'autoSave'),
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
       ),
     ).thenAnswer((invocation) async {
       savedBlocks.add(
@@ -567,7 +681,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: true,
-        shouldCommit: any(named: 'shouldCommit'),
+        autosaveEnabled: true,
       ),
     ).called(1);
     expect(savedBlocks.single.single.isConverted, isTrue);
@@ -606,6 +720,566 @@ void main() {
       ),
     );
     expect(find.text('Convert to editable text'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('basic HTML forwarded blocks open as normal body text', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'Intro note',
+          forwardedBlocks: [_forwardedBasicHtmlBlock()],
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final field = tester.widget<AxiTextFormField>(_bodyField());
+    expect(
+      field.controller?.text,
+      allOf(
+        contains('Intro note'),
+        contains('-------- Forwarded message --------'),
+        contains('Forwarded body'),
+      ),
+    );
+    expect(find.text('Convert to editable text'), findsNothing);
+    expect(find.byType(EmailHtmlWebView), findsNothing);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('forwarded original HTML unblock requires confirmation', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'Intro note',
+          forwardedBlocks: [_forwardedBlockedHtmlBlock()],
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<EmailHtmlWebView>(find.byType(EmailHtmlWebView))
+          .contentMode,
+      EmailHtmlContentMode.safe,
+    );
+
+    await tester.tap(find.text('Unblock'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('View original email?'), findsOneWidget);
+    expect(
+      tester
+          .widget<EmailHtmlWebView>(find.byType(EmailHtmlWebView))
+          .contentMode,
+      EmailHtmlContentMode.safe,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('View original email?'), findsNothing);
+    expect(find.text('Unblock'), findsOneWidget);
+  });
+
+  testWidgets('send does not start before forwarded attachment hydration', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final cloneCompleter = Completer<List<String>>();
+    final attachmentFile = File(
+      '${Directory.systemTemp.path}/axichat-forwarded-hydration-test.txt',
+    )..writeAsStringSync('forwarded attachment');
+    final sentAttachments = <List<Attachment>>[];
+    addTearDown(() {
+      if (attachmentFile.existsSync()) {
+        attachmentFile.deleteSync();
+      }
+    });
+    final chat = Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+    );
+    when(() => harness.chatsCubit.state).thenReturn(
+      ChatsState(
+        openCalendar: false,
+        items: [chat],
+        visibleItems: [chat],
+        creationStatus: RequestStatus.none,
+      ),
+    );
+    when(
+      () => harness.draftCubit.cloneDraftAttachmentMetadata(any()),
+    ).thenAnswer((_) => cloneCompleter.future);
+    when(
+      () => harness.draftCubit.loadDraftAttachments(any<List<String>>()),
+    ).thenAnswer((invocation) async {
+      final ids = invocation.positionalArguments.single as List<String>;
+      if (!ids.contains('cloned-meta')) {
+        return const [];
+      }
+      return [
+        Attachment(
+          metadataId: 'cloned-meta',
+          path: attachmentFile.path,
+          fileName: 'forwarded.txt',
+          mimeType: 'text/plain',
+          sizeBytes: attachmentFile.lengthSync(),
+        ),
+      ];
+    });
+    when(
+      () => harness.draftCubit.sendDraft(
+        id: any(named: 'id'),
+        xmppTargets: any(named: 'xmppTargets'),
+        emailTargets: any(named: 'emailTargets'),
+        body: any(named: 'body'),
+        shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+      ),
+    ).thenAnswer((invocation) async {
+      sentAttachments.add(
+        List<Attachment>.from(
+          invocation.namedArguments[#attachments] as List<Attachment>,
+        ),
+      );
+      return DraftSendOutcome.success();
+    });
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'Intro note',
+          forwardedSourceAttachmentMetadataIds: const ['source-meta'],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Send draft'), warnIfMissed: false);
+    await tester.pump();
+
+    expect(sentAttachments, isEmpty);
+
+    await tester.runAsync(() async {
+      cloneCompleter.complete(const ['cloned-meta']);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump(const Duration(milliseconds: 400));
+
+    verify(
+      () => harness.draftCubit.cloneDraftAttachmentMetadata(any()),
+    ).called(1);
+    verify(
+      () => harness.draftCubit.loadDraftAttachments(any<List<String>>()),
+    ).called(1);
+
+    expect(sentAttachments, isEmpty);
+  });
+
+  testWidgets('disposing during forwarded attachment hydration cleans clones', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final cloneCompleter = Completer<List<String>>();
+    when(
+      () => harness.draftCubit.cloneDraftAttachmentMetadata(any()),
+    ).thenAnswer((_) => cloneCompleter.future);
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          body: 'Intro note',
+          forwardedSourceAttachmentMetadataIds: const ['source-meta'],
+        ),
+      ),
+    );
+    await tester.pumpWidget(harness.wrap(const SizedBox.shrink()));
+
+    await tester.runAsync(() async {
+      cloneCompleter.complete(const ['cloned-meta']);
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+
+    verify(
+      () => harness.draftCubit.deleteDraftAttachmentMetadata('cloned-meta'),
+    ).called(1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('send preparation disables repeated taps until send finishes', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final sendCompleter = Completer<DraftSendOutcome>();
+    final chat = Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+    );
+    when(
+      () => harness.settingsCubit.state,
+    ).thenReturn(const SettingsState(emailSendConfirmationEnabled: false));
+    when(() => harness.chatsCubit.state).thenReturn(
+      ChatsState(
+        openCalendar: false,
+        items: [chat],
+        visibleItems: [chat],
+        creationStatus: RequestStatus.none,
+      ),
+    );
+    when(
+      () => harness.draftCubit.sendDraft(
+        id: any(named: 'id'),
+        xmppTargets: any(named: 'xmppTargets'),
+        emailTargets: any(named: 'emailTargets'),
+        body: any(named: 'body'),
+        shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+      ),
+    ).thenAnswer((_) => sendCompleter.future);
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['peer@example.com'],
+          body: 'hello',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Send draft').last);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send draft'), warnIfMissed: false);
+    await tester.pump();
+
+    verify(
+      () => harness.draftCubit.sendDraft(
+        id: any(named: 'id'),
+        xmppTargets: any(named: 'xmppTargets'),
+        emailTargets: any(named: 'emailTargets'),
+        body: any(named: 'body'),
+        shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+      ),
+    ).called(1);
+
+    sendCompleter.complete(DraftSendOutcome.success());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets(
+    'seeded email transport override sends XMPP-looking recipient as email',
+    (tester) async {
+      final harness = _DraftFormHarness();
+      final sentXmppTargetCounts = <int>[];
+      final sentEmailTargets = <List<Contact>>[];
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2026),
+        transport: MessageTransport.xmpp,
+      );
+      when(() => harness.settingsCubit.state).thenReturn(
+        const SettingsState(
+          endpointConfig: EndpointConfig(smtpEnabled: true),
+          emailSendConfirmationEnabled: false,
+        ),
+      );
+      when(() => harness.chatsCubit.state).thenReturn(
+        ChatsState(
+          openCalendar: false,
+          items: [chat],
+          visibleItems: [chat],
+          creationStatus: RequestStatus.none,
+        ),
+      );
+      when(
+        () => harness.draftCubit.sendDraft(
+          id: any(named: 'id'),
+          xmppTargets: any(named: 'xmppTargets'),
+          emailTargets: any(named: 'emailTargets'),
+          body: any(named: 'body'),
+          shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+          subject: any(named: 'subject'),
+          quoteTarget: any(named: 'quoteTarget'),
+          attachments: any(named: 'attachments'),
+          calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+          forwardedBlocks: any(named: 'forwardedBlocks'),
+        ),
+      ).thenAnswer((invocation) async {
+        sentXmppTargetCounts.add(
+          (invocation.namedArguments[#xmppTargets] as List<DraftXmppTarget>)
+              .length,
+        );
+        sentEmailTargets.add(
+          List<Contact>.from(invocation.namedArguments[#emailTargets] as List),
+        );
+        return DraftSendOutcome.success();
+      });
+
+      await tester.pumpWidget(
+        harness.wrap(
+          DraftForm(
+            locate: harness.locate,
+            jids: const ['peer@axi.im'],
+            recipientTransportOverrides: const {
+              'peer@axi.im': MessageTransport.email,
+            },
+            body: 'hello',
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('Send draft').last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(sentXmppTargetCounts, const [0]);
+      expect(sentEmailTargets.single, hasLength(1));
+      expect(sentEmailTargets.single.single.address, 'peer@axi.im');
+      expect(
+        sentEmailTargets.single.single.configuredTransport,
+        MessageTransport.email,
+      );
+    },
+  );
+
+  testWidgets('mixed draft retry keeps only recipients for failed transport', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    var sendAttempts = 0;
+    final sentXmppTargetCounts = <int>[];
+    final sentEmailTargetCounts = <int>[];
+    final xmppChat = Chat(
+      jid: 'xmpp@example.com',
+      title: 'Xmpp',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+      transport: MessageTransport.xmpp,
+    );
+    final emailChat = Chat(
+      jid: 'mail@example.com',
+      title: 'Mail',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+      transport: MessageTransport.email,
+      emailAddress: 'mail@example.com',
+    );
+    when(
+      () => harness.settingsCubit.state,
+    ).thenReturn(const SettingsState(emailSendConfirmationEnabled: false));
+    when(() => harness.chatsCubit.state).thenReturn(
+      ChatsState(
+        openCalendar: false,
+        items: [xmppChat, emailChat],
+        visibleItems: [xmppChat, emailChat],
+        creationStatus: RequestStatus.none,
+      ),
+    );
+    when(
+      () => harness.draftCubit.sendDraft(
+        id: any(named: 'id'),
+        xmppTargets: any(named: 'xmppTargets'),
+        emailTargets: any(named: 'emailTargets'),
+        body: any(named: 'body'),
+        shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+      ),
+    ).thenAnswer((invocation) async {
+      sendAttempts += 1;
+      sentXmppTargetCounts.add(
+        (invocation.namedArguments[#xmppTargets] as List<DraftXmppTarget>)
+            .length,
+      );
+      sentEmailTargetCounts.add(
+        (invocation.namedArguments[#emailTargets] as List<Contact>).length,
+      );
+      if (sendAttempts == 1) {
+        return DraftSendOutcome.failure(
+          failureType: DraftSendFailureType.sendFailed,
+          completedTransports: {DraftSendTransport.xmpp},
+        );
+      }
+      return DraftSendOutcome.success();
+    });
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['xmpp@example.com', 'mail@example.com'],
+          body: 'hello',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Send draft'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Send draft'));
+    await tester.pump();
+
+    expect(sentXmppTargetCounts, [1, 0]);
+    expect(sentEmailTargetCounts, [1, 1]);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  testWidgets('email partial retry keeps only failed email recipients', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    var sendAttempts = 0;
+    final sentEmailTargetAddresses = <List<String>>[];
+    final firstChat = Chat(
+      jid: 'chat-a@example.com',
+      title: 'Mail A',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+      transport: MessageTransport.email,
+      emailAddress: 'a@example.com',
+    );
+    final secondChat = Chat(
+      jid: 'chat-b@example.com',
+      title: 'Mail B',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+      transport: MessageTransport.email,
+      emailAddress: 'b@example.com',
+    );
+    when(
+      () => harness.settingsCubit.state,
+    ).thenReturn(const SettingsState(emailSendConfirmationEnabled: false));
+    when(() => harness.chatsCubit.state).thenReturn(
+      ChatsState(
+        openCalendar: false,
+        items: [firstChat, secondChat],
+        visibleItems: [firstChat, secondChat],
+        creationStatus: RequestStatus.none,
+      ),
+    );
+    when(
+      () => harness.draftCubit.sendDraft(
+        id: any(named: 'id'),
+        xmppTargets: any(named: 'xmppTargets'),
+        emailTargets: any(named: 'emailTargets'),
+        body: any(named: 'body'),
+        shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+      ),
+    ).thenAnswer((invocation) async {
+      sendAttempts += 1;
+      sentEmailTargetAddresses.add(
+        (invocation.namedArguments[#emailTargets] as List<Contact>)
+            .map((target) => target.preferredEmailAddress ?? target.key)
+            .toList(growable: false),
+      );
+      if (sendAttempts == 1) {
+        return DraftSendOutcome.failure(
+          failureType: DraftSendFailureType.sendFailed,
+          completedEmailRecipientKeys: const {'a@example.com'},
+          latestEmailRecipientStatuses: const {
+            'a@example.com': FanOutRecipientState.sent,
+            'b@example.com': FanOutRecipientState.failed,
+          },
+        );
+      }
+      return DraftSendOutcome.success(
+        completedTransports: {DraftSendTransport.email},
+        completedEmailRecipientKeys: const {'b@example.com'},
+      );
+    });
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          locate: harness.locate,
+          jids: const ['chat-a@example.com', 'chat-b@example.com'],
+          body: 'hello',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Send draft'));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(sentEmailTargetAddresses, hasLength(1));
+    expect(
+      find.text(
+        'Some recipients were not sent. Sent recipients were removed; retry the remaining recipients.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.priority_high_rounded), findsAtLeastNWidgets(2));
+    expect(find.byType(AxiProgressIndicator), findsNothing);
+
+    await tester.tap(find.byTooltip('Send draft'));
+    await tester.pump();
+
+    expect(sentEmailTargetAddresses, [
+      ['a@example.com', 'b@example.com'],
+      ['b@example.com'],
+    ]);
     await tester.pump(const Duration(milliseconds: 400));
   });
 }
@@ -650,7 +1324,16 @@ class _DraftFormHarness {
       () => draftCubit.loadDraftAttachments(any<List<String>>()),
     ).thenAnswer((_) async => const []);
     when(
+      () => draftCubit.deleteDraftAttachmentMetadata(any()),
+    ).thenAnswer((_) async {});
+    when(
       () => draftCubit.deleteDraft(id: any(named: 'id')),
+    ).thenAnswer((_) async {});
+    when(
+      () => draftCubit.updateDraftAutosaveEnabled(
+        id: any(named: 'id'),
+        enabled: any(named: 'enabled'),
+      ),
     ).thenAnswer((_) async {});
   }
 
@@ -740,7 +1423,21 @@ DraftForwardedBlock _forwardedBlock() {
 
 DraftForwardedBlock _forwardedHtmlBlock() {
   return _forwardedBlock().copyWith(
+    originalHtml: '<table><tr><td>Forwarded rich body</td></tr></table>',
+  );
+}
+
+DraftForwardedBlock _forwardedBasicHtmlBlock() {
+  return _forwardedBlock().copyWith(
     originalHtml: '<p><strong>Forwarded body</strong></p>',
+  );
+}
+
+DraftForwardedBlock _forwardedBlockedHtmlBlock() {
+  return _forwardedBlock().copyWith(
+    originalHtml:
+        '<script>alert("blocked")</script>'
+        '<table><tr><td>Forwarded rich body</td></tr></table>',
   );
 }
 

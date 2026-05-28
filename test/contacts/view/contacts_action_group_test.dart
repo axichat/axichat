@@ -5,16 +5,19 @@ import 'dart:async';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/contacts/view/contacts_list.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +101,7 @@ void main() {
       final contactsCubit = ContactsCubit(xmppService: xmppService);
       final settingsCubit = _settingsCubit(
         endpointConfig: const EndpointConfig(
+          domain: 'example.net',
           smtpEnabled: false,
           xmppEnabled: true,
         ),
@@ -120,9 +124,26 @@ void main() {
       await tester.tap(find.text('New'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('john@axi.im'), warnIfMissed: false);
+      await tester.tap(find.text('Contact address'), warnIfMissed: false);
+      tester.testTextInput.enterText('new@');
+      await tester.pump();
+
+      expect(find.text('new@example.net'), findsOneWidget);
+
+      tester.testTextInput.enterText('n');
+      await tester.pump();
+
+      expect(find.text('Enter a valid JID'), findsNothing);
+      expect(find.text('Enter a valid address.'), findsNothing);
+
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+
+      expect(find.text('Enter a valid address.'), findsOneWidget);
+
       tester.testTextInput.enterText('new@example.com');
       await tester.pump();
+      expect(find.text('Enter a valid address.'), findsNothing);
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
@@ -218,6 +239,10 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.descendant(of: details, matching: find.text('Belongs in')),
+      findsOneWidget,
+    );
+    expect(
       find.descendant(of: details, matching: find.text('alice@example.com')),
       findsNothing,
     );
@@ -229,17 +254,273 @@ void main() {
       find.descendant(of: details, matching: find.text('Alice Mail')),
       findsNothing,
     );
+    await tester.ensureVisible(find.text('Compose email'));
+    await tester.pumpAndSettle();
+
+    final Rect composeEmailRect = tester.getRect(
+      find.widgetWithText(AxiButton, 'Compose email'),
+    );
+    final Rect blockRect = tester.getRect(
+      find.widgetWithText(AxiButton, 'Block'),
+    );
+    final destructiveDividerRects = _sheetSectionDividerRects(tester)
+        .where(
+          (rect) =>
+              rect.top > composeEmailRect.bottom && rect.bottom < blockRect.top,
+        )
+        .toList(growable: false);
+    expect(destructiveDividerRects, isNotEmpty);
+    expect(
+      destructiveDividerRects.first.top - composeEmailRect.bottom,
+      greaterThanOrEqualTo(16),
+    );
 
     when(
       () => xmppService.openChat('alice@example.com'),
     ).thenAnswer((_) async {});
 
+    await tester.ensureVisible(find.text('Open'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
 
     expect(details, findsNothing);
     verify(() => xmppService.openChat('alice@example.com')).called(1);
   });
+
+  testWidgets('contact detail sheet places public key controls last', (
+    tester,
+  ) async {
+    const contact = ContactDirectoryEntry(
+      address: 'alice@example.com',
+      hasXmppRoster: true,
+      hasEmailContact: true,
+      emailNativeIds: <String>['email-alice'],
+      displayNameOverride: 'Alice',
+    );
+    final xmppService = MockXmppService();
+    _stubContactsShellService(
+      xmppService,
+      contacts: const <ContactDirectoryEntry>[contact],
+    );
+    final emailService = MockEmailService();
+    when(() => emailService.activeEncryptionAccountInfo()).thenAnswer(
+      (_) async => const EmailEncryptionAccountInfo(
+        normalizedAddress: 'owner@example.com',
+        deltaAccountId: 1,
+      ),
+    );
+    when(
+      () => emailService.trustedContactKeyForAddress('alice@example.com'),
+    ).thenAnswer((_) async => null);
+    final homeBloc = HomeBloc(
+      xmppService: xmppService,
+      tabs: const <HomeTab>[HomeTab.contacts],
+    );
+    final contactsCubit = ContactsCubit(xmppService: xmppService);
+    final chatsCubit = ChatsCubit(xmppService: xmppService);
+    final blocklistCubit = BlocklistCubit(xmppService: xmppService);
+    final foldersCubit = FoldersCubit(xmppService: xmppService);
+    addTearDown(homeBloc.close);
+    addTearDown(contactsCubit.close);
+    addTearDown(chatsCubit.close);
+    addTearDown(blocklistCubit.close);
+    addTearDown(foldersCubit.close);
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<HomeBloc>.value(value: homeBloc),
+          BlocProvider<ContactsCubit>.value(value: contactsCubit),
+          BlocProvider<ChatsCubit>.value(value: chatsCubit),
+          BlocProvider<BlocklistCubit>.value(value: blocklistCubit),
+          BlocProvider<FoldersCubit>.value(value: foldersCubit),
+          BlocProvider<SettingsCubit>.value(value: _settingsCubit()),
+        ],
+        child: _ContactsTestApp(
+          child: RepositoryProvider<EmailService>.value(
+            value: emailService,
+            child: const ContactsList(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('Alice'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Compose email'), findsOneWidget);
+
+    final publicKeySection = find.byKey(
+      const ValueKey('contact-email-encryption-alice@example.com'),
+    );
+    await tester.scrollUntilVisible(
+      publicKeySection,
+      120,
+      scrollable: find.descendant(
+        of: find.byType(AxiSheetScaffold),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Rect removeContactRect = tester.getRect(
+      find.widgetWithText(AxiButton, 'Remove contact'),
+    );
+    final Rect publicKeyRect = tester.getRect(publicKeySection);
+    final dividerRects = _sheetSectionDividerRects(tester)
+        .where(
+          (rect) =>
+              rect.top > removeContactRect.bottom &&
+              rect.bottom < publicKeyRect.top,
+        )
+        .toList(growable: false);
+
+    expect(dividerRects, isNotEmpty);
+    expect(
+      dividerRects.first.top - removeContactRect.bottom,
+      greaterThanOrEqualTo(16),
+    );
+    expect(find.text('Email encryption key'), findsOneWidget);
+  });
+
+  testWidgets(
+    'contact detail sheet hides public key controls when SMTP is disabled',
+    (tester) async {
+      const contact = ContactDirectoryEntry(
+        address: 'alice@example.com',
+        hasXmppRoster: true,
+        hasEmailContact: true,
+        emailNativeIds: <String>['email-alice'],
+        displayNameOverride: 'Alice',
+      );
+      final xmppService = MockXmppService();
+      _stubContactsShellService(
+        xmppService,
+        contacts: const <ContactDirectoryEntry>[contact],
+      );
+      final emailService = MockEmailService();
+      final homeBloc = HomeBloc(
+        xmppService: xmppService,
+        tabs: const <HomeTab>[HomeTab.contacts],
+      );
+      final contactsCubit = ContactsCubit(xmppService: xmppService);
+      final chatsCubit = ChatsCubit(xmppService: xmppService);
+      final blocklistCubit = BlocklistCubit(xmppService: xmppService);
+      final foldersCubit = FoldersCubit(xmppService: xmppService);
+      addTearDown(homeBloc.close);
+      addTearDown(contactsCubit.close);
+      addTearDown(chatsCubit.close);
+      addTearDown(blocklistCubit.close);
+      addTearDown(foldersCubit.close);
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<HomeBloc>.value(value: homeBloc),
+            BlocProvider<ContactsCubit>.value(value: contactsCubit),
+            BlocProvider<ChatsCubit>.value(value: chatsCubit),
+            BlocProvider<BlocklistCubit>.value(value: blocklistCubit),
+            BlocProvider<FoldersCubit>.value(value: foldersCubit),
+            BlocProvider<SettingsCubit>.value(
+              value: _settingsCubit(
+                endpointConfig: const EndpointConfig(smtpEnabled: false),
+              ),
+            ),
+          ],
+          child: _ContactsTestApp(
+            child: RepositoryProvider<EmailService>.value(
+              value: emailService,
+              child: const ContactsList(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Alice'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Email encryption key'), findsNothing);
+      verifyNever(() => emailService.activeEncryptionAccountInfo());
+      verifyNever(
+        () => emailService.trustedContactKeyForAddress('alice@example.com'),
+      );
+    },
+  );
+
+  testWidgets(
+    'contact row compose email action seeds email transport override',
+    (tester) async {
+      const contact = ContactDirectoryEntry(
+        address: 'alice@example.com',
+        hasXmppRoster: true,
+        hasEmailContact: true,
+        emailNativeIds: <String>['email-alice'],
+        displayNameOverride: 'Alice',
+      );
+      final xmppService = MockXmppService();
+      _stubContactsShellService(
+        xmppService,
+        contacts: const <ContactDirectoryEntry>[contact],
+      );
+      final homeBloc = HomeBloc(
+        xmppService: xmppService,
+        tabs: const <HomeTab>[HomeTab.contacts],
+      );
+      final contactsCubit = ContactsCubit(xmppService: xmppService);
+      final chatsCubit = ChatsCubit(xmppService: xmppService);
+      final composeWindowCubit = ComposeWindowCubit();
+      addTearDown(homeBloc.close);
+      addTearDown(contactsCubit.close);
+      addTearDown(chatsCubit.close);
+      addTearDown(composeWindowCubit.close);
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<HomeBloc>.value(value: homeBloc),
+            BlocProvider<ContactsCubit>.value(value: contactsCubit),
+            BlocProvider<ChatsCubit>.value(value: chatsCubit),
+            BlocProvider<ComposeWindowCubit>.value(value: composeWindowCubit),
+            BlocProvider<SettingsCubit>.value(value: _settingsCubit()),
+          ],
+          child: const _ContactsTestApp(
+            platform: TargetPlatform.macOS,
+            child: ContactsList(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final tile = find.byKey(const ValueKey('alice@example.com'));
+      final gesture = await tester.startGesture(
+        tester.getCenter(tile),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Compose email'));
+      await tester.pumpAndSettle();
+
+      expect(composeWindowCubit.state.windows, hasLength(1));
+      expect(
+        composeWindowCubit
+            .state
+            .windows
+            .single
+            .seed
+            .recipientTransportOverrides,
+        const <String, MessageTransport>{
+          'alice@example.com': MessageTransport.email,
+        },
+      );
+    },
+  );
 
   testWidgets('contact detail compose closes sheet before opening compose', (
     tester,
@@ -297,9 +578,19 @@ void main() {
     final details = find.byKey(
       const ValueKey('contact-details-mail@example.com'),
     );
-    expect(details, findsNothing);
+    expect(details, findsOneWidget);
+    expect(
+      find.descendant(of: details, matching: find.text('Phone numbers')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: details, matching: find.text('Addresses')),
+      findsOneWidget,
+    );
     expect(find.text('Details'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Compose email'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Compose email'));
     await tester.pumpAndSettle();
 
@@ -308,7 +599,21 @@ void main() {
     expect(composeWindowCubit.state.windows.single.seed.jids, const <String>[
       'mail@example.com',
     ]);
+    expect(
+      composeWindowCubit.state.windows.single.seed.recipientTransportOverrides,
+      const <String, MessageTransport>{
+        'mail@example.com': MessageTransport.email,
+      },
+    );
   });
+}
+
+List<Rect> _sheetSectionDividerRects(WidgetTester tester) {
+  final dividerFinder = find.byType(AxiSheetSectionDivider);
+  return [
+    for (var index = 0; index < dividerFinder.evaluate().length; index += 1)
+      tester.getRect(dividerFinder.at(index)),
+  ];
 }
 
 MockSettingsCubit _settingsCubit({

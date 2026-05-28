@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
@@ -25,6 +26,8 @@ void openComposeDraft(
   CalendarTaskIcsMessage? calendarTaskIcsMessage,
   List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
   List<String> forwardedSourceAttachmentMetadataIds = const <String>[],
+  Map<String, MessageTransport> recipientTransportOverrides = const {},
+  bool autosaveEnabled = true,
   bool scaleFromBottom = false,
 }) {
   final env = EnvScope.maybeOf(context);
@@ -47,6 +50,8 @@ void openComposeDraft(
       forwardedBlocks: forwardedBlocks,
       forwardedSourceAttachmentMetadataIds:
           forwardedSourceAttachmentMetadataIds,
+      recipientTransportOverrides: recipientTransportOverrides,
+      autosaveEnabled: autosaveEnabled,
     );
     return;
   }
@@ -64,6 +69,8 @@ void openComposeDraft(
       forwardedBlocks: forwardedBlocks,
       forwardedSourceAttachmentMetadataIds:
           forwardedSourceAttachmentMetadataIds,
+      recipientTransportOverrides: recipientTransportOverrides,
+      autosaveEnabled: autosaveEnabled,
     );
     return;
   }
@@ -78,8 +85,9 @@ void openComposeDraft(
     calendarTaskIcsMessage: calendarTaskIcsMessage,
     forwardedBlocks: forwardedBlocks,
     forwardedSourceAttachmentMetadataIds: forwardedSourceAttachmentMetadataIds,
+    recipientTransportOverrides: recipientTransportOverrides,
+    autosaveEnabled: autosaveEnabled,
   );
-  T locate<T>() => context.read<T>();
   final Duration animationDuration = context
       .read<SettingsCubit>()
       .animationDuration;
@@ -103,7 +111,7 @@ void openComposeDraft(
           transitionDuration: animationDuration,
           reverseTransitionDuration: animationDuration,
           pageBuilder: (context, animation, secondaryAnimation) =>
-              ComposeScreen(seed: seed, locate: locate),
+              ComposeScreen(seed: seed),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             final curved = CurvedAnimation(
               parent: animation,
@@ -137,7 +145,7 @@ void openComposeDraft(
     navigatorState.push<void>(
       AxiFadePageRoute<void>(
         duration: animationDuration,
-        builder: (_) => ComposeScreen(seed: seed, locate: locate),
+        builder: (_) => ComposeScreen(seed: seed),
       ),
     ),
   );

@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/tasks/fragment_card.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -34,6 +35,7 @@ Future<CalendarCriticalPathCopyDecision?> showCalendarCriticalPathCopySheet({
   return showAdaptiveBottomSheet<CalendarCriticalPathCopyDecision>(
     context: context,
     isScrollControlled: true,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     preferDialogOnMobile: true,
     surfacePadding: EdgeInsets.zero,
     builder: (sheetContext) => CalendarCriticalPathCopyDecisionSheet(

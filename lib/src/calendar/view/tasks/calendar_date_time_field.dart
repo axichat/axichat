@@ -255,7 +255,7 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
       await showAdaptiveBottomSheet<void>(
         context: modalContext,
         isScrollControlled: true,
-        bottomSafeAreaBehavior: context.calendarSheetBottomSafeAreaBehavior,
+        useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
         surfacePadding: EdgeInsets.zero,
         builder: (sheetContext) {
           return StatefulBuilder(

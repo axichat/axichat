@@ -802,6 +802,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftAutosaved => 'Enregistré automatiquement';
 
   @override
+  String get draftAutosave => 'Enregistrement automatique';
+
+  @override
   String get draftErrorTitle => 'Oups';
 
   @override
@@ -3452,6 +3455,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get contactsDetailsSectionTitle => 'Détails';
 
   @override
+  String get contactsFolderRoutingDetailLabel => 'Appartient à';
+
+  @override
   String get contactsAddressLabel => 'Adresse';
 
   @override
@@ -4518,7 +4524,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get emailEncryptionBetaLabel => 'Chiffrement des e-mails';
 
   @override
-  String get emailEncryptionBetaChip => 'Bêta';
+  String get emailEncryptionBetaChip => 'Expérimental';
 
   @override
   String emailEncryptionBetaEnabledStatus(Object address) {

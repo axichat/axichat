@@ -9,6 +9,7 @@ class NotificationRequestState {
     this.isCheckingPermissions = false,
     this.isRequestingPermissions = false,
     this.isEnablingForeground = false,
+    this.isDisablingForeground = false,
     required this.foregroundServiceActive,
   });
 
@@ -16,16 +17,21 @@ class NotificationRequestState {
   final bool isCheckingPermissions;
   final bool isRequestingPermissions;
   final bool isEnablingForeground;
+  final bool isDisablingForeground;
   final bool foregroundServiceActive;
 
   bool get isBusy =>
-      isCheckingPermissions || isRequestingPermissions || isEnablingForeground;
+      isCheckingPermissions ||
+      isRequestingPermissions ||
+      isEnablingForeground ||
+      isDisablingForeground;
 
   NotificationRequestState copyWith({
     bool? hasPermissions,
     bool? isCheckingPermissions,
     bool? isRequestingPermissions,
     bool? isEnablingForeground,
+    bool? isDisablingForeground,
     bool? foregroundServiceActive,
   }) {
     return NotificationRequestState(
@@ -35,6 +41,8 @@ class NotificationRequestState {
       isRequestingPermissions:
           isRequestingPermissions ?? this.isRequestingPermissions,
       isEnablingForeground: isEnablingForeground ?? this.isEnablingForeground,
+      isDisablingForeground:
+          isDisablingForeground ?? this.isDisablingForeground,
       foregroundServiceActive:
           foregroundServiceActive ?? this.foregroundServiceActive,
     );

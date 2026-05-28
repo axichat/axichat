@@ -8,11 +8,14 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
+import 'package:axichat/src/email/bloc/email_encryption_cubit.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
+import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
@@ -22,8 +25,10 @@ import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -438,18 +443,19 @@ class SettingsControls extends StatelessWidget {
                   .read<SettingsCubit>()
                   .toggleAllNotificationsMuted(muted),
             ),
-            _SettingsSwitchRow(
-              title: context.l10n.settingsNotificationPreviews,
-              subtitle: context.l10n.settingsNotificationPreviewsDescription,
-              state: state,
-              settingId: GlobalSettingId.notificationPreviews,
-              value: state.notificationPreviewsEnabled,
-              chats: chatItems,
-              contentPadding: switchPadding,
-              onChanged: (enabled) => context
-                  .read<SettingsCubit>()
-                  .toggleNotificationPreviews(enabled),
-            ),
+            if (defaultTargetPlatform.supportsNotificationPreviewControls)
+              _SettingsSwitchRow(
+                title: context.l10n.settingsNotificationPreviews,
+                subtitle: context.l10n.settingsNotificationPreviewsDescription,
+                state: state,
+                settingId: GlobalSettingId.notificationPreviews,
+                value: state.notificationPreviewsEnabled,
+                chats: chatItems,
+                contentPadding: switchPadding,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleNotificationPreviews(enabled),
+              ),
             anchors?.securityKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionSecurity,
@@ -464,6 +470,12 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
+            _EmailEncryptionBetaRow(
+              settingsState: state,
+              emailEnabled: emailEnabled,
+              chats: chatItems,
+              contentPadding: switchPadding,
+            ),
             _SettingsSwitchRow(
               title: context.l10n.settingsAutoLoadEmailImages,
               subtitle: context.l10n.settingsAutoLoadEmailImagesDescription,
@@ -964,6 +976,370 @@ class SettingsControls extends StatelessWidget {
   }
 }
 
+enum _EmailEncryptionActivationAction { importKey, createKey }
+
+class _EmailEncryptionBetaRow extends StatefulWidget {
+  const _EmailEncryptionBetaRow({
+    required this.settingsState,
+    required this.emailEnabled,
+    required this.chats,
+    this.contentPadding,
+  });
+
+  final SettingsState settingsState;
+  final bool emailEnabled;
+  final List<Chat> chats;
+  final EdgeInsetsGeometry? contentPadding;
+
+  @override
+  State<_EmailEncryptionBetaRow> createState() =>
+      _EmailEncryptionBetaRowState();
+}
+
+class _EmailEncryptionBetaRowState extends State<_EmailEncryptionBetaRow> {
+  EmailEncryptionAccountInfo? _account;
+  var _refreshed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _EmailEncryptionBetaRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.emailEnabled != widget.emailEnabled) {
+      _refreshed = false;
+      if (!widget.emailEnabled) {
+        _account = null;
+        return;
+      }
+      _refreshIfNeeded();
+    }
+  }
+
+  void _refreshIfNeeded() {
+    if (_refreshed || !widget.emailEnabled) {
+      return;
+    }
+    _refreshed = true;
+    context.read<EmailEncryptionCubit>().refreshActiveAccount();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.emailEnabled) {
+      return const SizedBox.shrink();
+    }
+    return BlocConsumer<EmailEncryptionCubit, EmailEncryptionState>(
+      listener: _handleState,
+      builder: (context, encryptionState) {
+        final account = switch (encryptionState) {
+          EmailEncryptionIdle(account: final activeAccount?) => activeAccount,
+          _ => _account,
+        };
+        if (account == null) {
+          return const SizedBox.shrink();
+        }
+        final enabled =
+            widget.settingsState.emailEncryptionBetaEnabledByAddress[account
+                .normalizedAddress] ==
+            true;
+        final busy = encryptionState.isBusy;
+        return _SettingsControlRow(
+          title: context.l10n.emailEncryptionBetaLabel,
+          titleChipLabel: context.l10n.emailEncryptionBetaChip,
+          titleChipTone: AxiStatusChipTone.info,
+          subtitle: enabled
+              ? context.l10n.emailEncryptionBetaEnabledStatus(
+                  account.normalizedAddress,
+                )
+              : account.hasSelfKey
+              ? context.l10n.emailEncryptionBetaDisabledExistingKeyStatus(
+                  account.normalizedAddress,
+                )
+              : context.l10n.emailEncryptionBetaDisabledStatus(
+                  account.normalizedAddress,
+                ),
+          state: widget.settingsState,
+          settingId: GlobalSettingId.emailEncryptionBeta,
+          chats: widget.chats,
+          contentPadding: widget.contentPadding,
+          trailing: ShadSwitch(
+            value: enabled,
+            onChanged: busy
+                ? null
+                : (value) {
+                    _account = account;
+                    if (value) {
+                      _startActivation(context, account);
+                      return;
+                    }
+                    context.read<EmailEncryptionCubit>().disable(
+                      account.normalizedAddress,
+                    );
+                  },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleState(
+    BuildContext context,
+    EmailEncryptionState state,
+  ) async {
+    if (state is EmailEncryptionIdle) {
+      if (_account != state.account && mounted) {
+        setState(() {
+          _account = state.account;
+        });
+      }
+      return;
+    }
+    if (state is EmailEncryptionActivationReady) {
+      await context.read<SettingsCubit>().setEmailEncryptionBetaEnabled(
+        state.normalizedAddress,
+        true,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.success(
+          message: context.l10n.emailEncryptionBetaActivationSuccess,
+        ),
+      );
+      await context.read<EmailEncryptionCubit>().refreshActiveAccount();
+      return;
+    }
+    if (state is EmailEncryptionDisableReady) {
+      await context.read<SettingsCubit>().setEmailEncryptionBetaEnabled(
+        state.normalizedAddress,
+        false,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.success(
+          message: context.l10n.emailEncryptionBetaDisableSuccess,
+        ),
+      );
+      await context.read<EmailEncryptionCubit>().refreshActiveAccount();
+      return;
+    }
+    if (state is EmailEncryptionExportReady) {
+      await _saveExport(context, state);
+      return;
+    }
+    if (state is EmailEncryptionSelfKeyConfirmationRequired) {
+      await _confirmSelfKeyIdentity(context, state);
+      return;
+    }
+    if (state is EmailEncryptionFailure) {
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.error(message: _failureMessage(context, state.reason)),
+      );
+      await context.read<EmailEncryptionCubit>().refreshActiveAccount();
+    }
+  }
+
+  Future<void> _startActivation(
+    BuildContext context,
+    EmailEncryptionAccountInfo account,
+  ) async {
+    final accepted = await confirm(
+      context,
+      title: context.l10n.emailEncryptionBetaWarningTitle,
+      titleChipLabel: context.l10n.emailEncryptionBetaChip,
+      titleChipTone: AxiStatusChipTone.info,
+      message: account.hasSelfKey
+          ? context.l10n.emailEncryptionBetaExistingKeyWarningBody
+          : context.l10n.emailEncryptionBetaWarningBody,
+      confirmLabel: context.l10n.commonContinue,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    if (!context.mounted || accepted != true) {
+      return;
+    }
+    if (account.hasSelfKey) {
+      await context.read<EmailEncryptionCubit>().activateExistingKey();
+      return;
+    }
+    final action = await _chooseActivationAction(context);
+    if (!context.mounted || action == null) {
+      return;
+    }
+    switch (action) {
+      case _EmailEncryptionActivationAction.importKey:
+        await _pickAndImportKey(context);
+      case _EmailEncryptionActivationAction.createKey:
+        await context.read<EmailEncryptionCubit>().createExport();
+    }
+  }
+
+  Future<_EmailEncryptionActivationAction?> _chooseActivationAction(
+    BuildContext context,
+  ) {
+    return showFadeScaleDialog<_EmailEncryptionActivationAction>(
+      context: context,
+      builder: (dialogContext) {
+        final pop = Navigator.of(dialogContext).pop;
+        return AxiDialog(
+          constraints: BoxConstraints(
+            maxWidth: dialogContext.sizing.dialogMaxWidth,
+          ),
+          title: Text(
+            dialogContext.l10n.emailEncryptionBetaChooseActionTitle,
+            style: dialogContext.modalHeaderTextStyle,
+          ),
+          actions: [
+            AxiButton.outline(
+              onPressed: () => pop(null),
+              child: Text(dialogContext.l10n.commonCancel),
+            ),
+            AxiButton.outline(
+              onPressed: () => pop(_EmailEncryptionActivationAction.importKey),
+              child: Text(dialogContext.l10n.emailEncryptionBetaImportAction),
+            ),
+            AxiButton.primary(
+              onPressed: () => pop(_EmailEncryptionActivationAction.createKey),
+              child: Text(dialogContext.l10n.emailEncryptionBetaCreateAction),
+            ),
+          ],
+          child: Text(
+            dialogContext.l10n.emailEncryptionBetaChooseActionBody,
+            style: dialogContext.textTheme.small,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndImportKey(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      allowedExtensions: const ['asc', 'pgp', 'gpg', 'zip'],
+    );
+    if (!context.mounted || result == null || result.files.isEmpty) {
+      return;
+    }
+    final path = result.files.single.path;
+    if (path == null || path.trim().isEmpty) {
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.error(
+          message: context.l10n.emailEncryptionBetaImportFailed,
+        ),
+      );
+      return;
+    }
+    await context.read<EmailEncryptionCubit>().importPrivateKey(File(path));
+  }
+
+  Future<void> _saveExport(
+    BuildContext context,
+    EmailEncryptionExportReady state,
+  ) async {
+    if (!context.mounted) {
+      return;
+    }
+    final locate = context.read;
+    final exportFilename = context.l10n.emailEncryptionBetaExportFilename;
+    try {
+      final exportBytes = await locate<EmailEncryptionCubit>()
+          .exportBytesForSave(state);
+      if (exportBytes == null) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      final savePath = await FilePicker.platform.saveFile(
+        fileName: exportFilename,
+        type: FileType.custom,
+        allowedExtensions: const ['zip'],
+        bytes: Platform.isAndroid || Platform.isIOS ? exportBytes : null,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (savePath == null || savePath.trim().isEmpty) {
+        await locate<EmailEncryptionCubit>().cancelExport();
+        return;
+      }
+      if (Platform.isAndroid || Platform.isIOS) {
+        await locate<EmailEncryptionCubit>().completePlatformSavedExport(
+          savePath,
+        );
+        return;
+      }
+      await locate<EmailEncryptionCubit>().saveExport(savePath);
+    } on FileSystemException {
+      if (!mounted) {
+        return;
+      }
+      await locate<EmailEncryptionCubit>().failExportSave();
+    } on PlatformException {
+      if (!mounted) {
+        return;
+      }
+      await locate<EmailEncryptionCubit>().failExportSave();
+    }
+  }
+
+  Future<void> _confirmSelfKeyIdentity(
+    BuildContext context,
+    EmailEncryptionSelfKeyConfirmationRequired state,
+  ) async {
+    final identities = state.metadata.userIds.isEmpty
+        ? context.l10n.emailEncryptionKeyIdentityNoIdentities
+        : state.metadata.userIds.join(', ');
+    final confirmed = await confirm(
+      context,
+      title: context.l10n.emailEncryptionKeyIdentityWarningTitle,
+      message: context.l10n.emailEncryptionKeyIdentityWarningBody(
+        state.metadata.fingerprint,
+        identities,
+      ),
+      confirmLabel: context.l10n.commonContinue,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: false,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (confirmed == true) {
+      await context.read<EmailEncryptionCubit>().confirmPrivateKeyImport();
+      return;
+    }
+    await context.read<EmailEncryptionCubit>().cancelPrivateKeyImport();
+  }
+
+  String _failureMessage(
+    BuildContext context,
+    EmailEncryptionFailureReason reason,
+  ) => switch (reason) {
+    EmailEncryptionFailureReason.noActiveAccount =>
+      context.l10n.emailEncryptionBetaNoActiveAccount,
+    EmailEncryptionFailureReason.unsupportedKeyFormat =>
+      context.l10n.emailEncryptionBetaUnsupportedFormat,
+    EmailEncryptionFailureReason.noPrivateKeyFound =>
+      context.l10n.emailEncryptionBetaNoPrivateKeyFound,
+    EmailEncryptionFailureReason.ambiguousKeyArchive =>
+      context.l10n.emailEncryptionBetaAmbiguousArchive,
+    EmailEncryptionFailureReason.importFailed =>
+      context.l10n.emailEncryptionBetaImportFailed,
+    EmailEncryptionFailureReason.exportFailed =>
+      context.l10n.emailEncryptionBetaExportFailed,
+    EmailEncryptionFailureReason.saveFailed =>
+      context.l10n.emailEncryptionBetaSaveFailed,
+  };
+}
+
 bool _settingsSyncPublishFailed(SettingsState previous, SettingsState current) {
   for (final settingId in GlobalSettingId.syncedSettings) {
     if (previous.isGlobalSettingLoading(settingId) &&
@@ -984,6 +1360,8 @@ class _SettingsControlRow extends StatelessWidget {
     required this.settingId,
     required this.trailing,
     required this.chats,
+    this.titleChipLabel,
+    this.titleChipTone = AxiStatusChipTone.neutral,
     this.subtitle,
     this.contentPadding,
     this.minTileHeight,
@@ -994,6 +1372,8 @@ class _SettingsControlRow extends StatelessWidget {
   final GlobalSettingId settingId;
   final Widget trailing;
   final List<Chat> chats;
+  final String? titleChipLabel;
+  final AxiStatusChipTone titleChipTone;
   final String? subtitle;
   final EdgeInsetsGeometry? contentPadding;
   final double? minTileHeight;
@@ -1017,6 +1397,8 @@ class _SettingsControlRow extends StatelessWidget {
                 Expanded(
                   child: _SettingsControlText(
                     title: title,
+                    titleChipLabel: titleChipLabel,
+                    titleChipTone: titleChipTone,
                     subtitle: subtitle,
                     statusKind: statusKind,
                   ),
@@ -1048,10 +1430,14 @@ class _SettingsControlText extends StatelessWidget {
   const _SettingsControlText({
     required this.title,
     required this.statusKind,
+    this.titleChipLabel,
+    this.titleChipTone = AxiStatusChipTone.neutral,
     this.subtitle,
   });
 
   final String title;
+  final String? titleChipLabel;
+  final AxiStatusChipTone titleChipTone;
   final String? subtitle;
   final _SettingsStatusKind? statusKind;
 
@@ -1062,23 +1448,25 @@ class _SettingsControlText extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: context.textTheme.small.copyWith(
-            color: context.colorScheme.foreground,
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small.strong,
+              ),
+            ),
+            if (titleChipLabel != null) ...[
+              SizedBox(width: spacing.s),
+              AxiStatusChip(label: titleChipLabel!, tone: titleChipTone),
+            ],
+          ],
         ),
         if (trimmedSubtitle != null && trimmedSubtitle.isNotEmpty) ...[
           SizedBox(height: spacing.xs),
-          Text(
-            trimmedSubtitle,
-            style: context.textTheme.muted.copyWith(
-              color: context.colorScheme.mutedForeground,
-            ),
-          ),
+          Text(trimmedSubtitle, style: context.textTheme.muted),
         ],
         if (statusKind != null) ...[
           SizedBox(height: spacing.s),

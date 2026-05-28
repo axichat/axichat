@@ -430,6 +430,7 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   required String emptyStateLabel,
   String? pendingEmailContentLabel,
   String? unavailableEmailContentLabel,
+  required String emailEncryptionStatusLabel,
   required bool isGroupChat,
   required bool isEmailChat,
   DateTime? staleUnackedCutoff,
@@ -475,8 +476,23 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
 }) {
   final timelineItems = <ChatTimelineItem>[];
   final shownSubjectShares = <String>{};
+  final loadedOpenPgpEmailStanzaIds = <String>{
+    for (final message in messages)
+      if (message.isEmailBackedOpenPgpContent) message.stanzaID,
+  };
   var unreadDividerInserted = false;
   for (final message in messages) {
+    if (message.pseudoMessageType?.isSystemStatus == true) {
+      final systemStatusItem = buildSystemStatusTimelineItem(
+        message,
+        loadedOpenPgpEmailStanzaIds: loadedOpenPgpEmailStanzaIds,
+        emailEncryptionStatusLabel: emailEncryptionStatusLabel,
+      );
+      if (systemStatusItem != null) {
+        timelineItems.add(systemStatusItem);
+      }
+      continue;
+    }
     final timelineItem = buildMainChatTimelineMessageItem(
       message: message,
       shownSubjectShares: shownSubjectShares,
@@ -525,6 +541,7 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     timelineItems.add(timelineItem);
     if (!unreadDividerInserted &&
         unreadBoundaryStanzaId != null &&
+        !message.displayed &&
         message.stanzaID == unreadBoundaryStanzaId) {
       unreadDividerInserted = true;
       timelineItems.add(
@@ -546,6 +563,30 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     );
   }
   return List<ChatTimelineItem>.unmodifiable(timelineItems);
+}
+
+ChatTimelineSystemStatusItem? buildSystemStatusTimelineItem(
+  Message message, {
+  required Set<String> loadedOpenPgpEmailStanzaIds,
+  String? emailEncryptionStatusLabel,
+}) {
+  if (!message.isRenderableEmailEncryptionStatusMarker(
+    loadedOpenPgpEmailStanzaIds: loadedOpenPgpEmailStanzaIds,
+  )) {
+    return null;
+  }
+  final timestamp = message.timestamp;
+  final label = emailEncryptionStatusLabel?.trim().isNotEmpty == true
+      ? emailEncryptionStatusLabel!.trim()
+      : previewTextForMessage(message)?.trim();
+  if (timestamp == null || label == null || label.isEmpty) {
+    return null;
+  }
+  return ChatTimelineSystemStatusItem(
+    id: message.stanzaID,
+    createdAt: timestamp.toLocal(),
+    label: label,
+  );
 }
 
 ({Set<String> revokedInviteTokens, Set<String> acceptedInviteTokens})

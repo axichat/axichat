@@ -10,8 +10,9 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1185,6 +1186,7 @@ Future<CriticalPathPickerResult?> _showCriticalPathPickerRoute({
     context: context,
     dialogMaxWidth: context.sizing.dialogMaxWidth,
     preferDialogOnMobile: true,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
     showCloseButton: false,
     builder: (sheetContext) {
@@ -1787,6 +1789,7 @@ Future<String?> promptCriticalPathName({
     isScrollControlled: true,
     preferDialogOnMobile: true,
     dialogMaxWidth: context.sizing.dialogMaxWidth,
+    useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
     showCloseButton: false,
     builder: (dialogContext) {

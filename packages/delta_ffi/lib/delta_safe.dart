@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:isolate';
 
@@ -13,6 +14,7 @@ const String _deltaSendAttachmentOperation = 'send attachment';
 const String _deltaSendFileOperation = 'send file message';
 const String _deltaSendQuotedOperation = 'send quoted message';
 const String _deltaMessageAllocationError = 'Failed to allocate Delta message';
+const String _deltaUnsupportedConfigKeyMessage = 'Invalid config key';
 
 typedef DeltaBackgroundFetchRunner = Future<bool> Function({
   required int accountsAddress,
@@ -106,6 +108,14 @@ typedef _DcGetConfigDart = ffi.Pointer<ffi.Char> Function(
   ffi.Pointer<ffi.Char>,
 );
 
+typedef _DcGetConnectivityHtmlNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+);
+
+typedef _DcGetConnectivityHtmlDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+);
+
 typedef _DcGetMsgMimeHeadersNative = ffi.Pointer<ffi.Char> Function(
   ffi.Pointer<dc_context_t>,
   ffi.Uint32,
@@ -123,6 +133,14 @@ typedef _DcChatGetContactIdNative = ffi.Uint32 Function(
 typedef _DcChatGetContactIdDart = int Function(
   ffi.Pointer<dc_chat_t>,
 );
+
+typedef _DcChatBoolNative = ffi.Int Function(ffi.Pointer<dc_chat_t>);
+
+typedef _DcChatBoolDart = int Function(ffi.Pointer<dc_chat_t>);
+
+typedef _DcMsgGetInfoTypeNative = ffi.Int Function(ffi.Pointer<dc_msg_t>);
+
+typedef _DcMsgGetInfoTypeDart = int Function(ffi.Pointer<dc_msg_t>);
 
 typedef _DcGetOauth2UrlNative = ffi.Pointer<ffi.Char> Function(
   ffi.Pointer<dc_context_t>,
@@ -166,6 +184,38 @@ final class _DeltaOptionalConfig {
 }
 
 final _DeltaOptionalConfig _deltaOptionalConfig = _DeltaOptionalConfig();
+
+final class _DeltaOptionalConnectivityHtml {
+  _DeltaOptionalConnectivityHtml()
+      : _getConnectivityHtml = _loadGetConnectivityHtml();
+
+  final _DcGetConnectivityHtmlDart? _getConnectivityHtml;
+
+  static _DcGetConnectivityHtmlDart? _loadGetConnectivityHtml() {
+    final library = loadDeltaLibrary();
+    const symbolName = 'dc_get_connectivity_html';
+    if (!library.providesSymbol(symbolName)) {
+      return null;
+    }
+    final symbol =
+        library.lookup<ffi.NativeFunction<_DcGetConnectivityHtmlNative>>(
+      symbolName,
+    );
+    return symbol.asFunction<_DcGetConnectivityHtmlDart>();
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getConnectivityHtml;
+    if (fn == null) return null;
+    return _takeString(fn(context), bindings: bindings);
+  }
+}
+
+final _DeltaOptionalConnectivityHtml _deltaOptionalConnectivityHtml =
+    _DeltaOptionalConnectivityHtml();
 
 final class _DeltaOptionalMimeHeaders {
   _DeltaOptionalMimeHeaders() : _getHeaders = _loadGetHeaders();
@@ -232,6 +282,65 @@ final class _DeltaOptionalChatContactId {
 
 final _DeltaOptionalChatContactId _deltaOptionalChatContactId =
     _DeltaOptionalChatContactId();
+
+final class _DeltaOptionalChatSendCapabilities {
+  _DeltaOptionalChatSendCapabilities()
+      : _canSend = _loadChatBool('dc_chat_can_send'),
+        _isEncrypted = _loadChatBool('dc_chat_is_encrypted');
+
+  final _DcChatBoolDart? _canSend;
+  final _DcChatBoolDart? _isEncrypted;
+
+  static _DcChatBoolDart? _loadChatBool(String symbolName) {
+    final library = loadDeltaLibrary();
+    if (!library.providesSymbol(symbolName)) {
+      return null;
+    }
+    return library
+        .lookup<ffi.NativeFunction<_DcChatBoolNative>>(symbolName)
+        .asFunction<_DcChatBoolDart>();
+  }
+
+  DeltaChatSendCapabilities read(ffi.Pointer<dc_chat_t> chat) {
+    final canSend = _canSend?.call(chat);
+    final isEncrypted = _isEncrypted?.call(chat);
+    return DeltaChatSendCapabilities(
+      exists: true,
+      canSend: canSend == null ? null : canSend != _zeroValue,
+      isEncrypted: isEncrypted == null ? null : isEncrypted != _zeroValue,
+    );
+  }
+}
+
+final _DeltaOptionalChatSendCapabilities _deltaOptionalChatSendCapabilities =
+    _DeltaOptionalChatSendCapabilities();
+
+final class _DeltaOptionalMessageInfoType {
+  _DeltaOptionalMessageInfoType() : _getInfoType = _loadGetInfoType();
+
+  final _DcMsgGetInfoTypeDart? _getInfoType;
+
+  static _DcMsgGetInfoTypeDart? _loadGetInfoType() {
+    final library = loadDeltaLibrary();
+    const symbolName = 'dc_msg_get_info_type';
+    if (!library.providesSymbol(symbolName)) {
+      return null;
+    }
+    return library
+        .lookup<ffi.NativeFunction<_DcMsgGetInfoTypeNative>>(symbolName)
+        .asFunction<_DcMsgGetInfoTypeDart>();
+  }
+
+  int? read(ffi.Pointer<dc_msg_t> message) {
+    final fn = _getInfoType;
+    if (fn == null) return null;
+    final infoType = fn(message);
+    return infoType == DeltaMessageInfo.unknown ? null : infoType;
+  }
+}
+
+final _DeltaOptionalMessageInfoType _deltaOptionalMessageInfoType =
+    _DeltaOptionalMessageInfoType();
 
 final class _DeltaOptionalOauth2Url {
   _DeltaOptionalOauth2Url() : _getOauth2Url = _loadOauth2Url();
@@ -319,6 +428,97 @@ class DeltaMessageId {
   static const int none = DC_MSG_NO_ID;
   static const int marker1 = DC_MSG_ID_MARKER1;
   static const int dayMarker = DC_MSG_ID_DAYMARKER;
+}
+
+enum DeltaOpenPgpKeyKind {
+  public(1),
+  private(2);
+
+  const DeltaOpenPgpKeyKind(this.nativeValue);
+
+  final int nativeValue;
+}
+
+final class DeltaOpenPgpKeyMetadata {
+  const DeltaOpenPgpKeyMetadata({
+    required this.kind,
+    required this.fingerprint,
+    required this.userIds,
+    required this.hasExpectedAddress,
+    required this.hasEncryptionCapability,
+  });
+
+  factory DeltaOpenPgpKeyMetadata.fromJson(Map<String, Object?> json) {
+    final kindValue = json['kind']?.toString();
+    return DeltaOpenPgpKeyMetadata(
+      kind: switch (kindValue) {
+        'public' => DeltaOpenPgpKeyKind.public,
+        'private' => DeltaOpenPgpKeyKind.private,
+        _ => throw DeltaOperationException(
+            'Invalid OpenPGP key metadata kind: $kindValue',
+          ),
+      },
+      fingerprint: json['fingerprint']?.toString() ?? '',
+      userIds: switch (json['userIds']) {
+        final List<Object?> values => values
+            .map((value) => value?.toString() ?? '')
+            .where((value) => value.trim().isNotEmpty)
+            .toList(growable: false),
+        _ => const <String>[],
+      },
+      hasExpectedAddress: json['hasExpectedAddress'] == true,
+      hasEncryptionCapability: json['hasEncryptionCapability'] == true,
+    );
+  }
+
+  final DeltaOpenPgpKeyKind kind;
+  final String fingerprint;
+  final List<String> userIds;
+  final bool hasExpectedAddress;
+  final bool hasEncryptionCapability;
+}
+
+final class DeltaContactPublicKeyImport {
+  const DeltaContactPublicKeyImport({
+    required this.metadata,
+    required this.contactId,
+    required this.chatId,
+  });
+
+  factory DeltaContactPublicKeyImport.fromJson(Map<String, Object?> json) {
+    return DeltaContactPublicKeyImport(
+      metadata: DeltaOpenPgpKeyMetadata.fromJson(json),
+      contactId: _jsonInt(json['contactId']),
+      chatId: _jsonInt(json['chatId']),
+    );
+  }
+
+  final DeltaOpenPgpKeyMetadata metadata;
+  final int contactId;
+  final int chatId;
+}
+
+final class DeltaContactPublicKeyRemoval {
+  const DeltaContactPublicKeyRemoval({
+    required this.contactId,
+    required this.chatId,
+    required this.fallbackContactId,
+    required this.fingerprint,
+  });
+
+  factory DeltaContactPublicKeyRemoval.fromJson(Map<String, Object?> json) {
+    return DeltaContactPublicKeyRemoval(
+      contactId: _jsonInt(json['contactId']),
+      chatId: _jsonInt(json['chatId']),
+      fallbackContactId: _jsonInt(json['fallbackContactId']),
+      fingerprint: json['fingerprint']?.toString() ?? '',
+    );
+  }
+
+  final int contactId;
+  final int chatId;
+  final int fallbackContactId;
+  final String fingerprint;
 }
 
 class DeltaVideoChatType {
@@ -542,6 +742,7 @@ class DeltaContextHandle {
   bool? _supportsContactList;
   bool? _supportsMessageGetHtml;
   bool? _supportsMessageSetHtml;
+  bool? _supportsMessageShowPadlock;
 
   Future<void> open({required String passphrase}) async {
     final result = _withCString(passphrase, (passPtr) {
@@ -586,6 +787,27 @@ class DeltaContextHandle {
   }) async {
     _ensureState(_opened, 'set config $key');
     await _setConfig(key, value);
+  }
+
+  Future<bool> setConfigIfSupported({
+    required String key,
+    required String value,
+  }) async {
+    _ensureState(_opened, 'set config $key');
+    final result = _withCString(key, (keyPtr) {
+      return _withCString(value, (valuePtr) {
+        return _bindings.dc_set_config(_context, keyPtr, valuePtr);
+      });
+    });
+    if (result != _zeroValue) {
+      return true;
+    }
+    final details = _lastError();
+    if (details == _deltaUnsupportedConfigKeyMessage) {
+      return false;
+    }
+    final suffix = details == null || details.isEmpty ? '' : ': $details';
+    throw DeltaOperationException('Failed to set config $key$suffix');
   }
 
   Future<String?> getConfig(String key) async {
@@ -674,6 +896,87 @@ class DeltaContextHandle {
     return chatId;
   }
 
+  Future<DeltaOpenPgpKeyMetadata> inspectOpenPgpKey({
+    required String armored,
+    required String expectedAddress,
+    required DeltaOpenPgpKeyKind expectedKind,
+  }) async {
+    _ensureState(_opened, 'inspect OpenPGP key');
+    final json = _withCString(armored, (keyPtr) {
+      return _withCString(expectedAddress, (addrPtr) {
+        return _takeString(
+          _bindings.axichat_dc_inspect_openpgp_key(
+            keyPtr,
+            addrPtr,
+            expectedKind.nativeValue,
+          ),
+          bindings: _bindings,
+        );
+      });
+    });
+    final parsed = _parseAxichatJsonResult(
+      json,
+      operation: 'inspect OpenPGP key',
+    );
+    return DeltaOpenPgpKeyMetadata.fromJson(parsed);
+  }
+
+  Future<DeltaContactPublicKeyImport> importContactPublicKey({
+    required String address,
+    required String displayName,
+    required String armoredPublicKey,
+  }) async {
+    _ensureState(_opened, 'import contact OpenPGP key');
+    final json = _withCString(address, (addrPtr) {
+      return _withCString(displayName, (namePtr) {
+        return _withCString(armoredPublicKey, (keyPtr) {
+          return _takeString(
+            _bindings.axichat_dc_import_contact_public_key(
+              _context,
+              addrPtr,
+              namePtr,
+              keyPtr,
+            ),
+            bindings: _bindings,
+          );
+        });
+      });
+    });
+    final parsed = _parseAxichatJsonResult(
+      json,
+      operation: 'import contact OpenPGP key',
+    );
+    return DeltaContactPublicKeyImport.fromJson(parsed);
+  }
+
+  Future<DeltaContactPublicKeyRemoval> removeContactPublicKey({
+    required String address,
+    required String fingerprint,
+    required int contactId,
+    required int chatId,
+  }) async {
+    _ensureState(_opened, 'remove contact OpenPGP key');
+    final json = _withCString(address, (addrPtr) {
+      return _withCString(fingerprint, (fingerprintPtr) {
+        return _takeString(
+          _bindings.axichat_dc_remove_contact_public_key(
+            _context,
+            addrPtr,
+            fingerprintPtr,
+            contactId,
+            chatId,
+          ),
+          bindings: _bindings,
+        );
+      });
+    });
+    final parsed = _parseAxichatJsonResult(
+      json,
+      operation: 'remove contact OpenPGP key',
+    );
+    return DeltaContactPublicKeyRemoval.fromJson(parsed);
+  }
+
   Future<int?> lookupContactIdByAddress(String address) async {
     _ensureState(_opened, 'lookup contact');
     final contactId = _withCString(address, (addrPtr) {
@@ -724,6 +1027,8 @@ class DeltaContextHandle {
     required String message,
     String? subject,
     String? html,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   }) async {
     _ensureState(_opened, _deltaSendTextOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
@@ -744,6 +1049,12 @@ class DeltaContextHandle {
           _bindings.dc_msg_set_subject(deltaMessage, subjectPtr);
         });
       }
+      _applySendOptions(
+        deltaMessage,
+        operation: _deltaSendTextOperation,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
+      );
       final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
       _ensurePositive(msgId, _deltaSendTextOperation, _lastError);
       return msgId;
@@ -761,6 +1072,8 @@ class DeltaContextHandle {
     String? text,
     String? subject,
     String? html,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   }) async {
     _ensureState(_opened, _deltaSendAttachmentOperation);
     final message = _bindings.dc_msg_new(_context, viewType);
@@ -788,6 +1101,12 @@ class DeltaContextHandle {
         filePath: filePath,
         fileName: fileName,
         mimeType: mimeType,
+      );
+      _applySendOptions(
+        message,
+        operation: _deltaSendFileOperation,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
       );
       final msgId = _bindings.dc_send_msg(_context, chatId, message);
       _ensurePositive(msgId, _deltaSendFileOperation, _lastError);
@@ -843,6 +1162,22 @@ class DeltaContextHandle {
         contactName: contactName,
         type: type == 0 ? null : type,
       );
+    } finally {
+      _bindings.dc_chat_unref(chatPtr);
+    }
+  }
+
+  Future<DeltaChatSendCapabilities> chatSendCapabilities(int chatId) async {
+    _ensureState(_opened, 'get chat send capabilities');
+    if (chatId <= _zeroValue) {
+      return const DeltaChatSendCapabilities(exists: false);
+    }
+    final chatPtr = _bindings.dc_get_chat(_context, chatId);
+    if (chatPtr == ffi.nullptr) {
+      return const DeltaChatSendCapabilities(exists: false);
+    }
+    try {
+      return _deltaOptionalChatSendCapabilities.read(chatPtr);
     } finally {
       _bindings.dc_chat_unref(chatPtr);
     }
@@ -987,6 +1322,25 @@ class DeltaContextHandle {
     }
   }
 
+  bool _getShowPadlock(ffi.Pointer<dc_msg_t> msgPtr) {
+    if (_supportsMessageShowPadlock == false) {
+      throw const DeltaOperationException(
+        'Delta FFI missing required symbol dc_msg_get_showpadlock',
+      );
+    }
+    try {
+      final showPadlock = _bindings.dc_msg_get_showpadlock(msgPtr) != 0;
+      _supportsMessageShowPadlock = true;
+      return showPadlock;
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      _supportsMessageShowPadlock = false;
+      throw const DeltaOperationException(
+        'Delta FFI missing required symbol dc_msg_get_showpadlock',
+      );
+    }
+  }
+
   String? _getMessageError(ffi.Pointer<dc_msg_t> msgPtr) {
     if (_supportsResend == false) return null;
     try {
@@ -1069,6 +1423,8 @@ class DeltaContextHandle {
       final isOutgoing = _messageIsOutgoing(msgPtr);
       final downloadState = _getDownloadState(msgPtr);
       final error = _getMessageError(msgPtr);
+      final showPadlock = _getShowPadlock(msgPtr);
+      final infoType = _deltaOptionalMessageInfoType.read(msgPtr);
       return DeltaMessage(
         id: id,
         chatId: chatId,
@@ -1076,6 +1432,7 @@ class DeltaContextHandle {
         html: html,
         subject: subject,
         viewType: viewType,
+        infoType: infoType,
         state: normalizedState,
         filePath: filePath,
         fileName: fileName,
@@ -1087,6 +1444,7 @@ class DeltaContextHandle {
         isOutgoing: isOutgoing,
         downloadState: downloadState,
         error: error,
+        showPadlock: showPadlock,
       );
     } finally {
       _bindings.dc_msg_unref(msgPtr);
@@ -1328,6 +1686,7 @@ class DeltaContextHandle {
             bindings: _bindings,
           ),
         );
+        final infoType = _deltaOptionalMessageInfoType.read(msgPtr);
         final fileBytes = _bindings.dc_msg_get_filebytes(msgPtr);
         final width = _bindings.dc_msg_get_width(msgPtr);
         final height = _bindings.dc_msg_get_height(msgPtr);
@@ -1338,6 +1697,7 @@ class DeltaContextHandle {
           html: html,
           subject: subject,
           viewType: viewType,
+          infoType: infoType,
           filePath: filePath,
           fileName: fileName,
           fileMime: fileMime,
@@ -1508,6 +1868,8 @@ class DeltaContextHandle {
     required int quotedMessageId,
     String? subject,
     String? html,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
   }) async {
     if (_supportsQuote == false) {
       return sendText(
@@ -1515,6 +1877,8 @@ class DeltaContextHandle {
         message: message,
         subject: subject,
         html: html,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
       );
     }
     _ensureState(_opened, _deltaSendQuotedOperation);
@@ -1550,6 +1914,12 @@ class DeltaContextHandle {
         }
       }
 
+      _applySendOptions(
+        deltaMessage,
+        operation: _deltaSendQuotedOperation,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
+      );
       final msgId = _bindings.dc_send_msg(_context, chatId, deltaMessage);
       _ensurePositive(msgId, _deltaSendQuotedOperation, _lastError);
       return msgId;
@@ -1617,6 +1987,49 @@ class DeltaContextHandle {
     _ensureSuccess(result, 'set config $key', _lastError);
   }
 
+  Future<void> startImex({
+    required int mode,
+    required String path,
+    String? passphrase,
+  }) async {
+    _ensureState(_opened, 'start import/export');
+    final trimmedPath = path.trim();
+    if (trimmedPath.isEmpty) {
+      throw const DeltaOperationException(
+        'Failed to start import/export: empty path',
+      );
+    }
+    try {
+      _withCString(trimmedPath, (pathPtr) {
+        final trimmedPassphrase = passphrase?.trim();
+        if (trimmedPassphrase == null || trimmedPassphrase.isEmpty) {
+          _bindings.dc_imex(_context, mode, pathPtr, ffi.nullptr);
+          return;
+        }
+        _withCString(trimmedPassphrase, (passphrasePtr) {
+          _bindings.dc_imex(_context, mode, pathPtr, passphrasePtr);
+        });
+      });
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      throw const DeltaOperationException(
+        'Delta FFI missing required symbol dc_imex',
+      );
+    }
+  }
+
+  Future<void> stopOngoingProcess() async {
+    _ensureState(_opened, 'stop ongoing process');
+    try {
+      _bindings.dc_stop_ongoing_process(_context);
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+      throw const DeltaOperationException(
+        'Delta FFI missing required symbol dc_stop_ongoing_process',
+      );
+    }
+  }
+
   bool? _maybeIsOpen() {
     try {
       return _bindings.dc_context_is_open(_context) != 0;
@@ -1629,6 +2042,9 @@ class DeltaContextHandle {
       _takeString(_bindings.dc_get_last_error(_context), bindings: _bindings);
 
   int connectivity() => _bindings.dc_get_connectivity(_context);
+
+  String? connectivityDetails() =>
+      _deltaOptionalConnectivityHtml.read(_context, _bindings);
 
   void _setFileForMessage(
     ffi.Pointer<dc_msg_t> message, {
@@ -1657,6 +2073,36 @@ class DeltaContextHandle {
       }
       if (mimePointer != ffi.nullptr) {
         malloc.free(mimePointer);
+      }
+    }
+  }
+
+  void _applySendOptions(
+    ffi.Pointer<dc_msg_t> message, {
+    required String operation,
+    required bool forcePlaintext,
+    required bool skipAutocrypt,
+  }) {
+    if (forcePlaintext) {
+      try {
+        _bindings.dc_msg_force_plaintext(message);
+      } on Object catch (error) {
+        if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+        throw DeltaOperationException(
+          'Delta FFI missing required symbol dc_msg_force_plaintext '
+          'for $operation',
+        );
+      }
+    }
+    if (skipAutocrypt) {
+      try {
+        _bindings.dc_msg_skip_autocrypt(message);
+      } on Object catch (error) {
+        if (error is! ArgumentError && error is! UnsupportedError) rethrow;
+        throw DeltaOperationException(
+          'Delta FFI missing required symbol dc_msg_skip_autocrypt '
+          'for $operation',
+        );
       }
     }
   }
@@ -1950,6 +2396,23 @@ class DeltaChat {
   final int? type;
 }
 
+class DeltaChatSendCapabilities {
+  const DeltaChatSendCapabilities({
+    required this.exists,
+    this.canSend,
+    this.isEncrypted,
+  });
+
+  final bool exists;
+  final bool? canSend;
+  final bool? isEncrypted;
+
+  bool get isSendable => exists && canSend != false;
+
+  bool get isEncryptedAndSendable =>
+      exists && isEncrypted == true && canSend != false;
+}
+
 class DeltaContact {
   const DeltaContact({
     required this.id,
@@ -1970,6 +2433,7 @@ class DeltaMessage {
     this.html,
     this.subject,
     this.viewType,
+    this.infoType,
     this.state,
     this.filePath,
     this.fileName,
@@ -1981,6 +2445,7 @@ class DeltaMessage {
     this.isOutgoing = false,
     this.downloadState,
     this.error,
+    this.showPadlock = false,
   });
 
   final int id;
@@ -1989,6 +2454,7 @@ class DeltaMessage {
   final String? html;
   final String? subject;
   final int? viewType;
+  final int? infoType;
   final int? state;
   final String? filePath;
   final String? fileName;
@@ -2000,8 +2466,13 @@ class DeltaMessage {
   final bool isOutgoing;
   final int? downloadState;
   final String? error;
+  final bool showPadlock;
 
   bool get hasFile => filePath != null && filePath!.isNotEmpty;
+
+  bool get isEncryptionStatusSystemMessage =>
+      infoType == DeltaMessageInfo.chatE2ee ||
+      infoType == DeltaMessageInfo.protectionEnabled;
 
   bool get needsDownload =>
       downloadState == DeltaDownloadState.available ||
@@ -2300,6 +2771,45 @@ String? _takeString(
 
 String? _cleanString(String? value) =>
     value == null || value.isEmpty ? null : value;
+
+Map<String, Object?> _parseAxichatJsonResult(
+  String? jsonValue, {
+  required String operation,
+}) {
+  if (jsonValue == null || jsonValue.trim().isEmpty) {
+    throw DeltaOperationException('Failed to $operation');
+  }
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(jsonValue);
+  } on FormatException catch (error) {
+    throw DeltaOperationException(
+      'Failed to $operation: invalid native response (${error.message})',
+    );
+  }
+  if (decoded is! Map<String, Object?>) {
+    throw DeltaOperationException('Failed to $operation: invalid native shape');
+  }
+  if (decoded['ok'] == true) {
+    return decoded;
+  }
+  final reason = decoded['reason']?.toString();
+  throw DeltaOperationException(
+    reason == null || reason.isEmpty
+        ? 'Failed to $operation'
+        : 'Failed to $operation: $reason',
+  );
+}
+
+int _jsonInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
 
 void _ensureSuccess(
   int code,

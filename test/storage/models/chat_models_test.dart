@@ -14,12 +14,14 @@ void main() {
     expect(baseChat.transport, MessageTransport.xmpp);
   });
 
-  test('transport resolves to email for non-axi contacts', () {
+  test('explicit email transport marks a contact email-only', () {
     final emailChat = Chat(
       jid: 'peer@example.com',
       title: 'Peer',
       type: ChatType.chat,
       lastChangeTimestamp: DateTime(2024, 1, 1),
+      transport: MessageTransport.email,
+      emailAddress: 'peer@example.com',
     );
 
     expect(emailChat.transport, MessageTransport.email);
@@ -40,7 +42,7 @@ void main() {
       );
 
       expect(chat.transport, MessageTransport.xmpp);
-      expect(chat.supportsEmail, isFalse);
+      expect(chat.supportsEmail, isTrue);
       expect(chat.isEmailOnlyContact, isFalse);
       expect(chat.isAxiContact, isTrue);
     },

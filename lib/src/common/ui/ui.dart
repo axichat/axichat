@@ -60,6 +60,7 @@ export 'axi_transport_chip.dart';
 export 'axi_motion.dart';
 export 'axi_spacing.dart';
 export 'axi_sizing.dart';
+export 'address_autocomplete_field.dart';
 export 'status_colors.dart';
 export 'buttons/axi_button.dart';
 export 'buttons/axi_button_haptics.dart';

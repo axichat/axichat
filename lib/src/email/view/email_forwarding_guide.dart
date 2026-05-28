@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -150,7 +152,16 @@ class EmailForwardingGuideDialog extends StatelessWidget {
 }
 
 class EmailForwardingWelcomeDialog extends StatelessWidget {
-  const EmailForwardingWelcomeDialog({super.key});
+  const EmailForwardingWelcomeDialog({
+    super.key,
+    required this.onForegroundActivationStarted,
+    required this.onForegroundActivationFinished,
+    required this.onForegroundActivated,
+  });
+
+  final void Function() onForegroundActivationStarted;
+  final void Function() onForegroundActivationFinished;
+  final Future<void> Function() onForegroundActivated;
 
   @override
   Widget build(BuildContext context) {
@@ -194,7 +205,13 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
                 ],
               ),
             ),
-            children: const [EmailForwardingWelcomeContent()],
+            children: [
+              EmailForwardingWelcomeContent(
+                onForegroundActivationStarted: onForegroundActivationStarted,
+                onForegroundActivationFinished: onForegroundActivationFinished,
+                onForegroundActivated: onForegroundActivated,
+              ),
+            ],
           ),
         ),
       ),
@@ -203,7 +220,16 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
 }
 
 class EmailForwardingWelcomeContent extends StatelessWidget {
-  const EmailForwardingWelcomeContent({super.key});
+  const EmailForwardingWelcomeContent({
+    super.key,
+    required this.onForegroundActivationStarted,
+    required this.onForegroundActivationFinished,
+    required this.onForegroundActivated,
+  });
+
+  final void Function() onForegroundActivationStarted;
+  final void Function() onForegroundActivationFinished;
+  final Future<void> Function() onForegroundActivated;
 
   @override
   Widget build(BuildContext context) {
@@ -224,7 +250,12 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         SizedBox(height: spacing.xl),
-        const NotificationRequest(),
+        NotificationRequest(
+          allowCurrentSessionMigration: true,
+          onForegroundActivationStarted: onForegroundActivationStarted,
+          onForegroundActivationFinished: onForegroundActivationFinished,
+          onForegroundActivated: onForegroundActivated,
+        ),
       ],
     );
   }
@@ -407,6 +438,7 @@ class _EmailForwardingWelcomeGateState
   final bool _debugAlwaysShowWelcome = false;
   bool _dialogShown = false;
   bool _dialogScheduled = false;
+  Completer<void>? _foregroundActivationCompleter;
 
   @override
   void didChangeDependencies() {
@@ -445,6 +477,7 @@ class _EmailForwardingWelcomeGateState
     }
     if (!_debugAlwaysShowWelcome &&
         !context.read<SettingsCubit>().state.endpointConfig.smtpEnabled) {
+      await _releaseSignupPostLoginWorkHold();
       return;
     }
     final authState = context.read<AuthenticationCubit>().state;
@@ -453,16 +486,44 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     _dialogShown = true;
-    await showFadeScaleDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => const EmailForwardingWelcomeDialog(),
-    );
-    if (!mounted) {
+    try {
+      await showFadeScaleDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => EmailForwardingWelcomeDialog(
+          onForegroundActivationStarted: _handleForegroundActivationStarted,
+          onForegroundActivationFinished: _handleForegroundActivationFinished,
+          onForegroundActivated: _releaseSignupPostLoginWorkHold,
+        ),
+      );
+    } finally {
+      await _foregroundActivationCompleter?.future;
+      if (mounted) {
+        await _releaseSignupPostLoginWorkHold();
+      }
+    }
+    if (!mounted || _debugAlwaysShowWelcome) {
       return;
     }
-    if (!_debugAlwaysShowWelcome) {
-      context.read<SettingsCubit>().markEmailForwardingGuideSeen();
+    context.read<SettingsCubit>().markEmailForwardingGuideSeen();
+  }
+
+  Future<void> _releaseSignupPostLoginWorkHold() async {
+    await context.read<AuthenticationCubit>().releaseSignupPostLoginWorkHold();
+  }
+
+  void _handleForegroundActivationStarted() {
+    _foregroundActivationCompleter ??= Completer<void>();
+  }
+
+  void _handleForegroundActivationFinished() {
+    final completer = _foregroundActivationCompleter;
+    if (completer == null) {
+      return;
+    }
+    _foregroundActivationCompleter = null;
+    if (!completer.isCompleted) {
+      completer.complete();
     }
   }
 }

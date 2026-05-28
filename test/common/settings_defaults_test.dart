@@ -2,9 +2,44 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/credential_store.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:mocktail/mocktail.dart';
+
+import '../mocks.dart';
+
+class _InMemoryStorage implements Storage {
+  final Map<String, dynamic> _store = {};
+
+  @override
+  dynamic read(String key) => _store[key];
+
+  @override
+  Future<void> write(String key, dynamic value) async {
+    _store[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    _store.remove(key);
+  }
+
+  @override
+  Future<void> clear() async {
+    _store.clear();
+  }
+
+  @override
+  Future<void> close() async {}
+}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(CredentialStore.registerKey('test_fallback'));
+  });
+
   const SettingsState state = SettingsState();
   const accountJid = 'user@example.com';
   const otherAccountJid = 'other@example.com';
@@ -52,8 +87,26 @@ void main() {
       expect(synced.containsKey('notification_previews_enabled'), isFalse);
       expect(synced.containsKey('background_messaging_enabled'), isFalse);
       expect(synced.containsKey('endpoint_config'), isFalse);
+      expect(synced.containsKey('email_encryption_beta'), isFalse);
       expect(synced['chat_read_receipts'], isTrue);
       expect(synced['auto_download_images'], isFalse);
+    });
+
+    test('email encryption beta is local only', () {
+      final localState = state.copyWith(
+        emailEncryptionBetaEnabledByAddress: const {'user@example.com': true},
+      );
+
+      expect(
+        localState.syncedSettingsJson.containsKey('email_encryption_beta'),
+        isFalse,
+      );
+      expect(
+        localState.syncedSettingsJson.containsKey(
+          'email_encryption_beta_enabled_by_address',
+        ),
+        isFalse,
+      );
     });
 
     test('all notifications muted is derived from transport mutes', () {
@@ -234,5 +287,267 @@ void main() {
         isFalse,
       );
     });
+  });
+
+  group('SettingsCubit email encryption beta updates', () {
+    test('normalizes addresses and removes disabled entries', () async {
+      HydratedBloc.storage = _InMemoryStorage();
+      final cubit = SettingsCubit();
+      addTearDown(cubit.close);
+      await cubit.activateAccountSettings(accountJid);
+
+      await cubit.setEmailEncryptionBetaEnabled('User@Example.COM', true);
+
+      expect(cubit.state.emailEncryptionBetaEnabledByAddress, {
+        'user@example.com': true,
+      });
+
+      await cubit.setEmailEncryptionBetaEnabled('user@example.com', false);
+
+      expect(cubit.state.emailEncryptionBetaEnabledByAddress, isEmpty);
+    });
+
+    test('rejects empty and invalid addresses', () async {
+      HydratedBloc.storage = _InMemoryStorage();
+      final cubit = SettingsCubit();
+      addTearDown(cubit.close);
+
+      await expectLater(
+        cubit.setEmailEncryptionBetaEnabled('', true),
+        throwsArgumentError,
+      );
+      await expectLater(
+        cubit.setEmailEncryptionBetaEnabled('not-an-address', true),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('SettingsCubit background messaging account preferences', () {
+    late MockCredentialStore credentialStore;
+    late Map<String, String?> credentialStorage;
+
+    setUp(() {
+      credentialStore = MockCredentialStore();
+      credentialStorage = <String, String?>{};
+      when(() => credentialStore.read(key: any(named: 'key'))).thenAnswer((
+        invocation,
+      ) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        return credentialStorage[key.value];
+      });
+      when(
+        () => credentialStore.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((invocation) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        credentialStorage[key.value] =
+            invocation.namedArguments[#value] as String?;
+        return true;
+      });
+      when(() => credentialStore.delete(key: any(named: 'key'))).thenAnswer((
+        invocation,
+      ) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        credentialStorage.remove(key.value);
+        return true;
+      });
+      when(() => credentialStore.close()).thenAnswer((_) async {});
+    });
+
+    test(
+      'does not let one account inherit another background preference',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+        await cubit.activateAccountSettings('User@Example.COM');
+
+        await cubit.toggleBackgroundMessaging(
+          true,
+          accountJid: 'User@Example.COM',
+        );
+        await cubit.activateAccountSettings('other@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isFalse);
+
+        await cubit.activateAccountSettings('user@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isTrue);
+      },
+    );
+
+    test(
+      'does not let a no-account background update mutate bootstrap',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+
+        await cubit.toggleBackgroundMessaging(true);
+
+        expect(cubit.state.backgroundMessagingEnabled, isFalse);
+        expect(
+          await cubit.backgroundMessagingEnabledForAccount('user@example.com'),
+          isFalse,
+        );
+      },
+    );
+
+    test('keeps account-owned settings out of bootstrap', () async {
+      HydratedBloc.storage = _InMemoryStorage();
+      final cubit = SettingsCubit(credentialStore: credentialStore);
+      addTearDown(cubit.close);
+
+      await cubit.toggleChatReadReceipts(false);
+      await cubit.toggleNotificationPreviews(true);
+      await cubit.updateThemeMode(ThemeMode.dark);
+
+      expect(cubit.state.chatReadReceipts, isTrue);
+      expect(cubit.state.notificationPreviewsEnabled, isFalse);
+      expect(cubit.state.themeMode, ThemeMode.dark);
+    });
+
+    test('imports legacy flat settings for the initially stored jid', () async {
+      HydratedBloc.storage = _InMemoryStorage();
+      credentialStorage['jid'] = 'user@example.com';
+      final cubit = SettingsCubit(credentialStore: credentialStore);
+      addTearDown(cubit.close);
+      cubit.fromJson(const {
+        'chat_read_receipts': false,
+        'background_messaging_enabled': true,
+      });
+
+      await cubit.activateAccountSettings('user@example.com');
+
+      expect(cubit.state.chatReadReceipts, isFalse);
+      expect(cubit.state.backgroundMessagingEnabled, isTrue);
+
+      await cubit.activateAccountSettings('other@example.com');
+
+      expect(cubit.state.chatReadReceipts, isTrue);
+      expect(cubit.state.backgroundMessagingEnabled, isFalse);
+    });
+
+    test(
+      'pre-connect lookup reads matching legacy flat background preference',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        credentialStorage['jid'] = 'user@example.com';
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+        cubit.fromJson(const {
+          'chat_read_receipts': false,
+          'background_messaging_enabled': true,
+        });
+
+        expect(
+          await cubit.backgroundMessagingEnabledForAccount('user@example.com'),
+          isTrue,
+        );
+        expect(
+          await cubit.backgroundMessagingEnabledForAccount('other@example.com'),
+          isFalse,
+        );
+
+        await cubit.activateAccountSettings('user@example.com');
+
+        expect(cubit.state.chatReadReceipts, isFalse);
+        expect(cubit.state.backgroundMessagingEnabled, isTrue);
+      },
+    );
+
+    test(
+      'pre-connect lookup lets legacy per-address preference override flat settings',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        credentialStorage['jid'] = 'user@example.com';
+        credentialStorage['background_messaging_by_address_v1'] =
+            '{"user@example.com":false}';
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+        cubit.fromJson(const {'background_messaging_enabled': true});
+
+        expect(
+          await cubit.backgroundMessagingEnabledForAccount('user@example.com'),
+          isFalse,
+        );
+
+        await cubit.activateAccountSettings('user@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isFalse);
+      },
+    );
+
+    test(
+      'does not import legacy flat settings for a later credential jid',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        credentialStorage['jid'] = 'old@example.com';
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+        cubit.fromJson(const {
+          'chat_read_receipts': false,
+          'background_messaging_enabled': true,
+        });
+        credentialStorage['jid'] = 'new@example.com';
+
+        await cubit.activateAccountSettings('new@example.com');
+
+        expect(cubit.state.chatReadReceipts, isTrue);
+        expect(cubit.state.backgroundMessagingEnabled, isFalse);
+
+        await cubit.activateAccountSettings('old@example.com');
+
+        expect(cubit.state.chatReadReceipts, isFalse);
+        expect(cubit.state.backgroundMessagingEnabled, isTrue);
+      },
+    );
+
+    test(
+      'uses the provided account jid when toggling background messaging',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+
+        await cubit.activateAccountSettings('first@example.com');
+        await cubit.toggleBackgroundMessaging(
+          true,
+          accountJid: 'second@example.com',
+        );
+
+        expect(cubit.state.backgroundMessagingEnabled, isTrue);
+
+        await cubit.activateAccountSettings('first@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isFalse);
+
+        await cubit.activateAccountSettings('second@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isTrue);
+      },
+    );
+
+    test(
+      'imports legacy per-address background preference for matching jid',
+      () async {
+        HydratedBloc.storage = _InMemoryStorage();
+        credentialStorage['background_messaging_by_address_v1'] =
+            '{"user@example.com":true}';
+        final cubit = SettingsCubit(credentialStore: credentialStore);
+        addTearDown(cubit.close);
+
+        await cubit.activateAccountSettings('other@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isFalse);
+
+        await cubit.activateAccountSettings('user@example.com');
+
+        expect(cubit.state.backgroundMessagingEnabled, isTrue);
+      },
+    );
   });
 }

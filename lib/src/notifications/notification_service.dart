@@ -11,6 +11,7 @@ import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
@@ -421,7 +422,11 @@ class NotificationService {
     }
 
     await _ensureInitialized();
-    final showPreview = showPreviewOverride ?? notificationPreviewsEnabled;
+    final showPreview = resolveNotificationPreviewEnabled(
+      platform: defaultTargetPlatform,
+      globalPreviewsEnabled: notificationPreviewsEnabled,
+      previewOverride: showPreviewOverride,
+    );
     final resolvedConversationTitle = _resolveMessageNotificationLabel(
       conversationTitle,
       fallback: title,

@@ -8,6 +8,120 @@ import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'anchored email encryption status marker projects as system status row',
+    () {
+      final timestamp = DateTime.utc(2024, 1, 1, 12);
+      final anchor = Message(
+        stanzaID: 'encrypted-email',
+        senderJid: 'alice@example.com',
+        chatJid: 'alice@example.com',
+        body: 'Encrypted hello',
+        timestamp: timestamp,
+        encryptionProtocol: EncryptionProtocol.openPgp,
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      );
+      final message = Message(
+        stanzaID: emailEncryptionStatusMarkerStanzaId('alice@example.com'),
+        senderJid: 'alice@example.com',
+        chatJid: 'alice@example.com',
+        timestamp: timestamp.subtract(const Duration(microseconds: 1)),
+        pseudoMessageType: PseudoMessageType.emailEncryptionStatus,
+        pseudoMessageData: emailEncryptionStatusMarkerData(
+          anchorStanzaId: anchor.stanzaID,
+          anchorTimestamp: timestamp,
+        ),
+      );
+
+      final item = buildSystemStatusTimelineItem(
+        message,
+        loadedOpenPgpEmailStanzaIds: {anchor.stanzaID},
+        emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
+      );
+
+      expect(item, isA<ChatTimelineSystemStatusItem>());
+      expect(item?.id, message.stanzaID);
+      expect(item?.label, 'Emails are end-to-end encrypted.');
+      expect(item?.createdAt, message.timestamp?.toLocal());
+    },
+  );
+
+  test('unanchored email encryption status messages are hidden', () {
+    final message = Message(
+      stanzaID: 'delta-e2ee-status',
+      senderJid: 'alice@example.com',
+      chatJid: 'alice@example.com',
+      body: 'Messages are end-to-end encrypted.',
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+      pseudoMessageType: PseudoMessageType.emailEncryptionStatus,
+    );
+
+    final item = buildSystemStatusTimelineItem(
+      message,
+      loadedOpenPgpEmailStanzaIds: const <String>{},
+      emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
+    );
+
+    expect(item, isNull);
+  });
+
+  test(
+    'email encryption status renders before the triggering encrypted email',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+      );
+      final encryptedMessage = Message(
+        stanzaID: 'encrypted-email',
+        senderJid: 'alice@example.com',
+        chatJid: chat.jid,
+        body: 'Encrypted hello',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        encryptionProtocol: EncryptionProtocol.openPgp,
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      );
+      final statusMessage = Message(
+        stanzaID: emailEncryptionStatusMarkerStanzaId(chat.jid),
+        senderJid: 'alice@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(
+          2024,
+          1,
+          1,
+          12,
+        ).subtract(const Duration(microseconds: 1)),
+        pseudoMessageType: PseudoMessageType.emailEncryptionStatus,
+        pseudoMessageData: emailEncryptionStatusMarkerData(
+          anchorStanzaId: encryptedMessage.stanzaID,
+          anchorTimestamp: encryptedMessage.timestamp!,
+        ),
+      );
+
+      final items = _projectMessages(
+        chat: chat,
+        messages: [encryptedMessage, statusMessage],
+        isEmailChat: true,
+      );
+
+      expect(items[0], isA<ChatTimelineMessageItem>());
+      expect(items[1], isA<ChatTimelineSystemStatusItem>());
+      expect(
+        (items[0] as ChatTimelineMessageItem).id,
+        encryptedMessage.stanzaID,
+      );
+      expect(
+        (items[1] as ChatTimelineSystemStatusItem).label,
+        'Emails are end-to-end encrypted.',
+      );
+    },
+  );
+
   test('stale unacked send-again projection requires a cutoff', () {
     final chat = chat_models.Chat(
       jid: 'peer@axi.im',
@@ -33,6 +147,7 @@ void main() {
         unreadDividerLabel: 'Unread',
         emptyStateItemId: 'empty-state',
         emptyStateLabel: 'Empty',
+        emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
         isGroupChat: false,
         isEmailChat: false,
         staleUnackedCutoff: staleUnackedCutoff,
@@ -109,6 +224,7 @@ void main() {
         unreadDividerLabel: 'Unread',
         emptyStateItemId: 'empty-state',
         emptyStateLabel: 'Empty',
+        emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
         isGroupChat: true,
         isEmailChat: false,
         profileJid: 'self@axi.im',
@@ -326,6 +442,7 @@ void main() {
         unreadDividerLabel: 'Unread',
         emptyStateItemId: 'empty-state',
         emptyStateLabel: 'Empty',
+        emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
         isGroupChat: false,
         isEmailChat: true,
         profileJid: 'self@example.com',
@@ -407,6 +524,7 @@ void main() {
         unreadDividerLabel: 'Unread',
         emptyStateItemId: 'empty-state',
         emptyStateLabel: 'Empty',
+        emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
         isGroupChat: false,
         isEmailChat: true,
         profileJid: 'self@example.com',
@@ -488,6 +606,7 @@ void main() {
         unreadDividerLabel: 'Unread',
         emptyStateItemId: 'empty-state',
         emptyStateLabel: 'Empty',
+        emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
         isGroupChat: false,
         isEmailChat: true,
         profileJid: 'self@example.com',
@@ -570,6 +689,7 @@ void main() {
       unreadDividerLabel: 'Unread',
       emptyStateItemId: 'empty-state',
       emptyStateLabel: 'Empty',
+      emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
       isGroupChat: false,
       isEmailChat: true,
       profileJid: 'self@example.com',
@@ -664,6 +784,7 @@ void main() {
       unreadDividerLabel: 'Unread',
       emptyStateItemId: 'empty-state',
       emptyStateLabel: 'Empty',
+      emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
       isGroupChat: false,
       isEmailChat: false,
       profileJid: 'self@example.com',
@@ -1073,6 +1194,31 @@ void main() {
     expect(laterLifecycle.acceptedInviteTokens, isEmpty);
     expect(laterLifecycle.revokedInviteTokens, contains('token-1'));
   });
+
+  test('does not render unread divider for displayed boundary message', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@axi.im',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    final message = Message(
+      stanzaID: 'displayed-boundary',
+      senderJid: chat.jid,
+      chatJid: chat.jid,
+      body: 'Already read',
+      displayed: true,
+      timestamp: DateTime.utc(2024, 1, 1),
+    );
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: [message],
+      unreadBoundaryStanzaId: message.stanzaID,
+    );
+
+    expect(items.whereType<ChatTimelineUnreadDividerItem>(), isEmpty);
+  });
 }
 
 List<ChatTimelineItem> _projectMessages({
@@ -1085,11 +1231,12 @@ List<ChatTimelineItem> _projectMessages({
   Map<String, List<String>> attachmentsByMessageId = const {},
   Set<String> revokedInviteTokens = const {},
   Set<String> acceptedInviteTokens = const {},
+  String? unreadBoundaryStanzaId,
 }) {
   return buildMainChatTimelineItems(
     messages: messages,
     loadingMessages: false,
-    unreadBoundaryStanzaId: null,
+    unreadBoundaryStanzaId: unreadBoundaryStanzaId,
     emptyStateCreatedAt: DateTime.utc(2024, 1, 1),
     unreadDividerItemId: 'unread-divider',
     unreadDividerLabel: 'Unread',
@@ -1097,6 +1244,7 @@ List<ChatTimelineItem> _projectMessages({
     emptyStateLabel: 'Empty',
     pendingEmailContentLabel: pendingEmailContentLabel,
     unavailableEmailContentLabel: unavailableEmailContentLabel,
+    emailEncryptionStatusLabel: 'Emails are end-to-end encrypted.',
     isGroupChat: false,
     isEmailChat: isEmailChat,
     profileJid: 'self@example.com',

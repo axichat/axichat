@@ -53,6 +53,8 @@ abstract class ForegroundTaskBridge {
 
   Future<void> release(String clientId);
 
+  Future<bool> isRunning();
+
   Future<void> send(List<Object> parts);
 
   void registerListener(String clientId, ForegroundTaskMessageHandler handler);
@@ -195,13 +197,25 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
 
   @override
   Future<void> release(String clientId) async {
+    _log.info(
+      'Foreground service release requested: '
+      'clientId=$clientId totalUsageBefore=$_totalUsage',
+    );
     _decrementUsage(clientId);
     if (_totalUsage != 0) {
+      _log.info(
+        'Foreground service release retained active leases: '
+        'clientId=$clientId totalUsageAfter=$_totalUsage',
+      );
       return;
     }
     final pendingStart = _startCompleter;
     final startupWasInFlight = pendingStart != null;
     if (pendingStart != null) {
+      _log.info(
+        'Foreground service release waiting for pending start: '
+        'clientId=$clientId',
+      );
       try {
         await pendingStart.future;
       } on Exception {
@@ -209,11 +223,22 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
         return;
       }
       if (_totalUsage != 0) {
+        _log.info(
+          'Foreground service release retained lease after pending start: '
+          'clientId=$clientId totalUsageAfter=$_totalUsage',
+        );
         return;
       }
     }
     await _stopService(forceStop: startupWasInFlight);
+    _log.info(
+      'Foreground service release completed: '
+      'clientId=$clientId totalUsageAfter=$_totalUsage',
+    );
   }
+
+  @override
+  Future<bool> isRunning() => _isRunningService();
 
   void _decrementUsage(String clientId) {
     final current = _usageCounts[clientId];
@@ -256,7 +281,9 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   }
 
   Future<void> _stopService({bool forceStop = false}) async {
+    final stopwatch = Stopwatch()..start();
     try {
+      _log.info('Stopping foreground service: forceStop=$forceStop');
       final serviceRunning = forceStop ? true : await _isRunningService();
       if (!serviceRunning) {
         _log.fine(
@@ -286,6 +313,11 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     } finally {
       _resetTaskReady();
       _detachCallbackIfUnused();
+      stopwatch.stop();
+      _log.info(
+        'Foreground service stop finished: '
+        'forceStop=$forceStop elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
     }
   }
 
@@ -859,8 +891,6 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     _sendToTask([destroyPrefix]);
   }
 
-  @override
-  @override
   @override
   Future<void> closeStreams() async {
     if (!_dataStream.isClosed) {

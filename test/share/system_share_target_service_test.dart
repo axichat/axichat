@@ -168,6 +168,51 @@ void main() {
     expect(values.single['avatarBytes'], bytes);
   });
 
+  test('channel payload tolerates failed avatar hydration', () async {
+    const target = SystemShareTarget(
+      jid: 'avatar@example.com',
+      label: 'Avatar',
+      avatarPath: '/avatars/avatar.enc',
+      rank: 0,
+    );
+
+    final values = await SystemShareTargetService.channelValuesForTargets([
+      target,
+    ], loadAvatarBytes: (_) async => throw Exception('bad avatar'));
+
+    expect(values.single['avatarBytes'], isNull);
+  });
+
+  test('channel payload loads each avatar path once', () async {
+    const targets = [
+      SystemShareTarget(
+        jid: 'one@example.com',
+        label: 'One',
+        avatarPath: '/avatars/shared.enc',
+        rank: 0,
+      ),
+      SystemShareTarget(
+        jid: 'two@example.com',
+        label: 'Two',
+        avatarPath: '/avatars/shared.enc',
+        rank: 1,
+      ),
+    ];
+    final bytes = Uint8List.fromList([1, 2, 3]);
+    var loadCount = 0;
+
+    final values = await SystemShareTargetService.channelValuesForTargets(
+      targets,
+      loadAvatarBytes: (_) async {
+        loadCount += 1;
+        return bytes;
+      },
+    );
+
+    expect(loadCount, 1);
+    expect(values.map((value) => value['avatarBytes']), [bytes, bytes]);
+  });
+
   group('publishing pipeline', () {
     const channel = MethodChannel('test/system_share_targets');
 

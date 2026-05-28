@@ -33,6 +33,19 @@ final class _ChatTimelineSpecialItemView extends StatelessWidget {
       ),
     ),
     ChatTimelineUnreadDividerItem(:final label) => _UnreadDivider(label: label),
+    ChatTimelineSystemStatusItem(:final label) => Padding(
+      padding: EdgeInsets.symmetric(
+        vertical: context.spacing.s,
+        horizontal: context.spacing.m,
+      ),
+      child: Center(
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: context.textTheme.muted.copyWith(fontStyle: FontStyle.italic),
+        ),
+      ),
+    ),
     ChatTimelineEmptyStateItem(:final label) => Padding(
       padding: EdgeInsets.symmetric(
         vertical: context.spacing.l,
