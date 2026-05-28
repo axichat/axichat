@@ -1221,8 +1221,13 @@ class _RoomJoinFailureComposerBanner extends StatelessWidget {
 }
 
 class _PinnedMessageComposerBanner extends StatelessWidget {
-  const _PinnedMessageComposerBanner({super.key, required this.onHide});
+  const _PinnedMessageComposerBanner({
+    super.key,
+    required this.onView,
+    required this.onHide,
+  });
 
+  final VoidCallback onView;
   final VoidCallback onHide;
 
   @override
@@ -1246,9 +1251,21 @@ class _PinnedMessageComposerBanner extends StatelessWidget {
           Expanded(
             child: Text(
               l10n.chatPinnedNoticeBanner,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: textTheme.p.copyWith(
                 color: colors.foreground,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          _ComposerBannerTrailing(
+            child: AxiButton.ghost(
+              size: AxiButtonSize.sm,
+              onPressed: onView,
+              child: Text(
+                l10n.chatAttachmentView,
+                style: textTheme.p.copyWith(color: colors.foreground),
               ),
             ),
           ),
@@ -1549,6 +1566,7 @@ class _ComposerNotices extends StatelessWidget {
     required this.composerError,
     required this.onComposerErrorCleared,
     required this.showPinnedMessageBanner,
+    required this.onPinnedMessageBannerViewed,
     required this.onPinnedMessageBannerHidden,
     required this.showAttachmentWarning,
     required this.retryReport,
@@ -1559,6 +1577,7 @@ class _ComposerNotices extends StatelessWidget {
   final String? composerError;
   final VoidCallback? onComposerErrorCleared;
   final bool showPinnedMessageBanner;
+  final VoidCallback onPinnedMessageBannerViewed;
   final VoidCallback onPinnedMessageBannerHidden;
   final bool showAttachmentWarning;
   final FanOutSendReport? retryReport;
@@ -1583,6 +1602,7 @@ class _ComposerNotices extends StatelessWidget {
       notices.add(
         _PinnedMessageComposerBanner(
           key: const ValueKey<String>('composer-pinned-message-notice'),
+          onView: onPinnedMessageBannerViewed,
           onHide: onPinnedMessageBannerHidden,
         ),
       );

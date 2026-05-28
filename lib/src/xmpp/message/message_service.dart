@@ -347,41 +347,26 @@ const String _outboundSummaryFlagSfs = 'sfs';
 const String _outboundSummaryFlagUploadNotification = 'upload_notification';
 const String _outboundSummaryFlagXhtml = 'xhtml';
 const String _outboundSummaryFlagPinMutation = 'pin_mutation';
-const String _pinPubSubNamespace = 'urn:axi:pins';
-const String _pinPubSubNodePrefix = 'urn:axi:pins:';
-const String _pinNodeLabelUnknown = '<unknown>';
-const String _pinNodeLabelRedacted = '<redacted>';
-const String _pinNodeLabelJidMarker = '@';
-const String _pinTag = 'pin';
-const String _pinMessageIdAttr = 'message_id';
-const String _pinPinnedAtAttr = 'pinned_at';
-const String _pinChatJidAttr = 'chat_jid';
-const String _pinPublishModelOpen = 'open';
-const String _pinPublishModelPublishers = 'publishers';
-const mox.PubSubAffiliation _pinAffiliationOwner = mox.PubSubAffiliation.owner;
-const mox.PubSubAffiliation _pinAffiliationPublisher =
-    mox.PubSubAffiliation.publisher;
-const int _pinSyncMaxItems = 500;
-const String _pinSyncMaxItemsValue = '500';
-const bool _pinNotifyEnabled = true;
-const bool _pinDeliverNotificationsEnabled = true;
-const bool _pinDeliverPayloadsEnabled = true;
-const bool _pinPersistItemsEnabled = true;
-const bool _pinPresenceBasedDeliveryDisabled = false;
-const mox.AccessModel _pinAccessModelOpen = mox.AccessModel.open;
-const mox.AccessModel _pinAccessModelRestricted = mox.AccessModel.whitelist;
-const String _pinPubSubHostPrefix = 'pubsub.';
 const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
+const String _pinPendingClearAllRetractionsKeyName =
+    'pin_sync_pending_clear_all_retractions';
+const String _pinLegacyActorMigrationKeyName =
+    'pin_sync_legacy_actor_migration';
 const String _pinArchiveBootstrapKeyPrefix = 'pin_sync_archive_bootstrap_';
 const Duration _mamQueryTimeout = Duration(seconds: 90);
 const Duration _mamQueryFallbackTimeout = Duration(seconds: 15);
-const Set<String> _emptyPinPublisherSet = <String>{};
 final _pinPendingPublishesKey = XmppStateStore.registerKey(
   _pinPendingPublishesKeyName,
 );
 final _pinPendingRetractionsKey = XmppStateStore.registerKey(
   _pinPendingRetractionsKeyName,
+);
+final _pinPendingClearAllRetractionsKey = XmppStateStore.registerKey(
+  _pinPendingClearAllRetractionsKeyName,
+);
+final _pinLegacyActorMigrationKey = XmppStateStore.registerKey(
+  _pinLegacyActorMigrationKeyName,
 );
 final _draftSyncSourceKey = XmppStateStore.registerKey(_draftSyncSourceKeyName);
 final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -396,9 +381,6 @@ final _draftSyncSnapshotAtKey = XmppStateStore.registerKey(
 final _draftSyncSnapshotIdsKey = XmppStateStore.registerKey(
   _draftSyncSnapshotIdsKeyName,
 );
-const String _pinBase64PaddingChar = '=';
-const int _pinBase64Quantum = 4;
-final RegExp _pinBase64PaddingPattern = RegExp(r'=+$');
 const int _tlsRequirementNegotiatorPriority = 95;
 const bool _tlsRequirementSendStreamHeader = false;
 const bool _tlsRequirementErrorRecoverable = false;
@@ -553,13 +535,17 @@ final class _OutboundMessageSummary {
 final class _OutboundPinMutation {
   const _OutboundPinMutation({
     required this.chatJid,
+    required this.referenceKind,
     required this.messageStanzaId,
     required this.pinned,
+    required this.scope,
   });
 
   final String chatJid;
+  final MessageReferenceKind referenceKind;
   final String messageStanzaId;
   final bool pinned;
+  final PinMessageMutationScope scope;
 }
 
 final class _OutboundReactionMutation {
@@ -717,66 +703,18 @@ String? _normalizePinJid(String raw) {
 
 String? _normalizePinChatJid(String raw) => _normalizePinJid(raw);
 
-String? _normalizePinPublisherJid(String raw) => _normalizePinJid(raw);
-
-String _encodePinChatJid(String chatJid) {
-  final bytes = utf8.encode(chatJid);
-  final encoded = base64Url.encode(bytes);
-  return encoded.replaceAll(_pinBase64PaddingPattern, '');
-}
-
-String? _decodePinChatJid(String encoded) {
-  final trimmed = encoded.trim();
-  if (trimmed.isEmpty) return null;
-  var normalized = trimmed;
-  final paddingRemainder = normalized.length % _pinBase64Quantum;
-  if (paddingRemainder != 0) {
-    final paddingLength = _pinBase64Quantum - paddingRemainder;
-    normalized = '$normalized${_pinBase64PaddingChar * paddingLength}';
-  }
-  try {
-    final bytes = base64Url.decode(normalized);
-    final decoded = utf8.decode(bytes);
-    return _normalizePinChatJid(decoded);
-  } on FormatException {
-    return null;
-  }
-}
-
-String? _pinNodeForChat(String chatJid) {
-  final normalized = _normalizePinChatJid(chatJid);
-  if (normalized == null) return null;
-  final encoded = _encodePinChatJid(normalized);
-  return '$_pinPubSubNodePrefix$encoded';
-}
-
-String? _chatJidFromPinNode(String nodeId) {
-  if (!nodeId.startsWith(_pinPubSubNodePrefix)) return null;
-  final encoded = nodeId.substring(_pinPubSubNodePrefix.length);
-  return _decodePinChatJid(encoded);
-}
-
-enum _PinNodePolicy { shared, restricted }
-
-enum _PinSyncBackend { sharedMutations, pubSub }
-
 final class _PinChatSyncSession {
-  Set<String>? authorizedPublishers;
   final Set<String> pendingPublishes = <String>{};
   final Set<String> pendingRetractions = <String>{};
+  final Set<String> pendingClearAllRetractions = <String>{};
+  final Set<String> hydratingMissingReferences = <String>{};
   var syncInFlight = false;
   var archiveBootstrapInFlight = false;
-  var legacyMirrorReady = false;
 
   bool get hasPendingMutations =>
-      pendingPublishes.isNotEmpty || pendingRetractions.isNotEmpty;
-
-  void cacheAuthorizedPublishers(Set<String> publishers) {
-    if (publishers.isEmpty) {
-      return;
-    }
-    authorizedPublishers = Set<String>.from(publishers);
-  }
+      pendingPublishes.isNotEmpty ||
+      pendingRetractions.isNotEmpty ||
+      pendingClearAllRetractions.isNotEmpty;
 
   bool queuePublish(String messageStanzaId) {
     final normalized = messageStanzaId.trim();
@@ -798,6 +736,17 @@ final class _PinChatSyncSession {
     return removed || added;
   }
 
+  bool queueClearAllRetraction(String messageStanzaId) {
+    final normalized = messageStanzaId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final removedPublish = pendingPublishes.remove(normalized);
+    final removedRetraction = pendingRetractions.remove(normalized);
+    final added = pendingClearAllRetractions.add(normalized);
+    return removedPublish || removedRetraction || added;
+  }
+
   bool removePendingPublish(String messageStanzaId) {
     final normalized = messageStanzaId.trim();
     if (normalized.isEmpty) {
@@ -812,6 +761,14 @@ final class _PinChatSyncSession {
       return false;
     }
     return pendingRetractions.remove(normalized);
+  }
+
+  bool removePendingClearAllRetraction(String messageStanzaId) {
+    final normalized = messageStanzaId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return pendingClearAllRetractions.remove(normalized);
   }
 
   bool removePendingMutation({
@@ -842,6 +799,7 @@ final class _PinChatSyncSession {
   void clearPendingMutations() {
     pendingPublishes.clear();
     pendingRetractions.clear();
+    pendingClearAllRetractions.clear();
   }
 
   void replacePendingPublishes(Iterable<String> messageIds) {
@@ -864,125 +822,24 @@ final class _PinChatSyncSession {
       );
   }
 
+  void replacePendingClearAllRetractions(Iterable<String> messageIds) {
+    pendingClearAllRetractions
+      ..clear()
+      ..addAll(
+        messageIds
+            .map((messageId) => messageId.trim())
+            .where((messageId) => messageId.isNotEmpty),
+      );
+  }
+
   List<String> pendingPublishesSnapshot() =>
       pendingPublishes.toList(growable: false);
 
   List<String> pendingRetractionsSnapshot() =>
       pendingRetractions.toList(growable: false);
-}
 
-mox.AccessModel _pinAccessModelForPolicy(_PinNodePolicy policy) =>
-    switch (policy) {
-      _PinNodePolicy.restricted => _pinAccessModelRestricted,
-      _PinNodePolicy.shared => _pinAccessModelOpen,
-    };
-
-String _pinPublishModelForPolicy(_PinNodePolicy policy) => switch (policy) {
-  _PinNodePolicy.restricted => _pinPublishModelPublishers,
-  _PinNodePolicy.shared => _pinPublishModelOpen,
-};
-
-AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
-    AxiPubSubNodeConfig(
-      accessModel: _pinAccessModelForPolicy(policy),
-      publishModel: _pinPublishModelForPolicy(policy),
-      deliverNotifications: _pinDeliverNotificationsEnabled,
-      deliverPayloads: _pinDeliverPayloadsEnabled,
-      maxItems: _pinSyncMaxItemsValue,
-      notifyRetract: _pinNotifyEnabled,
-      notifyDelete: _pinNotifyEnabled,
-      notifyConfig: _pinNotifyEnabled,
-      notifySub: _pinNotifyEnabled,
-      presenceBasedDelivery: _pinPresenceBasedDeliveryDisabled,
-      persistItems: _pinPersistItemsEnabled,
-      sendLastPublishedItem: null,
-    );
-
-mox.NodeConfig _pinCreateNodeConfig(_PinNodePolicy policy) =>
-    _pinNodeConfig(policy).withoutSendLastPublishedItem().toNodeConfig();
-
-mox.PubSubPublishOptions _pinPublishOptions(_PinNodePolicy policy) =>
-    mox.PubSubPublishOptions(
-      accessModel: _pinAccessModelForPolicy(policy).value,
-      maxItems: _pinSyncMaxItemsValue,
-      persistItems: _pinPersistItemsEnabled,
-      publishModel: _pinPublishModelForPolicy(policy),
-      sendLastPublishedItem: null,
-    );
-
-String _safePinNodeLabel(String? nodeId) {
-  final normalized = nodeId?.trim();
-  if (normalized == null || normalized.isEmpty) {
-    return _pinNodeLabelUnknown;
-  }
-  if (normalized.contains(_pinNodeLabelJidMarker)) {
-    return _pinNodeLabelRedacted;
-  }
-  return normalized;
-}
-
-final class _PinnedMessageSyncPayload {
-  const _PinnedMessageSyncPayload({
-    required this.messageStanzaId,
-    required this.chatJid,
-    required this.pinnedAt,
-  });
-
-  final String messageStanzaId;
-  final String chatJid;
-  final DateTime pinnedAt;
-
-  String get itemId => messageStanzaId;
-
-  static _PinnedMessageSyncPayload? fromXml(
-    mox.XMLNode node, {
-    required String chatJid,
-    String? itemId,
-  }) {
-    if (node.tag != _pinTag) return null;
-    if (node.attributes['xmlns']?.toString() != _pinPubSubNamespace) {
-      return null;
-    }
-    final rawMessageId = node.attributes[_pinMessageIdAttr]?.toString().trim();
-    final messageId = rawMessageId == null || rawMessageId.isEmpty
-        ? itemId?.trim()
-        : rawMessageId;
-    if (messageId == null || messageId.isEmpty) {
-      return null;
-    }
-    final rawPinnedAt = node.attributes[_pinPinnedAtAttr]?.toString().trim();
-    if (rawPinnedAt == null || rawPinnedAt.isEmpty) {
-      return null;
-    }
-    final parsedPinnedAt = DateTime.tryParse(rawPinnedAt);
-    if (parsedPinnedAt == null) return null;
-    final normalizedChat = _normalizePinChatJid(chatJid);
-    if (normalizedChat == null) return null;
-    final rawChat = node.attributes[_pinChatJidAttr]?.toString().trim();
-    if (rawChat != null && rawChat.isNotEmpty) {
-      final normalizedRawChat = _normalizePinChatJid(rawChat);
-      if (normalizedRawChat != null && normalizedRawChat != normalizedChat) {
-        return null;
-      }
-    }
-    return _PinnedMessageSyncPayload(
-      messageStanzaId: messageId,
-      chatJid: normalizedChat,
-      pinnedAt: parsedPinnedAt.toUtc(),
-    );
-  }
-
-  mox.XMLNode toXml() {
-    return mox.XMLNode.xmlns(
-      tag: _pinTag,
-      xmlns: _pinPubSubNamespace,
-      attributes: {
-        _pinMessageIdAttr: escapeXmlAttribute(messageStanzaId),
-        _pinChatJidAttr: escapeXmlAttribute(chatJid),
-        _pinPinnedAtAttr: pinnedAt.toUtc().toIso8601String(),
-      },
-    );
-  }
+  List<String> pendingClearAllRetractionsSnapshot() =>
+      pendingClearAllRetractions.toList(growable: false);
 }
 
 class MamPageResult {
@@ -1313,8 +1170,7 @@ enum _DraftSyncDecision { applyRemote, publishLocal, skip }
 
 enum _CalendarSyncAuthorizationResult { allowed, rejected, unresolved }
 
-mixin MessageService on XmppBase, BaseStreamService, BlockingService
-    implements PinnedMessageMutator {
+mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   bool _draftSnapshotInFlight = false;
   String? _draftSourceId;
   bool _pendingDraftSyncLoaded = false;
@@ -2930,6 +2786,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     await _applyPendingSelfDisplayedMarkersForChat(message.chatJid);
     await _applyPendingOutboundMessageStatusesForChat(message.chatJid);
     await _applyPendingInboundReactionsForMessage(message);
+    await _applyPendingInboundPinMutationsForMessage(message);
   }
 
   Future<ChatType> _resolvePersistedChatType({
@@ -3103,6 +2960,70 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       );
     }
     return (senderJid: senderJid, identityVerified: false);
+  }
+
+  ({String actorJid, bool identityVerified}) _resolveInboundPinActorIdentity({
+    required String senderJid,
+    required String chatJid,
+    required bool isGroupChat,
+    required bool isArchived,
+  }) {
+    final senderIdentity = _resolveInboundReactionSenderIdentity(
+      senderJid: senderJid,
+      chatJid: chatJid,
+      isGroupChat: isGroupChat,
+      isArchived: isArchived,
+    );
+    return (
+      actorJid: senderIdentity.senderJid,
+      identityVerified: senderIdentity.identityVerified,
+    );
+  }
+
+  _PendingInboundPinMutation _resolveInboundPinMutationForTarget({
+    required String chatJid,
+    required ChatType chatType,
+    required Message message,
+    required _PendingInboundPinMutation mutation,
+  }) {
+    return mutation;
+  }
+
+  bool _canPinInChat({required String chatJid, required ChatType chatType}) =>
+      chatType != ChatType.groupChat;
+
+  bool _canClearAnyPinsForChat({
+    required String chatJid,
+    required ChatType chatType,
+  }) => false;
+
+  Future<bool> _isInboundPinClearAllAuthorized(mox.MessageEvent event) async =>
+      false;
+
+  bool _isOutboundPinTargetAuthoredBySelf({
+    required String chatJid,
+    required ChatType chatType,
+    required Message message,
+  }) {
+    if (chatType == ChatType.groupChat) {
+      return false;
+    }
+    return message.isFromAccount(myJid);
+  }
+
+  bool _isInboundPinActorAuthorizedForTarget({
+    required String chatJid,
+    required ChatType chatType,
+    required Message message,
+    required _PendingInboundPinMutation mutation,
+  }) {
+    if (mutation.scope == PinMessageMutationScope.all) {
+      return true;
+    }
+    if (chatType == ChatType.groupChat) {
+      return false;
+    }
+    return message.isFromAuthorizedJid(mutation.actorJid);
   }
 
   void _updateUnsupportedArchiveChats(Set<String> chatJids) {}
@@ -4019,12 +3940,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     );
   }
 
-  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) async* {
+  Stream<List<PinnedMessageAggregate>> pinnedMessagesStream(
+    String chatJid,
+  ) async* {
     final normalizedChat = _normalizePinChatJid(chatJid);
     if (normalizedChat == null) {
-      yield const <PinnedMessageEntry>[];
+      yield const <PinnedMessageAggregate>[];
       return;
     }
+    final selfActorJid = _selfPinActorJid();
+    if (selfActorJid == null) {
+      yield const <PinnedMessageAggregate>[];
+      return;
+    }
+    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
     setPinSyncActiveForChat(normalizedChat, active: true);
     try {
       yield* databaseReloadStream
@@ -4034,11 +3963,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
               final stream =
                   await _dbOpReturning<
                     XmppDatabase,
-                    Stream<List<PinnedMessageEntry>>
+                    Stream<List<PinnedMessageAggregate>>
                   >((db) async {
                     final reset = databaseReloadStream.first;
-                    final watchStream = db.watchPinnedMessages(normalizedChat);
-                    final initial = await db.getPinnedMessages(normalizedChat);
+                    final watchStream = db.watchPinnedMessageAggregates(
+                      chatJid: normalizedChat,
+                      selfActorJid: selfActorJid,
+                    );
+                    final initial = await db.getPinnedMessageAggregates(
+                      chatJid: normalizedChat,
+                      selfActorJid: selfActorJid,
+                    );
                     return watchStream.takeUntil(reset).startWith(initial);
                   });
               yield* stream;
@@ -4073,158 +4008,45 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
   }
 
-  Map<String, mox.PubSubAffiliation>? _basePinAffiliations() {
-    final selfBare = _selfBareJid();
+  String? _selfPinActorJid() {
+    final selfBare = _selfBareJid()?.trim();
     if (selfBare == null || selfBare.isEmpty) {
       return null;
     }
-    return <String, mox.PubSubAffiliation>{selfBare: _pinAffiliationOwner};
+    return normalizedAddressKey(selfBare) ?? selfBare;
   }
 
-  Map<String, mox.PubSubAffiliation>? _pinDirectAffiliations(Chat chat) {
-    final affiliations = _basePinAffiliations();
-    if (affiliations == null) {
-      return null;
+  Future<void> _ensureLegacyPinnedMessagesMigrated(String selfActorJid) async {
+    final normalizedActor = selfActorJid.trim();
+    if (normalizedActor.isEmpty) {
+      return;
     }
-    final peerJid = chat.remoteJid.trim();
-    if (peerJid.isEmpty) {
-      return null;
+    final complete = await _dbOpReturning<XmppStateStore, String?>(
+      (ss) => ss.read(key: _pinLegacyActorMigrationKey) as String?,
+    );
+    if (complete?.trim().isNotEmpty == true) {
+      return;
     }
-    affiliations[peerJid] = _pinAffiliationPublisher;
-    return affiliations;
+    await _dbOp<XmppDatabase>(
+      (db) => db.copyLegacyPinnedMessagesToActorRows(actorJid: normalizedActor),
+      awaitDatabase: true,
+    );
+    await _dbOp<XmppStateStore>(
+      (ss) => ss.write(
+        key: _pinLegacyActorMigrationKey,
+        value: DateTime.timestamp().toUtc().toIso8601String(),
+      ),
+      awaitDatabase: true,
+    );
   }
-
-  Future<Map<String, mox.PubSubAffiliation>?> _pinGroupAffiliations(
-    Chat chat,
-  ) async => null;
 
   bool _chatSupportsArchiveQueries(Chat? chat) =>
       chat?.defaultTransport.isXmpp ?? true;
 
-  _PinSyncBackend _pinSyncBackendForChat(Chat? chat) =>
-      _chatSupportsArchiveQueries(chat)
-      ? _PinSyncBackend.sharedMutations
-      : _PinSyncBackend.pubSub;
-
-  bool _usesSharedPinMutations(Chat? chat) =>
-      _pinSyncBackendForChat(chat) == _PinSyncBackend.sharedMutations;
-
-  bool _usesPubSubPins(Chat? chat) =>
-      _pinSyncBackendForChat(chat) == _PinSyncBackend.pubSub;
-
-  Future<
-    ({
-      Map<String, mox.PubSubAffiliation>? affiliations,
-      Chat? chat,
-      _PinNodePolicy policy,
-    })
-  >
-  _resolvePinNodeContext(String chatJid) async {
-    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+  Future<Chat?> _loadPinChat(String chatJid) async {
+    return await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(chatJid),
     );
-    if (chat == null) {
-      return (
-        policy: _PinNodePolicy.restricted,
-        chat: null,
-        affiliations: _basePinAffiliations(),
-      );
-    }
-    if (_usesPubSubPins(chat)) {
-      return (
-        policy: _PinNodePolicy.restricted,
-        chat: chat,
-        affiliations: _basePinAffiliations(),
-      );
-    }
-    if (chat.type == ChatType.groupChat) {
-      final affiliations = await _pinGroupAffiliations(chat);
-      return (
-        policy: _PinNodePolicy.restricted,
-        chat: chat,
-        affiliations: affiliations,
-      );
-    }
-    final affiliations = _pinDirectAffiliations(chat);
-    return (
-      policy: _PinNodePolicy.restricted,
-      chat: chat,
-      affiliations: affiliations,
-    );
-  }
-
-  Set<String> _normalizePinPublishers(Iterable<String> publishers) {
-    final normalized = <String>{};
-    for (final publisher in publishers) {
-      final resolved = _normalizePinPublisherJid(publisher);
-      if (resolved != null) {
-        normalized.add(resolved);
-      }
-    }
-    return normalized;
-  }
-
-  Set<String> _pinAuthorizedPublishersFromContext(
-    ({
-      Map<String, mox.PubSubAffiliation>? affiliations,
-      Chat? chat,
-      _PinNodePolicy policy,
-    })
-    context,
-  ) {
-    final candidates = <String>[];
-    final selfBare = _selfBareJid();
-    if (selfBare != null && selfBare.isNotEmpty) {
-      candidates.add(selfBare);
-    }
-    final chat = context.chat;
-    if (chat != null &&
-        _usesSharedPinMutations(chat) &&
-        chat.type != ChatType.groupChat) {
-      final peerJid = chat.remoteJid.trim();
-      if (peerJid.isNotEmpty) {
-        candidates.add(peerJid);
-      }
-    }
-    final affiliations = context.affiliations;
-    if (affiliations != null && affiliations.isNotEmpty) {
-      candidates.addAll(affiliations.keys);
-    }
-    return _normalizePinPublishers(candidates);
-  }
-
-  void _cachePinAuthorizedPublishers(
-    String chatJid,
-    ({
-      Map<String, mox.PubSubAffiliation>? affiliations,
-      Chat? chat,
-      _PinNodePolicy policy,
-    })
-    context,
-  ) {
-    final normalizedChat = _normalizePinChatJid(chatJid);
-    if (normalizedChat == null) {
-      return;
-    }
-    final publishers = _pinAuthorizedPublishersFromContext(context);
-    if (publishers.isEmpty) {
-      return;
-    }
-    _pinSyncSession(normalizedChat).cacheAuthorizedPublishers(publishers);
-  }
-
-  Future<Set<String>?> _resolvePinAuthorizedPublishers(String chatJid) async {
-    final normalizedChat = _normalizePinChatJid(chatJid);
-    if (normalizedChat == null) {
-      return null;
-    }
-    final cached = _pinSyncSessionOrNull(normalizedChat)?.authorizedPublishers;
-    if (cached != null) {
-      return cached;
-    }
-    final context = await _resolvePinNodeContext(normalizedChat);
-    _cachePinAuthorizedPublishers(normalizedChat, context);
-    return _pinSyncSessionOrNull(normalizedChat)?.authorizedPublishers;
   }
 
   void setPinSyncActiveForChat(String chatJid, {required bool active}) {
@@ -4247,48 +4069,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     return _activePinSyncChats.contains(normalizedChat);
   }
 
-  bool _isPinPublisherAllowed({
-    required Set<String>? allowedPublishers,
-    required Set<String> pendingPublishes,
-    required String messageStanzaId,
-    required String? publisher,
-  }) {
-    if (pendingPublishes.contains(messageStanzaId)) {
-      return true;
-    }
-    final rawPublisher = publisher?.trim();
-    if (rawPublisher == null || rawPublisher.isEmpty) {
-      return false;
-    }
-    final normalizedPublisher = _normalizePinPublisherJid(rawPublisher);
-    if (normalizedPublisher == null) {
-      return false;
-    }
-    if (allowedPublishers == null || allowedPublishers.isEmpty) {
-      return false;
-    }
-    return allowedPublishers.contains(normalizedPublisher);
-  }
-
-  Future<bool> _isPinPublisherAuthorized({
-    required String chatJid,
-    required String messageStanzaId,
-    required String? publisher,
-  }) async {
-    await _ensurePendingPinSyncLoaded();
-    final pendingPublishes =
-        _pinSyncSessionOrNull(chatJid)?.pendingPublishes ??
-        _emptyPinPublisherSet;
-    final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
-    return _isPinPublisherAllowed(
-      allowedPublishers: allowedPublishers,
-      pendingPublishes: pendingPublishes,
-      messageStanzaId: messageStanzaId,
-      publisher: publisher,
-    );
-  }
-
-  @override
   Future<void> pinMessage({
     required String chatJid,
     required Message message,
@@ -4297,29 +4077,56 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (normalizedChat == null) {
       return;
     }
+    if (message.isEmailBacked) {
+      throw XmppMessageException();
+    }
     final resolvedChatType = await _resolvePersistedChatType(
       jid: normalizedChat,
       requestedChatType: ChatType.chat,
     );
-    final reference = message.pinReference(
+    final rawReference = message.pinReference(
       isGroupChat: resolvedChatType == ChatType.groupChat,
+    );
+    if (rawReference == null) {
+      return;
+    }
+    if (!_canPinInChat(chatJid: normalizedChat, chatType: resolvedChatType)) {
+      throw XmppPinPermissionException();
+    }
+    if (!_canClearAnyPinsForChat(
+          chatJid: normalizedChat,
+          chatType: resolvedChatType,
+        ) &&
+        !_isOutboundPinTargetAuthoredBySelf(
+          chatJid: normalizedChat,
+          chatType: resolvedChatType,
+          message: message,
+        )) {
+      throw XmppPinPermissionException();
+    }
+    final reference = await _normalizePinMessageReferenceForChat(
+      chatJid: normalizedChat,
+      chatType: resolvedChatType,
+      reference: rawReference,
     );
     if (reference == null) {
       return;
     }
     final messageId = reference.value;
-    await _normalizePinAliasState(
-      chatJid: normalizedChat,
-      canonicalMessageStanzaId: messageId,
-      aliases: _pinMessageAliases(message),
-    );
+    final selfActorJid = _selfPinActorJid();
+    if (selfActorJid == null) {
+      return;
+    }
+    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
     final pinnedAt = DateTime.timestamp().toUtc();
     await _dbOp<XmppDatabase>(
-      (db) => db.applyPinnedMessageMutation(
+      (db) => db.applyActorPinnedMessageMutation(
         chatJid: normalizedChat,
-        messageStanzaId: messageId,
+        reference: reference,
+        actorJid: selfActorJid,
         pinnedAt: pinnedAt,
         active: true,
+        identityVerified: true,
       ),
     );
     if (isAxichatWelcomeThreadJid(normalizedChat)) {
@@ -4328,13 +4135,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     await _queuePinPublish(normalizedChat, messageId);
     unawaited(
       fireAndForget(
-        () => _flushPendingPinSyncForChat(normalizedChat),
+        () => _flushPendingPinSyncForExplicitChat(normalizedChat),
         operationName: _pinSyncFlushOperationName,
       ),
     );
   }
 
-  @override
   Future<void> unpinMessage({
     required String chatJid,
     required Message message,
@@ -4343,38 +4149,97 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (normalizedChat == null) {
       return;
     }
+    if (message.isEmailBacked) {
+      throw XmppMessageException();
+    }
     final resolvedChatType = await _resolvePersistedChatType(
       jid: normalizedChat,
       requestedChatType: ChatType.chat,
     );
-    final reference = message.pinReference(
+    final rawReference = message.pinReference(
       isGroupChat: resolvedChatType == ChatType.groupChat,
+    );
+    if (rawReference == null) {
+      return;
+    }
+    if (!_canPinInChat(chatJid: normalizedChat, chatType: resolvedChatType)) {
+      throw XmppPinPermissionException();
+    }
+    final reference = await _normalizePinMessageReferenceForChat(
+      chatJid: normalizedChat,
+      chatType: resolvedChatType,
+      reference: rawReference,
     );
     if (reference == null) {
       return;
     }
     final messageId = reference.value;
-    await _normalizePinAliasState(
-      chatJid: normalizedChat,
-      canonicalMessageStanzaId: messageId,
-      aliases: _pinMessageAliases(message),
-    );
+    final selfActorJid = _selfPinActorJid();
+    if (selfActorJid == null) {
+      return;
+    }
+    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
     final unpinnedAt = DateTime.timestamp().toUtc();
-    await _dbOp<XmppDatabase>(
-      (db) => db.applyPinnedMessageMutation(
-        chatJid: normalizedChat,
-        messageStanzaId: messageId,
-        pinnedAt: unpinnedAt,
-        active: false,
-      ),
+    final canClearAnyPins = _canClearAnyPinsForChat(
+      chatJid: normalizedChat,
+      chatType: resolvedChatType,
     );
+    if (!canClearAnyPins &&
+        !_isOutboundPinTargetAuthoredBySelf(
+          chatJid: normalizedChat,
+          chatType: resolvedChatType,
+          message: message,
+        )) {
+      throw XmppPinPermissionException();
+    }
+    final selfPin = canClearAnyPins
+        ? null
+        : await _dbOpReturning<XmppDatabase, PinnedMessageActorEntry?>(
+            (db) => db.getPinnedMessageActor(
+              chatJid: normalizedChat,
+              reference: reference,
+              actorJid: selfActorJid,
+            ),
+          );
+    final scope = canClearAnyPins
+        ? PinMessageMutationScope.all
+        : selfPin?.active == true
+        ? PinMessageMutationScope.own
+        : null;
+    if (scope == null) {
+      throw XmppPinPermissionException();
+    }
+    if (scope == PinMessageMutationScope.own) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.applyActorPinnedMessageMutation(
+          chatJid: normalizedChat,
+          reference: reference,
+          actorJid: selfActorJid,
+          pinnedAt: unpinnedAt,
+          active: false,
+          identityVerified: true,
+        ),
+      );
+    } else {
+      await _dbOp<XmppDatabase>(
+        (db) => db.clearPinnedMessageActors(
+          chatJid: normalizedChat,
+          reference: reference,
+          pinnedAt: unpinnedAt,
+        ),
+      );
+    }
     if (isAxichatWelcomeThreadJid(normalizedChat)) {
       return;
     }
-    await _queuePinRetraction(normalizedChat, messageId);
+    if (scope == PinMessageMutationScope.own) {
+      await _queuePinRetraction(normalizedChat, messageId);
+    } else {
+      await _queuePinClearAllRetraction(normalizedChat, messageId);
+    }
     unawaited(
       fireAndForget(
-        () => _flushPendingPinSyncForChat(normalizedChat),
+        () => _flushPendingPinSyncForExplicitChat(normalizedChat),
         operationName: _pinSyncFlushOperationName,
       ),
     );
@@ -4383,9 +4248,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   Future<void> syncPinnedMessagesForChat(String chatJid) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
     if (normalizedChat == null) {
-      return;
-    }
-    if (!_isPinSyncActiveForChat(normalizedChat)) {
       return;
     }
     if (isAxichatWelcomeThreadJid(normalizedChat)) {
@@ -4399,60 +4261,28 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       return;
     }
     try {
-      final context = await _resolvePinNodeContext(normalizedChat);
+      final chat = await _loadPinChat(normalizedChat);
       await database;
+      final selfActorJid = _selfPinActorJid();
+      if (selfActorJid != null) {
+        await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+      }
       await _ensurePendingPinSyncLoaded();
       await _normalizeActivePinnedMessageAliasesForChat(normalizedChat);
-      if (!_usesPubSubPinSync(context)) {
-        try {
-          await _ensureSharedPinArchiveBootstrapped(
-            chatJid: normalizedChat,
-            chat: context.chat,
-          );
-        } on XmppAbortedException {
-          _log.fine(_pinArchiveBootstrapAbortedLog);
-        } on Exception catch (error, stackTrace) {
-          _log.fine(_pinArchiveBootstrapFailedLog, error, stackTrace);
-        }
-        await _flushPendingSharedPinMutationsForChat(
+      try {
+        await _ensureSharedPinArchiveBootstrapped(
           chatJid: normalizedChat,
-          chat: context.chat,
+          chat: chat,
         );
-        return;
+      } on XmppAbortedException {
+        _log.fine(_pinArchiveBootstrapAbortedLog);
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_pinArchiveBootstrapFailedLog, error, stackTrace);
       }
-      _cachePinAuthorizedPublishers(normalizedChat, context);
-      final support = await refreshPubSubSupport();
-      final decision = decidePubSubSupport(
-        supported: support.pubSubSupported,
-        featureLabel: 'pinned messages',
-      );
-      if (!decision.isAllowed) {
-        return;
-      }
-      final nodeConfig = await _ensurePinNodeForChat(
-        normalizedChat,
-        context: context,
-      );
-      if (nodeConfig == null) {
-        return;
-      }
-      final host = nodeConfig.host;
-      final nodeId = _pinNodeForChat(normalizedChat);
-      if (nodeId == null) {
-        return;
-      }
-      await _subscribeToPins(host: host, nodeId: nodeId);
-      await _flushPendingPinSyncForChat(normalizedChat);
-      final snapshot = await _fetchPinSnapshot(
-        host: host,
-        nodeId: nodeId,
+      await _flushPendingSharedPinMutationsForChat(
         chatJid: normalizedChat,
+        chat: chat,
       );
-      if (snapshot == null) {
-        return;
-      }
-      await _applyPinSnapshot(chatJid: normalizedChat, items: snapshot);
-      await _flushPendingPinSyncForChat(normalizedChat);
     } on XmppAbortedException {
       return;
     } finally {
@@ -4557,9 +4387,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   final Set<String> _activePinSyncChats = <String>{};
   final Map<String, Map<String, Map<String, _PendingInboundReaction>>>
   _pendingInboundReactionsByChatAndReference = {};
-  final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
-  final Set<String> _pinCreateRetryKeys = <String>{};
-  mox.JID? _pinPubSubHost;
+  final Map<String, Map<String, List<_PendingInboundPinMutation>>>
+  _pendingInboundPinMutationsByChatAndReference = {};
 
   bool _hasHttpUploadIdentity(mox.DiscoInfo info) {
     final hasIdentity = info.identities.any(
@@ -5471,12 +5300,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
           displayed: false,
           applyThrough: false,
         );
-      })
-      ..registerHandler<mox.PubSubNotificationEvent>((event) async {
-        await _handlePinNotification(event);
-      })
-      ..registerHandler<mox.PubSubItemsRetractedEvent>((event) async {
-        await _handlePinRetraction(event);
       });
   }
 
@@ -5941,8 +5764,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   void _trackOutboundPinMutation({
     required String stanzaId,
     required String chatJid,
+    required MessageReferenceKind referenceKind,
     required String messageStanzaId,
     required bool pinned,
+    required PinMessageMutationScope scope,
   }) {
     final trimmedStanzaId = stanzaId.trim();
     final normalizedChat = _normalizePinChatJid(chatJid);
@@ -5954,8 +5779,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     _outboundPinMutationsByStanzaId[trimmedStanzaId] = _OutboundPinMutation(
       chatJid: normalizedChat,
+      referenceKind: referenceKind,
       messageStanzaId: trimmedMessageId,
       pinned: pinned,
+      scope: scope,
     );
   }
 
@@ -6010,6 +5837,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String chatJid,
     required String messageStanzaId,
     required bool pinned,
+    PinMessageMutationScope? scope,
   }) {
     final normalizedChat = _normalizePinChatJid(chatJid);
     final trimmedMessageId = messageStanzaId.trim();
@@ -6020,7 +5848,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       (_, mutation) =>
           mutation.chatJid == normalizedChat &&
           mutation.messageStanzaId == trimmedMessageId &&
-          mutation.pinned == pinned,
+          mutation.pinned == pinned &&
+          (scope == null || mutation.scope == scope),
     );
   }
 
@@ -6028,6 +5857,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String chatJid,
     required String messageStanzaId,
     required bool pinned,
+    PinMessageMutationScope? scope,
   }) {
     final normalizedChat = _normalizePinChatJid(chatJid);
     final trimmedMessageId = messageStanzaId.trim();
@@ -6037,7 +5867,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     for (final mutation in _outboundPinMutationsByStanzaId.values) {
       if (mutation.chatJid == normalizedChat &&
           mutation.messageStanzaId == trimmedMessageId &&
-          mutation.pinned == pinned) {
+          mutation.pinned == pinned &&
+          (scope == null || mutation.scope == scope)) {
         return true;
       }
     }
@@ -7484,9 +7315,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     );
   }
 
-  Future<List<PinnedMessageEntry>> loadPinnedMessages(String chatJid) async {
-    return _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
-      (db) => db.getPinnedMessages(chatJid),
+  Future<List<PinnedMessageAggregate>> loadPinnedMessages(
+    String chatJid,
+  ) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final selfActorJid = _selfPinActorJid();
+    if (normalizedChat == null || selfActorJid == null) {
+      return const <PinnedMessageAggregate>[];
+    }
+    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+    return _dbOpReturning<XmppDatabase, List<PinnedMessageAggregate>>(
+      (db) => db.getPinnedMessageAggregates(
+        chatJid: normalizedChat,
+        selfActorJid: selfActorJid,
+      ),
     );
   }
 
@@ -9670,8 +9512,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     _chatMamSessions.clear();
     _pendingPinSyncLoaded = false;
-    _pinCreateRetryKeys.clear();
-    _pinPubSubHost = null;
   }
 
   Future<void> _resetMessageStreams() async {
@@ -9986,64 +9826,128 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (normalizedChat == null) {
       return true;
     }
-    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.getChat(normalizedChat),
+    final isGroupChat = event.type == _messageTypeGroupchat;
+    final senderJid = isGroupChat
+        ? event.from.toString()
+        : event.from.toBare().toString();
+    final actorIdentity = _resolveInboundPinActorIdentity(
+      senderJid: senderJid,
+      chatJid: normalizedChat,
+      isGroupChat: isGroupChat,
+      isArchived: _isArchivedOrOfflineMessage(event),
     );
-    if (!_usesSharedPinMutations(chat)) {
+    if (actorIdentity.actorJid.trim().isEmpty) {
       return true;
+    }
+    if (mutation.scope == PinMessageMutationScope.all) {
+      if (mutation.pinned || !await _isInboundPinClearAllAuthorized(event)) {
+        return true;
+      }
     }
     final fromSelf = _isSelfMutationEvent(event);
     final outboundMutation = fromSelf
         ? _takeOutboundPinMutation(event.id)
         : null;
-    final messageId = await _normalizePinReferenceForChat(
+    final reference = await _normalizePinMessageReferenceForChat(
       chatJid: normalizedChat,
-      messageId: mutation.messageId,
+      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+      reference: mutation.reference,
     );
-    if (messageId == null) {
+    if (reference == null) {
       return true;
     }
-    await _dbOp<XmppDatabase>(
-      (db) => db.applyPinnedMessageMutation(
-        chatJid: normalizedChat,
-        messageStanzaId: messageId,
-        pinnedAt: mutation.timestamp,
-        active: mutation.pinned,
-      ),
+    final pendingMutation = _PendingInboundPinMutation(
+      reference: reference,
+      actorJid: actorIdentity.actorJid,
+      identityVerified: actorIdentity.identityVerified,
+      pinned: mutation.pinned,
+      scope: mutation.scope,
+      timestamp: mutation.timestamp,
+      event: event,
     );
-    final current = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-      (db) => db.getPinnedMessage(
+    if (mutation.scope == PinMessageMutationScope.all) {
+      await _applyInboundPinMutation(
         chatJid: normalizedChat,
-        messageStanzaId: messageId,
-      ),
-    );
-    if (fromSelf) {
-      final matchesCurrentState =
-          current != null &&
-          current.active == mutation.pinned &&
-          current.pinnedAt.toUtc().isAtSameMomentAs(mutation.timestamp.toUtc());
-      if (matchesCurrentState) {
+        mutation: pendingMutation,
+      );
+      if (fromSelf) {
         _dropOutboundPinMutationByAction(
           chatJid: normalizedChat,
-          messageStanzaId: messageId,
+          messageStanzaId: reference.value,
           pinned: mutation.pinned,
+          scope: outboundMutation?.scope ?? mutation.scope,
         );
         await _clearPendingPinMutation(
           chatJid: normalizedChat,
-          messageStanzaId: messageId,
+          messageStanzaId: reference.value,
           pinned: mutation.pinned,
+          scope: outboundMutation?.scope ?? mutation.scope,
         );
-        if (outboundMutation != null) {
-          fireAndForget(
-            () => _mirrorSharedPinMutationToLegacyPubSub(
-              chatJid: normalizedChat,
-              messageStanzaId: messageId,
-            ),
-            operationName:
-                'MessageService.mirrorSharedPinMutationToLegacyPubSub',
-          );
-        }
       }
+      try {
+        await _acknowledgeMessage(event);
+      } catch (error, stackTrace) {
+        _log.fine(_pinMutationAckFailedLog, error, stackTrace);
+      }
+      return true;
+    }
+    var message = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) =>
+          db.getMessageByReferenceId(reference.value, chatJid: normalizedChat),
+    );
+    if (message == null) {
+      _queuePendingInboundPinMutation(
+        chatJid: normalizedChat,
+        reference: reference,
+        mutation: pendingMutation,
+      );
+      message = await _hydrateMissingPinMutationTargetFromArchive(
+        chatJid: normalizedChat,
+        chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+        reference: reference,
+      );
+      if (message == null) {
+        return true;
+      }
+    }
+    if (!_pinReferenceMatchesMessage(
+      message: message,
+      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+      reference: reference,
+    )) {
+      return true;
+    }
+    final resolvedMutation = _resolveInboundPinMutationForTarget(
+      chatJid: normalizedChat,
+      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+      message: message,
+      mutation: pendingMutation,
+    );
+    if (!_isInboundPinActorAuthorizedForTarget(
+      chatJid: normalizedChat,
+      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+      message: message,
+      mutation: resolvedMutation,
+    )) {
+      return true;
+    }
+    await _applyInboundPinMutation(
+      chatJid: normalizedChat,
+      mutation: resolvedMutation,
+    );
+    if (fromSelf) {
+      _dropOutboundPinMutationByAction(
+        chatJid: normalizedChat,
+        messageStanzaId: reference.value,
+        pinned: mutation.pinned,
+        scope: outboundMutation?.scope ?? mutation.scope,
+      );
+      await _clearPendingPinMutation(
+        chatJid: normalizedChat,
+        messageStanzaId: reference.value,
+        pinned: mutation.pinned,
+        scope: outboundMutation?.scope ?? mutation.scope,
+      );
     }
     try {
       await _acknowledgeMessage(event);
@@ -10051,6 +9955,152 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       _log.fine(_pinMutationAckFailedLog, error, stackTrace);
     }
     return true;
+  }
+
+  Future<Message?> _hydrateMissingPinMutationTargetFromArchive({
+    required String chatJid,
+    required ChatType chatType,
+    required MessageReference reference,
+  }) async {
+    final syncSession = _pinSyncSession(chatJid);
+    if (syncSession.archiveBootstrapInFlight) {
+      return null;
+    }
+    final referenceId = reference.value.trim();
+    if (referenceId.isEmpty ||
+        !syncSession.hydratingMissingReferences.add(referenceId)) {
+      return null;
+    }
+    try {
+      if (!await _canFetchArchiveForChat(
+        chatJid: chatJid,
+        chatType: chatType,
+      )) {
+        return null;
+      }
+      final storedChat = await _loadPinChat(chatJid);
+      final chat = (storedChat ?? Chat.fromJid(chatJid)).copyWith(
+        type: chatType,
+        transport: MessageTransport.xmpp,
+      );
+      final sessionId = const Uuid().v4();
+      try {
+        return await ensureMessageAvailableFromMamForChatSession(
+          sessionId: sessionId,
+          chat: chat,
+          messageId: referenceId,
+          filter: MessageTimelineFilter.allWithContact,
+          visibleWindowEmpty: true,
+          fallbackBeforeId: null,
+          pageSize: _sharedPinBootstrapPageSize,
+        );
+      } on TimeoutException {
+        return null;
+      } on XmppMessageException {
+        return null;
+      } finally {
+        disposeChatArchiveSession(sessionId);
+      }
+    } finally {
+      syncSession.hydratingMissingReferences.remove(referenceId);
+    }
+  }
+
+  void _queuePendingInboundPinMutation({
+    required String chatJid,
+    required MessageReference reference,
+    required _PendingInboundPinMutation mutation,
+  }) {
+    final normalizedChat = chatJid.trim();
+    final normalizedReference = reference.value.trim();
+    if (normalizedChat.isEmpty || normalizedReference.isEmpty) {
+      return;
+    }
+    final pendingByReference = _pendingInboundPinMutationsByChatAndReference
+        .putIfAbsent(
+          normalizedChat,
+          () => <String, List<_PendingInboundPinMutation>>{},
+        );
+    pendingByReference
+        .putIfAbsent(normalizedReference, () => <_PendingInboundPinMutation>[])
+        .add(mutation);
+  }
+
+  Future<void> _applyPendingInboundPinMutationsForMessage(
+    Message message,
+  ) async {
+    final pendingByReference =
+        _pendingInboundPinMutationsByChatAndReference[message.chatJid];
+    if (pendingByReference == null || pendingByReference.isEmpty) {
+      return;
+    }
+    final drained = <_PendingInboundPinMutation>[];
+    for (final referenceId in message.referenceIds) {
+      final pending = pendingByReference.remove(referenceId);
+      if (pending != null) {
+        drained.addAll(pending);
+      }
+    }
+    if (pendingByReference.isEmpty) {
+      _pendingInboundPinMutationsByChatAndReference.remove(message.chatJid);
+    }
+    for (final mutation in drained) {
+      final chatType =
+          mutation.reference.kind == MessageReferenceKind.mucStanzaId
+          ? ChatType.groupChat
+          : ChatType.chat;
+      if (!_pinReferenceMatchesMessage(
+        message: message,
+        chatType: chatType,
+        reference: mutation.reference,
+      )) {
+        continue;
+      }
+      final resolvedMutation = _resolveInboundPinMutationForTarget(
+        chatJid: message.chatJid,
+        chatType: chatType,
+        message: message,
+        mutation: mutation,
+      );
+      if (!_isInboundPinActorAuthorizedForTarget(
+        chatJid: message.chatJid,
+        chatType: chatType,
+        message: message,
+        mutation: resolvedMutation,
+      )) {
+        continue;
+      }
+      await _applyInboundPinMutation(
+        chatJid: message.chatJid,
+        mutation: resolvedMutation,
+      );
+    }
+  }
+
+  Future<void> _applyInboundPinMutation({
+    required String chatJid,
+    required _PendingInboundPinMutation mutation,
+  }) async {
+    if (mutation.scope == PinMessageMutationScope.all) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.clearPinnedMessageActors(
+          chatJid: chatJid,
+          reference: mutation.reference,
+          pinnedAt: mutation.timestamp,
+        ),
+      );
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyActorPinnedMessageMutation(
+        chatJid: chatJid,
+        reference: mutation.reference,
+        actorJid: mutation.actorJid,
+        pinnedAt: mutation.timestamp,
+        active: mutation.pinned,
+        identityVerified: mutation.identityVerified,
+      ),
+    );
   }
 
   Future<bool> _handleReactions(mox.MessageEvent event) async {
@@ -13090,468 +13140,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
   }
 
-  bool _shouldProcessPinSyncEvent(String chatJid) {
-    if (!_isPinSyncActiveForChat(chatJid)) {
-      return false;
-    }
-    if (_pinSyncRateLimiter.allowEvent()) {
-      return true;
-    }
-    if (_pinSyncRateLimiter.shouldRefreshNow()) {
-      fireAndForget(
-        () => syncPinnedMessagesForChat(chatJid),
-        operationName: 'MessageService.syncPinnedMessagesRateLimitRefresh',
-      );
-    }
-    return false;
-  }
-
-  Future<void> _handlePinNotification(mox.PubSubNotificationEvent event) async {
-    final nodeId = event.item.node;
-    final chatJid = _chatJidFromPinNode(nodeId);
-    if (chatJid == null) return;
-    if (!_isPinSyncActiveForChat(chatJid)) return;
-    final syncSession = _pinSyncSession(chatJid);
-    final context = await _resolvePinNodeContext(chatJid);
-    _cachePinAuthorizedPublishers(chatJid, context);
-    if (!_usesPubSubPinSync(context)) {
-      syncSession.legacyMirrorReady = true;
-    }
-    if (!_shouldProcessPinSyncEvent(chatJid)) return;
-    await _ensurePendingPinSyncLoaded();
-    final itemId = event.item.id.trim();
-    if (itemId.isNotEmpty && syncSession.pendingRetractions.contains(itemId)) {
-      return;
-    }
-    final payload = event.item.payload;
-    if (payload == null) {
-      fireAndForget(
-        () => syncPinnedMessagesForChat(chatJid),
-        operationName: 'MessageService.syncPinnedMessagesMissingPayload',
-      );
-      return;
-    }
-    final parsed = _PinnedMessageSyncPayload.fromXml(
-      payload,
-      chatJid: chatJid,
-      itemId: itemId.isEmpty ? null : itemId,
-    );
-    if (parsed == null) {
-      return;
-    }
-    final messageId = await _normalizePinReferenceForChat(
-      chatJid: chatJid,
-      messageId: parsed.messageStanzaId,
-    );
-    if (messageId == null) {
-      return;
-    }
-    if (syncSession.pendingRetractions.contains(messageId)) {
-      return;
-    }
-    final publisher = event.item.publisher;
-    final canApply = await _isPinPublisherAuthorized(
-      chatJid: chatJid,
-      messageStanzaId: messageId,
-      publisher: publisher,
-    );
-    if (!canApply) {
-      if (publisher == null || publisher.trim().isEmpty) {
-        fireAndForget(
-          () => syncPinnedMessagesForChat(chatJid),
-          operationName: 'MessageService.syncPinnedMessagesUnauthorized',
-        );
-      }
-      return;
-    }
-    await _applyPinSyncUpdate(
-      _PinnedMessageSyncPayload(
-        messageStanzaId: messageId,
-        chatJid: parsed.chatJid,
-        pinnedAt: parsed.pinnedAt,
-      ),
-    );
-  }
-
-  Future<void> _handlePinRetraction(mox.PubSubItemsRetractedEvent event) async {
-    final chatJid = _chatJidFromPinNode(event.node);
-    if (chatJid == null) return;
-    if (!_isPinSyncActiveForChat(chatJid)) return;
-    final syncSession = _pinSyncSession(chatJid);
-    final context = await _resolvePinNodeContext(chatJid);
-    if (!_usesPubSubPinSync(context)) {
-      syncSession.legacyMirrorReady = true;
-    }
-    if (event.itemIds.isEmpty) return;
-    if (!_shouldProcessPinSyncEvent(chatJid)) return;
-    await _ensurePendingPinSyncLoaded();
-    var pendingChanged = false;
-    for (final itemId in event.itemIds) {
-      final normalized = itemId.trim();
-      if (normalized.isEmpty) continue;
-      final messageId = await _normalizePinReferenceForChat(
-        chatJid: chatJid,
-        messageId: normalized,
-      );
-      if (messageId == null) {
-        continue;
-      }
-      await _applyPinSyncRetraction(
-        chatJid: chatJid,
-        messageStanzaId: messageId,
-      );
-      pendingChanged =
-          syncSession.removePendingPublish(messageId) ||
-          syncSession.removePendingRetraction(messageId) ||
-          pendingChanged;
-    }
-    if (pendingChanged) {
-      await _persistPendingPinSync();
-    }
-  }
-
-  Future<void> _applyPinSyncUpdate(_PinnedMessageSyncPayload payload) async {
-    await _dbOp<XmppDatabase>(
-      (db) => db.applyPinnedMessageMutation(
-        chatJid: payload.chatJid,
-        messageStanzaId: payload.messageStanzaId,
-        pinnedAt: payload.pinnedAt,
-        active: true,
-      ),
-    );
-    final syncSession = _pinSyncSessionOrNull(payload.chatJid);
-    if (syncSession?.removePendingPublish(payload.messageStanzaId) == true) {
-      await _persistPendingPinSync();
-    }
-  }
-
-  Future<void> _applyPinSyncRetraction({
-    required String chatJid,
-    required String messageStanzaId,
-    DateTime? retractedAt,
-  }) async {
-    final tombstoneTimestamp =
-        retractedAt?.toUtc() ?? DateTime.timestamp().toUtc();
-    await _dbOp<XmppDatabase>(
-      (db) => db.applyPinnedMessageMutation(
-        chatJid: chatJid,
-        messageStanzaId: messageStanzaId,
-        pinnedAt: tombstoneTimestamp,
-        active: false,
-      ),
-    );
-  }
-
-  PubSubManager? _pinPubSub() => _connection.getManager<PubSubManager>();
-
-  List<mox.JID> _pinPubSubHosts() {
-    final domain = _myJid?.domain.trim();
-    if (domain == null || domain.isEmpty) {
-      return const <mox.JID>[];
-    }
-    final candidates = <mox.JID>[];
-    final seen = <String>{};
-    void addCandidate(String raw) {
-      final normalized = raw.trim();
-      if (normalized.isEmpty || seen.contains(normalized)) return;
-      try {
-        candidates.add(mox.JID.fromString(normalized));
-        seen.add(normalized);
-      } on Exception {
-        return;
-      }
-    }
-
-    final cachedHost = _pinPubSubHost?.toString();
-    if (cachedHost != null && cachedHost.isNotEmpty) {
-      addCandidate(cachedHost);
-    }
-    addCandidate('$_pinPubSubHostPrefix$domain');
-    addCandidate(domain);
-    return candidates;
-  }
-
-  String _pinCreateRetryKey({required mox.JID host, required String nodeId}) =>
-      '${host.toString()}|$nodeId';
-
-  bool _shouldAttemptPinCreateAfterConfigureFailure({
-    required mox.JID host,
-    required String nodeId,
-    required mox.PubSubError error,
-  }) {
-    if (error.indicatesMissingNode) {
-      return true;
-    }
-    if (error is! mox.ItemForbiddenError && error is! mox.UnknownPubSubError) {
-      return false;
-    }
-    return _pinCreateRetryKeys.add(
-      _pinCreateRetryKey(host: host, nodeId: nodeId),
-    );
-  }
-
-  Future<({mox.JID host, _PinNodePolicy policy})?> _ensurePinNodeForChat(
-    String chatJid, {
-    required ({
-      Map<String, mox.PubSubAffiliation>? affiliations,
-      Chat? chat,
-      _PinNodePolicy policy,
-    })
-    context,
-  }) async {
-    final nodeId = _pinNodeForChat(chatJid);
-    if (nodeId == null) return null;
-    final pubsub = _pinPubSub();
-    if (pubsub == null) return null;
-    for (final host in _pinPubSubHosts()) {
-      final appliedPolicy = await _configurePinNode(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        context: context,
-      );
-      if (appliedPolicy == null) continue;
-      _pinPubSubHost = host;
-      return (host: host, policy: appliedPolicy);
-    }
-    return null;
-  }
-
-  Future<_PinNodePolicy?> _configurePinNode({
-    required PubSubManager pubsub,
-    required mox.JID host,
-    required String nodeId,
-    required ({
-      Map<String, mox.PubSubAffiliation>? affiliations,
-      Chat? chat,
-      _PinNodePolicy policy,
-    })
-    context,
-  }) async {
-    final applied = await _configurePinNodeWithPolicy(
-      pubsub: pubsub,
-      host: host,
-      nodeId: nodeId,
-      policy: context.policy,
-      affiliations: context.affiliations,
-    );
-    if (!applied) {
-      return null;
-    }
-    return context.policy;
-  }
-
-  Future<bool> _configurePinNodeWithPolicy({
-    required PubSubManager pubsub,
-    required mox.JID host,
-    required String nodeId,
-    required _PinNodePolicy policy,
-    Map<String, mox.PubSubAffiliation>? affiliations,
-  }) async {
-    final config = _pinNodeConfig(policy);
-    final safeNodeLabel = _safePinNodeLabel(nodeId);
-    var configured = await pubsub.configureNode(host, nodeId, config);
-    if (!configured.isType<mox.PubSubError>()) {
-      return _applyPinAffiliationsIfNeeded(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        policy: policy,
-        affiliations: affiliations,
-      );
-    }
-    var configuredError = configured.get<mox.PubSubError>();
-    _log.fine(
-      'PubSub pin node config failed. node=$safeNodeLabel '
-      'policy=${policy.name} error=${configuredError.runtimeType}.',
-    );
-    final shouldCreateNode = _shouldAttemptPinCreateAfterConfigureFailure(
-      host: host,
-      nodeId: nodeId,
-      error: configuredError,
-    );
-    if (!shouldCreateNode) {
-      return false;
-    }
-    if (configuredError.indicatesMissingNode) {
-      _log.fine('PubSub pin node missing; creating node=$safeNodeLabel.');
-    } else {
-      _log.fine(
-        'PubSub pin node create retry after configure failure. '
-        'node=$safeNodeLabel error=${configuredError.runtimeType}.',
-      );
-    }
-
-    try {
-      await pubsub.createNodeWithConfig(
-        host,
-        config.withoutSendLastPublishedItem().toNodeConfig(),
-        nodeId: nodeId,
-      );
-      var applied = await pubsub.configureNode(host, nodeId, config);
-      if (applied.isType<mox.PubSubError>() &&
-          config.hasSendLastPublishedItem) {
-        _log.fine(
-          'PubSub pin node config retry after create without send_last. '
-          'node=$safeNodeLabel policy=${policy.name}.',
-        );
-        final stripped = config.withoutSendLastPublishedItem();
-        applied = await pubsub.configureNode(host, nodeId, stripped);
-      }
-      if (applied.isType<mox.PubSubError>()) {
-        return false;
-      }
-      return _applyPinAffiliationsIfNeeded(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        policy: policy,
-        affiliations: affiliations,
-      );
-    } on Exception {
-      // Ignore and try fallback creation.
-    }
-
-    try {
-      await pubsub.createNode(host, nodeId: nodeId);
-      var applied = await pubsub.configureNode(host, nodeId, config);
-      if (applied.isType<mox.PubSubError>() &&
-          config.hasSendLastPublishedItem) {
-        _log.fine(
-          'PubSub pin node config retry after create without send_last. '
-          'node=$safeNodeLabel policy=${policy.name}.',
-        );
-        final stripped = config.withoutSendLastPublishedItem();
-        applied = await pubsub.configureNode(host, nodeId, stripped);
-      }
-      if (applied.isType<mox.PubSubError>()) {
-        return false;
-      }
-      return _applyPinAffiliationsIfNeeded(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        policy: policy,
-        affiliations: affiliations,
-      );
-    } on Exception {
-      return false;
-    }
-  }
-
-  Future<bool> _applyPinAffiliationsIfNeeded({
-    required PubSubManager pubsub,
-    required mox.JID host,
-    required String nodeId,
-    required _PinNodePolicy policy,
-    Map<String, mox.PubSubAffiliation>? affiliations,
-  }) async {
-    if (policy != _PinNodePolicy.restricted) {
-      return true;
-    }
-    if (affiliations == null || affiliations.isEmpty) {
-      return false;
-    }
-    final result = await pubsub.setAffiliations(host, nodeId, affiliations);
-    return !result.isType<mox.PubSubError>();
-  }
-
-  Future<void> _subscribeToPins({
-    required mox.JID host,
-    required String nodeId,
-  }) async {
-    final pubsub = _pinPubSub();
-    if (pubsub == null) return;
-    final result = await pubsub.subscribe(host, nodeId);
-    if (!result.isType<mox.PubSubError>()) {
-      return;
-    }
-    final error = result.get<mox.PubSubError>();
-    if (error is mox.MalformedResponseError) {
-      return;
-    }
-  }
-
-  Future<List<_PinnedMessageSyncPayload>?> _fetchPinSnapshot({
-    required mox.JID host,
-    required String nodeId,
-    required String chatJid,
-  }) async {
-    final pubsub = _pinPubSub();
-    if (pubsub == null) return null;
-    final result = await pubsub.getItems(
-      host,
-      nodeId,
-      maxItems: _pinSyncMaxItems,
-    );
-    if (result.isType<mox.PubSubError>()) {
-      return null;
-    }
-    await _ensurePendingPinSyncLoaded();
-    final allowedPublishers = await _resolvePinAuthorizedPublishers(chatJid);
-    final pendingPublishes =
-        _pinSyncSessionOrNull(chatJid)?.pendingPublishes ??
-        _emptyPinPublisherSet;
-    final items = result.get<List<mox.PubSubItem>>();
-    final parsed = <_PinnedMessageSyncPayload>[];
-    for (final item in items) {
-      final payload = item.payload;
-      if (payload == null) continue;
-      final entry = _PinnedMessageSyncPayload.fromXml(
-        payload,
-        chatJid: chatJid,
-        itemId: item.id,
-      );
-      if (entry != null &&
-          _isPinPublisherAllowed(
-            allowedPublishers: allowedPublishers,
-            pendingPublishes: pendingPublishes,
-            messageStanzaId: entry.messageStanzaId,
-            publisher: item.publisher,
-          )) {
-        parsed.add(entry);
-      }
-    }
-    return parsed;
-  }
-
-  Future<void> _applyPinSnapshot({
-    required String chatJid,
-    required List<_PinnedMessageSyncPayload> items,
-  }) async {
-    await _ensurePendingPinSyncLoaded();
-    final syncSession = _pinSyncSessionOrNull(chatJid);
-    final pendingPublishes = syncSession?.pendingPublishes ?? const <String>{};
-    final pendingRetractions =
-        syncSession?.pendingRetractions ?? const <String>{};
-    for (final item in items) {
-      if (pendingRetractions.contains(item.messageStanzaId)) {
-        continue;
-      }
-      await _applyPinSyncUpdate(item);
-    }
-    final remoteById = <String, _PinnedMessageSyncPayload>{
-      for (final item in items) item.messageStanzaId: item,
-    };
-    final localItems =
-        await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
-          (db) => db.getPinnedMessages(chatJid),
-        );
-    for (final local in localItems) {
-      final messageId = local.messageStanzaId;
-      if (remoteById.containsKey(messageId)) {
-        continue;
-      }
-      if (pendingPublishes.contains(messageId)) {
-        continue;
-      }
-      await _applyPinSyncRetraction(
-        chatJid: chatJid,
-        messageStanzaId: messageId,
-      );
-    }
-  }
-
   Future<void> _queuePinPublish(String chatJid, String messageStanzaId) async {
     await _ensurePendingPinSyncLoaded();
     _pinSyncSession(chatJid).queuePublish(messageStanzaId);
@@ -13569,6 +13157,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
   ) async {
     await _ensurePendingPinSyncLoaded();
     _pinSyncSession(chatJid).queueRetraction(messageStanzaId);
+    _dropOutboundPinMutationByAction(
+      chatJid: chatJid,
+      messageStanzaId: messageStanzaId,
+      pinned: true,
+    );
+    await _persistPendingPinSync();
+  }
+
+  Future<void> _queuePinClearAllRetraction(
+    String chatJid,
+    String messageStanzaId,
+  ) async {
+    await _ensurePendingPinSyncLoaded();
+    _pinSyncSession(chatJid).queueClearAllRetraction(messageStanzaId);
     _dropOutboundPinMutationByAction(
       chatJid: chatJid,
       messageStanzaId: messageStanzaId,
@@ -13608,6 +13210,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     final rawRetractions = await _dbOpReturning<XmppStateStore, Object?>(
       (ss) => ss.read(key: _pinPendingRetractionsKey),
     );
+    final rawClearAllRetractions =
+        await _dbOpReturning<XmppStateStore, Object?>(
+          (ss) => ss.read(key: _pinPendingClearAllRetractionsKey),
+        );
     for (final session in _pinChatSyncSessions.values) {
       session.clearPendingMutations();
     }
@@ -13616,6 +13222,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     for (final entry in _decodePendingPinMap(rawRetractions).entries) {
       _pinSyncSession(entry.key).replacePendingRetractions(entry.value);
+    }
+    for (final entry in _decodePendingPinMap(rawClearAllRetractions).entries) {
+      _pinSyncSession(entry.key).replacePendingClearAllRetractions(entry.value);
     }
     _pendingPinSyncLoaded = true;
   }
@@ -13626,12 +13235,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     }
     final publishes = <String, List<String>>{};
     final retractions = <String, List<String>>{};
+    final clearAllRetractions = <String, List<String>>{};
     for (final entry in _pinChatSyncSessions.entries) {
       if (entry.value.pendingPublishes.isNotEmpty) {
         publishes[entry.key] = entry.value.pendingPublishesSnapshot();
       }
       if (entry.value.pendingRetractions.isNotEmpty) {
         retractions[entry.key] = entry.value.pendingRetractionsSnapshot();
+      }
+      if (entry.value.pendingClearAllRetractions.isNotEmpty) {
+        clearAllRetractions[entry.key] = entry.value
+            .pendingClearAllRetractionsSnapshot();
       }
     }
     await _dbOp<XmppStateStore>((ss) async {
@@ -13644,6 +13258,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         await ss.delete(key: _pinPendingRetractionsKey);
       } else {
         await ss.write(key: _pinPendingRetractionsKey, value: retractions);
+      }
+      if (clearAllRetractions.isEmpty) {
+        await ss.delete(key: _pinPendingClearAllRetractionsKey);
+      } else {
+        await ss.write(
+          key: _pinPendingClearAllRetractionsKey,
+          value: clearAllRetractions,
+        );
       }
     }, awaitDatabase: true);
   }
@@ -13661,11 +13283,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       return;
     }
     for (final chatJid in chatIds) {
-      await _flushPendingPinSyncForChat(chatJid);
+      await _flushPendingPinSyncForActiveChat(chatJid);
     }
   }
 
-  Future<void> _flushPendingPinSyncForChat(String chatJid) async {
+  Future<void> _flushPendingPinSyncForActiveChat(String chatJid) async {
     if (!_connection.hasConnectionSettings) {
       return;
     }
@@ -13677,125 +13299,104 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (!_isPinSyncActiveForChat(normalizedChat)) {
       return;
     }
-    final syncSession = _pinSyncSession(normalizedChat);
-    final context = await _resolvePinNodeContext(normalizedChat);
-    if (!_usesPubSubPinSync(context)) {
-      await _flushPendingSharedPinMutationsForChat(
-        chatJid: normalizedChat,
-        chat: context.chat,
-      );
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.pubSubSupported,
-      featureLabel: 'pinned messages',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final pubsub = _pinPubSub();
-    if (pubsub == null) {
-      return;
-    }
-    final nodeConfig = await _ensurePinNodeForChat(
-      normalizedChat,
-      context: context,
-    );
-    if (nodeConfig == null) {
-      return;
-    }
-    final host = nodeConfig.host;
-    final policy = nodeConfig.policy;
-    final nodeId = _pinNodeForChat(normalizedChat);
-    if (nodeId == null) {
-      return;
-    }
-    await _subscribeToPins(host: host, nodeId: nodeId);
-    final pendingRetractions = syncSession.pendingRetractionsSnapshot();
-    final pendingPublishes = syncSession.pendingPublishesSnapshot();
-    var pendingChanged = false;
-    for (final messageId in pendingRetractions) {
-      final trimmed = messageId.trim();
-      if (trimmed.isEmpty) continue;
-      final canonicalMessageId = await _normalizePinReferenceForChat(
-        chatJid: normalizedChat,
-        messageId: trimmed,
-      );
-      if (canonicalMessageId == null) {
-        continue;
-      }
-      final success = await _retractPinFromServer(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        messageStanzaId: canonicalMessageId,
-      );
-      if (!success) {
-        continue;
-      }
-      pendingChanged =
-          syncSession.removePendingRetraction(canonicalMessageId) ||
-          pendingChanged;
-    }
-    for (final messageId in pendingPublishes) {
-      final trimmed = messageId.trim();
-      if (trimmed.isEmpty) continue;
-      final canonicalMessageId = await _normalizePinReferenceForChat(
-        chatJid: normalizedChat,
-        messageId: trimmed,
-      );
-      if (canonicalMessageId == null) {
-        continue;
-      }
-      final entry = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-        (db) => db.getPinnedMessage(
-          chatJid: normalizedChat,
-          messageStanzaId: canonicalMessageId,
-        ),
-      );
-      if (entry == null) {
-        pendingChanged =
-            syncSession.removePendingPublish(canonicalMessageId) ||
-            pendingChanged;
-        continue;
-      }
-      final success = await _publishPinToServer(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        entry: entry,
-        policy: policy,
-      );
-      if (!success) {
-        continue;
-      }
-      pendingChanged =
-          syncSession.removePendingPublish(canonicalMessageId) ||
-          pendingChanged;
-    }
-    if (pendingChanged) {
-      await _persistPendingPinSync();
-    }
+    await _flushPendingPinSyncForNormalizedChat(normalizedChat);
   }
 
-  bool _usesPubSubPinSync(
-    ({
-      Map<String, mox.PubSubAffiliation>? affiliations,
-      Chat? chat,
-      _PinNodePolicy policy,
-    })
-    context,
-  ) => _usesPubSubPins(context.chat);
+  Future<void> _flushPendingPinSyncForExplicitChat(String chatJid) async {
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
+    await _ensurePendingPinSyncLoaded();
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    await _flushPendingPinSyncForNormalizedChat(normalizedChat);
+  }
+
+  Future<void> _flushPendingPinSyncForNormalizedChat(
+    String normalizedChat,
+  ) async {
+    final syncSession = _pinSyncSession(normalizedChat);
+    if (!syncSession.markSyncInFlight()) {
+      return;
+    }
+    try {
+      final chat = await _loadPinChat(normalizedChat);
+      await _flushPendingSharedPinMutationsForChat(
+        chatJid: normalizedChat,
+        chat: chat,
+      );
+    } finally {
+      syncSession.syncInFlight = false;
+    }
+  }
 
   Future<void> _flushPendingSharedPinMutationsForChat({
     required String chatJid,
     required Chat? chat,
   }) async {
     final syncSession = _pinSyncSession(chatJid);
+    final selfActorJid = _selfPinActorJid();
+    if (selfActorJid == null) {
+      return;
+    }
+    final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);
+    final referenceKind = chatType == ChatType.groupChat
+        ? MessageReferenceKind.mucStanzaId
+        : MessageReferenceKind.stanzaId;
+    final pendingClearAllRetractions = syncSession
+        .pendingClearAllRetractionsSnapshot();
     final pendingRetractions = syncSession.pendingRetractionsSnapshot();
     final pendingPublishes = syncSession.pendingPublishesSnapshot();
     var pendingChanged = false;
+    for (final messageId in pendingClearAllRetractions) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final canonicalMessageId = await _normalizePinReferenceForChat(
+        chatJid: chatJid,
+        messageId: trimmed,
+      );
+      if (canonicalMessageId == null) {
+        continue;
+      }
+      if (_hasOutboundPinMutationInFlight(
+        chatJid: chatJid,
+        messageStanzaId: canonicalMessageId,
+        pinned: false,
+        scope: PinMessageMutationScope.all,
+      )) {
+        continue;
+      }
+      final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
+        (db) => db.getPinnedMessage(
+          chatJid: chatJid,
+          messageStanzaId: canonicalMessageId,
+        ),
+      );
+      if (record == null || record.active) {
+        pendingChanged =
+            syncSession.removePendingClearAllRetraction(canonicalMessageId) ||
+            pendingChanged;
+        continue;
+      }
+      final success = await _sendPinMutationToChat(
+        chatJid: chatJid,
+        chat: chat,
+        messageStanzaId: canonicalMessageId,
+        pinnedAt: record.pinnedAt,
+        pinned: false,
+        scope: PinMessageMutationScope.all,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          syncSession.removePendingClearAllRetraction(canonicalMessageId) ||
+          pendingChanged;
+    }
     for (final messageId in pendingRetractions) {
       final trimmed = messageId.trim();
       if (trimmed.isEmpty) {
@@ -13812,15 +13413,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         chatJid: chatJid,
         messageStanzaId: canonicalMessageId,
         pinned: false,
+        scope: PinMessageMutationScope.own,
       )) {
         continue;
       }
-      final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-        (db) => db.getPinnedMessage(
-          chatJid: chatJid,
-          messageStanzaId: canonicalMessageId,
-        ),
-      );
+      final record =
+          await _dbOpReturning<XmppDatabase, PinnedMessageActorEntry?>(
+            (db) => db.getPinnedMessageActor(
+              chatJid: chatJid,
+              reference: MessageReference(
+                kind: referenceKind,
+                value: canonicalMessageId,
+              ),
+              actorJid: selfActorJid,
+            ),
+          );
       if (record == null || record.active) {
         pendingChanged =
             syncSession.removePendingRetraction(canonicalMessageId) ||
@@ -13833,6 +13440,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         messageStanzaId: canonicalMessageId,
         pinnedAt: record.pinnedAt,
         pinned: false,
+        scope: PinMessageMutationScope.own,
       );
       if (!success) {
         continue;
@@ -13857,15 +13465,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         chatJid: chatJid,
         messageStanzaId: canonicalMessageId,
         pinned: true,
+        scope: PinMessageMutationScope.own,
       )) {
         continue;
       }
-      final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-        (db) => db.getPinnedMessage(
-          chatJid: chatJid,
-          messageStanzaId: canonicalMessageId,
-        ),
-      );
+      final record =
+          await _dbOpReturning<XmppDatabase, PinnedMessageActorEntry?>(
+            (db) => db.getPinnedMessageActor(
+              chatJid: chatJid,
+              reference: MessageReference(
+                kind: referenceKind,
+                value: canonicalMessageId,
+              ),
+              actorJid: selfActorJid,
+            ),
+          );
       if (record == null || !record.active) {
         pendingChanged =
             syncSession.removePendingPublish(canonicalMessageId) ||
@@ -13878,6 +13492,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
         messageStanzaId: canonicalMessageId,
         pinnedAt: record.pinnedAt,
         pinned: true,
+        scope: PinMessageMutationScope.own,
       );
       if (!success) {
         continue;
@@ -13897,12 +13512,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String messageStanzaId,
     required DateTime pinnedAt,
     required bool pinned,
+    PinMessageMutationScope scope = PinMessageMutationScope.own,
   }) async {
     final accountJid = myJid;
     if (accountJid == null) {
-      return false;
-    }
-    if (!_isPinSyncActiveForChat(chatJid)) {
       return false;
     }
     final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);
@@ -13922,6 +13535,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     if (outboundMessageId == null) {
       return false;
     }
+    final referenceKind = isGroupChat
+        ? MessageReferenceKind.mucStanzaId
+        : MessageReferenceKind.stanzaId;
     final stanzaId = _connection.generateId();
     final senderJid = _outboundSenderJidForChat(
       chatJid: chatJid,
@@ -13933,8 +13549,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       mox.MessageIdData(stanzaId),
       const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
       PinMessageMutationData(
-        messageId: outboundMessageId,
+        reference: MessageReference(
+          kind: referenceKind,
+          value: outboundMessageId,
+        ),
         pinned: pinned,
+        scope: scope,
         timestamp: pinnedAt.toUtc(),
       ),
     ];
@@ -13979,8 +13599,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       _trackOutboundPinMutation(
         stanzaId: stanzaId,
         chatJid: chatJid,
+        referenceKind: referenceKind,
         messageStanzaId: messageStanzaId,
         pinned: pinned,
+        scope: scope,
       );
       return true;
     } on Exception {
@@ -13997,111 +13619,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
     required String chatJid,
     required String messageStanzaId,
     required bool pinned,
+    PinMessageMutationScope scope = PinMessageMutationScope.own,
   }) async {
     await _ensurePendingPinSyncLoaded();
     final trimmed = messageStanzaId.trim();
     if (trimmed.isEmpty) {
       return;
     }
-    final changed =
-        _pinSyncSessionOrNull(
-          chatJid,
-        )?.removePendingMutation(messageStanzaId: trimmed, pinned: pinned) ==
-        true;
+    final session = _pinSyncSessionOrNull(chatJid);
+    final changed = scope == PinMessageMutationScope.all
+        ? session?.removePendingClearAllRetraction(trimmed) == true
+        : session?.removePendingMutation(
+                messageStanzaId: trimmed,
+                pinned: pinned,
+              ) ==
+              true;
     if (changed) {
       await _persistPendingPinSync();
     }
-  }
-
-  Future<bool> _publishPinToServer({
-    required PubSubManager pubsub,
-    required mox.JID host,
-    required String nodeId,
-    required PinnedMessageEntry entry,
-    required _PinNodePolicy policy,
-    bool autoCreate = true,
-  }) async {
-    final messageId = entry.messageStanzaId.trim();
-    if (messageId.isEmpty) return false;
-    final payload = _PinnedMessageSyncPayload(
-      messageStanzaId: messageId,
-      chatJid: entry.chatJid,
-      pinnedAt: entry.pinnedAt,
-    );
-    final result = await pubsub.publish(
-      host,
-      nodeId,
-      payload.toXml(),
-      id: payload.itemId,
-      options: _pinPublishOptions(policy),
-      autoCreate: autoCreate,
-      createNodeConfig: autoCreate ? _pinCreateNodeConfig(policy) : null,
-    );
-    return !result.isType<mox.PubSubError>();
-  }
-
-  Future<void> _mirrorSharedPinMutationToLegacyPubSub({
-    required String chatJid,
-    required String messageStanzaId,
-  }) async {
-    final normalizedChat = _normalizePinChatJid(chatJid);
-    final trimmedMessageId = messageStanzaId.trim();
-    if (normalizedChat == null || trimmedMessageId.isEmpty) {
-      return;
-    }
-    if (_pinSyncSessionOrNull(normalizedChat)?.legacyMirrorReady != true) {
-      return;
-    }
-    final pubsub = _pinPubSub();
-    final host = _pinPubSubHost;
-    final context = await _resolvePinNodeContext(normalizedChat);
-    final nodeId = _pinNodeForChat(normalizedChat);
-    if (pubsub == null || host == null || nodeId == null) {
-      return;
-    }
-    if (_usesPubSubPinSync(context)) {
-      return;
-    }
-    final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-      (db) => db.getPinnedMessage(
-        chatJid: normalizedChat,
-        messageStanzaId: trimmedMessageId,
-      ),
-    );
-    if (record == null || !record.active) {
-      await _retractPinFromServer(
-        pubsub: pubsub,
-        host: host,
-        nodeId: nodeId,
-        messageStanzaId: trimmedMessageId,
-      );
-      return;
-    }
-    await _publishPinToServer(
-      pubsub: pubsub,
-      host: host,
-      nodeId: nodeId,
-      entry: record,
-      policy: context.policy,
-      autoCreate: false,
-    );
-  }
-
-  Future<bool> _retractPinFromServer({
-    required PubSubManager pubsub,
-    required mox.JID host,
-    required String nodeId,
-    required String messageStanzaId,
-  }) async {
-    final trimmed = messageStanzaId.trim();
-    if (trimmed.isEmpty) return false;
-    final result = await pubsub.retract(
-      host,
-      nodeId,
-      trimmed,
-      notify: _pinNotifyEnabled,
-    );
-    return !result.isType<mox.PubSubError>();
   }
 
   Set<String> _pinMessageAliases(Message message) {
@@ -14159,6 +13694,54 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       aliases: identity.aliases,
     );
     return canonicalId;
+  }
+
+  Future<MessageReference?> _normalizePinMessageReferenceForChat({
+    required String chatJid,
+    required ChatType chatType,
+    required MessageReference reference,
+  }) async {
+    if (reference.kind == MessageReferenceKind.originId) {
+      return null;
+    }
+    final rawValue = reference.value.trim();
+    if (rawValue.isEmpty) {
+      return null;
+    }
+    final referencedMessage = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByReferenceId(rawValue, chatJid: chatJid),
+    );
+    if (referencedMessage != null &&
+        !_pinReferenceMatchesMessage(
+          message: referencedMessage,
+          chatType: chatType,
+          reference: reference,
+        )) {
+      return null;
+    }
+    final messageId = await _normalizePinReferenceForChat(
+      chatJid: chatJid,
+      messageId: reference.value,
+    );
+    if (messageId == null) {
+      return null;
+    }
+    final referenceKind = chatType == ChatType.groupChat
+        ? MessageReferenceKind.mucStanzaId
+        : MessageReferenceKind.stanzaId;
+    return MessageReference(kind: referenceKind, value: messageId);
+  }
+
+  bool _pinReferenceMatchesMessage({
+    required Message message,
+    required ChatType chatType,
+    required MessageReference reference,
+  }) {
+    final expected = message.pinReference(
+      isGroupChat: chatType == ChatType.groupChat,
+    );
+    return expected?.kind == reference.kind &&
+        expected?.value == reference.value;
   }
 
   Future<({String canonicalId, Set<String> aliases})>
@@ -14277,8 +13860,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService
       }
       updatedOutboundMutations[entry.key] = _OutboundPinMutation(
         chatJid: mutation.chatJid,
+        referenceKind: mutation.referenceKind,
         messageStanzaId: canonicalId,
         pinned: mutation.pinned,
+        scope: mutation.scope,
       );
     }
     if (updatedOutboundMutations.isNotEmpty) {
@@ -14441,6 +14026,41 @@ class _PendingInboundReaction {
   final List<String> emojis;
   final DateTime updatedAt;
   final DateTime? delayedAt;
+}
+
+class _PendingInboundPinMutation {
+  const _PendingInboundPinMutation({
+    required this.reference,
+    required this.actorJid,
+    required this.identityVerified,
+    required this.pinned,
+    required this.scope,
+    required this.timestamp,
+    required this.event,
+  });
+
+  final MessageReference reference;
+  final String actorJid;
+  final bool identityVerified;
+  final bool pinned;
+  final PinMessageMutationScope scope;
+  final DateTime timestamp;
+  final mox.MessageEvent event;
+
+  _PendingInboundPinMutation withActor({
+    required String actorJid,
+    required bool identityVerified,
+  }) {
+    return _PendingInboundPinMutation(
+      reference: reference,
+      actorJid: actorJid,
+      identityVerified: identityVerified,
+      pinned: pinned,
+      scope: scope,
+      timestamp: timestamp,
+      event: event,
+    );
+  }
 }
 
 class _ReactionBucket {

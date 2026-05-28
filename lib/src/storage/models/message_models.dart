@@ -824,7 +824,40 @@ extension MessageContent on Message {
   }
 }
 
-enum MessageReferenceKind { stanzaId, originId, mucStanzaId }
+enum MessageReferenceKind {
+  stanzaId,
+  originId,
+  mucStanzaId;
+
+  int get storageValue => switch (this) {
+    MessageReferenceKind.stanzaId => 0,
+    MessageReferenceKind.originId => 1,
+    MessageReferenceKind.mucStanzaId => 2,
+  };
+
+  String get wireValue => switch (this) {
+    MessageReferenceKind.stanzaId => 'stanza-id',
+    MessageReferenceKind.originId => 'origin-id',
+    MessageReferenceKind.mucStanzaId => 'muc-stanza-id',
+  };
+
+  static MessageReferenceKind? fromStorageValue(int? value) => switch (value) {
+    0 => MessageReferenceKind.stanzaId,
+    1 => MessageReferenceKind.originId,
+    2 => MessageReferenceKind.mucStanzaId,
+    _ => null,
+  };
+
+  static MessageReferenceKind? fromWireValue(String? value) {
+    final normalized = value?.trim();
+    return switch (normalized) {
+      'stanza-id' => MessageReferenceKind.stanzaId,
+      'origin-id' => MessageReferenceKind.originId,
+      'muc-stanza-id' => MessageReferenceKind.mucStanzaId,
+      _ => null,
+    };
+  }
+}
 
 enum DirectMessageReferencePolicy { currentWire, preferOriginId }
 

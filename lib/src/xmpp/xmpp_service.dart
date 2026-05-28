@@ -43,7 +43,6 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/network_safety.dart';
-import 'package:axichat/src/common/pinned_message_mutator.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -170,6 +169,8 @@ final class XmppUnknownException extends XmppException {
 final class XmppAbortedException extends XmppException {}
 
 final class XmppMessageException extends XmppException {}
+
+final class XmppPinPermissionException extends XmppMessageException {}
 
 final class XmppMucCreateConflictException extends XmppMessageException {}
 

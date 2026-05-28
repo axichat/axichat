@@ -77,7 +77,7 @@ final class _PinnedMessagesUpdated extends ChatEvent {
   const _PinnedMessagesUpdated({required this.sourceKey, required this.items});
 
   final String? sourceKey;
-  final List<PinnedMessageEntry> items;
+  final List<PinnedMessageAggregate> items;
 
   @override
   List<Object?> get props => [sourceKey, items];

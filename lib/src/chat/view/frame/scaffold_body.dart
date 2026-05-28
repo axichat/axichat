@@ -369,6 +369,15 @@ class _ChatScaffoldBody extends StatelessWidget {
                     final pinnedMessageIds = state.pinnedMessages
                         .map((item) => item.messageStanzaId)
                         .toSet();
+                    final selfPinnedMessageIds = state.pinnedMessages
+                        .where((item) => item.pinnedBySelf)
+                        .map((item) => item.messageStanzaId)
+                        .toSet();
+                    final canClearAnyPins =
+                        isGroupChat &&
+                        ((state.roomState?.myRole.canManagePins ?? false) ||
+                            (state.roomState?.myAffiliation.canManagePins ??
+                                false));
                     final loadingMessages = !state.messagesLoaded;
                     final attachmentsByMessageId = loadingMessages
                         ? const <String, List<String>>{}
@@ -414,6 +423,28 @@ class _ChatScaffoldBody extends StatelessWidget {
                     bool isPinnedMessage(Message message) {
                       return message.referenceIds.any(
                         pinnedMessageIds.contains,
+                      );
+                    }
+
+                    bool isPinActionActiveMessage(Message message) {
+                      if (canClearAnyPins && isPinnedMessage(message)) {
+                        return true;
+                      }
+                      return message.referenceIds.any(
+                        selfPinnedMessageIds.contains,
+                      );
+                    }
+
+                    bool canTogglePinMessage(Message message) {
+                      final chat = chatEntity;
+                      if (chat == null || !canTogglePins) {
+                        return false;
+                      }
+                      return canTogglePinForMessage(
+                        chat: chat,
+                        message: message,
+                        roomState: state.roomState,
+                        selfJid: accountJidForPins,
                       );
                     }
 
@@ -688,6 +719,12 @@ class _ChatScaffoldBody extends StatelessWidget {
                       composerError: composerErrorMessage,
                       onComposerErrorCleared: onComposerErrorCleared,
                       showPinnedMessageBanner: state.showPinnedMessageBanner,
+                      onPinnedMessageBannerViewed: () {
+                        locate<ChatBloc>().add(
+                          const ChatPinnedMessageNoticeHidden(),
+                        );
+                        owner._openPinnedMessages();
+                      },
                       onPinnedMessageBannerHidden: () => locate<ChatBloc>().add(
                         const ChatPinnedMessageNoticeHidden(),
                       ),
@@ -1058,6 +1095,8 @@ class _ChatScaffoldBody extends StatelessWidget {
                       bubbleWidthByMessageId: owner._bubbleWidthByMessageId,
                       shouldAnimateMessage: owner._shouldAnimateMessage,
                       isPinnedMessage: isPinnedMessage,
+                      isPinActionActiveMessage: isPinActionActiveMessage,
+                      canTogglePinMessage: canTogglePinMessage,
                       isImportantMessage: isImportantMessage,
                       onClosePinnedMessages: owner._closePinnedMessages,
                       metadataFor: (metadataId) => owner._metadataFor(

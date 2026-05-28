@@ -6,6 +6,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
@@ -47,6 +48,7 @@ bool isMucSelfMessage({
   required Message message,
   required RoomState? roomState,
   String? selfJid,
+  String? fallbackSelfNick,
 }) {
   final realJid = message.effectiveSenderRealJid;
   if (realJid != null) {
@@ -56,9 +58,44 @@ bool isMucSelfMessage({
     );
   }
   if (roomState != null) {
-    return roomState.isSelfOccupantId(message.senderJid);
+    if (roomState.isSelfOccupantId(message.occupantID)) {
+      return true;
+    }
+    return roomState.isSelfSenderJid(
+      message.senderJid,
+      selfJid: selfJid,
+      fallbackSelfNick: fallbackSelfNick,
+    );
   }
   return false;
+}
+
+bool canTogglePinForMessage({
+  required chat_models.Chat chat,
+  required Message message,
+  required RoomState? roomState,
+  String? selfJid,
+}) {
+  if (chat.defaultTransport.isEmail || message.isEmailBacked) {
+    return false;
+  }
+  if (chat.type != ChatType.groupChat) {
+    return message.isFromAccount(selfJid);
+  }
+  if (roomState == null ||
+      roomState.myRole.isVisitor ||
+      roomState.myRole.isNone) {
+    return false;
+  }
+  if (roomState.myRole.canManagePins || roomState.myAffiliation.canManagePins) {
+    return true;
+  }
+  return isMucSelfMessage(
+    message: message,
+    roomState: roomState,
+    selfJid: selfJid,
+    fallbackSelfNick: chat.myNickname,
+  );
 }
 
 bool isEmailMessageForBubble({

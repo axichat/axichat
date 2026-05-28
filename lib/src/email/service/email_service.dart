@@ -18,7 +18,6 @@ import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
-import 'package:axichat/src/common/pinned_message_mutator.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -605,7 +604,6 @@ class EmailService {
     EmailDeltaTransport Function()? transportFactory,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
-    PinnedMessageMutator? pinnedMessages,
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
@@ -634,7 +632,6 @@ class EmailService {
            const EmailConnectionConfigBuilder(_defaultConnectionConfig),
        _log = logger ?? Logger('EmailService'),
        _notificationService = notificationService,
-       _pinnedMessages = pinnedMessages,
        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _transportFactory =
         transportFactory ??
@@ -691,7 +688,6 @@ class EmailService {
   Map<String, bool> _emailEncryptionBetaEnabledByAddress;
   final String? Function()? _xmppSelfJidProvider;
   final NotificationService? _notificationService;
-  final PinnedMessageMutator? _pinnedMessages;
   final ForegroundTaskBridge? _foregroundBridge;
   AppLocalizations? _localizations;
   final _EmailCredentialRuntimeSession _credentialSession =
@@ -3755,13 +3751,6 @@ class EmailService {
     );
   }
 
-  Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String jid) async* {
-    await _ensureReady();
-    final db = await _databaseBuilder();
-    yield await db.getPinnedMessages(jid);
-    yield* db.watchPinnedMessages(jid);
-  }
-
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = _defaultPageSize,
@@ -3787,52 +3776,6 @@ class EmailService {
     final db = await _databaseBuilder();
     yield await db.getChat(jid);
     yield* db.watchChat(jid);
-  }
-
-  Future<void> pinMessage({
-    required Chat chat,
-    required Message message,
-  }) async {
-    await _ensureReady();
-    final chatJid = chat.jid.trim();
-    final stanzaId = message.stanzaID.trim();
-    if (chatJid.isEmpty || stanzaId.isEmpty) {
-      return;
-    }
-    final pinnedMessages = _pinnedMessages;
-    if (pinnedMessages != null) {
-      await pinnedMessages.pinMessage(chatJid: chatJid, message: message);
-      return;
-    }
-    final pinnedAt = DateTime.timestamp().toUtc();
-    final db = await _databaseBuilder();
-    await db.upsertPinnedMessage(
-      PinnedMessageEntry(
-        messageStanzaId: stanzaId,
-        chatJid: chatJid,
-        pinnedAt: pinnedAt,
-        active: true,
-      ),
-    );
-  }
-
-  Future<void> unpinMessage({
-    required Chat chat,
-    required Message message,
-  }) async {
-    await _ensureReady();
-    final chatJid = chat.jid.trim();
-    final stanzaId = message.stanzaID.trim();
-    if (chatJid.isEmpty || stanzaId.isEmpty) {
-      return;
-    }
-    final pinnedMessages = _pinnedMessages;
-    if (pinnedMessages != null) {
-      await pinnedMessages.unpinMessage(chatJid: chatJid, message: message);
-      return;
-    }
-    final db = await _databaseBuilder();
-    await db.deletePinnedMessage(chatJid: chatJid, messageStanzaId: stanzaId);
   }
 
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {

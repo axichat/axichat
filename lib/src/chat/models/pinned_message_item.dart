@@ -9,6 +9,8 @@ class PinnedMessageItem extends Equatable {
     required this.messageStanzaId,
     required this.chatJid,
     required this.pinnedAt,
+    required this.pinCount,
+    required this.pinnedBySelf,
     required this.message,
     required this.attachmentMetadataIds,
   });
@@ -16,6 +18,8 @@ class PinnedMessageItem extends Equatable {
   final String messageStanzaId;
   final String chatJid;
   final DateTime pinnedAt;
+  final int pinCount;
+  final bool pinnedBySelf;
   final Message? message;
   final List<String> attachmentMetadataIds;
 
@@ -28,6 +32,8 @@ class PinnedMessageItem extends Equatable {
     messageStanzaId,
     chatJid,
     pinnedAt,
+    pinCount,
+    pinnedBySelf,
     message,
     attachmentMetadataIds,
   ];

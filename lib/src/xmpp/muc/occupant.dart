@@ -21,7 +21,7 @@ enum OccupantAffiliation {
 
   bool get isNone => this == none;
 
-  bool get canManagePins => isOwner || isAdmin || isMember;
+  bool get canManagePins => isOwner || isAdmin;
 
   int get authorityRank => switch (this) {
     OccupantAffiliation.owner => 3,
@@ -61,6 +61,8 @@ enum OccupantRole {
   bool get isVisitor => this == visitor;
 
   bool get isNone => this == none;
+
+  bool get canManagePins => isModerator;
 
   String get xmlValue => switch (this) {
     OccupantRole.moderator => 'moderator',

@@ -533,7 +533,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
-  StreamSubscription<List<PinnedMessageEntry>>? _pinnedSubscription;
+  StreamSubscription<List<PinnedMessageAggregate>>? _pinnedSubscription;
   String? _pinnedMessagesSourceKey;
   Map<String, DateTime>? _knownPinnedMessagePinnedAtByKey;
   StreamSubscription<RoomState>? _roomSubscription;
@@ -1371,6 +1371,44 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
+  bool _canMutatePinForMessage({
+    required Message message,
+    required Chat chat,
+    required RoomState? roomState,
+  }) {
+    if (chat.defaultTransport.isEmail || message.isEmailBacked) {
+      return false;
+    }
+    if (chat.type != ChatType.groupChat) {
+      return message.isFromAccount(_chatsService.myJid);
+    }
+    if (roomState == null ||
+        roomState.myRole.isVisitor ||
+        roomState.myRole.isNone) {
+      return false;
+    }
+    if (roomState.myRole.canManagePins ||
+        roomState.myAffiliation.canManagePins) {
+      return true;
+    }
+    final realJid = message.effectiveSenderRealJid;
+    if (realJid != null) {
+      return sameBareAddress(
+        realJid,
+        roomState.resolvedSelfJid(fallbackJid: _chatsService.myJid) ??
+            _chatsService.myJid,
+      );
+    }
+    if (roomState.isSelfOccupantId(message.occupantID)) {
+      return true;
+    }
+    return roomState.isSelfSenderJid(
+      message.senderJid,
+      selfJid: _chatsService.myJid,
+      fallbackSelfNick: chat.myNickname,
+    );
+  }
+
   List<Message> _staleUnackedSendAgainCandidatesForMessages(
     Chat chat,
     Iterable<Message> messages,
@@ -1592,10 +1630,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String? _resolvePinnedMessagesChatJid(Chat chat) {
-    final resolvedChatJid = chat.defaultTransport.isEmail
-        ? chat.jid
-        : chat.remoteJid;
-    return normalizedBareAddressValue(resolvedChatJid);
+    if (chat.defaultTransport.isEmail) {
+      return null;
+    }
+    return normalizedBareAddressValue(chat.remoteJid);
   }
 
   Future<void> _subscribeToPinnedMessages(Chat chat) async {
@@ -1616,7 +1654,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       add(
         const _PinnedMessagesUpdated(
           sourceKey: null,
-          items: <PinnedMessageEntry>[],
+          items: <PinnedMessageAggregate>[],
         ),
       );
       return;
@@ -2869,9 +2907,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _emitPinnedMessagesLoadFailureIfRelevant(Emitter<ChatState> emit) {
-    if (emit.isDone) {
-      return;
-    }
     if (state.pinnedMessagesStatus.hasSnapshot) {
       return;
     }
@@ -2889,14 +2924,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> _applyPinnedMessagesUpdated({
     required String? sourceKey,
-    required List<PinnedMessageEntry> entries,
+    required List<PinnedMessageAggregate> entries,
     required Emitter<ChatState> emit,
   }) async {
     var pinnedItems = _emptyPinnedMessageItems;
     if (entries.isNotEmpty) {
       final orderedIds = <String>{};
       for (final entry in entries) {
-        final messageId = entry.messageStanzaId.trim();
+        final messageId = entry.messageReferenceId.trim();
         if (messageId.isEmpty) {
           continue;
         }
@@ -2907,7 +2942,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           orderedIds,
           chatJid: state.chat?.jid,
         );
-        if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) return;
+        if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
         final messageByReference = <String, Message>{};
         for (final message in state.items) {
           _indexMessageByReference(messageByReference, message);
@@ -2916,10 +2951,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           _indexMessageByReference(messageByReference, message);
         }
         final attachmentMaps = await _loadAttachmentMaps(messages);
-        if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) return;
+        if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
         pinnedItems = <PinnedMessageItem>[];
         for (final entry in entries) {
-          final messageId = entry.messageStanzaId.trim();
+          final messageId = entry.messageReferenceId.trim();
           if (messageId.isEmpty) {
             continue;
           }
@@ -2933,6 +2968,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               messageStanzaId: messageId,
               chatJid: entry.chatJid,
               pinnedAt: entry.pinnedAt,
+              pinCount: entry.pinCount,
+              pinnedBySelf: entry.pinnedBySelf,
               message: message,
               attachmentMetadataIds: attachmentIds,
             ),
@@ -2945,9 +2982,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
       pinnedMessages: pinnedItems,
     );
-    if (emit.isDone) return;
     await _syncFileMetadataSubscriptions(nextMetadataIds);
-    if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) return;
+    if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
     final latestPinnedMessageNotice = _takePinnedMessageNoticeForEntries(
       entries,
     );
@@ -3161,14 +3197,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       await _hydratePinnedMessagesFromMam(chat, missing);
     }
-    if (emit.isDone || !_isCurrentPinnedMessagesSource(sourceKey)) {
+    if (!_isCurrentPinnedMessagesSource(sourceKey)) {
       return;
     }
     emit(state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded));
   }
 
   ChatPinnedMessageNotice? _takePinnedMessageNoticeForEntries(
-    List<PinnedMessageEntry> entries,
+    List<PinnedMessageAggregate> entries,
   ) {
     final currentNotices = _pinnedMessageNoticesForEntries(entries);
     final knownPinnedAtByKey = _knownPinnedMessagePinnedAtByKey;
@@ -3225,17 +3261,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       '${notice.chatJid}\n${notice.messageStanzaId}';
 
   Set<ChatPinnedMessageNotice> _pinnedMessageNoticesForEntries(
-    List<PinnedMessageEntry> entries,
+    List<PinnedMessageAggregate> entries,
   ) {
     if (entries.isEmpty) {
       return const <ChatPinnedMessageNotice>{};
     }
     final notices = <ChatPinnedMessageNotice>{};
     for (final entry in entries) {
-      if (!entry.active) {
-        continue;
-      }
-      final messageId = entry.messageStanzaId.trim();
+      final messageId = entry.messageReferenceId.trim();
       final chatJid = entry.chatJid.trim();
       if (messageId.isEmpty || chatJid.isEmpty) {
         continue;
@@ -3452,7 +3485,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       add(
         const _PinnedMessagesUpdated(
           sourceKey: null,
-          items: <PinnedMessageEntry>[],
+          items: <PinnedMessageAggregate>[],
         ),
       );
       return;
@@ -5696,6 +5729,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = event.chat;
     final isEmailBacked =
         chat.defaultTransport.isEmail || event.message.isEmailBacked;
+    if (isEmailBacked) {
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: ChatMessageKey.chatPinMessageUnavailable,
+            variant: ChatToastVariant.warning,
+          ),
+        ),
+      );
+      return;
+    }
     final pinReference = event.message.pinReference(
       isGroupChat: chat.type == ChatType.groupChat,
     );
@@ -5711,7 +5756,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    if (chat.type == ChatType.groupChat && !isEmailBacked) {
+    if (chat.type == ChatType.groupChat) {
       final roomState = event.roomState;
       if (roomState == null) {
         emit(
@@ -5725,7 +5770,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
         return;
       }
-      if (!roomState.myAffiliation.canManagePins) {
+      if (roomState.myRole.isVisitor || roomState.myRole.isNone) {
         emit(
           _attachToast(
             state,
@@ -5738,52 +5783,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       }
     }
+    if (!_canMutatePinForMessage(
+      message: event.message,
+      chat: chat,
+      roomState: event.roomState,
+    )) {
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: ChatMessageKey.chatPinPermissionDenied,
+            variant: ChatToastVariant.warning,
+          ),
+        ),
+      );
+      return;
+    }
     final successMessage = event.pin
         ? ChatMessageKey.chatMessagePinned
         : ChatMessageKey.chatMessageUnpinned;
-    final emailService = _emailService;
-    if (isEmailBacked) {
-      if (emailService == null) {
-        emit(
-          _attachToast(
-            state,
-            const ChatToast(
-              message: ChatMessageKey.chatPinMessageUnavailable,
-              variant: ChatToastVariant.warning,
-            ),
-          ),
-        );
-        return;
-      }
-      try {
-        if (event.pin) {
-          await emailService.pinMessage(chat: chat, message: event.message);
-        } else {
-          await emailService.unpinMessage(chat: chat, message: event.message);
-        }
-        var nextState = _attachToast(state, ChatToast(message: successMessage));
-        if (event.pin) {
-          nextState = _attachPinnedMessageNotice(
-            nextState,
-            chat: chat,
-            pinReference: pinReference,
-          );
-        }
-        emit(nextState);
-      } on EmailServiceException catch (error, stackTrace) {
-        _log.safeFine('Failed to update email pin.', error, stackTrace);
-        emit(
-          _attachToast(
-            state,
-            const ChatToast(
-              message: ChatMessageKey.chatPinMessageUnavailable,
-              variant: ChatToastVariant.warning,
-            ),
-          ),
-        );
-      }
-      return;
-    }
     try {
       if (event.pin) {
         await _messageService.pinMessage(
@@ -5805,6 +5823,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
       }
       emit(nextState);
+    } on XmppPinPermissionException catch (error, stackTrace) {
+      _log.safeFine('Rejected unauthorized XMPP pin.', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(
+            message: ChatMessageKey.chatPinPermissionDenied,
+            variant: ChatToastVariant.warning,
+          ),
+        ),
+      );
     } on XmppException catch (error, stackTrace) {
       _log.safeFine('Failed to update XMPP pin.', error, stackTrace);
       emit(

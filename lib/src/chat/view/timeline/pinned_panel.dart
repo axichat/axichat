@@ -1083,7 +1083,18 @@ class _PinnedMessageTile extends StatelessWidget {
           selfJid: accountJid,
           myOccupantJid: roomState?.myOccupantJid,
         );
-    final Widget? unpinAction = canTogglePins && messageForPin != null
+    final Widget? unpinAction =
+        canTogglePins &&
+            messageForPin != null &&
+            (item.pinnedBySelf ||
+                roomState?.myRole.canManagePins == true ||
+                roomState?.myAffiliation.canManagePins == true) &&
+            canTogglePinForMessage(
+              chat: chat,
+              message: messageForPin,
+              roomState: roomState,
+              selfJid: accountJid,
+            )
         ? AxiIconButton.destructive(
             onPressed: pinActionBlocked
                 ? null

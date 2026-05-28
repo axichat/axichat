@@ -503,7 +503,6 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   void _markRoomCurrentSelfPresence(String roomJid) {
-    if (connectionState != ConnectionState.connected) return;
     final session = _ensureRoomSessionForKey(_roomKey(roomJid));
     session.lateSelfPresenceTimer?.cancel();
     session
@@ -1217,41 +1216,205 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   @override
-  Future<Map<String, mox.PubSubAffiliation>?> _pinGroupAffiliations(
-    Chat chat,
-  ) async {
-    final affiliations = _basePinAffiliations();
-    if (affiliations == null) {
-      return null;
+  bool _canPinInChat({required String chatJid, required ChatType chatType}) {
+    if (chatType != ChatType.groupChat) {
+      return super._canPinInChat(chatJid: chatJid, chatType: chatType);
     }
-    final roomJid = chat.jid.trim();
-    if (roomJid.isEmpty) {
-      return null;
+    final roomState = roomStateFor(chatJid);
+    if (roomState == null) {
+      return false;
     }
-    try {
-      final members = await fetchRoomMembers(roomJid: roomJid);
-      final admins = await fetchRoomAdmins(roomJid: roomJid);
-      final owners = await fetchRoomOwners(roomJid: roomJid);
-      final entries = <MucAffiliationEntry>[...members, ...admins, ...owners];
-      var added = 0;
-      for (final entry in entries) {
-        final jid = entry.jid?.trim();
-        if (jid == null || jid.isEmpty) {
-          continue;
-        }
-        if (affiliations.containsKey(jid)) {
-          continue;
-        }
-        affiliations[jid] = _pinAffiliationPublisher;
-        added += 1;
+    if (roomState.myRole.isVisitor || roomState.myRole.isNone) {
+      return false;
+    }
+    return roomState.myRole.isParticipant ||
+        roomState.myRole.canManagePins ||
+        roomState.myAffiliation.isMember ||
+        roomState.myAffiliation.canManagePins;
+  }
+
+  @override
+  bool _canClearAnyPinsForChat({
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return false;
+    }
+    final roomState = roomStateFor(chatJid);
+    if (roomState == null) {
+      return false;
+    }
+    return roomState.myRole.canManagePins ||
+        roomState.myAffiliation.canManagePins;
+  }
+
+  @override
+  Future<bool> _isInboundPinClearAllAuthorized(mox.MessageEvent event) async {
+    if (event.type != _messageTypeGroupchat) {
+      return false;
+    }
+    final roomJid = event.from.toBare().toString();
+    final senderJid = event.from.toString();
+    final roomState = roomStateFor(roomJid);
+    if (_mucPinClearAllActorCanManagePins(
+      senderJid: senderJid,
+      roomState: roomState,
+    )) {
+      return true;
+    }
+    if (!_isArchivedOrOfflineMessage(event)) {
+      return false;
+    }
+    await _restorePersistedRoomMembers(roomJid);
+    if (_mucPinClearAllActorCanManagePins(
+      senderJid: senderJid,
+      roomState: roomStateFor(roomJid),
+    )) {
+      return true;
+    }
+    return await _queriedMucPinClearAllActorCanManagePins(
+      roomJid: roomJid,
+      senderJid: senderJid,
+    );
+  }
+
+  @override
+  bool _isOutboundPinTargetAuthoredBySelf({
+    required String chatJid,
+    required ChatType chatType,
+    required Message message,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return super._isOutboundPinTargetAuthoredBySelf(
+        chatJid: chatJid,
+        chatType: chatType,
+        message: message,
+      );
+    }
+    final roomState = roomStateFor(chatJid);
+    if (roomState == null) {
+      return false;
+    }
+    final selfJid = roomState.resolvedSelfJid(fallbackJid: myJid) ?? myJid;
+    final realJid = message.effectiveSenderRealJid;
+    if (realJid != null) {
+      return sameBareAddress(realJid, selfJid);
+    }
+    if (roomState.isSelfOccupantId(message.occupantID)) {
+      return true;
+    }
+    if (roomState.isSelfSenderJid(
+      message.senderJid,
+      selfJid: selfJid,
+      fallbackSelfNick: roomState.selfNick,
+    )) {
+      return true;
+    }
+    return message.isFromAccount(selfJid);
+  }
+
+  @override
+  _PendingInboundPinMutation _resolveInboundPinMutationForTarget({
+    required String chatJid,
+    required ChatType chatType,
+    required Message message,
+    required _PendingInboundPinMutation mutation,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return super._resolveInboundPinMutationForTarget(
+        chatJid: chatJid,
+        chatType: chatType,
+        message: message,
+        mutation: mutation,
+      );
+    }
+    if (mutation.scope == PinMessageMutationScope.all ||
+        !_isArchivedOrOfflineMessage(mutation.event)) {
+      return mutation;
+    }
+    final selfActorJid = _selfPinActorJid();
+    if (selfActorJid == null) {
+      return mutation;
+    }
+    if (!message.isFromAccount(myJid)) {
+      return mutation;
+    }
+    if (!_mucPinTargetAuthoredByActor(
+      message: message,
+      actorJid: mutation.event.from.toString(),
+    )) {
+      return mutation;
+    }
+    return mutation.withActor(actorJid: selfActorJid, identityVerified: true);
+  }
+
+  @override
+  bool _isInboundPinActorAuthorizedForTarget({
+    required String chatJid,
+    required ChatType chatType,
+    required Message message,
+    required _PendingInboundPinMutation mutation,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return super._isInboundPinActorAuthorizedForTarget(
+        chatJid: chatJid,
+        chatType: chatType,
+        message: message,
+        mutation: mutation,
+      );
+    }
+    if (mutation.scope == PinMessageMutationScope.all) {
+      return true;
+    }
+    final roomState = roomStateFor(chatJid);
+    if (roomState != null) {
+      final occupant = _mucOccupantForSender(
+        mutation.event,
+        roomState: roomState,
+      );
+      if ((occupant?.role.canManagePins ?? false) ||
+          (occupant?.affiliation.canManagePins ?? false)) {
+        return true;
       }
-      if (added == 0) {
-        return null;
-      }
-      return affiliations;
-    } on Exception {
-      return null;
     }
+    if (_isSelfPinMutation(mutation.event) &&
+        _isOutboundPinTargetAuthoredBySelf(
+          chatJid: chatJid,
+          chatType: chatType,
+          message: message,
+        )) {
+      return true;
+    }
+    if (_mucPinTargetAuthoredByActor(
+      message: message,
+      actorJid: mutation.actorJid,
+    )) {
+      return true;
+    }
+    return _mucPinTargetAuthoredByActor(
+      message: message,
+      actorJid: mutation.event.from.toString(),
+    );
+  }
+
+  bool _mucPinTargetAuthoredByActor({
+    required Message message,
+    required String actorJid,
+  }) {
+    final actor = actorJid.trim();
+    if (actor.isEmpty) {
+      return false;
+    }
+    final realJid = message.effectiveSenderRealJid;
+    if (realJid != null && sameBareAddress(realJid, actor)) {
+      return true;
+    }
+    final occupantId = message.occupantID?.trim();
+    if (occupantId != null && occupantId.isNotEmpty && occupantId == actor) {
+      return true;
+    }
+    return message.senderJid.trim() == actor;
   }
 
   Occupant? _calendarSyncOccupantForSender(
@@ -1266,6 +1429,80 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     required RoomState roomState,
   }) {
     return roomState.occupantForSenderJid(event.from.toString());
+  }
+
+  bool _mucPinClearAllActorCanManagePins({
+    required String senderJid,
+    required RoomState? roomState,
+  }) {
+    final occupant = roomState?.occupantForSenderJid(senderJid);
+    return (occupant?.role.canManagePins ?? false) ||
+        (occupant?.affiliation.canManagePins ?? false);
+  }
+
+  Future<bool> _queriedMucPinClearAllActorCanManagePins({
+    required String roomJid,
+    required String senderJid,
+  }) async {
+    final senderNick = addressResourcePart(senderJid)?.trim();
+    if (senderNick == null || senderNick.isEmpty) {
+      return false;
+    }
+    try {
+      final moderators = await _fetchRoomRoleEntries(
+        roomJid: roomJid,
+        role: OccupantRole.moderator,
+      );
+      if (moderators.any(
+        (entry) => _mucAdminEntryMatchesSender(
+          entry,
+          senderJid: senderJid,
+          senderNick: senderNick,
+        ),
+      )) {
+        return true;
+      }
+      for (final affiliation in <OccupantAffiliation>[
+        OccupantAffiliation.admin,
+        OccupantAffiliation.owner,
+      ]) {
+        final entries = await fetchRoomAffiliations(
+          roomJid: roomJid,
+          affiliation: affiliation,
+        );
+        if (entries.any(
+          (entry) => _mucAdminEntryMatchesSender(
+            entry,
+            senderJid: senderJid,
+            senderNick: senderNick,
+          ),
+        )) {
+          return true;
+        }
+      }
+    } on XmppAbortedException {
+      rethrow;
+    } on TimeoutException {
+      return false;
+    } on XmppMessageException {
+      return false;
+    }
+    return false;
+  }
+
+  bool _mucAdminEntryMatchesSender(
+    MucAffiliationEntry entry, {
+    required String senderJid,
+    required String senderNick,
+  }) {
+    final entryJid = entry.jid?.trim();
+    if (entryJid != null &&
+        entryJid.isNotEmpty &&
+        sameBareAddress(entryJid, senderJid)) {
+      return true;
+    }
+    final entryNick = entry.nick?.trim();
+    return entryNick != null && entryNick.isNotEmpty && entryNick == senderNick;
   }
 
   Occupant? _exactPresentMucOccupantForSender({
@@ -1336,19 +1573,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   bool _isGroupChatPinMutationAuthorized(mox.MessageEvent event) {
-    if (!_isGroupChatMutationAuthorized(event)) {
-      return false;
-    }
-    if (event.type != _messageTypeGroupchat || event.isFromMAM) {
-      return true;
-    }
-    final roomJid = event.from.toBare().toString();
-    final roomState = roomStateFor(roomJid);
-    if (roomState == null) {
-      return false;
-    }
-    final occupant = _mucOccupantForSender(event, roomState: roomState);
-    return occupant?.affiliation.canManagePins ?? false;
+    return _isGroupChatMutationAuthorized(event);
   }
 
   bool _isSelfPinMutation(mox.MessageEvent event) {
@@ -3634,6 +3859,59 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     return List<MucAffiliationEntry>.unmodifiable(entries);
   }
 
+  Future<List<MucAffiliationEntry>> _fetchRoomRoleEntries({
+    required String roomJid,
+    required OccupantRole role,
+  }) async {
+    if (!await _ensureMucSupported(jid: roomJid)) {
+      return const [];
+    }
+    final normalizedRoom = _roomKey(roomJid);
+    final request = mox.Stanza.iq(
+      type: _iqTypeGet,
+      to: normalizedRoom,
+      children: [
+        mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(tag: _itemTag, attributes: {_roleAttr: role.xmlValue}),
+          ],
+        ),
+      ],
+    );
+    final mox.XMLNode? result;
+    try {
+      result = await _connection
+          .sendStanza(mox.StanzaDetails(request, shouldEncrypt: false))
+          .timeout(_roomQueryTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _mucLog.fine(_roomAffiliationQueryTimeoutLog, error, stackTrace);
+      throw XmppMessageException();
+    }
+    if (result == null) return const [];
+    if (result.attributes[_iqTypeAttr]?.toString() != _iqTypeResult) {
+      return const [];
+    }
+    final query = result.firstTag(_queryTag, xmlns: _mucAdminXmlns);
+    if (query == null) return const [];
+    return List<MucAffiliationEntry>.unmodifiable(
+      query.findTags(_itemTag).map((item) {
+        final itemAffiliation =
+            _readItemAttr(item, _affiliationAttr) ??
+            OccupantAffiliation.none.xmlValue;
+        final roleAttr = _readItemAttr(item, _roleAttr) ?? role.xmlValue;
+        return MucAffiliationEntry(
+          affiliation: OccupantAffiliation.fromString(itemAffiliation),
+          jid: _normalizeBareJid(_readItemAttr(item, _jidAttr)),
+          nick: _readItemAttr(item, _nickAttr),
+          role: OccupantRole.fromString(roleAttr),
+          reason: _normalizeSubject(item.firstTag(_reasonTag)?.innerText()),
+        );
+      }),
+    );
+  }
+
   Future<void> leaveRoom(String roomJid) async {
     if (_connection.getManager<MUCManager>() case final manager?) {
       final normalizedRoom = _roomKey(roomJid);
@@ -4971,6 +5249,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     return List<mox.XMLNode>.unmodifiable(extensions);
   }
 
+  @override
   Future<void> applyRoomPrimaryView({
     required String roomJid,
     required ChatPrimaryView primaryView,
@@ -5397,18 +5676,21 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       isPresent: isPresent,
     );
     if (!fromPresence || !isPresent) return;
-    if (!updated.isSelfOccupantId(occupantId) || updated.hasSelfPresence) {
+    if (!updated.isSelfOccupantId(occupantId) &&
+        (realJid == null || !_isSelfRealJid(realJid))) {
       return;
     }
-    final mergedCodes = <String>{
-      ...updated.selfPresenceStatusCodes,
-      MucStatusCode.selfPresence.code,
-    };
-    _applySelfPresenceStatus(
-      roomJid: roomJid,
-      statusCodes: mergedCodes,
-      reason: updated.selfPresenceReason,
-    );
+    if (!updated.hasSelfPresence) {
+      final mergedCodes = <String>{
+        ...updated.selfPresenceStatusCodes,
+        MucStatusCode.selfPresence.code,
+      };
+      _applySelfPresenceStatus(
+        roomJid: roomJid,
+        statusCodes: mergedCodes,
+        reason: updated.selfPresenceReason,
+      );
+    }
     _markRoomJoined(roomJid);
     _clearRoomNeedsJoin(roomJid);
     _markRoomCurrentSelfPresence(roomJid);

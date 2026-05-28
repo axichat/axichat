@@ -17,6 +17,7 @@ import 'package:axichat/src/calendar/view/sidebar/calendar_critical_path_share_s
 import 'package:axichat/src/calendar/view/tasks/calendar_task_share_sheet.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
+import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/view/chat.dart' as chat_view;
 import 'package:axichat/src/chat/view/composer/cutout_composer.dart';
 import 'package:axichat/src/chat/view/overlays/room_members_sheet.dart';
@@ -136,6 +137,70 @@ void main() {
         hasLength(1),
       );
     });
+
+    testWidgets(
+      'pinned panel hides unpin for participant when pin is not theirs',
+      (tester) async {
+        final chat = _chat(
+          jid: 'room@conference.axi.im',
+          title: 'Room',
+          type: ChatType.groupChat,
+          myNickname: 'me',
+        );
+        const selfOccupantJid = 'room@conference.axi.im/me';
+        final pinnedAt = DateTime.utc(2026, 5, 26);
+        final message = Message(
+          stanzaID: 'local-message-id',
+          mucStanzaId: 'room-stanza-id',
+          senderJid: selfOccupantJid,
+          chatJid: chat.jid,
+          timestamp: pinnedAt,
+          body: 'short',
+        );
+        final roomState = RoomState(
+          roomJid: chat.jid,
+          myOccupantJid: selfOccupantJid,
+          occupants: {
+            selfOccupantJid: Occupant(
+              occupantId: selfOccupantJid,
+              nick: 'me',
+              role: OccupantRole.participant,
+              affiliation: OccupantAffiliation.member,
+            ),
+          },
+        );
+        final harness = _RecipientSurfaceHarness(chats: [chat]);
+        _captureChatEvents(
+          harness,
+          state: ChatState(
+            items: [message],
+            messagesLoaded: true,
+            chat: chat,
+            roomState: roomState,
+            pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded,
+            pinnedMessages: [
+              PinnedMessageItem(
+                messageStanzaId: 'room-stanza-id',
+                chatJid: chat.jid,
+                pinnedAt: pinnedAt,
+                pinCount: 1,
+                pinnedBySelf: false,
+                message: message,
+                attachmentMetadataIds: const <String>[],
+              ),
+            ],
+          ),
+          jid: chat.jid,
+        );
+
+        await _pumpChatSurface(tester, harness);
+        await tester.tap(_pinnedMessagesButtonFinder());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.byTooltip('Unpin message'), findsNothing);
+      },
+    );
 
     testWidgets('pinned composer notice hide dispatches hide event', (
       tester,
@@ -1150,15 +1215,18 @@ Chat _chat({
   required String jid,
   required String title,
   String? contactDisplayName,
+  ChatType type = ChatType.chat,
   MessageTransport transport = MessageTransport.xmpp,
+  String? myNickname,
 }) {
   return Chat(
     jid: jid,
     title: title,
-    type: ChatType.chat,
+    type: type,
     lastChangeTimestamp: DateTime.utc(2026),
     contactDisplayName: contactDisplayName,
     transport: transport,
+    myNickname: myNickname,
   );
 }
 

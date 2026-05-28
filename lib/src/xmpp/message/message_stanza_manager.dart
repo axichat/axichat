@@ -22,9 +22,11 @@ const _calendarAvailabilityVersionValue = '1';
 const _pinMutationXmlns = 'urn:axichat:pins:1';
 const _pinMutationTag = 'pin';
 const _pinMutationVersionAttr = 'version';
-const _pinMutationVersionValue = '1';
+const _pinMutationVersionValue = '2';
 const _pinMutationMessageIdAttr = 'message-id';
+const _pinMutationReferenceKindAttr = 'reference-kind';
 const _pinMutationPinnedAttr = 'pinned';
+const _pinMutationScopeAttr = 'scope';
 const _pinMutationTimestampAttr = 'timestamp';
 const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
 const _mucJoinXmlns = 'http://jabber.org/protocol/muc';
@@ -452,16 +454,46 @@ final class CalendarAvailabilityMessagePayload
   }
 }
 
+enum PinMessageMutationScope {
+  own,
+  all;
+
+  String get wireValue => switch (this) {
+    PinMessageMutationScope.own => 'own',
+    PinMessageMutationScope.all => 'all',
+  };
+
+  static PinMessageMutationScope fromWireValue(String? value) {
+    final normalized = value?.trim();
+    return switch (normalized) {
+      'all' => PinMessageMutationScope.all,
+      _ => PinMessageMutationScope.own,
+    };
+  }
+}
+
 final class PinMessageMutationData implements mox.StanzaHandlerExtension {
-  const PinMessageMutationData({
-    required this.messageId,
+  PinMessageMutationData({
+    String? messageId,
+    MessageReference? reference,
+    MessageReferenceKind? messageReferenceKind,
     required this.pinned,
     required this.timestamp,
-  });
+    this.scope = PinMessageMutationScope.own,
+  }) : assert(reference != null || messageId != null),
+       reference =
+           reference ??
+           MessageReference(
+             kind: messageReferenceKind ?? MessageReferenceKind.stanzaId,
+             value: messageId ?? '',
+           );
 
-  final String messageId;
+  final MessageReference reference;
   final bool pinned;
   final DateTime timestamp;
+  final PinMessageMutationScope scope;
+
+  String get messageId => reference.value;
 
   mox.XMLNode toXml() {
     return mox.XMLNode.xmlns(
@@ -469,8 +501,10 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       xmlns: _pinMutationXmlns,
       attributes: {
         _pinMutationVersionAttr: _pinMutationVersionValue,
-        _pinMutationMessageIdAttr: escapeXmlAttribute(messageId),
+        _pinMutationMessageIdAttr: escapeXmlAttribute(reference.value),
+        _pinMutationReferenceKindAttr: reference.kind.wireValue,
         _pinMutationPinnedAttr: pinned.toString(),
+        _pinMutationScopeAttr: scope.wireValue,
         _pinMutationTimestampAttr: timestamp.toUtc().toIso8601String(),
       },
     );
@@ -493,6 +527,16 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
     if (pinned == null) {
       return null;
     }
+    final referenceKind =
+        MessageReferenceKind.fromWireValue(
+          node.attributes[_pinMutationReferenceKindAttr]?.toString(),
+        ) ??
+        (stanza.type == _messageTypeGroupchat
+            ? MessageReferenceKind.mucStanzaId
+            : MessageReferenceKind.stanzaId);
+    final scope = PinMessageMutationScope.fromWireValue(
+      node.attributes[_pinMutationScopeAttr]?.toString(),
+    );
     final rawTimestamp = node.attributes[_pinMutationTimestampAttr]
         ?.toString()
         .trim();
@@ -506,8 +550,9 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       return null;
     }
     return PinMessageMutationData(
-      messageId: messageId,
+      reference: MessageReference(kind: referenceKind, value: messageId),
       pinned: pinned,
+      scope: scope,
       timestamp: timestamp.toUtc(),
     );
   }

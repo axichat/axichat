@@ -49,6 +49,21 @@ Future<void> _pumpBloc() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+PinnedMessageAggregate _pinnedAggregate({
+  required String messageStanzaId,
+  required String chatJid,
+  required DateTime pinnedAt,
+  int pinCount = 1,
+  bool pinnedBySelf = true,
+}) => PinnedMessageAggregate(
+  chatJid: chatJid,
+  messageReferenceKind: MessageReferenceKind.stanzaId,
+  messageReferenceId: messageStanzaId,
+  pinnedAt: pinnedAt,
+  pinCount: pinCount,
+  pinnedBySelf: pinnedBySelf,
+);
+
 ChatSettingsSnapshot _defaultChatSettings() => const ChatSettingsSnapshot(
   language: AppLanguage.system,
   chatReadReceipts: true,
@@ -155,6 +170,8 @@ ChatState _dirtyEveryChatStateField(ChatState state, Chat chat) {
         messageStanzaId: 'dirty-message',
         chatJid: chat.jid,
         pinnedAt: DateTime.utc(2024, 1, 1),
+        pinCount: 1,
+        pinnedBySelf: true,
         message: dirtyMessage,
         attachmentMetadataIds: const ['dirty-file'],
       ),
@@ -297,9 +314,6 @@ void _mockEmailSync(MockEmailService service) {
       filter: any(named: 'filter'),
     ),
   ).thenAnswer((_) => const Stream<List<Message>>.empty());
-  when(
-    () => service.pinnedMessagesStream(any()),
-  ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
   when(
     () => service.backfillChatHistory(
       chat: any(named: 'chat'),
@@ -818,7 +832,7 @@ void main() {
     ).thenAnswer((_) async => const <Message>[]);
     when(
       () => messageService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
     when(
       () => messageService.syncPinnedMessagesForChat(any()),
     ).thenAnswer((_) async {});
@@ -915,7 +929,7 @@ void main() {
     ).thenAnswer((_) async => 0);
     when(
       () => messageService.loadPinnedMessages(any()),
-    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+    ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
     when(
       () => messageService.loadFileMetadata(any()),
     ).thenAnswer((_) async => null);
@@ -1214,7 +1228,7 @@ void main() {
 
   test('close cancels active chat subscriptions and archive session', () async {
     final pinnedController =
-        StreamController<List<PinnedMessageEntry>>.broadcast();
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
     final typingController = StreamController<List<String>>.broadcast();
     final uploadController =
         StreamController<xmpp.HttpUploadSupport>.broadcast();
@@ -3232,7 +3246,7 @@ void main() {
     await bloc.close();
   });
 
-  test('email chat syncs pins while open', () async {
+  test('email chat skips XMPP pin sync while open', () async {
     final emailService = MockEmailService();
     final emailMessageStreamController =
         StreamController<List<Message>>.broadcast();
@@ -3252,10 +3266,6 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) => emailMessageStreamController.stream);
-    when(
-      () => emailService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
-
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
@@ -3271,9 +3281,7 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    verify(
-      () => messageService.syncPinnedMessagesForChat(emailChat.jid),
-    ).called(1);
+    verifyNever(() => messageService.syncPinnedMessagesForChat(any()));
 
     await bloc.close();
     await emailMessageStreamController.close();
@@ -3318,7 +3326,7 @@ void main() {
   });
 
   test(
-    'pinning an email-backed message in a mixed chat uses EmailService',
+    'pinning an email-backed message in a mixed chat is unavailable',
     () async {
       final emailService = MockEmailService();
       _mockEmailSync(emailService);
@@ -3334,13 +3342,6 @@ void main() {
         deltaMsgId: 44,
         body: 'sent as email',
       );
-      when(
-        () => emailService.pinMessage(
-          chat: any(named: 'chat'),
-          message: any(named: 'message'),
-        ),
-      ).thenAnswer((_) async {});
-
       final bloc = ChatBloc(
         jid: mixedChat.jid,
         messageService: messageService,
@@ -3361,30 +3362,126 @@ void main() {
       );
       await _pumpBloc();
 
-      verify(
-        () => emailService.pinMessage(chat: mixedChat, message: message),
-      ).called(1);
       verifyNever(
         () => messageService.pinMessage(
           chatJid: any(named: 'chatJid'),
           message: any(named: 'message'),
         ),
       );
-      expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
+      expect(
+        bloc.state.toast?.message,
+        ChatMessageKey.chatPinMessageUnavailable,
+      );
       expect(bloc.state.toastId, 1);
-      expect(
-        bloc.state.latestPinnedMessageNotice?.messageStanzaId,
-        message.stanzaID,
-      );
-      expect(
-        bloc.state.latestPinnedMessageNotice?.chatJid,
-        mixedChat.remoteJid,
-      );
-      expect(bloc.state.showPinnedMessageBanner, isTrue);
+      expect(bloc.state.latestPinnedMessageNotice, isNull);
+      expect(bloc.state.showPinnedMessageBanner, isFalse);
 
       await bloc.close();
     },
   );
+
+  test('pinning a peer-authored direct XMPP message is denied', () async {
+    const message = Message(
+      stanzaID: 'peer-authored-pin',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'from peer',
+    );
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    bloc.add(
+      ChatMessagePinRequested(
+        message: message,
+        pin: true,
+        chat: initialChat,
+        roomState: null,
+      ),
+    );
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    );
+    expect(bloc.state.toast?.message, ChatMessageKey.chatPinPermissionDenied);
+    expect(bloc.state.toastId, 1);
+
+    await bloc.close();
+  });
+
+  test('participant MUC pinning a peer-authored message is denied', () async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    final roomChat = Chat(
+      jid: roomJid,
+      title: 'Room',
+      type: ChatType.groupChat,
+      myNickname: 'self',
+      lastChangeTimestamp: DateTime(2026, 5, 26),
+      contactJid: roomJid,
+    );
+    final roomState = RoomState(
+      roomJid: roomJid,
+      myOccupantJid: selfOccupantId,
+      occupants: <String, Occupant>{
+        selfOccupantId: _occupant(
+          occupantId: selfOccupantId,
+          nick: 'self',
+          realJid: 'self@axi.im',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+        ),
+      },
+    );
+    const message = Message(
+      stanzaID: 'peer-muc-pin',
+      mucStanzaId: 'peer-muc-room-pin',
+      senderJid: '$roomJid/peer',
+      occupantID: '$roomJid/peer',
+      chatJid: roomJid,
+      body: 'from peer',
+    );
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    bloc.add(
+      ChatMessagePinRequested(
+        message: message,
+        pin: true,
+        chat: roomChat,
+        roomState: roomState,
+      ),
+    );
+    await _pumpBloc();
+
+    verifyNever(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    );
+    expect(bloc.state.toast?.message, ChatMessageKey.chatPinPermissionDenied);
+    expect(bloc.state.toastId, 1);
+
+    await bloc.close();
+  });
 
   test('pinning an XMPP message in a mixed chat uses MessageService', () async {
     final emailService = MockEmailService();
@@ -3396,7 +3493,7 @@ void main() {
     );
     const message = Message(
       stanzaID: 'xmpp-stanza',
-      senderJid: 'peer@axi.im',
+      senderJid: 'self@axi.im',
       chatJid: 'peer@axi.im',
       body: 'sent as xmpp',
     );
@@ -3433,12 +3530,6 @@ void main() {
         message: message,
       ),
     ).called(1);
-    verifyNever(
-      () => emailService.pinMessage(
-        chat: any(named: 'chat'),
-        message: any(named: 'message'),
-      ),
-    );
     expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
     expect(bloc.state.toastId, 1);
     expect(
@@ -3454,7 +3545,7 @@ void main() {
   test('unpinning an XMPP message emits success toast', () async {
     const message = Message(
       stanzaID: 'xmpp-unpin-stanza',
-      senderJid: 'peer@axi.im',
+      senderJid: 'self@axi.im',
       chatJid: 'peer@axi.im',
       body: 'sent as xmpp',
     );
@@ -3546,13 +3637,13 @@ void main() {
     'opening pinned list marks pins loaded from local snapshot before stream emits',
     () async {
       final pinnedController =
-          StreamController<List<PinnedMessageEntry>>.broadcast();
+          StreamController<List<PinnedMessageAggregate>>.broadcast();
       when(
         () => messageService.pinnedMessagesStream(any()),
       ).thenAnswer((_) => pinnedController.stream);
       when(
         () => messageService.loadPinnedMessages(initialChat.remoteJid),
-      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+      ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
 
       final bloc = ChatBloc(
         jid: initialChat.jid,
@@ -3586,7 +3677,7 @@ void main() {
     'initial pinned stream snapshot does not show composer notice',
     () async {
       final pinnedController =
-          StreamController<List<PinnedMessageEntry>>.broadcast();
+          StreamController<List<PinnedMessageAggregate>>.broadcast();
       final pinnedAt = DateTime(2026, 5, 26, 12);
       const pinnedMessage = Message(
         stanzaID: 'initial-pin',
@@ -3619,11 +3710,10 @@ void main() {
       await _pumpBloc();
 
       pinnedController.add([
-        PinnedMessageEntry(
+        _pinnedAggregate(
           messageStanzaId: pinnedMessage.stanzaID,
           chatJid: initialChat.remoteJid,
           pinnedAt: pinnedAt,
-          active: true,
         ),
       ]);
       await untilCalled(
@@ -3646,7 +3736,7 @@ void main() {
 
   test('new pinned message shows composer notice until hidden', () async {
     final pinnedController =
-        StreamController<List<PinnedMessageEntry>>.broadcast();
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
     final firstPinnedAt = DateTime(2026, 5, 26, 12);
     final secondPinnedAt = DateTime(2026, 5, 26, 13);
     const firstMessage = Message(
@@ -3685,16 +3775,15 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    pinnedController.add(const <PinnedMessageEntry>[]);
+    pinnedController.add(const <PinnedMessageAggregate>[]);
     await _pumpBloc();
     await _pumpBloc();
 
     pinnedController.add([
-      PinnedMessageEntry(
+      _pinnedAggregate(
         messageStanzaId: firstMessage.stanzaID,
         chatJid: initialChat.remoteJid,
         pinnedAt: firstPinnedAt,
-        active: true,
       ),
     ]);
     await untilCalled(
@@ -3720,17 +3809,15 @@ void main() {
     expect(bloc.state.showPinnedMessageBanner, isFalse);
 
     pinnedController.add([
-      PinnedMessageEntry(
+      _pinnedAggregate(
         messageStanzaId: firstMessage.stanzaID,
         chatJid: initialChat.remoteJid,
         pinnedAt: firstPinnedAt,
-        active: true,
       ),
-      PinnedMessageEntry(
+      _pinnedAggregate(
         messageStanzaId: secondMessage.stanzaID,
         chatJid: initialChat.remoteJid,
         pinnedAt: secondPinnedAt,
-        active: true,
       ),
     ]);
     await _pumpBloc();
@@ -3753,7 +3840,7 @@ void main() {
 
   test('pinned list failure is stable until explicit retry', () async {
     final pinnedController =
-        StreamController<List<PinnedMessageEntry>>.broadcast();
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
     when(
       () => messageService.pinnedMessagesStream(any()),
     ).thenAnswer((_) => pinnedController.stream);
@@ -3789,7 +3876,7 @@ void main() {
 
     when(
       () => messageService.loadPinnedMessages(initialChat.remoteJid),
-    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+    ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
 
     bloc.add(const ChatPinnedMessagesRetryRequested());
     await _pumpBloc();
@@ -3806,7 +3893,7 @@ void main() {
     'pinned list fails instead of hanging when message lookup fails',
     () async {
       final pinnedController =
-          StreamController<List<PinnedMessageEntry>>.broadcast();
+          StreamController<List<PinnedMessageAggregate>>.broadcast();
       when(
         () => messageService.pinnedMessagesStream(any()),
       ).thenAnswer((_) => pinnedController.stream);
@@ -3814,11 +3901,10 @@ void main() {
         () => messageService.loadPinnedMessages(initialChat.remoteJid),
       ).thenAnswer(
         (_) async => [
-          PinnedMessageEntry(
+          _pinnedAggregate(
             messageStanzaId: 'lookup-fails-pin',
             chatJid: initialChat.remoteJid,
             pinnedAt: DateTime(2026, 5, 26),
-            active: true,
           ),
         ],
       );
@@ -3857,23 +3943,21 @@ void main() {
 
   test('stale pinned updates do not overwrite a rebound pin source', () async {
     final oldPinnedController =
-        StreamController<List<PinnedMessageEntry>>.broadcast();
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
     final newPinnedController =
-        StreamController<List<PinnedMessageEntry>>.broadcast();
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
     final lookupCompleter = Completer<List<Message>>();
-    final detachedEmailChat = Chat(
+    final oldXmppThread = Chat(
       jid: 'thread@example.com',
-      contactJid: 'peer@axi.im',
+      contactJid: 'old-peer@axi.im',
       title: 'Thread',
       type: ChatType.chat,
       lastChangeTimestamp: DateTime(2026, 5, 26),
-      transport: MessageTransport.email,
-    );
-    final xmppThread = detachedEmailChat.copyWith(
       transport: MessageTransport.xmpp,
     );
+    final newXmppThread = oldXmppThread.copyWith(contactJid: 'peer@axi.im');
     when(
-      () => messageService.pinnedMessagesStream('thread@example.com'),
+      () => messageService.pinnedMessagesStream('old-peer@axi.im'),
     ).thenAnswer((_) => oldPinnedController.stream);
     when(
       () => messageService.pinnedMessagesStream('peer@axi.im'),
@@ -3886,7 +3970,7 @@ void main() {
     ).thenAnswer((_) => lookupCompleter.future);
 
     final bloc = ChatBloc(
-      jid: detachedEmailChat.jid,
+      jid: oldXmppThread.jid,
       messageService: messageService,
       chatsService: chatsService,
       mucService: mucService,
@@ -3894,17 +3978,16 @@ void main() {
       settings: _defaultChatSettings(),
     );
 
-    chatStreamController.add(detachedEmailChat);
+    chatStreamController.add(oldXmppThread);
     messageStreamController.add(const <Message>[]);
     await _pumpBloc();
     await _pumpBloc();
 
     oldPinnedController.add([
-      PinnedMessageEntry(
+      _pinnedAggregate(
         messageStanzaId: 'old-source-pin',
-        chatJid: detachedEmailChat.jid,
+        chatJid: oldXmppThread.remoteJid,
         pinnedAt: DateTime(2026, 5, 26),
-        active: true,
       ),
     ]);
     await untilCalled(
@@ -3914,15 +3997,15 @@ void main() {
       ),
     );
 
-    chatStreamController.add(xmppThread);
+    chatStreamController.add(newXmppThread);
     await _pumpBloc();
     await _pumpBloc();
 
     lookupCompleter.complete([
       Message(
         stanzaID: 'old-source-pin',
-        senderJid: detachedEmailChat.jid,
-        chatJid: detachedEmailChat.jid,
+        senderJid: oldXmppThread.remoteJid,
+        chatJid: oldXmppThread.remoteJid,
         timestamp: DateTime(2026, 5, 26),
         body: 'stale pin',
       ),
@@ -3930,7 +4013,7 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    expect(bloc.state.chat?.defaultTransport, MessageTransport.xmpp);
+    expect(bloc.state.chat, newXmppThread);
     expect(bloc.state.pinnedMessagesStatus, ChatPinnedMessagesStatus.idle);
     expect(bloc.state.pinnedMessages, isEmpty);
 
@@ -6668,9 +6751,6 @@ void main() {
         ),
       ).thenAnswer((_) => emailMessageStreamController.stream);
       when(
-        () => emailService.pinnedMessagesStream(any()),
-      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
-      when(
         () => emailService.backfillChatHistory(
           chat: any(named: 'chat'),
           desiredWindow: any(named: 'desiredWindow'),
@@ -6924,9 +7004,6 @@ void main() {
         filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) => emailMessageStreamController.stream);
-    when(
-      () => emailService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
 
     final bloc = ChatBloc(
       jid: emailChat.jid,
@@ -7916,12 +7993,10 @@ void main() {
     },
   );
 
-  test('off-window pinned email messages hydrate full html', () async {
+  test('email chats skip off-window pinned message html hydration', () async {
     final emailService = MockEmailService();
     final emailMessageStreamController =
         StreamController<List<Message>>.broadcast();
-    final pinnedController =
-        StreamController<List<PinnedMessageEntry>>.broadcast();
     _mockEmailSync(emailService);
 
     final emailChat = initialChat.copyWith(
@@ -7948,15 +8023,6 @@ void main() {
       ),
     ).thenAnswer((_) => emailMessageStreamController.stream);
     when(
-      () => messageService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => pinnedController.stream);
-    when(
-      () => messageService.loadMessagesByReferenceIds(
-        any(),
-        chatJid: any(named: 'chatJid'),
-      ),
-    ).thenAnswer((_) async => [pinnedMessage]);
-    when(
       () => emailService.getMessageFullHtml(any()),
     ).thenAnswer((_) async => '<p>Pinned html</p>');
 
@@ -7975,26 +8041,17 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    pinnedController.add([
-      PinnedMessageEntry(
-        messageStanzaId: pinnedMessage.stanzaID,
-        chatJid: emailChat.jid,
-        pinnedAt: DateTime(2026, 1, 5, 11),
-        active: true,
-      ),
-    ]);
-    await untilCalled(() => emailService.getMessageFullHtml(pinnedMessage));
+    bloc.add(const ChatPinnedMessagesOpened());
+    await _pumpBloc();
     await _pumpBloc();
 
-    verify(() => emailService.getMessageFullHtml(pinnedMessage)).called(1);
-    expect(
-      bloc.state.emailFullHtmlByDeltaId[pinnedMessage.deltaMsgId],
-      '<p>Pinned html</p>',
-    );
+    verifyNever(() => messageService.pinnedMessagesStream(any()));
+    verifyNever(() => emailService.getMessageFullHtml(pinnedMessage));
+    expect(bloc.state.pinnedMessages, isEmpty);
+    expect(bloc.state.emailFullHtmlByDeltaId, isEmpty);
 
     await bloc.close();
     await emailMessageStreamController.close();
-    await pinnedController.close();
   });
 
   test(
@@ -8367,9 +8424,6 @@ void main() {
           filter: any(named: 'filter'),
         ),
       ).thenAnswer((_) => emailMessageStreamController.stream);
-      when(
-        () => emailService.pinnedMessagesStream(any()),
-      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
 
       final bloc = ChatBloc(
         jid: emailChat.jid,
@@ -8465,9 +8519,6 @@ void main() {
           filter: any(named: 'filter'),
         ),
       ).thenAnswer((_) => emailMessageStreamController.stream);
-      when(
-        () => emailService.pinnedMessagesStream(any()),
-      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
 
       final bloc = ChatBloc(
         jid: emailChat.jid,
@@ -8743,10 +8794,10 @@ void main() {
       ).thenAnswer((_) async {});
       when(
         () => xmppService.pinnedMessagesStream(any()),
-      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
       when(
         () => xmppService.loadPinnedMessages(any()),
-      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+      ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
       when(
         () => xmppService.syncPinnedMessagesForChat(any()),
       ).thenAnswer((_) async {});
@@ -8843,10 +8894,10 @@ void main() {
     ).thenAnswer((_) async {});
     when(
       () => xmppService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
     when(
       () => xmppService.loadPinnedMessages(any()),
-    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+    ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
     when(
       () => xmppService.syncPinnedMessagesForChat(any()),
     ).thenAnswer((_) async {});
@@ -8927,10 +8978,10 @@ void main() {
     ).thenAnswer((_) async {});
     when(
       () => xmppService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
     when(
       () => xmppService.loadPinnedMessages(any()),
-    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+    ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
     when(
       () => xmppService.syncPinnedMessagesForChat(any()),
     ).thenAnswer((_) async {});
@@ -9034,10 +9085,10 @@ void main() {
       ).thenAnswer((_) async {});
       when(
         () => xmppService.pinnedMessagesStream(any()),
-      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
       when(
         () => xmppService.loadPinnedMessages(any()),
-      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+      ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
       when(
         () => xmppService.syncPinnedMessagesForChat(any()),
       ).thenAnswer((_) async {});
@@ -9137,10 +9188,10 @@ void main() {
       ).thenAnswer((_) => catchUpCompleter.future);
       when(
         () => xmppService.pinnedMessagesStream(any()),
-      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
       when(
         () => xmppService.loadPinnedMessages(any()),
-      ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
+      ).thenAnswer((_) async => const <PinnedMessageAggregate>[]);
       when(
         () => xmppService.syncPinnedMessagesForChat(any()),
       ).thenAnswer((_) async {});

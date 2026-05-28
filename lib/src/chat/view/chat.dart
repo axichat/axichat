@@ -6176,9 +6176,18 @@ class _ChatState extends State<Chat> {
                 final isEmailBacked =
                     chatEntity?.defaultTransport.isEmail ?? false;
                 final canManagePins =
-                    !isGroupChat ||
-                    isEmailBacked ||
-                    (state.roomState?.myAffiliation.canManagePins ?? false);
+                    !isEmailBacked &&
+                    (!isGroupChat ||
+                        (state.roomState != null &&
+                            !state.roomState!.myRole.isVisitor &&
+                            !state.roomState!.myRole.isNone &&
+                            ((state.roomState?.myRole.isParticipant ?? false) ||
+                                (state.roomState?.myRole.canManagePins ??
+                                    false) ||
+                                (state.roomState?.myAffiliation.isMember ??
+                                    false) ||
+                                (state.roomState?.myAffiliation.canManagePins ??
+                                    false))));
                 final canTogglePins = !readOnly && canManagePins;
                 final int pinnedCount = state.pinnedMessages.length;
                 final bool calendarFirstRoom =
@@ -6990,6 +6999,23 @@ class _ChatState extends State<Chat> {
     }
     setState(() {
       _pinnedPanelVisible = !_pinnedPanelVisible;
+      if (_inlineComposerController.hasTextFocus) {
+        _inlineComposerController.unfocus();
+      }
+    });
+  }
+
+  void _openPinnedMessages() {
+    if (!mounted) return;
+    final bool isChatCalendarOpen = context
+        .read<ChatsCubit>()
+        .state
+        .openChatCalendar;
+    if (!_chatRoute.isMain || isChatCalendarOpen) {
+      _returnToMainRoute();
+    }
+    setState(() {
+      _pinnedPanelVisible = true;
       if (_inlineComposerController.hasTextFocus) {
         _inlineComposerController.unfocus();
       }

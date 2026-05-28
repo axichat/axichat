@@ -91,6 +91,8 @@ class _ChatTimelineItemView extends StatelessWidget {
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
     required this.isPinnedMessage,
+    required this.isPinActionActiveMessage,
+    required this.canTogglePinMessage,
     required this.isImportantMessage,
     required this.onTapOutsideRequested,
     required this.resolveViewData,
@@ -162,6 +164,8 @@ class _ChatTimelineItemView extends StatelessWidget {
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
   final bool Function(Message message) isPinnedMessage;
+  final bool Function(Message message) isPinActionActiveMessage;
+  final bool Function(Message message) canTogglePinMessage;
   final bool Function(Message message) isImportantMessage;
   final TapRegionCallback onTapOutsideRequested;
   final ({
@@ -369,6 +373,8 @@ class _ChatTimelineItemView extends StatelessWidget {
         bubbleWidthByMessageId: bubbleWidthByMessageId,
         shouldAnimateMessage: shouldAnimateMessage,
         isPinnedMessage: isPinnedMessage,
+        isPinActionActiveMessage: isPinActionActiveMessage,
+        canTogglePinMessage: canTogglePinMessage,
         isImportantMessage: isImportantMessage,
         onTapOutsideRequested: onTapOutsideRequested,
         resolveViewData: resolveViewData,

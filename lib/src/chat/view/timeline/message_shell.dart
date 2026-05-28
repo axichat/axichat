@@ -21,6 +21,8 @@ _resolveTimelineMessageChromeActions({
   required bool isInviteRevocationMessage,
   required bool inviteRevoked,
   required bool isPinned,
+  required bool isPinActionActive,
+  required bool canTogglePin,
   required bool isImportant,
   required MessageStatus messageStatus,
   required String detailId,
@@ -86,6 +88,8 @@ _resolveTimelineMessageChromeActions({
     isInviteRevocationMessage: isInviteRevocationMessage,
     inviteRevoked: inviteRevoked,
     isPinned: isPinned,
+    isPinActionActive: isPinActionActive,
+    canTogglePin: canTogglePin,
     messageStatus: messageStatus,
     detailId: detailId,
     onReplyRequested: onReplyRequested,
@@ -123,7 +127,7 @@ _resolveTimelineMessageChromeActions({
     pinDisabled: callbacks.pinDisabled,
     pinLoading: callbacks.pinLoading,
     onPinToggle: callbacks.onPinToggle,
-    isPinned: isPinned,
+    isPinned: isPinActionActive,
     onRevokeInvite: callbacks.onRevokeInvite,
   );
   final reactionManager = callbacks.canShowReactionManager
@@ -287,6 +291,8 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
     Color borderColor,
     bool isEmailMessage,
     bool isPinned,
+    bool isPinActionActive,
+    bool canTogglePin,
     bool isImportant,
   })
   viewData;

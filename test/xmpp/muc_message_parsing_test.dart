@@ -601,7 +601,9 @@ void main() {
           'msg&A <B> "C" \'D\'${String.fromCharCode(0xfffd)}';
       final payload = PinMessageMutationData(
         messageId: messageId,
+        messageReferenceKind: MessageReferenceKind.mucStanzaId,
         pinned: true,
+        scope: PinMessageMutationScope.all,
         timestamp: DateTime.utc(2026, 3, 12, 12),
       );
       final node = payload.toXml();
@@ -611,10 +613,14 @@ void main() {
       );
 
       expect(xml, contains('msg&amp;A &lt;B&gt; &quot;C&quot; &apos;D&apos;'));
+      expect(xml, contains("reference-kind='muc-stanza-id'"));
+      expect(xml, contains("scope='all'"));
       expect(xml, isNot(contains('<B>')));
       expect(xml, isNot(contains('\u0001')));
       expect(parsed?.messageId, sanitizedMessageId);
+      expect(parsed?.reference.kind, MessageReferenceKind.mucStanzaId);
       expect(parsed?.pinned, isTrue);
+      expect(parsed?.scope, PinMessageMutationScope.all);
     });
   });
 

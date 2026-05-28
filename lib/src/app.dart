@@ -188,7 +188,6 @@ class _AxichatState extends State<Axichat> {
                   credentialStore: context.read<CredentialStore>(),
                   databaseBuilder: () => context.read<XmppService>().database,
                   notificationService: context.read<NotificationService>(),
-                  pinnedMessages: context.read<XmppService>(),
                   emailReadReceiptsEnabled: settingsState.emailReadReceipts,
                   autoDownloadImages: settingsState.autoDownloadImages,
                   autoDownloadVideos: settingsState.autoDownloadVideos,

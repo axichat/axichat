@@ -366,6 +366,8 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
     required this.isPinnedMessage,
+    required this.isPinActionActiveMessage,
+    required this.canTogglePinMessage,
     required this.isImportantMessage,
     required this.onTapOutsideRequested,
     required this.resolveViewData,
@@ -433,6 +435,8 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
   final bool Function(Message message) isPinnedMessage;
+  final bool Function(Message message) isPinActionActiveMessage;
+  final bool Function(Message message) canTogglePinMessage;
   final bool Function(Message message) isImportantMessage;
   final TapRegionCallback onTapOutsideRequested;
   final ({
@@ -587,6 +591,8 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   Widget build(BuildContext context) {
     final messageModel = timelineMessageItem.messageModel;
     final isPinned = isPinnedMessage(messageModel);
+    final isPinActionActive = isPinActionActiveMessage(messageModel);
+    final canTogglePin = canTogglePinMessage(messageModel);
     final isImportant = isImportantMessage(messageModel);
     final rowKey = messageKeys[messageModel.stanzaID];
     final measuredBubbleWidth = bubbleWidthByMessageId[messageModel.stanzaID];
@@ -728,6 +734,8 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
         borderColor: borderColor,
         isEmailMessage: isEmailMessage,
         isPinned: isPinned,
+        isPinActionActive: isPinActionActive,
+        canTogglePin: canTogglePin,
         isImportant: isImportant,
       ),
       interactionData: (
@@ -861,6 +869,8 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     Color borderColor,
     bool isEmailMessage,
     bool isPinned,
+    bool isPinActionActive,
+    bool canTogglePin,
     bool isImportant,
   })
   viewData;
@@ -943,6 +953,8 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       :borderColor,
       isEmailMessage: isEmailMessage,
       isPinned: isPinned,
+      isPinActionActive: isPinActionActive,
+      canTogglePin: canTogglePin,
       isImportant: isImportant,
     ) = viewData;
     final (
@@ -1013,6 +1025,8 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       isInviteRevocationMessage: isInviteRevocationMessage,
       inviteRevoked: inviteRevoked,
       isPinned: isPinned,
+      isPinActionActive: isPinActionActive,
+      canTogglePin: canTogglePin,
       isImportant: isImportant,
       messageStatus: messageStatus,
       detailId: detailId,
@@ -1543,6 +1557,8 @@ _resolveTimelineMessageShellData({
     Color borderColor,
     bool isEmailMessage,
     bool isPinned,
+    bool isPinActionActive,
+    bool canTogglePin,
     bool isImportant,
   })
   viewData,
@@ -1781,6 +1797,8 @@ _resolveTimelineMessageActionCallbacks({
   required bool isInviteRevocationMessage,
   required bool inviteRevoked,
   required bool isPinned,
+  required bool isPinActionActive,
+  required bool canTogglePin,
   required MessageStatus messageStatus,
   required String detailId,
   required void Function(Message message) onReplyRequested,
@@ -1831,8 +1849,9 @@ _resolveTimelineMessageActionCallbacks({
   final canShowReactionManager = canReact && isSingleSelection;
   final reactionManagerDisabled =
       canShowReactionManager && requiresMucReference;
-  final pinDisabled = requiresMucReference && canTogglePins;
-  final pinLoading = loadingMucReference && canTogglePins;
+  final canToggleThisPin = canTogglePins && canTogglePin;
+  final pinDisabled = requiresMucReference && canToggleThisPin;
+  final pinLoading = loadingMucReference && canToggleThisPin;
   final rowText = timelineMessageItem.rowText;
 
   VoidCallback? onReply;
@@ -1872,10 +1891,12 @@ _resolveTimelineMessageActionCallbacks({
   }
 
   VoidCallback? onPinToggle;
-  if (canTogglePins && !requiresMucReference) {
+  if (canToggleThisPin &&
+      !requiresMucReference &&
+      !messageModel.isEmailBacked) {
     onPinToggle = () => onPinToggleRequested(
       messageModel,
-      pin: !isPinned,
+      pin: !isPinActionActive,
       chat: chatEntity,
       roomState: roomState,
     );
