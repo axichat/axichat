@@ -52,6 +52,72 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('autosave saving state disables the switch and shows progress', (
+    tester,
+  ) async {
+    final harness = _DraftComposerViewHarness();
+    final subjectController = TextEditingController();
+    final subjectFocusNode = FocusNode();
+    final bodyController = TextEditingController();
+    final bodyFocusNode = FocusNode();
+    addTearDown(subjectController.dispose);
+    addTearDown(subjectFocusNode.dispose);
+    addTearDown(bodyController.dispose);
+    addTearDown(bodyFocusNode.dispose);
+
+    await tester.pumpWidget(
+      harness.wrap(
+        _TestDraftComposerView(
+          subjectController: subjectController,
+          subjectFocusNode: subjectFocusNode,
+          bodyController: bodyController,
+          bodyFocusNode: bodyFocusNode,
+          onRecipientAdded: (_) async => true,
+          autosaveEnabled: true,
+          autosaveSaving: true,
+          onAutosaveChanged: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.byType(AxiProgressIndicator), findsOneWidget);
+    expect(
+      tester.widget<ShadSwitch>(find.byType(ShadSwitch)).onChanged,
+      isNull,
+    );
+  });
+
+  testWidgets('autosave saved state uses the compact check indicator', (
+    tester,
+  ) async {
+    final harness = _DraftComposerViewHarness();
+    final subjectController = TextEditingController();
+    final subjectFocusNode = FocusNode();
+    final bodyController = TextEditingController();
+    final bodyFocusNode = FocusNode();
+    addTearDown(subjectController.dispose);
+    addTearDown(subjectFocusNode.dispose);
+    addTearDown(bodyController.dispose);
+    addTearDown(bodyFocusNode.dispose);
+
+    await tester.pumpWidget(
+      harness.wrap(
+        _TestDraftComposerView(
+          subjectController: subjectController,
+          subjectFocusNode: subjectFocusNode,
+          bodyController: bodyController,
+          bodyFocusNode: bodyFocusNode,
+          onRecipientAdded: (_) async => true,
+          showAutosaveHint: true,
+          autosaveEnabled: true,
+          onAutosaveChanged: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.byIcon(LucideIcons.check), findsOneWidget);
+  });
 }
 
 class _TestDraftComposerView extends StatelessWidget {
@@ -61,6 +127,10 @@ class _TestDraftComposerView extends StatelessWidget {
     required this.bodyController,
     required this.bodyFocusNode,
     required this.onRecipientAdded,
+    this.showAutosaveHint = false,
+    this.autosaveEnabled = false,
+    this.autosaveSaving = false,
+    this.onAutosaveChanged,
   });
 
   final TextEditingController subjectController;
@@ -68,6 +138,10 @@ class _TestDraftComposerView extends StatelessWidget {
   final TextEditingController bodyController;
   final FocusNode bodyFocusNode;
   final FutureOr<bool> Function(Contact target) onRecipientAdded;
+  final bool showAutosaveHint;
+  final bool autosaveEnabled;
+  final bool autosaveSaving;
+  final ValueChanged<bool>? onAutosaveChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +181,10 @@ class _TestDraftComposerView extends StatelessWidget {
       sendBlockerMessage: null,
       sendErrorMessage: null,
       showSendingStatus: false,
-      showAutosaveHint: false,
+      showAutosaveHint: showAutosaveHint,
+      autosaveEnabled: autosaveEnabled,
+      autosaveSaving: autosaveSaving,
+      onAutosaveChanged: onAutosaveChanged,
       canDiscard: false,
       canSave: false,
       onDiscardPressed: null,

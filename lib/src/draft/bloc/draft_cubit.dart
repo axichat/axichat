@@ -369,7 +369,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     bool autoSave = false,
-    bool autosaveEnabled = true,
+    bool autosaveEnabled = false,
   }) async {
     final draft = await _messageService.saveDraft(
       id: id,

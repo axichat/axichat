@@ -749,7 +749,7 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
     @Default(<String>[]) List<String> attachmentMetadataIds,
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     @Default(<DraftForwardedBlock>[]) List<DraftForwardedBlock> forwardedBlocks,
-    @Default(true) bool autosaveEnabled,
+    @Default(false) bool autosaveEnabled,
   }) = _Draft;
 
   const Draft._();
@@ -882,7 +882,7 @@ class Drafts extends Table {
       .withDefault(const Constant('[]'))();
 
   BoolColumn get autosaveEnabled =>
-      boolean().named('autosave_enabled').withDefault(const Constant(true))();
+      boolean().named('autosave_enabled').withDefault(const Constant(false))();
 }
 
 @DataClassName('DraftAttachmentRef')

@@ -18,7 +18,7 @@ class ComposeDraftSeed extends Equatable {
     this.forwardedBlocks = const <DraftForwardedBlock>[],
     this.forwardedSourceAttachmentMetadataIds = const <String>[],
     this.recipientTransportOverrides = const <String, MessageTransport>{},
-    this.autosaveEnabled = true,
+    this.autosaveEnabled = false,
   });
 
   final int? id;

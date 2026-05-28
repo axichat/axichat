@@ -27,7 +27,7 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     List<String> forwardedSourceAttachmentMetadataIds = const <String>[],
     Map<String, MessageTransport> recipientTransportOverrides = const {},
-    bool autosaveEnabled = true,
+    bool autosaveEnabled = false,
   }) {
     final entry = ComposeWindowEntry(
       id: _nextId++,

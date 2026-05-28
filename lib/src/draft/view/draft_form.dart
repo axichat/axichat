@@ -56,10 +56,10 @@ class DraftForm extends StatefulWidget {
     this.forwardedBlocks = const <DraftForwardedBlock>[],
     this.forwardedSourceAttachmentMetadataIds = const <String>[],
     this.recipientTransportOverrides = const <String, MessageTransport>{},
-    this.autosaveEnabled = true,
+    this.autosaveEnabled = false,
+    required this.initialRecipients,
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
-    required this.locate,
     this.recipientCountAdjustment = 0,
     this.subjectTrailing,
     this.banner,
@@ -80,9 +80,9 @@ class DraftForm extends StatefulWidget {
   final List<String> forwardedSourceAttachmentMetadataIds;
   final Map<String, MessageTransport> recipientTransportOverrides;
   final bool autosaveEnabled;
+  final List<ComposerRecipient> initialRecipients;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
-  final T Function<T>() locate;
   final int recipientCountAdjustment;
   final Widget? subjectTrailing;
   final Widget? banner;
@@ -148,7 +148,7 @@ class DraftFormState extends State<DraftForm> {
   bool _discardingDraft = false;
   bool _sendCompletionHandled = false;
   bool _seedAttachmentCleanupHandled = false;
-  bool _autosaveEnabled = true;
+  bool _autosaveEnabled = false;
   bool _updatingAutosavePreference = false;
   Timer? _autosaveTimer;
   int? _lastSavedSignature;
@@ -186,13 +186,7 @@ class DraftFormState extends State<DraftForm> {
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
     _pendingCalendarTaskIcsMessage = widget.calendarTaskIcsMessage;
-    _recipients = _initialRecipients(
-      chats: widget.locate<ChatsCubit>().state.items ?? const <Chat>[],
-      shareSignatureEnabled: widget
-          .locate<SettingsCubit>()
-          .state
-          .shareTokenSignatureEnabled,
-    );
+    _recipients = List<ComposerRecipient>.from(widget.initialRecipients);
     _autosaveEnabled = widget.autosaveEnabled;
     _lastSavedSignature = _savedSignatureFromSeed();
   }
@@ -200,8 +194,9 @@ class DraftFormState extends State<DraftForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final draftCubit = widget.locate<DraftCubit>();
-    _deleteDraftAttachmentMetadata = draftCubit.deleteDraftAttachmentMetadata;
+    _deleteDraftAttachmentMetadata = context
+        .read<DraftCubit>()
+        .deleteDraftAttachmentMetadata;
     if (_hydrationScheduled ||
         (_seedAttachmentMetadataIds.isEmpty &&
             widget.forwardedSourceAttachmentMetadataIds.isEmpty)) {
@@ -209,7 +204,7 @@ class DraftFormState extends State<DraftForm> {
     }
     _hydrationScheduled = true;
     _loadingAttachments = true;
-    unawaited(_hydrateAttachments(draftCubit));
+    unawaited(_hydrateAttachments(context.read<DraftCubit>()));
   }
 
   @override
@@ -658,10 +653,8 @@ class DraftFormState extends State<DraftForm> {
     final l10n = context.l10n;
     final settingsState = context.watch<SettingsCubit>().state;
     final endpointConfig = settingsState.endpointConfig;
-    final locate = context.read;
 
     return BlocBuilder<ProfileCubit, ProfileState>(
-      bloc: locate<ProfileCubit>(),
       builder: (context, profileState) {
         final profileJid = profileState.jid;
         final resolvedProfileJid = profileJid.trim();
@@ -677,15 +670,9 @@ class DraftFormState extends State<DraftForm> {
           hydrating: profileState.avatarHydrating,
         );
         return BlocBuilder<RosterCubit, RosterState>(
-          bloc: locate<RosterCubit>(),
           builder: (context, rosterState) {
-            final rosterItems =
-                rosterState.items ??
-                (locate<RosterCubit>()[RosterCubit.itemsCacheKey]
-                    as List<RosterItem>?) ??
-                const <RosterItem>[];
+            final rosterItems = rosterState.items ?? const <RosterItem>[];
             return BlocBuilder<ChatsCubit, ChatsState>(
-              bloc: locate<ChatsCubit>(),
               builder: (context, chatsState) {
                 final chats = chatsState.items ?? const <Chat>[];
                 final autovalidateMode = _showValidationMessages
@@ -697,8 +684,7 @@ class DraftFormState extends State<DraftForm> {
                     key: _formKey,
                     autovalidateMode: autovalidateMode,
                     child: BlocConsumer<DraftCubit, DraftState>(
-                      bloc: locate<DraftCubit>(),
-                      listener: (context, state) async {
+                      listener: (context, state) {
                         if (state is DraftSaveComplete) {
                           if (!state.autoSaved) {
                             ShadToaster.maybeOf(context)?.show(
@@ -741,8 +727,6 @@ class DraftFormState extends State<DraftForm> {
                                   .toList();
                             });
                           }
-                        } else if (state is DraftSendComplete) {
-                          await _handleSendComplete();
                         }
                       },
                       builder: (context, state) {
@@ -821,6 +805,7 @@ class DraftFormState extends State<DraftForm> {
                               endpointConfig: endpointConfig,
                             );
                         final bool showAutosaveHint =
+                            _autosaveEnabled &&
                             _lastAutosaveAt != null &&
                             _lastSavedSignature == _currentDraftSignature();
                         return DraftComposerView(
@@ -831,7 +816,7 @@ class DraftFormState extends State<DraftForm> {
                           rosterItems: rosterItems,
                           databaseSuggestionAddresses:
                               chatsState.recipientAddressSuggestions,
-                          selfJid: locate<ChatsCubit>().selfJid,
+                          selfJid: selfJid,
                           selfIdentity: selfIdentity,
                           latestStatuses: _latestEmailRecipientStatuses,
                           collapsedRecipientsByDefault: false,
@@ -884,6 +869,7 @@ class DraftFormState extends State<DraftForm> {
                           showSendingStatus: isSending,
                           showAutosaveHint: showAutosaveHint,
                           autosaveEnabled: _autosaveEnabled,
+                          autosaveSaving: _autosaveInFlight,
                           autosaveUpdating: _updatingAutosavePreference,
                           onAutosaveChanged: _handleAutosaveEnabledChanged,
                           canDiscard: canDiscard,
@@ -903,60 +889,6 @@ class DraftFormState extends State<DraftForm> {
         );
       },
     );
-  }
-
-  List<ComposerRecipient> _initialRecipients({
-    required List<Chat> chats,
-    required bool shareSignatureEnabled,
-  }) {
-    final recipients = <ComposerRecipient>[];
-    for (final value in widget.jids) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty) continue;
-      final transportOverride = widget
-          .recipientTransportOverrides[contactDirectoryAddressKey(trimmed)];
-      Chat? match;
-      for (final chat in chats) {
-        if (chat.jid == trimmed) {
-          match = chat;
-          break;
-        }
-      }
-      if (transportOverride != null) {
-        recipients.add(
-          ComposerRecipient(
-            target: Contact.address(
-              address: trimmed,
-              displayName: match?.displayName,
-              shareSignatureEnabled: shareSignatureEnabled,
-              transport: transportOverride,
-            ),
-          ),
-        );
-        continue;
-      }
-      if (match != null) {
-        recipients.add(
-          ComposerRecipient(
-            target: Contact.chat(
-              chat: match,
-              shareSignatureEnabled:
-                  match.shareSignatureEnabled ?? shareSignatureEnabled,
-            ),
-          ),
-        );
-      } else {
-        recipients.add(
-          ComposerRecipient(
-            target: Contact.address(
-              address: trimmed,
-              shareSignatureEnabled: shareSignatureEnabled,
-            ),
-          ),
-        );
-      }
-    }
-    return recipients;
   }
 
   Future<void> _hydrateAttachments(DraftCubit draftCubit) async {
@@ -1456,12 +1388,13 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _handleAutosaveEnabledChanged(bool enabled) async {
-    if (_autosaveEnabled == enabled || _updatingAutosavePreference) {
+    if (_autosaveEnabled == enabled ||
+        _updatingAutosavePreference ||
+        _autosaveInFlight) {
       return;
     }
     final previous = _autosaveEnabled;
     final draftId = id;
-    final draftCubit = widget.locate<DraftCubit>();
     setState(() {
       _autosaveEnabled = enabled;
       _updatingAutosavePreference = draftId != null;
@@ -1474,7 +1407,7 @@ class DraftFormState extends State<DraftForm> {
       return;
     }
     try {
-      await draftCubit.updateDraftAutosaveEnabled(
+      await context.read<DraftCubit>().updateDraftAutosaveEnabled(
         id: draftId,
         enabled: enabled,
       );
@@ -1620,10 +1553,8 @@ class DraftFormState extends State<DraftForm> {
     if (widget.id == null) {
       return null;
     }
-    final recipients = widget.jids
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toList(growable: false);
+    final recipients = widget.initialRecipients.includedRecipients
+        .recipientAddresses();
     final attachmentIds = _seedAttachmentMetadataIds
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
@@ -1706,7 +1637,7 @@ class DraftFormState extends State<DraftForm> {
     if (_lastSavedSignature == signature) {
       return;
     }
-    _autosaveInFlight = true;
+    setState(() => _autosaveInFlight = true);
     final int attemptedSaveEpoch = _saveEpoch;
     final int attemptedSignature = signature;
     final operation = _saveDraft(autoSave: true);
@@ -1716,10 +1647,19 @@ class DraftFormState extends State<DraftForm> {
     } on Exception {
       // Best-effort autosave should not block composition.
     } finally {
-      if (_autosaveOperation == operation) {
-        _autosaveOperation = null;
+      if (mounted) {
+        setState(() {
+          if (_autosaveOperation == operation) {
+            _autosaveOperation = null;
+          }
+          _autosaveInFlight = false;
+        });
+      } else {
+        if (_autosaveOperation == operation) {
+          _autosaveOperation = null;
+        }
+        _autosaveInFlight = false;
       }
-      _autosaveInFlight = false;
     }
     if (mounted &&
         _saveEpoch == attemptedSaveEpoch &&

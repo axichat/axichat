@@ -417,8 +417,11 @@ void main() {
       await tester.pumpWidget(
         harness.wrap(
           DraftForm(
-            locate: harness.locate,
             jids: const ['alice@axi.im', 'bob@axi.im'],
+            initialRecipients: harness.initialRecipients(const [
+              'alice@axi.im',
+              'bob@axi.im',
+            ]),
             body: 'hello',
           ),
         ),
@@ -448,8 +451,11 @@ void main() {
       await tester.pumpWidget(
         harness.wrap(
           DraftForm(
-            locate: harness.locate,
             jids: const ['alice@axi.im', 'bob@axi.im'],
+            initialRecipients: harness.initialRecipients(const [
+              'alice@axi.im',
+              'bob@axi.im',
+            ]),
             body: 'hello',
           ),
         ),
@@ -486,7 +492,12 @@ void main() {
         _captureDraftSends(harness, xmppTargetBatches: xmppTargetBatches);
 
         await tester.pumpWidget(
-          harness.wrap(DraftForm(locate: harness.locate, body: 'hello')),
+          harness.wrap(
+            DraftForm(
+              initialRecipients: const <ComposerRecipient>[],
+              body: 'hello',
+            ),
+          ),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
@@ -955,6 +966,46 @@ class _RecipientSurfaceHarness {
   final xmppService = _MockXmppService();
   final emailService = _MockEmailService();
   final calendarReminderController = _MockCalendarReminderController();
+
+  List<ComposerRecipient> initialRecipients(List<String> jids) {
+    final recipients = <ComposerRecipient>[];
+    for (final value in jids) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      Chat? match;
+      for (final chat in chatsCubit.state.items ?? const <Chat>[]) {
+        if (chat.jid == trimmed) {
+          match = chat;
+          break;
+        }
+      }
+      if (match != null) {
+        recipients.add(
+          ComposerRecipient(
+            target: Contact.chat(
+              chat: match,
+              shareSignatureEnabled:
+                  match.shareSignatureEnabled ??
+                  settingsCubit.state.shareTokenSignatureEnabled,
+            ),
+          ),
+        );
+      } else {
+        recipients.add(
+          ComposerRecipient(
+            target: Contact.address(
+              address: trimmed,
+              shareSignatureEnabled:
+                  settingsCubit.state.shareTokenSignatureEnabled,
+            ),
+          ),
+        );
+      }
+    }
+    return recipients;
+  }
 
   T locate<T>() => switch (T) {
     const (SettingsCubit) => settingsCubit as T,

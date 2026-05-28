@@ -226,12 +226,10 @@ class _ComposeWindowBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final locate = context.read;
     return SizedBox(
       height: availableHeight,
       child: ComposeDraftContent(
         seed: seed,
-        locate: locate,
         draftFormKey: draftFormKey,
         onClosed: () => context.read<ComposeWindowCubit>().closeWindow(id),
         onDiscarded: () => context.read<ComposeWindowCubit>().closeWindow(id),

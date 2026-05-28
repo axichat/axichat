@@ -63,7 +63,8 @@ class DraftComposerView extends StatelessWidget {
     required this.sendErrorMessage,
     required this.showSendingStatus,
     required this.showAutosaveHint,
-    this.autosaveEnabled = true,
+    this.autosaveEnabled = false,
+    this.autosaveSaving = false,
     this.autosaveUpdating = false,
     this.onAutosaveChanged,
     required this.canDiscard,
@@ -127,6 +128,7 @@ class DraftComposerView extends StatelessWidget {
   final bool showSendingStatus;
   final bool showAutosaveHint;
   final bool autosaveEnabled;
+  final bool autosaveSaving;
   final bool autosaveUpdating;
   final ValueChanged<bool>? onAutosaveChanged;
   final bool canDiscard;
@@ -330,25 +332,16 @@ class DraftComposerView extends StatelessWidget {
                       ],
                     ),
                   ),
-                if (showAutosaveHint)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: spacing.s),
-                    child: Text(l10n.draftAutosaved, style: textTheme.muted),
-                  ),
                 if (onAutosaveChanged != null)
                   Padding(
                     padding: EdgeInsets.only(bottom: spacing.s),
-                    child: Row(
-                      children: [
-                        Text(l10n.draftAutosave, style: textTheme.muted),
-                        const Spacer(),
-                        ShadSwitch(
-                          value: autosaveEnabled,
-                          onChanged: enabled && !autosaveUpdating
-                              ? onAutosaveChanged
-                              : null,
-                        ),
-                      ],
+                    child: _DraftAutosaveControl(
+                      enabled: enabled,
+                      autosaveEnabled: autosaveEnabled,
+                      autosaveSaving: autosaveSaving,
+                      autosaveSaved: showAutosaveHint,
+                      autosaveUpdating: autosaveUpdating,
+                      onChanged: onAutosaveChanged,
                     ),
                   ),
                 Row(
@@ -370,6 +363,61 @@ class DraftComposerView extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DraftAutosaveControl extends StatelessWidget {
+  const _DraftAutosaveControl({
+    required this.enabled,
+    required this.autosaveEnabled,
+    required this.autosaveSaving,
+    required this.autosaveSaved,
+    required this.autosaveUpdating,
+    required this.onChanged,
+  });
+
+  final bool enabled;
+  final bool autosaveEnabled;
+  final bool autosaveSaving;
+  final bool autosaveSaved;
+  final bool autosaveUpdating;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(l10n.draftAutosave, style: context.textTheme.muted),
+        if (autosaveSaving || autosaveSaved) ...[
+          SizedBox(width: spacing.xs),
+          if (autosaveSaving)
+            AxiProgressIndicator(
+              color: colors.primary,
+              semanticsLabel: l10n.draftAutosave,
+            )
+          else
+            Semantics(
+              label: l10n.draftAutosaved,
+              child: Icon(
+                LucideIcons.check,
+                color: colors.green,
+                size: context.sizing.progressIndicatorSize,
+              ),
+            ),
+        ],
+        SizedBox(width: spacing.xs),
+        ShadSwitch(
+          value: autosaveEnabled,
+          onChanged: enabled && !autosaveSaving && !autosaveUpdating
+              ? onChanged
+              : null,
+        ),
+      ],
     );
   }
 }

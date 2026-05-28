@@ -3,16 +3,18 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/draft_form.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,7 +23,6 @@ class ComposeDraftContent extends StatelessWidget {
   const ComposeDraftContent({
     super.key,
     required this.seed,
-    required this.locate,
     this.draftFormKey,
     this.recipientCountAdjustment = 0,
     this.subjectTrailing,
@@ -31,7 +32,6 @@ class ComposeDraftContent extends StatelessWidget {
   });
 
   final ComposeDraftSeed seed;
-  final T Function<T>() locate;
   final GlobalKey<DraftFormState>? draftFormKey;
   final int recipientCountAdjustment;
   final Widget? subjectTrailing;
@@ -43,7 +43,6 @@ class ComposeDraftContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ComposeDraftFormContent(
       seed: seed,
-      locate: locate,
       draftFormKey: draftFormKey,
       recipientCountAdjustment: recipientCountAdjustment,
       subjectTrailing: subjectTrailing,
@@ -58,7 +57,6 @@ class ComposeDraftContent extends StatelessWidget {
 class _ComposeDraftFormContent extends StatefulWidget {
   const _ComposeDraftFormContent({
     required this.seed,
-    required this.locate,
     required this.showQuoteBanner,
     this.draftFormKey,
     this.recipientCountAdjustment = 0,
@@ -69,7 +67,6 @@ class _ComposeDraftFormContent extends StatefulWidget {
   });
 
   final ComposeDraftSeed seed;
-  final T Function<T>() locate;
   final bool showQuoteBanner;
   final GlobalKey<DraftFormState>? draftFormKey;
   final int recipientCountAdjustment;
@@ -121,59 +118,52 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
 
   @override
   Widget build(BuildContext context) {
-    final xmppService = widget.locate<XmppService>();
-    return BlocBuilder<SettingsCubit, SettingsState>(
-      bloc: widget.locate<SettingsCubit>(),
-      builder: (context, settingsState) {
-        final endpointConfig = settingsState.endpointConfig;
-        final emailService = endpointConfig.smtpEnabled
-            ? widget.locate<EmailService>()
-            : null;
-        final emailAddress = emailService?.activeAccount?.address;
-        final myJid = xmppService.myJid;
-        final suggestionAddresses = <String>{
-          if (myJid?.isNotEmpty == true) myJid!,
-          if (emailAddress?.isNotEmpty == true) emailAddress!,
-        };
-        final suggestionDomains = <String>{
-          EndpointConfig.defaultDomain,
-          ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
-        };
-        final quoteTarget = widget.showQuoteBanner
-            ? _effectiveQuoteTarget
-            : null;
-        return DraftForm(
-          key: widget.draftFormKey,
-          id: widget.seed.id,
-          jids: widget.seed.jids,
-          recipientTransportOverrides: widget.seed.recipientTransportOverrides,
-          body: widget.seed.body,
-          subject: widget.seed.subject,
-          quoteTarget: _effectiveQuoteTarget,
-          attachmentMetadataIds: widget.seed.attachmentMetadataIds,
-          calendarTaskIcsMessage: widget.seed.calendarTaskIcsMessage,
-          forwardedBlocks: widget.seed.forwardedBlocks,
-          forwardedSourceAttachmentMetadataIds:
-              widget.seed.forwardedSourceAttachmentMetadataIds,
-          autosaveEnabled: widget.seed.autosaveEnabled,
-          suggestionAddresses: suggestionAddresses,
-          suggestionDomains: suggestionDomains,
-          locate: widget.locate,
-          recipientCountAdjustment: widget.recipientCountAdjustment,
-          subjectTrailing: widget.subjectTrailing,
-          banner: quoteTarget == null
-              ? null
-              : _DraftQuoteBanner(
-                  quotedMessage: _quotedMessage,
-                  selfJid: myJid,
-                  onClear: _handleQuoteCleared,
-                ),
-          onRecipientAddressesChanged: _handleRecipientAddressesChanged,
-          onClosed: widget.onClosed,
-          onDiscarded: widget.onDiscarded,
-          onDraftSaved: widget.onDraftSaved,
-        );
-      },
+    final settingsState = context.watch<SettingsCubit>().state;
+    final profileState = context.watch<ProfileCubit>().state;
+    final chatsState = context.watch<ChatsCubit>().state;
+    final profileJid = profileState.jid.trim();
+    final String? myJid = profileJid.isEmpty ? null : profileJid;
+    final suggestionAddresses = <String>{if (myJid?.isNotEmpty == true) myJid!};
+    final suggestionDomains = <String>{
+      EndpointConfig.defaultDomain,
+      ...suggestionAddresses.map(_domainFromAddress).whereType<String>(),
+    };
+    final quoteTarget = widget.showQuoteBanner ? _effectiveQuoteTarget : null;
+    return DraftForm(
+      key: widget.draftFormKey,
+      id: widget.seed.id,
+      jids: widget.seed.jids,
+      initialRecipients: _initialRecipients(
+        jids: widget.seed.jids,
+        chats: chatsState.items ?? const <Chat>[],
+        shareSignatureEnabled: settingsState.shareTokenSignatureEnabled,
+        recipientTransportOverrides: widget.seed.recipientTransportOverrides,
+      ),
+      recipientTransportOverrides: widget.seed.recipientTransportOverrides,
+      body: widget.seed.body,
+      subject: widget.seed.subject,
+      quoteTarget: _effectiveQuoteTarget,
+      attachmentMetadataIds: widget.seed.attachmentMetadataIds,
+      calendarTaskIcsMessage: widget.seed.calendarTaskIcsMessage,
+      forwardedBlocks: widget.seed.forwardedBlocks,
+      forwardedSourceAttachmentMetadataIds:
+          widget.seed.forwardedSourceAttachmentMetadataIds,
+      autosaveEnabled: widget.seed.autosaveEnabled,
+      suggestionAddresses: suggestionAddresses,
+      suggestionDomains: suggestionDomains,
+      recipientCountAdjustment: widget.recipientCountAdjustment,
+      subjectTrailing: widget.subjectTrailing,
+      banner: quoteTarget == null
+          ? null
+          : _DraftQuoteBanner(
+              quotedMessage: _quotedMessage,
+              selfJid: myJid,
+              onClear: _handleQuoteCleared,
+            ),
+      onRecipientAddressesChanged: _handleRecipientAddressesChanged,
+      onClosed: widget.onClosed,
+      onDiscarded: widget.onDiscarded,
+      onDraftSaved: widget.onDraftSaved,
     );
   }
 
@@ -212,7 +202,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
   }
 
   Future<void> _loadQuotedMessage(String referenceId) async {
-    final message = await widget.locate<DraftCubit>().loadMessageByReferenceId(
+    final message = await context.read<DraftCubit>().loadMessageByReferenceId(
       referenceId,
       chatJid: _quoteLookupChatJid,
     );
@@ -258,6 +248,62 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
         .where((value) => value.isNotEmpty)
         .toList(growable: false);
   }
+}
+
+List<ComposerRecipient> _initialRecipients({
+  required Iterable<String> jids,
+  required List<Chat> chats,
+  required bool shareSignatureEnabled,
+  required Map<String, MessageTransport> recipientTransportOverrides,
+}) {
+  final recipients = <ComposerRecipient>[];
+  for (final value in jids) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) continue;
+    final transportOverride =
+        recipientTransportOverrides[contactDirectoryAddressKey(trimmed)];
+    Chat? match;
+    for (final chat in chats) {
+      if (chat.jid == trimmed) {
+        match = chat;
+        break;
+      }
+    }
+    if (transportOverride != null) {
+      recipients.add(
+        ComposerRecipient(
+          target: Contact.address(
+            address: trimmed,
+            displayName: match?.displayName,
+            shareSignatureEnabled: shareSignatureEnabled,
+            transport: transportOverride,
+          ),
+        ),
+      );
+      continue;
+    }
+    if (match != null) {
+      recipients.add(
+        ComposerRecipient(
+          target: Contact.chat(
+            chat: match,
+            shareSignatureEnabled:
+                match.shareSignatureEnabled ?? shareSignatureEnabled,
+          ),
+        ),
+      );
+    } else {
+      recipients.add(
+        ComposerRecipient(
+          target: Contact.address(
+            address: trimmed,
+            shareSignatureEnabled: shareSignatureEnabled,
+          ),
+        ),
+      );
+    }
+  }
+  return recipients;
 }
 
 String? _domainFromAddress(String? value) {

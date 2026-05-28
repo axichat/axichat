@@ -551,7 +551,7 @@ abstract interface class XmppDatabase implements Database {
     List<String> attachmentMetadataIds = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
-    bool autosaveEnabled = true,
+    bool autosaveEnabled = false,
   });
 
   Future<void> updateDraftSyncMetadata({
@@ -5088,7 +5088,7 @@ WHERE stanza_i_d = ?
     List<String> attachmentMetadataIds = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
-    bool autosaveEnabled = true,
+    bool autosaveEnabled = false,
   }) async {
     return transaction(() async {
       final draftId = await draftsAccessor.insertOrUpdateOne(
@@ -5180,6 +5180,7 @@ WHERE stanza_i_d = ?
             attachmentMetadataIds: Value(attachmentMetadataIds),
             calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
             forwardedBlocks: Value(forwardedBlocks),
+            autosaveEnabled: const Value(false),
           ),
         );
         await _replaceDraftAttachmentRefs(

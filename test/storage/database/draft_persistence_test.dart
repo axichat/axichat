@@ -38,6 +38,25 @@ void main() {
     );
   }
 
+  Future<void> recreateDraftsTableWithLegacyAutosaveDefault() async {
+    final row = await database
+        .customSelect(
+          "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'drafts'",
+        )
+        .getSingle();
+    final createSql = row.read<String>('sql');
+    final legacySql = createSql.replaceFirstMapped(
+      RegExp(r'("autosave_enabled"\s+INTEGER\s+NOT NULL\s+DEFAULT\s+)0'),
+      (match) => '${match[1]}1',
+    );
+    expect(legacySql, isNot(createSql));
+
+    await database.customStatement('PRAGMA foreign_keys = OFF');
+    await database.customStatement('DROP TABLE drafts');
+    await database.customStatement(legacySql);
+    await database.customStatement('PRAGMA foreign_keys = ON');
+  }
+
   test('saveDraft clears nullable draft fields', () async {
     final task = CalendarTask(
       id: 'stored-task',
@@ -162,6 +181,25 @@ void main() {
     expect(saved?.body, 'Intro');
     expect(saved?.forwardedBlocks, [block]);
   });
+
+  test(
+    'upsertDraftFromSync disables autosave even with legacy table default',
+    () async {
+      await recreateDraftsTableWithLegacyAutosaveDefault();
+
+      final draftId = await database.upsertDraftFromSync(
+        draftSyncId: 'sync-remote-legacy-default',
+        jids: const ['peer@axi.im'],
+        draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+        draftSourceId: 'source',
+        draftRecipients: const [],
+        body: 'Body',
+      );
+
+      final saved = await database.getDraft(draftId);
+      expect(saved?.autosaveEnabled, isFalse);
+    },
+  );
 
   test('upsertDraftFromSync clears nullable draft fields', () async {
     final draftId = await database.upsertDraftFromSync(

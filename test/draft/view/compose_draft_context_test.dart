@@ -6,15 +6,12 @@ import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
-import 'package:axichat/src/draft/view/draft_form.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
-import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,11 +88,17 @@ class _ComposeDraftContextHarness {
       () => rosterCubit.stream,
     ).thenAnswer((_) => const Stream<RosterState>.empty());
     when(() => rosterCubit[RosterCubit.itemsCacheKey]).thenReturn(null);
-    when(() => chatsCubit.selfJid).thenReturn('me@example.com');
+    final chat = Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+    );
     when(() => chatsCubit.state).thenReturn(
-      const ChatsState(
+      ChatsState(
         openCalendar: false,
-        items: [],
+        items: [chat],
+        visibleItems: [chat],
         creationStatus: RequestStatus.none,
       ),
     );
@@ -108,7 +111,6 @@ class _ComposeDraftContextHarness {
     when(
       () => draftCubit.stream,
     ).thenAnswer((_) => const Stream<DraftState>.empty());
-    when(() => xmppService.myJid).thenReturn('me@example.com');
     when(
       () => draftCubit.loadDraftAttachments(any<List<String>>()),
     ).thenAnswer((_) async => const []);
@@ -165,8 +167,6 @@ class _ComposeDraftContextHarness {
   final chatsCubit = _MockChatsCubit();
   final draftCubit = _MockDraftCubit();
   final composeWindowCubit = _MockComposeWindowCubit();
-  final xmppService = _MockXmppService();
-  final emailService = _MockEmailService();
   final _settings = StreamController<SettingsState>.broadcast();
   SettingsState _settingsState = const SettingsState();
 
@@ -192,47 +192,39 @@ class _ComposeDraftContextHarness {
         supportedLocales: AppLocalizations.supportedLocales,
         home: ChangeNotifierProvider<CalendarTaskOffGridDragController>(
           create: (context) => CalendarTaskOffGridDragController(),
-          child: MultiRepositoryProvider(
+          child: MultiBlocProvider(
             providers: [
-              RepositoryProvider<XmppService>.value(value: xmppService),
-              RepositoryProvider<EmailService>.value(value: emailService),
+              BlocProvider<SettingsCubit>.value(value: settingsCubit),
+              BlocProvider<ProfileCubit>.value(value: profileCubit),
+              BlocProvider<RosterCubit>.value(value: rosterCubit),
+              BlocProvider<ChatsCubit>.value(value: chatsCubit),
+              BlocProvider<DraftCubit>.value(value: draftCubit),
+              BlocProvider<ComposeWindowCubit>.value(value: composeWindowCubit),
             ],
-            child: MultiBlocProvider(
-              providers: [
-                BlocProvider<SettingsCubit>.value(value: settingsCubit),
-                BlocProvider<ProfileCubit>.value(value: profileCubit),
-                BlocProvider<RosterCubit>.value(value: rosterCubit),
-                BlocProvider<ChatsCubit>.value(value: chatsCubit),
-                BlocProvider<DraftCubit>.value(value: draftCubit),
-                BlocProvider<ComposeWindowCubit>.value(
-                  value: composeWindowCubit,
-                ),
-              ],
-              child: Scaffold(
-                body: Builder(
-                  builder: (rootContext) {
-                    return ValueListenableBuilder<bool>(
-                      valueListenable: showOpener,
-                      builder: (context, showOpener, child) {
-                        if (!showOpener) {
-                          return const SizedBox.shrink();
-                        }
-                        return Center(
-                          child: TextButton(
-                            onPressed: () {
-                              openComposeDraft(
-                                rootContext,
-                                jids: const ['peer@example.com'],
-                                body: 'hello',
-                              );
-                            },
-                            child: const Text('Open compose draft'),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
+            child: Scaffold(
+              body: Builder(
+                builder: (openerContext) {
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: showOpener,
+                    builder: (context, showOpener, child) {
+                      if (!showOpener) {
+                        return const SizedBox.shrink();
+                      }
+                      return Center(
+                        child: TextButton(
+                          onPressed: () {
+                            openComposeDraft(
+                              openerContext,
+                              jids: const ['peer@example.com'],
+                              body: 'hello',
+                            );
+                          },
+                          child: const Text('Open compose draft'),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ),
@@ -281,7 +273,3 @@ class _MockChatsCubit extends Mock implements ChatsCubit {}
 class _MockDraftCubit extends Mock implements DraftCubit {}
 
 class _MockComposeWindowCubit extends Mock implements ComposeWindowCubit {}
-
-class _MockXmppService extends Mock implements XmppService {}
-
-class _MockEmailService extends Mock implements EmailService {}

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
 import 'package:axichat/src/chat/view/timeline/message/email_html_web_view.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
@@ -38,9 +39,12 @@ void main() {
         harness.wrap(
           DraftForm(
             id: 7,
-            locate: harness.locate,
             jids: const ['peer@example.com'],
+            initialRecipients: harness.initialRecipients(const [
+              'peer@example.com',
+            ]),
             body: 'hello',
+            autosaveEnabled: true,
             recipientCountAdjustment: 1,
           ),
         ),
@@ -61,9 +65,12 @@ void main() {
       harness.wrap(
         DraftForm(
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
+          autosaveEnabled: true,
           recipientCountAdjustment: 1,
         ),
       ),
@@ -82,6 +89,25 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   });
 
+  testWidgets('autosave switch defaults off for a new draft', (tester) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
+          body: 'hello',
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.widget<ShadSwitch>(find.byType(ShadSwitch)).value, isFalse);
+  });
+
   testWidgets('autosave switch off prevents scheduled autosave', (
     tester,
   ) async {
@@ -91,8 +117,10 @@ void main() {
       harness.wrap(
         DraftForm(
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
           autosaveEnabled: false,
           recipientCountAdjustment: 1,
@@ -143,8 +171,10 @@ void main() {
       harness.wrap(
         DraftForm(
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
         ),
       ),
@@ -164,7 +194,7 @@ void main() {
         calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
         forwardedBlocks: any(named: 'forwardedBlocks'),
         autoSave: false,
-        autosaveEnabled: true,
+        autosaveEnabled: false,
       ),
     ).called(1);
   });
@@ -193,9 +223,12 @@ void main() {
         harness.wrap(
           DraftForm(
             id: 7,
-            locate: harness.locate,
             jids: const ['peer@example.com'],
+            initialRecipients: harness.initialRecipients(const [
+              'peer@example.com',
+            ]),
             body: 'hello',
+            autosaveEnabled: true,
             recipientCountAdjustment: 1,
           ),
         ),
@@ -243,8 +276,10 @@ void main() {
         DraftForm(
           key: formKey,
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           recipientCountAdjustment: 1,
           onClosed: () => closed = true,
         ),
@@ -272,8 +307,10 @@ void main() {
         DraftForm(
           key: formKey,
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
           recipientCountAdjustment: 1,
           onDiscarded: () => discarded = true,
@@ -322,9 +359,12 @@ void main() {
         DraftForm(
           key: formKey,
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
+          autosaveEnabled: true,
           recipientCountAdjustment: 1,
         ),
       ),
@@ -354,7 +394,7 @@ void main() {
 
     expect(find.text('Unsaved changes'), findsOneWidget);
     await tester.tap(find.text('Cancel').last);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(await closeResult, isFalse);
 
     saveCompleter.complete(_draft(id: 7));
@@ -392,9 +432,12 @@ void main() {
         DraftForm(
           key: formKey,
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
+          autosaveEnabled: true,
           recipientCountAdjustment: 1,
           onDraftSaved: savedDraftIds.add,
           onDiscarded: () => discarded = true,
@@ -472,9 +515,12 @@ void main() {
           DraftForm(
             key: formKey,
             id: 7,
-            locate: harness.locate,
             jids: const ['peer@example.com'],
+            initialRecipients: harness.initialRecipients(const [
+              'peer@example.com',
+            ]),
             body: 'hello',
+            autosaveEnabled: true,
             recipientCountAdjustment: 1,
           ),
         ),
@@ -531,9 +577,12 @@ void main() {
         DraftForm(
           key: formKey,
           id: 7,
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
+          autosaveEnabled: true,
           recipientCountAdjustment: 1,
           onClosed: () => closed = true,
           onDraftSaved: savedDraftIds.add,
@@ -584,8 +633,11 @@ void main() {
         harness.wrap(
           DraftForm(
             key: formKey,
-            locate: harness.locate,
             jids: const ['peer@example.com'],
+            initialRecipients: harness.initialRecipients(const [
+              'peer@example.com',
+            ]),
+            autosaveEnabled: true,
             recipientCountAdjustment: 1,
             onDiscarded: () => discarded = true,
           ),
@@ -656,10 +708,13 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'Intro note',
           forwardedBlocks: [_forwardedHtmlBlock()],
+          autosaveEnabled: true,
           recipientCountAdjustment: 1,
         ),
       ),
@@ -700,8 +755,10 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'Intro note',
           forwardedBlocks: [_forwardedBlock()],
           recipientCountAdjustment: 1,
@@ -731,8 +788,10 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'Intro note',
           forwardedBlocks: [_forwardedBasicHtmlBlock()],
           recipientCountAdjustment: 1,
@@ -763,8 +822,10 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'Intro note',
           forwardedBlocks: [_forwardedBlockedHtmlBlock()],
           recipientCountAdjustment: 1,
@@ -873,8 +934,10 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'Intro note',
           forwardedSourceAttachmentMetadataIds: const ['source-meta'],
         ),
@@ -916,7 +979,7 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
+          initialRecipients: const <ComposerRecipient>[],
           body: 'Intro note',
           forwardedSourceAttachmentMetadataIds: const ['source-meta'],
         ),
@@ -932,6 +995,30 @@ void main() {
 
     verify(
       () => harness.draftCubit.deleteDraftAttachmentMetadata('cloned-meta'),
+    ).called(1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('disposing with unsaved seed attachment metadata cleans it up', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        const DraftForm(
+          initialRecipients: <ComposerRecipient>[],
+          body: 'Intro note',
+          attachmentMetadataIds: ['seed-meta'],
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpWidget(harness.wrap(const SizedBox.shrink()));
+    await tester.pump();
+
+    verify(
+      () => harness.draftCubit.deleteDraftAttachmentMetadata('seed-meta'),
     ).called(1);
     expect(tester.takeException(), isNull);
   });
@@ -976,8 +1063,10 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
           body: 'hello',
         ),
       ),
@@ -1063,11 +1152,16 @@ void main() {
       await tester.pumpWidget(
         harness.wrap(
           DraftForm(
-            locate: harness.locate,
             jids: const ['peer@axi.im'],
             recipientTransportOverrides: const {
               'peer@axi.im': MessageTransport.email,
             },
+            initialRecipients: harness.initialRecipients(
+              const ['peer@axi.im'],
+              recipientTransportOverrides: const {
+                'peer@axi.im': MessageTransport.email,
+              },
+            ),
             body: 'hello',
           ),
         ),
@@ -1155,8 +1249,11 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['xmpp@example.com', 'mail@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'xmpp@example.com',
+            'mail@example.com',
+          ]),
           body: 'hello',
         ),
       ),
@@ -1246,8 +1343,11 @@ void main() {
     await tester.pumpWidget(
       harness.wrap(
         DraftForm(
-          locate: harness.locate,
           jids: const ['chat-a@example.com', 'chat-b@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'chat-a@example.com',
+            'chat-b@example.com',
+          ]),
           body: 'hello',
         ),
       ),
@@ -1342,6 +1442,66 @@ class _DraftFormHarness {
   final rosterCubit = _MockRosterCubit();
   final chatsCubit = _MockChatsCubit();
   final draftCubit = _MockDraftCubit();
+
+  List<ComposerRecipient> initialRecipients(
+    List<String> jids, {
+    Map<String, MessageTransport> recipientTransportOverrides =
+        const <String, MessageTransport>{},
+  }) {
+    final recipients = <ComposerRecipient>[];
+    for (final value in jids) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final transportOverride =
+          recipientTransportOverrides[contactDirectoryAddressKey(trimmed)];
+      Chat? match;
+      for (final chat in chatsCubit.state.items ?? const <Chat>[]) {
+        if (chat.jid == trimmed) {
+          match = chat;
+          break;
+        }
+      }
+      if (transportOverride != null) {
+        recipients.add(
+          ComposerRecipient(
+            target: Contact.address(
+              address: trimmed,
+              displayName: match?.displayName,
+              shareSignatureEnabled:
+                  settingsCubit.state.shareTokenSignatureEnabled,
+              transport: transportOverride,
+            ),
+          ),
+        );
+        continue;
+      }
+      if (match != null) {
+        recipients.add(
+          ComposerRecipient(
+            target: Contact.chat(
+              chat: match,
+              shareSignatureEnabled:
+                  match.shareSignatureEnabled ??
+                  settingsCubit.state.shareTokenSignatureEnabled,
+            ),
+          ),
+        );
+      } else {
+        recipients.add(
+          ComposerRecipient(
+            target: Contact.address(
+              address: trimmed,
+              shareSignatureEnabled:
+                  settingsCubit.state.shareTokenSignatureEnabled,
+            ),
+          ),
+        );
+      }
+    }
+    return recipients;
+  }
 
   T locate<T>() => switch (T) {
     const (SettingsCubit) => settingsCubit as T,

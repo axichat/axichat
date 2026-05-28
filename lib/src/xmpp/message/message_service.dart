@@ -1330,7 +1330,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     List<Attachment> attachments = const <Attachment>[],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
-    bool autosaveEnabled = true,
+    bool autosaveEnabled = false,
   }) async {
     final Draft? existingDraft = id == null
         ? null
