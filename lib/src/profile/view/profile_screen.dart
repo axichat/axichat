@@ -10,7 +10,6 @@ import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
-import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -218,56 +217,44 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   ),
               ],
             ),
-            body: Column(
-              children: [
-                MediaQuery.removePadding(
-                  context: context,
-                  removeTop: true,
-                  child: const ConnectivityIndicator(),
-                ),
-                Expanded(
-                  child: SafeArea(
-                    top: false,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final profileWideLayoutMinWidth =
-                            sizing.profileWideSidebarMaxWidth +
-                            sizing.profileWideSettingsMinWidth +
-                            spacing.m +
-                            (spacing.l * 2);
-                        final isWideLayout =
-                            constraints.maxWidth >= profileWideLayoutMinWidth;
-                        final Duration animationDuration = context
-                            .watch<SettingsCubit>()
-                            .animationDuration;
-                        return AxiFadeIndexedStack(
-                          index: _profileRoute.index,
-                          duration: animationDuration,
-                          curve: _profileFadeCurve,
-                          children: [
-                            _ProfileMainView(
-                              isWideLayout: isWideLayout,
-                              connectivityState: connectivityState,
-                              demoOffline: demoOffline,
-                              applicationVersion: _applicationVersion,
-                              sidebarColor: profileSidebarColor,
-                              settingsAnchors: _settingsAnchors,
-                              settingsScrollController:
-                                  _settingsScrollController,
-                              profileScrollController: _profileScrollController,
-                              settingsScrollOffset: _settingsScrollOffset,
-                              locate: widget.locate,
-                              onNavigate: _setRoute,
-                            ),
-                            const _ProfileFormPage(child: ChangePasswordForm()),
-                            const _ProfileFormPage(child: UnregisterForm()),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ],
+            body: SafeArea(
+              top: false,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final profileWideLayoutMinWidth =
+                      sizing.profileWideSidebarMaxWidth +
+                      sizing.profileWideSettingsMinWidth +
+                      spacing.m +
+                      (spacing.l * 2);
+                  final isWideLayout =
+                      constraints.maxWidth >= profileWideLayoutMinWidth;
+                  final Duration animationDuration = context
+                      .watch<SettingsCubit>()
+                      .animationDuration;
+                  return AxiFadeIndexedStack(
+                    index: _profileRoute.index,
+                    duration: animationDuration,
+                    curve: _profileFadeCurve,
+                    children: [
+                      _ProfileMainView(
+                        isWideLayout: isWideLayout,
+                        connectivityState: connectivityState,
+                        demoOffline: demoOffline,
+                        applicationVersion: _applicationVersion,
+                        sidebarColor: profileSidebarColor,
+                        settingsAnchors: _settingsAnchors,
+                        settingsScrollController: _settingsScrollController,
+                        profileScrollController: _profileScrollController,
+                        settingsScrollOffset: _settingsScrollOffset,
+                        locate: widget.locate,
+                        onNavigate: _setRoute,
+                      ),
+                      const _ProfileFormPage(child: ChangePasswordForm()),
+                      const _ProfileFormPage(child: UnregisterForm()),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         );

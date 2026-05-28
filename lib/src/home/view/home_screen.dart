@@ -1116,6 +1116,32 @@ class HomeShellBranchTransitionContainer extends StatelessWidget {
   }
 }
 
+class _HomeShellConnectivityFrame extends StatelessWidget {
+  const _HomeShellConnectivityFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ConnectivityIndicator(reserveTopInsetWhenHidden: true),
+          Expanded(
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key, required this.navigationShell});
 
@@ -1374,7 +1400,7 @@ class _HomeShellState extends State<HomeShell> {
                   _railCollapsed = value;
                 });
               },
-              child: widget.navigationShell,
+              child: _HomeShellConnectivityFrame(child: widget.navigationShell),
             );
           },
         ),
@@ -1414,7 +1440,9 @@ class _HomeShellState extends State<HomeShell> {
                           data: mediaQuery.removePadding(
                             removeBottom: removeBranchBottomPadding,
                           ),
-                          child: widget.navigationShell,
+                          child: _HomeShellConnectivityFrame(
+                            child: widget.navigationShell,
+                          ),
                         );
                       },
                     ),
@@ -2078,180 +2106,154 @@ class _HomeContent extends StatelessWidget {
               previous.openStack != current.openStack,
           listener: (context, state) => onSyncHomeHistoryEntries(state),
           child: KeyboardPopScope(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const ConnectivityIndicator(reserveTopInsetWhenHidden: true),
-                Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeTop: true,
-                    child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
-                      builder: (context, state) {
-                        final chatsState = context.watch<ChatsCubit>().state;
-                        final chatRoute = chatsState.openChatRoute;
-                        Widget chatLayout({
-                          required bool showChatCalendar,
-                          required bool chatCalendarActive,
-                        }) {
-                          final Widget chatPane = Align(
-                            alignment: Alignment.topLeft,
-                            child: _HomeSecondaryChatPane(
-                              key: ValueKey(pane.scopeKey),
-                              pane: pane,
-                              settings: settings,
-                              emailEnabled: emailEnabled,
-                              chatCalendarActive: chatCalendarActive,
-                            ),
-                          );
-                          final Widget content = Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: AxiAdaptiveLayout(
-                                  invertPriority: pane.hasChatPane,
-                                  showPrimary: !showChatCalendar,
-                                  centerSecondary: false,
-                                  centerPrimary: false,
-                                  animatePaneChanges: true,
-                                  primaryAlignment: Alignment.topLeft,
-                                  secondaryAlignment: Alignment.topLeft,
-                                  primaryChild: Nexus(
-                                    badgeCounts: badgeCounts.tabs,
-                                    tabs: tabs,
-                                    navPlacement: navPlacement,
-                                    showNavigationRail:
-                                        navPlacement != NavPlacement.rail,
-                                    navRailCollapsed: railCollapsed,
-                                    onToggleNavRail: onToggleNavRail,
-                                  ),
-                                  secondaryChild: chatPane,
-                                ),
-                              ),
-                            ],
-                          );
-                          return content;
-                        }
-
-                        Widget calendarLayout({
-                          required int? calendarTabIndex,
-                          required bool animateMobileTabChanges,
-                          required bool surfacePopEnabled,
-                        }) {
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child:
-                                    NotificationListener<
-                                      NavigationNotification
-                                    >(
-                                      onNotification: (notification) {
-                                        if (calendarCanHandleBack.value !=
-                                            notification.canHandlePop) {
-                                          calendarCanHandleBack.value =
-                                              notification.canHandlePop;
-                                        }
-                                        return false;
-                                      },
-                                      child: CalendarWidget(
-                                        active:
-                                            homeBranchActive &&
-                                            surfacePopEnabled,
-                                        mobileTabIndex: calendarTabIndex,
-                                        animateMobileTabChanges:
-                                            animateMobileTabChanges,
-                                        mobileTabChangeDuration:
-                                            animationDuration,
-                                        surfacePopEnabled: surfacePopEnabled,
-                                        onMobileTabIndexChanged: (tabIndex) {
-                                          final safeTab = tabIndex
-                                              .clamp(0, 1)
-                                              .toInt();
-                                          _HomeShellScope.maybeOf(
-                                            context,
-                                          )?.setBottomNavIndex(
-                                            safeTab == 0 ? 1 : 2,
-                                          );
-                                        },
-                                        bottomDragSession:
-                                            calendarBottomDragSession,
-                                      ),
-                                    ),
-                              ),
-                            ],
-                          );
-                        }
-
-                        Widget contentForBottomIndex({
-                          required int selectedBottomIndex,
-                        }) {
-                          final bool openCalendar =
-                              selectedBottomIndex == 1 ||
-                              selectedBottomIndex == 2;
-                          final int? calendarTabIndex = openCalendar
-                              ? (selectedBottomIndex == 2 ? 1 : 0)
-                              : null;
-                          final bool showChatCalendar =
-                              openJid != null && chatRoute.isCalendar;
-                          final Widget body;
-                          if (!hasCalendarBloc) {
-                            body = chatLayout(
-                              showChatCalendar: showChatCalendar,
-                              chatCalendarActive: homeBranchActive,
-                            );
-                          } else {
-                            body = AxiDirectionalIndexedStack(
-                              index: openCalendar ? 1 : 0,
-                              duration: navPlacement == NavPlacement.bottom
-                                  ? animationDuration
-                                  : Duration.zero,
-                              animationEnabled:
-                                  navPlacement == NavPlacement.bottom &&
-                                  homeBranchActive,
-                              children: [
-                                chatLayout(
-                                  showChatCalendar: showChatCalendar,
-                                  chatCalendarActive:
-                                      homeBranchActive && !openCalendar,
-                                ),
-                                calendarLayout(
-                                  calendarTabIndex: calendarTabIndex,
-                                  animateMobileTabChanges:
-                                      navPlacement == NavPlacement.bottom &&
-                                      homeBranchActive,
-                                  surfacePopEnabled: openCalendar,
-                                ),
-                              ],
-                            );
-                          }
-                          return SafeArea(
-                            top: false,
-                            bottom: navPlacement != NavPlacement.bottom,
-                            child: body,
-                          );
-                        }
-
-                        final bottomIndexNotifier = bottomNavIndex;
-                        if (bottomIndexNotifier == null) {
-                          return contentForBottomIndex(selectedBottomIndex: 0);
-                        }
-
-                        return ValueListenableBuilder<int>(
-                          valueListenable: bottomIndexNotifier,
-                          builder: (context, selectedBottomIndex, _) {
-                            final int safeSelectedBottomIndex =
-                                _normalizeBottomNavIndex(selectedBottomIndex);
-                            return contentForBottomIndex(
-                              selectedBottomIndex: safeSelectedBottomIndex,
-                            );
-                          },
-                        );
-                      },
+            child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
+              builder: (context, state) {
+                final chatsState = context.watch<ChatsCubit>().state;
+                final chatRoute = chatsState.openChatRoute;
+                Widget chatLayout({
+                  required bool showChatCalendar,
+                  required bool chatCalendarActive,
+                }) {
+                  final Widget chatPane = Align(
+                    alignment: Alignment.topLeft,
+                    child: _HomeSecondaryChatPane(
+                      key: ValueKey(pane.scopeKey),
+                      pane: pane,
+                      settings: settings,
+                      emailEnabled: emailEnabled,
+                      chatCalendarActive: chatCalendarActive,
                     ),
-                  ),
-                ),
-              ],
+                  );
+                  final Widget content = Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: AxiAdaptiveLayout(
+                          invertPriority: pane.hasChatPane,
+                          showPrimary: !showChatCalendar,
+                          centerSecondary: false,
+                          centerPrimary: false,
+                          animatePaneChanges: true,
+                          primaryAlignment: Alignment.topLeft,
+                          secondaryAlignment: Alignment.topLeft,
+                          primaryChild: Nexus(
+                            badgeCounts: badgeCounts.tabs,
+                            tabs: tabs,
+                            navPlacement: navPlacement,
+                            showNavigationRail:
+                                navPlacement != NavPlacement.rail,
+                            navRailCollapsed: railCollapsed,
+                            onToggleNavRail: onToggleNavRail,
+                          ),
+                          secondaryChild: chatPane,
+                        ),
+                      ),
+                    ],
+                  );
+                  return content;
+                }
+
+                Widget calendarLayout({
+                  required int? calendarTabIndex,
+                  required bool animateMobileTabChanges,
+                  required bool surfacePopEnabled,
+                }) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: NotificationListener<NavigationNotification>(
+                          onNotification: (notification) {
+                            if (calendarCanHandleBack.value !=
+                                notification.canHandlePop) {
+                              calendarCanHandleBack.value =
+                                  notification.canHandlePop;
+                            }
+                            return false;
+                          },
+                          child: CalendarWidget(
+                            active: homeBranchActive && surfacePopEnabled,
+                            mobileTabIndex: calendarTabIndex,
+                            animateMobileTabChanges: animateMobileTabChanges,
+                            mobileTabChangeDuration: animationDuration,
+                            surfacePopEnabled: surfacePopEnabled,
+                            onMobileTabIndexChanged: (tabIndex) {
+                              final safeTab = tabIndex.clamp(0, 1).toInt();
+                              _HomeShellScope.maybeOf(
+                                context,
+                              )?.setBottomNavIndex(safeTab == 0 ? 1 : 2);
+                            },
+                            bottomDragSession: calendarBottomDragSession,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                Widget contentForBottomIndex({
+                  required int selectedBottomIndex,
+                }) {
+                  final bool openCalendar =
+                      selectedBottomIndex == 1 || selectedBottomIndex == 2;
+                  final int? calendarTabIndex = openCalendar
+                      ? (selectedBottomIndex == 2 ? 1 : 0)
+                      : null;
+                  final bool showChatCalendar =
+                      openJid != null && chatRoute.isCalendar;
+                  final Widget body;
+                  if (!hasCalendarBloc) {
+                    body = chatLayout(
+                      showChatCalendar: showChatCalendar,
+                      chatCalendarActive: homeBranchActive,
+                    );
+                  } else {
+                    body = AxiDirectionalIndexedStack(
+                      index: openCalendar ? 1 : 0,
+                      duration: navPlacement == NavPlacement.bottom
+                          ? animationDuration
+                          : Duration.zero,
+                      animationEnabled:
+                          navPlacement == NavPlacement.bottom &&
+                          homeBranchActive,
+                      children: [
+                        chatLayout(
+                          showChatCalendar: showChatCalendar,
+                          chatCalendarActive: homeBranchActive && !openCalendar,
+                        ),
+                        calendarLayout(
+                          calendarTabIndex: calendarTabIndex,
+                          animateMobileTabChanges:
+                              navPlacement == NavPlacement.bottom &&
+                              homeBranchActive,
+                          surfacePopEnabled: openCalendar,
+                        ),
+                      ],
+                    );
+                  }
+                  return SafeArea(
+                    top: false,
+                    bottom: navPlacement != NavPlacement.bottom,
+                    child: body,
+                  );
+                }
+
+                final bottomIndexNotifier = bottomNavIndex;
+                if (bottomIndexNotifier == null) {
+                  return contentForBottomIndex(selectedBottomIndex: 0);
+                }
+
+                return ValueListenableBuilder<int>(
+                  valueListenable: bottomIndexNotifier,
+                  builder: (context, selectedBottomIndex, _) {
+                    final int safeSelectedBottomIndex =
+                        _normalizeBottomNavIndex(selectedBottomIndex);
+                    return contentForBottomIndex(
+                      selectedBottomIndex: safeSelectedBottomIndex,
+                    );
+                  },
+                );
+              },
             ),
           ),
         );
