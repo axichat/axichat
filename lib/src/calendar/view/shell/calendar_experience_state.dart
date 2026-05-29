@@ -25,6 +25,7 @@ import 'package:axichat/src/calendar/view/tasks/quick_add_modal.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_drag_tab_mixin.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_error_banner.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_grid_host.dart';
+import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_keyboard_scope.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_loading_overlay.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_mobile_tab_shell.dart';
@@ -51,6 +52,8 @@ abstract class CalendarExperienceState<
   bool _usesMobileLayout = false;
   final GlobalKey<TaskSidebarState<B>> _sidebarKey =
       GlobalKey<TaskSidebarState<B>>();
+  final CalendarTaskClipboardController _taskClipboardController =
+      CalendarTaskClipboardController();
   final ValueNotifier<bool> _cancelBucketHoverNotifier = ValueNotifier<bool>(
     false,
   );
@@ -121,6 +124,7 @@ abstract class CalendarExperienceState<
     _mobileTabController.removeListener(_handleFocusedCriticalPathTabChanged);
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
+    _taskClipboardController.dispose();
     _cancelBucketHoverNotifier.dispose();
     _gridDragCompletionRevision.dispose();
     super.dispose();
@@ -197,6 +201,7 @@ abstract class CalendarExperienceState<
           onDragPayloadConsumed: _handleCalendarDragPayloadConsumed,
           onNonGridDragRegionHoverChanged:
               _handleCalendarNonGridDragRegionHoverChanged,
+          taskClipboardController: _taskClipboardController,
         );
         final bool isMonthView = state.viewMode == CalendarView.month;
         final Widget calendarSurface = isMonthView
@@ -221,6 +226,7 @@ abstract class CalendarExperienceState<
                     ) ??
                     const AlwaysStoppedAnimation<bool>(false),
                 dragCompletionRevision: _gridDragCompletionRevision,
+                taskClipboardController: _taskClipboardController,
               );
         final Widget dragTargets = isMonthView
             ? const SizedBox.shrink()

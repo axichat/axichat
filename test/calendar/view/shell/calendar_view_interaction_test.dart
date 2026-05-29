@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/month/day_event_editor.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
+import 'package:axichat/src/calendar/view/sidebar/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/tasks/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/tasks/quick_add_modal.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
@@ -23,6 +24,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/buttons/axi_button.dart';
 import 'package:axichat/src/common/ui/axi_text_input.dart';
 import 'package:axichat/src/common/ui/focus_extensions.dart';
+import 'package:axichat/src/calendar/view/grid/calendar_render_surface.dart';
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_surface.dart';
@@ -1284,6 +1286,63 @@ void main() {
     await _clickOutsideContextMenu(tester);
     expect(menuFinder, findsNothing);
   });
+
+  testWidgets(
+    'calendar shell shares copied sidebar tasks with grid paste menu',
+    (tester) async {
+      final harness = await CalendarWidgetHarness.pump(
+        tester: tester,
+        size: const Size(1280, 860),
+      );
+      final CalendarTask copiedTask =
+          harness.currentState.model.tasks['task-unscheduled']!;
+
+      tester
+          .state<TaskSidebarState<CalendarBloc>>(
+            find.byType(TaskSidebar<CalendarBloc>),
+          )
+          .debugCopyTaskForPaste(copiedTask);
+      await tester.pump();
+      clearInteractions(harness.bloc);
+
+      final RenderCalendarSurface renderSurface = tester
+          .renderObject<RenderCalendarSurface>(
+            find.byType(CalendarRenderSurface),
+          );
+      final double dayWidth =
+          (renderSurface.size.width -
+              renderSurface.layoutTheme.timeColumnWidth) /
+          7;
+      final Offset localPosition = Offset(
+        renderSurface.layoutTheme.timeColumnWidth + (dayWidth * 6.5),
+        harness.verticalScrollOffset() + 180,
+      );
+      expect(renderSurface.slotForOffset(localPosition), isNotNull);
+      final TestGesture gesture = await tester.startGesture(
+        renderSurface.localToGlobal(localPosition),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await tester.pump();
+      await gesture.up();
+      await _pumpUntilMenuVisible(tester, find.text('Paste Task Here'));
+
+      await tester.tap(find.text('Paste Task Here'));
+      await tester.pump();
+
+      final captured = verify(() => harness.bloc.add(captureAny())).captured;
+      expect(
+        captured,
+        contains(
+          isA<CalendarTaskRepeated>().having(
+            (event) => event.template.id,
+            'template id',
+            copiedTask.id,
+          ),
+        ),
+      );
+    },
+  );
 
   testWidgets('log calendar grid geometry', (tester) async {
     final harness = await CalendarWidgetHarness.pump(

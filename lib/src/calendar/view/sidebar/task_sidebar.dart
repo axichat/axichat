@@ -30,6 +30,7 @@ import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_target.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
+import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
@@ -85,6 +86,7 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
     this.onDragGlobalPositionChanged,
     this.onDragPayloadConsumed,
     this.onNonGridDragRegionHoverChanged,
+    this.taskClipboardController,
   });
 
   final VoidCallback? onDragSessionStarted;
@@ -92,6 +94,7 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
   final ValueChanged<CalendarDragPayload>? onDragPayloadConsumed;
   final ValueChanged<bool>? onNonGridDragRegionHoverChanged;
+  final CalendarTaskClipboardController? taskClipboardController;
 
   @override
   State<TaskSidebar<B>> createState() => TaskSidebarState<B>();
@@ -110,6 +113,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   bool _sidebarControllerInitialized = false;
   late final TaskDraftController _draftController;
   late final TaskChecklistController _checklistController;
+  late final CalendarTaskClipboardController _fallbackTaskClipboardController;
   final GlobalKey<ShadFormState> _addTaskFormKey = GlobalKey<ShadFormState>();
   final _titleController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode(debugLabel: 'sidebarTitleInput');
@@ -214,6 +218,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
 
   bool get _isTouchOnlyInput => !_hasPrecisePointerInput;
+
+  CalendarTaskClipboardController get _taskClipboardController =>
+      widget.taskClipboardController ?? _fallbackTaskClipboardController;
 
   bool get _hasSidebarFormValues =>
       _titleController.text.trim().isNotEmpty ||
@@ -621,6 +628,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     WidgetsBinding.instance.addObserver(this);
     _draftController = TaskDraftController();
     _checklistController = TaskChecklistController();
+    _fallbackTaskClipboardController = CalendarTaskClipboardController();
     _selectionChecklistController = TaskChecklistController();
     _formActivityListenable = Listenable.merge([
       _titleController,
@@ -655,6 +663,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _locationController.removeListener(_handleLocationEdited);
     _locationController.dispose();
     _checklistController.dispose();
+    _fallbackTaskClipboardController.dispose();
 
     _selectionTitleController.dispose();
     _selectionDescriptionController.dispose();
@@ -2118,7 +2127,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       TaskContextAction(
         icon: Icons.copy_outlined,
         label: context.l10n.chatActionCopy,
-        onSelected: () => _copyTaskDetails(task),
+        onSelected: () => _copyTaskForPaste(task),
       ),
       TaskContextAction(
         icon: Icons.send,
@@ -2143,34 +2152,14 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     ];
   }
 
-  Future<void> _copyTaskDetails(CalendarTask task) async {
-    final buffer = StringBuffer();
-    if (task.title.trim().isNotEmpty) {
-      buffer.writeln(task.title.trim());
-    }
-    final description = task.description?.trim();
-    if (description != null && description.isNotEmpty) {
-      buffer.writeln(description);
-    }
-    final location = task.location?.trim();
-    if (location != null && location.isNotEmpty) {
-      buffer.writeln(context.l10n.calendarCopyLocation(location));
-    }
-    final deadline = task.deadline;
-    if (deadline != null) {
-      buffer.writeln(
-        context.l10n.draftTaskDue(
-          TimeFormatter.formatFriendlyDateTime(context.l10n, deadline),
-        ),
-      );
-    }
-    final payload = buffer.toString().trim().isEmpty
-        ? task.title.trim()
-        : buffer.toString().trim();
-    await Clipboard.setData(ClipboardData(text: payload));
-    if (mounted) {
-      FeedbackSystem.showSuccess(context, context.l10n.calendarTaskCopied);
-    }
+  void _copyTaskForPaste(CalendarTask task) {
+    _taskClipboardController.setTemplate(task.forClipboardInstance());
+    FeedbackSystem.showSuccess(context, context.l10n.calendarTaskCopied);
+  }
+
+  @visibleForTesting
+  void debugCopyTaskForPaste(CalendarTask task) {
+    _copyTaskForPaste(task);
   }
 
   Future<void> _copyTaskShareText(CalendarTask task) async {
@@ -2411,7 +2400,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     return [
       ShadContextMenuItem(
         leading: const Icon(Icons.copy_outlined),
-        onPressed: () => _copyTaskDetails(task),
+        onPressed: () => _copyTaskForPaste(task),
         child: Text(context.l10n.calendarCopyTask),
       ),
       ShadContextMenuItem(

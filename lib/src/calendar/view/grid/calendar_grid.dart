@@ -152,6 +152,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
   final ValueListenable<bool>? nonGridDragRegionHoverNotifier;
   final ValueListenable<bool>? composeWindowDragRegionHoverNotifier;
   final ValueListenable<int>? dragCompletionRevision;
+  final CalendarTaskClipboardController? taskClipboardController;
 
   const CalendarGrid({
     super.key,
@@ -168,6 +169,7 @@ class CalendarGrid<T extends BaseCalendarBloc> extends StatefulWidget {
     this.nonGridDragRegionHoverNotifier,
     this.composeWindowDragRegionHoverNotifier,
     this.dragCompletionRevision,
+    this.taskClipboardController,
   });
 
   @override
@@ -320,6 +322,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _horizontalGridController.addListener(_handleHorizontalGridScroll);
     _taskInteractionController = TaskInteractionController(
       onTaskInteracted: _handleTaskInteractionAcknowledged,
+      clipboardController: widget.taskClipboardController,
     );
     _gridContextMenuController = ShadPopoverController();
     _taskInteractionController.clipboard.addListener(_handleClipboardChanged);

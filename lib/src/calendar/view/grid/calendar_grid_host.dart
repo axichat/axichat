@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_grid.dart';
+import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 
 /// Shared CalendarGrid wrapper that wires the bloc callbacks for both guest
 /// and authenticated surfaces.
@@ -27,6 +28,7 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
     this.composeWindowDragRegionHoverNotifier =
         const AlwaysStoppedAnimation<bool>(false),
     required this.dragCompletionRevision,
+    required this.taskClipboardController,
   });
 
   final CalendarState state;
@@ -40,6 +42,7 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
   final ValueListenable<bool> nonGridDragRegionHoverNotifier;
   final ValueListenable<bool> composeWindowDragRegionHoverNotifier;
   final ValueListenable<int> dragCompletionRevision;
+  final CalendarTaskClipboardController taskClipboardController;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +61,7 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
       composeWindowDragRegionHoverNotifier:
           composeWindowDragRegionHoverNotifier,
       dragCompletionRevision: dragCompletionRevision,
+      taskClipboardController: taskClipboardController,
     );
   }
 }

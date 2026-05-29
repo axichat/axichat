@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/sidebar/task_sidebar.dart';
 
 /// Wraps [TaskSidebar] with the provided [BaseCalendarBloc] so drag sessions
@@ -18,6 +19,7 @@ class CalendarSidebarHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required this.onDragGlobalPositionChanged,
     required this.onDragPayloadConsumed,
     required this.onNonGridDragRegionHoverChanged,
+    required this.taskClipboardController,
   });
 
   final GlobalKey<TaskSidebarState<B>> sidebarKey;
@@ -26,6 +28,7 @@ class CalendarSidebarHost<B extends BaseCalendarBloc> extends StatelessWidget {
   final ValueChanged<Offset> onDragGlobalPositionChanged;
   final ValueChanged<CalendarDragPayload> onDragPayloadConsumed;
   final ValueChanged<bool> onNonGridDragRegionHoverChanged;
+  final CalendarTaskClipboardController taskClipboardController;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +39,7 @@ class CalendarSidebarHost<B extends BaseCalendarBloc> extends StatelessWidget {
       onDragGlobalPositionChanged: onDragGlobalPositionChanged,
       onDragPayloadConsumed: onDragPayloadConsumed,
       onNonGridDragRegionHoverChanged: onNonGridDragRegionHoverChanged,
+      taskClipboardController: taskClipboardController,
     );
   }
 }

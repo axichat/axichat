@@ -23,10 +23,11 @@ import '../calendar_test_utils.dart';
 class _MockCalendarBloc extends Mock implements CalendarBloc {}
 
 class _GridHarness extends StatelessWidget {
-  const _GridHarness({required this.child, required this.state});
+  const _GridHarness({required this.child, required this.state, this.onEvent});
 
   final Widget child;
   final CalendarState state;
+  final ValueChanged<CalendarEvent>? onEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +36,9 @@ class _GridHarness extends StatelessWidget {
     when(
       () => bloc.stream,
     ).thenAnswer((_) => const Stream<CalendarState>.empty());
-    when(() => bloc.add(any())).thenReturn(null);
+    when(() => bloc.add(any())).thenAnswer((invocation) {
+      onEvent?.call(invocation.positionalArguments.first as CalendarEvent);
+    });
 
     return MultiBlocProvider(
       providers: [
@@ -192,7 +195,7 @@ void main() {
       await gesture.moveBy(const Offset(0, -160));
       await tester.pump();
       await gesture.up();
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(tappedSlot, isNull);
     },
@@ -230,6 +233,77 @@ void main() {
       await tester.pump();
 
       expect(tappedSlot, isNull);
+    },
+  );
+
+  testWidgets(
+    'CalendarGrid shows paste for a shared task clipboard on empty cells',
+    (tester) async {
+      final state = CalendarTestData.weekView();
+      final clipboardController = CalendarTaskClipboardController();
+      addTearDown(clipboardController.dispose);
+      final CalendarTask copiedTask = state.model.tasks['task-weekly-sync']!;
+      clipboardController.setTemplate(copiedTask.forClipboardInstance());
+      final List<CalendarEvent> events = <CalendarEvent>[];
+
+      await tester.pumpWidget(
+        _GridHarness(
+          state: state,
+          onEvent: events.add,
+          child: CalendarGrid<CalendarBloc>(
+            state: state,
+            onDateSelected: (_) {},
+            onViewChanged: (_) {},
+            taskClipboardController: clipboardController,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final RenderCalendarSurface renderSurface = tester
+          .renderObject<RenderCalendarSurface>(
+            find.byType(CalendarRenderSurface),
+          );
+      final metrics = renderSurface.metrics!;
+      final Offset localPosition = Offset(
+        renderSurface.layoutTheme.timeColumnWidth + 40,
+        metrics.slotHeight * 15.5,
+      );
+      final DateTime expectedSlot = renderSurface.slotForOffset(localPosition)!;
+      final gesture = await tester.startGesture(
+        renderSurface.localToGlobal(localPosition),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final Finder pasteFinder = find.text('Paste Task Here');
+      expect(pasteFinder, findsOneWidget);
+
+      await tester.tap(pasteFinder);
+      await tester.pump();
+
+      expect(
+        events,
+        contains(
+          isA<CalendarTaskRepeated>()
+              .having(
+                (event) => event.template.id,
+                'template id',
+                copiedTask.id,
+              )
+              .having(
+                (event) => event.scheduledTime,
+                'scheduled time',
+                expectedSlot,
+              ),
+        ),
+      );
     },
   );
 

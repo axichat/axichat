@@ -56,6 +56,32 @@ class TaskClipboardState {
   int get hashCode => Object.hash(template, pasteSlot);
 }
 
+class CalendarTaskClipboardController
+    extends ValueNotifier<TaskClipboardState> {
+  CalendarTaskClipboardController() : super(const TaskClipboardState());
+
+  CalendarTask? get template => value.template;
+  DateTime? get pasteSlot => value.pasteSlot;
+
+  void setTemplate(CalendarTask template) {
+    value = TaskClipboardState(
+      template: template,
+      pasteSlot: template.scheduledTime,
+    );
+  }
+
+  void updatePasteSlot(DateTime slot) {
+    value = value.copyWith(pasteSlot: slot);
+  }
+
+  void clear() {
+    if (value.template == null && value.pasteSlot == null) {
+      return;
+    }
+    value = const TaskClipboardState();
+  }
+}
+
 @immutable
 class TaskResizeInteraction {
   const TaskResizeInteraction({required this.taskId, required this.handle});
@@ -155,21 +181,25 @@ class CalendarInteractionSession {
 }
 
 class TaskInteractionController extends ChangeNotifier {
-  TaskInteractionController({ValueChanged<String>? onTaskInteracted})
-    : _onTaskInteracted = onTaskInteracted,
-      preview = ValueNotifier<DragPreview?>(null),
-      clipboard = ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
-      resizePreviewRevision = ValueNotifier<int>(0),
-      draggingTaskIdNotifier = ValueNotifier<String?>(null),
-      hoveredTaskId = ValueNotifier<String?>(null),
-      dropHoverTaskId = ValueNotifier<String?>(null),
-      resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null),
-      interactionSession = ValueNotifier<CalendarInteractionSession?>(null);
+  TaskInteractionController({
+    ValueChanged<String>? onTaskInteracted,
+    CalendarTaskClipboardController? clipboardController,
+  }) : _onTaskInteracted = onTaskInteracted,
+       preview = ValueNotifier<DragPreview?>(null),
+       clipboard = clipboardController ?? CalendarTaskClipboardController(),
+       _ownsClipboardController = clipboardController == null,
+       resizePreviewRevision = ValueNotifier<int>(0),
+       draggingTaskIdNotifier = ValueNotifier<String?>(null),
+       hoveredTaskId = ValueNotifier<String?>(null),
+       dropHoverTaskId = ValueNotifier<String?>(null),
+       resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null),
+       interactionSession = ValueNotifier<CalendarInteractionSession?>(null);
 
   final ValueChanged<String>? _onTaskInteracted;
+  final bool _ownsClipboardController;
 
   final ValueNotifier<DragPreview?> preview;
-  final ValueNotifier<TaskClipboardState> clipboard;
+  final CalendarTaskClipboardController clipboard;
   final ValueNotifier<int> resizePreviewRevision;
   final ValueNotifier<String?> draggingTaskIdNotifier;
   final ValueNotifier<String?> hoveredTaskId;
@@ -219,8 +249,8 @@ class TaskInteractionController extends ChangeNotifier {
   DateTime? get pendingAnchorMinutes => _pendingAnchorMinutes;
   Map<String, CalendarTask> get resizePreviews => _resizePreviews;
 
-  CalendarTask? get clipboardTemplate => clipboard.value.template;
-  DateTime? get clipboardPasteSlot => clipboard.value.pasteSlot;
+  CalendarTask? get clipboardTemplate => clipboard.template;
+  DateTime? get clipboardPasteSlot => clipboard.pasteSlot;
   String? get currentHoveredTaskId => hoveredTaskId.value;
   String? get currentDropHoverTaskId => dropHoverTaskId.value;
   TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
@@ -251,24 +281,21 @@ class TaskInteractionController extends ChangeNotifier {
   }
 
   void setClipboardTemplate(CalendarTask template) {
-    clipboard.value = TaskClipboardState(
-      template: template,
-      pasteSlot: template.scheduledTime,
-    );
+    clipboard.setTemplate(template);
     notifyListeners();
   }
 
   void updateClipboardPasteSlot(DateTime slot) {
-    clipboard.value = clipboard.value.copyWith(pasteSlot: slot);
+    clipboard.updatePasteSlot(slot);
     notifyListeners();
   }
 
   void clearClipboard() {
-    if (clipboard.value.template == null && clipboard.value.pasteSlot == null) {
-      return;
+    final TaskClipboardState current = clipboard.value;
+    clipboard.clear();
+    if (clipboard.value != current) {
+      notifyListeners();
     }
-    clipboard.value = const TaskClipboardState();
-    notifyListeners();
   }
 
   void setHoveringTask(String taskId, {bool isRead = false}) {
@@ -770,7 +797,9 @@ class TaskInteractionController extends ChangeNotifier {
   void dispose() {
     _cancelPendingWidthUpdates();
     preview.dispose();
-    clipboard.dispose();
+    if (_ownsClipboardController) {
+      clipboard.dispose();
+    }
     resizePreviewRevision.dispose();
     draggingTaskIdNotifier.dispose();
     hoveredTaskId.dispose();
