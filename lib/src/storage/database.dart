@@ -2428,6 +2428,7 @@ WHERE transport = ${MessageTransport.email.index}
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
+        await _repairRestoredArchiveJids();
       },
     );
   }
@@ -7456,9 +7457,7 @@ WHERE jid = ?
       final chat = await chatsAccessor.selectOne(jid);
       if (chat == null) return;
       if (!archived) {
-        await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
-          const ChatsCompanion(archived: Value(false)),
-        );
+        await _unarchiveChatThread(chat);
         return;
       }
       if (chat.archived) {
@@ -7471,13 +7470,36 @@ WHERE jid = ?
         canonicalJid: canonicalJid,
         archivedJid: archivedJid,
       );
-      await _retargetDraftsForChat(fromJid: jid, toJid: archivedJid);
     });
   }
 
   String _generateArchivedJid(String canonicalJid) {
     final timestamp = DateTime.timestamp().microsecondsSinceEpoch;
     return '$canonicalJid--arch--${timestamp.toRadixString(16)}';
+  }
+
+  String? _archivedJidBase(String jid) {
+    final normalizedJid = normalizeAddress(jid);
+    if (normalizedJid == null) {
+      return null;
+    }
+    final archiveMatch = RegExp(
+      r'^(.*)--arch--[0-9a-f]+$',
+      caseSensitive: false,
+    ).firstMatch(normalizedJid);
+    final canonicalJid = archiveMatch?.group(1);
+    if (canonicalJid == null || canonicalJid.isEmpty) {
+      return null;
+    }
+    return canonicalJid;
+  }
+
+  String _canonicalJidForArchivedChat(Chat chat) {
+    final contactJid = normalizeAddress(chat.contactJid);
+    if (contactJid != null) {
+      return contactJid;
+    }
+    return _archivedJidBase(chat.jid) ?? normalizeAddress(chat.jid) ?? chat.jid;
   }
 
   Future<void> _archiveChatThread({
@@ -7492,11 +7514,109 @@ WHERE jid = ?
       open: false,
     );
     await chatsAccessor.insertOne(archivedChat);
-    await (update(messages)..where((tbl) => tbl.chatJid.equals(chat.jid)))
-        .write(MessagesCompanion(chatJid: Value(archivedJid)));
-    await (update(notifications)..where((tbl) => tbl.chatJid.equals(chat.jid)))
-        .write(NotificationsCompanion(chatJid: Value(archivedJid)));
+    await _retargetChatThreadReferences(fromJid: chat.jid, toJid: archivedJid);
     await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
+  }
+
+  Future<void> _unarchiveChatThread(Chat chat) async {
+    final canonicalJid = _canonicalJidForArchivedChat(chat);
+    if (canonicalJid == chat.jid) {
+      await (update(chats)..where((tbl) => tbl.jid.equals(chat.jid))).write(
+        ChatsCompanion(
+          archived: const Value(false),
+          contactJid: Value(canonicalJid),
+        ),
+      );
+      return;
+    }
+    final existing = await chatsAccessor.selectOne(canonicalJid);
+    if (existing == null) {
+      await chatsAccessor.insertOne(
+        chat.copyWith(
+          jid: canonicalJid,
+          contactJid: canonicalJid,
+          archived: false,
+        ),
+      );
+    } else {
+      await (update(chats)..where((tbl) => tbl.jid.equals(canonicalJid))).write(
+        ChatsCompanion(
+          contactJid: Value(canonicalJid),
+          archived: const Value(false),
+        ),
+      );
+    }
+    await _retargetChatThreadReferences(fromJid: chat.jid, toJid: canonicalJid);
+    await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
+    await _refreshChatSummaryAfterTrim(jid: canonicalJid);
+  }
+
+  Future<void> _retargetChatThreadReferences({
+    required String fromJid,
+    required String toJid,
+  }) async {
+    await _retargetEmailChatAccounts(fromJid: fromJid, toJid: toJid);
+    await (update(messages)..where((tbl) => tbl.chatJid.equals(fromJid))).write(
+      MessagesCompanion(chatJid: Value(toJid)),
+    );
+    await (update(notifications)..where((tbl) => tbl.chatJid.equals(fromJid)))
+        .write(NotificationsCompanion(chatJid: Value(toJid)));
+    await _retargetDraftsForChat(fromJid: fromJid, toJid: toJid);
+  }
+
+  Future<void> _retargetEmailChatAccounts({
+    required String fromJid,
+    required String toJid,
+  }) async {
+    final accounts = await (select(
+      emailChatAccounts,
+    )..where((tbl) => tbl.chatJid.equals(fromJid))).get();
+    for (final account in accounts) {
+      final target =
+          await (select(emailChatAccounts)..where(
+                (tbl) =>
+                    tbl.chatJid.equals(toJid) &
+                    tbl.deltaAccountId.equals(account.deltaAccountId),
+              ))
+              .getSingleOrNull();
+      final source = delete(emailChatAccounts)
+        ..where(
+          (tbl) =>
+              tbl.chatJid.equals(fromJid) &
+              tbl.deltaAccountId.equals(account.deltaAccountId),
+        );
+      if (target != null) {
+        await source.go();
+        continue;
+      }
+      await (update(emailChatAccounts)..where(
+            (tbl) =>
+                tbl.chatJid.equals(fromJid) &
+                tbl.deltaAccountId.equals(account.deltaAccountId),
+          ))
+          .write(EmailChatAccountsCompanion(chatJid: Value(toJid)));
+    }
+  }
+
+  Future<void> _repairRestoredArchiveJids() async {
+    final restoredChats =
+        await (select(chats)..where(
+              (tbl) =>
+                  tbl.archived.equals(false) &
+                  tbl.contactJid.isNotNull() &
+                  tbl.jid.like('%--arch--%'),
+            ))
+            .get();
+    for (final chat in restoredChats) {
+      final canonicalJid = _archivedJidBase(chat.jid);
+      final contactJid = normalizeAddress(chat.contactJid);
+      if (canonicalJid == null ||
+          contactJid == null ||
+          canonicalJid != contactJid) {
+        continue;
+      }
+      await transaction(() => _unarchiveChatThread(chat));
+    }
   }
 
   Future<void> _retargetDraftsForChat({
