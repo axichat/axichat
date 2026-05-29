@@ -1939,6 +1939,12 @@ abstract class AppLocalizations {
   /// **'This message cannot be pinned yet.'**
   String get chatPinMessageUnavailable;
 
+  /// No description provided for @chatMessageAlreadyPinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Already pinned.'**
+  String get chatMessageAlreadyPinned;
+
   /// No description provided for @chatMessagePinned.
   ///
   /// In en, this message translates to:

@@ -1046,6 +1046,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatPinMessageUnavailable => 'Este mensaje aún no se puede fijar.';
 
   @override
+  String get chatMessageAlreadyPinned => 'Ya está fijado.';
+
+  @override
   String get chatMessagePinned => 'Mensaje fijado.';
 
   @override

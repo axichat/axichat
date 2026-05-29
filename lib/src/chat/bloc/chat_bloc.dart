@@ -1380,7 +1380,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return false;
     }
     if (chat.type != ChatType.groupChat) {
-      return message.isFromAccount(_chatsService.myJid);
+      return true;
     }
     if (roomState == null ||
         roomState.myRole.isVisitor ||
@@ -1391,22 +1391,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         roomState.myAffiliation.canManagePins) {
       return true;
     }
-    final realJid = message.effectiveSenderRealJid;
-    if (realJid != null) {
-      return sameBareAddress(
-        realJid,
-        roomState.resolvedSelfJid(fallbackJid: _chatsService.myJid) ??
-            _chatsService.myJid,
-      );
-    }
-    if (roomState.isSelfOccupantId(message.occupantID)) {
-      return true;
-    }
-    return roomState.isSelfSenderJid(
-      message.senderJid,
-      selfJid: _chatsService.myJid,
-      fallbackSelfNick: chat.myNickname,
-    );
+    return roomState.myRole.isParticipant || roomState.myAffiliation.isMember;
   }
 
   List<Message> _staleUnackedSendAgainCandidatesForMessages(
@@ -3407,6 +3392,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       missing.add(stanzaId);
     }
     return missing;
+  }
+
+  bool _isPinnedMessageInChat({
+    required Chat chat,
+    required MessageReference reference,
+  }) {
+    final sourceKey = _resolvePinnedMessagesChatJid(chat);
+    if (sourceKey == null) {
+      return false;
+    }
+    final messageId = reference.value.trim();
+    if (messageId.isEmpty) {
+      return false;
+    }
+    for (final item in state.pinnedMessages) {
+      if (item.messageStanzaId.trim() != messageId) {
+        continue;
+      }
+      if (sameNormalizedAddressValue(item.chatJid, sourceKey)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _hydratePinnedMessagesFromMam(
@@ -5799,6 +5807,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
+    if (event.pin &&
+        _isPinnedMessageInChat(chat: chat, reference: pinReference)) {
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(message: ChatMessageKey.chatMessageAlreadyPinned),
+        ),
+      );
+      return;
+    }
     final successMessage = event.pin
         ? ChatMessageKey.chatMessagePinned
         : ChatMessageKey.chatMessageUnpinned;
@@ -5832,6 +5850,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             message: ChatMessageKey.chatPinPermissionDenied,
             variant: ChatToastVariant.warning,
           ),
+        ),
+      );
+    } on XmppPinAlreadyPinnedException catch (error, stackTrace) {
+      _log.safeFine('Rejected duplicate XMPP pin.', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          const ChatToast(message: ChatMessageKey.chatMessageAlreadyPinned),
         ),
       );
     } on XmppException catch (error, stackTrace) {

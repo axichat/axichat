@@ -4521,7 +4521,7 @@ void main() {
       expect(pinned?.active, isTrue);
     });
 
-    test('Rejects outbound direct pins for peer-authored messages', () async {
+    test('Allows outbound direct pins for peer-authored messages', () async {
       const chatJid = 'peer@axi.im';
       const stanzaId = 'direct-stanza-id';
 
@@ -4534,17 +4534,55 @@ void main() {
         body: 'hello',
       );
 
+      await xmppService.pinMessage(chatJid: chatJid, message: message);
+
+      final pinned = await database.getPinnedMessage(
+        chatJid: chatJid,
+        messageStanzaId: stanzaId,
+      );
+      expect(pinned?.active, isTrue);
+    });
+
+    test('Rejects direct pins when any active pin already exists', () async {
+      const chatJid = 'peer@axi.im';
+      const stanzaId = 'direct-stanza-id';
+      const selfPinnerJid = 'jid@axi.im';
+      const reference = MessageReference(
+        kind: MessageReferenceKind.stanzaId,
+        value: stanzaId,
+      );
+
+      await connectSuccessfully(xmppService);
+      final message = Message(
+        stanzaID: stanzaId,
+        senderJid: selfPinnerJid,
+        chatJid: chatJid,
+        timestamp: DateTime.timestamp(),
+        body: 'hello',
+      );
+      await database.applyMessagePinMutation(
+        chatJid: chatJid,
+        reference: reference,
+        pinnerJid: chatJid,
+        pinnedAt: DateTime.utc(2026, 5, 26),
+        active: true,
+        identityVerified: true,
+      );
+
       await expectLater(
         xmppService.pinMessage(chatJid: chatJid, message: message),
-        throwsA(isA<XmppPinPermissionException>()),
+        throwsA(isA<XmppPinAlreadyPinnedException>()),
       );
+
       expect(
-        await database.getPinnedMessage(
+        await database.getMessagePin(
           chatJid: chatJid,
-          messageStanzaId: stanzaId,
+          reference: reference,
+          pinnerJid: selfPinnerJid,
         ),
         isNull,
       );
+      verifyNever(() => mockConnection.sendMessage(any()));
     });
 
     test('Sends direct pin mutation before pinned stream is active', () async {
@@ -4591,7 +4629,7 @@ void main() {
       ).called(1);
     });
 
-    test('Coalesces overlapping explicit direct pin flushes', () async {
+    test('Rejects repeat direct pins without queuing another flush', () async {
       const chatJid = 'peer@axi.im';
       const stanzaId = 'direct-stanza-id';
       final sendCompleter = Completer<bool>();
@@ -4615,7 +4653,10 @@ void main() {
 
       await xmppService.pinMessage(chatJid: chatJid, message: message);
       await untilCalled(() => mockConnection.sendMessage(any()));
-      await xmppService.pinMessage(chatJid: chatJid, message: message);
+      await expectLater(
+        xmppService.pinMessage(chatJid: chatJid, message: message),
+        throwsA(isA<XmppPinAlreadyPinnedException>()),
+      );
       await pumpEventQueue();
 
       expect(sendAttempts, 1);
@@ -4644,13 +4685,13 @@ void main() {
           timestamp: DateTime.timestamp(),
           body: 'hello',
         );
-        await database.applyActorPinnedMessageMutation(
+        await database.applyMessagePinMutation(
           chatJid: chatJid,
           reference: const MessageReference(
             kind: MessageReferenceKind.stanzaId,
             value: stanzaId,
           ),
-          actorJid: 'jid@axi.im',
+          pinnerJid: 'jid@axi.im',
           pinnedAt: DateTime.timestamp(),
           active: true,
           identityVerified: true,
@@ -4680,6 +4721,229 @@ void main() {
             ),
           ),
         ).called(1);
+      },
+    );
+
+    test('Direct self unpin removes the local pinned aggregate', () async {
+      const chatJid = 'peer@axi.im';
+      const stanzaId = 'direct-stanza-id';
+      const reference = MessageReference(
+        kind: MessageReferenceKind.stanzaId,
+        value: stanzaId,
+      );
+
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+      final message = Message(
+        stanzaID: stanzaId,
+        senderJid: 'jid@axi.im',
+        chatJid: chatJid,
+        timestamp: DateTime.timestamp(),
+        body: 'hello',
+      );
+
+      await xmppService.pinMessage(chatJid: chatJid, message: message);
+      expect(
+        await database.getPinnedMessageAggregates(
+          chatJid: chatJid,
+          selfPinnerJid: 'jid@axi.im',
+        ),
+        hasLength(1),
+      );
+
+      await xmppService.unpinMessage(chatJid: chatJid, message: message);
+
+      final selfPin = await database.getMessagePin(
+        chatJid: chatJid,
+        reference: reference,
+        pinnerJid: 'jid@axi.im',
+      );
+      expect(
+        await database.getPinnedMessageAggregates(
+          chatJid: chatJid,
+          selfPinnerJid: 'jid@axi.im',
+        ),
+        isEmpty,
+      );
+      expect(selfPin?.active, isFalse);
+      expect(
+        await database.getPinnedMessage(
+          chatJid: chatJid,
+          messageStanzaId: stanzaId,
+        ),
+        isNull,
+      );
+    });
+
+    test('Direct sent message unpin clears the pinned stream', () async {
+      const chatJid = 'peer@axi.im';
+      const stanzaId = 'sent-direct-stanza-id';
+      const originId = 'sent-direct-origin-id';
+      var generatedId = 0;
+
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.generateId()).thenAnswer((_) {
+        final ids = [stanzaId, originId];
+        return ids[generatedId++];
+      });
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
+
+      await xmppService.sendMessage(jid: chatJid, text: 'hello');
+      final sentMessage = await database.getMessageByReferenceId(
+        stanzaId,
+        chatJid: chatJid,
+      );
+      expect(sentMessage, isNotNull);
+      expect(sentMessage!.senderJid, xmppService.myJid);
+
+      when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+      final emissions = <List<PinnedMessageAggregate>>[];
+      final subscription = xmppService
+          .pinnedMessagesStream(chatJid)
+          .listen(emissions.add);
+      await pumpEventQueue();
+
+      await xmppService.pinMessage(chatJid: chatJid, message: sentMessage);
+      await pumpEventQueue();
+      expect(emissions.last, hasLength(1));
+      expect(emissions.last.single.messageReferenceId, stanzaId);
+      expect(emissions.last.single.pinnedBySelf, isTrue);
+
+      await xmppService.unpinMessage(chatJid: chatJid, message: sentMessage);
+      await pumpEventQueue();
+
+      expect(emissions.last, isEmpty);
+      await subscription.cancel();
+    });
+
+    test('Direct self unpin clears legacy origin-id pin rows', () async {
+      const chatJid = 'peer@axi.im';
+      const stanzaId = 'direct-stanza-id';
+      const originId = 'direct-origin-id';
+      const selfPinnerJid = 'jid@axi.im';
+      const stanzaReference = MessageReference(
+        kind: MessageReferenceKind.stanzaId,
+        value: stanzaId,
+      );
+      const originReference = MessageReference(
+        kind: MessageReferenceKind.originId,
+        value: originId,
+      );
+      final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
+
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+      final message = Message(
+        stanzaID: stanzaId,
+        originID: originId,
+        senderJid: selfPinnerJid,
+        chatJid: chatJid,
+        timestamp: pinnedAt,
+        body: 'hello',
+      );
+      await database.saveMessage(message);
+      await database.applyMessagePinMutation(
+        chatJid: chatJid,
+        reference: stanzaReference,
+        pinnerJid: selfPinnerJid,
+        pinnedAt: pinnedAt,
+        active: true,
+        identityVerified: true,
+      );
+      await database.applyMessagePinMutation(
+        chatJid: chatJid,
+        reference: originReference,
+        pinnerJid: selfPinnerJid,
+        pinnedAt: pinnedAt,
+        active: true,
+        identityVerified: true,
+      );
+
+      await xmppService.unpinMessage(chatJid: chatJid, message: message);
+
+      final stanzaPin = await database.getMessagePin(
+        chatJid: chatJid,
+        reference: stanzaReference,
+        pinnerJid: selfPinnerJid,
+      );
+      final originPin = await database.getMessagePin(
+        chatJid: chatJid,
+        reference: originReference,
+        pinnerJid: selfPinnerJid,
+      );
+      expect(stanzaPin?.active, isFalse);
+      expect(originPin?.active, isFalse);
+      expect(
+        await database.getPinnedMessageAggregates(
+          chatJid: chatJid,
+          selfPinnerJid: selfPinnerJid,
+        ),
+        isEmpty,
+      );
+    });
+
+    test(
+      'Direct self unpin leaves peer pin rows active for the same target',
+      () async {
+        const chatJid = 'peer@axi.im';
+        const stanzaId = 'direct-stanza-id';
+        const selfPinnerJid = 'jid@axi.im';
+        final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
+        const reference = MessageReference(
+          kind: MessageReferenceKind.stanzaId,
+          value: stanzaId,
+        );
+
+        await connectSuccessfully(xmppService);
+        when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+        final message = Message(
+          stanzaID: stanzaId,
+          senderJid: selfPinnerJid,
+          chatJid: chatJid,
+          timestamp: pinnedAt,
+          body: 'hello',
+        );
+        await database.saveMessage(message);
+        await database.applyMessagePinMutation(
+          chatJid: chatJid,
+          reference: reference,
+          pinnerJid: selfPinnerJid,
+          pinnedAt: pinnedAt,
+          active: true,
+          identityVerified: true,
+        );
+        await database.applyMessagePinMutation(
+          chatJid: chatJid,
+          reference: reference,
+          pinnerJid: chatJid,
+          pinnedAt: pinnedAt,
+          active: true,
+          identityVerified: false,
+        );
+
+        await xmppService.unpinMessage(chatJid: chatJid, message: message);
+
+        final selfPin = await database.getMessagePin(
+          chatJid: chatJid,
+          reference: reference,
+          pinnerJid: selfPinnerJid,
+        );
+        final peerPin = await database.getMessagePin(
+          chatJid: chatJid,
+          reference: reference,
+          pinnerJid: chatJid,
+        );
+        expect(selfPin?.active, isFalse);
+        expect(peerPin?.active, isTrue);
+        final aggregates = await database.getPinnedMessageAggregates(
+          chatJid: chatJid,
+          selfPinnerJid: selfPinnerJid,
+        );
+        expect(aggregates, hasLength(1));
+        expect(aggregates.single.pinCount, 1);
+        expect(aggregates.single.pinnedBySelf, isFalse);
       },
     );
 
@@ -4732,10 +4996,10 @@ void main() {
       },
     );
 
-    test('Inbound direct unpin only clears the peer actor row', () async {
+    test('Inbound direct unpin only clears the peer pin row', () async {
       const chatJid = 'peer@axi.im';
       const stanzaId = 'direct-stanza-id';
-      const selfActorJid = 'jid@axi.im';
+      const selfPinnerJid = 'jid@axi.im';
       final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
       final peerUnpinnedAt = pinnedAt.add(const Duration(minutes: 1));
       final controller = StreamController<mox.XmppEvent>();
@@ -4764,18 +5028,18 @@ void main() {
         kind: MessageReferenceKind.stanzaId,
         value: stanzaId,
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: chatJid,
         reference: reference,
-        actorJid: selfActorJid,
+        pinnerJid: selfPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: chatJid,
         reference: reference,
-        actorJid: chatJid,
+        pinnerJid: chatJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
@@ -4802,17 +5066,17 @@ void main() {
 
       final aggregates = await database.getPinnedMessageAggregates(
         chatJid: chatJid,
-        selfActorJid: selfActorJid,
+        selfPinnerJid: selfPinnerJid,
       );
-      final selfPin = await database.getPinnedMessageActor(
+      final selfPin = await database.getMessagePin(
         chatJid: chatJid,
         reference: reference,
-        actorJid: selfActorJid,
+        pinnerJid: selfPinnerJid,
       );
-      final peerPin = await database.getPinnedMessageActor(
+      final peerPin = await database.getMessagePin(
         chatJid: chatJid,
         reference: reference,
-        actorJid: chatJid,
+        pinnerJid: chatJid,
       );
 
       expect(aggregates, hasLength(1));
@@ -4824,7 +5088,7 @@ void main() {
       await controller.close();
     });
 
-    test('Inbound direct pin cannot target a local-authored message', () async {
+    test('Inbound direct pin can target a local-authored message', () async {
       const chatJid = 'peer@axi.im';
       const stanzaId = 'local-authored-stanza-id';
       final controller = StreamController<mox.XmppEvent>();
@@ -4866,16 +5130,95 @@ void main() {
       await pumpEventQueue();
       await pumpEventQueue();
 
-      expect(
-        await database.getPinnedMessageAggregates(
-          chatJid: chatJid,
-          selfActorJid: chatJid,
-        ),
-        isEmpty,
+      final aggregates = await database.getPinnedMessageAggregates(
+        chatJid: chatJid,
+        selfPinnerJid: 'jid@axi.im',
       );
+      final peerPin = await database.getMessagePin(
+        chatJid: chatJid,
+        reference: reference,
+        pinnerJid: chatJid,
+      );
+
+      expect(aggregates, hasLength(1));
+      expect(aggregates.single.pinCount, 1);
+      expect(aggregates.single.pinnedBySelf, isFalse);
+      expect(peerPin?.active, isTrue);
 
       await controller.close();
     });
+
+    test(
+      'Inbound direct pin is ignored when the message is already pinned',
+      () async {
+        const chatJid = 'peer@axi.im';
+        const stanzaId = 'already-pinned-inbound-stanza-id';
+        const selfPinnerJid = 'jid@axi.im';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await database.saveMessage(
+          Message(
+            stanzaID: stanzaId,
+            senderJid: selfPinnerJid,
+            chatJid: chatJid,
+            timestamp: DateTime.utc(2026, 5, 26, 11, 24),
+            body: 'hello',
+          ),
+        );
+        const reference = MessageReference(
+          kind: MessageReferenceKind.stanzaId,
+          value: stanzaId,
+        );
+        await database.applyMessagePinMutation(
+          chatJid: chatJid,
+          reference: reference,
+          pinnerJid: selfPinnerJid,
+          pinnedAt: DateTime.utc(2026, 5, 26, 11, 24),
+          active: true,
+          identityVerified: true,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(chatJid),
+            mox.JID.fromString(jid),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              PinMessageMutationData(
+                reference: reference,
+                pinned: true,
+                timestamp: DateTime.utc(2026, 5, 26, 11, 25),
+              ),
+            ]),
+            id: uuid.v4(),
+            type: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final aggregates = await database.getPinnedMessageAggregates(
+          chatJid: chatJid,
+          selfPinnerJid: selfPinnerJid,
+        );
+        final peerPin = await database.getMessagePin(
+          chatJid: chatJid,
+          reference: reference,
+          pinnerJid: chatJid,
+        );
+
+        expect(aggregates, hasLength(1));
+        expect(aggregates.single.pinCount, 1);
+        expect(aggregates.single.pinnedBySelf, isTrue);
+        expect(peerPin, isNull);
+
+        await controller.close();
+      },
+    );
 
     test(
       'Inbound direct pin rejects origin id disguised as stanza id',
@@ -4925,7 +5268,7 @@ void main() {
         expect(
           await database.getPinnedMessageAggregates(
             chatJid: chatJid,
-            selfActorJid: chatJid,
+            selfPinnerJid: chatJid,
           ),
           isEmpty,
         );
@@ -5041,14 +5384,14 @@ void main() {
       );
     });
 
-    test('Moderator MUC unpin clears every actor pin', () async {
+    test('Moderator MUC unpin clears every pin row', () async {
       const roomJid = 'room@conference.axi.im';
       const roomNick = 'me';
       const occupantId = '$roomJid/$roomNick';
       const stanzaId = 'pin-local-stanza-id';
       const mucStanzaId = 'pin-room-stanza-id';
-      const selfActorJid = 'jid@axi.im';
-      const peerActorJid = 'peer@axi.im';
+      const selfPinnerJid = 'jid@axi.im';
+      const peerPinnerJid = 'peer@axi.im';
       final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
 
       await connectSuccessfully(xmppService);
@@ -5107,18 +5450,18 @@ void main() {
         kind: MessageReferenceKind.mucStanzaId,
         value: mucStanzaId,
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: roomJid,
         reference: reference,
-        actorJid: selfActorJid,
+        pinnerJid: selfPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: roomJid,
         reference: reference,
-        actorJid: peerActorJid,
+        pinnerJid: peerPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
@@ -5138,7 +5481,7 @@ void main() {
       expect(
         await database.getPinnedMessageAggregates(
           chatJid: roomJid,
-          selfActorJid: selfActorJid,
+          selfPinnerJid: selfPinnerJid,
         ),
         isEmpty,
       );
@@ -5155,8 +5498,8 @@ void main() {
       const occupantId = '$roomJid/$roomNick';
       const stanzaId = 'pin-local-stanza-id';
       const mucStanzaId = 'pin-room-stanza-id';
-      const selfActorJid = 'jid@axi.im';
-      const peerActorJid = 'peer@axi.im';
+      const selfPinnerJid = 'jid@axi.im';
+      const peerPinnerJid = 'peer@axi.im';
       final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
       var generatedId = 0;
 
@@ -5225,18 +5568,18 @@ void main() {
         kind: MessageReferenceKind.mucStanzaId,
         value: mucStanzaId,
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: roomJid,
         reference: reference,
-        actorJid: selfActorJid,
+        pinnerJid: selfPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: roomJid,
         reference: reference,
-        actorJid: peerActorJid,
+        pinnerJid: peerPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
@@ -5278,7 +5621,7 @@ void main() {
       expect(mutations.last?.scope, PinMessageMutationScope.own);
     });
 
-    test('Rejects participant MUC pins for peer-authored messages', () async {
+    test('Allows participant MUC pins for peer-authored messages', () async {
       const roomJid = 'room@conference.axi.im';
       const roomNick = 'me';
       const occupantId = '$roomJid/$roomNick';
@@ -5286,6 +5629,7 @@ void main() {
       const mucStanzaId = 'pin-room-stanza-id';
 
       await connectSuccessfully(xmppService);
+      when(() => mockConnection.hasConnectionSettings).thenReturn(false);
       await database.createChat(
         Chat(
           jid: roomJid,
@@ -5316,18 +5660,14 @@ void main() {
         body: 'hello',
       );
 
-      await expectLater(
-        xmppService.pinMessage(chatJid: roomJid, message: message),
-        throwsA(isA<XmppPinPermissionException>()),
-      );
+      await xmppService.pinMessage(chatJid: roomJid, message: message);
+
       verifyNever(() => mockConnection.sendMessage(any()));
-      expect(
-        await database.getPinnedMessage(
-          chatJid: roomJid,
-          messageStanzaId: mucStanzaId,
-        ),
-        isNull,
+      final pinned = await database.getPinnedMessage(
+        chatJid: roomJid,
+        messageStanzaId: mucStanzaId,
       );
+      expect(pinned?.active, isTrue);
     });
 
     test('Allows participant MUC pins for own room-nick messages', () async {
@@ -5400,10 +5740,105 @@ void main() {
     });
 
     test(
-      'Inbound participant MUC pin cannot target another occupant message',
+      'Participant MUC unpin clears stale self room-nick pin rows',
       () async {
         const roomJid = 'room@conference.axi.im';
-        const actorJid = '$roomJid/actor';
+        const roomNick = 'me';
+        const roomNickPinnerJid = '$roomJid/$roomNick';
+        const selfPinnerJid = 'jid@axi.im';
+        const opaqueOccupantId = 'occupant-id-self';
+        const stanzaId = 'pin-local-stanza-id';
+        const mucStanzaId = 'pin-room-stanza-id';
+        const reference = MessageReference(
+          kind: MessageReferenceKind.mucStanzaId,
+          value: mucStanzaId,
+        );
+        final pinnedAt = DateTime.utc(2026, 5, 26, 11, 24);
+
+        await connectSuccessfully(xmppService);
+        when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.groupChat,
+            myNickname: roomNick,
+            lastChangeTimestamp: pinnedAt,
+            contactJid: roomJid,
+          ),
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: opaqueOccupantId,
+          nick: roomNick,
+          realJid: xmppService.myJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+          fromPresence: true,
+        );
+        final message = Message(
+          stanzaID: stanzaId,
+          mucStanzaId: mucStanzaId,
+          senderJid: roomNickPinnerJid,
+          occupantID: opaqueOccupantId,
+          chatJid: roomJid,
+          timestamp: pinnedAt,
+          body: 'hello',
+        );
+        await database.saveMessage(
+          message,
+          chatType: ChatType.groupChat,
+          selfJid: xmppService.myJid,
+        );
+        await database.applyMessagePinMutation(
+          chatJid: roomJid,
+          reference: reference,
+          pinnerJid: selfPinnerJid,
+          pinnedAt: pinnedAt,
+          active: true,
+          identityVerified: true,
+        );
+        await database.applyMessagePinMutation(
+          chatJid: roomJid,
+          reference: reference,
+          pinnerJid: roomNickPinnerJid,
+          pinnedAt: pinnedAt,
+          active: true,
+          identityVerified: false,
+        );
+
+        await xmppService.unpinMessage(chatJid: roomJid, message: message);
+
+        final selfPin = await database.getMessagePin(
+          chatJid: roomJid,
+          reference: reference,
+          pinnerJid: selfPinnerJid,
+        );
+        final roomNickPin = await database.getMessagePin(
+          chatJid: roomJid,
+          reference: reference,
+          pinnerJid: roomNickPinnerJid,
+        );
+
+        verifyNever(() => mockConnection.sendMessage(any()));
+        expect(selfPin?.active, isFalse);
+        expect(roomNickPin?.active, isFalse);
+        expect(
+          await database.getPinnedMessageAggregates(
+            chatJid: roomJid,
+            selfPinnerJid: selfPinnerJid,
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'Inbound participant MUC pin can target another occupant message',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const pinnerJid = '$roomJid/pinner';
         const targetJid = '$roomJid/friend';
         const stanzaId = 'muc-local-stanza-id';
         const mucStanzaId = 'muc-room-stanza-id';
@@ -5416,9 +5851,9 @@ void main() {
         await xmppService.setMucServiceHost('conference.axi.im');
         xmppService.updateOccupantFromPresence(
           roomJid: roomJid,
-          occupantId: actorJid,
-          nick: 'actor',
-          realJid: 'actor@axi.im',
+          occupantId: pinnerJid,
+          nick: 'pinner',
+          realJid: 'pinner@axi.im',
           affiliation: OccupantAffiliation.member,
           role: OccupantRole.participant,
           isPresent: true,
@@ -5440,79 +5875,7 @@ void main() {
 
         controller.add(
           mox.MessageEvent(
-            mox.JID.fromString(actorJid),
-            mox.JID.fromString(xmppService.myJid!),
-            false,
-            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-              PinMessageMutationData(
-                reference: const MessageReference(
-                  kind: MessageReferenceKind.mucStanzaId,
-                  value: mucStanzaId,
-                ),
-                pinned: true,
-                timestamp: DateTime.utc(2026, 5, 26, 11, 25),
-              ),
-            ]),
-            id: uuid.v4(),
-            type: 'groupchat',
-          ),
-        );
-        await pumpEventQueue();
-        await pumpEventQueue();
-
-        expect(
-          await database.getPinnedMessageAggregates(
-            chatJid: roomJid,
-            selfActorJid: 'actor@axi.im',
-          ),
-          isEmpty,
-        );
-
-        await controller.close();
-      },
-    );
-
-    test(
-      'Inbound participant MUC pin can target their own occupant message',
-      () async {
-        const roomJid = 'room@conference.axi.im';
-        const actorJid = '$roomJid/actor';
-        const stanzaId = 'muc-local-stanza-id';
-        const mucStanzaId = 'muc-room-stanza-id';
-        final controller = StreamController<mox.XmppEvent>();
-        when(
-          () => mockConnection.asBroadcastStream(),
-        ).thenAnswer((_) => controller.stream);
-
-        await connectSuccessfully(xmppService);
-        await xmppService.setMucServiceHost('conference.axi.im');
-        xmppService.updateOccupantFromPresence(
-          roomJid: roomJid,
-          occupantId: actorJid,
-          nick: 'actor',
-          realJid: 'actor@axi.im',
-          affiliation: OccupantAffiliation.member,
-          role: OccupantRole.participant,
-          isPresent: true,
-          fromPresence: true,
-        );
-        await database.saveMessage(
-          Message(
-            stanzaID: stanzaId,
-            mucStanzaId: mucStanzaId,
-            senderJid: actorJid,
-            occupantID: actorJid,
-            chatJid: roomJid,
-            timestamp: DateTime.utc(2026, 5, 26, 11, 24),
-            body: 'hello',
-          ),
-          chatType: ChatType.groupChat,
-          selfJid: xmppService.myJid,
-        );
-
-        controller.add(
-          mox.MessageEvent(
-            mox.JID.fromString(actorJid),
+            mox.JID.fromString(pinnerJid),
             mox.JID.fromString(xmppService.myJid!),
             false,
             mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
@@ -5534,7 +5897,90 @@ void main() {
 
         final aggregates = await database.getPinnedMessageAggregates(
           chatJid: roomJid,
-          selfActorJid: 'actor@axi.im',
+          selfPinnerJid: 'jid@axi.im',
+        );
+        const reference = MessageReference(
+          kind: MessageReferenceKind.mucStanzaId,
+          value: mucStanzaId,
+        );
+        final pinnerPin = await database.getMessagePin(
+          chatJid: roomJid,
+          reference: reference,
+          pinnerJid: 'pinner@axi.im',
+        );
+
+        expect(aggregates, hasLength(1));
+        expect(aggregates.single.pinCount, 1);
+        expect(aggregates.single.pinnedBySelf, isFalse);
+        expect(pinnerPin?.active, isTrue);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Inbound participant MUC pin can target their own occupant message',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const pinnerJid = '$roomJid/pinner';
+        const stanzaId = 'muc-local-stanza-id';
+        const mucStanzaId = 'muc-room-stanza-id';
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: pinnerJid,
+          nick: 'pinner',
+          realJid: 'pinner@axi.im',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+          fromPresence: true,
+        );
+        await database.saveMessage(
+          Message(
+            stanzaID: stanzaId,
+            mucStanzaId: mucStanzaId,
+            senderJid: pinnerJid,
+            occupantID: pinnerJid,
+            chatJid: roomJid,
+            timestamp: DateTime.utc(2026, 5, 26, 11, 24),
+            body: 'hello',
+          ),
+          chatType: ChatType.groupChat,
+          selfJid: xmppService.myJid,
+        );
+
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(pinnerJid),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              PinMessageMutationData(
+                reference: const MessageReference(
+                  kind: MessageReferenceKind.mucStanzaId,
+                  value: mucStanzaId,
+                ),
+                pinned: true,
+                timestamp: DateTime.utc(2026, 5, 26, 11, 25),
+              ),
+            ]),
+            id: uuid.v4(),
+            type: 'groupchat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final aggregates = await database.getPinnedMessageAggregates(
+          chatJid: roomJid,
+          selfPinnerJid: 'pinner@axi.im',
         );
         expect(aggregates, hasLength(1));
         expect(aggregates.single.messageReferenceId, mucStanzaId);
@@ -5543,7 +5989,7 @@ void main() {
       },
     );
 
-    test('Archived self MUC pin stores the account actor', () async {
+    test('Archived self MUC pin stores the account JID', () async {
       const roomJid = 'room@conference.axi.im';
       const selfOccupantJid = '$roomJid/oldme';
       const stanzaId = 'self-muc-local-stanza-id';
@@ -5594,19 +6040,19 @@ void main() {
       await pumpEventQueue();
       await pumpEventQueue();
 
-      final selfPin = await database.getPinnedMessageActor(
+      final selfPin = await database.getMessagePin(
         chatJid: roomJid,
         reference: reference,
-        actorJid: xmppService.myJid!,
+        pinnerJid: xmppService.myJid!,
       );
-      final roomNickPin = await database.getPinnedMessageActor(
+      final roomNickPin = await database.getMessagePin(
         chatJid: roomJid,
         reference: reference,
-        actorJid: selfOccupantJid,
+        pinnerJid: selfOccupantJid,
       );
       final aggregates = await database.getPinnedMessageAggregates(
         chatJid: roomJid,
-        selfActorJid: xmppService.myJid!,
+        selfPinnerJid: xmppService.myJid!,
       );
 
       expect(selfPin?.active, isTrue);
@@ -5647,10 +6093,10 @@ void main() {
           kind: MessageReferenceKind.mucStanzaId,
           value: mucStanzaId,
         );
-        await database.applyActorPinnedMessageMutation(
+        await database.applyMessagePinMutation(
           chatJid: roomJid,
           reference: reference,
-          actorJid: 'peer@axi.im',
+          pinnerJid: 'peer@axi.im',
           pinnedAt: pinnedAt,
           active: true,
           identityVerified: true,
@@ -5680,7 +6126,7 @@ void main() {
         expect(
           await database.getPinnedMessageAggregates(
             chatJid: roomJid,
-            selfActorJid: 'peer@axi.im',
+            selfPinnerJid: 'peer@axi.im',
           ),
           isEmpty,
         );

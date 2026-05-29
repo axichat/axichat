@@ -351,8 +351,8 @@ const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
 const String _pinPendingClearAllRetractionsKeyName =
     'pin_sync_pending_clear_all_retractions';
-const String _pinLegacyActorMigrationKeyName =
-    'pin_sync_legacy_actor_migration';
+const String _pinLegacyPinnerMigrationKeyName =
+    'pin_sync_legacy_pinner_migration';
 const String _pinArchiveBootstrapKeyPrefix = 'pin_sync_archive_bootstrap_';
 const Duration _mamQueryTimeout = Duration(seconds: 90);
 const Duration _mamQueryFallbackTimeout = Duration(seconds: 15);
@@ -365,8 +365,8 @@ final _pinPendingRetractionsKey = XmppStateStore.registerKey(
 final _pinPendingClearAllRetractionsKey = XmppStateStore.registerKey(
   _pinPendingClearAllRetractionsKeyName,
 );
-final _pinLegacyActorMigrationKey = XmppStateStore.registerKey(
-  _pinLegacyActorMigrationKeyName,
+final _pinLegacyPinnerMigrationKey = XmppStateStore.registerKey(
+  _pinLegacyPinnerMigrationKeyName,
 );
 final _draftSyncSourceKey = XmppStateStore.registerKey(_draftSyncSourceKeyName);
 final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -2891,7 +2891,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return (senderJid: senderJid, identityVerified: false);
   }
 
-  ({String actorJid, bool identityVerified}) _resolveInboundPinActorIdentity({
+  ({String pinnerJid, bool identityVerified}) _resolveInboundPinSenderIdentity({
     required String senderJid,
     required String chatJid,
     required bool isGroupChat,
@@ -2904,12 +2904,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       isArchived: isArchived,
     );
     return (
-      actorJid: senderIdentity.senderJid,
+      pinnerJid: senderIdentity.senderJid,
       identityVerified: senderIdentity.identityVerified,
     );
   }
 
-  _PendingInboundPinMutation _resolveInboundPinMutationForTarget({
+  _PendingInboundPinMutation _canonicalizeInboundPinMutationForTarget({
     required String chatJid,
     required ChatType chatType,
     required Message message,
@@ -2929,21 +2929,158 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<bool> _isInboundPinClearAllAuthorized(mox.MessageEvent event) async =>
       false;
 
-  bool _isOutboundPinTargetAuthoredBySelf({
+  Set<String> _selfPinnerJidsForChat({
     required String chatJid,
     required ChatType chatType,
-    required Message message,
+    required String selfPinnerJid,
   }) {
-    if (chatType == ChatType.groupChat) {
-      return false;
+    final normalizedSelfPinner = selfPinnerJid.trim();
+    if (normalizedSelfPinner.isEmpty) {
+      return const <String>{};
     }
-    return message.isFromAccount(myJid);
+    return <String>{normalizedSelfPinner};
   }
 
-  bool _isInboundPinActorAuthorizedForTarget({
+  List<MessageReference> _pinReferencesForMessage({
+    required MessageReference reference,
+    required Message message,
+  }) {
+    final references = <String, MessageReference>{};
+
+    void addReference(MessageReferenceKind kind, String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return;
+      }
+      references['${kind.storageValue}:$trimmed'] = MessageReference(
+        kind: kind,
+        value: trimmed,
+      );
+    }
+
+    addReference(reference.kind, reference.value);
+    addReference(MessageReferenceKind.stanzaId, message.trimmedStanzaId);
+    addReference(MessageReferenceKind.originId, message.trimmedOriginId);
+    addReference(MessageReferenceKind.mucStanzaId, message.trimmedMucStanzaId);
+    for (final referenceId in message.referenceIds) {
+      addReference(reference.kind, referenceId);
+    }
+    return references.values.toList(growable: false);
+  }
+
+  Future<List<PinEntry>> _activeSelfPinRowsForMessage({
     required String chatJid,
     required ChatType chatType,
     required Message message,
+    required MessageReference reference,
+    required String selfPinnerJid,
+  }) async {
+    final pinnerJids = _selfPinnerJidsForChat(
+      chatJid: chatJid,
+      chatType: chatType,
+      selfPinnerJid: selfPinnerJid,
+    );
+    if (pinnerJids.isEmpty) {
+      return const <PinEntry>[];
+    }
+    final references = _pinReferencesForMessage(
+      reference: reference,
+      message: message,
+    );
+    if (references.isEmpty) {
+      return const <PinEntry>[];
+    }
+    return await _dbOpReturning<XmppDatabase, List<PinEntry>>((db) async {
+      final entries = <PinEntry>[];
+      final seen = <String>{};
+      for (final pinnerJid in pinnerJids) {
+        for (final pinReference in references) {
+          final entry = await db.getMessagePin(
+            chatJid: chatJid,
+            reference: pinReference,
+            pinnerJid: pinnerJid,
+          );
+          if (entry?.active != true) {
+            continue;
+          }
+          final key =
+              '${entry!.pinnerJid}\u0000${entry.messageReferenceKind}'
+              '\u0000${entry.messageReferenceId}';
+          if (seen.add(key)) {
+            entries.add(entry);
+          }
+        }
+      }
+      return entries;
+    });
+  }
+
+  Future<PinnedMessageAggregate?> _activePinnedAggregateForMessage({
+    required String chatJid,
+    required Message message,
+    required MessageReference reference,
+    required String selfPinnerJid,
+  }) async {
+    final references = _pinReferencesForMessage(
+      reference: reference,
+      message: message,
+    );
+    if (references.isEmpty) {
+      return null;
+    }
+    final referenceKeys = {
+      for (final reference in references)
+        (kind: reference.kind, value: reference.value),
+    };
+    return await _activePinnedAggregateForReferences(
+      chatJid: chatJid,
+      references: referenceKeys,
+      selfPinnerJid: selfPinnerJid,
+    );
+  }
+
+  Future<PinnedMessageAggregate?> _activePinnedAggregateForReference({
+    required String chatJid,
+    required MessageReference reference,
+    required String selfPinnerJid,
+  }) async {
+    return await _activePinnedAggregateForReferences(
+      chatJid: chatJid,
+      references: {(kind: reference.kind, value: reference.value)},
+      selfPinnerJid: selfPinnerJid,
+    );
+  }
+
+  Future<PinnedMessageAggregate?> _activePinnedAggregateForReferences({
+    required String chatJid,
+    required Set<({MessageReferenceKind kind, String value})> references,
+    required String selfPinnerJid,
+  }) async {
+    if (references.isEmpty) {
+      return null;
+    }
+    return await _dbOpReturning<XmppDatabase, PinnedMessageAggregate?>((
+      db,
+    ) async {
+      final aggregates = await db.getPinnedMessageAggregates(
+        chatJid: chatJid,
+        selfPinnerJid: selfPinnerJid,
+      );
+      for (final aggregate in aggregates) {
+        if (references.contains((
+          kind: aggregate.messageReferenceKind,
+          value: aggregate.messageReferenceId.trim(),
+        ))) {
+          return aggregate;
+        }
+      }
+      return null;
+    });
+  }
+
+  bool _isInboundPinSenderAuthorized({
+    required String chatJid,
+    required ChatType chatType,
     required _PendingInboundPinMutation mutation,
   }) {
     if (mutation.scope == PinMessageMutationScope.all) {
@@ -2952,7 +3089,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (chatType == ChatType.groupChat) {
       return false;
     }
-    return message.isFromAuthorizedJid(mutation.actorJid);
+    return sameNormalizedAddressValue(mutation.pinnerJid, chatJid) ||
+        sameNormalizedAddressValue(mutation.pinnerJid, myJid);
   }
 
   void _updateUnsupportedArchiveChats(Set<String> chatJids) {}
@@ -3877,12 +4015,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       yield const <PinnedMessageAggregate>[];
       return;
     }
-    final selfActorJid = _selfPinActorJid();
-    if (selfActorJid == null) {
+    final selfPinnerJid = _selfPinnerJid();
+    if (selfPinnerJid == null) {
       yield const <PinnedMessageAggregate>[];
       return;
     }
-    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+    await _ensureLegacyPinnedMessagesMigrated(selfPinnerJid);
     setPinSyncActiveForChat(normalizedChat, active: true);
     try {
       yield* databaseReloadStream
@@ -3897,11 +4035,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
                     final reset = databaseReloadStream.first;
                     final watchStream = db.watchPinnedMessageAggregates(
                       chatJid: normalizedChat,
-                      selfActorJid: selfActorJid,
+                      selfPinnerJid: selfPinnerJid,
                     );
                     final initial = await db.getPinnedMessageAggregates(
                       chatJid: normalizedChat,
-                      selfActorJid: selfActorJid,
+                      selfPinnerJid: selfPinnerJid,
                     );
                     return watchStream.takeUntil(reset).startWith(initial);
                   });
@@ -3937,7 +4075,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  String? _selfPinActorJid() {
+  String? _selfPinnerJid() {
     final selfBare = _selfBareJid()?.trim();
     if (selfBare == null || selfBare.isEmpty) {
       return null;
@@ -3945,24 +4083,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return normalizedAddressKey(selfBare) ?? selfBare;
   }
 
-  Future<void> _ensureLegacyPinnedMessagesMigrated(String selfActorJid) async {
-    final normalizedActor = selfActorJid.trim();
-    if (normalizedActor.isEmpty) {
+  Future<void> _ensureLegacyPinnedMessagesMigrated(String selfPinnerJid) async {
+    final normalizedPinner = selfPinnerJid.trim();
+    if (normalizedPinner.isEmpty) {
       return;
     }
     final complete = await _dbOpReturning<XmppStateStore, String?>(
-      (ss) => ss.read(key: _pinLegacyActorMigrationKey) as String?,
+      (ss) => ss.read(key: _pinLegacyPinnerMigrationKey) as String?,
     );
     if (complete?.trim().isNotEmpty == true) {
       return;
     }
     await _dbOp<XmppDatabase>(
-      (db) => db.copyLegacyPinnedMessagesToActorRows(actorJid: normalizedActor),
+      (db) => db.copyLegacyPinnedMessagesToPinRows(pinnerJid: normalizedPinner),
       awaitDatabase: true,
     );
     await _dbOp<XmppStateStore>(
       (ss) => ss.write(
-        key: _pinLegacyActorMigrationKey,
+        key: _pinLegacyPinnerMigrationKey,
         value: DateTime.timestamp().toUtc().toIso8601String(),
       ),
       awaitDatabase: true,
@@ -4022,17 +4160,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (!_canPinInChat(chatJid: normalizedChat, chatType: resolvedChatType)) {
       throw XmppPinPermissionException();
     }
-    if (!_canClearAnyPinsForChat(
-          chatJid: normalizedChat,
-          chatType: resolvedChatType,
-        ) &&
-        !_isOutboundPinTargetAuthoredBySelf(
-          chatJid: normalizedChat,
-          chatType: resolvedChatType,
-          message: message,
-        )) {
-      throw XmppPinPermissionException();
-    }
     final reference = await _normalizePinMessageReferenceForChat(
       chatJid: normalizedChat,
       chatType: resolvedChatType,
@@ -4042,17 +4169,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return;
     }
     final messageId = reference.value;
-    final selfActorJid = _selfPinActorJid();
-    if (selfActorJid == null) {
+    final selfPinnerJid = _selfPinnerJid();
+    if (selfPinnerJid == null) {
       return;
     }
-    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+    await _ensureLegacyPinnedMessagesMigrated(selfPinnerJid);
+    final activeAggregate = await _activePinnedAggregateForMessage(
+      chatJid: normalizedChat,
+      message: message,
+      reference: reference,
+      selfPinnerJid: selfPinnerJid,
+    );
+    if (activeAggregate != null) {
+      throw XmppPinAlreadyPinnedException();
+    }
     final pinnedAt = DateTime.timestamp().toUtc();
     await _dbOp<XmppDatabase>(
-      (db) => db.applyActorPinnedMessageMutation(
+      (db) => db.applyMessagePinMutation(
         chatJid: normalizedChat,
         reference: reference,
-        actorJid: selfActorJid,
+        pinnerJid: selfPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
         identityVerified: true,
@@ -4076,7 +4212,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
     if (normalizedChat == null) {
-      return;
+      throw XmppMessageException();
     }
     if (message.isEmailBacked) {
       throw XmppMessageException();
@@ -4089,7 +4225,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       isGroupChat: resolvedChatType == ChatType.groupChat,
     );
     if (rawReference == null) {
-      return;
+      throw XmppMessageException();
     }
     if (!_canPinInChat(chatJid: normalizedChat, chatType: resolvedChatType)) {
       throw XmppPinPermissionException();
@@ -4100,58 +4236,62 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       reference: rawReference,
     );
     if (reference == null) {
-      return;
+      throw XmppMessageException();
     }
     final messageId = reference.value;
-    final selfActorJid = _selfPinActorJid();
-    if (selfActorJid == null) {
-      return;
+    final selfPinnerJid = _selfPinnerJid();
+    if (selfPinnerJid == null) {
+      throw XmppMessageException();
     }
-    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+    await _ensureLegacyPinnedMessagesMigrated(selfPinnerJid);
     final unpinnedAt = DateTime.timestamp().toUtc();
     final canClearAnyPins = _canClearAnyPinsForChat(
       chatJid: normalizedChat,
       chatType: resolvedChatType,
     );
-    if (!canClearAnyPins &&
-        !_isOutboundPinTargetAuthoredBySelf(
-          chatJid: normalizedChat,
-          chatType: resolvedChatType,
-          message: message,
-        )) {
-      throw XmppPinPermissionException();
-    }
-    final selfPin = canClearAnyPins
-        ? null
-        : await _dbOpReturning<XmppDatabase, PinnedMessageActorEntry?>(
-            (db) => db.getPinnedMessageActor(
-              chatJid: normalizedChat,
-              reference: reference,
-              actorJid: selfActorJid,
-            ),
+    final pinsToClear = canClearAnyPins
+        ? const <PinEntry>[]
+        : await _activeSelfPinRowsForMessage(
+            chatJid: normalizedChat,
+            chatType: resolvedChatType,
+            message: message,
+            reference: reference,
+            selfPinnerJid: selfPinnerJid,
           );
     final scope = canClearAnyPins
         ? PinMessageMutationScope.all
-        : selfPin?.active == true
+        : pinsToClear.isNotEmpty
         ? PinMessageMutationScope.own
         : null;
     if (scope == null) {
       throw XmppPinPermissionException();
     }
     if (scope == PinMessageMutationScope.own) {
-      await _dbOp<XmppDatabase>(
-        (db) => db.applyActorPinnedMessageMutation(
-          chatJid: normalizedChat,
-          reference: reference,
-          actorJid: selfActorJid,
-          pinnedAt: unpinnedAt,
-          active: false,
-          identityVerified: true,
-        ),
-      );
+      await _dbOp<XmppDatabase>((db) async {
+        for (final pinToClear in pinsToClear) {
+          final ownReferenceKind = MessageReferenceKind.fromStorageValue(
+            pinToClear.messageReferenceKind,
+          );
+          final ownReferenceId = pinToClear.messageReferenceId.trim();
+          if (ownReferenceKind == null || ownReferenceId.isEmpty) {
+            continue;
+          }
+          await db.applyMessagePinMutation(
+            chatJid: normalizedChat,
+            reference: MessageReference(
+              kind: ownReferenceKind,
+              value: ownReferenceId,
+            ),
+            pinnerJid: pinToClear.pinnerJid,
+            pinnedAt: unpinnedAt,
+            active: false,
+            identityVerified: pinToClear.identityVerified,
+          );
+        }
+      });
     } else {
       await _dbOp<XmppDatabase>(
-        (db) => db.clearPinnedMessageActors(
+        (db) => db.clearMessagePins(
           chatJid: normalizedChat,
           reference: reference,
           pinnedAt: unpinnedAt,
@@ -4192,9 +4332,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     try {
       final chat = await _loadPinChat(normalizedChat);
       await database;
-      final selfActorJid = _selfPinActorJid();
-      if (selfActorJid != null) {
-        await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+      final selfPinnerJid = _selfPinnerJid();
+      if (selfPinnerJid != null) {
+        await _ensureLegacyPinnedMessagesMigrated(selfPinnerJid);
       }
       await _ensurePendingPinSyncLoaded();
       await _normalizeActivePinnedMessageAliasesForChat(normalizedChat);
@@ -7248,15 +7388,15 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String chatJid,
   ) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
-    final selfActorJid = _selfPinActorJid();
-    if (normalizedChat == null || selfActorJid == null) {
+    final selfPinnerJid = _selfPinnerJid();
+    if (normalizedChat == null || selfPinnerJid == null) {
       return const <PinnedMessageAggregate>[];
     }
-    await _ensureLegacyPinnedMessagesMigrated(selfActorJid);
+    await _ensureLegacyPinnedMessagesMigrated(selfPinnerJid);
     return _dbOpReturning<XmppDatabase, List<PinnedMessageAggregate>>(
       (db) => db.getPinnedMessageAggregates(
         chatJid: normalizedChat,
-        selfActorJid: selfActorJid,
+        selfPinnerJid: selfPinnerJid,
       ),
     );
   }
@@ -9759,13 +9899,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final senderJid = isGroupChat
         ? event.from.toString()
         : event.from.toBare().toString();
-    final actorIdentity = _resolveInboundPinActorIdentity(
+    final pinnerIdentity = _resolveInboundPinSenderIdentity(
       senderJid: senderJid,
       chatJid: normalizedChat,
       isGroupChat: isGroupChat,
       isArchived: _isArchivedOrOfflineMessage(event),
     );
-    if (actorIdentity.actorJid.trim().isEmpty) {
+    if (pinnerIdentity.pinnerJid.trim().isEmpty) {
       return true;
     }
     if (mutation.scope == PinMessageMutationScope.all) {
@@ -9787,8 +9927,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     final pendingMutation = _PendingInboundPinMutation(
       reference: reference,
-      actorJid: actorIdentity.actorJid,
-      identityVerified: actorIdentity.identityVerified,
+      pinnerJid: pinnerIdentity.pinnerJid,
+      identityVerified: pinnerIdentity.identityVerified,
       pinned: mutation.pinned,
       scope: mutation.scope,
       timestamp: mutation.timestamp,
@@ -9846,16 +9986,15 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     )) {
       return true;
     }
-    final resolvedMutation = _resolveInboundPinMutationForTarget(
+    final resolvedMutation = _canonicalizeInboundPinMutationForTarget(
       chatJid: normalizedChat,
       chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
       message: message,
       mutation: pendingMutation,
     );
-    if (!_isInboundPinActorAuthorizedForTarget(
+    if (!_isInboundPinSenderAuthorized(
       chatJid: normalizedChat,
       chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
-      message: message,
       mutation: resolvedMutation,
     )) {
       return true;
@@ -9985,16 +10124,15 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       )) {
         continue;
       }
-      final resolvedMutation = _resolveInboundPinMutationForTarget(
+      final resolvedMutation = _canonicalizeInboundPinMutationForTarget(
         chatJid: message.chatJid,
         chatType: chatType,
         message: message,
         mutation: mutation,
       );
-      if (!_isInboundPinActorAuthorizedForTarget(
+      if (!_isInboundPinSenderAuthorized(
         chatJid: message.chatJid,
         chatType: chatType,
-        message: message,
         mutation: resolvedMutation,
       )) {
         continue;
@@ -10012,7 +10150,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     if (mutation.scope == PinMessageMutationScope.all) {
       await _dbOp<XmppDatabase>(
-        (db) => db.clearPinnedMessageActors(
+        (db) => db.clearMessagePins(
           chatJid: chatJid,
           reference: mutation.reference,
           pinnedAt: mutation.timestamp,
@@ -10020,11 +10158,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       );
       return;
     }
-    await _dbOp<XmppDatabase>(
-      (db) => db.applyActorPinnedMessageMutation(
+    if (mutation.pinned) {
+      final activeAggregate = await _activePinnedAggregateForReference(
         chatJid: chatJid,
         reference: mutation.reference,
-        actorJid: mutation.actorJid,
+        selfPinnerJid: _selfPinnerJid() ?? '',
+      );
+      if (activeAggregate != null) {
+        return;
+      }
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyMessagePinMutation(
+        chatJid: chatJid,
+        reference: mutation.reference,
+        pinnerJid: mutation.pinnerJid,
         pinnedAt: mutation.timestamp,
         active: mutation.pinned,
         identityVerified: mutation.identityVerified,
@@ -13266,8 +13414,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required Chat? chat,
   }) async {
     final syncSession = _pinSyncSession(chatJid);
-    final selfActorJid = _selfPinActorJid();
-    if (selfActorJid == null) {
+    final selfPinnerJid = _selfPinnerJid();
+    if (selfPinnerJid == null) {
       return;
     }
     final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);
@@ -13359,17 +13507,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       )) {
         continue;
       }
-      final record =
-          await _dbOpReturning<XmppDatabase, PinnedMessageActorEntry?>(
-            (db) => db.getPinnedMessageActor(
-              chatJid: chatJid,
-              reference: MessageReference(
-                kind: referenceKind,
-                value: canonicalMessageId,
-              ),
-              actorJid: selfActorJid,
-            ),
-          );
+      final record = await _dbOpReturning<XmppDatabase, PinEntry?>(
+        (db) => db.getMessagePin(
+          chatJid: chatJid,
+          reference: MessageReference(
+            kind: referenceKind,
+            value: canonicalMessageId,
+          ),
+          pinnerJid: selfPinnerJid,
+        ),
+      );
       if (record == null || record.active) {
         pendingChanged =
             syncSession.removePendingRetraction(canonicalMessageId) ||
@@ -13411,17 +13558,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       )) {
         continue;
       }
-      final record =
-          await _dbOpReturning<XmppDatabase, PinnedMessageActorEntry?>(
-            (db) => db.getPinnedMessageActor(
-              chatJid: chatJid,
-              reference: MessageReference(
-                kind: referenceKind,
-                value: canonicalMessageId,
-              ),
-              actorJid: selfActorJid,
-            ),
-          );
+      final record = await _dbOpReturning<XmppDatabase, PinEntry?>(
+        (db) => db.getMessagePin(
+          chatJid: chatJid,
+          reference: MessageReference(
+            kind: referenceKind,
+            value: canonicalMessageId,
+          ),
+          pinnerJid: selfPinnerJid,
+        ),
+      );
       if (record == null || !record.active) {
         pendingChanged =
             syncSession.removePendingPublish(canonicalMessageId) ||
@@ -13973,7 +14119,7 @@ class _PendingInboundReaction {
 class _PendingInboundPinMutation {
   const _PendingInboundPinMutation({
     required this.reference,
-    required this.actorJid,
+    required this.pinnerJid,
     required this.identityVerified,
     required this.pinned,
     required this.scope,
@@ -13982,20 +14128,20 @@ class _PendingInboundPinMutation {
   });
 
   final MessageReference reference;
-  final String actorJid;
+  final String pinnerJid;
   final bool identityVerified;
   final bool pinned;
   final PinMessageMutationScope scope;
   final DateTime timestamp;
   final mox.MessageEvent event;
 
-  _PendingInboundPinMutation withActor({
-    required String actorJid,
+  _PendingInboundPinMutation withPinner({
+    required String pinnerJid,
     required bool identityVerified,
   }) {
     return _PendingInboundPinMutation(
       reference: reference,
-      actorJid: actorJid,
+      pinnerJid: pinnerJid,
       identityVerified: identityVerified,
       pinned: pinned,
       scope: scope,

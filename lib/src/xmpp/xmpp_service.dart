@@ -172,6 +172,8 @@ final class XmppMessageException extends XmppException {}
 
 final class XmppPinPermissionException extends XmppMessageException {}
 
+final class XmppPinAlreadyPinnedException extends XmppMessageException {}
+
 final class XmppMucCreateConflictException extends XmppMessageException {}
 
 final class XmppForeignDomainException extends XmppMessageException {}

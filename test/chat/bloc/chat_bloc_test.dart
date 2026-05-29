@@ -3380,13 +3380,19 @@ void main() {
     },
   );
 
-  test('pinning a peer-authored direct XMPP message is denied', () async {
+  test('pinning a peer-authored direct XMPP message is allowed', () async {
     const message = Message(
       stanzaID: 'peer-authored-pin',
       senderJid: 'peer@axi.im',
       chatJid: 'peer@axi.im',
       body: 'from peer',
     );
+    when(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((_) async {});
 
     final bloc = ChatBloc(
       jid: initialChat.jid,
@@ -3407,19 +3413,19 @@ void main() {
     );
     await _pumpBloc();
 
-    verifyNever(
+    verify(
       () => messageService.pinMessage(
-        chatJid: any(named: 'chatJid'),
-        message: any(named: 'message'),
+        chatJid: initialChat.remoteJid,
+        message: message,
       ),
-    );
-    expect(bloc.state.toast?.message, ChatMessageKey.chatPinPermissionDenied);
+    ).called(1);
+    expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
     expect(bloc.state.toastId, 1);
 
     await bloc.close();
   });
 
-  test('participant MUC pinning a peer-authored message is denied', () async {
+  test('participant MUC pinning a peer-authored message is allowed', () async {
     const roomJid = 'room@conference.axi.im';
     const selfOccupantId = '$roomJid/self';
     final roomChat = Chat(
@@ -3451,6 +3457,12 @@ void main() {
       chatJid: roomJid,
       body: 'from peer',
     );
+    when(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((_) async {});
 
     final bloc = ChatBloc(
       jid: roomJid,
@@ -3471,13 +3483,13 @@ void main() {
     );
     await _pumpBloc();
 
-    verifyNever(
+    verify(
       () => messageService.pinMessage(
-        chatJid: any(named: 'chatJid'),
-        message: any(named: 'message'),
+        chatJid: roomChat.remoteJid,
+        message: message,
       ),
-    );
-    expect(bloc.state.toast?.message, ChatMessageKey.chatPinPermissionDenied);
+    ).called(1);
+    expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
     expect(bloc.state.toastId, 1);
 
     await bloc.close();
@@ -3538,6 +3550,133 @@ void main() {
     );
     expect(bloc.state.latestPinnedMessageNotice?.chatJid, mixedChat.remoteJid);
     expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+    await bloc.close();
+  });
+
+  test(
+    'pinning an already pinned direct message emits info toast without service call',
+    () async {
+      final pinnedController =
+          StreamController<List<PinnedMessageAggregate>>.broadcast();
+      const message = Message(
+        stanzaID: 'already-pinned-stanza',
+        senderJid: 'self@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'sent as xmpp',
+      );
+      when(
+        () => messageService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => pinnedController.stream);
+      when(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      ).thenAnswer((_) async => const [message]);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const [message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      pinnedController.add([
+        _pinnedAggregate(
+          messageStanzaId: message.stanzaID,
+          chatJid: initialChat.remoteJid,
+          pinnedAt: DateTime(2026, 5, 26),
+          pinnedBySelf: false,
+        ),
+      ]);
+      await untilCalled(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      );
+      await _pumpBloc();
+
+      bloc.add(
+        ChatMessagePinRequested(
+          message: message,
+          pin: true,
+          chat: initialChat,
+          roomState: null,
+        ),
+      );
+      await _pumpBloc();
+
+      verifyNever(
+        () => messageService.pinMessage(
+          chatJid: any(named: 'chatJid'),
+          message: any(named: 'message'),
+        ),
+      );
+      expect(
+        bloc.state.toast?.message,
+        ChatMessageKey.chatMessageAlreadyPinned,
+      );
+      expect(bloc.state.toast?.variant, ChatToastVariant.info);
+      expect(bloc.state.latestPinnedMessageNotice, isNull);
+      expect(bloc.state.showPinnedMessageBanner, isFalse);
+
+      await bloc.close();
+      await pinnedController.close();
+    },
+  );
+
+  test('stale duplicate pin rejection emits already pinned toast', () async {
+    const message = Message(
+      stanzaID: 'stale-already-pinned-stanza',
+      senderJid: 'self@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'sent as xmpp',
+    );
+    when(
+      () => messageService.pinMessage(
+        chatJid: any(named: 'chatJid'),
+        message: any(named: 'message'),
+      ),
+    ).thenThrow(xmpp.XmppPinAlreadyPinnedException());
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    bloc.add(
+      ChatMessagePinRequested(
+        message: message,
+        pin: true,
+        chat: initialChat,
+        roomState: null,
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.pinMessage(
+        chatJid: initialChat.remoteJid,
+        message: message,
+      ),
+    ).called(1);
+    expect(bloc.state.toast?.message, ChatMessageKey.chatMessageAlreadyPinned);
+    expect(bloc.state.toast?.variant, ChatToastVariant.info);
+    expect(bloc.state.latestPinnedMessageNotice, isNull);
+    expect(bloc.state.showPinnedMessageBanner, isFalse);
 
     await bloc.close();
   });

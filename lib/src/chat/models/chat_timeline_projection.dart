@@ -80,7 +80,7 @@ bool canTogglePinForMessage({
     return false;
   }
   if (chat.type != ChatType.groupChat) {
-    return message.isFromAccount(selfJid);
+    return true;
   }
   if (roomState == null ||
       roomState.myRole.isVisitor ||
@@ -90,12 +90,7 @@ bool canTogglePinForMessage({
   if (roomState.myRole.canManagePins || roomState.myAffiliation.canManagePins) {
     return true;
   }
-  return isMucSelfMessage(
-    message: message,
-    roomState: roomState,
-    selfJid: selfJid,
-    fallbackSelfNick: chat.myNickname,
-  );
+  return roomState.myRole.isParticipant || roomState.myAffiliation.isMember;
 }
 
 bool isEmailMessageForBubble({

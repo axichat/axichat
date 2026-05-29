@@ -1055,6 +1055,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ce message ne peut pas encore être épinglé.';
 
   @override
+  String get chatMessageAlreadyPinned => 'Déjà épinglé.';
+
+  @override
   String get chatMessagePinned => 'Message épinglé.';
 
   @override

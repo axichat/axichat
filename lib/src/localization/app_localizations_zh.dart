@@ -987,6 +987,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatPinMessageUnavailable => '这条消息暂时无法置顶。';
 
   @override
+  String get chatMessageAlreadyPinned => '已置顶。';
+
+  @override
   String get chatMessagePinned => '消息已置顶。';
 
   @override
@@ -7586,6 +7589,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatPinMessageUnavailable => '此訊息暫時無法置頂。';
+
+  @override
+  String get chatMessageAlreadyPinned => '已置頂。';
 
   @override
   String get chatMessagePinned => '訊息已置頂。';

@@ -350,6 +350,7 @@
   "chatPinMessage": "置顶消息",
   "chatUnpinMessage": "取消置顶",
   "chatPinMessageUnavailable": "这条消息暂时无法置顶。",
+  "chatMessageAlreadyPinned": "已置顶。",
   "chatMessagePinned": "消息已置顶。",
   "chatMessageUnpinned": "消息已取消置顶。",
   "chatPinnedEmptyState": "暂无置顶消息。",

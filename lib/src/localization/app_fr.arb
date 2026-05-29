@@ -351,6 +351,7 @@
   "chatPinMessage": "Épingler le message",
   "chatUnpinMessage": "Désépingler le message",
   "chatPinMessageUnavailable": "Ce message ne peut pas encore être épinglé.",
+  "chatMessageAlreadyPinned": "Déjà épinglé.",
   "chatMessagePinned": "Message épinglé.",
   "chatMessageUnpinned": "Message désépinglé.",
   "chatPinnedEmptyState": "Aucun message épinglé pour le moment.",

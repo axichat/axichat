@@ -351,6 +351,7 @@
   "chatPinMessage": "Fijar mensaje",
   "chatUnpinMessage": "Desfijar mensaje",
   "chatPinMessageUnavailable": "Este mensaje aún no se puede fijar.",
+  "chatMessageAlreadyPinned": "Ya está fijado.",
   "chatMessagePinned": "Mensaje fijado.",
   "chatMessageUnpinned": "Mensaje desfijado.",
   "chatPinnedEmptyState": "Aún no hay mensajes fijados.",

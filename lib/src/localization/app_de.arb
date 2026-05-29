@@ -350,6 +350,7 @@
   "chatPinMessage": "Nachricht anheften",
   "chatUnpinMessage": "Anheften aufheben",
   "chatPinMessageUnavailable": "Diese Nachricht kann noch nicht angeheftet werden.",
+  "chatMessageAlreadyPinned": "Bereits angeheftet.",
   "chatMessagePinned": "Nachricht angeheftet.",
   "chatMessageUnpinned": "Nachricht nicht mehr angeheftet.",
   "chatPinnedEmptyState": "Noch keine angehefteten Nachrichten.",

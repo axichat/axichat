@@ -11,8 +11,8 @@ const String _chatJid = 'chat@axi.im';
 const String _messageStanzaId = 'message-id';
 const String _messageOriginId = 'origin-id';
 const String _messageMucStanzaId = 'muc-message-id';
-const String _selfActorJid = 'self@axi.im';
-const String _peerActorJid = 'peer@axi.im';
+const String _selfPinnerJid = 'self@axi.im';
+const String _peerPinnerJid = 'peer@axi.im';
 const String _emptyPassphrase = '';
 
 void main() {
@@ -144,7 +144,140 @@ void main() {
     },
   );
 
-  test('actor pin rows aggregate by message reference', () async {
+  test('alias normalization rewrites message pin rows', () async {
+    final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
+    const originReference = MessageReference(
+      kind: MessageReferenceKind.originId,
+      value: _messageOriginId,
+    );
+    const stanzaReference = MessageReference(
+      kind: MessageReferenceKind.stanzaId,
+      value: _messageStanzaId,
+    );
+
+    await database.saveMessage(
+      Message(
+        stanzaID: _messageStanzaId,
+        originID: _messageOriginId,
+        senderJid: _peerPinnerJid,
+        chatJid: _chatJid,
+        timestamp: pinnedAt,
+        body: 'hello',
+      ),
+    );
+    await database.applyMessagePinMutation(
+      chatJid: _chatJid,
+      reference: originReference,
+      pinnerJid: _selfPinnerJid,
+      pinnedAt: pinnedAt,
+      active: true,
+      identityVerified: true,
+    );
+    await database.deletePinnedMessage(
+      chatJid: _chatJid,
+      messageStanzaId: _messageOriginId,
+    );
+
+    await database.normalizePinnedMessageAliases(
+      chatJid: _chatJid,
+      canonicalMessageStanzaId: _messageStanzaId,
+      aliases: const {_messageStanzaId, _messageOriginId},
+    );
+
+    final alias = await database.getMessagePin(
+      chatJid: _chatJid,
+      reference: originReference,
+      pinnerJid: _selfPinnerJid,
+    );
+    final canonical = await database.getMessagePin(
+      chatJid: _chatJid,
+      reference: stanzaReference,
+      pinnerJid: _selfPinnerJid,
+    );
+    final aggregates = await database.getPinnedMessageAggregates(
+      chatJid: _chatJid,
+      selfPinnerJid: _selfPinnerJid,
+    );
+
+    expect(alias, isNull);
+    expect(canonical?.active, isTrue);
+    expect(aggregates, hasLength(1));
+    expect(
+      aggregates.single.messageReferenceKind,
+      MessageReferenceKind.stanzaId,
+    );
+    expect(aggregates.single.messageReferenceId, _messageStanzaId);
+  });
+
+  test(
+    'alias normalization preserves same-timestamp pin row unpin tombstones',
+    () async {
+      final timestamp = DateTime.utc(2026, 3, 9, 12, 0, 0);
+      const originReference = MessageReference(
+        kind: MessageReferenceKind.originId,
+        value: _messageOriginId,
+      );
+      const stanzaReference = MessageReference(
+        kind: MessageReferenceKind.stanzaId,
+        value: _messageStanzaId,
+      );
+
+      await database.saveMessage(
+        Message(
+          stanzaID: _messageStanzaId,
+          originID: _messageOriginId,
+          senderJid: _peerPinnerJid,
+          chatJid: _chatJid,
+          timestamp: timestamp,
+          body: 'hello',
+        ),
+      );
+      await database.applyMessagePinMutation(
+        chatJid: _chatJid,
+        reference: stanzaReference,
+        pinnerJid: _selfPinnerJid,
+        pinnedAt: timestamp,
+        active: true,
+        identityVerified: true,
+      );
+      await database.applyMessagePinMutation(
+        chatJid: _chatJid,
+        reference: originReference,
+        pinnerJid: _selfPinnerJid,
+        pinnedAt: timestamp,
+        active: false,
+        identityVerified: true,
+      );
+
+      await database.normalizePinnedMessageAliases(
+        chatJid: _chatJid,
+        canonicalMessageStanzaId: _messageStanzaId,
+        aliases: const {_messageStanzaId, _messageOriginId},
+      );
+
+      final alias = await database.getMessagePin(
+        chatJid: _chatJid,
+        reference: originReference,
+        pinnerJid: _selfPinnerJid,
+      );
+      final canonical = await database.getMessagePin(
+        chatJid: _chatJid,
+        reference: stanzaReference,
+        pinnerJid: _selfPinnerJid,
+      );
+      final aggregates = await database.getPinnedMessageAggregates(
+        chatJid: _chatJid,
+        selfPinnerJid: _selfPinnerJid,
+      );
+
+      expect(alias, isNull);
+      expect(canonical?.active, isFalse);
+      expect(canonical?.pinnedAt, timestamp);
+      expect(aggregates, isEmpty);
+    },
+  );
+
+  test('pin rows aggregate by message reference', () async {
     final selfPinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     final peerPinnedAt = selfPinnedAt.add(const Duration(minutes: 5));
     const reference = MessageReference(
@@ -152,18 +285,18 @@ void main() {
       value: _messageStanzaId,
     );
 
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: selfPinnedAt,
       active: true,
       identityVerified: true,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
       pinnedAt: peerPinnedAt,
       active: true,
       identityVerified: true,
@@ -171,7 +304,7 @@ void main() {
 
     final aggregates = await database.getPinnedMessageAggregates(
       chatJid: _chatJid,
-      selfActorJid: _selfActorJid,
+      selfPinnerJid: _selfPinnerJid,
     );
     final legacy = await database.getPinnedMessage(
       chatJid: _chatJid,
@@ -192,7 +325,7 @@ void main() {
     expect(legacy.pinnedAt, peerPinnedAt);
   });
 
-  test('clear all actor pins leaves a legacy tombstone', () async {
+  test('clear all pins leaves a legacy tombstone', () async {
     final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     final clearedAt = pinnedAt.add(const Duration(minutes: 5));
     const reference = MessageReference(
@@ -200,23 +333,23 @@ void main() {
       value: _messageStanzaId,
     );
 
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: pinnedAt,
       active: true,
       identityVerified: true,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
       pinnedAt: pinnedAt,
       active: true,
       identityVerified: true,
     );
-    await database.clearPinnedMessageActors(
+    await database.clearMessagePins(
       chatJid: _chatJid,
       reference: reference,
       pinnedAt: clearedAt,
@@ -224,32 +357,32 @@ void main() {
 
     final aggregates = await database.getPinnedMessageAggregates(
       chatJid: _chatJid,
-      selfActorJid: _selfActorJid,
+      selfPinnerJid: _selfPinnerJid,
     );
     final legacy = await database.getPinnedMessage(
       chatJid: _chatJid,
       messageStanzaId: _messageStanzaId,
     );
-    final selfActor = await database.getPinnedMessageActor(
+    final selfPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
     );
-    final peerActor = await database.getPinnedMessageActor(
+    final peerPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
     );
 
     expect(aggregates, isEmpty);
     expect(legacy, isNotNull);
     expect(legacy!.active, isFalse);
     expect(legacy.pinnedAt, clearedAt);
-    expect(selfActor?.active, isFalse);
-    expect(peerActor?.active, isFalse);
+    expect(selfPin?.active, isFalse);
+    expect(peerPin?.active, isFalse);
   });
 
-  test('clear all tombstone blocks older missing actor pins', () async {
+  test('clear all tombstone blocks older missing pins', () async {
     final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     final clearedAt = pinnedAt.add(const Duration(minutes: 5));
     const reference = MessageReference(
@@ -257,15 +390,15 @@ void main() {
       value: _messageStanzaId,
     );
 
-    await database.clearPinnedMessageActors(
+    await database.clearMessagePins(
       chatJid: _chatJid,
       reference: reference,
       pinnedAt: clearedAt,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
       pinnedAt: pinnedAt,
       active: true,
       identityVerified: true,
@@ -273,26 +406,26 @@ void main() {
 
     final aggregates = await database.getPinnedMessageAggregates(
       chatJid: _chatJid,
-      selfActorJid: _selfActorJid,
+      selfPinnerJid: _selfPinnerJid,
     );
     final legacy = await database.getPinnedMessage(
       chatJid: _chatJid,
       messageStanzaId: _messageStanzaId,
     );
-    final peerActor = await database.getPinnedMessageActor(
+    final peerPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
     );
 
     expect(aggregates, isEmpty);
     expect(legacy, isNotNull);
     expect(legacy!.active, isFalse);
     expect(legacy.pinnedAt, clearedAt);
-    expect(peerActor, isNull);
+    expect(peerPin, isNull);
   });
 
-  test('clear all tombstone does not hide newer actor pins', () async {
+  test('clear all tombstone does not hide newer pins', () async {
     final olderPinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     final clearedAt = olderPinnedAt.add(const Duration(minutes: 5));
     final newerPinnedAt = olderPinnedAt.add(const Duration(minutes: 10));
@@ -301,23 +434,23 @@ void main() {
       value: _messageStanzaId,
     );
 
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
       pinnedAt: newerPinnedAt,
       active: true,
       identityVerified: true,
     );
-    await database.clearPinnedMessageActors(
+    await database.clearMessagePins(
       chatJid: _chatJid,
       reference: reference,
       pinnedAt: clearedAt,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: olderPinnedAt,
       active: true,
       identityVerified: true,
@@ -325,21 +458,21 @@ void main() {
 
     final aggregates = await database.getPinnedMessageAggregates(
       chatJid: _chatJid,
-      selfActorJid: _selfActorJid,
+      selfPinnerJid: _selfPinnerJid,
     );
     final legacy = await database.getPinnedMessage(
       chatJid: _chatJid,
       messageStanzaId: _messageStanzaId,
     );
-    final selfActor = await database.getPinnedMessageActor(
+    final selfPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
     );
-    final peerActor = await database.getPinnedMessageActor(
+    final peerPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
     );
 
     expect(aggregates, hasLength(1));
@@ -349,11 +482,11 @@ void main() {
     expect(legacy, isNotNull);
     expect(legacy!.active, isTrue);
     expect(legacy.pinnedAt, newerPinnedAt);
-    expect(selfActor, isNull);
-    expect(peerActor?.active, isTrue);
+    expect(selfPin, isNull);
+    expect(peerPin?.active, isTrue);
   });
 
-  test('actor unpin does not become a clear-all tombstone', () async {
+  test('own unpin does not become a clear-all tombstone', () async {
     final selfPinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     final peerPinnedAt = selfPinnedAt.add(const Duration(minutes: 2));
     final selfUnpinnedAt = selfPinnedAt.add(const Duration(minutes: 5));
@@ -362,26 +495,26 @@ void main() {
       value: _messageStanzaId,
     );
 
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: selfPinnedAt,
       active: true,
       identityVerified: true,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: selfUnpinnedAt,
       active: false,
       identityVerified: true,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
       pinnedAt: peerPinnedAt,
       active: true,
       identityVerified: true,
@@ -389,21 +522,21 @@ void main() {
 
     final aggregates = await database.getPinnedMessageAggregates(
       chatJid: _chatJid,
-      selfActorJid: _selfActorJid,
+      selfPinnerJid: _selfPinnerJid,
     );
     final legacy = await database.getPinnedMessage(
       chatJid: _chatJid,
       messageStanzaId: _messageStanzaId,
     );
-    final selfActor = await database.getPinnedMessageActor(
+    final selfPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
     );
-    final peerActor = await database.getPinnedMessageActor(
+    final peerPin = await database.getMessagePin(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _peerActorJid,
+      pinnerJid: _peerPinnerJid,
     );
 
     expect(aggregates, hasLength(1));
@@ -413,11 +546,11 @@ void main() {
     expect(legacy, isNotNull);
     expect(legacy!.active, isTrue);
     expect(legacy.pinnedAt, peerPinnedAt);
-    expect(selfActor?.active, isFalse);
-    expect(peerActor?.active, isTrue);
+    expect(selfPin?.active, isFalse);
+    expect(peerPin?.active, isTrue);
   });
 
-  test('deleting a message clears legacy and actor pin references', () async {
+  test('deleting a message clears legacy and message pin references', () async {
     final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     const reference = MessageReference(
       kind: MessageReferenceKind.mucStanzaId,
@@ -428,7 +561,7 @@ void main() {
       Message(
         stanzaID: _messageStanzaId,
         mucStanzaId: _messageMucStanzaId,
-        senderJid: _peerActorJid,
+        senderJid: _peerPinnerJid,
         chatJid: _chatJid,
         timestamp: pinnedAt,
         body: 'hello',
@@ -440,10 +573,10 @@ void main() {
       pinnedAt: pinnedAt,
       active: true,
     );
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: pinnedAt,
       active: true,
       identityVerified: true,
@@ -459,26 +592,26 @@ void main() {
       isNull,
     );
     expect(
-      await database.getPinnedMessageActor(
+      await database.getMessagePin(
         chatJid: _chatJid,
         reference: reference,
-        actorJid: _selfActorJid,
+        pinnerJid: _selfPinnerJid,
       ),
       isNull,
     );
   });
 
-  test('clearing message history clears legacy and actor pin rows', () async {
+  test('clearing message history clears legacy and message pin rows', () async {
     final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
     const reference = MessageReference(
       kind: MessageReferenceKind.stanzaId,
       value: _messageStanzaId,
     );
 
-    await database.applyActorPinnedMessageMutation(
+    await database.applyMessagePinMutation(
       chatJid: _chatJid,
       reference: reference,
-      actorJid: _selfActorJid,
+      pinnerJid: _selfPinnerJid,
       pinnedAt: pinnedAt,
       active: true,
       identityVerified: true,
@@ -488,24 +621,24 @@ void main() {
 
     expect(await database.getPinnedMessages(_chatJid), isEmpty);
     expect(
-      await database.getPinnedMessageActor(
+      await database.getMessagePin(
         chatJid: _chatJid,
         reference: reference,
-        actorJid: _selfActorJid,
+        pinnerJid: _selfPinnerJid,
       ),
       isNull,
     );
     expect(
       await database.getPinnedMessageAggregates(
         chatJid: _chatJid,
-        selfActorJid: _selfActorJid,
+        selfPinnerJid: _selfPinnerJid,
       ),
       isEmpty,
     );
   });
 
   test(
-    'trimming messages clears legacy and actor MUC pin references',
+    'trimming messages clears legacy and message MUC pin references',
     () async {
       final oldPinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
       final newTimestamp = oldPinnedAt.add(const Duration(minutes: 1));
@@ -518,7 +651,7 @@ void main() {
         Message(
           stanzaID: _messageStanzaId,
           mucStanzaId: _messageMucStanzaId,
-          senderJid: _peerActorJid,
+          senderJid: _peerPinnerJid,
           chatJid: _chatJid,
           timestamp: oldPinnedAt,
           body: 'old',
@@ -528,16 +661,16 @@ void main() {
         Message(
           stanzaID: 'new-message-id',
           mucStanzaId: 'new-muc-message-id',
-          senderJid: _peerActorJid,
+          senderJid: _peerPinnerJid,
           chatJid: _chatJid,
           timestamp: newTimestamp,
           body: 'new',
         ),
       );
-      await database.applyActorPinnedMessageMutation(
+      await database.applyMessagePinMutation(
         chatJid: _chatJid,
         reference: reference,
-        actorJid: _selfActorJid,
+        pinnerJid: _selfPinnerJid,
         pinnedAt: oldPinnedAt,
         active: true,
         identityVerified: true,
@@ -553,10 +686,10 @@ void main() {
         isNull,
       );
       expect(
-        await database.getPinnedMessageActor(
+        await database.getMessagePin(
           chatJid: _chatJid,
           reference: reference,
-          actorJid: _selfActorJid,
+          pinnerJid: _selfPinnerJid,
         ),
         isNull,
       );
@@ -573,7 +706,7 @@ void main() {
     await database.saveMessage(
       Message(
         stanzaID: _messageStanzaId,
-        senderJid: _peerActorJid,
+        senderJid: _peerPinnerJid,
         chatJid: _chatJid,
         deltaAccountId: 1,
         deltaMsgId: 2,
@@ -588,13 +721,13 @@ void main() {
       active: true,
     );
 
-    await database.copyLegacyPinnedMessagesToActorRows(actorJid: _selfActorJid);
+    await database.copyLegacyPinnedMessagesToPinRows(pinnerJid: _selfPinnerJid);
 
     expect(
-      await database.getPinnedMessageActor(
+      await database.getMessagePin(
         chatJid: _chatJid,
         reference: reference,
-        actorJid: _selfActorJid,
+        pinnerJid: _selfPinnerJid,
       ),
       isNull,
     );
@@ -628,58 +761,114 @@ void main() {
         active: true,
       );
 
-      await database.copyLegacyPinnedMessagesToActorRows(
-        actorJid: _selfActorJid,
+      await database.copyLegacyPinnedMessagesToPinRows(
+        pinnerJid: _selfPinnerJid,
       );
 
       expect(
-        await database.getPinnedMessageActor(
+        await database.getMessagePin(
           chatJid: emailChatJid,
           reference: reference,
-          actorJid: _selfActorJid,
+          pinnerJid: _selfPinnerJid,
         ),
         isNull,
       );
     },
   );
 
-  test(
-    'legacy migration skips direct pins for peer-authored messages',
-    () async {
-      final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
-      const reference = MessageReference(
-        kind: MessageReferenceKind.stanzaId,
-        value: _messageStanzaId,
-      );
+  test('legacy migration copies direct pins for peer messages', () async {
+    final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
+    const reference = MessageReference(
+      kind: MessageReferenceKind.stanzaId,
+      value: _messageStanzaId,
+    );
 
-      await database.saveMessage(
-        Message(
-          stanzaID: _messageStanzaId,
-          senderJid: _peerActorJid,
-          chatJid: _chatJid,
-          timestamp: pinnedAt,
-          body: 'hello',
-        ),
-      );
-      await database.applyPinnedMessageMutation(
+    await database.saveMessage(
+      Message(
+        stanzaID: _messageStanzaId,
+        senderJid: _peerPinnerJid,
         chatJid: _chatJid,
-        messageStanzaId: _messageStanzaId,
-        pinnedAt: pinnedAt,
-        active: true,
-      );
+        timestamp: pinnedAt,
+        body: 'hello',
+      ),
+    );
+    await database.applyPinnedMessageMutation(
+      chatJid: _chatJid,
+      messageStanzaId: _messageStanzaId,
+      pinnedAt: pinnedAt,
+      active: true,
+    );
 
-      await database.copyLegacyPinnedMessagesToActorRows(
-        actorJid: _selfActorJid,
-      );
+    await database.copyLegacyPinnedMessagesToPinRows(pinnerJid: _selfPinnerJid);
 
-      expect(
-        await database.getPinnedMessageActor(
-          chatJid: _chatJid,
-          reference: reference,
-          actorJid: _selfActorJid,
-        ),
-        isNull,
-      );
-    },
-  );
+    final migrated = await database.getMessagePin(
+      chatJid: _chatJid,
+      reference: reference,
+      pinnerJid: _selfPinnerJid,
+    );
+    expect(migrated?.active, isTrue);
+    expect(migrated?.pinnedAt, pinnedAt);
+  });
+
+  test('legacy migration skips pins that already have pinner rows', () async {
+    final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
+    const reference = MessageReference(
+      kind: MessageReferenceKind.stanzaId,
+      value: _messageStanzaId,
+    );
+
+    await database.applyMessagePinMutation(
+      chatJid: _chatJid,
+      reference: reference,
+      pinnerJid: _peerPinnerJid,
+      pinnedAt: pinnedAt,
+      active: true,
+      identityVerified: true,
+    );
+
+    await database.copyLegacyPinnedMessagesToPinRows(pinnerJid: _selfPinnerJid);
+
+    expect(
+      await database.getMessagePin(
+        chatJid: _chatJid,
+        reference: reference,
+        pinnerJid: _selfPinnerJid,
+      ),
+      isNull,
+    );
+    expect(
+      await database.getMessagePin(
+        chatJid: _chatJid,
+        reference: reference,
+        pinnerJid: _peerPinnerJid,
+      ),
+      isNotNull,
+    );
+  });
+
+  test('legacy migration copies direct pins without local messages', () async {
+    const missingMessageId = 'missing-direct-message-id';
+    final pinnedAt = DateTime.utc(2026, 3, 9, 12, 0, 0);
+    const reference = MessageReference(
+      kind: MessageReferenceKind.stanzaId,
+      value: missingMessageId,
+    );
+
+    await database.applyPinnedMessageMutation(
+      chatJid: _chatJid,
+      messageStanzaId: missingMessageId,
+      pinnedAt: pinnedAt,
+      active: true,
+    );
+
+    await database.copyLegacyPinnedMessagesToPinRows(pinnerJid: _selfPinnerJid);
+
+    final migrated = await database.getMessagePin(
+      chatJid: _chatJid,
+      reference: reference,
+      pinnerJid: _selfPinnerJid,
+    );
+    expect(migrated?.active, isTrue);
+    expect(migrated?.pinnedAt, pinnedAt);
+  });
 }

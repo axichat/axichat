@@ -1028,6 +1028,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatPinMessageUnavailable => 'This message cannot be pinned yet.';
 
   @override
+  String get chatMessageAlreadyPinned => 'Already pinned.';
+
+  @override
   String get chatMessagePinned => 'Message pinned.';
 
   @override

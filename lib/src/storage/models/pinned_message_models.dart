@@ -24,15 +24,15 @@ class PinnedMessages extends Table {
   ];
 }
 
-@DataClassName('PinnedMessageActorEntry')
-class PinnedMessageActors extends Table {
+@DataClassName('PinEntry')
+class MessagePins extends Table {
   TextColumn get chatJid => text()();
 
   IntColumn get messageReferenceKind => integer()();
 
   TextColumn get messageReferenceId => text()();
 
-  TextColumn get actorJid => text()();
+  TextColumn get pinnerJid => text()();
 
   DateTimeColumn get pinnedAt => dateTime()();
 
@@ -46,15 +46,15 @@ class PinnedMessageActors extends Table {
     chatJid,
     messageReferenceKind,
     messageReferenceId,
-    actorJid,
+    pinnerJid,
   };
 
   List<Index> get indexes => [
     Index(
-      'idx_pinned_message_actors_chat',
+      'idx_message_pins_chat',
       'chat_jid, message_reference_kind, message_reference_id, active',
     ),
-    Index('idx_pinned_message_actors_actor', 'actor_jid, chat_jid, active'),
+    Index('idx_message_pins_pinner', 'pinner_jid, chat_jid, active'),
   ];
 }
 

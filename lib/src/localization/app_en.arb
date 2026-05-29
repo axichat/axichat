@@ -425,6 +425,7 @@
   "chatPinMessage": "Pin message",
   "chatUnpinMessage": "Unpin message",
   "chatPinMessageUnavailable": "This message cannot be pinned yet.",
+  "chatMessageAlreadyPinned": "Already pinned.",
   "chatMessagePinned": "Message pinned.",
   "chatMessageUnpinned": "Message unpinned.",
   "chatPinnedEmptyState": "No pinned messages yet.",

@@ -1324,7 +1324,7 @@ class _MessageActionBar extends StatelessWidget {
     this.pinDisabled = false,
     this.pinLoading = false,
     this.onPinToggle,
-    required this.isPinned,
+    required this.isPinActionActive,
     this.onRevokeInvite,
   });
 
@@ -1346,7 +1346,7 @@ class _MessageActionBar extends StatelessWidget {
   final bool pinDisabled;
   final bool pinLoading;
   final VoidCallback? onPinToggle;
-  final bool isPinned;
+  final bool isPinActionActive;
   final VoidCallback? onRevokeInvite;
 
   @override
@@ -1404,10 +1404,12 @@ class _MessageActionBar extends StatelessWidget {
       if (onPinToggle != null || pinLoading || pinDisabled)
         ContextActionButton(
           icon: Icon(
-            isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+            isPinActionActive ? LucideIcons.pinOff : LucideIcons.pin,
             size: iconSize,
           ),
-          label: isPinned ? l10n.chatUnpinMessage : l10n.chatPinMessage,
+          label: isPinActionActive
+              ? l10n.chatUnpinMessage
+              : l10n.chatPinMessage,
           loading: pinLoading,
           onPressed: pinLoading ? null : onPinToggle,
         ),

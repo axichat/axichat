@@ -127,7 +127,7 @@ _resolveTimelineMessageChromeActions({
     pinDisabled: callbacks.pinDisabled,
     pinLoading: callbacks.pinLoading,
     onPinToggle: callbacks.onPinToggle,
-    isPinned: isPinActionActive,
+    isPinActionActive: isPinActionActive,
     onRevokeInvite: callbacks.onRevokeInvite,
   );
   final reactionManager = callbacks.canShowReactionManager

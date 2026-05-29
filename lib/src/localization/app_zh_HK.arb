@@ -350,6 +350,7 @@
   "chatPinMessage": "置頂訊息",
   "chatUnpinMessage": "取消置頂",
   "chatPinMessageUnavailable": "此訊息暫時無法置頂。",
+  "chatMessageAlreadyPinned": "已置頂。",
   "chatMessagePinned": "訊息已置頂。",
   "chatMessageUnpinned": "訊息已取消置頂。",
   "chatPinnedEmptyState": "暫無置頂訊息。",

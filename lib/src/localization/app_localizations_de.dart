@@ -1055,6 +1055,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Diese Nachricht kann noch nicht angeheftet werden.';
 
   @override
+  String get chatMessageAlreadyPinned => 'Bereits angeheftet.';
+
+  @override
   String get chatMessagePinned => 'Nachricht angeheftet.';
 
   @override

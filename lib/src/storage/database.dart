@@ -368,18 +368,18 @@ abstract interface class XmppDatabase implements Database {
 
   Stream<List<PinnedMessageAggregate>> watchPinnedMessageAggregates({
     required String chatJid,
-    required String selfActorJid,
+    required String selfPinnerJid,
   });
 
   Future<List<PinnedMessageAggregate>> getPinnedMessageAggregates({
     required String chatJid,
-    required String selfActorJid,
+    required String selfPinnerJid,
   });
 
-  Future<PinnedMessageActorEntry?> getPinnedMessageActor({
+  Future<PinEntry?> getMessagePin({
     required String chatJid,
     required MessageReference reference,
-    required String actorJid,
+    required String pinnerJid,
   });
 
   Future<DateTime?> getPinnedMessageClearAllTimestamp({
@@ -401,22 +401,22 @@ abstract interface class XmppDatabase implements Database {
     required bool active,
   });
 
-  Future<void> applyActorPinnedMessageMutation({
+  Future<void> applyMessagePinMutation({
     required String chatJid,
     required MessageReference reference,
-    required String actorJid,
+    required String pinnerJid,
     required DateTime pinnedAt,
     required bool active,
     required bool identityVerified,
   });
 
-  Future<void> clearPinnedMessageActors({
+  Future<void> clearMessagePins({
     required String chatJid,
     required MessageReference reference,
     required DateTime pinnedAt,
   });
 
-  Future<void> copyLegacyPinnedMessagesToActorRows({required String actorJid});
+  Future<void> copyLegacyPinnedMessagesToPinRows({required String pinnerJid});
 
   Future<void> normalizePinnedMessageAliases({
     required String chatJid,
@@ -1844,7 +1844,7 @@ class EmailSpamlistAccessor
     MessageCollections,
     MessageCollectionMemberships,
     PinnedMessages,
-    PinnedMessageActors,
+    MessagePins,
     MessageAttachments,
     MessageShares,
     MessageParticipants,
@@ -1900,9 +1900,9 @@ class EmailSpamlistAccessor
   ],
 )
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
-  // This marker preserves clear-all ordering even when newer actor pins keep
+  // This marker preserves clear-all ordering even when newer individual pins keep
   // the visible aggregate active.
-  static const String _pinnedMessageClearAllMarkerActorJid =
+  static const String _pinnedMessageClearAllMarkerPinnerJid =
       'urn:axi:pinned-message:clear-all';
 
   XmppDrift._(this._file, super.e, {bool inMemory = false})
@@ -1963,7 +1963,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 56;
+  int get schemaVersion => 57;
 
   @override
   MigrationStrategy get migration {
@@ -2207,8 +2207,8 @@ WHERE transport IS NULL
             !await _tableHasColumn(pinnedMessages.actualTableName, 'active')) {
           await m.addColumn(pinnedMessages, pinnedMessages.active);
         }
-        if (from < 55) {
-          await m.createTable(pinnedMessageActors);
+        if (from < 57) {
+          await _migrateMessagePinsTable(m);
         }
         if (from < 32 &&
             !await _tableHasColumn(messages.actualTableName, 'muc_stanza_id')) {
@@ -4085,7 +4085,7 @@ WHERE chat_jid = ?
       }
       final referenceIds = existing.referenceIds;
       if (referenceIds.isNotEmpty) {
-        await (delete(pinnedMessageActors)
+        await (delete(messagePins)
               ..where((tbl) => tbl.chatJid.equals(existing.chatJid))
               ..where((tbl) => tbl.messageReferenceId.isIn(referenceIds)))
             .go();
@@ -4362,7 +4362,7 @@ WHERE email_from_address IN ($placeholderClause)
         await delete(messageShares).go();
         await delete(messageAttachments).go();
         await delete(messages).go();
-        await delete(pinnedMessageActors).go();
+        await delete(messagePins).go();
         await delete(pinnedMessages).go();
         await delete(drafts).go();
         await delete(fileMetadata).go();
@@ -4535,7 +4535,7 @@ WHERE email_from_address IN ($placeholderClause)
           )..where((tbl) => tbl.messageId.isIn(batch))).go();
         }
         for (final batch in chunked(referenceIds.toList(growable: false))) {
-          await (delete(pinnedMessageActors)
+          await (delete(messagePins)
                 ..where((tbl) => tbl.messageReferenceId.isIn(batch))
                 ..where((tbl) => tbl.chatJid.equals(jid)))
               .go();
@@ -6340,7 +6340,7 @@ WHERE stanza_i_d = ?
 
   Selectable<QueryRow> _pinnedMessageAggregateRows({
     required String chatJid,
-    required String selfActorJid,
+    required String selfPinnerJid,
   }) {
     return customSelect(
       '''
@@ -6350,14 +6350,14 @@ SELECT
   message_reference_id,
   max(pinned_at) AS pinned_at,
   count(*) AS pin_count,
-  max(CASE WHEN actor_jid = ? THEN 1 ELSE 0 END) AS pinned_by_self
-FROM pinned_message_actors
+  max(CASE WHEN pinner_jid = ? THEN 1 ELSE 0 END) AS pinned_by_self
+FROM message_pins
 WHERE chat_jid = ? AND active = 1
 GROUP BY chat_jid, message_reference_kind, message_reference_id
 ORDER BY pinned_at DESC, message_reference_id DESC
 ''',
-      variables: [Variable<String>(selfActorJid), Variable<String>(chatJid)],
-      readsFrom: {pinnedMessageActors},
+      variables: [Variable<String>(selfPinnerJid), Variable<String>(chatJid)],
+      readsFrom: {messagePins},
     );
   }
 
@@ -6381,11 +6381,11 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Stream<List<PinnedMessageAggregate>> watchPinnedMessageAggregates({
     required String chatJid,
-    required String selfActorJid,
+    required String selfPinnerJid,
   }) {
     return _pinnedMessageAggregateRows(
       chatJid: chatJid,
-      selfActorJid: selfActorJid,
+      selfPinnerJid: selfPinnerJid,
     ).watch().map(
       (rows) => rows
           .map(_pinnedMessageAggregateFromRow)
@@ -6397,11 +6397,11 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Future<List<PinnedMessageAggregate>> getPinnedMessageAggregates({
     required String chatJid,
-    required String selfActorJid,
+    required String selfPinnerJid,
   }) async {
     final rows = await _pinnedMessageAggregateRows(
       chatJid: chatJid,
-      selfActorJid: selfActorJid,
+      selfPinnerJid: selfPinnerJid,
     ).get();
     return rows
         .map(_pinnedMessageAggregateFromRow)
@@ -6410,30 +6410,30 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
-  Future<PinnedMessageActorEntry?> getPinnedMessageActor({
+  Future<PinEntry?> getMessagePin({
     required String chatJid,
     required MessageReference reference,
-    required String actorJid,
+    required String pinnerJid,
   }) {
-    final query = select(pinnedMessageActors)
+    final query = select(messagePins)
       ..where((tbl) => tbl.chatJid.equals(chatJid))
       ..where(
         (tbl) =>
             tbl.messageReferenceKind.equals(reference.kind.storageValue) &
             tbl.messageReferenceId.equals(reference.value),
       )
-      ..where((tbl) => tbl.actorJid.equals(actorJid));
+      ..where((tbl) => tbl.pinnerJid.equals(pinnerJid));
     return query.getSingleOrNull();
   }
 
-  Future<PinnedMessageActorEntry?> _getPinnedMessageClearAllMarker({
+  Future<PinEntry?> _getPinnedMessageClearAllMarker({
     required String chatJid,
     required MessageReference reference,
   }) {
-    return getPinnedMessageActor(
+    return getMessagePin(
       chatJid: chatJid,
       reference: reference,
-      actorJid: _pinnedMessageClearAllMarkerActorJid,
+      pinnerJid: _pinnedMessageClearAllMarkerPinnerJid,
     );
   }
 
@@ -6515,8 +6515,8 @@ ORDER BY pinned_at DESC, message_reference_id DESC
     required bool writeTombstone,
   }) async {
     final normalizedFallbackTimestamp = fallbackTimestamp.toUtc();
-    final activeActors =
-        await (select(pinnedMessageActors)
+    final activePins =
+        await (select(messagePins)
               ..where((tbl) => tbl.chatJid.equals(chatJid))
               ..where(
                 (tbl) =>
@@ -6533,7 +6533,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
                 ),
               ]))
             .get();
-    if (activeActors.isEmpty) {
+    if (activePins.isEmpty) {
       final existingAggregate = await getPinnedMessage(
         chatJid: chatJid,
         messageStanzaId: reference.value,
@@ -6562,7 +6562,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       );
       return;
     }
-    final activePinnedAt = activeActors.first.pinnedAt.toUtc();
+    final activePinnedAt = activePins.first.pinnedAt.toUtc();
     final clearAllMarker = await _getPinnedMessageClearAllMarker(
       chatJid: chatJid,
       reference: reference,
@@ -6582,10 +6582,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
-  Future<void> applyActorPinnedMessageMutation({
+  Future<void> applyMessagePinMutation({
     required String chatJid,
     required MessageReference reference,
-    required String actorJid,
+    required String pinnerJid,
     required DateTime pinnedAt,
     required bool active,
     required bool identityVerified,
@@ -6600,10 +6600,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
           !clearAllMarker.pinnedAt.toUtc().isBefore(normalizedPinnedAt)) {
         return;
       }
-      final existing = await getPinnedMessageActor(
+      final existing = await getMessagePin(
         chatJid: chatJid,
         reference: reference,
-        actorJid: actorJid,
+        pinnerJid: pinnerJid,
       );
       if (existing != null) {
         final existingPinnedAt = existing.pinnedAt.toUtc();
@@ -6617,12 +6617,12 @@ ORDER BY pinned_at DESC, message_reference_id DESC
           return;
         }
       }
-      await into(pinnedMessageActors).insertOnConflictUpdate(
-        PinnedMessageActorEntry(
+      await into(messagePins).insertOnConflictUpdate(
+        PinEntry(
           chatJid: chatJid,
           messageReferenceKind: reference.kind.storageValue,
           messageReferenceId: reference.value,
-          actorJid: actorJid,
+          pinnerJid: pinnerJid,
           pinnedAt: normalizedPinnedAt,
           active: active,
           identityVerified: identityVerified,
@@ -6638,7 +6638,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
-  Future<void> clearPinnedMessageActors({
+  Future<void> clearMessagePins({
     required String chatJid,
     required MessageReference reference,
     required DateTime pinnedAt,
@@ -6651,20 +6651,20 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       );
       if (existingMarker == null ||
           existingMarker.pinnedAt.toUtc().isBefore(normalizedPinnedAt)) {
-        await into(pinnedMessageActors).insertOnConflictUpdate(
-          PinnedMessageActorEntry(
+        await into(messagePins).insertOnConflictUpdate(
+          PinEntry(
             chatJid: chatJid,
             messageReferenceKind: reference.kind.storageValue,
             messageReferenceId: reference.value,
-            actorJid: _pinnedMessageClearAllMarkerActorJid,
+            pinnerJid: _pinnedMessageClearAllMarkerPinnerJid,
             pinnedAt: normalizedPinnedAt,
             active: false,
             identityVerified: true,
           ),
         );
       }
-      final activeActors =
-          await (select(pinnedMessageActors)
+      final activePins =
+          await (select(messagePins)
                 ..where((tbl) => tbl.chatJid.equals(chatJid))
                 ..where(
                   (tbl) =>
@@ -6675,12 +6675,12 @@ ORDER BY pinned_at DESC, message_reference_id DESC
                 )
                 ..where((tbl) => tbl.active.equals(true)))
               .get();
-      for (final actor in activeActors) {
-        if (actor.pinnedAt.toUtc().isAfter(normalizedPinnedAt)) {
+      for (final pin in activePins) {
+        if (pin.pinnedAt.toUtc().isAfter(normalizedPinnedAt)) {
           continue;
         }
-        await into(pinnedMessageActors).insertOnConflictUpdate(
-          actor.copyWith(pinnedAt: normalizedPinnedAt, active: false),
+        await into(messagePins).insertOnConflictUpdate(
+          pin.copyWith(pinnedAt: normalizedPinnedAt, active: false),
         );
       }
       await _refreshPinnedMessageAggregate(
@@ -6693,11 +6693,11 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
-  Future<void> copyLegacyPinnedMessagesToActorRows({
-    required String actorJid,
+  Future<void> copyLegacyPinnedMessagesToPinRows({
+    required String pinnerJid,
   }) async {
-    final normalizedActor = actorJid.trim();
-    if (normalizedActor.isEmpty) {
+    final normalizedPinner = pinnerJid.trim();
+    if (normalizedPinner.isEmpty) {
       return;
     }
     await transaction(() async {
@@ -6720,13 +6720,6 @@ ORDER BY pinned_at DESC, message_reference_id DESC
         if (message?.isEmailBacked == true) {
           continue;
         }
-        final isGroupPin =
-            chat?.type == ChatType.groupChat ||
-            message?.trimmedMucStanzaId != null;
-        if (!isGroupPin &&
-            (message == null || !message.isFromAccount(normalizedActor))) {
-          continue;
-        }
         final reference =
             message?.pinReference(
               isGroupChat: message.trimmedMucStanzaId != null,
@@ -6735,20 +6728,26 @@ ORDER BY pinned_at DESC, message_reference_id DESC
               kind: MessageReferenceKind.stanzaId,
               value: messageId,
             );
-        final existing = await getPinnedMessageActor(
-          chatJid: legacy.chatJid,
-          reference: reference,
-          actorJid: normalizedActor,
-        );
-        if (existing != null) {
+        final existingPinRows =
+            await (select(messagePins)
+                  ..where((tbl) => tbl.chatJid.equals(legacy.chatJid))
+                  ..where(
+                    (tbl) =>
+                        tbl.messageReferenceKind.equals(
+                          reference.kind.storageValue,
+                        ) &
+                        tbl.messageReferenceId.equals(reference.value),
+                  ))
+                .get();
+        if (existingPinRows.isNotEmpty) {
           continue;
         }
-        await into(pinnedMessageActors).insert(
-          PinnedMessageActorEntry(
+        await into(messagePins).insert(
+          PinEntry(
             chatJid: legacy.chatJid,
             messageReferenceKind: reference.kind.storageValue,
             messageReferenceId: reference.value,
-            actorJid: normalizedActor,
+            pinnerJid: normalizedPinner,
             pinnedAt: legacy.pinnedAt.toUtc(),
             active: true,
             identityVerified: true,
@@ -6782,49 +6781,117 @@ ORDER BY pinned_at DESC, message_reference_id DESC
                 ..where((tbl) => tbl.chatJid.equals(chatJid))
                 ..where((tbl) => tbl.messageStanzaId.isIn(normalizedAliases)))
               .get();
-      if (existing.isEmpty) {
+      if (existing.isNotEmpty) {
+        PinnedMessageEntry latest = existing.first;
+        for (final entry in existing.skip(1)) {
+          final latestPinnedAt = latest.pinnedAt.toUtc();
+          final entryPinnedAt = entry.pinnedAt.toUtc();
+          if (entryPinnedAt.isAfter(latestPinnedAt)) {
+            latest = entry;
+            continue;
+          }
+          if (!entryPinnedAt.isAtSameMomentAs(latestPinnedAt)) {
+            continue;
+          }
+          if (!entry.active && latest.active) {
+            latest = entry;
+            continue;
+          }
+          if (entry.messageStanzaId == canonical &&
+              latest.messageStanzaId != canonical) {
+            latest = entry;
+          }
+        }
+
+        final requiresRewrite =
+            latest.messageStanzaId != canonical ||
+            existing.any((entry) => entry.messageStanzaId != canonical);
+        if (requiresRewrite) {
+          await (delete(pinnedMessages)
+                ..where((tbl) => tbl.chatJid.equals(chatJid))
+                ..where((tbl) => tbl.messageStanzaId.isIn(normalizedAliases)))
+              .go();
+          await into(pinnedMessages).insertOnConflictUpdate(
+            PinnedMessageEntry(
+              messageStanzaId: canonical,
+              chatJid: chatJid,
+              pinnedAt: latest.pinnedAt.toUtc(),
+              active: latest.active,
+            ),
+          );
+        }
+      }
+
+      final message = await getMessageByReferenceId(
+        canonical,
+        chatJid: chatJid,
+      );
+      final canonicalReference = message?.pinReference(
+        isGroupChat: message.trimmedMucStanzaId != null,
+      );
+      if (canonicalReference == null) {
         return;
       }
-
-      PinnedMessageEntry latest = existing.first;
-      for (final entry in existing.skip(1)) {
-        final latestPinnedAt = latest.pinnedAt.toUtc();
-        final entryPinnedAt = entry.pinnedAt.toUtc();
-        if (entryPinnedAt.isAfter(latestPinnedAt)) {
-          latest = entry;
-          continue;
-        }
-        if (!entryPinnedAt.isAtSameMomentAs(latestPinnedAt)) {
-          continue;
-        }
-        if (!entry.active && latest.active) {
-          latest = entry;
-          continue;
-        }
-        if (entry.messageStanzaId == canonical &&
-            latest.messageStanzaId != canonical) {
-          latest = entry;
-        }
-      }
-
-      final requiresRewrite =
-          latest.messageStanzaId != canonical ||
-          existing.any((entry) => entry.messageStanzaId != canonical);
-      if (!requiresRewrite) {
+      final existingPins =
+          await (select(messagePins)
+                ..where((tbl) => tbl.chatJid.equals(chatJid))
+                ..where(
+                  (tbl) => tbl.messageReferenceId.isIn(normalizedAliases),
+                ))
+              .get();
+      if (existingPins.isEmpty) {
         return;
       }
-
-      await (delete(pinnedMessages)
+      final latestPinsByPinner = <String, PinEntry>{};
+      for (final pin in existingPins) {
+        final current = latestPinsByPinner[pin.pinnerJid];
+        if (current == null) {
+          latestPinsByPinner[pin.pinnerJid] = pin;
+          continue;
+        }
+        final pinTimestamp = pin.pinnedAt.toUtc();
+        final currentTimestamp = current.pinnedAt.toUtc();
+        if (pinTimestamp.isAfter(currentTimestamp)) {
+          latestPinsByPinner[pin.pinnerJid] = pin;
+          continue;
+        }
+        if (!pinTimestamp.isAtSameMomentAs(currentTimestamp)) {
+          continue;
+        }
+        if (current.active && !pin.active) {
+          latestPinsByPinner[pin.pinnerJid] = pin;
+          continue;
+        }
+        if (pin.active == current.active &&
+            pin.messageReferenceId == canonical &&
+            current.messageReferenceId != canonical) {
+          latestPinsByPinner[pin.pinnerJid] = pin;
+        }
+      }
+      await (delete(messagePins)
             ..where((tbl) => tbl.chatJid.equals(chatJid))
-            ..where((tbl) => tbl.messageStanzaId.isIn(normalizedAliases)))
+            ..where((tbl) => tbl.messageReferenceId.isIn(normalizedAliases)))
           .go();
-      await into(pinnedMessages).insertOnConflictUpdate(
-        PinnedMessageEntry(
-          messageStanzaId: canonical,
-          chatJid: chatJid,
-          pinnedAt: latest.pinnedAt.toUtc(),
-          active: latest.active,
-        ),
+      for (final pin in latestPinsByPinner.values) {
+        await into(messagePins).insertOnConflictUpdate(
+          PinEntry(
+            chatJid: pin.chatJid,
+            messageReferenceKind: canonicalReference.kind.storageValue,
+            messageReferenceId: canonicalReference.value,
+            pinnerJid: pin.pinnerJid,
+            pinnedAt: pin.pinnedAt.toUtc(),
+            active: pin.active,
+            identityVerified: pin.identityVerified,
+          ),
+        );
+      }
+      await _refreshPinnedMessageAggregate(
+        chatJid: chatJid,
+        reference: canonicalReference,
+        fallbackTimestamp: latestPinsByPinner.values
+            .map((pin) => pin.pinnedAt.toUtc())
+            .reduce((a, b) => a.isAfter(b) ? a : b),
+        writeTombstone: latestPinsByPinner.values.every((pin) => !pin.active),
       );
     });
   }
@@ -9001,6 +9068,60 @@ ON CONFLICT(address) DO UPDATE SET
       }
     }
     return false;
+  }
+
+  Future<bool> _tableExists(String tableName) async {
+    final rows = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable<String>(tableName)],
+    ).get();
+    return rows.isNotEmpty;
+  }
+
+  Future<void> _migrateMessagePinsTable(Migrator m) async {
+    final tableName = messagePins.actualTableName;
+    if (!await _tableExists(tableName)) {
+      await m.createTable(messagePins);
+    }
+
+    Future<void> copyOldRows({
+      required String oldTableName,
+      required String oldPinnerColumn,
+    }) async {
+      if (!await _tableExists(oldTableName)) {
+        return;
+      }
+      await customStatement('''
+INSERT OR REPLACE INTO message_pins (
+  chat_jid,
+  message_reference_kind,
+  message_reference_id,
+  pinner_jid,
+  pinned_at,
+  active,
+  identity_verified
+)
+SELECT
+  chat_jid,
+  message_reference_kind,
+  message_reference_id,
+  $oldPinnerColumn,
+  pinned_at,
+  active,
+  identity_verified
+FROM $oldTableName
+''');
+      await customStatement('DROP TABLE $oldTableName');
+    }
+
+    await copyOldRows(
+      oldTableName: 'pinned_message_actors',
+      oldPinnerColumn: 'actor_jid',
+    );
+    await copyOldRows(
+      oldTableName: 'pinned_message_pinners',
+      oldPinnerColumn: 'pinner_jid',
+    );
   }
 
   Future<void> _rebuildChatsTable(Migrator m) async {
