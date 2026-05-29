@@ -89,7 +89,7 @@ void _expectFreshChatState(
   expect(state.pinnedMessages, isEmpty);
   expect(state.pinnedMessagesStatus, ChatPinnedMessagesStatus.idle);
   expect(state.latestPinnedMessageNotice, isNull);
-  expect(state.hiddenPinnedMessageNotice, isNull);
+  expect(state.lastSeenPinnedMessageAt, isNull);
   expect(state.showPinnedMessageBanner, isFalse);
   expect(state.quotedMessagesById, isEmpty);
   expect(state.chat, isNull);
@@ -178,11 +178,7 @@ ChatState _dirtyEveryChatStateField(ChatState state, Chat chat) {
     ],
     pinnedMessagesStatus: ChatPinnedMessagesStatus.hydrating,
     latestPinnedMessageNotice: dirtyPinnedMessageNotice,
-    hiddenPinnedMessageNotice: ChatPinnedMessageNotice(
-      messageStanzaId: 'hidden-dirty-message',
-      chatJid: chat.jid,
-      pinnedAt: DateTime.utc(2024, 1, 2),
-    ),
+    lastSeenPinnedMessageAt: DateTime.utc(2024, 1, 2),
     quotedMessagesById: const {'quoted-message': dirtyMessage},
     chat: chat,
     roomState: RoomState(roomJid: 'dirty-room@conference.axi.im'),
@@ -540,6 +536,7 @@ void main() {
     registerFallbackValue(OccupantAffiliation.none);
     registerFallbackValue(OccupantRole.none);
     registerFallbackValue(fallbackMessage);
+    registerFallbackValue(DateTime(2023));
     registerFallbackValue(
       Chat(
         jid: 'fallback@axi.im',
@@ -835,6 +832,15 @@ void main() {
     ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
     when(
       () => messageService.syncPinnedMessagesForChat(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => messageService.loadLastSeenPinnedMessageAt(any()),
+    ).thenAnswer((_) async => null);
+    when(
+      () => messageService.saveLastSeenPinnedMessageAt(
+        chatJid: any(named: 'chatJid'),
+        seenAt: any(named: 'seenAt'),
+      ),
     ).thenAnswer((_) async {});
     when(
       () =>
@@ -1390,8 +1396,8 @@ void main() {
       dirtyState.latestPinnedMessageNotice,
     );
     expect(
-      bloc.state.hiddenPinnedMessageNotice,
-      dirtyState.hiddenPinnedMessageNotice,
+      bloc.state.lastSeenPinnedMessageAt,
+      dirtyState.lastSeenPinnedMessageAt,
     );
     expect(bloc.state.fanOutReports, dirtyState.fanOutReports);
     expect(
@@ -3544,12 +3550,8 @@ void main() {
     ).called(1);
     expect(bloc.state.toast?.message, ChatMessageKey.chatMessagePinned);
     expect(bloc.state.toastId, 1);
-    expect(
-      bloc.state.latestPinnedMessageNotice?.messageStanzaId,
-      message.stanzaID,
-    );
-    expect(bloc.state.latestPinnedMessageNotice?.chatJid, mixedChat.remoteJid);
-    expect(bloc.state.showPinnedMessageBanner, isTrue);
+    expect(bloc.state.latestPinnedMessageNotice, isNull);
+    expect(bloc.state.showPinnedMessageBanner, isFalse);
 
     await bloc.close();
   });
@@ -3626,8 +3628,11 @@ void main() {
         ChatMessageKey.chatMessageAlreadyPinned,
       );
       expect(bloc.state.toast?.variant, ChatToastVariant.info);
-      expect(bloc.state.latestPinnedMessageNotice, isNull);
-      expect(bloc.state.showPinnedMessageBanner, isFalse);
+      expect(
+        bloc.state.latestPinnedMessageNotice?.messageStanzaId,
+        message.stanzaID,
+      );
+      expect(bloc.state.showPinnedMessageBanner, isTrue);
 
       await bloc.close();
       await pinnedController.close();
@@ -3813,7 +3818,138 @@ void main() {
   );
 
   test(
-    'initial pinned stream snapshot does not show composer notice',
+    'same-source chat update subscribes to pins after initial update restart',
+    () async {
+      final xmppService = MockXmppService();
+      final connectivityController =
+          StreamController<xmpp.ConnectionState>.broadcast();
+      final pinnedController =
+          StreamController<List<PinnedMessageAggregate>>.broadcast();
+      final prefetchCompleter = Completer<void>();
+      const pinnedMessage = Message(
+        stanzaID: 'pin-after-restart',
+        senderJid: 'self@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'sent as xmpp',
+      );
+
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(xmpp.ConnectionState.notConnected);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => connectivityController.stream);
+      when(
+        () => xmppService.httpUploadSupportStream,
+      ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+      when(
+        () => xmppService.httpUploadSupport,
+      ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+      when(
+        () => xmppService.createChatArchiveSession(),
+      ).thenReturn('xmpp-session-1');
+      when(
+        () => xmppService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => messageStreamController.stream);
+      when(
+        () => xmppService.hydrateLatestFromMamForChatSessionIfNeeded(
+          sessionId: any(named: 'sessionId'),
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          filter: any(named: 'filter'),
+          visibleWindowEmpty: any(named: 'visibleWindowEmpty'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => pinnedController.stream);
+      when(
+        () => xmppService.syncPinnedMessagesForChat(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.loadLastSeenPinnedMessageAt(any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => xmppService.saveLastSeenPinnedMessageAt(
+          chatJid: any(named: 'chatJid'),
+          seenAt: any(named: 'seenAt'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => xmppService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      ).thenAnswer((_) async => const [pinnedMessage]);
+      when(
+        () => xmppService.resolvePeerCapabilities(
+          jid: any(named: 'jid'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+      when(
+        () => xmppService.prefetchAvatarForJid(initialChat.jid),
+      ).thenAnswer((_) => prefetchCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: xmppService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await untilCalled(
+        () => xmppService.prefetchAvatarForJid(initialChat.jid),
+      );
+
+      chatStreamController.add(initialChat.copyWith(title: 'Renamed peer'));
+      prefetchCompleter.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => xmppService.pinnedMessagesStream(initialChat.remoteJid),
+      ).called(1);
+
+      pinnedController.add([
+        _pinnedAggregate(
+          messageStanzaId: pinnedMessage.stanzaID,
+          chatJid: initialChat.remoteJid,
+          pinnedAt: DateTime(2026, 5, 28),
+        ),
+      ]);
+      await untilCalled(
+        () => xmppService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.pinnedMessages, hasLength(1));
+      expect(
+        bloc.state.pinnedMessages.single.messageStanzaId,
+        pinnedMessage.stanzaID,
+      );
+
+      await bloc.close();
+      await pinnedController.close();
+      await connectivityController.close();
+    },
+  );
+
+  test(
+    'initial pinned stream snapshot shows composer notice when not hidden',
     () async {
       final pinnedController =
           StreamController<List<PinnedMessageAggregate>>.broadcast();
@@ -3853,6 +3989,7 @@ void main() {
           messageStanzaId: pinnedMessage.stanzaID,
           chatJid: initialChat.remoteJid,
           pinnedAt: pinnedAt,
+          pinnedBySelf: false,
         ),
       ]);
       await untilCalled(
@@ -3864,8 +4001,146 @@ void main() {
       await _pumpBloc();
 
       expect(bloc.state.pinnedMessages, hasLength(1));
-      expect(bloc.state.latestPinnedMessageNotice, isNull);
-      expect(bloc.state.hiddenPinnedMessageNotice, isNull);
+      expect(
+        bloc.state.latestPinnedMessageNotice,
+        ChatPinnedMessageNotice(
+          messageStanzaId: pinnedMessage.stanzaID,
+          chatJid: initialChat.remoteJid,
+          pinnedAt: pinnedAt,
+        ),
+      );
+      expect(bloc.state.lastSeenPinnedMessageAt, isNull);
+      expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+      await bloc.close();
+      await pinnedController.close();
+    },
+  );
+
+  test('self pinned stream snapshot does not show composer notice', () async {
+    final pinnedController =
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
+    final pinnedAt = DateTime(2026, 5, 26, 12);
+    const pinnedMessage = Message(
+      stanzaID: 'self-initial-pin',
+      senderJid: 'self@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'self pin',
+    );
+    when(
+      () => messageService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => pinnedController.stream);
+    when(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async => const [pinnedMessage]);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    pinnedController.add([
+      _pinnedAggregate(
+        messageStanzaId: pinnedMessage.stanzaID,
+        chatJid: initialChat.remoteJid,
+        pinnedAt: pinnedAt,
+        pinnedBySelf: true,
+      ),
+    ]);
+    await untilCalled(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    );
+    await _pumpBloc();
+
+    expect(bloc.state.pinnedMessages, hasLength(1));
+    expect(bloc.state.latestPinnedMessageNotice, isNull);
+    expect(bloc.state.lastSeenPinnedMessageAt, isNull);
+    expect(bloc.state.showPinnedMessageBanner, isFalse);
+
+    await bloc.close();
+    await pinnedController.close();
+  });
+
+  test(
+    'initial pinned stream snapshot stays hidden after seen timestamp',
+    () async {
+      final pinnedController =
+          StreamController<List<PinnedMessageAggregate>>.broadcast();
+      final pinnedAt = DateTime(2026, 5, 26, 12);
+      const pinnedMessage = Message(
+        stanzaID: 'hidden-initial-pin',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'hidden initial pin',
+      );
+      when(
+        () => messageService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => pinnedController.stream);
+      when(
+        () => messageService.loadLastSeenPinnedMessageAt(any()),
+      ).thenAnswer((_) async => pinnedAt);
+      when(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      ).thenAnswer((_) async => const [pinnedMessage]);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      pinnedController.add([
+        _pinnedAggregate(
+          messageStanzaId: pinnedMessage.stanzaID,
+          chatJid: initialChat.remoteJid,
+          pinnedAt: pinnedAt,
+          pinnedBySelf: false,
+        ),
+      ]);
+      await untilCalled(
+        () => messageService.loadMessagesByReferenceIds(
+          any(),
+          chatJid: any(named: 'chatJid'),
+        ),
+      );
+      await _pumpBloc();
+
+      expect(bloc.state.pinnedMessages, hasLength(1));
+      expect(
+        bloc.state.latestPinnedMessageNotice,
+        ChatPinnedMessageNotice(
+          messageStanzaId: pinnedMessage.stanzaID,
+          chatJid: initialChat.remoteJid,
+          pinnedAt: pinnedAt,
+        ),
+      );
+      expect(bloc.state.lastSeenPinnedMessageAt, pinnedAt);
       expect(bloc.state.showPinnedMessageBanner, isFalse);
 
       await bloc.close();
@@ -3923,6 +4198,7 @@ void main() {
         messageStanzaId: firstMessage.stanzaID,
         chatJid: initialChat.remoteJid,
         pinnedAt: firstPinnedAt,
+        pinnedBySelf: false,
       ),
     ]);
     await untilCalled(
@@ -3944,19 +4220,27 @@ void main() {
     bloc.add(const ChatPinnedMessageNoticeHidden());
     await _pumpBloc();
 
-    expect(bloc.state.hiddenPinnedMessageNotice, firstNotice);
+    expect(bloc.state.lastSeenPinnedMessageAt, firstNotice.pinnedAt);
     expect(bloc.state.showPinnedMessageBanner, isFalse);
+    verify(
+      () => messageService.saveLastSeenPinnedMessageAt(
+        chatJid: firstNotice.chatJid,
+        seenAt: firstNotice.pinnedAt,
+      ),
+    ).called(1);
 
     pinnedController.add([
       _pinnedAggregate(
         messageStanzaId: firstMessage.stanzaID,
         chatJid: initialChat.remoteJid,
         pinnedAt: firstPinnedAt,
+        pinnedBySelf: false,
       ),
       _pinnedAggregate(
         messageStanzaId: secondMessage.stanzaID,
         chatJid: initialChat.remoteJid,
         pinnedAt: secondPinnedAt,
+        pinnedBySelf: false,
       ),
     ]);
     await _pumpBloc();
@@ -3970,7 +4254,7 @@ void main() {
         pinnedAt: secondPinnedAt,
       ),
     );
-    expect(bloc.state.hiddenPinnedMessageNotice, firstNotice);
+    expect(bloc.state.lastSeenPinnedMessageAt, firstNotice.pinnedAt);
     expect(bloc.state.showPinnedMessageBanner, isTrue);
 
     await bloc.close();

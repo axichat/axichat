@@ -354,6 +354,7 @@ const String _pinPendingClearAllRetractionsKeyName =
 const String _pinLegacyPinnerMigrationKeyName =
     'pin_sync_legacy_pinner_migration';
 const String _pinArchiveBootstrapKeyPrefix = 'pin_sync_archive_bootstrap_';
+const String _pinBannerLastSeenKeyPrefix = 'pin_banner_last_seen_';
 const Duration _mamQueryTimeout = Duration(seconds: 90);
 const Duration _mamQueryFallbackTimeout = Duration(seconds: 15);
 final _pinPendingPublishesKey = XmppStateStore.registerKey(
@@ -946,6 +947,7 @@ const String _mamGlobalScopeFallback = 'default';
 const String _mamGlobalScopeSeparator = ':';
 final Map<String, RegisteredStateKey> _mamGlobalScopedKeyCache = {};
 final Map<String, RegisteredStateKey> _pinArchiveBootstrapKeyCache = {};
+final Map<String, RegisteredStateKey> _pinBannerLastSeenKeyCache = {};
 const String _messageCollectionSyncSourceKeyName =
     'message_collection_sync_source_id';
 const String _messageCollectionSyncPendingPublishesKeyName =
@@ -3568,6 +3570,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  RegisteredStateKey _pinBannerLastSeenKeyFor(String chatJid) {
+    final normalizedChat = _normalizePinChatJid(chatJid) ?? chatJid.trim();
+    return _pinBannerLastSeenKeyCache.putIfAbsent(
+      normalizedChat,
+      () => XmppStateStore.registerKey(
+        '$_pinBannerLastSeenKeyPrefix$normalizedChat',
+      ),
+    );
+  }
+
   Future<bool> _sharedPinArchiveBootstrapComplete(String chatJid) async {
     final raw = await _dbOpReturning<XmppStateStore, String?>(
       (ss) => ss.read(key: _pinArchiveBootstrapKeyFor(chatJid)) as String?,
@@ -4005,6 +4017,45 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         deltaMsgId: message.deltaMsgId,
       ),
     );
+  }
+
+  Future<DateTime?> loadLastSeenPinnedMessageAt(String chatJid) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null || !isStateStoreReady) {
+      return null;
+    }
+    final raw = await _dbOpReturning<XmppStateStore, Object?>(
+      (ss) => ss.read(key: _pinBannerLastSeenKeyFor(normalizedChat)),
+    );
+    return _lastSeenPinnedMessageAtFromRaw(raw);
+  }
+
+  Future<void> saveLastSeenPinnedMessageAt({
+    required String chatJid,
+    required DateTime seenAt,
+  }) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null || !isStateStoreReady) {
+      return;
+    }
+    await _dbOp<XmppStateStore>(
+      (ss) => ss.write(
+        key: _pinBannerLastSeenKeyFor(normalizedChat),
+        value: seenAt.toUtc().toIso8601String(),
+      ),
+    );
+  }
+
+  DateTime? _lastSeenPinnedMessageAtFromRaw(Object? raw) {
+    final rawSeenAt = switch (raw) {
+      String value => value.trim(),
+      Map value => value['pinnedAt']?.toString().trim(),
+      _ => null,
+    };
+    if (rawSeenAt == null || rawSeenAt.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(rawSeenAt)?.toUtc();
   }
 
   Stream<List<PinnedMessageAggregate>> pinnedMessagesStream(

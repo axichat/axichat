@@ -535,7 +535,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<List<Message>>? _messageSubscription;
   StreamSubscription<List<PinnedMessageAggregate>>? _pinnedSubscription;
   String? _pinnedMessagesSourceKey;
-  Map<String, DateTime>? _knownPinnedMessagePinnedAtByKey;
+  String? _lastSeenPinnedMessageSourceKey;
+  DateTime? _lastSeenPinnedMessageAt;
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<List<RosterItem>>? _roomRosterSubscription;
   StreamSubscription<List<Chat>>? _roomChatsSubscription;
@@ -1627,7 +1628,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final sourceKey = _resolvePinnedMessagesChatJid(chat);
     if (_pinnedMessagesSourceKey != sourceKey) {
-      _knownPinnedMessagePinnedAtByKey = null;
+      _clearLastSeenPinnedMessageCache();
     }
     _pinnedMessagesSourceKey = sourceKey;
     final previousSubscription = _pinnedSubscription;
@@ -1644,7 +1645,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    _pinnedSubscription = _messageService
+    late final StreamSubscription<List<PinnedMessageAggregate>> subscription;
+    subscription = _messageService
         .pinnedMessagesStream(sourceKey)
         .listen(
           (items) =>
@@ -1655,9 +1657,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           },
           onDone: () {
             _log.safeFine('Pinned messages stream closed.');
+            if (identical(_pinnedSubscription, subscription)) {
+              _pinnedSubscription = null;
+            }
             add(_PinnedMessagesLoadFailed(sourceKey));
           },
         );
+    _pinnedSubscription = subscription;
     unawaited(_syncPinnedMessagesForChat(chat));
   }
 
@@ -1782,9 +1788,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         : _resolvePinnedMessagesChatJid(state.chat!);
     final nextPinnedSourceKey = _resolvePinnedMessagesChatJid(event.chat);
     final typingContextChanged = chatWasUninitialized || transportChanged;
+    final pinnedSourceChanged =
+        (_pinnedMessagesSourceKey ?? previousPinnedSourceKey) !=
+        nextPinnedSourceKey;
     final pinnedContextChanged =
-        chatWasUninitialized || previousPinnedSourceKey != nextPinnedSourceKey;
-    final resetPinnedMessages = !chatWasUninitialized && pinnedContextChanged;
+        chatWasUninitialized ||
+        pinnedSourceChanged ||
+        (nextPinnedSourceKey != null && _pinnedSubscription == null);
+    final resetPinnedMessages =
+        !chatWasUninitialized && previousPinnedSourceKey != nextPinnedSourceKey;
     final capabilitiesShouldReset = chatWasUninitialized || transportChanged;
     final showXmppCapabilities = _xmppAllowedForChat(event.chat);
     final typingShouldClear =
@@ -1809,7 +1821,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         unreadCount <= _emptyMessageCount &&
         (stagedUnreadCount == null || stagedUnreadCount <= _emptyMessageCount);
     if (resetPinnedMessages) {
-      _knownPinnedMessagePinnedAtByKey = null;
+      _clearLastSeenPinnedMessageCache();
     }
     emit(
       state.copyWith(
@@ -1836,9 +1848,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         latestPinnedMessageNotice: resetPinnedMessages
             ? null
             : state.latestPinnedMessageNotice,
-        hiddenPinnedMessageNotice: resetPinnedMessages
+        lastSeenPinnedMessageAt: resetPinnedMessages
             ? null
-            : state.hiddenPinnedMessageNotice,
+            : state.lastSeenPinnedMessageAt,
         unreadBoundaryStanzaId: shouldClearUnreadBoundary
             ? null
             : state.unreadBoundaryStanzaId,
@@ -2969,22 +2981,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     await _syncFileMetadataSubscriptions(nextMetadataIds);
     if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
-    final latestPinnedMessageNotice = _takePinnedMessageNoticeForEntries(
+    final lastSeenPinnedMessageAt = await _loadLastSeenPinnedMessageAt(
+      sourceKey,
+    );
+    if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
+    final latestPinnedMessageNotice = _latestPinnedMessageNoticeForEntries(
       entries,
     );
-    var nextState = state.copyWith(
+    final nextState = state.copyWith(
       pinnedMessages: pinnedItems,
       pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded,
+      latestPinnedMessageNotice: latestPinnedMessageNotice,
+      lastSeenPinnedMessageAt: lastSeenPinnedMessageAt,
       fileMetadataById: _pruneFileMetadataById(
         metadataIds: nextMetadataIds,
         existing: state.fileMetadataById,
       ),
     );
-    if (latestPinnedMessageNotice != null) {
-      nextState = nextState.copyWith(
-        latestPinnedMessageNotice: latestPinnedMessageNotice,
-      );
-    }
     emit(nextState);
     _requestPresentationHydrationForMessages(
       pinnedItems.map((item) => item.message).whereType<Message>(),
@@ -3154,15 +3167,35 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _refreshPinnedMessagesFromDatabase(chat);
   }
 
-  void _onChatPinnedMessageNoticeHidden(
+  Future<void> _onChatPinnedMessageNoticeHidden(
     ChatPinnedMessageNoticeHidden event,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
     final latest = state.latestPinnedMessageNotice;
-    if (latest == null || latest == state.hiddenPinnedMessageNotice) {
+    final seenAt = state.lastSeenPinnedMessageAt;
+    if (latest == null ||
+        (seenAt != null && !latest.pinnedAt.isAfter(seenAt))) {
       return;
     }
-    emit(state.copyWith(hiddenPinnedMessageNotice: latest));
+    final sourceKey = _pinnedMessagesSourceKey;
+    _lastSeenPinnedMessageSourceKey = sourceKey;
+    _lastSeenPinnedMessageAt = latest.pinnedAt;
+    try {
+      await _messageService.saveLastSeenPinnedMessageAt(
+        chatJid: latest.chatJid,
+        seenAt: latest.pinnedAt,
+      );
+    } on XmppException catch (error, stackTrace) {
+      _log.safeFine(
+        'Failed to save latest seen pinned message timestamp.',
+        error,
+        stackTrace,
+      );
+    }
+    if (sourceKey != _pinnedMessagesSourceKey) {
+      return;
+    }
+    emit(state.copyWith(lastSeenPinnedMessageAt: latest.pinnedAt));
   }
 
   Future<void> _hydratePinnedMessagesIfNeeded(
@@ -3188,62 +3221,44 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded));
   }
 
-  ChatPinnedMessageNotice? _takePinnedMessageNoticeForEntries(
+  Future<DateTime?> _loadLastSeenPinnedMessageAt(String? sourceKey) async {
+    if (sourceKey == null) {
+      return null;
+    }
+    if (_lastSeenPinnedMessageSourceKey == sourceKey) {
+      return _lastSeenPinnedMessageAt;
+    }
+    try {
+      final seenAt = await _messageService.loadLastSeenPinnedMessageAt(
+        sourceKey,
+      );
+      _lastSeenPinnedMessageSourceKey = sourceKey;
+      _lastSeenPinnedMessageAt = seenAt;
+      return seenAt;
+    } on XmppException catch (error, stackTrace) {
+      _log.safeFine(
+        'Failed to load latest seen pinned message timestamp.',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  void _clearLastSeenPinnedMessageCache() {
+    _lastSeenPinnedMessageSourceKey = null;
+    _lastSeenPinnedMessageAt = null;
+  }
+
+  ChatPinnedMessageNotice? _latestPinnedMessageNoticeForEntries(
     List<PinnedMessageAggregate> entries,
   ) {
     final currentNotices = _pinnedMessageNoticesForEntries(entries);
-    final knownPinnedAtByKey = _knownPinnedMessagePinnedAtByKey;
-    _knownPinnedMessagePinnedAtByKey = _pinnedMessageNoticePinnedAtByKey(
-      currentNotices,
-    );
-    if (knownPinnedAtByKey == null) {
+    if (currentNotices.isEmpty) {
       return null;
     }
-    final newNotices = <ChatPinnedMessageNotice>{};
-    for (final notice in currentNotices) {
-      final knownPinnedAt = knownPinnedAtByKey[_pinnedMessageNoticeKey(notice)];
-      if (knownPinnedAt == null || notice.pinnedAt.isAfter(knownPinnedAt)) {
-        newNotices.add(notice);
-      }
-    }
-    if (newNotices.isEmpty) {
-      return null;
-    }
-    return _latestPinnedMessageNotice(newNotices);
+    return _latestPinnedMessageNotice(currentNotices);
   }
-
-  void _rememberPinnedMessageNotice(ChatPinnedMessageNotice notice) {
-    final knownPinnedAtByKey = _knownPinnedMessagePinnedAtByKey;
-    if (knownPinnedAtByKey == null) {
-      return;
-    }
-    final key = _pinnedMessageNoticeKey(notice);
-    final knownPinnedAt = knownPinnedAtByKey[key];
-    if (knownPinnedAt != null && !notice.pinnedAt.isAfter(knownPinnedAt)) {
-      return;
-    }
-    _knownPinnedMessagePinnedAtByKey = Map.unmodifiable({
-      ...knownPinnedAtByKey,
-      key: notice.pinnedAt,
-    });
-  }
-
-  Map<String, DateTime> _pinnedMessageNoticePinnedAtByKey(
-    Set<ChatPinnedMessageNotice> notices,
-  ) {
-    final pinnedAtByKey = <String, DateTime>{};
-    for (final notice in notices) {
-      final key = _pinnedMessageNoticeKey(notice);
-      final knownPinnedAt = pinnedAtByKey[key];
-      if (knownPinnedAt == null || notice.pinnedAt.isAfter(knownPinnedAt)) {
-        pinnedAtByKey[key] = notice.pinnedAt;
-      }
-    }
-    return Map.unmodifiable(pinnedAtByKey);
-  }
-
-  String _pinnedMessageNoticeKey(ChatPinnedMessageNotice notice) =>
-      '${notice.chatJid}\n${notice.messageStanzaId}';
 
   Set<ChatPinnedMessageNotice> _pinnedMessageNoticesForEntries(
     List<PinnedMessageAggregate> entries,
@@ -3253,6 +3268,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final notices = <ChatPinnedMessageNotice>{};
     for (final entry in entries) {
+      if (entry.pinnedBySelf) {
+        continue;
+      }
       final messageId = entry.messageReferenceId.trim();
       final chatJid = entry.chatJid.trim();
       if (messageId.isEmpty || chatJid.isEmpty) {
@@ -3279,14 +3297,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         latest = notice;
         continue;
       }
-      final timestampOrder = notice.pinnedAt.compareTo(current.pinnedAt);
-      final messageOrder = notice.messageStanzaId.compareTo(
-        current.messageStanzaId,
-      );
-      final chatOrder = notice.chatJid.compareTo(current.chatJid);
-      if (timestampOrder > 0 ||
-          (timestampOrder == 0 && messageOrder > 0) ||
-          (timestampOrder == 0 && messageOrder == 0 && chatOrder > 0)) {
+      if (notice.isAfter(current)) {
         latest = notice;
       }
     }
@@ -5832,15 +5843,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           message: event.message,
         );
       }
-      var nextState = _attachToast(state, ChatToast(message: successMessage));
-      if (event.pin) {
-        nextState = _attachPinnedMessageNotice(
-          nextState,
-          chat: chat,
-          pinReference: pinReference,
-        );
-      }
-      emit(nextState);
+      emit(_attachToast(state, ChatToast(message: successMessage)));
     } on XmppPinPermissionException catch (error, stackTrace) {
       _log.safeFine('Rejected unauthorized XMPP pin.', error, stackTrace);
       emit(
@@ -8052,24 +8055,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   ChatState _attachToast(ChatState base, ChatToast toast) =>
       base.copyWith(toast: toast, toastId: base.toastId + 1);
-
-  ChatState _attachPinnedMessageNotice(
-    ChatState base, {
-    required Chat chat,
-    required MessageReference pinReference,
-  }) {
-    final sourceKey = _resolvePinnedMessagesChatJid(chat);
-    if (sourceKey == null) {
-      return base;
-    }
-    final notice = ChatPinnedMessageNotice(
-      messageStanzaId: pinReference.value,
-      chatJid: sourceKey,
-      pinnedAt: DateTime.timestamp().toUtc(),
-    );
-    _rememberPinnedMessageNotice(notice);
-    return base.copyWith(latestPinnedMessageNotice: notice);
-  }
 
   void _clearEmailSubject(Emitter<ChatState> emit) {
     if (state.emailSubject?.isEmpty ?? true) {

@@ -23,7 +23,8 @@ enum ChatPinnedMessagesStatus {
   bool get canRetry => this == failure;
 }
 
-final class ChatPinnedMessageNotice extends Equatable {
+final class ChatPinnedMessageNotice extends Equatable
+    implements Comparable<ChatPinnedMessageNotice> {
   const ChatPinnedMessageNotice({
     required this.messageStanzaId,
     required this.chatJid,
@@ -33,6 +34,21 @@ final class ChatPinnedMessageNotice extends Equatable {
   final String messageStanzaId;
   final String chatJid;
   final DateTime pinnedAt;
+
+  bool isAfter(ChatPinnedMessageNotice other) => compareTo(other) > 0;
+
+  @override
+  int compareTo(ChatPinnedMessageNotice other) {
+    final timestampOrder = pinnedAt.compareTo(other.pinnedAt);
+    if (timestampOrder != 0) {
+      return timestampOrder;
+    }
+    final messageOrder = messageStanzaId.compareTo(other.messageStanzaId);
+    if (messageOrder != 0) {
+      return messageOrder;
+    }
+    return chatJid.compareTo(other.chatJid);
+  }
 
   @override
   List<Object?> get props => [messageStanzaId, chatJid, pinnedAt];
@@ -185,7 +201,7 @@ abstract class ChatState with _$ChatState {
     @Default(ChatPinnedMessagesStatus.idle)
     ChatPinnedMessagesStatus pinnedMessagesStatus,
     ChatPinnedMessageNotice? latestPinnedMessageNotice,
-    ChatPinnedMessageNotice? hiddenPinnedMessageNotice,
+    DateTime? lastSeenPinnedMessageAt,
     @Default(<String, Message>{}) Map<String, Message> quotedMessagesById,
     Chat? chat,
     RoomState? roomState,
@@ -249,7 +265,11 @@ abstract class ChatState with _$ChatState {
 extension ChatStatePinnedMessageNoticeVisibility on ChatState {
   bool get showPinnedMessageBanner {
     final latest = latestPinnedMessageNotice;
-    return latest != null && latest != hiddenPinnedMessageNotice;
+    if (latest == null) {
+      return false;
+    }
+    final seenAt = lastSeenPinnedMessageAt;
+    return seenAt == null || latest.pinnedAt.isAfter(seenAt);
   }
 }
 
