@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
+    as provisioning;
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/foreground_runtime_controller.dart';
@@ -165,7 +167,7 @@ void main() {
     expect(find.text('Background notifications'), findsOneWidget);
   });
 
-  testWidgets('signup welcome gate skips normal login completions', (
+  testWidgets('signup welcome gate skips normal login for non-axi accounts', (
     tester,
   ) async {
     await _pumpEmailForwardingApp(
@@ -179,6 +181,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Axichat'), findsNothing);
+  });
+
+  testWidgets('first axi.im login shows recovery setup when unconfigured', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit(
+      recoveryStatus: const provisioning.RecoveryStatus(
+        recoveryEmailConfigured: false,
+        totpConfigured: false,
+      ),
+    );
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: settingsCubit,
+      xmppService: _xmppService(jid: 'alice@axi.im'),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationComplete(),
+      ),
+      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set up account recovery'), findsOneWidget);
+    expect(find.text('Add recovery email'), findsOneWidget);
+    expect(find.text('Add authenticator app'), findsOneWidget);
+    verify(
+      () => settingsCubit.recoveryStatus(accountJid: 'alice@axi.im'),
+    ).called(1);
   });
 
   testWidgets('signup welcome gate skips smtp-disabled signups', (
@@ -200,6 +231,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Axichat'), findsNothing);
+  });
+
+  testWidgets('signup welcome gate releases post-login hold after unmount', (
+    tester,
+  ) async {
+    final recoveryStatus = Completer<provisioning.RecoveryStatus>();
+    final settingsCubit = _settingsCubit();
+    final authenticationCubit = _authenticationCubit(
+      state: const AuthenticationCompleteFromSignup(),
+    );
+    when(
+      () => settingsCubit.recoveryStatus(accountJid: any(named: 'accountJid')),
+    ).thenAnswer((_) => recoveryStatus.future);
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: settingsCubit,
+      authenticationCubit: authenticationCubit,
+      xmppService: _xmppService(jid: 'alice@axi.im'),
+      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+    );
+    await tester.pump();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    recoveryStatus.complete(
+      const provisioning.RecoveryStatus(
+        recoveryEmailConfigured: false,
+        totpConfigured: false,
+      ),
+    );
+    await tester.pump();
+
+    verify(
+      () => authenticationCubit.releaseSignupPostLoginWorkHold(),
+    ).called(1);
   });
 }
 
@@ -275,6 +340,12 @@ Future<void> _pumpEmailForwardingApp(
 
 _MockSettingsCubit _settingsCubit({
   SettingsState state = const SettingsState(),
+  bool recoveryWelcomeDismissed = false,
+  provisioning.RecoveryStatus recoveryStatus =
+      const provisioning.RecoveryStatus(
+        recoveryEmailConfigured: true,
+        totpConfigured: false,
+      ),
 }) {
   final settingsCubit = _MockSettingsCubit();
   when(() => settingsCubit.state).thenReturn(state);
@@ -287,6 +358,24 @@ _MockSettingsCubit _settingsCubit({
       any(),
       accountJid: any(named: 'accountJid'),
     ),
+  ).thenAnswer((_) async {});
+  when(() => settingsCubit.recoveryAvailableForAccount(any())).thenAnswer((
+    invocation,
+  ) {
+    final accountJid = invocation.positionalArguments.first as String?;
+    return state.endpointConfig.isAxiImDomain && isAxiJid(accountJid);
+  });
+  when(
+    () => settingsCubit.recoveryWelcomeDismissedFor(any()),
+  ).thenAnswer((_) async => recoveryWelcomeDismissed);
+  when(
+    () => settingsCubit.recoveryStatus(accountJid: any(named: 'accountJid')),
+  ).thenAnswer((_) async => recoveryStatus);
+  when(
+    () => settingsCubit.dismissRecoveryWelcomeFor(any()),
+  ).thenAnswer((_) async {});
+  when(
+    () => settingsCubit.markEmailForwardingGuideSeen(),
   ).thenAnswer((_) async {});
   return settingsCubit;
 }
@@ -310,13 +399,13 @@ _MockNotificationService _notificationService() {
   return notificationService;
 }
 
-_MockXmppService _xmppService() {
+_MockXmppService _xmppService({String jid = 'user@example.com'}) {
   final xmppService = _MockXmppService();
   when(xmppService.ensureForegroundSocketIfActive).thenAnswer((_) async {});
   when(() => xmppService.connected).thenReturn(true);
   when(() => xmppService.hasConnectionSettings).thenReturn(true);
   when(() => xmppService.usingForegroundSocket).thenReturn(true);
-  when(() => xmppService.myJid).thenReturn('user@example.com');
+  when(() => xmppService.myJid).thenReturn(jid);
   return xmppService;
 }
 

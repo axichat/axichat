@@ -5,11 +5,14 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
+    as provisioning;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/settings/view/account_recovery_settings.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -154,14 +157,33 @@ class EmailForwardingGuideDialog extends StatelessWidget {
 class EmailForwardingWelcomeDialog extends StatelessWidget {
   const EmailForwardingWelcomeDialog({
     super.key,
+    required this.accountJid,
+    required this.showEmailForwarding,
+    required this.showRecoverySetup,
     required this.onForegroundActivationStarted,
     required this.onForegroundActivationFinished,
     required this.onForegroundActivated,
+    required this.onRecoveryDismissed,
+    required this.onRecoveryConfigured,
   });
 
+  final String accountJid;
+  final bool showEmailForwarding;
+  final bool showRecoverySetup;
   final void Function() onForegroundActivationStarted;
   final void Function() onForegroundActivationFinished;
   final Future<void> Function() onForegroundActivated;
+  final Future<void> Function() onRecoveryDismissed;
+  final Future<void> Function() onRecoveryConfigured;
+
+  Future<void> _dismiss(BuildContext context) async {
+    if (showRecoverySetup) {
+      await onRecoveryDismissed();
+    }
+    if (context.mounted) {
+      context.pop();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +204,7 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
           child: AxiSheetScaffold.scroll(
             header: AxiSheetHeader(
               title: Text(l10n.emailForwardingWelcomeTitle),
-              onClose: () => context.pop(),
+              onClose: () => _dismiss(context),
             ),
             footer: Padding(
               padding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m),
@@ -190,15 +212,17 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    l10n.emailForwardingGuideSettingsHint,
-                    style: context.textTheme.muted,
-                  ),
-                  SizedBox(height: spacing.s),
+                  if (showEmailForwarding) ...[
+                    Text(
+                      l10n.emailForwardingGuideSettingsHint,
+                      style: context.textTheme.muted,
+                    ),
+                    SizedBox(height: spacing.s),
+                  ],
                   Align(
                     alignment: Alignment.centerRight,
                     child: AxiButton.outline(
-                      onPressed: () => context.pop(),
+                      onPressed: () => _dismiss(context),
                       child: Text(l10n.emailForwardingGuideSkipLabel),
                     ),
                   ),
@@ -206,11 +230,21 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
               ),
             ),
             children: [
-              EmailForwardingWelcomeContent(
-                onForegroundActivationStarted: onForegroundActivationStarted,
-                onForegroundActivationFinished: onForegroundActivationFinished,
-                onForegroundActivated: onForegroundActivated,
-              ),
+              if (showEmailForwarding)
+                EmailForwardingWelcomeContent(
+                  onForegroundActivationStarted: onForegroundActivationStarted,
+                  onForegroundActivationFinished:
+                      onForegroundActivationFinished,
+                  onForegroundActivated: onForegroundActivated,
+                ),
+              if (showRecoverySetup) ...[
+                if (showEmailForwarding) SizedBox(height: spacing.xl),
+                AccountRecoveryWelcomeContent(
+                  accountJid: accountJid,
+                  onRecoveryDismissed: onRecoveryDismissed,
+                  onRecoveryConfigured: onRecoveryConfigured,
+                ),
+              ],
             ],
           ),
         ),
@@ -255,6 +289,95 @@ class EmailForwardingWelcomeContent extends StatelessWidget {
           onForegroundActivationStarted: onForegroundActivationStarted,
           onForegroundActivationFinished: onForegroundActivationFinished,
           onForegroundActivated: onForegroundActivated,
+        ),
+      ],
+    );
+  }
+}
+
+class AccountRecoveryWelcomeContent extends StatelessWidget {
+  const AccountRecoveryWelcomeContent({
+    super.key,
+    required this.accountJid,
+    required this.onRecoveryDismissed,
+    required this.onRecoveryConfigured,
+  });
+
+  final String accountJid;
+  final Future<void> Function() onRecoveryDismissed;
+  final Future<void> Function() onRecoveryConfigured;
+
+  Future<void> _showEmailSetup(BuildContext context) async {
+    final changed = await showRecoveryEmailSetupDialog(
+      context,
+      accountJid: accountJid,
+    );
+    if (!context.mounted || !changed) {
+      return;
+    }
+    await onRecoveryConfigured();
+    if (context.mounted) {
+      context.pop();
+    }
+  }
+
+  Future<void> _showTotpSetup(BuildContext context) async {
+    final changed = await showRecoveryTotpSetupDialog(
+      context,
+      accountJid: accountJid,
+    );
+    if (!context.mounted || !changed) {
+      return;
+    }
+    await onRecoveryConfigured();
+    if (context.mounted) {
+      context.pop();
+    }
+  }
+
+  Future<void> _skip(BuildContext context) async {
+    await onRecoveryDismissed();
+    if (context.mounted) {
+      context.pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!context.watch<SettingsCubit>().state.endpointConfig.isAxiImDomain ||
+        !isAxiJid(accountJid)) {
+      return const SizedBox.shrink();
+    }
+    final spacing = context.spacing;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(context.l10n.recoveryWelcomeTitle, style: context.textTheme.large),
+        SizedBox(height: spacing.s),
+        Text(
+          context.l10n.recoveryWelcomeDescription,
+          style: context.textTheme.muted,
+        ),
+        SizedBox(height: spacing.m),
+        Wrap(
+          spacing: spacing.s,
+          runSpacing: spacing.s,
+          children: [
+            AxiButton.secondary(
+              leading: const Icon(LucideIcons.mail),
+              onPressed: () async => await _showEmailSetup(context),
+              child: Text(context.l10n.recoveryAddEmailAction),
+            ),
+            AxiButton.secondary(
+              leading: const Icon(LucideIcons.smartphone),
+              onPressed: () async => await _showTotpSetup(context),
+              child: Text(context.l10n.recoveryAddTotpAction),
+            ),
+            AxiButton.outline(
+              onPressed: () async => await _skip(context),
+              child: Text(context.l10n.recoverySkipForNow),
+            ),
+          ],
         ),
       ],
     );
@@ -436,7 +559,7 @@ class EmailForwardingWelcomeGate extends StatefulWidget {
 class _EmailForwardingWelcomeGateState
     extends State<EmailForwardingWelcomeGate> {
   final bool _debugAlwaysShowWelcome = false;
-  bool _dialogShown = false;
+  String? _dialogShownForAccount;
   bool _dialogScheduled = false;
   Completer<void>? _foregroundActivationCompleter;
 
@@ -450,8 +573,8 @@ class _EmailForwardingWelcomeGateState
   Widget build(BuildContext context) {
     return BlocListener<AuthenticationCubit, AuthenticationState>(
       listenWhen: (previous, current) =>
-          current is AuthenticationCompleteFromSignup &&
-          previous is! AuthenticationCompleteFromSignup,
+          current is AuthenticationComplete &&
+          previous is! AuthenticationComplete,
       listener: (context, state) => _scheduleWelcomeDialog(),
       child: widget.child,
     );
@@ -472,44 +595,82 @@ class _EmailForwardingWelcomeGateState
   }
 
   Future<void> _showWelcomeDialog() async {
-    if (_dialogShown || !mounted) {
+    if (!mounted) {
       return;
     }
-    if (!_debugAlwaysShowWelcome &&
-        !context.read<SettingsCubit>().state.endpointConfig.smtpEnabled) {
-      await _releaseSignupPostLoginWorkHold();
+    final authenticationCubit = context.read<AuthenticationCubit>();
+    final authState = authenticationCubit.state;
+    if (!_debugAlwaysShowWelcome && authState is! AuthenticationComplete) {
       return;
     }
-    final authState = context.read<AuthenticationCubit>().state;
-    if (!_debugAlwaysShowWelcome &&
-        authState is! AuthenticationCompleteFromSignup) {
+    final accountJid = _resolveForwardingAddress(context.read<XmppService>());
+    if (accountJid.isEmpty || _dialogShownForAccount == accountJid) {
+      await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
-    _dialogShown = true;
+    final settingsCubit = context.read<SettingsCubit>();
+    final showEmailForwarding =
+        settingsCubit.state.endpointConfig.smtpEnabled &&
+        authState is AuthenticationCompleteFromSignup;
+    final showRecoverySetup = await _shouldShowRecoverySetup(
+      settingsCubit: settingsCubit,
+      accountJid: accountJid,
+    );
+    if (!mounted) {
+      await authenticationCubit.releaseSignupPostLoginWorkHold();
+      return;
+    }
+    if (!showEmailForwarding && !showRecoverySetup) {
+      await authenticationCubit.releaseSignupPostLoginWorkHold();
+      return;
+    }
+    _dialogShownForAccount = accountJid;
     try {
       await showFadeScaleDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => EmailForwardingWelcomeDialog(
+          accountJid: accountJid,
+          showEmailForwarding: showEmailForwarding,
+          showRecoverySetup: showRecoverySetup,
           onForegroundActivationStarted: _handleForegroundActivationStarted,
           onForegroundActivationFinished: _handleForegroundActivationFinished,
-          onForegroundActivated: _releaseSignupPostLoginWorkHold,
+          onForegroundActivated:
+              authenticationCubit.releaseSignupPostLoginWorkHold,
+          onRecoveryDismissed: () =>
+              settingsCubit.dismissRecoveryWelcomeFor(accountJid),
+          onRecoveryConfigured: () =>
+              settingsCubit.dismissRecoveryWelcomeFor(accountJid),
         ),
       );
     } finally {
       await _foregroundActivationCompleter?.future;
-      if (mounted) {
-        await _releaseSignupPostLoginWorkHold();
-      }
+      await authenticationCubit.releaseSignupPostLoginWorkHold();
     }
     if (!mounted || _debugAlwaysShowWelcome) {
       return;
     }
-    context.read<SettingsCubit>().markEmailForwardingGuideSeen();
+    if (showEmailForwarding) {
+      settingsCubit.markEmailForwardingGuideSeen();
+    }
   }
 
-  Future<void> _releaseSignupPostLoginWorkHold() async {
-    await context.read<AuthenticationCubit>().releaseSignupPostLoginWorkHold();
+  Future<bool> _shouldShowRecoverySetup({
+    required SettingsCubit settingsCubit,
+    required String accountJid,
+  }) async {
+    if (!settingsCubit.recoveryAvailableForAccount(accountJid)) {
+      return false;
+    }
+    if (await settingsCubit.recoveryWelcomeDismissedFor(accountJid)) {
+      return false;
+    }
+    try {
+      final status = await settingsCubit.recoveryStatus(accountJid: accountJid);
+      return !(status?.hasRecoveryMethod ?? true);
+    } on provisioning.EmailProvisioningApiException {
+      return false;
+    }
   }
 
   void _handleForegroundActivationStarted() {
