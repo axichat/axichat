@@ -26,6 +26,8 @@ mox.JID? parseJid(String? raw) {
   if (normalized == null) return null;
   try {
     return mox.JID.fromString(normalized);
+  } on ArgumentError {
+    return null;
   } on Exception {
     return null;
   }

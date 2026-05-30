@@ -2123,6 +2123,49 @@ void main() {
   });
 
   test(
+    'sendAttachment prepares plain caption HTML fallback in service',
+    () async {
+      final service = await createProvisionedService();
+      final chat = Chat(
+        jid: 'dc-6@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 6,
+      );
+      const attachment = EmailAttachment(
+        path: '/tmp/file.txt',
+        fileName: 'file.txt',
+        sizeBytes: 12,
+        mimeType: 'text/plain',
+        caption: 'File caption',
+      );
+
+      await service.sendAttachment(chat: chat, attachment: attachment);
+
+      final capturedAttachment =
+          verify(
+                () => transport.sendAttachment(
+                  chatId: chat.deltaChatId!,
+                  attachment: captureAny(named: 'attachment'),
+                  subject: any(named: 'subject'),
+                  shareId: any(named: 'shareId'),
+                  captionOverride: 'File caption',
+                  htmlCaption: HtmlContentCodec.normalizeHtml(
+                    HtmlContentCodec.fromPlainText('File caption'),
+                  ),
+                  quotingStanzaId: any(named: 'quotingStanzaId'),
+                  accountId: any(named: 'accountId'),
+                  forcePlaintext: true,
+                  skipAutocrypt: true,
+                ),
+              ).captured.single
+              as EmailAttachment;
+      expect(capturedAttachment.caption, 'File caption');
+    },
+  );
+
+  test(
     'fanOutSend delivers to multiple recipients and records share metadata',
     () async {
       final service = EmailService(
@@ -2240,20 +2283,29 @@ void main() {
               ).captured.single
               as List<MessageParticipantData>;
       expect(participantsCapture, hasLength(3));
-      verify(
+      final capturedSendText = verify(
         () => transport.sendText(
           chatId: chatA.deltaChatId!,
-          body: any(named: 'body'),
+          body: captureAny(named: 'body'),
           subject: any(named: 'subject'),
           shareId: report.shareId,
-          localBodyOverride: any(named: 'localBodyOverride'),
-          htmlBody: any(named: 'htmlBody'),
+          localBodyOverride: captureAny(named: 'localBodyOverride'),
+          htmlBody: captureAny(named: 'htmlBody'),
           quotingStanzaId: 'quoted-stanza',
           accountId: any(named: 'accountId'),
           forcePlaintext: true,
           skipAutocrypt: true,
         ),
-      ).called(1);
+      ).captured;
+      expect(capturedSendText[0] as String, contains('Hello everyone'));
+      expect(capturedSendText[1], 'Hello everyone');
+      final capturedHtml = capturedSendText[2] as String?;
+      expect(capturedHtml, isNotNull);
+      expect(capturedHtml, contains('data-axichat-share-token'));
+      expect(
+        HtmlContentCodec.toPlainText(capturedHtml!),
+        contains('Hello everyone'),
+      );
       verify(
         () => transport.sendText(
           chatId: chatB.deltaChatId!,
@@ -4566,7 +4618,9 @@ void main() {
           subject: syntheticReply.subject,
           shareId: any(named: 'shareId'),
           localBodyOverride: syntheticReply.body,
-          htmlBody: HtmlContentCodec.fromPlainText(syntheticReply.body),
+          htmlBody: HtmlContentCodec.normalizeHtml(
+            HtmlContentCodec.fromPlainText(syntheticReply.body),
+          ),
           quotingStanzaId: 'quoted-xmpp-stanza',
           accountId: DeltaAccountDefaults.legacyId,
           forcePlaintext: true,
@@ -4654,7 +4708,9 @@ void main() {
           quotedMessageId: 77,
           quotedStanzaId: 'quoted-stanza',
           subject: 'Re: FWD: peer@axi.im',
-          htmlBody: any(named: 'htmlBody'),
+          htmlBody: HtmlContentCodec.normalizeHtml(
+            HtmlContentCodec.fromPlainText('Reply body'),
+          ),
           accountId: DeltaAccountDefaults.legacyId,
           forcePlaintext: true,
           skipAutocrypt: true,
@@ -5036,8 +5092,10 @@ void main() {
         body: 'Plain send',
         subject: any(named: 'subject'),
         shareId: any(named: 'shareId'),
-        localBodyOverride: any(named: 'localBodyOverride'),
-        htmlBody: any(named: 'htmlBody'),
+        localBodyOverride: 'Plain send',
+        htmlBody: HtmlContentCodec.normalizeHtml(
+          HtmlContentCodec.fromPlainText('Plain send'),
+        ),
         quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: DeltaAccountDefaults.legacyId,
         forcePlaintext: true,

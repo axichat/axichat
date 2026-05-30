@@ -4558,20 +4558,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final hasBody = trimmedText.isNotEmpty;
     final emailBody = hasBody ? trimmedText : (hasSubject ? '' : null);
     final emailBodyTrimmed = emailBody?.trim();
-    final emailHtmlBody = switch (emailBodyTrimmed) {
-      final value? when value.isNotEmpty => HtmlContentCodec.fromPlainText(
-        value,
-      ),
-      _ => null,
-    };
     final syntheticEmailReply = _emailService?.syntheticEmailReplyEnvelope(
       body: trimmedText,
       subject: subject,
       quotedDraft: quotedDraft,
     );
-    final emailReplyHtmlBody = hasBody
-        ? HtmlContentCodec.fromPlainText(trimmedText)
-        : null;
     if (trimmedText.isEmpty &&
         !hasQueuedAttachments &&
         !hasSubject &&
@@ -4789,8 +4780,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? (syntheticEmailReply?.body ?? emailBody)
               : emailBody;
           final effectiveEmailHtmlBody = shouldFanOut
-              ? (syntheticEmailReply?.htmlBody ?? emailHtmlBody)
-              : emailHtmlBody;
+              ? syntheticEmailReply?.htmlBody
+              : null;
           if (shouldFanOut) {
             final sent = await _sendFanOut(
               recipients: emailRecipients,
@@ -4812,14 +4803,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 body: trimmedText,
                 quotedMessage: quotedDraft,
                 subject: subject,
-                htmlBody: emailReplyHtmlBody,
               );
             } else {
               await emailService.sendMessage(
                 chat: chat,
                 body: emailBody,
                 subject: subject,
-                htmlBody: emailHtmlBody,
               );
             }
             _messageService.notifyDemoOutboundTextMessage(
@@ -4839,9 +4828,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           final captionForAttachments = emailBodyTrimmed?.isNotEmpty == true
               ? emailBody
               : null;
-          final htmlCaptionForAttachments = captionForAttachments == null
-              ? null
-              : emailHtmlBody;
           final calendarTaskCaption =
               captionForAttachments ?? event.calendarTaskShareText;
           var queuedAttachmentsSent = !hasQueuedEmailAttachments;
@@ -4860,7 +4846,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     settings: settings,
                     retainOnSuccess: attachmentsViaXmpp,
                     captionForBundle: captionForAttachments,
-                    htmlCaptionForBundle: htmlCaptionForAttachments,
                   )
                 : await _sendQueuedAttachments(
                     attachments: queuedAttachments,
@@ -4874,7 +4859,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     settings: settings,
                     retainOnSuccess: attachmentsViaXmpp,
                     captionForFirstAttachment: captionForAttachments,
-                    htmlCaptionForFirstAttachment: htmlCaptionForAttachments,
                   );
             if (!attachmentsSent) {
               return;
@@ -4894,7 +4878,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               quotedDraft: quotedDraft,
               settings: settings,
               caption: calendarTaskCaption,
-              htmlCaption: htmlCaptionForAttachments,
             );
             if (!sent) {
               return;

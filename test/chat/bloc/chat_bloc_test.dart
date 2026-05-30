@@ -8,7 +8,6 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
-import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
@@ -1803,7 +1802,7 @@ void main() {
               () => emailService.fanOutSend(
                 targets: captureAny(named: 'targets'),
                 body: 'Team status update',
-                htmlBody: HtmlContentCodec.fromPlainText('Team status update'),
+                htmlBody: null,
                 attachment: any(named: 'attachment'),
                 htmlCaption: any(named: 'htmlCaption'),
                 shareId: any(named: 'shareId'),
@@ -1913,7 +1912,7 @@ void main() {
               () => emailService.fanOutSend(
                 targets: captureAny(named: 'targets'),
                 body: 'Hello world',
-                htmlBody: HtmlContentCodec.fromPlainText('Hello world'),
+                htmlBody: null,
                 attachment: any(named: 'attachment'),
                 htmlCaption: any(named: 'htmlCaption'),
                 shareId: any(named: 'shareId'),
@@ -6740,7 +6739,7 @@ void main() {
           chat: emailChat,
           body: 'Hello from UI list',
           subject: null,
-          htmlBody: HtmlContentCodec.fromPlainText('Hello from UI list'),
+          htmlBody: null,
         ),
       ).called(1);
 

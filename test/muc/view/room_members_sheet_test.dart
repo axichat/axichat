@@ -7,6 +7,7 @@ import 'package:axichat/src/chat/view/overlays/room_members_sheet.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:flutter/material.dart';
@@ -566,12 +567,48 @@ void main() {
     expect(fieldRect.top - headerDividerRect.bottom, 8);
     expect(footerDividerRect.top - fieldRect.bottom, 8);
   });
+
+  testWidgets('RoomAvatarEditorSheet.show survives opener disposal', (
+    tester,
+  ) async {
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RoomMembersSheetTestApp(
+        xmppService: _MockXmppService(),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: showOpener,
+          builder: (context, visible, child) {
+            if (!visible) {
+              return const SizedBox.shrink();
+            }
+            return Center(
+              child: AxiButton.primary(
+                onPressed: () {
+                  unawaited(RoomAvatarEditorSheet.show(context));
+                },
+                child: const Text('Open room avatar'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open room avatar'));
+    showOpener.value = false;
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _RoomMembersSheetTestApp extends StatelessWidget {
-  const _RoomMembersSheetTestApp({required this.child});
+  const _RoomMembersSheetTestApp({required this.child, this.xmppService});
 
   final Widget child;
+  final XmppService? xmppService;
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +637,12 @@ class _RoomMembersSheetTestApp extends StatelessWidget {
             colorScheme: const ShadSlateColorScheme.light(),
             brightness: Brightness.light,
           ),
-          child: Scaffold(body: child),
+          child: xmppService == null
+              ? Scaffold(body: child)
+              : RepositoryProvider<XmppService>.value(
+                  value: xmppService!,
+                  child: Scaffold(body: child),
+                ),
         ),
       ),
     );
@@ -608,3 +650,5 @@ class _RoomMembersSheetTestApp extends StatelessWidget {
 }
 
 class _MockSettingsCubit extends Mock implements SettingsCubit {}
+
+class _MockXmppService extends Mock implements XmppService {}

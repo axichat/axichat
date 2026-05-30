@@ -1572,6 +1572,11 @@ class DeltaEventConsumer {
       msg: msg,
     );
     next = _preserveHtmlIfEquivalent(existing: existing, next: next);
+    next = _preserveOutgoingContentIfDeltaEmpty(
+      existing: existing,
+      next: next,
+      msg: msg,
+    );
     final updatedFields = existing.diffFields(next);
     if (_shouldSkipHtmlOnlyUpdate(
       existing: existing,
@@ -1635,6 +1640,34 @@ class DeltaEventConsumer {
       return next.copyWith(htmlBody: existingHtml);
     }
     return next;
+  }
+
+  Message _preserveOutgoingContentIfDeltaEmpty({
+    required Message existing,
+    required Message next,
+    required DeltaMessage msg,
+  }) {
+    if (!msg.isOutgoing || !existing.isEmailBacked) {
+      return next;
+    }
+    var preserved = next;
+    final existingBody = existing.body;
+    final rawText = clampMessageText(msg.text);
+    final rawHtml = HtmlContentCodec.normalizeHtml(clampMessageHtml(msg.html));
+    if (rawText?.trim().isNotEmpty != true &&
+        rawHtml == null &&
+        preserved.body?.trim().isNotEmpty != true &&
+        existingBody?.trim().isNotEmpty == true) {
+      preserved = preserved.copyWith(body: existingBody);
+    }
+    final existingHtml = HtmlContentCodec.normalizeHtml(existing.htmlBody);
+    if (rawHtml == null &&
+        HtmlContentCodec.normalizeHtml(preserved.htmlBody) == null &&
+        existingHtml != null &&
+        (preserved.body?.trim() ?? '') == (existing.body?.trim() ?? '')) {
+      preserved = preserved.copyWith(htmlBody: existing.htmlBody);
+    }
+    return preserved;
   }
 
   String _canonicalHtml(String? html) {

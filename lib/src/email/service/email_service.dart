@@ -2382,19 +2382,14 @@ class EmailService {
     final mode = _outgoingEncryptionModeForAccount(binding.account);
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(subject);
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-    final trimmedBody = body.trim();
-    final effectiveBody = trimmedBody.isNotEmpty
-        ? trimmedBody
-        : (normalizedHtml == null
-              ? ''
-              : HtmlContentCodec.toPlainText(normalizedHtml));
+    final payload = _outgoingTextPayload(
+      body: body,
+      htmlBody: htmlBody,
+      subject: normalizedSubject,
+    );
     String? shareId;
-    String? subjectToken;
     if (normalizedSubject != null) {
       shareId = ShareTokenCodec.generateShareId();
-      // Single-recipient sends do not need a visible subject token.
-      subjectToken = null;
       final db = await _databaseBuilder();
       final senderJid = binding.senderIdentity(_transport);
       final participants = await _shareParticipants(
@@ -2405,7 +2400,7 @@ class EmailService {
       final shareRecord = MessageShareData(
         shareId: shareId,
         originatorDcMsgId: null,
-        subjectToken: subjectToken,
+        subjectToken: null,
         subject: normalizedSubject,
         createdAt: DateTime.timestamp(),
         participantCount: participants.length,
@@ -2415,30 +2410,15 @@ class EmailService {
         participants: participants,
       );
     }
-    final transmitBody = subjectToken != null
-        ? ShareTokenCodec.injectToken(
-            token: subjectToken,
-            body: _composeSubjectEnvelope(
-              subject: normalizedSubject,
-              body: effectiveBody,
-            ),
-          )
-        : _composeSubjectEnvelope(
-            subject: normalizedSubject,
-            body: effectiveBody,
-          );
-    final localBodyOverride = trimmedBody.isNotEmpty
-        ? trimmedBody
-        : effectiveBody;
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
         chatId: chatId,
-        body: transmitBody,
+        body: payload.transmitText,
         subject: normalizedSubject,
         shareId: shareId,
-        localBodyOverride: localBodyOverride,
-        htmlBody: normalizedHtml,
+        localBodyOverride: payload.displayText,
+        htmlBody: payload.htmlBody,
         quotingStanzaId: quotedStanzaId,
         accountId: binding.deltaAccountId,
         forcePlaintext: mode.forcePlaintext,
@@ -2514,11 +2494,11 @@ class EmailService {
     final mode = _outgoingEncryptionModeForAccount(binding.account);
     await _ensureReady();
     final normalizedSubject = _normalizeSubject(effectiveSubject);
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(effectiveHtmlCaption);
-    var captionText = effectiveAttachment.caption?.trim() ?? '';
-    if (captionText.isEmpty && normalizedHtml != null) {
-      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
-    }
+    final payload = _outgoingTextPayload(
+      body: effectiveAttachment.caption,
+      htmlBody: effectiveHtmlCaption,
+      subject: normalizedSubject,
+    );
     String? shareId;
     if (normalizedSubject != null) {
       shareId = ShareTokenCodec.generateShareId();
@@ -2542,20 +2522,15 @@ class EmailService {
         participants: participants,
       );
     }
-    final captionEnvelope = _composeSubjectEnvelope(
-      subject: normalizedSubject,
-      body: captionText,
-    );
-    final sanitizedCaption = captionText.trim();
     final msgId = await _guardDeltaOperation(
       operation: 'send email attachment',
       body: () => _transport.sendAttachment(
         chatId: chatId,
-        attachment: effectiveAttachment.copyWith(caption: captionEnvelope),
+        attachment: effectiveAttachment.copyWith(caption: payload.transmitText),
         subject: normalizedSubject,
         shareId: shareId,
-        captionOverride: sanitizedCaption,
-        htmlCaption: normalizedHtml,
+        captionOverride: payload.displayText,
+        htmlCaption: payload.htmlBody,
         quotingStanzaId: effectiveQuotedStanzaId,
         accountId: binding.deltaAccountId,
         forcePlaintext: mode.forcePlaintext,
@@ -2624,17 +2599,15 @@ class EmailService {
     if (targetChatsByJid.length > composeRecipientLimit) {
       throw const FanOutTooManyRecipientsException(composeRecipientLimit);
     }
-    final trimmedBody = body?.trim() ?? '';
-    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(htmlBody);
-    var bodyText = trimmedBody;
-    if (bodyText.isEmpty && normalizedHtmlBody != null) {
-      bodyText = HtmlContentCodec.toPlainText(normalizedHtmlBody);
-    }
-    final hasBody = bodyText.isNotEmpty;
     final normalizedSubject = _normalizeSubject(subject);
     final hasSubject = normalizedSubject != null;
     final hasAttachment = attachment != null;
-    final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
+    final bodyPayload = _outgoingTextPayload(
+      body: body,
+      htmlBody: htmlBody,
+      subject: normalizedSubject,
+    );
+    final hasBody = bodyPayload.displayText.isNotEmpty;
     if (!hasBody && !hasAttachment && !hasSubject) {
       throw const FanOutEmptyMessageException();
     }
@@ -2656,49 +2629,20 @@ class EmailService {
         existingShare?.subjectToken ??
         (shouldUseToken ? _shareTokenForShare(effectiveShareId) : null);
     final effectiveSubject = normalizedSubject ?? existingShare?.subject;
-    final htmlBodyWithToken = subjectShareToken == null
-        ? normalizedHtmlBody
-        : ShareTokenHtmlCodec.injectToken(
-            html: normalizedHtmlBody,
-            token: subjectShareToken,
-            asSignature: tokenAsSignature,
-            footerLabel: _l10n.shareTokenFooterLabel,
-          );
-    final htmlCaptionWithToken = subjectShareToken == null
-        ? normalizedHtmlCaption
-        : ShareTokenHtmlCodec.injectToken(
-            html: normalizedHtmlCaption,
-            token: subjectShareToken,
-            asSignature: tokenAsSignature,
-            footerLabel: _l10n.shareTokenFooterLabel,
-          );
-
-    final transmitBody = subjectShareToken != null
-        ? ShareTokenCodec.injectToken(
-            token: subjectShareToken,
-            body: _composeSubjectEnvelope(
-              subject: effectiveSubject,
-              body: bodyText,
-            ),
-            asSignature: tokenAsSignature,
-            footerLabel: _l10n.shareTokenFooterLabel,
-          )
-        : _composeSubjectEnvelope(subject: effectiveSubject, body: bodyText);
-    var captionText = attachment?.caption?.trim() ?? '';
-    if (captionText.isEmpty && normalizedHtmlCaption != null) {
-      captionText = HtmlContentCodec.toPlainText(normalizedHtmlCaption);
-    }
-    final transmitCaption = subjectShareToken != null
-        ? ShareTokenCodec.injectToken(
-            token: subjectShareToken,
-            body: _composeSubjectEnvelope(
-              subject: effectiveSubject,
-              body: captionText,
-            ),
-            asSignature: tokenAsSignature,
-            footerLabel: _l10n.shareTokenFooterLabel,
-          )
-        : _composeSubjectEnvelope(subject: effectiveSubject, body: captionText);
+    final effectiveBodyPayload = _outgoingTextPayload(
+      body: bodyPayload.displayText,
+      htmlBody: bodyPayload.htmlBody,
+      subject: effectiveSubject,
+      shareToken: subjectShareToken,
+      tokenAsSignature: tokenAsSignature,
+    );
+    final captionPayload = _outgoingTextPayload(
+      body: attachment?.caption,
+      htmlBody: htmlCaption,
+      subject: effectiveSubject,
+      shareToken: subjectShareToken,
+      tokenAsSignature: tokenAsSignature,
+    );
     final participants = await _shareParticipants(
       shareId: effectiveShareId,
       chats: targetChatsByJid.values,
@@ -2727,7 +2671,7 @@ class EmailService {
         int msgId;
         if (hasAttachment) {
           final updatedAttachment = attachment.copyWith(
-            caption: transmitCaption,
+            caption: captionPayload.transmitText,
           );
           msgId = await _guardDeltaOperation(
             operation: 'fan-out attachment',
@@ -2736,8 +2680,8 @@ class EmailService {
               attachment: updatedAttachment,
               subject: effectiveSubject,
               shareId: effectiveShareId,
-              captionOverride: captionText,
-              htmlCaption: htmlCaptionWithToken,
+              captionOverride: captionPayload.displayText,
+              htmlCaption: captionPayload.htmlBody,
               quotingStanzaId: quotedStanzaId,
               accountId: binding.deltaAccountId,
               forcePlaintext: mode.forcePlaintext,
@@ -2749,11 +2693,11 @@ class EmailService {
             operation: 'fan-out message',
             body: () => _transport.sendText(
               chatId: chatId,
-              body: transmitBody,
+              body: effectiveBodyPayload.transmitText,
               subject: effectiveSubject,
               shareId: effectiveShareId,
-              localBodyOverride: bodyText,
-              htmlBody: htmlBodyWithToken,
+              localBodyOverride: effectiveBodyPayload.displayText,
+              htmlBody: effectiveBodyPayload.htmlBody,
               quotingStanzaId: quotedStanzaId,
               accountId: binding.deltaAccountId,
               forcePlaintext: mode.forcePlaintext,
@@ -2868,17 +2812,16 @@ class EmailService {
           );
           _scheduleDemoCopiedReply(chat);
         } else {
-          final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-          final effectiveBody =
-              body ??
-              (normalizedHtml == null
-                  ? ''
-                  : HtmlContentCodec.toPlainText(normalizedHtml));
+          final payload = _outgoingTextPayload(
+            body: body,
+            htmlBody: htmlBody,
+            subject: subject,
+          );
           await _sendDemoEmailMessage(
             chat: chat,
-            body: effectiveBody,
+            body: payload.displayText,
             subject: subject,
-            htmlBody: htmlBody,
+            htmlBody: payload.htmlBody,
             quotedStanzaId: quotedStanzaId,
           );
         }
@@ -2978,6 +2921,54 @@ class EmailService {
     );
   }
 
+  ({String displayText, String transmitText, String? htmlBody})
+  _outgoingTextPayload({
+    required String? body,
+    required String? subject,
+    String? htmlBody,
+    String? shareToken,
+    bool tokenAsSignature = true,
+  }) {
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
+    final trimmedBody = body?.trim() ?? '';
+    final htmlText = normalizedHtml == null
+        ? ''
+        : HtmlContentCodec.toPlainText(normalizedHtml).trim();
+    final displayText = trimmedBody.isNotEmpty ? trimmedBody : htmlText;
+    final resolvedHtml =
+        normalizedHtml ??
+        (displayText.isEmpty
+            ? null
+            : HtmlContentCodec.normalizeHtml(
+                HtmlContentCodec.fromPlainText(displayText),
+              ));
+    final envelope = _composeSubjectEnvelope(
+      subject: subject,
+      body: displayText,
+    );
+    final transmitText = shareToken == null
+        ? envelope
+        : ShareTokenCodec.injectToken(
+            token: shareToken,
+            body: envelope,
+            asSignature: tokenAsSignature,
+            footerLabel: _l10n.shareTokenFooterLabel,
+          );
+    final transmitHtml = shareToken == null
+        ? resolvedHtml
+        : ShareTokenHtmlCodec.injectToken(
+            html: resolvedHtml,
+            token: shareToken,
+            asSignature: tokenAsSignature,
+            footerLabel: _l10n.shareTokenFooterLabel,
+          );
+    return (
+      displayText: displayText,
+      transmitText: transmitText,
+      htmlBody: transmitHtml,
+    );
+  }
+
   ({String subject, String body, String? htmlBody}) _syntheticReplyEnvelope(
     Message quotedMessage, {
     required String body,
@@ -2997,12 +2988,11 @@ class EmailService {
           quotedMessage.senderJid.trim(),
     );
     final normalizedBody = envelope.body.trim();
+    final payload = _outgoingTextPayload(body: normalizedBody, subject: null);
     return (
       subject: envelope.subject,
       body: normalizedBody,
-      htmlBody: normalizedBody.isEmpty
-          ? null
-          : HtmlContentCodec.fromPlainText(normalizedBody),
+      htmlBody: payload.htmlBody,
     );
   }
 
@@ -3028,26 +3018,21 @@ class EmailService {
           displaySafeAddress(quotedDraft.senderJid) ?? quotedDraft.senderJid,
     );
     final normalizedBody = envelope.body.trim();
+    final payload = _outgoingTextPayload(body: normalizedBody, subject: null);
     return (
       subject: envelope.subject,
       body: normalizedBody,
-      htmlBody: normalizedBody.isEmpty
-          ? null
-          : HtmlContentCodec.fromPlainText(normalizedBody),
+      htmlBody: payload.htmlBody,
       quotedStanzaId: quotedDraft.stanzaID,
     );
   }
 
   String? _normalizeDraftHtml({required String text, String? htmlBody}) {
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-    if (normalizedHtml != null) {
-      return normalizedHtml;
-    }
-    final trimmedText = text.trim();
-    if (trimmedText.isEmpty) {
-      return null;
-    }
-    return HtmlContentCodec.normalizeHtml(HtmlContentCodec.fromPlainText(text));
+    return _outgoingTextPayload(
+      body: text,
+      htmlBody: htmlBody,
+      subject: null,
+    ).htmlBody;
   }
 
   EmailAttachment? _draftAttachmentForCore(List<EmailAttachment> attachments) {
@@ -5156,13 +5141,11 @@ class EmailService {
     String? quotedStanzaId,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-    final trimmedBody = body.trim();
-    final effectiveBody = trimmedBody.isNotEmpty
-        ? trimmedBody
-        : (normalizedHtml == null
-              ? ''
-              : HtmlContentCodec.toPlainText(normalizedHtml));
+    final payload = _outgoingTextPayload(
+      body: body,
+      htmlBody: htmlBody,
+      subject: normalizedSubject,
+    );
     const generator = Uuid();
     final stanzaId = 'demo-email-${generator.v4()}';
     final forwardedFromNormalized = forwardedFromJid?.trim();
@@ -5178,8 +5161,8 @@ class EmailService {
       originID: stanzaId,
       senderJid: kDemoSelfJid,
       chatJid: chat.jid,
-      body: effectiveBody,
-      htmlBody: normalizedHtml,
+      body: payload.displayText,
+      htmlBody: payload.htmlBody,
       subject: normalizedSubject,
       quoting: quotedStanzaId,
       timestamp: timestamp,
@@ -5220,14 +5203,10 @@ class EmailService {
     String? quotedStanzaId,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
-    var captionText = attachment.caption?.trim() ?? '';
-    if (captionText.isEmpty && normalizedHtml != null) {
-      captionText = HtmlContentCodec.toPlainText(normalizedHtml);
-    }
-    final captionBody = _composeSubjectEnvelope(
+    final payload = _outgoingTextPayload(
+      body: attachment.caption,
+      htmlBody: htmlCaption,
       subject: normalizedSubject,
-      body: captionText,
     );
     const generator = Uuid();
     final metadataId = attachment.metadataId ?? generator.v4();
@@ -5255,8 +5234,8 @@ class EmailService {
       originID: stanzaId,
       senderJid: kDemoSelfJid,
       chatJid: chat.jid,
-      body: captionBody,
-      htmlBody: normalizedHtml,
+      body: payload.transmitText,
+      htmlBody: payload.htmlBody,
       subject: normalizedSubject,
       quoting: quotedStanzaId,
       timestamp: timestamp,
@@ -7269,22 +7248,20 @@ class EmailService {
           displaySafeAddress(quotedMessage.senderJid) ??
           quotedMessage.senderJid.trim(),
     );
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-    final trimmedBody = body.trim();
-    final effectiveBody = trimmedBody.isNotEmpty
-        ? trimmedBody
-        : (normalizedHtml == null
-              ? ''
-              : HtmlContentCodec.toPlainText(normalizedHtml));
+    final payload = _outgoingTextPayload(
+      body: body,
+      htmlBody: htmlBody,
+      subject: null,
+    );
     final msgId = await _guardDeltaOperation(
       operation: 'send reply',
       body: () => _transport.sendTextWithQuote(
         chatId: chatId,
-        body: effectiveBody,
+        body: payload.displayText,
         quotedMessageId: quotedMsgId,
         quotedStanzaId: quotedMessage.stanzaID,
         subject: normalizedSubject,
-        htmlBody: normalizedHtml,
+        htmlBody: payload.htmlBody,
         accountId: binding.deltaAccountId,
         forcePlaintext: mode.forcePlaintext,
         skipAutocrypt: mode.skipAutocrypt,

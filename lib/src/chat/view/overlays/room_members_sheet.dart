@@ -1002,6 +1002,8 @@ class RoomAvatarEditorSheet extends StatefulWidget {
     BuildContext context, {
     String? avatarPath,
   }) {
+    final locate = context.read;
+    final xmppService = locate<XmppService>();
     final dialogMaxWidth = context.sizing.dialogMaxWidth;
     return showAdaptiveBottomSheet<AvatarUploadPayload>(
       context: context,
@@ -1016,7 +1018,7 @@ class RoomAvatarEditorSheet extends StatefulWidget {
         final colors = sheetContext.colorScheme;
         return BlocProvider(
           create: (_) => AvatarEditorCubit(
-            xmppService: sheetContext.read<XmppService>(),
+            xmppService: xmppService,
             templates: buildDefaultAvatarTemplates(),
           )..initializeRoomAvatarCarousel(colors, avatarPath: avatarPath),
           child: RoomAvatarEditorSheet(

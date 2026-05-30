@@ -1188,6 +1188,303 @@ void main() {
     expect(updated.timestamp, deltaTimestamp);
   });
 
+  test(
+    'preserves outgoing local body and HTML when Delta content is empty',
+    () async {
+      const chatId = 34;
+      const msgId = 94;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final existing = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'me@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        body: 'Local body',
+        htmlBody: '<p>Local body</p>',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        timestamp: DateTime.utc(2024, 1, 1, 12, 10),
+        isOutgoing: true,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => existing);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final updated = verify(() => database.updateMessage(captureAny()))
+          .captured
+          .whereType<Message>()
+          .lastWhere(
+            (message) =>
+                message.stanzaID == existing.stanzaID &&
+                message.timestamp == deltaMessage.timestamp,
+          );
+      expect(updated.body, 'Local body');
+      expect(updated.htmlBody, '<p>Local body</p>');
+    },
+  );
+
+  test(
+    'uses non-empty Delta body instead of preserved outgoing body',
+    () async {
+      const chatId = 35;
+      const msgId = 95;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final existing = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'me@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        body: 'Local body',
+        htmlBody: '<p>Local body</p>',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Delta body',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 10),
+        isOutgoing: true,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => existing);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final updated = verify(() => database.updateMessage(captureAny()))
+          .captured
+          .whereType<Message>()
+          .lastWhere(
+            (message) =>
+                message.stanzaID == existing.stanzaID &&
+                message.timestamp == deltaMessage.timestamp,
+          );
+      expect(updated.body, 'Delta body');
+      expect(updated.htmlBody, isNull);
+    },
+  );
+
+  test(
+    'does not preserve incoming content when Delta content is empty',
+    () async {
+      const chatId = 36;
+      const msgId = 96;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final existing = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'alice@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        body: 'Existing incoming body',
+        htmlBody: '<p>Existing incoming body</p>',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        timestamp: DateTime.utc(2024, 1, 1, 12, 10),
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => existing);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final updated = verify(() => database.updateMessage(captureAny()))
+          .captured
+          .whereType<Message>()
+          .lastWhere(
+            (message) =>
+                message.stanzaID == existing.stanzaID &&
+                message.timestamp == deltaMessage.timestamp,
+          );
+      expect(updated.body, isNull);
+      expect(updated.htmlBody, isNull);
+    },
+  );
+
+  test(
+    'does not preserve outgoing local body when Delta supplies HTML content',
+    () async {
+      const chatId = 37;
+      const msgId = 97;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final existing = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'me@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        body: 'Local body',
+        htmlBody: '<p>Local body</p>',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        html: '<img src="cid:empty-text" />',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 10),
+        isOutgoing: true,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => existing);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final updated = verify(() => database.updateMessage(captureAny()))
+          .captured
+          .whereType<Message>()
+          .lastWhere(
+            (message) =>
+                message.stanzaID == existing.stanzaID &&
+                message.timestamp == deltaMessage.timestamp,
+          );
+      expect(updated.body, isNull);
+      expect(updated.htmlBody, '<img src="cid:empty-text" />');
+    },
+  );
+
   test('treats incoming noticed messages as displayed', () async {
     const chatId = 7;
     const msgId = 24;
