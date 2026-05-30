@@ -182,6 +182,238 @@ void main() {
     expect(saved?.forwardedBlocks, [block]);
   });
 
+  test('saveDraft persists attachment metadata before draft refs', () async {
+    const metadataId = 'draft-attachment-meta';
+    const metadata = FileMetadataData(
+      id: ' draft-attachment-meta ',
+      filename: 'attachment.txt',
+      path: '/tmp/attachment.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 42,
+    );
+
+    final draftId = await database.saveDraft(
+      jids: const ['peer@axi.im'],
+      body: 'Body with attachment',
+      draftSyncId: 'sync-attachment-save',
+      draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+      draftSourceId: 'source',
+      draftRecipients: const [],
+      attachmentMetadataIds: const [metadataId],
+      attachmentMetadata: const [metadata],
+    );
+
+    final saved = await database.getDraft(draftId);
+    final savedMetadata = await database.getFileMetadata(metadataId);
+    expect(saved?.attachmentMetadataIds, [metadataId]);
+    expect(savedMetadata, metadata.copyWith(id: metadataId));
+  });
+
+  test(
+    'upsertDraftFromSync persists attachment metadata before draft refs',
+    () async {
+      const metadataId = 'synced-draft-attachment-meta';
+      const metadata = FileMetadataData(
+        id: ' synced-draft-attachment-meta ',
+        filename: 'synced-attachment.txt',
+        sourceUrls: ['https://example.com/synced-attachment.txt'],
+        mimeType: 'text/plain',
+        sizeBytes: 84,
+      );
+
+      final draftId = await database.upsertDraftFromSync(
+        draftSyncId: 'sync-attachment-upsert',
+        jids: const ['peer@axi.im'],
+        draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+        draftSourceId: 'source',
+        draftRecipients: const [],
+        body: 'Synced body with attachment',
+        attachmentMetadataIds: const [metadataId],
+        attachmentMetadata: const [metadata],
+      );
+
+      final saved = await database.getDraft(draftId);
+      final savedMetadata = await database.getFileMetadata(metadataId);
+      expect(saved?.attachmentMetadataIds, [metadataId]);
+      expect(savedMetadata, metadata.copyWith(id: metadataId));
+    },
+  );
+
+  test('saveFileMetadata normalizes metadata IDs at the DB boundary', () async {
+    const metadata = FileMetadataData(
+      id: ' normalized-metadata-id ',
+      filename: 'attachment.txt',
+      path: '/tmp/attachment.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 42,
+    );
+    const normalizedMetadata = FileMetadataData(
+      id: 'normalized-metadata-id',
+      filename: 'attachment.txt',
+      path: '/tmp/attachment.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 42,
+    );
+
+    await database.saveFileMetadata(metadata);
+
+    expect(
+      await database.getFileMetadata('normalized-metadata-id'),
+      normalizedMetadata,
+    );
+    expect(
+      await database.getFileMetadata(' normalized-metadata-id '),
+      normalizedMetadata,
+    );
+    expect(
+      await database.getFileMetadataForIds(const [
+        ' normalized-metadata-id ',
+        'normalized-metadata-id',
+      ]),
+      [normalizedMetadata],
+    );
+  });
+
+  test('saveMessage normalizes message attachment metadata refs', () async {
+    const metadata = FileMetadataData(
+      id: ' message-attachment-meta ',
+      filename: 'message.txt',
+      path: '/tmp/message.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 42,
+    );
+    await database.saveFileMetadata(metadata);
+
+    await database.saveMessage(
+      Message(
+        stanzaID: 'message-with-normalized-attachment',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'Body',
+        timestamp: DateTime.utc(2026, 3, 11, 10),
+        fileMetadataID: ' message-attachment-meta ',
+      ),
+    );
+
+    final saved = await database.getMessageByStanzaID(
+      'message-with-normalized-attachment',
+    );
+    final attachments = await database.getMessageAttachments(saved!.id!);
+
+    expect(saved.fileMetadataID, 'message-attachment-meta');
+    expect(attachments.single.fileMetadataId, 'message-attachment-meta');
+  });
+
+  test('updateMessageAttachment normalizes metadata and refs', () async {
+    await database.saveMessage(
+      Message(
+        stanzaID: 'message-update-normalized-attachment',
+        senderJid: 'peer@axi.im',
+        chatJid: 'peer@axi.im',
+        body: 'Body',
+        timestamp: DateTime.utc(2026, 3, 11, 10),
+      ),
+    );
+
+    await database.updateMessageAttachment(
+      stanzaID: 'message-update-normalized-attachment',
+      metadata: const FileMetadataData(
+        id: ' updated-message-attachment-meta ',
+        filename: 'updated.txt',
+        path: '/tmp/updated.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 42,
+      ),
+    );
+
+    final saved = await database.getMessageByStanzaID(
+      'message-update-normalized-attachment',
+    );
+    final attachments = await database.getMessageAttachments(saved!.id!);
+
+    expect(saved.fileMetadataID, 'updated-message-attachment-meta');
+    expect(
+      attachments.single.fileMetadataId,
+      'updated-message-attachment-meta',
+    );
+    expect(
+      await database.getFileMetadata('updated-message-attachment-meta'),
+      isNotNull,
+    );
+  });
+
+  test(
+    'saveDraft preserves existing refs when new metadata is missing',
+    () async {
+      const metadata = FileMetadataData(
+        id: 'existing-draft-attachment-meta',
+        filename: 'existing.txt',
+        path: '/tmp/existing.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 42,
+      );
+      await database.saveFileMetadata(metadata);
+      final draftId = await database.saveDraft(
+        jids: const ['peer@axi.im'],
+        body: 'Old body',
+        draftSyncId: 'sync-preserve-missing',
+        draftUpdatedAt: DateTime.utc(2026, 3, 11, 10),
+        draftSourceId: 'source',
+        draftRecipients: const [],
+        attachmentMetadataIds: const ['existing-draft-attachment-meta'],
+      );
+
+      await expectLater(
+        database.saveDraft(
+          id: draftId,
+          jids: const ['peer@axi.im'],
+          body: 'New body',
+          draftSyncId: 'sync-preserve-missing',
+          draftUpdatedAt: DateTime.utc(2026, 3, 11, 11),
+          draftSourceId: 'source',
+          draftRecipients: const [],
+          attachmentMetadataIds: const ['missing-draft-attachment-meta'],
+        ),
+        throwsA(isA<FormatException>()),
+      );
+
+      final saved = await database.getDraft(draftId);
+      expect(saved?.body, 'Old body');
+      expect(saved?.attachmentMetadataIds, ['existing-draft-attachment-meta']);
+    },
+  );
+
+  test(
+    'replaceMessageAttachments preserves refs when metadata is missing',
+    () async {
+      const metadata = FileMetadataData(
+        id: 'existing-message-attachment-meta',
+        filename: 'existing.txt',
+        path: '/tmp/existing.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 42,
+      );
+      await database.saveFileMetadata(metadata);
+      await database.addMessageAttachment(
+        messageId: 'message-preserve-missing',
+        fileMetadataId: metadata.id,
+      );
+
+      await expectLater(
+        database.replaceMessageAttachments(
+          messageId: 'message-preserve-missing',
+          fileMetadataIds: const ['missing-message-attachment-meta'],
+        ),
+        throwsA(isA<FormatException>()),
+      );
+
+      final attachments = await database.getMessageAttachments(
+        'message-preserve-missing',
+      );
+      expect(attachments.single.fileMetadataId, metadata.id);
+    },
+  );
+
   test(
     'upsertDraftFromSync disables autosave even with legacy table default',
     () async {
@@ -254,6 +486,9 @@ void main() {
   });
 
   test('message attachment group quote metadata persists', () async {
+    await database.saveFileMetadata(
+      const FileMetadataData(id: 'file-1', filename: 'file.txt'),
+    );
     await database.addMessageAttachment(
       messageId: 'message-1',
       fileMetadataId: 'file-1',

@@ -549,6 +549,7 @@ abstract interface class XmppDatabase implements Database {
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
     bool autosaveEnabled = false,
@@ -577,6 +578,7 @@ abstract interface class XmppDatabase implements Database {
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
   });
@@ -3434,13 +3436,15 @@ WHERE transport = ${MessageTransport.email.index}
     _log.fine('Persisting message');
     final resolvedMessageId = message.id ?? uuid.v4();
     final trimmedBody = message.body?.trim();
-    final trimmedMetadataId = message.fileMetadataID?.trim();
-    final hasAttachment = trimmedMetadataId?.isNotEmpty == true;
+    final normalizedMetadataId = _normalizedFileMetadataIdOrNull(
+      message.fileMetadataID,
+    );
+    final hasAttachment = normalizedMetadataId != null;
     final messageTimestamp = message.timestamp ?? DateTime.timestamp();
     final bool isInternalSync = await _isInternalSyncMessage(
       subject: message.subject,
       body: message.body,
-      fileMetadataId: trimmedMetadataId,
+      fileMetadataId: normalizedMetadataId,
     );
     final bool shouldUpdateChatSummary =
         !isInternalSync && !_messageExcludedFromChatSummary(message);
@@ -3477,7 +3481,7 @@ WHERE transport = ${MessageTransport.email.index}
             subject: message.subject,
             deltaChatId: message.deltaChatId,
             deltaMsgId: message.deltaMsgId,
-            fileMetadataId: message.fileMetadataID,
+            fileMetadataId: normalizedMetadataId,
             hasAttachment: hasAttachment,
             pseudoMessageType: message.pseudoMessageType,
             pseudoMessageData: message.pseudoMessageData,
@@ -3527,6 +3531,7 @@ WHERE transport = ${MessageTransport.email.index}
       }
       final messageToSave = message.copyWith(
         id: resolvedMessageId,
+        fileMetadataID: normalizedMetadataId,
         trust: trust,
         trusted: trusted,
       );
@@ -3557,12 +3562,12 @@ WHERE transport = ${MessageTransport.email.index}
       }
 
       final persistedMessageId = persisted.id ?? resolvedMessageId;
-      final incomingMetadataId = messageToSave.fileMetadataID?.trim();
-      final hasIncomingMetadataId = incomingMetadataId?.isNotEmpty == true;
-      if (hasIncomingMetadataId) {
+      final incomingMetadataId = messageToSave.fileMetadataID;
+      final hasIncomingMetadataId = incomingMetadataId != null;
+      if (incomingMetadataId != null) {
         await addMessageAttachment(
           messageId: persistedMessageId,
-          fileMetadataId: incomingMetadataId!,
+          fileMetadataId: incomingMetadataId,
         );
       }
       if (shouldUpdateChatSummary) {
@@ -3836,22 +3841,25 @@ WHERE jid = ?
     String? body,
   }) async {
     await transaction(() async {
-      if (metadata != null) {
-        await saveFileMetadata(metadata);
+      final normalizedMetadata = metadata == null
+          ? null
+          : _normalizedFileMetadataData(metadata);
+      if (normalizedMetadata != null) {
+        await saveFileMetadata(normalizedMetadata);
       }
       final existing = await messagesAccessor.selectOne(stanzaID);
-      if (metadata != null && existing?.id != null) {
+      if (normalizedMetadata != null && existing?.id != null) {
         await addMessageAttachment(
           messageId: existing!.id!,
-          fileMetadataId: metadata.id,
+          fileMetadataId: normalizedMetadata.id,
         );
       }
       await (update(
         messages,
       )..where((tbl) => tbl.stanzaID.equals(stanzaID))).write(
         MessagesCompanion(
-          fileMetadataID: metadata != null
-              ? Value(metadata.id)
+          fileMetadataID: normalizedMetadata != null
+              ? Value(normalizedMetadata.id)
               : const Value.absent(),
           body: body != null ? Value(body) : const Value.absent(),
         ),
@@ -4680,7 +4688,11 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<void> updateMessage(Message message) async {
     _log.fine('Updating message');
-    await update(messages).replace(message);
+    await update(messages).replace(
+      message.copyWith(
+        fileMetadataID: _normalizedFileMetadataIdOrNull(message.fileMetadataID),
+      ),
+    );
   }
 
   @override
@@ -5087,11 +5099,20 @@ WHERE stanza_i_d = ?
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
     bool autosaveEnabled = false,
   }) async {
     return transaction(() async {
+      for (final metadata in attachmentMetadata) {
+        await saveFileMetadata(metadata);
+      }
+      final normalizedAttachmentMetadataIds = _normalizedFileMetadataIds(
+        attachmentMetadataIds.isEmpty && attachmentMetadata.isNotEmpty
+            ? attachmentMetadata.map((metadata) => metadata.id)
+            : attachmentMetadataIds,
+      );
       final draftId = await draftsAccessor.insertOrUpdateOne(
         DraftsCompanion(
           id: Value.absentIfNull(id),
@@ -5104,7 +5125,7 @@ WHERE stanza_i_d = ?
           subject: Value(subject),
           quotingStanzaId: Value(quotingStanzaId),
           quotingReferenceKind: Value(quotingReferenceKind),
-          attachmentMetadataIds: Value(attachmentMetadataIds),
+          attachmentMetadataIds: Value(normalizedAttachmentMetadataIds),
           calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
           forwardedBlocks: Value(forwardedBlocks),
           autosaveEnabled: id == null
@@ -5114,7 +5135,7 @@ WHERE stanza_i_d = ?
       );
       await _replaceDraftAttachmentRefs(
         draftId: draftId,
-        attachmentMetadataIds: attachmentMetadataIds,
+        attachmentMetadataIds: normalizedAttachmentMetadataIds,
       );
       return draftId;
     });
@@ -5159,6 +5180,7 @@ WHERE stanza_i_d = ?
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
+    List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const [],
   }) async {
@@ -5167,6 +5189,14 @@ WHERE stanza_i_d = ?
     final existing = await getDraftBySyncId(normalized);
     if (existing == null) {
       return transaction(() async {
+        for (final metadata in attachmentMetadata) {
+          await saveFileMetadata(metadata);
+        }
+        final normalizedAttachmentMetadataIds = _normalizedFileMetadataIds(
+          attachmentMetadataIds.isEmpty && attachmentMetadata.isNotEmpty
+              ? attachmentMetadata.map((metadata) => metadata.id)
+              : attachmentMetadataIds,
+        );
         final draftId = await draftsAccessor.insertOrUpdateOne(
           DraftsCompanion(
             jids: Value(jids),
@@ -5178,7 +5208,7 @@ WHERE stanza_i_d = ?
             subject: Value(subject),
             quotingStanzaId: Value(quotingStanzaId),
             quotingReferenceKind: Value(quotingReferenceKind),
-            attachmentMetadataIds: Value(attachmentMetadataIds),
+            attachmentMetadataIds: Value(normalizedAttachmentMetadataIds),
             calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
             forwardedBlocks: Value(forwardedBlocks),
             autosaveEnabled: const Value(false),
@@ -5186,12 +5216,20 @@ WHERE stanza_i_d = ?
         );
         await _replaceDraftAttachmentRefs(
           draftId: draftId,
-          attachmentMetadataIds: attachmentMetadataIds,
+          attachmentMetadataIds: normalizedAttachmentMetadataIds,
         );
         return draftId;
       });
     }
     await transaction(() async {
+      for (final metadata in attachmentMetadata) {
+        await saveFileMetadata(metadata);
+      }
+      final normalizedAttachmentMetadataIds = _normalizedFileMetadataIds(
+        attachmentMetadataIds.isEmpty && attachmentMetadata.isNotEmpty
+            ? attachmentMetadata.map((metadata) => metadata.id)
+            : attachmentMetadataIds,
+      );
       await draftsAccessor.updateOne(
         DraftsCompanion(
           id: Value(existing.id),
@@ -5204,14 +5242,14 @@ WHERE stanza_i_d = ?
           subject: Value(subject),
           quotingStanzaId: Value(quotingStanzaId),
           quotingReferenceKind: Value(quotingReferenceKind),
-          attachmentMetadataIds: Value(attachmentMetadataIds),
+          attachmentMetadataIds: Value(normalizedAttachmentMetadataIds),
           calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
           forwardedBlocks: Value(forwardedBlocks),
         ),
       );
       await _replaceDraftAttachmentRefs(
         draftId: existing.id,
-        attachmentMetadataIds: attachmentMetadataIds,
+        attachmentMetadataIds: normalizedAttachmentMetadataIds,
       );
     });
     return existing.id;
@@ -5231,13 +5269,11 @@ WHERE stanza_i_d = ?
     required int draftId,
     required List<String> attachmentMetadataIds,
   }) async {
+    final normalizedIds = _normalizedFileMetadataIds(attachmentMetadataIds);
+    await _ensureFileMetadataRowsExist(normalizedIds);
     await (delete(
       draftAttachmentRefs,
     )..where((tbl) => tbl.draftId.equals(draftId))).go();
-    final normalizedIds = attachmentMetadataIds
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet();
     if (normalizedIds.isEmpty) {
       return;
     }
@@ -5414,29 +5450,86 @@ WHERE stanza_i_d = ?
 
   @override
   Future<void> saveFileMetadata(FileMetadataData metadata) async {
-    await fileMetadataAccessor.insertOrUpdateOne(metadata);
+    await fileMetadataAccessor.insertOrUpdateOne(
+      _normalizedFileMetadataData(metadata),
+    );
   }
 
   @override
-  Future<FileMetadataData?> getFileMetadata(String id) =>
-      fileMetadataAccessor.selectOne(id);
+  Future<FileMetadataData?> getFileMetadata(String id) {
+    final normalizedId = _normalizedFileMetadataIdOrNull(id);
+    if (normalizedId == null) return Future.value(null);
+    return fileMetadataAccessor.selectOne(normalizedId);
+  }
 
   @override
-  Future<List<FileMetadataData>> getFileMetadataForIds(Iterable<String> ids) =>
-      fileMetadataAccessor.selectForIds(ids.toList(growable: false));
+  Future<List<FileMetadataData>> getFileMetadataForIds(Iterable<String> ids) {
+    final normalizedIds = _normalizedFileMetadataIds(ids);
+    if (normalizedIds.isEmpty) return Future.value(const <FileMetadataData>[]);
+    return fileMetadataAccessor.selectForIds(normalizedIds);
+  }
 
   @override
-  Stream<FileMetadataData?> watchFileMetadata(String id) =>
-      fileMetadataAccessor.watchOne(id);
+  Stream<FileMetadataData?> watchFileMetadata(String id) {
+    final normalizedId = _normalizedFileMetadataIdOrNull(id);
+    if (normalizedId == null) return Stream.value(null);
+    return fileMetadataAccessor.watchOne(normalizedId);
+  }
 
   @override
   Future<void> deleteFileMetadata(String id) async {
-    await _deleteFileMetadataIfOrphaned(id);
+    final normalizedId = _normalizedFileMetadataIdOrNull(id);
+    if (normalizedId == null) return;
+    await _deleteFileMetadataIfOrphaned(normalizedId);
+  }
+
+  String? _normalizedFileMetadataIdOrNull(String? id) {
+    final normalized = id?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String _requiredFileMetadataId(String id) {
+    final normalized = _normalizedFileMetadataIdOrNull(id);
+    if (normalized == null) {
+      throw const FormatException('File metadata id cannot be empty.');
+    }
+    return normalized;
+  }
+
+  FileMetadataData _normalizedFileMetadataData(FileMetadataData metadata) {
+    final normalizedId = _requiredFileMetadataId(metadata.id);
+    if (normalizedId == metadata.id) {
+      return metadata;
+    }
+    return metadata.copyWith(id: normalizedId);
+  }
+
+  List<String> _normalizedFileMetadataIds(Iterable<String> ids) {
+    final normalizedIds = <String>[];
+    final seen = <String>{};
+    for (final id in ids) {
+      final normalized = _normalizedFileMetadataIdOrNull(id);
+      if (normalized == null || !seen.add(normalized)) {
+        continue;
+      }
+      normalizedIds.add(normalized);
+    }
+    return normalizedIds;
+  }
+
+  Future<void> _ensureFileMetadataRowsExist(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final rows = await fileMetadataAccessor.selectForIds(ids);
+    if (rows.length == ids.length) return;
+    throw const FormatException('Missing file metadata for attachment ref.');
   }
 
   Future<void> _deleteFileMetadataIfOrphaned(String id) async {
-    final trimmedId = id.trim();
-    if (trimmedId.isEmpty) return;
+    final trimmedId = _normalizedFileMetadataIdOrNull(id);
+    if (trimmedId == null) return;
     final metadata = await fileMetadataAccessor.selectOne(trimmedId);
     if (metadata == null) return;
     final isReferenced = await _isFileMetadataReferenced(trimmedId);
@@ -5577,11 +5670,13 @@ WHERE stanza_i_d = ?
     int? sortOrder,
     MessageReference? groupQuotedReference,
   }) async {
+    final normalizedMetadataId = _requiredFileMetadataId(fileMetadataId);
+    await _ensureFileMetadataRowsExist(<String>[normalizedMetadataId]);
     final existing =
         await (select(messageAttachments)..where(
               (tbl) =>
                   tbl.messageId.equals(messageId) &
-                  tbl.fileMetadataId.equals(fileMetadataId),
+                  tbl.fileMetadataId.equals(normalizedMetadataId),
             ))
             .getSingleOrNull();
     if (existing != null) {
@@ -5625,7 +5720,7 @@ WHERE stanza_i_d = ?
     await into(messageAttachments).insert(
       MessageAttachmentsCompanion.insert(
         messageId: messageId,
-        fileMetadataId: fileMetadataId,
+        fileMetadataId: normalizedMetadataId,
         sortOrder: Value(nextOrder),
         transportGroupId: Value.absentIfNull(transportGroupId),
         groupQuotedReference: Value.absentIfNull(groupQuotedReference?.value),
@@ -5644,21 +5739,21 @@ WHERE stanza_i_d = ?
     String? transportGroupId,
     MessageReference? groupQuotedReference,
   }) async {
-    final trimmedIds = fileMetadataIds.length > _messageAttachmentMaxCount
-        ? fileMetadataIds
-              .take(_messageAttachmentMaxCount)
-              .toList(growable: false)
-        : fileMetadataIds;
-    if (trimmedIds.length < fileMetadataIds.length) {
+    final normalizedIds = _normalizedFileMetadataIds(fileMetadataIds);
+    final limitedIds = normalizedIds.length > _messageAttachmentMaxCount
+        ? normalizedIds.take(_messageAttachmentMaxCount).toList(growable: false)
+        : normalizedIds;
+    if (limitedIds.length < normalizedIds.length) {
       _log.warning('Dropping message attachments beyond max count.');
     }
+    await _ensureFileMetadataRowsExist(limitedIds);
     await transaction(() async {
       await messageAttachmentsAccessor.deleteForMessage(messageId);
-      if (trimmedIds.isEmpty) return;
+      if (limitedIds.isEmpty) return;
       const attachmentSortOrderStart = 0;
       const attachmentSortOrderStep = 1;
       var order = attachmentSortOrderStart;
-      for (final metadataId in trimmedIds) {
+      for (final metadataId in limitedIds) {
         await into(messageAttachments).insert(
           MessageAttachmentsCompanion.insert(
             messageId: messageId,

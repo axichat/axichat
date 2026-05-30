@@ -198,6 +198,40 @@ void main() {
       when(() => mockStateStore.read(key: any(named: 'key'))).thenReturn(null);
       await connectSuccessfully(xmppService);
       final draftId = await database.saveDraft(
+    test(
+      'normalizes attachment metadata IDs before saving draft refs',
+      () async {
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        await connectSuccessfully(xmppService);
+
+        final draft = await xmppService.saveDraft(
+          jids: const ['peer@axi.im'],
+          body: 'Saved body',
+          attachments: const [
+            Attachment(
+              path: '/tmp/attachment.txt',
+              fileName: 'attachment.txt',
+              sizeBytes: 42,
+              mimeType: 'text/plain',
+              metadataId: ' draft-attachment-meta ',
+            ),
+          ],
+        );
+
+        expect(draft.attachmentMetadataIds, ['draft-attachment-meta']);
+        expect(
+          await database.getFileMetadata('draft-attachment-meta'),
+          isNotNull,
+        );
+        expect(
+          await database.getFileMetadata(' draft-attachment-meta '),
+          isNotNull,
+        );
+      },
+    );
+
         jids: const ['peer@axi.im'],
         body: 'Saved body',
         draftSyncId: 'sync-autosave-toggle',

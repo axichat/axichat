@@ -1360,30 +1360,43 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       stanzaId: quotingStanzaId,
       referenceKind: quotingReferenceKind,
     );
-    final metadataIds = <String>[];
-    for (final attachment in attachments) {
-      final metadataId = await _persistDraftAttachmentMetadata(attachment);
-      metadataIds.add(metadataId);
-    }
-    final attachmentMetadata = DraftAttachmentMetadataIds(metadataIds);
-    final savedId = await _dbOpReturning<XmppDatabase, int>(
-      (db) => db.saveDraft(
-        id: id,
-        jids: jids,
-        body: body,
-        draftSyncId: draftSyncMetadata.id,
-        draftUpdatedAt: draftSyncMetadata.updatedAt,
-        draftSourceId: draftSyncMetadata.sourceId,
-        draftRecipients: draftRecipients,
-        subject: subject,
-        quotingStanzaId: quoteTarget?.stanzaId,
-        quotingReferenceKind: quoteTarget?.referenceKind,
-        attachmentMetadataIds: attachmentMetadata.values,
-        calendarTaskIcsMessage: calendarTaskIcsMessage,
-        forwardedBlocks: forwardedBlocks,
-        autosaveEnabled: autosaveEnabled,
-      ),
-    );
+    final draftSave =
+        await _dbOpReturning<
+          XmppDatabase,
+          ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
+        >((db) async {
+          final attachmentMetadataRows = <FileMetadataData>[];
+          for (final attachment in attachments) {
+            final metadata = await _draftAttachmentMetadataDataInDb(
+              db,
+              attachment,
+            );
+            attachmentMetadataRows.add(metadata);
+          }
+          final attachmentMetadata = DraftAttachmentMetadataIds(
+            attachmentMetadataRows.map((metadata) => metadata.id).toList(),
+          );
+          final savedId = await db.saveDraft(
+            id: id,
+            jids: jids,
+            body: body,
+            draftSyncId: draftSyncMetadata.id,
+            draftUpdatedAt: draftSyncMetadata.updatedAt,
+            draftSourceId: draftSyncMetadata.sourceId,
+            draftRecipients: draftRecipients,
+            subject: subject,
+            quotingStanzaId: quoteTarget?.stanzaId,
+            quotingReferenceKind: quoteTarget?.referenceKind,
+            attachmentMetadataIds: attachmentMetadata.values,
+            attachmentMetadata: attachmentMetadataRows,
+            calendarTaskIcsMessage: calendarTaskIcsMessage,
+            forwardedBlocks: forwardedBlocks,
+            autosaveEnabled: autosaveEnabled,
+          );
+          return (attachmentMetadata: attachmentMetadata, savedId: savedId);
+        });
+    final savedId = draftSave.savedId;
+    final attachmentMetadata = draftSave.attachmentMetadata;
     final staleMetadataIds =
         (existingDraft?.attachmentMetadata ??
                 DraftAttachmentMetadataIds(const <String>[]))
@@ -1934,9 +1947,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final attachmentMetadata = DraftAttachmentMetadataIds(
       payload.attachmentMetadataIds,
     );
-    await _saveDraftAttachmentMetadataFromSync(payload.attachments);
-    await _dbOp<XmppDatabase>(
-      (db) async => db.upsertDraftFromSync(
+    await _dbOp<XmppDatabase>((db) async {
+      final attachmentMetadataRows = await _draftAttachmentMetadataFromSyncInDb(
+        db,
+        payload.attachments,
+      );
+      await db.upsertDraftFromSync(
         draftSyncId: payload.syncId,
         jids: payload.recipientJids,
         body: payload.body,
@@ -1944,13 +1960,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         quotingStanzaId: payload.quotingStanzaId,
         quotingReferenceKind: payload.quotingReferenceKind,
         attachmentMetadataIds: attachmentMetadata.values,
+        attachmentMetadata: attachmentMetadataRows,
         calendarTaskIcsMessage: payload.calendarTaskIcsMessage,
         forwardedBlocks: payload.forwardedBlocks,
         draftUpdatedAt: payload.updatedAt.toUtc(),
         draftSourceId: payload.sourceId,
         draftRecipients: recipientRecords,
-      ),
-    );
+      );
+    });
     await _clearPendingDraftPublish(payload.syncId);
     final staleMetadataIds = existingMetadata.staleComparedTo(
       attachmentMetadata.values,
@@ -2053,26 +2070,28 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return List<DraftAttachmentRef>.unmodifiable(attachments);
   }
 
-  Future<void> _saveDraftAttachmentMetadataFromSync(
+  Future<List<FileMetadataData>> _draftAttachmentMetadataFromSyncInDb(
+    XmppDatabase db,
     List<DraftAttachmentRef> attachments,
   ) async {
-    if (attachments.isEmpty) return;
-    await _dbOp<XmppDatabase>((db) async {
-      for (final attachment in attachments) {
-        final existing = await db.getFileMetadata(attachment.id);
-        final merged = _mergeDraftAttachmentMetadata(
-          attachment: attachment,
-          existing: existing,
-        );
-        await db.saveFileMetadata(merged);
-      }
-    });
+    if (attachments.isEmpty) return const <FileMetadataData>[];
+    final metadataRows = <FileMetadataData>[];
+    for (final attachment in attachments) {
+      final existing = await db.getFileMetadata(attachment.id);
+      final merged = _mergeDraftAttachmentMetadata(
+        attachment: attachment,
+        existing: existing,
+      );
+      metadataRows.add(merged);
+    }
+    return List<FileMetadataData>.unmodifiable(metadataRows);
   }
 
   FileMetadataData _mergeDraftAttachmentMetadata({
     required DraftAttachmentRef attachment,
     FileMetadataData? existing,
   }) {
+    final metadataId = _resolvedFileMetadataId(attachment.id);
     final normalizedName = _normalizeAttachmentText(
       attachment.filename,
       maxBytes: draftSyncMaxAttachmentNameBytes,
@@ -2086,8 +2105,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       attachment.url,
     );
     return FileMetadataData(
-      id: attachment.id,
-      filename: normalizedName ?? existing?.filename ?? attachment.id,
+      id: metadataId,
+      filename: normalizedName ?? existing?.filename ?? metadataId,
       path: existing?.path,
       sourceUrls: mergedUrls,
       mimeType: normalizedMime ?? existing?.mimeType,
@@ -2465,10 +2484,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Future<String> _persistDraftAttachmentMetadata(Attachment attachment) async {
-    final metadataId = attachment.metadataId ?? uuid.v4();
-    final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
-      (db) => db.getFileMetadata(metadataId),
+    return _dbOpReturning<XmppDatabase, String>(
+      (db) => _persistDraftAttachmentMetadataInDb(db, attachment),
     );
+  }
+
+  Future<String> _persistDraftAttachmentMetadataInDb(
+    XmppDatabase db,
+    Attachment attachment,
+  ) async {
+    final metadata = await _draftAttachmentMetadataDataInDb(db, attachment);
+    await db.saveFileMetadata(metadata);
+    return metadata.id;
+  }
+
+  Future<FileMetadataData> _draftAttachmentMetadataDataInDb(
+    XmppDatabase db,
+    Attachment attachment,
+  ) async {
+    final metadataId = _resolvedFileMetadataId(attachment.metadataId);
+    final existing = await db.getFileMetadata(metadataId);
     final fileName = attachment.fileName.isNotEmpty
         ? attachment.fileName
         : existing?.filename ?? p.basename(attachment.path);
@@ -2492,8 +2527,23 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       thumbnailType: existing?.thumbnailType,
       thumbnailData: existing?.thumbnailData,
     );
-    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
-    return metadata.id;
+    return metadata;
+  }
+
+  String _resolvedFileMetadataId(String? metadataId) {
+    final normalized = metadataId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return uuid.v4();
+    }
+    return normalized;
+  }
+
+  FileMetadataData _normalizedFileMetadataData(FileMetadataData metadata) {
+    final normalizedId = _resolvedFileMetadataId(metadata.id);
+    if (normalizedId == metadata.id) {
+      return metadata;
+    }
+    return metadata.copyWith(id: normalizedId);
   }
 
   Future<void> _deleteDraftAttachmentMetadata(
@@ -6468,13 +6518,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       accountJid: accountJid,
       chatType: resolvedChatType,
     );
-    final metadataId =
-        upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
+    final metadataId = _resolvedFileMetadataId(
+      upload?.metadata.id ?? attachment.metadataId,
+    );
     final attachmentWithMetadataId = attachment.metadataId == metadataId
         ? attachment
         : attachment.copyWith(metadataId: metadataId);
     final metadata =
-        upload?.metadata ??
+        (upload == null
+            ? null
+            : _normalizedFileMetadataData(upload.metadata)) ??
         await _seedAttachmentMetadata(attachmentWithMetadataId);
     if (upload != null) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
@@ -6800,7 +6853,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
     final getUrl = slot.getUrl;
     final metadata = FileMetadataData(
-      id: attachment.metadataId ?? uuid.v4(),
+      id: _resolvedFileMetadataId(attachment.metadataId),
       filename: filename,
       path: file.path,
       mimeType: contentType,
@@ -8449,7 +8502,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<FileMetadataData> _seedAttachmentMetadata(
     Attachment attachment,
   ) async {
-    final metadataId = attachment.metadataId ?? uuid.v4();
+    final metadataId = _resolvedFileMetadataId(attachment.metadataId);
     final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
       (db) => db.getFileMetadata(metadataId),
     );
