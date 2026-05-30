@@ -1127,6 +1127,7 @@ class _HomeShellConnectivityFrame extends StatelessWidget {
       color: context.colorScheme.background,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const ConnectivityIndicator(reserveTopInsetWhenHidden: true),
           Expanded(
