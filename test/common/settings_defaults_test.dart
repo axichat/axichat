@@ -263,6 +263,42 @@ void main() {
       );
     });
 
+    test('does not show the donation prompt while disabled', () {
+      const promptState = SettingsState(
+        endpointConfig: EndpointConfig(domain: 'selfhost.example'),
+        donationPromptAccountJid: accountJid,
+        donationPromptTrackingInitialized: true,
+        donationPromptTrackedMessageCount: 100,
+        donationPromptLastObservedStoredMessageCount: 100,
+      );
+
+      expect(
+        promptState.showsDonationPrompt(
+          accountJid: accountJid,
+          storedConversationMessageCount: 100,
+        ),
+        isFalse,
+      );
+      expect(
+        promptState
+            .copyWith(endpointConfig: const EndpointConfig())
+            .showsDonationPrompt(
+              accountJid: accountJid,
+              storedConversationMessageCount: 100,
+            ),
+        isFalse,
+      );
+      expect(
+        promptState
+            .copyWith(donationPromptAccountJid: 'user@axi.im')
+            .showsDonationPrompt(
+              accountJid: 'user@axi.im',
+              storedConversationMessageCount: 100,
+            ),
+        isFalse,
+      );
+    });
+
     test('resets donation prompt tracking when the active account changes', () {
       final hiddenPromptState = state.copyWith(
         donationPromptAccountJid: accountJid,

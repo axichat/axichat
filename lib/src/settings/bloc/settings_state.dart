@@ -477,17 +477,5 @@ extension SettingsStateDonationPrompt on SettingsState {
   bool showsDonationPrompt({
     required String? accountJid,
     required int storedConversationMessageCount,
-  }) {
-    final normalizedAccountJid = _normalizedDonationPromptAccountJid(
-      accountJid,
-    );
-    if (normalizedAccountJid == null ||
-        normalizedAccountJid != donationPromptAccountJid) {
-      return false;
-    }
-    return effectiveDonationPromptTrackedMessageCount(
-          storedConversationMessageCount,
-        ) >=
-        donationPromptNextDisplayMessageCount;
-  }
+  }) => false;
 }
