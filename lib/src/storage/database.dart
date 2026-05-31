@@ -14,6 +14,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -39,6 +40,21 @@ abstract interface class Database {
 const String _databaseFileSuffix = '.axichat.drift';
 const int _messageAttachmentMaxCount = 50;
 const int _emptyTimestampMillis = 0;
+
+List<String> _emailOriginIdCandidates(String originID) {
+  final trimmed = originID.trim();
+  if (trimmed.isEmpty) {
+    return const <String>[];
+  }
+  final normalized = normalizeEmailMessageId(trimmed);
+  final candidates = <String>{trimmed};
+  if (normalized != null && normalized.isNotEmpty && normalized.contains('@')) {
+    candidates
+      ..add(normalized)
+      ..add('<$normalized>');
+  }
+  return candidates.toList(growable: false);
+}
 
 class MessageDeltaSnapshot {
   const MessageDeltaSnapshot({
@@ -140,6 +156,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID, {String? chatJid});
 
+  Future<List<Message>> getMessagesByOriginID(
+    String originID, {
+    String? chatJid,
+  });
+
   Future<Message?> getMessageByReferenceId(String messageId, {String? chatJid});
 
   Future<Message?> getMessageByDeltaId(
@@ -159,6 +180,17 @@ abstract interface class XmppDatabase implements Database {
   Future<List<Message>> getMessagesByReferenceIds(
     Iterable<String> messageIds, {
     String? chatJid,
+  });
+
+  Future<List<Message>> getEmailMessagesByRfcGroup({
+    required String chatJid,
+    required String originID,
+    required int deltaAccountId,
+  });
+
+  Future<List<Message>> getEmailMessagesForOriginRepair({
+    required int deltaAccountId,
+    required int limit,
   });
 
   Stream<List<Reaction>> watchReactionsForChat(String jid);
@@ -484,6 +516,7 @@ abstract interface class XmppDatabase implements Database {
     required String jid,
     required int maxMessages,
     int? deltaAccountId,
+    int? deltaChatId,
     String? selfJid,
     String? emailSelfJid,
   });
@@ -669,6 +702,15 @@ abstract interface class XmppDatabase implements Database {
     required int deltaChatId,
   });
 
+  Future<List<EmailChatAccountData>> getEmailChatAccountsForAccount(
+    int deltaAccountId,
+  );
+
+  Future<List<int>> getDeltaChatIdsForAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  });
+
   Future<int?> getDeltaChatIdForAccount({
     required String chatJid,
     required int deltaAccountId,
@@ -677,6 +719,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> deleteEmailChatAccount({
     required String chatJid,
     required int deltaAccountId,
+    required int deltaChatId,
   });
 
   Future<void> deleteEmailChatAccountsForDeltaChat({
@@ -1965,7 +2008,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 57;
+  int get schemaVersion => 59;
 
   @override
   MigrationStrategy get migration {
@@ -2426,6 +2469,12 @@ WHERE transport = ${MessageTransport.email.index}
               'autosave_enabled',
             )) {
           await m.addColumn(drafts, drafts.autosaveEnabled);
+        }
+        if (from < 58) {
+          await _rebuildEmailChatAccountsForMultipleDeltaChats();
+        }
+        if (from < 59) {
+          await repairGeneratedEmailAttachmentCaptionBodies();
         }
       },
       beforeOpen: (_) async {
@@ -3164,20 +3213,31 @@ WHERE transport = ${MessageTransport.email.index}
     String originID, {
     String? chatJid,
   }) async {
-    final normalizedOriginId = originID.trim();
-    if (normalizedOriginId.isEmpty) {
-      return null;
+    final matches = await getMessagesByOriginID(originID, chatJid: chatJid);
+    return matches.firstOrNull;
+  }
+
+  @override
+  Future<List<Message>> getMessagesByOriginID(
+    String originID, {
+    String? chatJid,
+  }) async {
+    final originIds = _emailOriginIdCandidates(originID);
+    if (originIds.isEmpty) {
+      return const <Message>[];
     }
     final normalizedChatJid = chatJid?.trim();
+    final query = select(messages)
+      ..where((tbl) => tbl.originID.isIn(originIds))
+      ..orderBy([
+        (tbl) => OrderingTerm.asc(tbl.timestamp),
+        (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
+        (tbl) => OrderingTerm.asc(tbl.stanzaID),
+      ]);
     if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
-      return await (select(messages)..where(
-            (tbl) =>
-                tbl.chatJid.equals(normalizedChatJid) &
-                tbl.originID.equals(normalizedOriginId),
-          ))
-          .getSingleOrNull();
+      query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
     }
-    return messagesAccessor.selectOneByOriginID(normalizedOriginId);
+    return query.get();
   }
 
   @override
@@ -3287,6 +3347,55 @@ WHERE transport = ${MessageTransport.email.index}
       query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
     }
     return query.get();
+  }
+
+  @override
+  Future<List<Message>> getEmailMessagesByRfcGroup({
+    required String chatJid,
+    required String originID,
+    required int deltaAccountId,
+  }) {
+    final normalizedChatJid = chatJid.trim();
+    final originIds = _emailOriginIdCandidates(originID);
+    if (normalizedChatJid.isEmpty || originIds.isEmpty) {
+      return Future.value(const <Message>[]);
+    }
+    return (select(messages)
+          ..where(
+            (tbl) =>
+                tbl.chatJid.equals(normalizedChatJid) &
+                tbl.originID.isIn(originIds) &
+                tbl.deltaAccountId.equals(deltaAccountId),
+          )
+          ..orderBy([
+            (tbl) => OrderingTerm.asc(tbl.timestamp),
+            (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
+            (tbl) => OrderingTerm.asc(tbl.stanzaID),
+          ]))
+        .get();
+  }
+
+  @override
+  Future<List<Message>> getEmailMessagesForOriginRepair({
+    required int deltaAccountId,
+    required int limit,
+  }) {
+    if (limit <= 0) {
+      return Future.value(const <Message>[]);
+    }
+    return (select(messages)
+          ..where(
+            (tbl) =>
+                tbl.deltaAccountId.equals(deltaAccountId) &
+                tbl.deltaMsgId.isNotNull(),
+          )
+          ..orderBy([
+            (tbl) => OrderingTerm.desc(tbl.timestamp),
+            (tbl) => OrderingTerm.desc(tbl.deltaMsgId),
+            (tbl) => OrderingTerm.asc(tbl.stanzaID),
+          ])
+          ..limit(limit))
+        .get();
   }
 
   @override
@@ -3458,12 +3567,12 @@ WHERE transport = ${MessageTransport.email.index}
         isSelfChat &&
         currentChat?.contactDisplayName?.trim().isNotEmpty != true &&
         currentChat?.title.trim() != 'Saved Messages';
-    final bool shouldIncrementUnread =
-        shouldUpdateChatSummary &&
-        _messageCountsTowardUnread(message: message) &&
-        !message.displayed &&
-        !isSelfMessage;
-    final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
+    final int unreadIncrement = await _unreadIncrementForIncomingMessage(
+      message: message,
+      shouldUpdateChatSummary: shouldUpdateChatSummary,
+      selfJid: selfJid,
+      isSelfMessage: isSelfMessage,
+    );
     final bool usesEmailUnreadCounter =
         currentChat?.defaultTransport.isEmail == true;
     final bool shouldRepairSummaryAfterSave =
@@ -3656,6 +3765,46 @@ WHERE transport = ${MessageTransport.email.index}
 
   bool _messageCountsTowardUnread({required Message message}) {
     return message.hasUnreadContent;
+  }
+
+  Future<int> _unreadIncrementForIncomingMessage({
+    required Message message,
+    required bool shouldUpdateChatSummary,
+    required String? selfJid,
+    required bool isSelfMessage,
+  }) async {
+    if (!shouldUpdateChatSummary ||
+        !_messageCountsTowardUnread(message: message) ||
+        message.displayed ||
+        isSelfMessage) {
+      return 0;
+    }
+    final originId = message.originID?.trim();
+    if (message.emailRfcGroupKey == null ||
+        originId == null ||
+        originId.isEmpty) {
+      return 1;
+    }
+    final siblings = await getEmailMessagesByRfcGroup(
+      chatJid: message.chatJid,
+      originID: originId,
+      deltaAccountId: message.deltaAccountId,
+    );
+    for (final sibling in siblings) {
+      if (sibling.stanzaID == message.stanzaID) {
+        continue;
+      }
+      if (!message.hasSameEmailRfcGroup(sibling)) {
+        continue;
+      }
+      if (sibling.displayed ||
+          !_messageCountsTowardUnread(message: sibling) ||
+          sibling.isFromAccount(selfJid)) {
+        continue;
+      }
+      return 0;
+    }
+    return 1;
   }
 
   bool _messageExcludedFromChatSummary(Message message) {
@@ -4400,6 +4549,7 @@ WHERE email_from_address IN ($placeholderClause)
     required String jid,
     required int maxMessages,
     int? deltaAccountId,
+    int? deltaChatId,
     String? selfJid,
     String? emailSelfJid,
   }) async {
@@ -4421,18 +4571,22 @@ WHERE email_from_address IN ($placeholderClause)
         ? ' AND delta_account_id = ?'
               ' AND (delta_chat_id IS NOT NULL OR delta_msg_id IS NOT NULL)'
         : '';
+    final String deltaChatClause = deltaChatId != null
+        ? ' AND delta_chat_id = ?'
+        : '';
     final pruned = await customSelect(
       '''
       SELECT id AS message_id, stanza_i_d AS stanza_id, origin_i_d,
              muc_stanza_id, delta_msg_id, delta_account_id
       FROM messages
-      WHERE chat_jid = ?$accountClause
+      WHERE chat_jid = ?$accountClause$deltaChatClause
       ORDER BY timestamp DESC
       LIMIT -1 OFFSET ?
       ''',
       variables: [
         Variable<String>(jid),
         if (filterByAccount) Variable<int>(deltaAccountId),
+        if (deltaChatId != null) Variable<int>(deltaChatId),
         Variable<int>(offset),
       ],
       readsFrom: {messages},
@@ -4812,6 +4966,7 @@ WHERE email_from_address IN ($placeholderClause)
             ))
             .get();
     var unreadCount = 0;
+    final unreadEmailGroups = <String>{};
     for (final message in candidates) {
       if (!message.hasUnreadContent) {
         continue;
@@ -4822,9 +4977,14 @@ WHERE email_from_address IN ($placeholderClause)
       if (message.isFromAccount(messageSelfJid)) {
         continue;
       }
+      final emailGroupKey = message.emailRfcGroupKey;
+      if (emailGroupKey != null) {
+        unreadEmailGroups.add(emailGroupKey);
+        continue;
+      }
       unreadCount += 1;
     }
-    return unreadCount;
+    return unreadCount + unreadEmailGroups.length;
   }
 
   @override
@@ -7177,29 +7337,58 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
+  Future<List<EmailChatAccountData>> getEmailChatAccountsForAccount(
+    int deltaAccountId,
+  ) {
+    return (select(emailChatAccounts)
+          ..where((tbl) => tbl.deltaAccountId.equals(deltaAccountId))
+          ..orderBy([
+            (tbl) => OrderingTerm.asc(tbl.chatJid),
+            (tbl) => OrderingTerm.desc(tbl.deltaChatId),
+          ]))
+        .get();
+  }
+
+  @override
+  Future<List<int>> getDeltaChatIdsForAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  }) async {
+    final rows =
+        await (select(emailChatAccounts)
+              ..where(
+                (tbl) =>
+                    tbl.chatJid.equals(chatJid) &
+                    tbl.deltaAccountId.equals(deltaAccountId),
+              )
+              ..orderBy([(tbl) => OrderingTerm.desc(tbl.deltaChatId)]))
+            .get();
+    return rows.map((row) => row.deltaChatId).toList(growable: false);
+  }
+
+  @override
   Future<int?> getDeltaChatIdForAccount({
     required String chatJid,
     required int deltaAccountId,
   }) async {
-    final query = select(emailChatAccounts)
-      ..where(
-        (tbl) =>
-            tbl.chatJid.equals(chatJid) &
-            tbl.deltaAccountId.equals(deltaAccountId),
-      );
-    final row = await query.getSingleOrNull();
-    return row?.deltaChatId;
+    final deltaChatIds = await getDeltaChatIdsForAccount(
+      chatJid: chatJid,
+      deltaAccountId: deltaAccountId,
+    );
+    return deltaChatIds.firstOrNull;
   }
 
   @override
   Future<void> deleteEmailChatAccount({
     required String chatJid,
     required int deltaAccountId,
+    required int deltaChatId,
   }) async {
     await (delete(emailChatAccounts)..where(
           (tbl) =>
               tbl.chatJid.equals(chatJid) &
-              tbl.deltaAccountId.equals(deltaAccountId),
+              tbl.deltaAccountId.equals(deltaAccountId) &
+              tbl.deltaChatId.equals(deltaChatId),
         ))
         .go();
   }
@@ -7380,6 +7569,132 @@ WHERE jid = ?
     await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
       ChatsCompanion(archived: Value(archived)),
     );
+  }
+
+  Future<void> repairGeneratedEmailAttachmentCaptionBodies() async {
+    final candidates =
+        await (select(messages)..where(
+              (tbl) =>
+                  tbl.fileMetadataID.isNotNull() &
+                  (tbl.body.isNotNull() | tbl.pseudoMessageData.isNotNull()),
+            ))
+            .get();
+    final chatJids = <String>{};
+    for (final message in candidates) {
+      if (!message.isEmailBacked) {
+        continue;
+      }
+      final metadataId = message.fileMetadataID?.trim();
+      final metadata = metadataId == null || metadataId.isEmpty
+          ? null
+          : await fileMetadataAccessor.selectOne(metadataId);
+      final shouldClearBody = _shouldClearGeneratedEmailAttachmentCaptionBody(
+        message: message,
+        metadata: metadata,
+      );
+      if (!shouldClearBody && !message.hasGeneratedEmailAttachmentCaption) {
+        continue;
+      }
+      await (update(
+        messages,
+      )..where((tbl) => tbl.stanzaID.equals(message.stanzaID))).write(
+        MessagesCompanion(
+          body: shouldClearBody ? const Value(null) : const Value.absent(),
+          pseudoMessageData: message.hasGeneratedEmailAttachmentCaption
+              ? Value(
+                  _pseudoMessageDataWithoutGeneratedEmailAttachmentCaption(
+                    message.pseudoMessageData,
+                  ),
+                )
+              : const Value.absent(),
+        ),
+      );
+      chatJids.add(message.chatJid);
+    }
+    for (final chatJid in chatJids) {
+      await repairChatSummaryPreservingTimestamp(chatJid);
+    }
+  }
+
+  Map<String, dynamic>?
+  _pseudoMessageDataWithoutGeneratedEmailAttachmentCaption(
+    Map<String, dynamic>? pseudoMessageData,
+  ) {
+    if (pseudoMessageData?['emailAttachmentCaption'] != true) {
+      return pseudoMessageData;
+    }
+    final updated = Map<String, dynamic>.from(pseudoMessageData!)
+      ..remove('emailAttachmentCaption');
+    return updated.isEmpty ? null : updated;
+  }
+
+  bool _shouldClearGeneratedEmailAttachmentCaptionBody({
+    required Message message,
+    required FileMetadataData? metadata,
+  }) {
+    final body = message.body?.trim();
+    if (body == null || body.isEmpty) {
+      return false;
+    }
+    if (message.hasGeneratedEmailAttachmentCaption) {
+      return body.startsWith('\u{1F4CE} ');
+    }
+    if (message.subject?.trim().isNotEmpty == true ||
+        message.normalizedHtmlBody?.trim().isNotEmpty == true) {
+      return false;
+    }
+    return _bodyMatchesGeneratedEmailAttachmentCaption(
+      body: body,
+      metadata: metadata,
+    );
+  }
+
+  bool _bodyMatchesGeneratedEmailAttachmentCaption({
+    required String body,
+    required FileMetadataData? metadata,
+  }) {
+    final filename = metadata?.filename.trim();
+    if (filename == null || filename.isEmpty) {
+      return false;
+    }
+    for (final sizeLabel in _generatedEmailAttachmentCaptionSizeLabels(
+      metadata?.sizeBytes,
+    )) {
+      final captions = [
+        '\u{1F4CE} $filename ($sizeLabel)',
+        '\u{1F4CE} Archivo: $filename ($sizeLabel)',
+        '\u{1F4CE} Datei: $filename ($sizeLabel)',
+        '\u{1F4CE} Fichier : $filename ($sizeLabel)',
+        '\u{1F4CE} $filename（$sizeLabel）',
+      ];
+      if (captions.contains(body)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Set<String> _generatedEmailAttachmentCaptionSizeLabels(int? bytes) {
+    if (bytes == null || bytes <= 0) {
+      return const {
+        'Unknown size',
+        'Tama\u00F1o desconocido',
+        'Unbekannte Gr\u00F6\u00DFe',
+        'Taille inconnue',
+        '\u5927\u5C0F\u672A\u77E5',
+      };
+    }
+    var value = bytes.toDouble();
+    var unitIndex = 0;
+    const unitBase = 1024;
+    while (value >= unitBase && unitIndex < 4) {
+      value /= unitBase;
+      unitIndex++;
+    }
+    const precisionThreshold = 10;
+    final precision = value >= precisionThreshold || unitIndex == 0 ? 0 : 1;
+    const unitLabels = ['B', 'KB', 'MB', 'GB', 'TB'];
+    return {'${value.toStringAsFixed(precision)} ${unitLabels[unitIndex]}'};
   }
 
   @override
@@ -7673,14 +7988,16 @@ WHERE jid = ?
           await (select(emailChatAccounts)..where(
                 (tbl) =>
                     tbl.chatJid.equals(toJid) &
-                    tbl.deltaAccountId.equals(account.deltaAccountId),
+                    tbl.deltaAccountId.equals(account.deltaAccountId) &
+                    tbl.deltaChatId.equals(account.deltaChatId),
               ))
               .getSingleOrNull();
       final source = delete(emailChatAccounts)
         ..where(
           (tbl) =>
               tbl.chatJid.equals(fromJid) &
-              tbl.deltaAccountId.equals(account.deltaAccountId),
+              tbl.deltaAccountId.equals(account.deltaAccountId) &
+              tbl.deltaChatId.equals(account.deltaChatId),
         );
       if (target != null) {
         await source.go();
@@ -7689,7 +8006,8 @@ WHERE jid = ?
       await (update(emailChatAccounts)..where(
             (tbl) =>
                 tbl.chatJid.equals(fromJid) &
-                tbl.deltaAccountId.equals(account.deltaAccountId),
+                tbl.deltaAccountId.equals(account.deltaAccountId) &
+                tbl.deltaChatId.equals(account.deltaChatId),
           ))
           .write(EmailChatAccountsCompanion(chatJid: Value(toJid)));
     }
@@ -9285,6 +9603,38 @@ ON CONFLICT(address) DO UPDATE SET
       }
     }
     return false;
+  }
+
+  Future<void> _rebuildEmailChatAccountsForMultipleDeltaChats() async {
+    const tempTableName = 'email_chat_accounts_multi';
+    await customStatement('PRAGMA foreign_keys = OFF');
+    try {
+      await customStatement('DROP TABLE IF EXISTS $tempTableName');
+      await customStatement('''
+CREATE TABLE $tempTableName (
+  chat_jid TEXT NOT NULL REFERENCES chats(jid),
+  delta_account_id INTEGER NOT NULL DEFAULT ${DeltaAccountDefaults.legacyId},
+  delta_chat_id INTEGER NOT NULL,
+  PRIMARY KEY(chat_jid, delta_account_id, delta_chat_id),
+  UNIQUE(delta_account_id, delta_chat_id)
+)
+''');
+      await customStatement('''
+INSERT OR IGNORE INTO $tempTableName(
+  chat_jid,
+  delta_account_id,
+  delta_chat_id
+)
+SELECT chat_jid, delta_account_id, delta_chat_id
+FROM email_chat_accounts
+''');
+      await customStatement('DROP TABLE email_chat_accounts');
+      await customStatement(
+        'ALTER TABLE $tempTableName RENAME TO email_chat_accounts',
+      );
+    } finally {
+      await customStatement('PRAGMA foreign_keys = ON');
+    }
   }
 
   Future<bool> _tableExists(String tableName) async {

@@ -2558,6 +2558,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authLogoutNormalDescription => 'Cerrar sesión de esta cuenta.';
 
   @override
+  String get authLogoutInProgressDescription =>
+      'Terminando el cierre de sesión. Espera.';
+
+  @override
   String get authLogoutBurn => 'Borrar cuenta';
 
   @override
@@ -4859,6 +4863,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get notificationNewMessageTitle => 'Nuevo mensaje';
+
+  @override
+  String get notificationNewEmailTitle => 'Nuevo correo';
 
   @override
   String get notificationOpenAction => 'Abrir notificación';

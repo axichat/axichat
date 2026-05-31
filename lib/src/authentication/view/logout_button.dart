@@ -69,7 +69,9 @@ class _LogoutDialogState extends State<_LogoutDialog> {
     return AxiInputDialog(
       title: Text(LogoutButton.title(context.l10n)),
       content: Text(
-        context.l10n.authLogoutNormalDescription,
+        _loading
+            ? context.l10n.authLogoutInProgressDescription
+            : context.l10n.authLogoutNormalDescription,
         style: context.textTheme.small,
       ),
       callbackText: context.l10n.authLogoutTitle,

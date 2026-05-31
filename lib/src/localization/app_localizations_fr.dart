@@ -2568,6 +2568,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authLogoutNormalDescription => 'Se déconnecter de ce compte.';
 
   @override
+  String get authLogoutInProgressDescription =>
+      'Déconnexion en cours. Veuillez patienter.';
+
+  @override
   String get authLogoutBurn => 'Supprimer le compte';
 
   @override
@@ -4882,6 +4886,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get notificationNewMessageTitle => 'Nouveau message';
+
+  @override
+  String get notificationNewEmailTitle => 'Nouvel e-mail';
 
   @override
   String get notificationOpenAction => 'Ouvrir la notification';

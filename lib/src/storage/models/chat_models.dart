@@ -882,7 +882,7 @@ class EmailChatAccounts extends Table {
   IntColumn get deltaChatId => integer()();
 
   @override
-  Set<Column> get primaryKey => {chatJid, deltaAccountId};
+  Set<Column> get primaryKey => {chatJid, deltaAccountId, deltaChatId};
 
   @override
   List<String> get customConstraints => const [

@@ -23,6 +23,19 @@ use tokio::runtime::Runtime;
 use tokio::sync::Notify;
 
 const MIME_HEADERS_QUERY: &str = "SELECT mime_headers, mime_compressed FROM msgs WHERE id=?";
+const RFC724_MID_QUERY: &str = "SELECT rfc724_mid FROM msgs WHERE id=?";
+const RFC724_MID_MESSAGE_IDS_QUERY: &str = r#"
+SELECT related.id
+FROM msgs AS source
+JOIN msgs AS related
+  ON related.rfc724_mid = source.rfc724_mid
+ AND related.chat_id = source.chat_id
+ AND related.from_id = source.from_id
+WHERE source.id = ?
+  AND source.rfc724_mid != ''
+  AND related.hidden = 0
+ORDER BY related.timestamp ASC, related.id ASC
+"#;
 const MIME_HEADERS_COLUMN_HEADERS: usize = 0;
 const MIME_HEADERS_COLUMN_COMPRESSED: usize = 1;
 const BROTLI_BUFFER_SIZE: usize = 4096;
@@ -98,6 +111,28 @@ fn _read_mime_headers(context: &Context, msg_id: MsgId) -> Option<Vec<u8>> {
         return Some(headers);
     }
     _decompress_headers(&headers)
+}
+
+fn _read_msg_rfc724_mid(context: &Context, msg_id: MsgId) -> Option<String> {
+    let value: String =
+        _block_on(context.sql().query_get_value(RFC724_MID_QUERY, (msg_id,))).ok()??;
+    let sanitized = value.replace('\0', "").trim().to_string();
+    if sanitized.is_empty() {
+        return None;
+    }
+    Some(sanitized)
+}
+
+fn _read_msg_ids_by_rfc724_mid(context: &Context, msg_id: MsgId) -> Vec<u32> {
+    _block_on(
+        context
+            .sql()
+            .query_map_vec(RFC724_MID_MESSAGE_IDS_QUERY, (msg_id,), |row| {
+                let msg_id: MsgId = row.get(0)?;
+                Ok(msg_id.to_u32())
+            }),
+    )
+    .unwrap_or_default()
 }
 
 fn _decompress_headers(compressed: &[u8]) -> Option<Vec<u8>> {
@@ -594,6 +629,34 @@ pub unsafe extern "C" fn dc_get_msg_mime_headers(
         None => return ptr::null_mut(),
     };
     _headers_to_c_string(&headers)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_get_msg_rfc724_mid(
+    context: *mut dc_context_t,
+    msg_id: u32,
+) -> *mut c_char {
+    if context.is_null() {
+        return ptr::null_mut();
+    }
+    let ctx = &*context;
+    match _read_msg_rfc724_mid(ctx, MsgId::new(msg_id)) {
+        Some(rfc724_mid) => _string_to_c(rfc724_mid),
+        None => ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_get_msg_ids_by_rfc724_mid(
+    context: *mut dc_context_t,
+    msg_id: u32,
+) -> *mut c_char {
+    if context.is_null() {
+        return _string_to_c("[]".to_string());
+    }
+    let ctx = &*context;
+    let ids = _read_msg_ids_by_rfc724_mid(ctx, MsgId::new(msg_id));
+    _string_to_c(serde_json::to_string(&ids).unwrap_or_else(|_| "[]".to_string()))
 }
 
 #[no_mangle]

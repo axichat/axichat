@@ -126,6 +126,22 @@ typedef _DcGetMsgMimeHeadersDart = ffi.Pointer<ffi.Char> Function(
   int,
 );
 
+typedef _AxichatDcGetMsgRfc724MidNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Uint32,
+);
+
+typedef _AxichatDcGetMsgRfc724MidDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  int,
+);
+
+typedef _AxichatDcGetMsgIdsByRfc724MidNative = ffi.Pointer<ffi.Char> Function(
+    ffi.Pointer<dc_context_t>, ffi.Uint32);
+
+typedef _AxichatDcGetMsgIdsByRfc724MidDart = ffi.Pointer<ffi.Char> Function(
+    ffi.Pointer<dc_context_t>, int);
+
 typedef _DcChatGetContactIdNative = ffi.Uint32 Function(
   ffi.Pointer<dc_chat_t>,
 );
@@ -250,6 +266,95 @@ final class _DeltaOptionalMimeHeaders {
 
 final _DeltaOptionalMimeHeaders _deltaOptionalMimeHeaders =
     _DeltaOptionalMimeHeaders();
+
+final class _DeltaOptionalMsgRfc724Mid {
+  _DeltaOptionalMsgRfc724Mid() : _getRfc724Mid = _loadGetRfc724Mid();
+
+  final _AxichatDcGetMsgRfc724MidDart? _getRfc724Mid;
+
+  static _AxichatDcGetMsgRfc724MidDart? _loadGetRfc724Mid() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol =
+          library.lookup<ffi.NativeFunction<_AxichatDcGetMsgRfc724MidNative>>(
+        'axichat_dc_get_msg_rfc724_mid',
+      );
+      return symbol.asFunction<_AxichatDcGetMsgRfc724MidDart>();
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) {
+        rethrow;
+      }
+      return null;
+    }
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    int messageId,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getRfc724Mid;
+    if (fn == null) return null;
+    if (messageId <= _zeroValue) return null;
+    final ptr = fn(context, messageId);
+    return _cleanString(_takeString(ptr, bindings: bindings));
+  }
+}
+
+final _DeltaOptionalMsgRfc724Mid _deltaOptionalMsgRfc724Mid =
+    _DeltaOptionalMsgRfc724Mid();
+
+final class _DeltaOptionalMsgIdsByRfc724Mid {
+  _DeltaOptionalMsgIdsByRfc724Mid() : _getMessageIds = _loadGetMessageIds();
+
+  final _AxichatDcGetMsgIdsByRfc724MidDart? _getMessageIds;
+
+  static _AxichatDcGetMsgIdsByRfc724MidDart? _loadGetMessageIds() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol = library
+          .lookup<ffi.NativeFunction<_AxichatDcGetMsgIdsByRfc724MidNative>>(
+        'axichat_dc_get_msg_ids_by_rfc724_mid',
+      );
+      return symbol.asFunction<_AxichatDcGetMsgIdsByRfc724MidDart>();
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) {
+        rethrow;
+      }
+      return null;
+    }
+  }
+
+  List<int> read(
+    ffi.Pointer<dc_context_t> context,
+    int messageId,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getMessageIds;
+    if (fn == null || messageId <= _zeroValue) {
+      return const <int>[];
+    }
+    final raw =
+        _cleanString(_takeString(fn(context, messageId), bindings: bindings));
+    if (raw == null || raw.isEmpty) {
+      return const <int>[];
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) {
+      return const <int>[];
+    }
+    final ids = <int>{};
+    for (final value in decoded) {
+      if (value is int && value > _zeroValue) {
+        ids.add(value);
+      }
+    }
+    return ids.toList(growable: false);
+  }
+}
+
+final _DeltaOptionalMsgIdsByRfc724Mid _deltaOptionalMsgIdsByRfc724Mid =
+    _DeltaOptionalMsgIdsByRfc724Mid();
 
 final class _DeltaOptionalChatContactId {
   _DeltaOptionalChatContactId() : _getContactId = _loadGetContactId();
@@ -1455,6 +1560,22 @@ class DeltaContextHandle {
     _ensureState(_opened, 'get message mime headers');
     if (messageId <= _zeroValue) return null;
     return _deltaOptionalMimeHeaders.read(_context, messageId, _bindings);
+  }
+
+  Future<String?> getMessageRfc724Mid(int messageId) async {
+    _ensureState(_opened, 'get message RFC 724 Message-ID');
+    if (messageId <= _zeroValue) return null;
+    return _deltaOptionalMsgRfc724Mid.read(_context, messageId, _bindings);
+  }
+
+  Future<List<int>> getMessageIdsByRfc724Mid(int messageId) async {
+    _ensureState(_opened, 'get message IDs by RFC 724 Message-ID');
+    if (messageId <= _zeroValue) return const <int>[];
+    return _deltaOptionalMsgIdsByRfc724Mid.read(
+      _context,
+      messageId,
+      _bindings,
+    );
   }
 
   Future<String?> getMessageFullHtml(int messageId) async {

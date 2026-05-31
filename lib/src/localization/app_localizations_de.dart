@@ -2567,6 +2567,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authLogoutNormalDescription => 'Von diesem Konto abmelden.';
 
   @override
+  String get authLogoutInProgressDescription =>
+      'Abmeldung wird abgeschlossen. Bitte warten.';
+
+  @override
   String get authLogoutBurn => 'Konto löschen';
 
   @override
@@ -4872,6 +4876,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get notificationNewMessageTitle => 'Neue Nachricht';
+
+  @override
+  String get notificationNewEmailTitle => 'Neue E-Mail';
 
   @override
   String get notificationOpenAction => 'Benachrichtigung öffnen';

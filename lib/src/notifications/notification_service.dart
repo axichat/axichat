@@ -6,10 +6,10 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -29,6 +29,7 @@ const Duration _messageNotificationRateLimitCleanupInterval = Duration(
 );
 const int _messageNotificationMaxPerThread = 30;
 const int _messageNotificationMaxGlobal = 120;
+const String _androidIconPath = '@mipmap/ic_launcher';
 const WindowRateLimit _messageNotificationPerThreadRateLimit = WindowRateLimit(
   maxEvents: _messageNotificationMaxPerThread,
   window: _messageNotificationRateLimitWindow,
@@ -38,7 +39,17 @@ const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
   window: _messageNotificationRateLimitWindow,
 );
 
-enum MessageNotificationChannel { chat, email }
+enum MessageNotificationChannel {
+  chat,
+  email;
+
+  String notificationTitle(NotificationStrings strings) {
+    return switch (this) {
+      MessageNotificationChannel.chat => strings.newMessageTitle,
+      MessageNotificationChannel.email => strings.newEmailTitle,
+    };
+  }
+}
 
 enum ReminderSchedulingPermissionRequestResult {
   granted,
@@ -47,10 +58,25 @@ enum ReminderSchedulingPermissionRequestResult {
   failed,
 }
 
+class PendingNotificationReference {
+  const PendingNotificationReference({
+    required this.id,
+    this.title,
+    this.body,
+    this.payload,
+  });
+
+  final int id;
+  final String? title;
+  final String? body;
+  final String? payload;
+}
+
 class NotificationStrings {
   const NotificationStrings({
     required this.channelMessages,
     required this.newMessageTitle,
+    required this.newEmailTitle,
     required this.openAction,
     required this.appTitle,
     required this.backgroundConnectionDisabledTitle,
@@ -60,6 +86,7 @@ class NotificationStrings {
   const NotificationStrings.empty()
     : channelMessages = '',
       newMessageTitle = '',
+      newEmailTitle = '',
       openAction = '',
       appTitle = '',
       backgroundConnectionDisabledTitle = '',
@@ -67,6 +94,7 @@ class NotificationStrings {
 
   final String channelMessages;
   final String newMessageTitle;
+  final String newEmailTitle;
   final String openAction;
   final String appTitle;
   final String backgroundConnectionDisabledTitle;
@@ -78,6 +106,7 @@ extension NotificationStringsFromL10n on AppLocalizations {
     return NotificationStrings(
       channelMessages: notificationChannelMessages,
       newMessageTitle: notificationNewMessageTitle,
+      newEmailTitle: notificationNewEmailTitle,
       openAction: notificationOpenAction,
       appTitle: appTitle,
       backgroundConnectionDisabledTitle:
@@ -100,6 +129,68 @@ final class _MessageNotificationEntry {
   final String senderKey;
   final String text;
   final DateTime timestamp;
+}
+
+@visibleForTesting
+({String title, String? body}) resolveMessageNotificationPresentation({
+  required NotificationStrings strings,
+  required MessageNotificationChannel channel,
+  required String conversationTitle,
+  required String senderName,
+  required bool isGroupConversation,
+  required String? sanitizedBody,
+  required bool useMessagingStyle,
+}) {
+  if (sanitizedBody != null) {
+    return (
+      title: isGroupConversation ? conversationTitle : senderName,
+      body: useMessagingStyle
+          ? sanitizedBody
+          : _resolveMessageNotificationBody(
+              sanitizedBody: sanitizedBody,
+              senderName: senderName,
+              conversationTitle: conversationTitle,
+              isGroupConversation: isGroupConversation,
+            ),
+    );
+  }
+
+  return (
+    title: _messageNotificationHeadline(
+      categoryTitle: channel.notificationTitle(strings),
+      label: isGroupConversation ? conversationTitle : senderName,
+    ),
+    body: isGroupConversation && senderName.trim() != conversationTitle.trim()
+        ? senderName
+        : null,
+  );
+}
+
+String _messageNotificationHeadline({
+  required String categoryTitle,
+  required String label,
+}) {
+  final normalizedCategory = categoryTitle.trim();
+  final normalizedLabel = label.trim();
+  if (normalizedCategory.isEmpty) {
+    return normalizedLabel;
+  }
+  if (normalizedLabel.isEmpty) {
+    return normalizedCategory;
+  }
+  return '$normalizedCategory: $normalizedLabel';
+}
+
+String _resolveMessageNotificationBody({
+  required String sanitizedBody,
+  required String senderName,
+  required String conversationTitle,
+  required bool isGroupConversation,
+}) {
+  if (isGroupConversation && senderName != conversationTitle) {
+    return '$senderName: $sanitizedBody';
+  }
+  return sanitizedBody;
 }
 
 ///Call [init].
@@ -192,7 +283,7 @@ class NotificationService {
       FlutterForegroundTask.initCommunicationPort();
       ensureNotificationTapPortInitialized();
       const AndroidInitializationSettings initializationSettingsAndroid =
-          AndroidInitializationSettings(androidIconPath);
+          AndroidInitializationSettings(_androidIconPath);
       const DarwinInitializationSettings initializationSettingsDarwin =
           DarwinInitializationSettings();
       final LinuxInitializationSettings initializationSettingsLinux =
@@ -460,21 +551,20 @@ class NotificationService {
         : null;
     final bool useMessagingStyle =
         Platform.isAndroid && showPreview && sanitizedBody != null;
+    final presentation = resolveMessageNotificationPresentation(
+      strings: _l10n,
+      channel: channel,
+      conversationTitle: resolvedConversationTitle,
+      senderName: resolvedSenderName,
+      isGroupConversation: isGroupConversation,
+      sanitizedBody: sanitizedBody,
+      useMessagingStyle: useMessagingStyle,
+    );
 
     await _showNotification(
       id: notificationId,
-      title: _resolveMessageNotificationTitle(
-        conversationTitle: resolvedConversationTitle,
-        senderName: resolvedSenderName,
-        isGroupConversation: isGroupConversation,
-      ),
-      body: _resolveMessageNotificationBody(
-        sanitizedBody: sanitizedBody,
-        senderName: resolvedSenderName,
-        conversationTitle: resolvedConversationTitle,
-        isGroupConversation: isGroupConversation,
-        useMessagingStyle: useMessagingStyle,
-      ),
+      title: presentation.title,
+      body: presentation.body,
       notificationDetails: notificationDetails,
       payload: payload,
     );
@@ -597,6 +687,38 @@ class NotificationService {
     await _plugin.cancel(id: id);
   }
 
+  Future<List<PendingNotificationReference>>
+  pendingNotificationRequests() async {
+    await _ensureInitialized();
+    try {
+      final List<PendingNotificationRequest> requests = await _plugin
+          .pendingNotificationRequests();
+      return <PendingNotificationReference>[
+        for (final PendingNotificationRequest request in requests)
+          PendingNotificationReference(
+            id: request.id,
+            title: request.title,
+            body: request.body,
+            payload: request.payload,
+          ),
+      ];
+    } on UnimplementedError catch (error, stackTrace) {
+      _log.warning(
+        'Pending notification requests are unavailable on this platform.',
+        error,
+        stackTrace,
+      );
+      return const <PendingNotificationReference>[];
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Pending notification requests plugin unavailable.',
+        error,
+        stackTrace,
+      );
+      return const <PendingNotificationReference>[];
+    }
+  }
+
   Future<void> refreshTimeZone() => _ensureTimeZones(force: true);
 
   void _markSchedulingUnsupported({Object? error, StackTrace? stackTrace}) {
@@ -706,7 +828,7 @@ class NotificationService {
       groupKey: '${packageInfo.packageName}.MESSAGES',
       importance: Importance.max,
       priority: Priority.high,
-      icon: androidIconPath,
+      icon: _androidIconPath,
       visibility: NotificationVisibility.private,
     );
     const windowsDetails = WindowsNotificationDetails();
@@ -749,7 +871,7 @@ class NotificationService {
       groupKey: '${packageInfo.packageName}.MESSAGES',
       importance: Importance.max,
       priority: Priority.high,
-      icon: androidIconPath,
+      icon: _androidIconPath,
       category: AndroidNotificationCategory.message,
       styleInformation: styleInformation,
       visibility: showPreview
@@ -877,36 +999,6 @@ class NotificationService {
     return history
         .map((item) => item._toAndroidMessage())
         .toList(growable: false);
-  }
-
-  String _resolveMessageNotificationTitle({
-    required String conversationTitle,
-    required String senderName,
-    required bool isGroupConversation,
-  }) {
-    if (isGroupConversation) {
-      return conversationTitle;
-    }
-    return senderName;
-  }
-
-  String? _resolveMessageNotificationBody({
-    required String? sanitizedBody,
-    required String senderName,
-    required String conversationTitle,
-    required bool isGroupConversation,
-    required bool useMessagingStyle,
-  }) {
-    if (sanitizedBody == null) {
-      return null;
-    }
-    if (useMessagingStyle) {
-      return sanitizedBody;
-    }
-    if (isGroupConversation && senderName != conversationTitle) {
-      return '$senderName: $sanitizedBody';
-    }
-    return sanitizedBody;
   }
 
   int _stableNotificationId(String key) {

@@ -51,6 +51,14 @@ class FakeForegroundBridge implements ForegroundTaskBridge {
   Future<bool> isRunning() async => _acquiredClients.isNotEmpty;
 
   @override
+  Future<bool> stopIfRunning() async {
+    final running = _acquiredClients.isNotEmpty;
+    _acquiredClients.clear();
+    _listeners.clear();
+    return running;
+  }
+
+  @override
   Future<void> acquire({
     required String clientId,
     ForegroundServiceConfig? config,
@@ -194,6 +202,7 @@ void main() {
     ).thenAnswer((_) async => false);
     when(() => transport.isIoRunning).thenReturn(false);
     when(() => transport.start()).thenAnswer((_) async {});
+    when(() => transport.stopEventDeliveryForLogout()).thenAnswer((_) async {});
     when(() => transport.stop()).thenAnswer((_) async {});
     when(() => transport.dispose()).thenAnswer((_) async {});
     when(
@@ -371,11 +380,11 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => database.getDeltaChatIdForAccount(
+      () => database.getDeltaChatIdsForAccount(
         chatJid: any(named: 'chatJid'),
         deltaAccountId: any(named: 'deltaAccountId'),
       ),
-    ).thenAnswer((_) async => null);
+    ).thenAnswer((_) async => const <int>[]);
     when(
       () => database.getEmailTrustedContactKey(
         deltaAccountId: any(named: 'deltaAccountId'),
@@ -406,6 +415,13 @@ void main() {
         deltaAccountId: any(named: 'deltaAccountId'),
       ),
     ).thenAnswer((_) async => null);
+    when(
+      () => database.getEmailMessagesByRfcGroup(
+        chatJid: any(named: 'chatJid'),
+        originID: any(named: 'originID'),
+        deltaAccountId: any(named: 'deltaAccountId'),
+      ),
+    ).thenAnswer((_) async => const <Message>[]);
     when(() => database.getChat(any())).thenAnswer((_) async => null);
     when(
       () => notificationService.sendNotification(
@@ -722,6 +738,67 @@ void main() {
       ),
     ]);
   });
+
+  test(
+    'markSeenMessages expands RFC email siblings before syncing Core',
+    () async {
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[1]);
+      const first = Message(
+        stanzaID: 'dc-msg-10',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        originID: 'message@example.com',
+        deltaAccountId: 1,
+        deltaChatId: 2,
+        deltaMsgId: 10,
+      );
+      const second = Message(
+        stanzaID: 'dc-msg-11',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        originID: 'message@example.com',
+        deltaAccountId: 1,
+        deltaChatId: 2,
+        deltaMsgId: 11,
+      );
+      when(
+        () => database.getEmailMessagesByRfcGroup(
+          chatJid: 'chat@example.com',
+          originID: 'message@example.com',
+          deltaAccountId: 1,
+        ),
+      ).thenAnswer((_) async => const <Message>[first, second]);
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        emailReadReceiptsEnabled: true,
+      );
+      addTearDown(service.shutdown);
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'secret',
+        jid: 'alice@example.com',
+        passwordOverride: 'password',
+        persistCredentials: false,
+      );
+      clearInteractions(transport);
+
+      final marked = await service.markSeenMessages(const <Message>[
+        first,
+      ], sendReadReceipts: false);
+
+      expect(marked, isTrue);
+      verify(
+        () => transport.markSeenMessages(const <int>[10, 11], accountId: 1),
+      ).called(1);
+    },
+  );
 
   test('imports BYOK private key from a copied temp file', () async {
     final source = await temporaryFile(
@@ -1611,6 +1688,216 @@ void main() {
   );
 
   test(
+    'notifies RFC email group leader when incoming event is a sibling',
+    () async {
+      const chatId = 12;
+      const accountId = 1;
+      const firstMsgId = 200;
+      const secondMsgId = 201;
+      final firstMessage = Message(
+        stanzaID: 'dc-msg-$firstMsgId',
+        senderJid: 'peer@axi.im',
+        chatJid: 'dc-$chatId@delta.chat',
+        originID: 'message@example.com',
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: firstMsgId,
+        timestamp: DateTime.now(),
+        body: 'First RFC group hello',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final secondMessage = Message(
+        stanzaID: 'dc-msg-$secondMsgId',
+        senderJid: 'peer@axi.im',
+        chatJid: 'dc-$chatId@delta.chat',
+        originID: 'message@example.com',
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: secondMsgId,
+        timestamp: DateTime.now().add(const Duration(seconds: 1)),
+        body: 'Second RFC group hello',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final chat = Chat(
+        jid: 'dc-$chatId@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: chatId,
+        emailAddress: 'peer@example.com',
+      );
+
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$secondMsgId'),
+      ).thenAnswer((_) async => secondMessage);
+      when(
+        () => database.getEmailMessagesByRfcGroup(
+          chatJid: secondMessage.chatJid,
+          originID: 'message@example.com',
+          deltaAccountId: accountId,
+        ),
+      ).thenAnswer((_) async => [firstMessage, secondMessage]);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      addTearDown(service.shutdown);
+
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: secondMsgId,
+          accountId: accountId,
+        ),
+      );
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsgBunch.code,
+          data1: chatId,
+          data2: 0,
+          accountId: accountId,
+        ),
+      );
+
+      await pumpMicrotasks();
+
+      verify(
+        () => notificationService.sendMessageNotification(
+          title: chat.displayName,
+          body: firstMessage.body,
+          senderName: chat.displayName,
+          senderKey: firstMessage.senderJid,
+          conversationTitle: chat.displayName,
+          sentAt: firstMessage.timestamp,
+          isGroupConversation: false,
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+          threadKey: any(named: 'threadKey'),
+          showPreviewOverride: true,
+          channel: MessageNotificationChannel.email,
+        ),
+      ).called(1);
+    },
+  );
+
+  test('dedupes RFC email group notifications in one flush', () async {
+    const chatId = 13;
+    const accountId = 1;
+    const firstMsgId = 210;
+    const secondMsgId = 211;
+    final firstMessage = Message(
+      stanzaID: 'dc-msg-$firstMsgId',
+      senderJid: 'peer@axi.im',
+      chatJid: 'dc-$chatId@delta.chat',
+      originID: 'message@example.com',
+      deltaAccountId: accountId,
+      deltaChatId: chatId,
+      deltaMsgId: firstMsgId,
+      timestamp: DateTime.now(),
+      body: 'First RFC group hello',
+      encryptionProtocol: EncryptionProtocol.none,
+    );
+    final secondMessage = Message(
+      stanzaID: 'dc-msg-$secondMsgId',
+      senderJid: 'peer@axi.im',
+      chatJid: 'dc-$chatId@delta.chat',
+      originID: 'message@example.com',
+      deltaAccountId: accountId,
+      deltaChatId: chatId,
+      deltaMsgId: secondMsgId,
+      timestamp: DateTime.now().add(const Duration(seconds: 1)),
+      body: 'Second RFC group hello',
+      encryptionProtocol: EncryptionProtocol.none,
+    );
+    final chat = Chat(
+      jid: 'dc-$chatId@delta.chat',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: chatId,
+      emailAddress: 'peer@example.com',
+    );
+
+    when(
+      () => database.getMessageByStanzaID('dc-msg-$firstMsgId'),
+    ).thenAnswer((_) async => firstMessage);
+    when(
+      () => database.getMessageByStanzaID('dc-msg-$secondMsgId'),
+    ).thenAnswer((_) async => secondMessage);
+    when(
+      () => database.getEmailMessagesByRfcGroup(
+        chatJid: firstMessage.chatJid,
+        originID: 'message@example.com',
+        deltaAccountId: accountId,
+      ),
+    ).thenAnswer((_) async => [firstMessage, secondMessage]);
+    when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    addTearDown(service.shutdown);
+
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
+        data1: chatId,
+        data2: firstMsgId,
+        accountId: accountId,
+      ),
+    );
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
+        data1: chatId,
+        data2: secondMsgId,
+        accountId: accountId,
+      ),
+    );
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsgBunch.code,
+        data1: chatId,
+        data2: 0,
+        accountId: accountId,
+      ),
+    );
+
+    await pumpMicrotasks();
+
+    verify(
+      () => notificationService.sendMessageNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        senderName: any(named: 'senderName'),
+        senderKey: any(named: 'senderKey'),
+        conversationTitle: any(named: 'conversationTitle'),
+        sentAt: any(named: 'sentAt'),
+        isGroupConversation: any(named: 'isGroupConversation'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+        payload: any(named: 'payload'),
+        threadKey: any(named: 'threadKey'),
+        showPreviewOverride: any(named: 'showPreviewOverride'),
+        channel: MessageNotificationChannel.email,
+      ),
+    ).called(1);
+  });
+
+  test(
     'flushes pending notifications after debounce when no bunch arrives',
     () async {
       const chatId = 9;
@@ -2041,6 +2328,111 @@ void main() {
     expect(fetchCalls, 2);
     expect(refreshCalls, 2);
   });
+
+  test('foreground keepalive repairs stale foreground lease', () async {
+    when(
+      () => transport.performBackgroundFetch(any()),
+    ).thenAnswer((_) async => false);
+
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    await service.setForegroundKeepalive(true);
+    await pumpMicrotasks();
+    expect(
+      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      isTrue,
+    );
+
+    await foregroundBridge.release(foregroundClientEmailKeepalive);
+    foregroundBridge.sent.clear();
+
+    await service.setForegroundKeepalive(true);
+    await pumpMicrotasks();
+
+    expect(
+      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      isTrue,
+    );
+    expect(
+      foregroundBridge.sent,
+      contains(
+        predicate<List<Object>>(
+          (message) =>
+              message.length == 3 &&
+              message[0] == emailKeepalivePrefix &&
+              message[1] == emailKeepaliveStartCommand,
+        ),
+      ),
+    );
+
+    await service.shutdown();
+  });
+
+  test(
+    'foreground keepalive re-acquires email lease while XMPP keeps service running',
+    () async {
+      when(
+        () => transport.performBackgroundFetch(any()),
+      ).thenAnswer((_) async => false);
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      await service.setForegroundKeepalive(true);
+      await foregroundBridge.acquire(clientId: foregroundClientXmpp);
+      await foregroundBridge.release(foregroundClientEmailKeepalive);
+      foregroundBridge.sent.clear();
+
+      await service.setForegroundKeepalive(true);
+
+      expect(foregroundBridge.isClientAcquired(foregroundClientXmpp), isTrue);
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+        isTrue,
+      );
+      expect(
+        foregroundBridge.sent,
+        contains(
+          predicate<List<Object>>(
+            (message) =>
+                message.length == 3 &&
+                message[0] == emailKeepalivePrefix &&
+                message[1] == emailKeepaliveStartCommand,
+          ),
+        ),
+      );
+
+      await service.shutdown();
+      await foregroundBridge.release(foregroundClientXmpp);
+    },
+  );
 
   test('sendAttachment delegates to transport after provisioning', () async {
     final service = EmailService(
@@ -3117,6 +3509,430 @@ void main() {
       await pumpMicrotasks();
     },
   );
+
+  test(
+    'logout shutdown does not wait for pre-DB chatlist refresh before returning',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final refreshCompleter = Completer<void>();
+      when(
+        () => transport.refreshChatlistSnapshot(
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) => refreshCompleter.future);
+
+      final networkFuture = service.handleNetworkAvailable();
+      await untilCalled(
+        () => transport.refreshChatlistSnapshot(
+          accountId: any(named: 'accountId'),
+        ),
+      );
+
+      var shutdownCompleted = false;
+      final shutdownFuture = service
+          .shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout)
+          .whenComplete(() {
+            shutdownCompleted = true;
+          });
+      await pumpMicrotasks();
+
+      await shutdownFuture;
+
+      expect(shutdownCompleted, isTrue);
+      verify(() => transport.stopEventDeliveryForLogout()).called(1);
+      verifyNever(() => transport.dispose());
+
+      refreshCompleter.complete();
+      await networkFuture;
+
+      await untilCalled(() => transport.dispose());
+      verify(() => transport.dispose()).called(1);
+    },
+  );
+
+  test(
+    'logout shutdown does not wait for native fetch before closing app DB',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final fetchCompleter = Completer<bool>();
+      when(
+        () => transport.performBackgroundFetch(any()),
+      ).thenAnswer((_) => fetchCompleter.future);
+
+      final networkFuture = service.handleNetworkAvailable();
+      await untilCalled(() => transport.performBackgroundFetch(any()));
+
+      var shutdownCompleted = false;
+      final shutdownFuture = service
+          .shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout)
+          .whenComplete(() {
+            shutdownCompleted = true;
+          });
+      await shutdownFuture;
+
+      expect(shutdownCompleted, isTrue);
+      verifyNever(
+        () => transport.refreshChatlistSnapshot(
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      verifyNever(() => transport.dispose());
+
+      fetchCompleter.complete(true);
+      await networkFuture;
+      await untilCalled(() => transport.dispose());
+    },
+  );
+
+  test(
+    'logout native cleanup waits for matching in-flight stop before dispose',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+      await service.start();
+
+      final stopCompleter = Completer<void>();
+      when(() => transport.stop()).thenAnswer((_) => stopCompleter.future);
+
+      final stopFuture = service.stop();
+      await untilCalled(() => transport.stop());
+
+      final shutdownFuture = service.shutdown(
+        jid: 'bob@axi.im',
+        mode: EmailShutdownMode.logout,
+      );
+      await shutdownFuture;
+      await pumpMicrotasks();
+
+      verifyNever(() => transport.dispose());
+
+      stopCompleter.complete();
+      await stopFuture;
+      await untilCalled(() => transport.dispose());
+
+      verify(() => transport.stop()).called(1);
+      verify(() => transport.dispose()).called(1);
+    },
+  );
+
+  test(
+    'logout shutdown waits for active contacts app DB work before returning',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final replaceStarted = Completer<void>();
+      final replaceCompleter = Completer<void>();
+      when(
+        () => transport.getContactIds(flags: any(named: 'flags')),
+      ).thenAnswer((_) async => const <int>[7]);
+      when(() => transport.getContact(7)).thenAnswer(
+        (_) async => const DeltaContact(
+          id: 7,
+          address: 'friend@example.com',
+          name: 'Friend',
+        ),
+      );
+      when(
+        () => transport.getBlockedContactIds(),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => database.replaceContacts(any())).thenAnswer((_) {
+        if (!replaceStarted.isCompleted) {
+          replaceStarted.complete();
+        }
+        return replaceCompleter.future;
+      });
+      when(
+        () => database.getEmailSpamlist(),
+      ).thenAnswer((_) async => <EmailSpamEntry>[]);
+      when(
+        () => database.getEmailBlocklist(),
+      ).thenAnswer((_) async => <EmailBlocklistEntry>[]);
+      when(
+        () => database.getChatsByJids(any()),
+      ).thenAnswer((_) async => <Chat>[]);
+
+      final syncFuture = service.syncContactsFromCore();
+      await replaceStarted.future;
+
+      var shutdownCompleted = false;
+      final shutdownFuture = service
+          .shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout)
+          .whenComplete(() {
+            shutdownCompleted = true;
+          });
+      await pumpMicrotasks();
+
+      expect(shutdownCompleted, isFalse);
+
+      replaceCompleter.complete();
+      await syncFuture;
+      await shutdownFuture;
+
+      expect(shutdownCompleted, isTrue);
+    },
+  );
+
+  test(
+    'logout shutdown waits for active read-state app DB work before returning',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+        emailReadReceiptsEnabled: true,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      const message = Message(
+        stanzaID: 'dc-msg-10',
+        senderJid: 'friend@example.com',
+        chatJid: 'friend@example.com',
+        originID: 'message@example.com',
+        deltaAccountId: 1,
+        deltaChatId: 2,
+        deltaMsgId: 10,
+      );
+      final groupLookupStarted = Completer<void>();
+      final groupLookupCompleter = Completer<List<Message>>();
+      when(
+        () => database.getEmailMessagesByRfcGroup(
+          chatJid: message.chatJid,
+          originID: 'message@example.com',
+          deltaAccountId: 1,
+        ),
+      ).thenAnswer((_) {
+        if (!groupLookupStarted.isCompleted) {
+          groupLookupStarted.complete();
+        }
+        return groupLookupCompleter.future;
+      });
+
+      final markFuture = service.markSeenMessages(const [
+        message,
+      ], sendReadReceipts: false);
+      await groupLookupStarted.future;
+
+      var shutdownCompleted = false;
+      final shutdownFuture = service
+          .shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout)
+          .whenComplete(() {
+            shutdownCompleted = true;
+          });
+      await pumpMicrotasks();
+
+      expect(shutdownCompleted, isFalse);
+
+      groupLookupCompleter.complete(const [message]);
+      await markFuture;
+      await shutdownFuture;
+
+      expect(shutdownCompleted, isTrue);
+    },
+  );
+
+  test(
+    'logout shutdown waits for active reaction notification DB work',
+    () async {
+      final service = await createProvisionedService();
+      const chatId = 22;
+      const msgId = 221;
+      const accountId = 1;
+      final message = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'friend@example.com',
+        chatJid: 'friend@example.com',
+        body: 'hello',
+        timestamp: DateTime.now(),
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+      final lookupStarted = Completer<void>();
+      final lookupCompleter = Completer<Message?>();
+      when(
+        () => database.getMessageByDeltaId(msgId, deltaAccountId: accountId),
+      ).thenAnswer((_) {
+        if (!lookupStarted.isCompleted) {
+          lookupStarted.complete();
+        }
+        return lookupCompleter.future;
+      });
+
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingReaction.code,
+          data1: chatId,
+          data2: msgId,
+          data2Text: '+1',
+          accountId: accountId,
+        ),
+      );
+      await lookupStarted.future;
+
+      var shutdownCompleted = false;
+      final shutdownFuture = service
+          .shutdown(jid: 'alice@example.com', mode: EmailShutdownMode.logout)
+          .whenComplete(() {
+            shutdownCompleted = true;
+          });
+      await pumpMicrotasks();
+
+      expect(shutdownCompleted, isFalse);
+
+      lookupCompleter.complete(message);
+      await shutdownFuture;
+
+      expect(shutdownCompleted, isTrue);
+    },
+  );
+
+  test('logout shutdown waits for active send chat binding DB work', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    when(
+      () => transport.isConfigured(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => true);
+
+    final chat = Chat(
+      jid: 'friend@example.com',
+      title: 'Friend',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      transport: MessageTransport.email,
+      emailAddress: 'friend@example.com',
+      emailFromAddress: 'bob@axi.im',
+    );
+    final lookupStarted = Completer<void>();
+    final lookupCompleter = Completer<Chat?>();
+    when(() => database.getChat('friend@example.com')).thenAnswer((_) {
+      if (!lookupStarted.isCompleted) {
+        lookupStarted.complete();
+      }
+      return lookupCompleter.future;
+    });
+
+    final sendFuture = service.sendMessage(chat: chat, body: 'hello');
+    await lookupStarted.future;
+
+    var shutdownCompleted = false;
+    final shutdownFuture = service
+        .shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout)
+        .whenComplete(() {
+          shutdownCompleted = true;
+        });
+    await pumpMicrotasks();
+
+    expect(shutdownCompleted, isFalse);
+
+    lookupCompleter.complete(chat);
+    await expectLater(
+      sendFuture,
+      throwsA(isA<EmailServiceStoppingException>()),
+    );
+    await shutdownFuture;
+
+    expect(shutdownCompleted, isTrue);
+    verifyNever(
+      () => transport.sendText(
+        chatId: any(named: 'chatId'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
+        accountId: any(named: 'accountId'),
+        forcePlaintext: any(named: 'forcePlaintext'),
+        skipAutocrypt: any(named: 'skipAutocrypt'),
+      ),
+    );
+  });
 
   test('provisioning waits for pending logout native cleanup', () async {
     final service = EmailService(
@@ -4825,6 +5641,97 @@ void main() {
   );
 
   test(
+    'sendMessage ignores stale active Delta chat owned by another address',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getChatByDeltaChatId(
+          88,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => Chat(
+          jid: 'other@example.com',
+          title: 'Other',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          deltaChatId: 88,
+          emailAddress: 'other@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 99);
+
+      final chat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await service.sendMessage(chat: chat, body: 'Address-owned send');
+
+      verify(
+        () => transport.sendText(
+          chatId: 99,
+          body: 'Address-owned send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
+        ),
+      ).called(1);
+      verify(
+        () => database.upsertEmailChatAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 99,
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.upsertEmailChatAccount(
+          chatJid: 'other@example.com',
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'beta send uses trusted contact public key chat when encrypted-sendable',
     () async {
       final service = EmailService(
@@ -5133,11 +6040,11 @@ void main() {
         () => transport.isConfigured(accountId: any(named: 'accountId')),
       ).thenAnswer((_) async => true);
       when(
-        () => database.getDeltaChatIdForAccount(
+        () => database.getDeltaChatIdsForAccount(
           chatJid: 'peer@example.com',
           deltaAccountId: DeltaAccountDefaults.legacyId,
         ),
-      ).thenAnswer((_) async => 88);
+      ).thenAnswer((_) async => const [88]);
       when(
         () => transport.chatSendCapabilities(
           chatId: 88,
@@ -5197,6 +6104,75 @@ void main() {
           skipAutocrypt: false,
         ),
       ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'sendMessage fails closed instead of using stale active Delta chat',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getDeltaChatIdsForAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => const [77]);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenThrow(const DeltaOperationException('chat lookup failed'));
+
+      final chat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 999,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await expectLater(
+        service.sendMessage(chat: chat, body: 'Mapped fallback send'),
+        throwsA(isA<Exception>()),
+      );
+      verifyNever(
+        () => transport.sendText(
+          chatId: any(named: 'chatId'),
+          body: any(named: 'body'),
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: any(named: 'accountId'),
+          forcePlaintext: any(named: 'forcePlaintext'),
+          skipAutocrypt: any(named: 'skipAutocrypt'),
+        ),
+      );
 
       addTearDown(service.shutdown);
     },
@@ -5927,11 +6903,11 @@ void main() {
       );
 
       when(
-        () => database.getDeltaChatIdForAccount(
+        () => database.getDeltaChatIdsForAccount(
           chatJid: 'peer@example.com',
           deltaAccountId: DeltaAccountDefaults.legacyId,
         ),
-      ).thenAnswer((_) async => 77);
+      ).thenAnswer((_) async => const [77]);
       when(
         () => transport.ensureChatForAddress(
           address: 'peer@example.com',

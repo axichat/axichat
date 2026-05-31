@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
@@ -70,13 +69,6 @@ const String _attachmentHydrationFailedLog =
 const String _missingOutgoingDeltaIdError =
     'Outgoing email message missing delta ID.';
 const int _deltaMessageIdUnset = DeltaMessageId.none;
-const int _originIdHydrationDelayMs = 1000;
-const int _originIdHydrationMaxAttempts = 60;
-const int _originIdHydrationAttemptStart = 0;
-const int _originIdHydrationAttemptStep = 1;
-const Duration _originIdHydrationDelay = Duration(
-  milliseconds: _originIdHydrationDelayMs,
-);
 const String _pendingOutgoingStanzaPrefix = 'dc-pending';
 const String _pendingOutgoingStanzaSeparator = '-';
 const bool _defaultScheduleAccountHydration = true;
@@ -86,6 +78,8 @@ const Set<String> _deltaSensitiveConfigKeys = <String>{
 };
 
 enum _DeltaSecurityModeResolution { auto, ssl, startTls, plain, unknown }
+
+enum _DeltaEventDeliveryBlockReason { stopped, logout }
 
 Map<String, String> _sanitizeDeltaConfigForLog(Map<String, String> config) {
   final sanitized = <String, String>{};
@@ -142,10 +136,17 @@ class _DeltaBackgroundFetchEventSubscriptions {
   const _DeltaBackgroundFetchEventSubscriptions({
     required this.hadAccountsSubscription,
     required this.existingAccountSubscriptions,
+    this.blockedByLogout = false,
   });
+
+  const _DeltaBackgroundFetchEventSubscriptions.blockedByLogout()
+    : hadAccountsSubscription = false,
+      existingAccountSubscriptions = const <int>{},
+      blockedByLogout = true;
 
   final bool hadAccountsSubscription;
   final Set<int> existingAccountSubscriptions;
+  final bool blockedByLogout;
 }
 
 class EmailDeltaImexResult {
@@ -180,17 +181,22 @@ final class EmailDeltaImexCancelledException extends EmailDeltaImexException {
 class EmailDeltaTransport implements ChatTransport {
   EmailDeltaTransport({
     required Future<XmppDatabase> Function() databaseBuilder,
+    Future<T> Function<T>(Future<T> Function() operation)?
+    databaseOperationTracker,
     DeltaSafe? deltaSafe,
     Logger? logger,
     AppLocalizations Function()? localizationsProvider,
     String? Function()? xmppSelfJidProvider,
   }) : _databaseBuilder = databaseBuilder,
+       _databaseOperationTracker = databaseOperationTracker,
        _deltaSafe = deltaSafe ?? DeltaSafe(),
        _log = logger ?? Logger('EmailDeltaTransport'),
        _localizationsProvider = localizationsProvider,
        _xmppSelfJidProvider = xmppSelfJidProvider;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
+  Future<T> Function<T>(Future<T> Function() operation)?
+  _databaseOperationTracker;
   final DeltaSafe _deltaSafe;
   final Logger _log;
   final AppLocalizations Function()? _localizationsProvider;
@@ -209,10 +215,6 @@ class EmailDeltaTransport implements ChatTransport {
   var _autoDownloadArchives = false;
   Map<String, bool> _emailEncryptionBetaEnabledByAddress =
       const <String, bool>{};
-
-  AppLocalizations get _l10n =>
-      _localizationsProvider?.call() ??
-      lookupAppLocalizations(const Locale('en'));
 
   void updateAttachmentAutoDownloadSettings({
     required bool imagesEnabled,
@@ -240,6 +242,20 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
+  void updateDatabaseOperationTracker(
+    Future<T> Function<T>(Future<T> Function() operation)? tracker,
+  ) {
+    _databaseOperationTracker = tracker;
+  }
+
+  Future<T> _trackDatabaseOperation<T>(Future<T> Function() operation) {
+    final tracker = _databaseOperationTracker;
+    if (tracker == null) {
+      return operation();
+    }
+    return tracker(operation);
+  }
+
   void updateEmailEncryptionBetaSettings(Map<String, bool> enabledByAddress) {
     final normalized = <String, bool>{};
     for (final entry in enabledByAddress.entries) {
@@ -264,8 +280,15 @@ class EmailDeltaTransport implements ChatTransport {
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
   Future<void> _originIdHydrationQueue = Future<void>.value();
   final Set<String> _originIdHydrationPending = <String>{};
+  final Set<Future<void>> _activeEventOperations = <Future<void>>{};
   final Set<Future<void>> _activeCoreOperations = <Future<void>>{};
   int _coreOperationEpoch = 0;
+  _DeltaEventDeliveryBlockReason? _eventDeliveryBlockReason;
+
+  bool get _eventDeliveryBlocked => _eventDeliveryBlockReason != null;
+
+  bool get _eventDeliveryBlockedForLogout =>
+      _eventDeliveryBlockReason == _DeltaEventDeliveryBlockReason.logout;
 
   String? _databasePrefix;
   String? _databasePassphrase;
@@ -281,6 +304,23 @@ class EmailDeltaTransport implements ChatTransport {
       _activeCoreOperations.remove(tracked);
     });
     return future;
+  }
+
+  Future<T> _trackEventOperation<T>(Future<T> Function() operation) {
+    final future = Future<T>.sync(operation);
+    late final Future<void> tracked;
+    tracked = future.then<void>((_) {}, onError: (_, _) {});
+    _activeEventOperations.add(tracked);
+    tracked.whenComplete(() {
+      _activeEventOperations.remove(tracked);
+    });
+    return future;
+  }
+
+  Future<void> _awaitActiveEventOperations() async {
+    while (_activeEventOperations.isNotEmpty) {
+      await Future.wait(_activeEventOperations.toList(growable: false));
+    }
   }
 
   Future<void> _awaitActiveCoreOperations() async {
@@ -537,6 +577,7 @@ class EmailDeltaTransport implements ChatTransport {
     } else {
       await _context!.startIo();
     }
+    _eventDeliveryBlockReason = null;
     for (final session in sessions) {
       _attachEventSubscription(session);
     }
@@ -658,22 +699,81 @@ class EmailDeltaTransport implements ChatTransport {
 
   @override
   Future<void> stop() async {
-    _invalidateCoreOperationEpoch();
-    await _cancelAccountsEventSubscription();
-    for (final subscription in _eventSubscriptions.values.toList(
-      growable: false,
-    )) {
-      await subscription.cancel();
+    final wasIoRunning = _ioRunning;
+    Object? stopError;
+    StackTrace? stopStackTrace;
+    try {
+      await stopEventDeliveryAndAwaitActiveOperations();
+    } on Exception catch (error, stackTrace) {
+      stopError = error;
+      stopStackTrace = stackTrace;
     }
-    _eventSubscriptions.clear();
+    _ioRunning = false;
+    if (wasIoRunning) {
+      try {
+        if (_accounts != null) {
+          await _accounts?.stopIo();
+        } else {
+          await _context?.stopIo();
+        }
+      } on Exception catch (error, stackTrace) {
+        stopError ??= error;
+        stopStackTrace ??= stackTrace;
+      }
+    }
+    if (stopError != null) {
+      Error.throwWithStackTrace(stopError, stopStackTrace!);
+    }
+  }
+
+  Future<void> stopEventDeliveryAndAwaitActiveOperations() async {
+    Object? eventDeliveryError;
+    StackTrace? eventDeliveryStackTrace;
+    try {
+      await _stopEventDelivery(_DeltaEventDeliveryBlockReason.stopped);
+    } on Exception catch (error, stackTrace) {
+      eventDeliveryError = error;
+      eventDeliveryStackTrace = stackTrace;
+    }
     await _awaitActiveCoreOperations();
     await _originIdHydrationQueue;
     _originIdHydrationQueue = Future<void>.value();
-    _ioRunning = false;
-    if (_accounts != null) {
-      await _accounts?.stopIo();
-    } else {
-      await _context?.stopIo();
+    if (eventDeliveryError != null) {
+      Error.throwWithStackTrace(eventDeliveryError, eventDeliveryStackTrace!);
+    }
+  }
+
+  Future<void> stopEventDeliveryForLogout() =>
+      _stopEventDelivery(_DeltaEventDeliveryBlockReason.logout);
+
+  Future<void> _stopEventDelivery(_DeltaEventDeliveryBlockReason reason) async {
+    if (reason == _DeltaEventDeliveryBlockReason.logout ||
+        _eventDeliveryBlockReason == null) {
+      _eventDeliveryBlockReason = reason;
+    }
+    _invalidateCoreOperationEpoch();
+    Object? cancellationError;
+    StackTrace? cancellationStackTrace;
+    try {
+      await _cancelAccountsEventSubscription();
+    } on Exception catch (error, stackTrace) {
+      cancellationError ??= error;
+      cancellationStackTrace ??= stackTrace;
+    }
+    for (final subscription in _eventSubscriptions.values.toList(
+      growable: false,
+    )) {
+      try {
+        await subscription.cancel();
+      } on Exception catch (error, stackTrace) {
+        cancellationError ??= error;
+        cancellationStackTrace ??= stackTrace;
+      }
+    }
+    _eventSubscriptions.clear();
+    await _awaitActiveEventOperations();
+    if (cancellationError != null) {
+      Error.throwWithStackTrace(cancellationError, cancellationStackTrace!);
     }
   }
 
@@ -702,14 +802,30 @@ class EmailDeltaTransport implements ChatTransport {
     return didBootstrap;
   }
 
-  Future<void> refreshChatlistSnapshot({int? accountId}) async {
+  Future<void> refreshChatlistSnapshot({int? accountId}) =>
+      _trackCoreOperation(() => _refreshChatlistSnapshot(accountId: accountId));
+
+  Future<void> _refreshChatlistSnapshot({int? accountId}) async {
+    final epoch = _coreOperationEpoch;
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
     await _ensureContextReady();
+    if (!_isCurrentCoreOperationEpoch(epoch)) {
+      return;
+    }
     final sessions = await _resolveSessions(accountId: accountId);
     for (final session in sessions) {
-      await session.consumer.refreshChatlistSnapshot();
+      if (!_isCurrentCoreOperationEpoch(epoch)) {
+        return;
+      }
+      await session.consumer.refreshChatlistSnapshot(
+        isCurrent: () => _isCurrentCoreOperationEpoch(epoch),
+      );
+      if (!_isCurrentCoreOperationEpoch(epoch)) {
+        return;
+      }
+      await _repairStoredEmailOriginsForSession(session: session, epoch: epoch);
     }
   }
 
@@ -740,12 +856,18 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   Future<bool> performBackgroundFetch(Duration timeout) async {
-    if (_ioRunning) {
+    if (_ioRunning || _eventDeliveryBlockedForLogout) {
       return false;
     }
     await _ensureContextReady();
+    if (_eventDeliveryBlockedForLogout) {
+      return false;
+    }
     final temporarySubscriptions =
         await _attachBackgroundFetchEventSubscriptions();
+    if (temporarySubscriptions.blockedByLogout) {
+      return false;
+    }
     final accounts = _accounts;
     try {
       if (accounts == null) {
@@ -760,14 +882,20 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<_DeltaBackgroundFetchEventSubscriptions>
   _attachBackgroundFetchEventSubscriptions() async {
+    if (_eventDeliveryBlockedForLogout) {
+      return const _DeltaBackgroundFetchEventSubscriptions.blockedByLogout();
+    }
     final hadAccountsSubscription = _accountsEventSubscription != null;
     final existingAccountSubscriptions = Set<int>.of(_eventSubscriptions.keys);
     if (_accounts != null) {
-      _ensureAccountsEventSubscription();
+      _ensureAccountsEventSubscription(allowWhileBlocked: true);
     } else {
       final sessions = await _resolveSessions();
+      if (_eventDeliveryBlockedForLogout) {
+        return const _DeltaBackgroundFetchEventSubscriptions.blockedByLogout();
+      }
       for (final session in sessions) {
-        _attachEventSubscription(session);
+        _attachEventSubscription(session, allowWhileBlocked: true);
       }
     }
     return _DeltaBackgroundFetchEventSubscriptions(
@@ -779,7 +907,7 @@ class EmailDeltaTransport implements ChatTransport {
   Future<void> _detachBackgroundFetchEventSubscriptions(
     _DeltaBackgroundFetchEventSubscriptions subscriptions,
   ) async {
-    await _awaitActiveCoreOperations();
+    await _awaitActiveEventOperations();
     if (!subscriptions.hadAccountsSubscription) {
       await _cancelAccountsEventSubscription();
     }
@@ -1245,6 +1373,7 @@ class EmailDeltaTransport implements ChatTransport {
             _emailEncryptionBetaEnabledByAddress[normalized] == true;
       },
       logger: _log,
+      databaseOperationTracker: _trackDatabaseOperation,
     );
     final session = _DeltaAccountSession(
       accountId: accountId,
@@ -1307,9 +1436,15 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
-  void _attachEventSubscription(_DeltaAccountSession session) {
+  void _attachEventSubscription(
+    _DeltaAccountSession session, {
+    bool allowWhileBlocked = false,
+  }) {
+    if (_eventDeliveryBlocked && !allowWhileBlocked) {
+      return;
+    }
     if (_accounts != null) {
-      _ensureAccountsEventSubscription();
+      _ensureAccountsEventSubscription(allowWhileBlocked: allowWhileBlocked);
       return;
     }
     if (_eventSubscriptions.containsKey(session.accountId)) {
@@ -1317,7 +1452,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
     final subscription = session.context.events().listen((event) {
       unawaited(
-        _trackCoreOperation(
+        _trackEventOperation(
           () => _handleEvent(event: event, consumer: session.consumer),
         ),
       );
@@ -1325,7 +1460,10 @@ class EmailDeltaTransport implements ChatTransport {
     _eventSubscriptions[session.accountId] = subscription;
   }
 
-  void _ensureAccountsEventSubscription() {
+  void _ensureAccountsEventSubscription({bool allowWhileBlocked = false}) {
+    if (_eventDeliveryBlocked && !allowWhileBlocked) {
+      return;
+    }
     if (_accountsEventSubscription != null) {
       return;
     }
@@ -1334,7 +1472,7 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     _accountsEventSubscription = accounts.events().listen((event) {
-      unawaited(_trackCoreOperation(() => _handleAccountsEvent(event)));
+      unawaited(_trackEventOperation(() => _handleAccountsEvent(event)));
     });
   }
 
@@ -1914,10 +2052,6 @@ class EmailDeltaTransport implements ChatTransport {
     }
     final displayBody = localBodyOverride ?? body;
     final trimmedBody = displayBody?.trim();
-    final hasBody = trimmedBody?.isNotEmpty == true;
-    final resolvedBody = hasBody
-        ? trimmedBody
-        : (metadata == null ? null : _deltaAttachmentLabel(metadata));
     final resolvedTimestamp = timestamp ?? DateTime.timestamp();
     final message = Message(
       stanzaID: resolvedStanzaId,
@@ -1928,7 +2062,7 @@ class EmailDeltaTransport implements ChatTransport {
       chatJid: resolvedChat.jid,
       timestamp: resolvedTimestamp,
       originID: originId,
-      body: resolvedBody,
+      body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
       htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       subject: subject,
       quoting: quotingStanzaId,
@@ -2066,47 +2200,6 @@ class EmailDeltaTransport implements ChatTransport {
     return _selfJidForAddress(null);
   }
 
-  String _deltaAttachmentLabel(FileMetadataData metadata) {
-    final filename = metadata.filename.trim();
-    final label = filename.isEmpty
-        ? _l10n.chatAttachmentFallbackLabel
-        : filename;
-    final sizeLabel = _formatAttachmentBytes(metadata.sizeBytes);
-    return _l10n.chatAttachmentCaption(label, sizeLabel);
-  }
-
-  String _formatAttachmentBytes(int? bytes) {
-    if (bytes == null || bytes <= 0) {
-      return _l10n.chatAttachmentUnknownSize;
-    }
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    const unitBase = 1024;
-    while (value >= unitBase && unitIndex < 4) {
-      value /= unitBase;
-      unitIndex++;
-    }
-    const precisionThreshold = 10;
-    final precision = value >= precisionThreshold || unitIndex == 0 ? 0 : 1;
-    final unitLabel = _attachmentUnitLabel(unitIndex);
-    return '${value.toStringAsFixed(precision)} $unitLabel';
-  }
-
-  String _attachmentUnitLabel(int unitIndex) {
-    switch (unitIndex) {
-      case 0:
-        return _l10n.commonFileSizeUnitBytes;
-      case 1:
-        return _l10n.commonFileSizeUnitKilobytes;
-      case 2:
-        return _l10n.commonFileSizeUnitMegabytes;
-      case 3:
-        return _l10n.commonFileSizeUnitGigabytes;
-      default:
-        return _l10n.commonFileSizeUnitTerabytes;
-    }
-  }
-
   Future<Chat> _ensureChat(
     int chatId, {
     int? accountId,
@@ -2145,6 +2238,8 @@ class EmailDeltaTransport implements ChatTransport {
       final merged = existingByAddress.copyWith(
         deltaChatId: existingByAddress.deltaChatId ?? chatId,
         emailAddress: chat.emailAddress,
+        emailFromAddress:
+            existingByAddress.emailFromAddress ?? chat.emailFromAddress,
         contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
         contactJid: existingByAddress.contactJid ?? chat.contactJid,
@@ -2300,8 +2395,10 @@ class EmailDeltaTransport implements ChatTransport {
     if (updatedMetadata == metadata) {
       return;
     }
-    final db = await _databaseBuilder();
-    await db.saveFileMetadata(updatedMetadata);
+    await _trackDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      await db.saveFileMetadata(updatedMetadata);
+    });
   }
 
   Future<void> _hydrateOriginId({
@@ -2311,75 +2408,187 @@ class EmailDeltaTransport implements ChatTransport {
     required int epoch,
   }) async {
     final stanzaId = deltaMessageStanzaId(msgId);
-    const maxAttempts = _originIdHydrationMaxAttempts;
-    const attemptStep = _originIdHydrationAttemptStep;
-    const lastAttemptIndex = maxAttempts - attemptStep;
     final String? selfJid = _selfJidForAccount(accountId);
-    for (
-      int attempt = _originIdHydrationAttemptStart;
-      attempt < maxAttempts;
-      attempt += attemptStep
-    ) {
+    if (!_isCurrentCoreOperationEpoch(epoch)) {
+      return;
+    }
+    final originId = await _resolveMessageOriginId(context, msgId);
+    if (originId == null || !_isCurrentCoreOperationEpoch(epoch)) {
+      return;
+    }
+    await _trackDatabaseOperation(() async {
+      final db = await _databaseBuilder();
       if (!_isCurrentCoreOperationEpoch(epoch)) {
         return;
       }
-      final originId = await _resolveMessageOriginId(context, msgId);
+      final existing =
+          await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
+          await db.getMessageByStanzaID(stanzaId);
+      if (existing == null) {
+        return;
+      }
+      final existingOrigin = normalizeEmailMessageId(existing.originID);
+      if (existingOrigin == originId) {
+        return;
+      }
+      final duplicate = await _originMergeDuplicate(
+        db: db,
+        existing: existing,
+        originId: originId,
+      );
+      if (duplicate != null) {
+        final primary = resolveOriginMergePrimary(
+          existing: existing,
+          duplicate: duplicate,
+          selfJid: selfJid,
+        );
+        final primaryIsExisting = primary.stanzaID == existing.stanzaID;
+        final Message secondary = primaryIsExisting ? duplicate : existing;
+        final merged = mergeOriginMessages(
+          primary: primary,
+          duplicate: secondary,
+          originId: originId,
+        );
+        await db.updateMessage(merged);
+        await db.deleteMessage(
+          secondary.stanzaID,
+          selfJid: _xmppSelfJidProvider?.call(),
+          emailSelfJid: selfJid,
+        );
+        await db.repairUnreadCountForChat(
+          primary.chatJid,
+          selfJid: _xmppSelfJidProvider?.call(),
+          emailSelfJid: selfJid,
+        );
+        await db.repairChatSummaryPreservingTimestamp(primary.chatJid);
+        return;
+      }
+      await db.updateMessage(existing.copyWith(originID: originId));
+      await db.repairUnreadCountForChat(
+        existing.chatJid,
+        selfJid: _xmppSelfJidProvider?.call(),
+        emailSelfJid: selfJid,
+      );
+    });
+  }
+
+  Future<void> _repairStoredEmailOriginsForSession({
+    required _DeltaAccountSession session,
+    required int epoch,
+  }) async {
+    await _trackDatabaseOperation(() async {
+      final db = await _databaseBuilder();
       if (!_isCurrentCoreOperationEpoch(epoch)) {
         return;
       }
-      if (originId != null) {
-        final db = await _databaseBuilder();
+      final messages = await db.getEmailMessagesForOriginRepair(
+        deltaAccountId: session.accountId,
+        limit: 500,
+      );
+      final touchedChats = <String>{};
+      final emailSelfJid = _selfJidForAccount(session.accountId);
+      final xmppSelfJid = _xmppSelfJidProvider?.call();
+      for (final message in messages) {
         if (!_isCurrentCoreOperationEpoch(epoch)) {
           return;
         }
-        final existing =
-            await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-            await db.getMessageByStanzaID(stanzaId);
-        if (existing == null) {
+        final deltaMsgId = message.deltaMsgId;
+        if (deltaMsgId == null || deltaMsgId <= _deltaMessageIdUnset) {
+          continue;
+        }
+        final String? originId;
+        try {
+          originId = await _resolveMessageOriginId(session.context, deltaMsgId);
+        } on Exception catch (error, stackTrace) {
+          _log.fine(_originIdHydrationFailedLog, error, stackTrace);
+          continue;
+        }
+        if (!_isCurrentCoreOperationEpoch(epoch)) {
           return;
         }
-        final existingOrigin = existing.originID?.trim();
-        if (existingOrigin != null && existingOrigin.isNotEmpty) {
-          return;
+        final stored = await db.getMessageByDeltaId(
+          deltaMsgId,
+          deltaAccountId: session.accountId,
+        );
+        if (stored == null) {
+          continue;
         }
-        final duplicate = await db.getMessageByOriginID(originId);
-        if (canMergeOriginMessages(existing: existing, duplicate: duplicate)) {
-          final Message duplicateMessage = duplicate!;
-          final primary = resolveOriginMergePrimary(
-            existing: existing,
-            duplicate: duplicateMessage,
-            selfJid: selfJid,
-          );
-          final primaryIsExisting = primary.stanzaID == existing.stanzaID;
-          final Message secondary = primaryIsExisting
-              ? duplicateMessage
-              : existing;
-          final merged = mergeOriginMessages(
-            primary: primary,
-            duplicate: secondary,
+        final storedOrigin = normalizeEmailMessageId(stored.originID);
+        if (originId != null) {
+          if (storedOrigin == originId) {
+            continue;
+          }
+          final duplicate = await _originMergeDuplicate(
+            db: db,
+            existing: stored,
             originId: originId,
           );
-          await db.updateMessage(merged);
-          await db.deleteMessage(
-            secondary.stanzaID,
-            selfJid: _xmppSelfJidProvider?.call(),
-            emailSelfJid: selfJid,
-          );
-          return;
+          if (duplicate != null) {
+            final primary = resolveOriginMergePrimary(
+              existing: stored,
+              duplicate: duplicate,
+              selfJid: emailSelfJid,
+            );
+            final primaryIsStored = primary.stanzaID == stored.stanzaID;
+            final secondary = primaryIsStored ? duplicate : stored;
+            await db.updateMessage(
+              mergeOriginMessages(
+                primary: primary,
+                duplicate: secondary,
+                originId: originId,
+              ),
+            );
+            await db.deleteMessage(
+              secondary.stanzaID,
+              selfJid: xmppSelfJid,
+              emailSelfJid: emailSelfJid,
+            );
+            touchedChats.add(primary.chatJid);
+            continue;
+          }
+          await db.updateMessage(stored.copyWith(originID: originId));
+          touchedChats.add(stored.chatJid);
+          continue;
         }
-        await db.updateMessage(existing.copyWith(originID: originId));
-        return;
       }
-      if (attempt < lastAttemptIndex) {
-        await Future<void>.delayed(_originIdHydrationDelay);
+      for (final chatJid in touchedChats) {
+        await db.repairUnreadCountForChat(
+          chatJid,
+          selfJid: xmppSelfJid,
+          emailSelfJid: emailSelfJid,
+        );
+        await db.repairChatSummaryPreservingTimestamp(chatJid);
+      }
+    });
+  }
+
+  Future<Message?> _originMergeDuplicate({
+    required XmppDatabase db,
+    required Message existing,
+    required String originId,
+  }) async {
+    final candidates = await db.getMessagesByOriginID(
+      originId,
+      chatJid: existing.chatJid,
+    );
+    for (final candidate in candidates) {
+      if (canMergeOriginMessages(existing: existing, duplicate: candidate)) {
+        return candidate;
       }
     }
+    return null;
   }
 
   Future<String?> _resolveMessageOriginId(
     DeltaContextHandle context,
     int msgId,
   ) async {
+    final rfc724Mid = normalizeEmailMessageId(
+      await context.getMessageRfc724Mid(msgId),
+    );
+    if (rfc724Mid != null) {
+      return rfc724Mid;
+    }
     final headers = await context.getMessageMimeHeaders(msgId);
     return parseEmailMessageId(headers);
   }
@@ -2905,6 +3114,16 @@ class EmailDeltaTransport implements ChatTransport {
     final context = session?.context;
     if (context == null) return null;
     return context.getMessageMimeHeaders(messageId);
+  }
+
+  /// Gets the RFC 724 Message-ID stored by Delta Core.
+  Future<String?> getMessageRfc724Mid(int messageId, {int? accountId}) async {
+    if (messageId <= _deltaMessageIdUnset) return null;
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) return null;
+    return context.getMessageRfc724Mid(messageId);
   }
 
   /// Gets HTML synthesized from the stored raw MIME for a message.

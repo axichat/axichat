@@ -4560,6 +4560,12 @@ abstract class AppLocalizations {
   /// **'Sign out of this account.'**
   String get authLogoutNormalDescription;
 
+  /// No description provided for @authLogoutInProgressDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing logout. Please wait.'**
+  String get authLogoutInProgressDescription;
+
   /// No description provided for @authLogoutBurn.
   ///
   /// In en, this message translates to:
@@ -8519,6 +8525,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New message'**
   String get notificationNewMessageTitle;
+
+  /// No description provided for @notificationNewEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New email'**
+  String get notificationNewEmailTitle;
 
   /// No description provided for @notificationOpenAction.
   ///

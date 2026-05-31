@@ -393,6 +393,8 @@ class DeltaEventConsumer {
     bool Function(int accountId, String address)?
     emailEncryptionBetaEnabledForAddress,
     Logger? logger,
+    Future<T> Function<T>(Future<T> Function() operation)?
+    databaseOperationTracker,
   }) : _databaseBuilder = databaseBuilder,
        _context = context,
        _autoDownloadImages = autoDownloadImages,
@@ -404,9 +406,12 @@ class DeltaEventConsumer {
        _xmppSelfJidProvider = xmppSelfJidProvider,
        _emailEncryptionBetaEnabledForAddress =
            emailEncryptionBetaEnabledForAddress,
+       _databaseOperationTracker = databaseOperationTracker,
        _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
+  final Future<T> Function<T>(Future<T> Function() operation)?
+  _databaseOperationTracker;
   final DeltaContextHandle _context;
   bool _autoDownloadImages;
   bool _autoDownloadVideos;
@@ -554,13 +559,13 @@ class DeltaEventConsumer {
     return didBootstrap;
   }
 
-  Future<void> refreshChatlistSnapshot() async {
+  Future<void> refreshChatlistSnapshot({bool Function()? isCurrent}) async {
     final inFlight = _chatlistRefreshInFlight;
     if (inFlight != null) {
       await inFlight;
       return;
     }
-    final future = _refreshChatlistSnapshotInternal();
+    final future = _refreshChatlistSnapshotInternal(isCurrent: isCurrent);
     _chatlistRefreshInFlight = future;
     try {
       await future;
@@ -571,12 +576,17 @@ class DeltaEventConsumer {
     }
   }
 
-  Future<void> _refreshChatlistSnapshotInternal() async {
+  Future<void> _refreshChatlistSnapshotInternal({
+    bool Function()? isCurrent,
+  }) async {
+    bool cancelled() => isCurrent?.call() == false;
     final int deltaAccountId = _deltaAccountId;
     final chatlist = await _context.getChatlist();
+    if (cancelled()) return;
     final archivedChatlist = await _context.getChatlist(
       flags: _deltaChatlistArchivedOnlyFlag,
     );
+    if (cancelled()) return;
     if (chatlist.isEmpty && archivedChatlist.isEmpty) {
       return;
     }
@@ -605,144 +615,173 @@ class DeltaEventConsumer {
     register(chatlist);
     register(archivedChatlist);
 
-    final db = await _db();
-    final knownChatIds = entriesByChatId.keys.toSet();
-    final deltaChats = await db.getDeltaChats(accountId: deltaAccountId);
-    for (final chat in deltaChats) {
-      final deltaChatId = chat.deltaChatId;
-      if (deltaChatId == null || deltaChatId <= _deltaChatLastSpecialId) {
-        continue;
-      }
-      if (!knownChatIds.contains(deltaChatId)) {
-        await db.deleteEmailChatAccount(
-          chatJid: chat.jid,
-          deltaAccountId: deltaAccountId,
-        );
-        await db.trimChatMessages(
-          jid: chat.jid,
-          maxMessages: 0,
-          deltaAccountId: deltaAccountId,
-          selfJid: _xmppSelfJid,
-          emailSelfJid: _selfJid,
-        );
-        final remaining = await db.countEmailChatAccounts(chat.jid);
-        if (remaining == 0 && chat.defaultTransport.isEmail) {
-          await db.removeChat(chat.jid);
+    await _trackDatabaseOperation(() async {
+      final db = await _db();
+      if (cancelled()) return;
+      final knownChatIds = entriesByChatId.keys.toSet();
+      final emailChatAccounts = await db.getEmailChatAccountsForAccount(
+        deltaAccountId,
+      );
+      if (cancelled()) return;
+      for (final emailChatAccount in emailChatAccounts) {
+        if (cancelled()) return;
+        final deltaChatId = emailChatAccount.deltaChatId;
+        if (deltaChatId <= _deltaChatLastSpecialId) {
+          continue;
+        }
+        if (!knownChatIds.contains(deltaChatId)) {
+          final chat = await db.getChat(emailChatAccount.chatJid);
+          if (chat == null) {
+            await db.deleteEmailChatAccount(
+              chatJid: emailChatAccount.chatJid,
+              deltaAccountId: deltaAccountId,
+              deltaChatId: deltaChatId,
+            );
+            continue;
+          }
+          await db.deleteEmailChatAccount(
+            chatJid: chat.jid,
+            deltaAccountId: deltaAccountId,
+            deltaChatId: deltaChatId,
+          );
+          await db.trimChatMessages(
+            jid: chat.jid,
+            maxMessages: 0,
+            deltaAccountId: deltaAccountId,
+            deltaChatId: deltaChatId,
+            selfJid: _xmppSelfJid,
+            emailSelfJid: _selfJid,
+          );
+          await _repairActiveDeltaChatReference(
+            chatJid: chat.jid,
+            removedDeltaChatId: deltaChatId,
+            db: db,
+          );
+          final remaining = await db.countEmailChatAccounts(chat.jid);
+          if (remaining == 0 && chat.defaultTransport.isEmail) {
+            await db.removeChat(chat.jid);
+          }
         }
       }
-    }
-    for (final entry in entriesByChatId.values) {
-      final chatId = entry.chatId;
-      if (await _isDeltaSystemChat(chatId)) {
-        continue;
-      }
-      final chat = await _ensureChat(chatId);
-      final isArchived = archivedChatIds.contains(chatId);
-      var updated = chat;
-      var hydratedMessages = false;
-      DateTime? lastTimestamp;
-      String? lastPreview;
-      if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
-        final existing = await db.getMessageByDeltaId(
-          entry.msgId,
-          deltaAccountId: deltaAccountId,
-        );
-        if (existing != null) {
-          if (!existing.isHiddenMultiDeviceSyncMessage) {
-            lastTimestamp = existing.timestamp;
-            lastPreview = await _previewTextForStoredMessage(
-              db: db,
-              message: existing,
-            );
-          }
-        } else {
-          final last = await _context.getMessage(entry.msgId);
-          if (last != null &&
-              !_isHiddenMultiDeviceSyncMessage(last, chat: updated)) {
-            lastTimestamp = last.timestamp;
-            lastPreview = _previewTextForDeltaMessage(last, chat: updated);
-            final stanzaId = _stanzaId(entry.msgId);
-            final stored = await db.getMessageByStanzaID(stanzaId);
-            if (stored == null) {
-              await _ingestDeltaMessage(
-                chatId: chatId,
-                msg: last,
-                chat: updated,
-                skipSystemChatCheck: true,
+      for (final entry in entriesByChatId.values) {
+        if (cancelled()) return;
+        final chatId = entry.chatId;
+        if (await _isDeltaSystemChat(chatId)) {
+          continue;
+        }
+        if (cancelled()) return;
+        final chat = await _ensureChat(chatId);
+        if (cancelled()) return;
+        final isArchived = archivedChatIds.contains(chatId);
+        var updated = chat;
+        var hydratedMessages = false;
+        DateTime? lastTimestamp;
+        String? lastPreview;
+        if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
+          final existing = await db.getMessageByDeltaId(
+            entry.msgId,
+            deltaAccountId: deltaAccountId,
+          );
+          if (existing != null) {
+            if (!existing.isHiddenMultiDeviceSyncMessage) {
+              lastTimestamp = existing.timestamp;
+              lastPreview = await _previewTextForStoredMessage(
+                db: db,
+                message: existing,
               );
-              hydratedMessages = true;
+            }
+          } else {
+            final last = await _context.getMessage(entry.msgId);
+            if (cancelled()) return;
+            if (last != null &&
+                !_isHiddenMultiDeviceSyncMessage(last, chat: updated)) {
+              lastTimestamp = last.timestamp;
+              lastPreview = _previewTextForDeltaMessage(last, chat: updated);
+              final stanzaId = _stanzaId(entry.msgId);
+              final stored = await db.getMessageByStanzaID(stanzaId);
+              if (stored == null) {
+                await _ingestDeltaMessage(
+                  chatId: chatId,
+                  msg: last,
+                  chat: updated,
+                  skipSystemChatCheck: true,
+                );
+                hydratedMessages = true;
+              }
             }
           }
         }
-      }
-      if (updated.archived != isArchived) {
-        updated = updated.copyWith(archived: isArchived);
-      }
-      if (!hydratedMessages && lastTimestamp != null) {
-        final bool hasPreview = lastPreview?.isNotEmpty == true;
-        final bool hasStoredPreview =
-            updated.lastMessage?.trim().isNotEmpty == true;
-        final bool shouldBackfillPreview = hasPreview && !hasStoredPreview;
-        final bool shouldUpdateTimestamp =
-            lastTimestamp.isAfter(updated.lastChangeTimestamp) ||
-            shouldBackfillPreview;
-        if (shouldUpdateTimestamp) {
-          updated = updated.copyWith(lastChangeTimestamp: lastTimestamp);
+        if (updated.archived != isArchived) {
+          updated = updated.copyWith(archived: isArchived);
         }
-        if (hasPreview && shouldUpdateTimestamp) {
-          updated = updated.copyWith(lastMessage: lastPreview);
+        if (!hydratedMessages && lastTimestamp != null) {
+          final bool hasPreview = lastPreview?.isNotEmpty == true;
+          final bool hasStoredPreview =
+              updated.lastMessage?.trim().isNotEmpty == true;
+          final bool shouldBackfillPreview = hasPreview && !hasStoredPreview;
+          final bool shouldUpdateTimestamp =
+              lastTimestamp.isAfter(updated.lastChangeTimestamp) ||
+              shouldBackfillPreview;
+          if (shouldUpdateTimestamp) {
+            updated = updated.copyWith(lastChangeTimestamp: lastTimestamp);
+          }
+          if (hasPreview && shouldUpdateTimestamp) {
+            updated = updated.copyWith(lastMessage: lastPreview);
+          }
+        } else if (!hydratedMessages && lastTimestamp == null) {
+          await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
         }
-      } else if (!hydratedMessages && lastTimestamp == null) {
-        await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
-      }
-      var storedUnreadCount = await db.countUnreadMessagesForChat(
-        updated.jid,
-        selfJid: _xmppSelfJid,
-        emailSelfJid: _selfJid,
-      );
-      final freshCount = await _context.getFreshMessageCountSafe(chatId);
-      if (storedUnreadCount > 0 ||
-          (freshCount.supported && freshCount.count > 0)) {
-        await _syncChatMessages(chatId);
-        await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
-        hydratedMessages = true;
-        storedUnreadCount = await db.countUnreadMessagesForChat(
+        var storedUnreadCount = await db.countUnreadMessagesForChat(
           updated.jid,
           selfJid: _xmppSelfJid,
           emailSelfJid: _selfJid,
         );
-      }
-      if (hydratedMessages) {
-        final refreshed = await db.getChat(updated.jid);
-        if (refreshed == null) {
+        final freshCount = await _context.getFreshMessageCountSafe(chatId);
+        if (cancelled()) return;
+        if (storedUnreadCount > 0 ||
+            (freshCount.supported && freshCount.count > 0)) {
+          await _syncChatMessages(chatId);
+          if (cancelled()) return;
+          await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
+          hydratedMessages = true;
+          storedUnreadCount = await db.countUnreadMessagesForChat(
+            updated.jid,
+            selfJid: _xmppSelfJid,
+            emailSelfJid: _selfJid,
+          );
+        }
+        if (hydratedMessages) {
+          final refreshed = await db.getChat(updated.jid);
+          if (refreshed == null) {
+            final nextUpdated = updated.unreadCount == storedUnreadCount
+                ? updated
+                : updated.copyWith(unreadCount: storedUnreadCount);
+            if (nextUpdated != chat) {
+              await db.updateChat(nextUpdated);
+            }
+          } else {
+            var merged = refreshed;
+            if (merged.archived != updated.archived ||
+                merged.unreadCount != storedUnreadCount) {
+              merged = merged.copyWith(
+                archived: updated.archived,
+                unreadCount: storedUnreadCount,
+              );
+            }
+            if (merged != refreshed) {
+              await db.updateChat(merged);
+            }
+          }
+        } else {
           final nextUpdated = updated.unreadCount == storedUnreadCount
               ? updated
               : updated.copyWith(unreadCount: storedUnreadCount);
           if (nextUpdated != chat) {
             await db.updateChat(nextUpdated);
           }
-        } else {
-          var merged = refreshed;
-          if (merged.archived != updated.archived ||
-              merged.unreadCount != storedUnreadCount) {
-            merged = merged.copyWith(
-              archived: updated.archived,
-              unreadCount: storedUnreadCount,
-            );
-          }
-          if (merged != refreshed) {
-            await db.updateChat(merged);
-          }
-        }
-      } else {
-        final nextUpdated = updated.unreadCount == storedUnreadCount
-            ? updated
-            : updated.copyWith(unreadCount: storedUnreadCount);
-        if (nextUpdated != chat) {
-          await db.updateChat(nextUpdated);
         }
       }
-    }
+    });
   }
 
   Future<int> backfillChatHistory({
@@ -970,18 +1009,43 @@ class DeltaEventConsumer {
     await db.deleteEmailChatAccount(
       chatJid: chat.jid,
       deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
     );
     await db.trimChatMessages(
       jid: chat.jid,
       maxMessages: 0,
       deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
       selfJid: _xmppSelfJid,
       emailSelfJid: _selfJid,
+    );
+    await _repairActiveDeltaChatReference(
+      chatJid: chat.jid,
+      removedDeltaChatId: chatId,
+      db: db,
     );
     final remaining = await db.countEmailChatAccounts(chat.jid);
     if (remaining == 0 && chat.defaultTransport.isEmail) {
       await db.removeChat(chat.jid);
     }
+  }
+
+  Future<void> _repairActiveDeltaChatReference({
+    required String chatJid,
+    required int removedDeltaChatId,
+    required XmppDatabase db,
+  }) async {
+    final chat = await db.getChat(chatJid);
+    if (chat == null || chat.deltaChatId != removedDeltaChatId) {
+      return;
+    }
+    final remainingDeltaChatIds = await db.getDeltaChatIdsForAccount(
+      chatJid: chatJid,
+      deltaAccountId: _deltaAccountId,
+    );
+    await db.updateChat(
+      chat.copyWith(deltaChatId: remainingDeltaChatIds.firstOrNull),
+    );
   }
 
   Future<void> _updateUnreadCount(int chatId) async {
@@ -1334,9 +1398,6 @@ class DeltaEventConsumer {
         deltaAccountId: _deltaAccountId,
         deltaChatId: learnedChatId,
       );
-      if (chat.deltaChatId != learnedChatId) {
-        await db.updateChat(chat.copyWith(deltaChatId: learnedChatId));
-      }
       return;
     }
     try {
@@ -1359,9 +1420,6 @@ class DeltaEventConsumer {
         deltaAccountId: _deltaAccountId,
         deltaChatId: imported.chatId,
       );
-      if (chat.deltaChatId != imported.chatId) {
-        await db.updateChat(chat.copyWith(deltaChatId: imported.chatId));
-      }
       _learnedAutocryptContactKeyChatIds[learnedKey] = imported.chatId;
       _log.fine(
         'Learned Autocrypt contact key for $contactAddress '
@@ -1597,7 +1655,8 @@ class DeltaEventConsumer {
         _log.log(Level.FINE, 'Message update diff: $updateSummary');
       }
       await db.updateMessage(next);
-      if (updatedFields.contains(MessageDiffField.displayed)) {
+      if (updatedFields.contains(MessageDiffField.displayed) ||
+          updatedFields.contains(MessageDiffField.originId)) {
         await db.repairUnreadCountForChat(
           next.chatJid,
           selfJid: _xmppSelfJid,
@@ -1698,8 +1757,7 @@ class DeltaEventConsumer {
     required int msgId,
     required int accountId,
   }) async {
-    final String? existingOrigin = existing.originID?.trim();
-    if (existingOrigin != null && existingOrigin.isNotEmpty) {
+    if (!existing.isEmailBacked) {
       return;
     }
     await _scheduleOriginIdHydration(msgId: msgId, accountId: accountId);
@@ -1710,59 +1768,89 @@ class DeltaEventConsumer {
     required int accountId,
   }) async {
     final stanzaId = _stanzaId(msgId);
-    const maxAttempts = 60;
-    const attemptStep = 1;
-    const delay = Duration(seconds: 1);
-    const lastAttemptIndex = maxAttempts - attemptStep;
-    for (int attempt = 0; attempt < maxAttempts; attempt += attemptStep) {
-      final originId = await _resolveOriginId(msgId);
-      if (originId != null) {
-        final db = await _db();
-        final existing =
-            await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-            await db.getMessageByStanzaID(stanzaId);
-        if (existing == null) {
-          return;
-        }
-        final existingOrigin = existing.originID?.trim();
-        if (existingOrigin != null && existingOrigin.isNotEmpty) {
-          return;
-        }
-        final duplicate = await db.getMessageByOriginID(originId);
-        if (duplicate != null &&
-            canMergeOriginMessages(existing: existing, duplicate: duplicate)) {
-          final primary = resolveOriginMergePrimary(
-            existing: existing,
-            duplicate: duplicate,
-            selfJid: _selfJid,
-          );
-          final primaryIsExisting = primary.stanzaID == existing.stanzaID;
-          final secondary = primaryIsExisting ? duplicate : existing;
-          final merged = mergeOriginMessages(
-            primary: primary,
-            duplicate: secondary,
-            originId: originId,
-          );
-          await db.updateMessage(merged);
-          await db.deleteMessage(
-            secondary.stanzaID,
-            selfJid: _xmppSelfJid,
-            emailSelfJid: _selfJid,
-          );
-          return;
-        }
-        await db.updateMessage(existing.copyWith(originID: originId));
-        return;
-      }
-      if (attempt < lastAttemptIndex) {
-        await Future<void>.delayed(delay);
-      }
+    final nativeOriginId = await _resolveOriginId(msgId);
+    if (nativeOriginId == null) {
+      return;
     }
+    final db = await _db();
+    final existing =
+        await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
+        await db.getMessageByStanzaID(stanzaId);
+    if (existing == null) {
+      return;
+    }
+    final existingOrigin = existing.originID?.trim();
+    if (existingOrigin == nativeOriginId) {
+      return;
+    }
+    final duplicate = await _originMergeDuplicate(
+      db: db,
+      existing: existing,
+      originId: nativeOriginId,
+    );
+    if (duplicate != null) {
+      final primary = resolveOriginMergePrimary(
+        existing: existing,
+        duplicate: duplicate,
+        selfJid: _selfJid,
+      );
+      final primaryIsExisting = primary.stanzaID == existing.stanzaID;
+      final secondary = primaryIsExisting ? duplicate : existing;
+      final merged = mergeOriginMessages(
+        primary: primary,
+        duplicate: secondary,
+        originId: nativeOriginId,
+      );
+      await db.updateMessage(merged);
+      await db.deleteMessage(
+        secondary.stanzaID,
+        selfJid: _xmppSelfJid,
+        emailSelfJid: _selfJid,
+      );
+      await db.repairUnreadCountForChat(
+        primary.chatJid,
+        selfJid: _xmppSelfJid,
+        emailSelfJid: _selfJid,
+      );
+      await _refreshStoredChatSummary(chatJid: primary.chatJid, db: db);
+      return;
+    }
+    final updated = existing.copyWith(originID: nativeOriginId);
+    await db.updateMessage(updated);
+    await db.repairUnreadCountForChat(
+      existing.chatJid,
+      selfJid: _xmppSelfJid,
+      emailSelfJid: _selfJid,
+    );
+    await _refreshStoredChatSummary(chatJid: existing.chatJid, db: db);
   }
 
   Future<String?> _resolveOriginId(int msgId) async {
+    final rfc724Mid = normalizeEmailMessageId(
+      await _context.getMessageRfc724Mid(msgId),
+    );
+    if (rfc724Mid != null) {
+      return rfc724Mid;
+    }
     final headers = await _context.getMessageMimeHeaders(msgId);
     return parseEmailMessageId(headers);
+  }
+
+  Future<Message?> _originMergeDuplicate({
+    required XmppDatabase db,
+    required Message existing,
+    required String originId,
+  }) async {
+    final candidates = await db.getMessagesByOriginID(
+      originId,
+      chatJid: existing.chatJid,
+    );
+    for (final candidate in candidates) {
+      if (canMergeOriginMessages(existing: existing, duplicate: candidate)) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   Future<void> _updateChatSummaryForIncomingMessage({
@@ -1792,32 +1880,7 @@ class DeltaEventConsumer {
     XmppDatabase? db,
   }) async {
     final resolvedDb = db ?? await _db();
-    final chat = await resolvedDb.getChat(chatJid);
-    if (chat == null) {
-      return;
-    }
-    final messages = await resolvedDb.getChatMessages(
-      chatJid,
-      start: 0,
-      end: 1,
-      filter: MessageTimelineFilter.allWithContact,
-    );
-    final lastMessage = messages.isEmpty ? null : messages.first;
-    final preview = lastMessage == null
-        ? null
-        : await _previewTextForStoredMessage(
-            db: resolvedDb,
-            message: lastMessage,
-          );
-    final lastChangeTimestamp =
-        lastMessage?.timestamp ?? chat.lastChangeTimestamp;
-    final updated = chat.copyWith(
-      lastMessage: preview,
-      lastChangeTimestamp: lastChangeTimestamp,
-    );
-    if (updated != chat) {
-      await resolvedDb.updateChat(updated);
-    }
+    await resolvedDb.repairChatSummaryPreservingTimestamp(chatJid);
   }
 
   Future<String?> _previewTextForStoredMessage({
@@ -1959,6 +2022,24 @@ class DeltaEventConsumer {
         remote: remote,
         emailFromAddress: _selfJid,
       );
+      final existingByAddress = await db.getChat(chat.jid);
+      if (existingByAddress != null) {
+        final merged = existingByAddress.copyWith(
+          deltaChatId: existingByAddress.deltaChatId ?? chatId,
+          emailAddress: chat.emailAddress,
+          emailFromAddress:
+              existingByAddress.emailFromAddress ?? chat.emailFromAddress,
+          contactDisplayName: chat.contactDisplayName,
+          contactID: chat.contactID,
+        );
+        await db.updateChat(merged);
+        await db.upsertEmailChatAccount(
+          chatJid: merged.jid,
+          deltaAccountId: deltaAccountId,
+          deltaChatId: chatId,
+        );
+        return;
+      }
       await db.createChat(chat);
       await db.upsertEmailChatAccount(
         chatJid: chat.jid,
@@ -2050,6 +2131,14 @@ class DeltaEventConsumer {
 
   Future<XmppDatabase> _db() async {
     return await _databaseBuilder();
+  }
+
+  Future<T> _trackDatabaseOperation<T>(Future<T> Function() operation) {
+    final tracker = _databaseOperationTracker;
+    if (tracker == null) {
+      return operation();
+    }
+    return tracker(operation);
   }
 
   Future<Message> _buildDeltaMessageContent({
@@ -2171,14 +2260,9 @@ class DeltaEventConsumer {
     if (merged != null && (existing == null || merged != existing)) {
       await db.saveFileMetadata(merged);
     }
-    var next = message.copyWith(
+    return message.copyWith(
       fileMetadataID: merged?.id ?? existing?.id ?? resolvedMetadata.id,
     );
-    final normalizedBody = next.body?.trim() ?? '';
-    if (normalizedBody.isEmpty) {
-      next = next.copyWith(body: _attachmentLabel(merged ?? resolvedMetadata));
-    }
-    return next;
   }
 
   FileMetadataData _metadataFromDelta({

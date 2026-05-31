@@ -2514,6 +2514,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authLogoutNormalDescription => 'Sign out of this account.';
 
   @override
+  String get authLogoutInProgressDescription =>
+      'Finishing logout. Please wait.';
+
+  @override
   String get authLogoutBurn => 'Burn account';
 
   @override
@@ -4777,6 +4781,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationNewMessageTitle => 'New message';
+
+  @override
+  String get notificationNewEmailTitle => 'New email';
 
   @override
   String get notificationOpenAction => 'Open notification';

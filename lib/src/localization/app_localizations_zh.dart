@@ -2423,6 +2423,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authLogoutNormalDescription => '退出此账户。';
 
   @override
+  String get authLogoutInProgressDescription => '正在完成退出登录。请稍候。';
+
+  @override
   String get authLogoutBurn => '销毁账户';
 
   @override
@@ -4604,6 +4607,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationNewMessageTitle => '新消息';
+
+  @override
+  String get notificationNewEmailTitle => '新邮件';
 
   @override
   String get notificationOpenAction => '打开通知';
@@ -9037,6 +9043,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authLogoutNormalDescription => '登出此帳戶。';
 
   @override
+  String get authLogoutInProgressDescription => '正在完成登出。請稍候。';
+
+  @override
   String get authLogoutBurn => '銷毀帳戶';
 
   @override
@@ -11220,6 +11229,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get notificationNewMessageTitle => '新訊息';
+
+  @override
+  String get notificationNewEmailTitle => '新電郵';
 
   @override
   String get notificationOpenAction => '開啟通知';
