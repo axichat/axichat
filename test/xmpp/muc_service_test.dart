@@ -379,10 +379,30 @@ void main() {
     ).thenReturn(joinBootstrapManager);
     when(() => mockConnection.sendStanza(any())).thenAnswer((_) async => null);
     when(() => mockConnection.sendMessage(any())).thenAnswer((_) async => true);
+    when(
+      () => mockStateStore.read(key: any(named: 'key')),
+    ).thenAnswer((_) => null);
+    when(
+      () => mockStateStore.write(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
+      () => mockStateStore.delete(key: any(named: 'key')),
+    ).thenAnswer((_) async => true);
     when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
     when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.getRosterItem(any())).thenAnswer((_) async => null);
+    when(
+      () => mockDatabase.getChatMessages(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async => <Message>[]);
     when(
       () => mockDatabase.countChatMessages(
         any(),
@@ -2251,6 +2271,20 @@ void main() {
           );
           return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
         });
+        when(() => mamManager.id).thenReturn(mox.mamManager);
+        when(() => mamManager.postRegisterCallback()).thenAnswer((_) async {});
+        await mockConnection.registerManagers(<mox.XmppManagerBase>[
+          mamManager,
+        ]);
+        expect(mockConnection.getManager<mox.MAMManager>(), same(mamManager));
+        when(
+          () => mamManager.queryArchive(
+            to: any(named: 'to'),
+            options: any(named: 'options'),
+            rsm: any(named: 'rsm'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((_) async => null);
         when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
           final details =
               invocation.positionalArguments.first as mox.StanzaDetails;
@@ -2303,6 +2337,106 @@ void main() {
     );
 
     test(
+      'JOIN-026 [HP] room history sync is not gated by account MAM disco',
+      () async {
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mamManager.id).thenReturn(mox.mamManager);
+        when(() => mamManager.postRegisterCallback()).thenAnswer((_) async {});
+        await mockConnection.registerManagers(<mox.XmppManagerBase>[
+          mamManager,
+        ]);
+        when(() => mockConnection.discoInfoQuery(any())).thenAnswer((
+          invocation,
+        ) async {
+          final target = invocation.positionalArguments.first;
+          final jid = target is mox.JID
+              ? target.toBare().toString()
+              : target.toString();
+          final features = jid == _serviceJid || jid == 'conference.axi.im'
+              ? <String>[_mucDiscoFeature]
+              : <String>[];
+          final discoInfo = mox.DiscoInfo(
+            features,
+            const [],
+            const [],
+            null,
+            mox.JID.fromString(_accountBareJid),
+          );
+          return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
+        });
+        when(
+          () => mamManager.queryArchive(
+            to: any(named: 'to'),
+            options: any(named: 'options'),
+            rsm: any(named: 'rsm'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => const mox.MAMQueryResult(
+            messages: <mox.MAMMessage>[],
+            complete: true,
+          ),
+        );
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: 'me',
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+        await pumpEventQueue(times: 20);
+
+        verify(
+          () => mamManager.queryArchive(
+            to: any(named: 'to'),
+            options: any(named: 'options'),
+            rsm: any(named: 'rsm'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'JOIN-027 [HP] bare MUC rooms assume MAM so archive sync is attempted',
+      () async {
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockConnection.discoInfoQuery(any())).thenAnswer((
+          invocation,
+        ) async {
+          final target = invocation.positionalArguments.first;
+          final jid = target is mox.JID
+              ? target.toBare().toString()
+              : target.toString();
+          final features = jid == _serviceJid || jid == 'conference.axi.im'
+              ? <String>[_mucDiscoFeature]
+              : <String>[];
+          final discoInfo = mox.DiscoInfo(
+            features,
+            const [],
+            const [],
+            null,
+            mox.JID.fromString(_accountBareJid),
+          );
+          return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
+        });
+
+        final capabilities = await xmppService.resolvePeerCapabilities(
+          jid: _roomJid,
+        );
+
+        expect(capabilities.supportsFeature(mox.mamXmlns), isTrue);
+      },
+    );
+
+    test(
       'MAM-001 [HP] hanging archive queries fail via the hard timeout fallback',
       () {
         when(
@@ -2335,7 +2469,7 @@ void main() {
               );
 
           async.flushMicrotasks();
-          async.elapse(const Duration(seconds: 96));
+          async.elapse(const Duration(seconds: 106));
           async.flushMicrotasks();
 
           final mamEvents = events
@@ -2494,6 +2628,55 @@ void main() {
           ),
         ).called(1);
         verifyNever(() => mockConnection.sendStanza(any()));
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-002B [HP] empty occupant vCard hashes do not clear room avatars',
+      () async {
+        final avatarDir = Directory(p.join(tempDir.path, 'support', 'avatars'));
+        await avatarDir.create(recursive: true);
+        final cachedAvatarPath = p.join(
+          avatarDir.path,
+          'cached-room-avatar.enc',
+        );
+        await File(cachedAvatarPath).writeAsBytes(_pngLikeBytes, flush: true);
+        when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: _roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: _roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: _roomJid,
+            avatarPath: cachedAvatarPath,
+            avatarHash: 'room-avatar-hash',
+          ),
+        );
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).thenAnswer((_) async {});
+
+        eventStreamController.add(
+          RoomVCardAvatarUpdatedEvent(
+            mox.JID.fromString(_roomJidWithSelfNick),
+            '',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        verifyNever(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        );
       },
     );
 
@@ -2975,6 +3158,47 @@ void main() {
             error: MessageError.unknown,
           ),
         ).called(1);
+        expect(
+          xmppService.roomStateFor(_roomJid)?.pendingInviteeJids ??
+              const <String>{},
+          isNot(contains(_inviteeJid)),
+        );
+      },
+    );
+
+    test(
+      'DINV-010C [HP] inviteUserToRoom clears pending invitee when affiliation grant times out',
+      () async {
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+        );
+        when(
+          () => mucManager.sendAdminIq(
+            roomJid: any(named: 'roomJid'),
+            items: any(named: 'items'),
+          ),
+        ).thenThrow(TimeoutException('admin iq timeout'));
+
+        await expectLater(
+          () => xmppService.inviteUserToRoom(
+            roomJid: _roomJid,
+            inviteeJid: _inviteeJid,
+            reason: _inviteReasonRaw,
+          ),
+          throwsA(isA<TimeoutException>()),
+        );
+
+        verifyNever(() => mockConnection.sendMessage(any()));
+        expect(
+          xmppService.roomStateFor(_roomJid)?.pendingInviteeJids ??
+              const <String>{},
+          isNot(contains(_inviteeJid)),
+        );
       },
     );
 
@@ -3515,6 +3739,140 @@ void main() {
             items: any(named: 'items'),
           ),
         ).called(1);
+        final room = xmppService.roomStateFor(_roomJid);
+        final pendingInvitee = room?.occupantForRealJid(_inviteeJid);
+        expect(room?.pendingInviteeJids, contains(_inviteeJid));
+        expect(pendingInvitee?.isPresent, isFalse);
+        expect(room?.isPendingInvitee(pendingInvitee!), isTrue);
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: '$_roomJidBare/friend',
+          nick: 'friend',
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+
+        final joinedRoom = xmppService.roomStateFor(_roomJid);
+        expect(joinedRoom?.pendingInviteeJids, isNot(contains(_inviteeJid)));
+      },
+    );
+
+    test('DINV-014A [HP] revokeInvite clears pending invitee', () async {
+      when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+      when(
+        () => mockDatabase.saveMessage(
+          any(),
+          chatType: any(named: 'chatType'),
+          selfJid: any(named: 'selfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {
+        return true;
+      });
+
+      await xmppService.inviteUserToRoom(
+        roomJid: _roomJid,
+        inviteeJid: _inviteeJid,
+        reason: _inviteReasonRaw,
+      );
+
+      expect(
+        xmppService.roomStateFor(_roomJid)?.pendingInviteeJids,
+        contains(_inviteeJid),
+      );
+
+      await xmppService.revokeInvite(
+        roomJid: _roomJid,
+        inviteeJid: _inviteeJid,
+        token: 'token-123',
+      );
+
+      expect(
+        xmppService.roomStateFor(_roomJid)?.pendingInviteeJids ??
+            const <String>{},
+        isNot(contains(_inviteeJid)),
+      );
+    });
+
+    test(
+      'DINV-014B [HP] inbound invite revocation clears pending invitee',
+      () async {
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.getMessageByOriginID(
+            any(),
+            chatJid: any(named: 'chatJid'),
+          ),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockDatabase.getMessageByReferenceId(
+            any(),
+            chatJid: any(named: 'chatJid'),
+          ),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockDatabase.getMessageByStanzaID(any()),
+        ).thenAnswer((_) async => null);
+        when(() => mockDatabase.getChat(_inviteeJid)).thenAnswer((_) async {
+          return Chat(
+            jid: _inviteeJid,
+            title: 'Friend',
+            type: ChatType.chat,
+            lastChangeTimestamp: _fixedTimestamp,
+          );
+        });
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenAnswer((_) async {});
+        when(() => mockConnection.sendMessage(any())).thenAnswer((_) async {
+          return true;
+        });
+
+        await xmppService.inviteUserToRoom(
+          roomJid: _roomJid,
+          inviteeJid: _inviteeJid,
+          reason: _inviteReasonRaw,
+        );
+
+        expect(
+          xmppService.roomStateFor(_roomJid)?.pendingInviteeJids,
+          contains(_inviteeJid),
+        );
+
+        eventStreamController.add(
+          mox.MessageEvent(
+            mox.JID.fromString(_accountBareJid),
+            mox.JID.fromString(_inviteeJid),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              const mox.MessageBodyData('Invite revoked'),
+              const mox.MessageIdData('inbound-revocation'),
+              const AxiMucInvitePayload(
+                roomJid: _roomJid,
+                token: 'token-123',
+                inviter: _accountBareJid,
+                invitee: _inviteeJid,
+                revoked: true,
+              ),
+            ]),
+            id: 'inbound-revocation',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        expect(
+          xmppService.roomStateFor(_roomJid)?.pendingInviteeJids ??
+              const <String>{},
+          isNot(contains(_inviteeJid)),
+        );
       },
     );
 
@@ -3553,6 +3911,11 @@ void main() {
         );
 
         verifyNever(() => mockConnection.sendMessage(any()));
+        expect(
+          xmppService.roomStateFor(_roomJid)?.pendingInviteeJids ??
+              const <String>{},
+          isNot(contains(_inviteeJid)),
+        );
       },
     );
   });
@@ -3659,6 +4022,32 @@ void main() {
       final room = xmppService.roomStateFor(_roomJid);
       expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
     });
+
+    test(
+      'PRES-002B [HP] removeOccupant marks affiliated members offline',
+      () async {
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithNick,
+          nick: _roomNick,
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+
+        xmppService.removeOccupant(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithNick,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final occupant = room?.occupants[_roomJidWithNick];
+        expect(occupant, isNotNull);
+        expect(occupant?.isPresent, isFalse);
+        expect(occupant?.affiliation, OccupantAffiliation.member);
+      },
+    );
 
     test(
       'PRES-002A [HP] removeOccupant clears myOccupantJid for self rows',
@@ -3819,6 +4208,93 @@ void main() {
         expect(offlineMember?.nick, equals(_inviteeJid));
         expect(offlineMember?.affiliation, OccupantAffiliation.member);
         expect(offlineMember?.isPresent, isFalse);
+      },
+    );
+
+    test(
+      'REG-009C [HP] non-owner member queries do not prune cached offline members',
+      () async {
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithNick,
+          nick: _roomNick,
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: false,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: const [],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.occupants[_roomJidWithNick], isNotNull);
+        expect(room?.occupants[_roomJidWithNick]?.isPresent, isFalse);
+      },
+    );
+
+    test(
+      'REG-009D [HP] owner member queries prune cached offline members',
+      () async {
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          isPresent: true,
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithNick,
+          nick: _roomNick,
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: false,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: const [],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
       },
     );
 
@@ -4002,8 +4478,11 @@ void main() {
         const staleRealJid = 'alice@axi.im';
         xmppService.updateOccupantFromPresence(
           roomJid: _roomJid,
-          occupantId: '$_roomJidBare/bootstrap',
-          nick: 'bootstrap',
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
           isPresent: _presenceAvailable,
         );
         final staleQuery = mox.XMLNode.xmlns(
@@ -4250,6 +4729,117 @@ void main() {
         expect(owner?.realJid, 'owner@axi.im');
         expect(owner?.affiliation, OccupantAffiliation.owner);
         expect(room.occupants.containsKey('$_roomJid/OwnerNick'), isFalse);
+      },
+    );
+
+    test(
+      'REG-013 [HP] self-only joins do not overwrite cached offline owners',
+      () async {
+        final stateEntries = <String, Object?>{};
+        when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+          invocation,
+        ) {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          return stateEntries[key.value];
+        });
+        when(
+          () => mockStateStore.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
+          ),
+        ).thenAnswer((invocation) async {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          stateEntries[key.value] = invocation.namedArguments[#value];
+          return true;
+        });
+        when(() => mockStateStore.delete(key: any(named: 'key'))).thenAnswer((
+          invocation,
+        ) async {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          stateEntries.remove(key.value);
+          return true;
+        });
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: '$_roomJid/OwnerNick',
+          nick: 'OwnerNick',
+          realJid: 'owner@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          isPresent: _presenceAvailable,
+          fromPresence: true,
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        await xmppService.close();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => mockDatabase,
+          notificationService: mockNotificationService,
+        );
+        await connectSuccessfully(xmppService);
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(_connectedState, _disconnectedState),
+        );
+        await pumpEventQueue();
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+          fromPresence: true,
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final room = await xmppService.warmRoomFromHistory(roomJid: _roomJid);
+
+        expect(room.owners.map((owner) => owner.nick), contains('OwnerNick'));
+        expect(room.owners.single.realJid, 'owner@axi.im');
+        expect(room.owners.single.isPresent, isFalse);
+      },
+    );
+
+    test(
+      'REG-014 [HP] warmRoomFromHistory does not fabricate membership from message-only history',
+      () async {
+        when(
+          () => mockDatabase.getChatMessages(
+            _roomJid,
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            filter: any(named: 'filter'),
+          ),
+        ).thenAnswer(
+          (_) async => <Message>[
+            Message(
+              stanzaID: 'message-only-history',
+              senderJid: '$_roomJid/OwnerNick',
+              chatJid: _roomJid,
+              timestamp: DateTime.timestamp(),
+              body: 'I sent a message before',
+            ),
+          ],
+        );
+
+        final room = await xmppService.warmRoomFromHistory(roomJid: _roomJid);
+
+        expect(room.owners, isEmpty);
+        expect(room.members, isEmpty);
+        expect(room.participants, isEmpty);
+        expect(room.occupants.values.single.nick, 'OwnerNick');
+        expect(
+          room.occupants.values.single.hasResolvedMembershipState,
+          isFalse,
+        );
       },
     );
   });

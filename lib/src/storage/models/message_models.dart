@@ -248,6 +248,9 @@ extension PseudoMessageTypeX on PseudoMessageType {
       this == PseudoMessageType.calendarAvailabilityResponse;
 
   bool get isSystemStatus => this == PseudoMessageType.emailEncryptionStatus;
+
+  bool get isHiddenInviteLifecycle =>
+      this == PseudoMessageType.mucInviteAccepted;
 }
 
 String emailEncryptionStatusMarkerStanzaId(String chatJid) {
@@ -402,15 +405,16 @@ abstract class Message with _$Message implements Insertable<Message> {
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
     final isGroupChat = event.type == 'groupchat';
+    final invite = _ParsedInvite.fromEvent(event, to: to);
     final chatJid = isGroupChat
         ? from
-        : (accountJid != null &&
-                  accountJid.isNotEmpty &&
-                  from.toLowerCase() == accountJid.toLowerCase()
-              ? to
-              : from);
+        : invite?.chatJidOverride ??
+              (accountJid != null &&
+                      accountJid.isNotEmpty &&
+                      from.toLowerCase() == accountJid.toLowerCase()
+                  ? to
+                  : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
-    final invite = _ParsedInvite.fromEvent(event, to: to);
     final fragmentPayload = get<CalendarFragmentPayload>();
     final taskIcsPayload = get<CalendarTaskIcsPayload>();
     final CalendarTask? calendarTaskIcs = taskIcsPayload == null
@@ -1384,11 +1388,13 @@ class _ParsedInvite {
     required this.type,
     required this.data,
     required this.displayBody,
+    this.chatJidOverride,
   });
 
   final PseudoMessageType type;
   final Map<String, dynamic> data;
   final String displayBody;
+  final String? chatJidOverride;
 
   static const _invitePrefix = 'axc-invite:';
   static const _inviteRevokePrefix = 'axc-invite-revoke:';
@@ -1445,7 +1451,8 @@ class _ParsedInvite {
           !_matchesBareJid(payloadInvitee, senderBare)) {
         return null;
       }
-      if (!_matchesBareJid(payloadInviter, recipientBare)) {
+      if (!_matchesBareJid(payloadInviter, recipientBare) &&
+          !_matchesBareJid(senderBare, recipientBare)) {
         return null;
       }
     } else {
@@ -1459,12 +1466,18 @@ class _ParsedInvite {
       }
     }
 
-    final inviter = kind.isAcceptance
+    final inviterCandidate = kind.isAcceptance
         ? _firstNonEmpty([payloadInviter, recipientBare])
         : _firstNonEmpty([payloadInviter, senderBare]);
-    final invitee = kind.isAcceptance
+    final inviteeCandidate = kind.isAcceptance
         ? _firstNonEmpty([payloadInvitee, senderBare])
         : _firstNonEmpty([payloadInvitee, recipientBare]);
+    final inviter = _normalizeBareJid(inviterCandidate) ?? inviterCandidate;
+    final invitee = _normalizeBareJid(inviteeCandidate) ?? inviteeCandidate;
+    final chatJidOverride =
+        kind.isAcceptance && _matchesBareJid(senderBare, recipientBare)
+        ? inviter
+        : null;
     final roomName = _firstNonEmpty([axiInvite?.roomName]);
     final reason = kind.isAcceptance
         ? null
@@ -1501,6 +1514,7 @@ class _ParsedInvite {
           : kind.isRevocation
           ? _inviteRevokedBodyLabel
           : _inviteBodyLabel,
+      chatJidOverride: chatJidOverride,
     );
   }
 

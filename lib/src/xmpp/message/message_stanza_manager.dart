@@ -29,6 +29,9 @@ const _pinMutationPinnedAttr = 'pinned';
 const _pinMutationScopeAttr = 'scope';
 const _pinMutationTimestampAttr = 'timestamp';
 const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
+const _mucUserTag = 'x';
+const _mucUserItemTag = 'item';
+const _mucUserItemJidAttr = 'jid';
 const _mucJoinXmlns = 'http://jabber.org/protocol/muc';
 const _directInviteTag = 'x';
 const _directInviteXmlns = 'jabber:x:conference';
@@ -295,11 +298,39 @@ final class StanzaErrorConditionData implements mox.StanzaHandlerExtension {
   final String? type;
 }
 
+final class MucUserItemData implements mox.StanzaHandlerExtension {
+  const MucUserItemData({required this.jid});
+
+  final String jid;
+
+  static MucUserItemData? fromStanza(mox.Stanza stanza) {
+    final mucUser = stanza.firstTag(_mucUserTag, xmlns: _mucUserXmlns);
+    final item = mucUser?.firstTag(_mucUserItemTag);
+    final jid = item?.attributes[_mucUserItemJidAttr]?.toString().trim();
+    if (jid == null || jid.isEmpty || jid.length > _inviteRoomJidMaxLength) {
+      return null;
+    }
+    return MucUserItemData(jid: jid);
+  }
+}
+
 final class OutboundGroupchatStanzaEvent extends mox.XmppEvent {
   OutboundGroupchatStanzaEvent({required this.stanzaId, required this.roomJid});
 
   final String stanzaId;
   final String roomJid;
+}
+
+final class InboundGroupchatMucStanzaIdEvent extends mox.XmppEvent {
+  InboundGroupchatMucStanzaIdEvent({
+    required this.stanzaId,
+    required this.roomJid,
+    required this.mucStanzaId,
+  });
+
+  final String stanzaId;
+  final String roomJid;
+  final String mucStanzaId;
 }
 
 final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
@@ -632,7 +663,6 @@ class MessageStanzaManager extends mox.XmppManagerBase {
   MessageStanzaManager() : super('axi.message.stanza');
 
   final _log = Logger('MessageStanzaManager');
-  static const String _mucUserTag = 'x';
   static const String _mucInviteTag = 'invite';
 
   @override
@@ -736,6 +766,46 @@ class MessageStanzaManager extends mox.XmppManagerBase {
     return state;
   }
 
+  void _emitInboundGroupchatMucStanzaId(mox.Stanza stanza) {
+    final stanzaId = stanza.id?.trim();
+    if (stanzaId == null || stanzaId.isEmpty) return;
+    if (stanza.type?.trim() != _messageTypeGroupchat) return;
+    final fromAttr = stanza.from?.trim();
+    if (fromAttr == null || fromAttr.isEmpty) return;
+    late final String roomJid;
+    try {
+      final roomCandidate = mox.JID.fromString(fromAttr).toBare().toString();
+      final normalizedRoom = _normalizeMucRoomJidCandidate(roomCandidate);
+      if (normalizedRoom == null) return;
+      roomJid = normalizedRoom;
+    } on Exception {
+      return;
+    }
+    for (final child in stanza.findTags(
+      'stanza-id',
+      xmlns: mox.stableIdXmlns,
+    )) {
+      if (!sameNormalizedAddressValue(
+        child.attributes['by']?.toString(),
+        roomJid,
+      )) {
+        continue;
+      }
+      final mucStanzaId = child.attributes['id']?.toString().trim();
+      if (mucStanzaId == null || mucStanzaId.isEmpty) {
+        continue;
+      }
+      getAttributes().sendEvent(
+        InboundGroupchatMucStanzaIdEvent(
+          stanzaId: stanzaId,
+          roomJid: roomJid,
+          mucStanzaId: mucStanzaId,
+        ),
+      );
+      return;
+    }
+  }
+
   Future<mox.StanzaHandlerData> _onIncomingMessage(
     mox.Stanza stanza,
     mox.StanzaHandlerData state,
@@ -753,6 +823,13 @@ class MessageStanzaManager extends mox.XmppManagerBase {
     if (errorCondition != null) {
       state.extensions.set(errorCondition);
     }
+
+    final mucUserItem = MucUserItemData.fromStanza(stanza);
+    if (mucUserItem != null) {
+      state.extensions.set(mucUserItem);
+    }
+
+    _emitInboundGroupchatMucStanzaId(stanza);
 
     if (_isMucInvite(stanza)) {
       state.done = true;

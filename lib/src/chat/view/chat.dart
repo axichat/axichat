@@ -1535,7 +1535,6 @@ class _ChatState extends State<Chat> {
     required ChatTimelineMessageItem timelineMessageItem,
     required bool isSelfBubble,
     required Message messageModel,
-    required RoomState? roomState,
     required String? selfXmppJid,
     required Object bubbleContentKey,
     required TextStyle baseTextStyle,
@@ -1554,40 +1553,51 @@ class _ChatState extends State<Chat> {
     final inviteRoomName = timelineMessageItem.inviteRoomName?.trim() ?? '';
     final inviteRoom = timelineMessageItem.inviteRoom?.trim() ?? '';
     final inviteActionEnabled = timelineMessageItem.inviteJoinActionEnabled;
-    final inviteCardLabel = inviteRoomName.isNotEmpty
+    final inviteCardLabel =
+        timelineMessageItem.inviteAccepted || timelineMessageItem.inviteRevoked
+        ? inviteLabel
+        : inviteRoomName.isNotEmpty
         ? inviteRoomName
         : inviteRoom.isNotEmpty
         ? inviteRoom
         : inviteLabel;
-    final inviteCardDetail = inviteRoom.isNotEmpty ? inviteRoom : inviteLabel;
+    final inviteCardDetail =
+        timelineMessageItem.inviteAccepted || timelineMessageItem.inviteRevoked
+        ? inviteRoomName.isNotEmpty
+              ? inviteRoomName
+              : inviteRoom
+        : inviteRoom.isNotEmpty
+        ? inviteRoom
+        : inviteLabel;
     final inviteCardShape = _attachmentSurfaceShape(
       context: context,
       isSelf: isSelfBubble,
       chainedPrevious: bubbleTextChildren.isNotEmpty,
       chainedNext: false,
     );
-    bubbleTextChildren.add(
-      DynamicInlineText(
-        key: ValueKey<Object>(bubbleContentKey),
-        text: TextSpan(text: inviteLabel, style: baseTextStyle),
-        details: messageDetails,
-        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-        onLinkTap: _handleLinkTap,
-        onLinkLongPress: _handleLinkTap,
-      ),
-    );
+    if (!timelineMessageItem.inviteAccepted &&
+        !timelineMessageItem.inviteRevoked) {
+      bubbleTextChildren.add(
+        DynamicInlineText(
+          key: ValueKey<Object>(bubbleContentKey),
+          text: TextSpan(text: inviteLabel, style: baseTextStyle),
+          details: messageDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+          onLinkTap: _handleLinkTap,
+          onLinkLongPress: _handleLinkTap,
+        ),
+      );
+    }
     addExtra(
       _InviteAttachmentCard(
         shape: inviteCardShape,
         enabled: inviteActionEnabled,
+        accepted: timelineMessageItem.inviteAccepted,
+        revoked: timelineMessageItem.inviteRevoked,
         label: inviteCardLabel,
         detailLabel: inviteCardDetail,
         actionLabel: inviteActionLabel,
-        onPressed: () => _handleInviteTap(
-          messageModel,
-          roomState: roomState,
-          selfJid: selfXmppJid,
-        ),
+        onPressed: () => _handleInviteTap(messageModel, selfJid: selfXmppJid),
       ),
       shape: inviteCardShape,
       spacing: context.spacing.s,
@@ -2756,7 +2766,6 @@ class _ChatState extends State<Chat> {
         timelineMessageItem: timelineMessageItem,
         isSelfBubble: self,
         messageModel: messageModel,
-        roomState: state.roomState,
         selfXmppJid: selfXmppJid,
         bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
@@ -2974,6 +2983,7 @@ class _ChatState extends State<Chat> {
     final scrimBase = context.brightness == Brightness.dark
         ? colors.background
         : colors.foreground;
+    final shadThemeData = ShadTheme.of(context);
     final scrimColor = scrimBase.withValues(
       alpha: motion.tapFocusAlpha + motion.tapHoverAlpha,
     );
@@ -2985,145 +2995,149 @@ class _ChatState extends State<Chat> {
       barrierColor: scrimColor,
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final drawerWidth = math.min(
-                  constraints.maxWidth,
-                  sizing.dialogMaxWidth,
-                );
-                return SizedBox(
-                  width: drawerWidth,
-                  child: BlocProvider.value(
-                    value: chatBloc,
-                    child: Builder(
-                      builder: (context) => _RoomMembersDrawerContent(
-                        onInvite: (jid) {
-                          final locate = context.read;
-                          final chatState = locate<ChatBloc>().state;
-                          final chat = chatState.chat;
-                          if (chat == null) {
-                            return;
-                          }
-                          locate<ChatBloc>().add(
-                            ChatInviteRequested(
-                              jid,
-                              chat: chat,
-                              roomState: chatState.roomState,
-                            ),
-                          );
-                        },
-                        onAction: (occupantId, action, actionLabel) {
-                          final locate = context.read;
-                          final chatState = locate<ChatBloc>().state;
-                          final chat = chatState.chat;
-                          if (chat == null) {
-                            return Future<void>.value();
-                          }
-                          final completer = Completer<void>();
-                          locate<ChatBloc>().add(
-                            ChatModerationActionRequested(
-                              occupantId: occupantId,
-                              action: action,
-                              actionLabel: actionLabel,
-                              chat: chat,
-                              roomState: chatState.roomState,
-                              completer: completer,
-                            ),
-                          );
-                          return completer.future;
-                        },
-                        onOpenDirectChat: (jid) async {
-                          final locate = context.read;
-                          final chatsCubit = locate<ChatsCubit>();
-                          final normalizedJid = jid.trim();
-                          var opened = false;
-                          try {
-                            await chatsCubit.openChat(jid: jid);
-                            opened = true;
-                          } on XmppException {
-                            opened =
-                                chatsCubit.state.openJid?.trim() ==
-                                normalizedJid;
-                          }
-                          if (!opened) {
-                            return false;
-                          }
-                          if (!context.mounted) {
+        return ShadTheme(
+          data: shadThemeData,
+          child: SafeArea(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final drawerWidth = math.min(
+                    constraints.maxWidth,
+                    sizing.dialogMaxWidth,
+                  );
+                  return SizedBox(
+                    width: drawerWidth,
+                    height: constraints.maxHeight,
+                    child: BlocProvider.value(
+                      value: chatBloc,
+                      child: Builder(
+                        builder: (context) => _RoomMembersDrawerContent(
+                          onInvite: (jid) {
+                            final locate = context.read;
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            locate<ChatBloc>().add(
+                              ChatInviteRequested(
+                                jid,
+                                chat: chat,
+                                roomState: chatState.roomState,
+                              ),
+                            );
+                          },
+                          onAction: (occupantId, action, actionLabel) {
+                            final locate = context.read;
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return Future<void>.value();
+                            }
+                            final completer = Completer<void>();
+                            locate<ChatBloc>().add(
+                              ChatModerationActionRequested(
+                                occupantId: occupantId,
+                                action: action,
+                                actionLabel: actionLabel,
+                                chat: chat,
+                                roomState: chatState.roomState,
+                                completer: completer,
+                              ),
+                            );
+                            return completer.future;
+                          },
+                          onOpenDirectChat: (jid) async {
+                            final locate = context.read;
+                            final chatsCubit = locate<ChatsCubit>();
+                            final normalizedJid = jid.trim();
+                            var opened = false;
+                            try {
+                              await chatsCubit.openChat(jid: jid);
+                              opened = true;
+                            } on XmppException {
+                              opened =
+                                  chatsCubit.state.openJid?.trim() ==
+                                  normalizedJid;
+                            }
+                            if (!opened) {
+                              return false;
+                            }
+                            if (!context.mounted) {
+                              return true;
+                            }
+                            navigator.pop();
                             return true;
-                          }
-                          navigator.pop();
-                          return true;
-                        },
-                        onChangeNickname: (nick) {
-                          final locate = context.read;
-                          final chatState = locate<ChatBloc>().state;
-                          final chat = chatState.chat;
-                          if (chat == null) {
-                            return;
-                          }
-                          locate<ChatBloc>().add(
-                            ChatNicknameChangeRequested(
-                              nickname: nick,
-                              chatJid: chat.jid,
-                              chatType: chat.type,
-                            ),
-                          );
-                        },
-                        onLeaveRoom: () async {
-                          final locate = context.read;
-                          final chatsCubit = locate<ChatsCubit>();
-                          final chatState = locate<ChatBloc>().state;
-                          final chat = chatState.chat;
-                          if (chat == null) {
-                            return;
-                          }
-                          final completer = Completer<void>();
-                          locate<ChatBloc>().add(
-                            ChatLeaveRoomRequested(
-                              chatJid: chat.jid,
-                              chatType: chat.type,
-                              completer: completer,
-                            ),
-                          );
-                          await completer.future;
-                          if (!context.mounted) {
-                            return;
-                          }
-                          navigator.pop();
-                          await chatsCubit.popChat();
-                        },
-                        onDestroyRoom: () async {
-                          final locate = context.read;
-                          final chatsCubit = locate<ChatsCubit>();
-                          final chatState = locate<ChatBloc>().state;
-                          final chat = chatState.chat;
-                          if (chat == null) {
-                            return;
-                          }
-                          final completer = Completer<void>();
-                          locate<ChatBloc>().add(
-                            ChatDestroyRoomRequested(
-                              chatJid: chat.jid,
-                              chatType: chat.type,
-                              completer: completer,
-                            ),
-                          );
-                          await completer.future;
-                          if (!context.mounted) {
-                            return;
-                          }
-                          navigator.pop();
-                          await chatsCubit.popChat();
-                        },
-                        onClose: navigator.pop,
+                          },
+                          onChangeNickname: (nick) {
+                            final locate = context.read;
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            locate<ChatBloc>().add(
+                              ChatNicknameChangeRequested(
+                                nickname: nick,
+                                chatJid: chat.jid,
+                                chatType: chat.type,
+                              ),
+                            );
+                          },
+                          onLeaveRoom: () async {
+                            final locate = context.read;
+                            final chatsCubit = locate<ChatsCubit>();
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            final completer = Completer<void>();
+                            locate<ChatBloc>().add(
+                              ChatLeaveRoomRequested(
+                                chatJid: chat.jid,
+                                chatType: chat.type,
+                                completer: completer,
+                              ),
+                            );
+                            await completer.future;
+                            if (!context.mounted) {
+                              return;
+                            }
+                            navigator.pop();
+                            await chatsCubit.popChat();
+                          },
+                          onDestroyRoom: () async {
+                            final locate = context.read;
+                            final chatsCubit = locate<ChatsCubit>();
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            final completer = Completer<void>();
+                            locate<ChatBloc>().add(
+                              ChatDestroyRoomRequested(
+                                chatJid: chat.jid,
+                                chatType: chat.type,
+                                completer: completer,
+                              ),
+                            );
+                            await completer.future;
+                            if (!context.mounted) {
+                              return;
+                            }
+                            navigator.pop();
+                            await chatsCubit.popChat();
+                          },
+                          onClose: navigator.pop,
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         );
@@ -6445,7 +6459,6 @@ class _ChatState extends State<Chat> {
 
   Future<void> _handleInviteTap(
     Message message, {
-    required RoomState? roomState,
     required String? selfJid,
   }) async {
     final l10n = context.l10n;
@@ -6454,10 +6467,6 @@ class _ChatState extends State<Chat> {
     final roomName = (data['roomName'] as String?)?.trim();
     final invitee = data['invitee'] as String?;
     if (roomJid == null) return;
-    if (roomState?.myOccupantJid != null) {
-      _showSnackbar(l10n.chatInviteAlreadyInRoom);
-      return;
-    }
     if (invitee != null &&
         selfJid != null &&
         mox.JID.fromString(invitee).toBare().toString() !=

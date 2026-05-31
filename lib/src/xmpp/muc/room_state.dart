@@ -17,11 +17,15 @@ class RoomState {
     this.isDestroyed = false,
     this.destroyedAlternateRoomJid,
     this.postJoinRefreshPending = false,
+    Set<String>? pendingInviteeJids,
   }) : occupants = Map.unmodifiable(
          Map<String, Occupant>.of(occupants ?? <String, Occupant>{}),
        ),
        selfPresenceStatusCodes = Set.unmodifiable(
          Set<String>.of(selfPresenceStatusCodes ?? const <String>{}),
+       ),
+       pendingInviteeJids = Set.unmodifiable(
+         Set<String>.of(pendingInviteeJids ?? const <String>{}),
        );
 
   final String roomJid;
@@ -34,6 +38,7 @@ class RoomState {
   final bool isDestroyed;
   final String? destroyedAlternateRoomJid;
   final bool postJoinRefreshPending;
+  final Set<String> pendingInviteeJids;
   late final _RoomOccupantGroups _occupantGroups = _buildOccupantGroups();
   late final _RoomOccupantDirectory _occupantDirectory = _RoomOccupantDirectory(
     roomJid: roomJid,
@@ -258,6 +263,14 @@ class RoomState {
     return occupants[canonicalId];
   }
 
+  bool isPendingInvitee(Occupant occupant) {
+    final realJid = occupant.normalizedBareRealJid;
+    if (realJid == null || realJid.isEmpty) {
+      return false;
+    }
+    return pendingInviteeJids.contains(realJid);
+  }
+
   String? canonicalOccupantId(String occupantId) =>
       _occupantDirectory.canonicalOccupantId(occupantId);
 
@@ -348,6 +361,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -371,6 +385,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -410,6 +425,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -426,6 +442,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -449,6 +466,7 @@ class RoomState {
       isDestroyed: destroyed,
       destroyedAlternateRoomJid: nextAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -479,13 +497,35 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: pending,
+      pendingInviteeJids: pendingInviteeJids,
     );
+  }
+
+  RoomState withPendingInvitee(String jid) {
+    final normalized = normalizedAddressKey(jid);
+    if (normalized == null || normalized.isEmpty) {
+      return this;
+    }
+    if (pendingInviteeJids.contains(normalized)) {
+      return this;
+    }
+    return copyWith(pendingInviteeJids: {...pendingInviteeJids, normalized});
+  }
+
+  RoomState withoutPendingInvitee(String jid) {
+    final normalized = normalizedAddressKey(jid);
+    if (normalized == null || !pendingInviteeJids.contains(normalized)) {
+      return this;
+    }
+    final updated = Set<String>.of(pendingInviteeJids)..remove(normalized);
+    return copyWith(pendingInviteeJids: updated);
   }
 
   RoomState withAffiliationEntries({
     required OccupantAffiliation queriedAffiliation,
     required List<MucAffiliationEntry> entries,
     String? selfRealJid,
+    bool pruneMissing = true,
   }) {
     final updated = Map<String, Occupant>.of(occupants);
     var nextMyOccupantJid = myOccupantJid;
@@ -504,6 +544,7 @@ class RoomState {
         isDestroyed: isDestroyed,
         destroyedAlternateRoomJid: destroyedAlternateRoomJid,
         postJoinRefreshPending: postJoinRefreshPending,
+        pendingInviteeJids: pendingInviteeJids,
       );
       final occupantId = workingRoom.occupantIdForAffiliation(
         realJid: realJid,
@@ -554,19 +595,21 @@ class RoomState {
       );
       retainedOccupantIds.add(occupantId);
     }
-    updated.removeWhere((occupantId, occupant) {
-      if (occupant.affiliation != queriedAffiliation) {
-        return false;
-      }
-      if (occupant.isPresent) {
-        return false;
-      }
-      final realJid = occupant.realJid;
-      if (realJid == null || realJid.isEmpty) {
-        return false;
-      }
-      return !retainedOccupantIds.contains(occupantId);
-    });
+    if (pruneMissing) {
+      updated.removeWhere((occupantId, occupant) {
+        if (occupant.affiliation != queriedAffiliation) {
+          return false;
+        }
+        if (occupant.isPresent) {
+          return false;
+        }
+        final realJid = occupant.realJid;
+        if (realJid == null || realJid.isEmpty) {
+          return false;
+        }
+        return !retainedOccupantIds.contains(occupantId);
+      });
+    }
     if (nextMyOccupantJid != null && !updated.containsKey(nextMyOccupantJid)) {
       nextMyOccupantJid = null;
     }
@@ -581,6 +624,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -602,6 +646,24 @@ class RoomState {
     return copyWith(occupants: updated);
   }
 
+  RoomState withOccupantUnavailable(String occupantId) {
+    final resolvedOccupantId = canonicalOccupantId(occupantId);
+    if (resolvedOccupantId == null) {
+      return this;
+    }
+    final occupant = occupants[resolvedOccupantId];
+    if (occupant == null) {
+      return this;
+    }
+    final updatedOccupant = occupant.withUnavailable();
+    if (identical(updatedOccupant, occupant)) {
+      return this;
+    }
+    final updated = Map<String, Occupant>.of(occupants)
+      ..[resolvedOccupantId] = updatedOccupant;
+    return copyWith(occupants: updated);
+  }
+
   RoomState withoutOccupants() {
     if (occupants.isEmpty && myOccupantJid == null) {
       return this;
@@ -616,6 +678,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -653,6 +716,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -675,6 +739,7 @@ class RoomState {
       isDestroyed: false,
       destroyedAlternateRoomJid: null,
       postJoinRefreshPending: false,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -696,6 +761,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -718,6 +784,7 @@ class RoomState {
       isDestroyed: isDestroyed,
       destroyedAlternateRoomJid: destroyedAlternateRoomJid,
       postJoinRefreshPending: postJoinRefreshPending,
+      pendingInviteeJids: pendingInviteeJids,
     );
   }
 
@@ -732,6 +799,7 @@ class RoomState {
     for (final occupant in occupants.values) {
       if (occupant.affiliation.isOutcast) continue;
       if (!occupant.hasResolvedMembershipState) continue;
+      if (!occupant.isPresent && isPendingInvitee(occupant)) continue;
       switch (occupant.memberSectionKind) {
         case RoomMemberSectionKind.owners:
           owners.add(occupant);
@@ -779,6 +847,7 @@ class RoomState {
     bool? isDestroyed,
     String? destroyedAlternateRoomJid,
     bool? postJoinRefreshPending,
+    Set<String>? pendingInviteeJids,
   }) => RoomState(
     roomJid: roomJid,
     occupants: occupants ?? this.occupants,
@@ -793,6 +862,7 @@ class RoomState {
         destroyedAlternateRoomJid ?? this.destroyedAlternateRoomJid,
     postJoinRefreshPending:
         postJoinRefreshPending ?? this.postJoinRefreshPending,
+    pendingInviteeJids: pendingInviteeJids ?? this.pendingInviteeJids,
   );
 }
 

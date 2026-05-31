@@ -11,6 +11,44 @@ const String _syntheticOccupantId =
 const String _realJid = 'user@example.com';
 
 void main() {
+  group('Occupant affiliation permissions', () {
+    test(
+      'canAuthoritativelyRefreshAffiliation matches MUC admin authority',
+      () {
+        expect(
+          OccupantAffiliation.owner.canAuthoritativelyRefreshAffiliation(
+            OccupantAffiliation.member,
+          ),
+          isTrue,
+        );
+        expect(
+          OccupantAffiliation.owner.canAuthoritativelyRefreshAffiliation(
+            OccupantAffiliation.owner,
+          ),
+          isTrue,
+        );
+        expect(
+          OccupantAffiliation.admin.canAuthoritativelyRefreshAffiliation(
+            OccupantAffiliation.member,
+          ),
+          isTrue,
+        );
+        expect(
+          OccupantAffiliation.admin.canAuthoritativelyRefreshAffiliation(
+            OccupantAffiliation.owner,
+          ),
+          isFalse,
+        );
+        expect(
+          OccupantAffiliation.member.canAuthoritativelyRefreshAffiliation(
+            OccupantAffiliation.member,
+          ),
+          isFalse,
+        );
+      },
+    );
+  });
+
   group('Occupant merge helpers', () {
     test(
       'nextRealJid prefers incoming, then present current, then fallback',
@@ -585,6 +623,31 @@ void main() {
       expect(updated.myOccupantJid, _syntheticOccupantId);
     });
 
+    test('withOccupantUnavailable preserves cached member rows', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: {
+          _roomNickOccupantId: Occupant(
+            occupantId: _roomNickOccupantId,
+            nick: 'nick',
+            realJid: _realJid,
+            affiliation: OccupantAffiliation.member,
+            role: OccupantRole.participant,
+            isPresent: true,
+          ),
+        },
+      );
+
+      final updated = state.withOccupantUnavailable(_roomNickOccupantId);
+
+      expect(updated.occupants.keys, {_roomNickOccupantId});
+      expect(updated.occupants[_roomNickOccupantId]?.isPresent, isFalse);
+      expect(
+        updated.occupants[_roomNickOccupantId]?.affiliation,
+        OccupantAffiliation.member,
+      );
+    });
+
     test(
       'withoutOtherOccupantsForRealJid keeps the requested occupant only',
       () {
@@ -703,6 +766,32 @@ void main() {
         );
 
         expect(updated.occupants, isEmpty);
+      },
+    );
+
+    test(
+      'withAffiliationEntries can merge without pruning stale offline occupants',
+      () {
+        final state = RoomState(
+          roomJid: _roomJid,
+          occupants: {
+            _syntheticOccupantId: Occupant(
+              occupantId: _syntheticOccupantId,
+              nick: 'nick',
+              realJid: _realJid,
+              affiliation: OccupantAffiliation.member,
+              isPresent: false,
+            ),
+          },
+        );
+
+        final updated = state.withAffiliationEntries(
+          queriedAffiliation: OccupantAffiliation.member,
+          entries: const [],
+          pruneMissing: false,
+        );
+
+        expect(updated.occupants.keys, {_syntheticOccupantId});
       },
     );
   });

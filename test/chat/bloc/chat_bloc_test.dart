@@ -575,7 +575,7 @@ void main() {
           RoomState(roomJid: invocation.positionalArguments.first as String),
     );
     when(
-      () => mucService.warmRoomFromHistory(roomJid: any(named: 'roomJid')),
+      () => mucService.prepareRoomMemberState(roomJid: any(named: 'roomJid')),
     ).thenAnswer(
       (invocation) async =>
           RoomState(roomJid: invocation.namedArguments[#roomJid] as String),
@@ -584,6 +584,7 @@ void main() {
       () => mucService.ensureJoined(
         roomJid: any(named: 'roomJid'),
         nickname: any(named: 'nickname'),
+        maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
         allowRejoin: any(named: 'allowRejoin'),
       ),
     ).thenAnswer((_) async {});
@@ -9767,7 +9768,9 @@ void main() {
       when(
         () => mucService.roomStateFor(roomJid),
       ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
-      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer(
         (_) async => RoomState(
           roomJid: roomJid,
           myOccupantJid: selfOccupantId,
@@ -9817,7 +9820,7 @@ void main() {
       () => mucService.roomStateFor(roomJid),
     ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
     when(
-      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
     ).thenAnswer((_) async => RoomState(roomJid: roomJid, occupants: const {}));
 
     final roomStreamController = StreamController<RoomState>.broadcast();
@@ -9842,10 +9845,7 @@ void main() {
 
     verifyInOrder([
       () => mucService.roomStateStream(roomJid),
-      () => mucService.warmRoomFromHistory(
-        roomJid: roomJid,
-        limit: any(named: 'limit'),
-      ),
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
     ]);
 
     await bloc.close();
@@ -9859,7 +9859,7 @@ void main() {
       () => mucService.roomStateFor(roomJid),
     ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
     when(
-      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
     ).thenAnswer((_) async => RoomState(roomJid: roomJid, occupants: const {}));
 
     final bloc = ChatBloc(
@@ -9881,6 +9881,7 @@ void main() {
       () => mucService.ensureJoined(
         roomJid: roomJid,
         nickname: null,
+        maxHistoryStanzas: 0,
         allowRejoin: true,
       ),
       () => mucService.refreshRoomAvatar(roomJid),
@@ -9904,13 +9905,16 @@ void main() {
       when(
         () => mucService.roomStateFor(roomJid),
       ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
-      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer(
         (_) async => RoomState(roomJid: roomJid, occupants: const {}),
       );
       when(
         () => mucService.ensureJoined(
           roomJid: roomJid,
           nickname: any(named: 'nickname'),
+          maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           allowRejoin: any(named: 'allowRejoin'),
         ),
       ).thenAnswer((_) => joinCompleter.future);
@@ -9950,7 +9954,7 @@ void main() {
         () => mucService.roomStateFor(roomJid),
       ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
       when(
-        () => mucService.warmRoomFromHistory(roomJid: roomJid),
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
       ).thenAnswer((_) => warmCompleter.future);
       when(
         () => mucService.roomStateStream(roomJid),
@@ -10007,6 +10011,7 @@ void main() {
         () => mucService.ensureJoined(
           roomJid: roomJid,
           nickname: null,
+          maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           allowRejoin: true,
         ),
       ).thenAnswer((_) => joinCompleter.future);
@@ -10057,7 +10062,9 @@ void main() {
       when(
         () => mucService.roomStateFor(roomJid),
       ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
-      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer(
         (_) async => RoomState(roomJid: roomJid, occupants: const {}),
       );
 
@@ -10106,6 +10113,7 @@ void main() {
   test('opening room members fetches room affiliations', () async {
     const roomJid = 'room@conference.axi.im';
     const selfOccupantId = '$roomJid/self';
+    const cachedMemberOccupantId = '$roomJid/cached';
     final roomState = RoomState(
       roomJid: roomJid,
       myOccupantJid: selfOccupantId,
@@ -10118,12 +10126,20 @@ void main() {
           affiliation: OccupantAffiliation.owner,
           role: OccupantRole.moderator,
         ),
+        cachedMemberOccupantId: _occupant(
+          occupantId: cachedMemberOccupantId,
+          nick: 'cached',
+          realJid: 'cached@axi.im',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: false,
+        ),
       },
     );
 
     when(() => mucService.roomStateForOrEmpty(roomJid)).thenReturn(roomState);
     when(
-      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
     ).thenAnswer((_) async => roomState);
 
     final bloc = ChatBloc(
@@ -10147,15 +10163,97 @@ void main() {
     await _pumpBloc();
 
     verifyInOrder([
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
       () => mucService.ensureJoined(
         roomJid: roomJid,
         nickname: null,
+        maxHistoryStanzas: 0,
         allowRejoin: true,
       ),
       () => mucService.fetchRoomMembers(roomJid: roomJid),
       () => mucService.fetchRoomOwners(roomJid: roomJid),
       () => mucService.fetchRoomAdmins(roomJid: roomJid),
     ]);
+    final memberSection = bloc.state.roomMemberSections.singleWhere(
+      (section) => section.kind == RoomMemberSectionKind.members,
+    );
+    expect(
+      memberSection.members.single.occupant.occupantId,
+      cachedMemberOccupantId,
+    );
+    expect(memberSection.members.single.occupant.isPresent, isFalse);
+
+    await bloc.close();
+  });
+
+  test('room members drawer hides pending invitees until they join', () async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    const cachedMemberOccupantId = '$roomJid/cached';
+    const pendingInviteeOccupantId = '$roomJid/pending';
+    final roomState = RoomState(
+      roomJid: roomJid,
+      myOccupantJid: selfOccupantId,
+      selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+      pendingInviteeJids: const {'pending@axi.im'},
+      occupants: <String, Occupant>{
+        selfOccupantId: _occupant(
+          occupantId: selfOccupantId,
+          nick: 'self',
+          realJid: 'self@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+        ),
+        cachedMemberOccupantId: _occupant(
+          occupantId: cachedMemberOccupantId,
+          nick: 'cached',
+          realJid: 'cached@axi.im',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: false,
+        ),
+        pendingInviteeOccupantId: _occupant(
+          occupantId: pendingInviteeOccupantId,
+          nick: 'pending',
+          realJid: 'pending@axi.im',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.none,
+          isPresent: false,
+        ),
+      },
+    );
+
+    when(() => mucService.roomStateForOrEmpty(roomJid)).thenReturn(roomState);
+    when(
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
+    ).thenAnswer((_) async => roomState);
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: null,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(_groupChat(roomJid));
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    bloc.add(const ChatRoomMembersOpened());
+    await _pumpBloc();
+    await _pumpBloc();
+
+    final memberSection = bloc.state.roomMemberSections.singleWhere(
+      (section) => section.kind == RoomMemberSectionKind.members,
+    );
+    expect(
+      memberSection.members.map((entry) => entry.occupant.occupantId),
+      equals([cachedMemberOccupantId]),
+    );
 
     await bloc.close();
   });
@@ -10163,7 +10261,6 @@ void main() {
   test('opening room members uses fresh room state after join', () async {
     const roomJid = 'room@conference.axi.im';
     const selfOccupantId = '$roomJid/self';
-    final staleRoomState = RoomState(roomJid: roomJid, occupants: const {});
     final freshRoomState = RoomState(
       roomJid: roomJid,
       myOccupantJid: selfOccupantId,
@@ -10178,15 +10275,9 @@ void main() {
         ),
       },
     );
-    var roomStateReads = 0;
-    when(() => mucService.roomStateForOrEmpty(roomJid)).thenAnswer((_) {
-      roomStateReads += 1;
-      if (roomStateReads == 1) return staleRoomState;
-      return freshRoomState;
-    });
     when(
-      () => mucService.warmRoomFromHistory(roomJid: roomJid),
-    ).thenAnswer((_) async => staleRoomState);
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
+    ).thenAnswer((_) async => freshRoomState);
 
     final bloc = ChatBloc(
       jid: roomJid,
@@ -10209,12 +10300,13 @@ void main() {
     await _pumpBloc();
 
     verifyInOrder([
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
       () => mucService.ensureJoined(
         roomJid: roomJid,
         nickname: null,
+        maxHistoryStanzas: 0,
         allowRejoin: true,
       ),
-      () => mucService.roomStateForOrEmpty(roomJid),
       () => mucService.fetchRoomMembers(roomJid: roomJid),
       () => mucService.fetchRoomOwners(roomJid: roomJid),
       () => mucService.fetchRoomAdmins(roomJid: roomJid),
@@ -10223,6 +10315,302 @@ void main() {
 
     await bloc.close();
   });
+
+  test(
+    'opening room members skips affiliation iq for regular members',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      const ownerOccupantId = '$roomJid/owner';
+      final roomState = RoomState(
+        roomJid: roomJid,
+        myOccupantJid: selfOccupantId,
+        selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+        occupants: <String, Occupant>{
+          selfOccupantId: _occupant(
+            occupantId: selfOccupantId,
+            nick: 'self',
+            realJid: 'self@axi.im',
+            affiliation: OccupantAffiliation.member,
+            role: OccupantRole.participant,
+          ),
+          ownerOccupantId: _occupant(
+            occupantId: ownerOccupantId,
+            nick: 'owner',
+            realJid: 'owner@axi.im',
+            affiliation: OccupantAffiliation.owner,
+            role: OccupantRole.moderator,
+            isPresent: false,
+          ),
+        },
+      );
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer((_) async => roomState);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(mucService);
+
+      bloc.add(const ChatRoomMembersOpened());
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).called(1);
+      verify(
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: null,
+          maxHistoryStanzas: 0,
+          allowRejoin: true,
+        ),
+      ).called(greaterThanOrEqualTo(1));
+      verifyNever(() => mucService.fetchRoomMembers(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomOwners(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomAdmins(roomJid: roomJid));
+      final ownerSection = bloc.state.roomMemberSections.singleWhere(
+        (section) => section.kind == RoomMemberSectionKind.owners,
+      );
+      expect(ownerSection.members.single.occupant.occupantId, ownerOccupantId);
+      expect(ownerSection.members.single.occupant.isPresent, isFalse);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'opening room members exposes cached state before join completes',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      final joinCompleter = Completer<void>();
+      final roomState = RoomState(
+        roomJid: roomJid,
+        myOccupantJid: selfOccupantId,
+        selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+        occupants: <String, Occupant>{
+          selfOccupantId: _occupant(
+            occupantId: selfOccupantId,
+            nick: 'self',
+            realJid: 'self@axi.im',
+            affiliation: OccupantAffiliation.owner,
+            role: OccupantRole.moderator,
+          ),
+        },
+      );
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer((_) async => roomState);
+      when(
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: null,
+          maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          allowRejoin: true,
+        ),
+      ).thenAnswer((_) => joinCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(mucService);
+
+      bloc.add(const ChatRoomMembersOpened());
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.roomState, roomState);
+      expect(bloc.state.roomMemberSections, isNotEmpty);
+      verifyNever(() => mucService.fetchRoomMembers(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomOwners(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomAdmins(roomJid: roomJid));
+
+      joinCompleter.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(() => mucService.fetchRoomMembers(roomJid: roomJid)).called(1);
+      verify(() => mucService.fetchRoomOwners(roomJid: roomJid)).called(1);
+      verify(() => mucService.fetchRoomAdmins(roomJid: roomJid)).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'opening room members exposes cached state before preparation completes',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      final prepareCompleter = Completer<RoomState>();
+      final cachedRoomState = RoomState(
+        roomJid: roomJid,
+        myOccupantJid: selfOccupantId,
+        selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+        occupants: <String, Occupant>{
+          selfOccupantId: _occupant(
+            occupantId: selfOccupantId,
+            nick: 'self',
+            realJid: 'self@axi.im',
+            affiliation: OccupantAffiliation.owner,
+            role: OccupantRole.moderator,
+          ),
+        },
+      );
+      final warmedRoomState = cachedRoomState.copyWith(
+        occupants: <String, Occupant>{
+          ...cachedRoomState.occupants,
+          '$roomJid/member': _occupant(
+            occupantId: '$roomJid/member',
+            nick: 'member',
+            realJid: 'member@axi.im',
+            affiliation: OccupantAffiliation.member,
+            role: OccupantRole.participant,
+          ),
+        },
+      );
+      var currentRoomState = cachedRoomState;
+      when(
+        () => mucService.roomStateFor(roomJid),
+      ).thenAnswer((_) => currentRoomState);
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer((_) => prepareCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(mucService);
+
+      bloc.add(const ChatRoomMembersOpened());
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.roomState?.occupants.keys, contains(selfOccupantId));
+      expect(
+        bloc.state.roomState?.occupants.keys,
+        isNot(contains('$roomJid/member')),
+      );
+      expect(bloc.state.roomMemberSections, isNotEmpty);
+      verifyNever(
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: null,
+          maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          allowRejoin: true,
+        ),
+      );
+      verifyNever(() => mucService.fetchRoomMembers(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomOwners(roomJid: roomJid));
+      verifyNever(() => mucService.fetchRoomAdmins(roomJid: roomJid));
+
+      currentRoomState = warmedRoomState;
+      prepareCompleter.complete(warmedRoomState);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.roomState?.occupants.keys, contains('$roomJid/member'));
+      verify(
+        () => mucService.ensureJoined(
+          roomJid: roomJid,
+          nickname: null,
+          maxHistoryStanzas: 0,
+          allowRejoin: true,
+        ),
+      ).called(greaterThanOrEqualTo(1));
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'closing during room member preparation does not emit stale drawer state',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      final prepareCompleter = Completer<RoomState>();
+      when(
+        () => mucService.prepareRoomMemberState(roomJid: roomJid),
+      ).thenAnswer((_) => prepareCompleter.future);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+      clearInteractions(mucService);
+
+      bloc.add(const ChatRoomMembersOpened());
+      await _pumpBloc();
+
+      final closeFuture = bloc.close();
+      prepareCompleter.complete(
+        RoomState(
+          roomJid: roomJid,
+          myOccupantJid: selfOccupantId,
+          selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
+          occupants: <String, Occupant>{
+            selfOccupantId: _occupant(
+              occupantId: selfOccupantId,
+              nick: 'self',
+              realJid: 'self@axi.im',
+              affiliation: OccupantAffiliation.owner,
+              role: OccupantRole.moderator,
+            ),
+          },
+        ),
+      );
+      await closeFuture;
+      await _pumpBloc();
+
+      expect(bloc.isClosed, isTrue);
+    },
+  );
 
   test('reopening room members fetches room affiliations again', () async {
     const roomJid = 'room@conference.axi.im';
@@ -10244,7 +10632,7 @@ void main() {
 
     when(() => mucService.roomStateForOrEmpty(roomJid)).thenReturn(roomState);
     when(
-      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      () => mucService.prepareRoomMemberState(roomJid: roomJid),
     ).thenAnswer((_) async => roomState);
 
     final bloc = ChatBloc(

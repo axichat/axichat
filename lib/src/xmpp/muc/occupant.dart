@@ -21,7 +21,18 @@ enum OccupantAffiliation {
 
   bool get isNone => this == none;
 
+  bool get isPersistentRoomMember => isOwner || isAdmin || isMember;
+
   bool get canManagePins => isOwner || isAdmin;
+
+  bool canAuthoritativelyRefreshAffiliation(
+    OccupantAffiliation queriedAffiliation,
+  ) => switch (queriedAffiliation) {
+    OccupantAffiliation.member => isOwner || isAdmin,
+    OccupantAffiliation.owner || OccupantAffiliation.admin => isOwner,
+    OccupantAffiliation.outcast => isOwner || isAdmin,
+    OccupantAffiliation.none => false,
+  };
 
   int get authorityRank => switch (this) {
     OccupantAffiliation.owner => 3,

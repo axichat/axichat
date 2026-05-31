@@ -30,6 +30,10 @@ const String _directInvitePasswordAttr = 'password';
 const String _directInviteContinueAttr = 'continue';
 const String _directInviteContinueTrue = 'true';
 const String _directInviteContinueInvalid = 'maybe';
+const String _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
+const String _mucUserTag = 'x';
+const String _mucUserItemTag = 'item';
+const String _mucUserItemJidAttr = 'jid';
 const String _axiInviteXmlns = 'urn:axichat:invite:1';
 const String _axiInviteTag = 'invite';
 const String _axiInviteRevokeTag = 'invite-revoke';
@@ -211,6 +215,91 @@ void main() {
         expect(parsed?.roomJid, equals(_roomJid));
       },
     );
+  });
+
+  group('Message stanza manager MUC stable ids', () {
+    test('emits room stanza id from live groupchat stanzas', () async {
+      final events = <mox.XmppEvent>[];
+      final manager = MessageStanzaManager();
+      final fullJid = mox.JID.fromString('$_accountBareJid/resource');
+      manager.register(
+        mox.XmppManagerAttributes(
+          sendStanza: (_) async => null,
+          sendNonza: (_) {},
+          sendEvent: events.add,
+          getConnectionSettings: () =>
+              mox.ConnectionSettings(jid: fullJid, password: 'password'),
+          getFullJID: () => fullJid,
+          getSocket: () => throw UnimplementedError(),
+          getConnection: () => throw UnimplementedError(),
+          getManagerById: <T extends mox.XmppManagerBase>(_) => null,
+          getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(_) =>
+              null,
+        ),
+      );
+
+      const mucStanzaId = 'room-stanza-id';
+      final stanza = mox.Stanza.message(
+        from: _roomOccupantJid,
+        to: fullJid.toString(),
+        type: _messageTypeGroupchat,
+        id: _stanzaId,
+        children: [
+          mox.XMLNode.xmlns(
+            tag: 'stanza-id',
+            xmlns: mox.stableIdXmlns,
+            attributes: const {'by': _roomJid, 'id': mucStanzaId},
+          ),
+        ],
+      );
+
+      await manager.getIncomingPreStanzaHandlers().single.callback(
+        stanza,
+        mox.StanzaHandlerData(
+          false,
+          false,
+          stanza,
+          mox.TypedMap<mox.StanzaHandlerExtension>(),
+        ),
+      );
+
+      expect(
+        events,
+        contains(
+          isA<InboundGroupchatMucStanzaIdEvent>()
+              .having((event) => event.stanzaId, 'stanza id', _stanzaId)
+              .having((event) => event.roomJid, 'room jid', _roomJid)
+              .having(
+                (event) => event.mucStanzaId,
+                'muc stanza id',
+                mucStanzaId,
+              ),
+        ),
+      );
+    });
+  });
+
+  group('MUC user item parsing', () {
+    test('MUCUSER-010 [HP] parses the MUC user item real JID', () {
+      final stanza = mox.Stanza.message(
+        children: [
+          mox.XMLNode.xmlns(
+            tag: _mucUserTag,
+            xmlns: _mucUserXmlns,
+            children: [
+              mox.XMLNode(
+                tag: _mucUserItemTag,
+                attributes: {_mucUserItemJidAttr: '$_accountBareJid/resource'},
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final parsed = MucUserItemData.fromStanza(stanza);
+
+      expect(parsed?.jid, equals('$_accountBareJid/resource'));
+    });
   });
 
   group('Axi invite serialization', () {
@@ -497,7 +586,7 @@ void main() {
             const AxiMucInvitePayload(
               roomJid: _roomJid,
               token: _inviteTokenRaw,
-              inviter: _inviterBareJid,
+              inviter: '$_inviterBareJid/phone',
               invitee: _inviteeBareJid,
               roomName: _roomName,
               kind: AxiMucInvitePayloadKind.acceptance,
@@ -518,6 +607,34 @@ void main() {
         expect(message.pseudoMessageData?['inviter'], equals(_inviterBareJid));
         expect(message.pseudoMessageData?['invitee'], equals(_inviteeBareJid));
         expect(message.pseudoMessageData?['accepted'], isTrue);
+      },
+    );
+
+    test(
+      'DINV-021B [HP] accepted Axi invite self-copies stay in inviter chat',
+      () {
+        final event = _createMessageEvent(
+          from: mox.JID.fromString(_inviteeBareJid),
+          to: mox.JID.fromString(_inviteeBareJid),
+          extensions: [
+            const AxiMucInvitePayload(
+              roomJid: _roomJid,
+              token: _inviteTokenRaw,
+              inviter: '$_inviterBareJid/phone',
+              invitee: _inviteeBareJid,
+              roomName: _roomName,
+              kind: AxiMucInvitePayloadKind.acceptance,
+            ),
+          ],
+        );
+
+        final message = Message.fromMox(event, accountJid: _inviteeBareJid);
+
+        expect(
+          message.pseudoMessageType,
+          equals(PseudoMessageType.mucInviteAccepted),
+        );
+        expect(message.chatJid, equals(_inviterBareJid));
       },
     );
 

@@ -72,6 +72,8 @@ class _InviteAttachmentCard extends StatelessWidget {
   const _InviteAttachmentCard({
     required this.shape,
     required this.enabled,
+    required this.accepted,
+    required this.revoked,
     required this.label,
     required this.detailLabel,
     required this.actionLabel,
@@ -80,6 +82,8 @@ class _InviteAttachmentCard extends StatelessWidget {
 
   final OutlinedBorder shape;
   final bool enabled;
+  final bool accepted;
+  final bool revoked;
   final String label;
   final String detailLabel;
   final String actionLabel;
@@ -95,9 +99,21 @@ class _InviteAttachmentCard extends StatelessWidget {
     final headerSpacing = spacing.xs;
     final accentWidth = spacing.xxs;
     final leadingInset = sizing.menuItemIconSize + headerSpacing;
-    final accentColor = enabled ? colors.primary : colors.muted;
-    final labelColor = enabled ? colors.foreground : colors.mutedForeground;
-    final iconColor = enabled ? colors.primary : colors.mutedForeground;
+    final statusResolved = accepted || revoked;
+    final accentColor = enabled || statusResolved
+        ? colors.primary
+        : colors.muted;
+    final labelColor = enabled || statusResolved
+        ? colors.foreground
+        : colors.mutedForeground;
+    final iconColor = enabled || statusResolved
+        ? colors.primary
+        : colors.mutedForeground;
+    final icon = accepted
+        ? LucideIcons.check
+        : revoked
+        ? LucideIcons.ban
+        : LucideIcons.userPlus;
     final trimmedDetailLabel = detailLabel.trim();
     final showDetailLabel =
         trimmedDetailLabel.isNotEmpty && trimmedDetailLabel != label.trim();
@@ -135,7 +151,7 @@ class _InviteAttachmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          LucideIcons.userPlus,
+                          icon,
                           size: sizing.menuItemIconSize,
                           color: iconColor,
                         ),

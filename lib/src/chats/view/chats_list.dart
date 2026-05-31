@@ -481,6 +481,40 @@ class _CalendarRoomTitle extends StatelessWidget {
   }
 }
 
+class _GroupChatTitle extends StatelessWidget {
+  const _GroupChatTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return Row(
+      children: [
+        Icon(
+          LucideIcons.users,
+          size: sizing.menuItemIconSize,
+          color: colors.mutedForeground,
+        ),
+        SizedBox(width: spacing.xs),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.small.copyWith(
+              color: colors.foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ChatAvatar extends StatelessWidget {
   const _ChatAvatar({
     required this.chat,
@@ -952,7 +986,12 @@ class _ChatListTileState extends State<ChatListTile> {
               selfIdentity: widget.selfIdentity,
               size: leadingAvatarSize,
             ),
-      title: isCalendarFirstRoom || isEmailChatRow ? null : displayName,
+      title:
+          isCalendarFirstRoom ||
+              isEmailChatRow ||
+              item.type == ChatType.groupChat
+          ? null
+          : displayName,
       titleWidget: isCalendarFirstRoom
           ? _CalendarRoomTitle(title: displayName)
           : isEmailChatRow
@@ -961,6 +1000,8 @@ class _ChatListTileState extends State<ChatListTile> {
               selfIdentity: widget.selfIdentity,
               title: displayName,
             )
+          : item.type == ChatType.groupChat
+          ? _GroupChatTitle(title: displayName)
           : null,
       subtitle: subtitleText,
       subtitlePlaceholder: isCalendarFirstRoom

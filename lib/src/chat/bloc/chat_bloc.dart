@@ -1516,6 +1516,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _mucService.ensureJoined(
         roomJid: chat.jid,
         nickname: chat.myNickname,
+        maxHistoryStanzas: 0,
         allowRejoin: true,
       );
     } on Exception catch (error, stackTrace) {
@@ -1549,9 +1550,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
-    await _ensureMucMembership(chat);
+    final chatJid = _bareJid(chat.jid);
+    if (chatJid == null) return;
+    RoomState roomState =
+        _mucService.roomStateFor(chat.jid) ??
+        _mucService.roomStateForOrEmpty(chat.jid);
+    if (_bareJid(state.chat?.jid) != chatJid) return;
     if (emit.isDone) return;
-    final roomState = _mucService.roomStateForOrEmpty(chat.jid);
+    emit(
+      state.copyWith(
+        roomState: roomState,
+        roomMemberSections: _buildRoomMemberSections(roomState),
+      ),
+    );
+    try {
+      roomState = await _mucService.prepareRoomMemberState(roomJid: chat.jid);
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_roomStateWarmFailedLogMessage, error, stackTrace);
+    }
+    if (_bareJid(state.chat?.jid) != chatJid) return;
+    if (emit.isDone) return;
     emit(
       state.copyWith(
         roomState: roomState,
@@ -1559,7 +1577,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
     );
     if (emit.isDone) return;
-    await _refreshRoomAffiliations(chat: chat, roomState: roomState);
+    await _ensureMucMembership(chat);
+    if (_bareJid(state.chat?.jid) != chatJid) return;
+    if (emit.isDone) return;
+    final latestRoomState = _mucService.roomStateFor(chat.jid) ?? roomState;
+    emit(
+      state.copyWith(
+        roomState: latestRoomState,
+        roomMemberSections: _buildRoomMemberSections(latestRoomState),
+      ),
+    );
+    if (emit.isDone) return;
+    await _refreshRoomAffiliations(chat: chat, roomState: latestRoomState);
   }
 
   Future<void> _refreshRoomAffiliations({
@@ -1569,13 +1598,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!roomState.hasSelfPresence) return;
     final roomJid = _bareJid(chat.jid);
     if (roomJid == null || roomJid.isEmpty) return;
-    try {
-      await _mucService.fetchRoomMembers(roomJid: roomJid);
-      await _mucService.fetchRoomOwners(roomJid: roomJid);
-      await _mucService.fetchRoomAdmins(roomJid: roomJid);
-    } on Exception catch (error, stackTrace) {
-      _log.safeFine(_roomAffiliationRefreshFailedLogMessage, error, stackTrace);
+    final affiliation = roomState.myAffiliation;
+    Future<void> refreshIfAllowed(
+      OccupantAffiliation queriedAffiliation,
+      Future<void> Function() refresh,
+    ) async {
+      if (!affiliation.canAuthoritativelyRefreshAffiliation(
+        queriedAffiliation,
+      )) {
+        return;
+      }
+      try {
+        await refresh();
+      } on Exception catch (error, stackTrace) {
+        _log.safeFine(
+          _roomAffiliationRefreshFailedLogMessage,
+          error,
+          stackTrace,
+        );
+      }
     }
+
+    await refreshIfAllowed(
+      OccupantAffiliation.member,
+      () => _mucService.fetchRoomMembers(roomJid: roomJid),
+    );
+    await refreshIfAllowed(
+      OccupantAffiliation.owner,
+      () => _mucService.fetchRoomOwners(roomJid: roomJid),
+    );
+    await refreshIfAllowed(
+      OccupantAffiliation.admin,
+      () => _mucService.fetchRoomAdmins(roomJid: roomJid),
+    );
   }
 
   Future<void> _subscribeToMessages({
@@ -2117,6 +2172,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     for (final occupant in roomState.occupants.values) {
       if (!seen.add(occupant.occupantId)) continue;
       if (!occupant.hasResolvedMembershipState) continue;
+      if (!occupant.isPresent && roomState.isPendingInvitee(occupant)) {
+        continue;
+      }
       final kind = occupant.memberSectionKind;
       membersByKind[kind]!.add(
         RoomMemberEntry(
@@ -2212,7 +2270,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _onRoomStateUpdated(_RoomStateUpdated(cachedRoom), emit);
     }
     try {
-      final warmed = await _mucService.warmRoomFromHistory(roomJid: chat.jid);
+      final warmed = await _mucService.prepareRoomMemberState(
+        roomJid: chat.jid,
+      );
       if (_bareJid(state.chat?.jid) != _bareJid(chat.jid)) return;
       await _onRoomStateUpdated(_RoomStateUpdated(warmed), emit);
     } on Exception catch (error, stackTrace) {
@@ -2981,13 +3041,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     await _syncFileMetadataSubscriptions(nextMetadataIds);
     if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
-    final lastSeenPinnedMessageAt = await _loadLastSeenPinnedMessageAt(
-      sourceKey,
-    );
+    var lastSeenPinnedMessageAt = await _loadLastSeenPinnedMessageAt(sourceKey);
     if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
     final latestPinnedMessageNotice = _latestPinnedMessageNoticeForEntries(
       entries,
     );
+    if ((state.pinnedMessagesStatus.showsPanelLoading ||
+            state.pinnedMessagesStatus.isHydrating) &&
+        latestPinnedMessageNotice != null) {
+      lastSeenPinnedMessageAt = await _markPinnedMessageNoticeSeen(
+        latest: latestPinnedMessageNotice,
+        seenAt: lastSeenPinnedMessageAt,
+        sourceKey: sourceKey,
+      );
+      if (!_isCurrentPinnedMessagesSource(sourceKey)) return;
+    }
     final nextState = state.copyWith(
       pinnedMessages: pinnedItems,
       pinnedMessagesStatus: ChatPinnedMessagesStatus.loaded,
@@ -3148,9 +3216,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _hydratePinnedMessagesIfNeeded(chat, emit);
       case ChatPinnedMessagesStatus.loading:
       case ChatPinnedMessagesStatus.hydrating:
+        await _markLatestPinnedMessageNoticeSeen(emit);
+        return;
       case ChatPinnedMessagesStatus.failure:
         return;
     }
+    await _markLatestPinnedMessageNoticeSeen(emit);
   }
 
   Future<void> _onChatPinnedMessagesRetryRequested(
@@ -3178,6 +3249,44 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final sourceKey = _pinnedMessagesSourceKey;
+    final markedAt = await _markPinnedMessageNoticeSeen(
+      latest: latest,
+      seenAt: seenAt,
+      sourceKey: sourceKey,
+    );
+    if (sourceKey != _pinnedMessagesSourceKey) {
+      return;
+    }
+    emit(state.copyWith(lastSeenPinnedMessageAt: markedAt));
+  }
+
+  Future<void> _markLatestPinnedMessageNoticeSeen(
+    Emitter<ChatState> emit,
+  ) async {
+    final latest = state.latestPinnedMessageNotice;
+    if (latest == null) {
+      return;
+    }
+    final sourceKey = _pinnedMessagesSourceKey;
+    final markedAt = await _markPinnedMessageNoticeSeen(
+      latest: latest,
+      seenAt: state.lastSeenPinnedMessageAt,
+      sourceKey: sourceKey,
+    );
+    if (sourceKey != _pinnedMessagesSourceKey) {
+      return;
+    }
+    emit(state.copyWith(lastSeenPinnedMessageAt: markedAt));
+  }
+
+  Future<DateTime?> _markPinnedMessageNoticeSeen({
+    required ChatPinnedMessageNotice latest,
+    required DateTime? seenAt,
+    required String? sourceKey,
+  }) async {
+    if (seenAt != null && !latest.pinnedAt.isAfter(seenAt)) {
+      return seenAt;
+    }
     _lastSeenPinnedMessageSourceKey = sourceKey;
     _lastSeenPinnedMessageAt = latest.pinnedAt;
     try {
@@ -3192,10 +3301,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
     }
-    if (sourceKey != _pinnedMessagesSourceKey) {
-      return;
-    }
-    emit(state.copyWith(lastSeenPinnedMessageAt: latest.pinnedAt));
+    return latest.pinnedAt;
   }
 
   Future<void> _hydratePinnedMessagesIfNeeded(

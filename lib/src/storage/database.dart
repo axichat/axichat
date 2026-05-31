@@ -3659,7 +3659,8 @@ WHERE transport = ${MessageTransport.email.index}
   }
 
   bool _messageExcludedFromChatSummary(Message message) {
-    return message.pseudoMessageType?.isSystemStatus == true;
+    return message.pseudoMessageType?.isSystemStatus == true ||
+        message.pseudoMessageType?.isHiddenInviteLifecycle == true;
   }
 
   Future<String?> _messagePreview({
@@ -3672,7 +3673,8 @@ WHERE transport = ${MessageTransport.email.index}
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
   }) async {
-    if (pseudoMessageType?.isSystemStatus == true) {
+    if (pseudoMessageType?.isSystemStatus == true ||
+        pseudoMessageType?.isHiddenInviteLifecycle == true) {
       return null;
     }
     if (pseudoMessageType == PseudoMessageType.mucInvite ||

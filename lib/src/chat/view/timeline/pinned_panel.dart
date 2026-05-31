@@ -805,6 +805,20 @@ class _PinnedMessageTile extends StatelessWidget {
             previewTimelineItem?.inviteRoomName?.trim() ?? _emptyText;
         final inviteRoom =
             previewTimelineItem?.inviteRoom?.trim() ?? _emptyText;
+        final inviteAccepted = previewTimelineItem?.inviteAccepted ?? false;
+        final inviteRevoked = previewTimelineItem?.inviteRevoked ?? false;
+        final inviteCardLabel = inviteAccepted || inviteRevoked
+            ? inviteLabel
+            : inviteRoomName.isNotEmpty
+            ? inviteRoomName
+            : inviteLabel;
+        final inviteCardDetail = inviteAccepted || inviteRevoked
+            ? inviteRoomName.isNotEmpty
+                  ? inviteRoomName
+                  : inviteRoom
+            : inviteRoom.isNotEmpty
+            ? inviteRoom
+            : inviteLabel;
         final OutlinedBorder inviteCardShape = _attachmentSurfaceShape(
           context: context,
           isSelf: isSelf,
@@ -827,8 +841,10 @@ class _PinnedMessageTile extends StatelessWidget {
           _InviteAttachmentCard(
             shape: inviteCardShape,
             enabled: false,
-            label: inviteRoomName.isNotEmpty ? inviteRoomName : inviteLabel,
-            detailLabel: inviteRoom.isNotEmpty ? inviteRoom : inviteLabel,
+            accepted: inviteAccepted,
+            revoked: inviteRevoked,
+            label: inviteCardLabel,
+            detailLabel: inviteCardDetail,
             actionLabel: inviteActionLabel,
             onPressed: () {},
           ),

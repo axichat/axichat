@@ -2761,6 +2761,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _dbOp<XmppDatabase>((db) async {
       await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
+    await _applyMucInviteLifecycleToRoomState(message);
     if (shouldSeedConversationIndex) {
       await _seedConversationIndexForDirectChatCreation(message.chatJid);
     }
@@ -2769,6 +2770,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _applyPendingInboundReactionsForMessage(message);
     await _applyPendingInboundPinMutationsForMessage(message);
   }
+
+  Future<void> _applyMucInviteLifecycleToRoomState(Message message) async {}
 
   Future<ChatType> _resolvePersistedChatType({
     required String jid,
@@ -2868,6 +2871,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required ChatType chatType,
   }) => null;
 
+  String? _senderRealJidForInboundMutationEvent(
+    mox.MessageEvent event, {
+    required bool isGroupChat,
+  }) => null;
+
   void _scheduleArchiveSyncAfterJoin({
     required String chatJid,
     required ChatType chatType,
@@ -2930,6 +2938,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   ({String senderJid, bool identityVerified})
   _resolveInboundReactionSenderIdentity({
     required String senderJid,
+    required String? senderRealJid,
     required String chatJid,
     required bool isGroupChat,
     required bool isArchived,
@@ -2945,12 +2954,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   ({String pinnerJid, bool identityVerified}) _resolveInboundPinSenderIdentity({
     required String senderJid,
+    required String? senderRealJid,
     required String chatJid,
     required bool isGroupChat,
     required bool isArchived,
   }) {
     final senderIdentity = _resolveInboundReactionSenderIdentity(
       senderJid: senderJid,
+      senderRealJid: senderRealJid,
       chatJid: chatJid,
       isGroupChat: isGroupChat,
       isArchived: isArchived,
@@ -3509,7 +3520,47 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
     if (updatedMessage != null) {
       await _applyPendingInboundReactionsForMessage(updatedMessage);
+      await _applyPendingInboundPinMutationsForMessage(updatedMessage);
     }
+  }
+
+  Future<void> _hydrateInboundGroupchatMucStanzaId(
+    InboundGroupchatMucStanzaIdEvent event,
+  ) async {
+    final stanzaId = event.stanzaId.trim();
+    final mucStanzaId = event.mucStanzaId.trim();
+    final roomJid = _normalizeMucRoomJidCandidate(event.roomJid);
+    if (stanzaId.isEmpty || mucStanzaId.isEmpty || roomJid == null) {
+      return;
+    }
+
+    String? updatedMessageId;
+    await _dbOp<XmppDatabase>((db) async {
+      final existing = await db.getMessageByStanzaID(stanzaId);
+      if (existing == null) return;
+      if (!sameNormalizedAddressValue(existing.chatJid, roomJid)) return;
+      final existingMucStanzaId = existing.trimmedMucStanzaId;
+      if (existingMucStanzaId != null && existingMucStanzaId.isNotEmpty) {
+        return;
+      }
+      updatedMessageId = existing.stanzaID;
+      await db.saveMessageMucStanzaId(
+        stanzaID: existing.stanzaID,
+        mucStanzaId: mucStanzaId,
+      );
+    });
+    if (updatedMessageId == null) {
+      return;
+    }
+
+    final updatedMessage = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(updatedMessageId!),
+    );
+    if (updatedMessage == null) {
+      return;
+    }
+    await _applyPendingInboundReactionsForMessage(updatedMessage);
+    await _applyPendingInboundPinMutationsForMessage(updatedMessage);
   }
 
   RegisteredStateKey _archiveCursorKeyFor(String jid) =>
@@ -3546,6 +3597,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required mox.MessageEvent event,
     required bool isGroupChat,
   }) async {
+    if (message.noStore) {
+      return;
+    }
     final timestamp = message.timestamp;
     if (timestamp == null) {
       return;
@@ -4071,7 +4125,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   Future<DateTime?> loadLastSeenPinnedMessageAt(String chatJid) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
-    if (normalizedChat == null || !isStateStoreReady) {
+    if (normalizedChat == null) {
       return null;
     }
     final raw = await _dbOpReturning<XmppStateStore, Object?>(
@@ -4085,7 +4139,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required DateTime seenAt,
   }) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
-    if (normalizedChat == null || !isStateStoreReady) {
+    if (normalizedChat == null) {
       return;
     }
     await _dbOp<XmppStateStore>(
@@ -4093,6 +4147,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         key: _pinBannerLastSeenKeyFor(normalizedChat),
         value: seenAt.toUtc().toIso8601String(),
       ),
+      awaitDatabase: true,
     );
   }
 
@@ -5217,6 +5272,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         if (event.state == ConnectionState.connected) return;
         _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+      })
+      ..registerHandler<InboundGroupchatMucStanzaIdEvent>((event) async {
+        await _hydrateInboundGroupchatMucStanzaId(event);
       })
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
@@ -7827,7 +7885,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       filter: filter,
       includePseudoMessages: false,
     );
-    if (!visibleWindowEmpty && localCount >= desiredWindow) {
+    if (chat.type != ChatType.groupChat &&
+        !visibleWindowEmpty &&
+        localCount >= desiredWindow) {
       return;
     }
     final loadingToken = _beginChatMamLoad(session);
@@ -8104,7 +8164,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (!await _canFetchMamForChat(chat)) {
       return (catchUpResults: const <MamPageResult>[], latestResult: null);
     }
-    if (currentLocalCount >= desiredWindow) {
+    if (chat.type != ChatType.groupChat && currentLocalCount >= desiredWindow) {
       return (catchUpResults: const <MamPageResult>[], latestResult: null);
     }
     final jid = _resolvedMamChatJid(chat);
@@ -8125,7 +8185,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         filter: filter,
         includePseudoMessages: false,
       );
-      if (refreshedCount >= desiredWindow) {
+      if (chat.type != ChatType.groupChat && refreshedCount >= desiredWindow) {
         return (catchUpResults: catchUpResults, latestResult: null);
       }
     }
@@ -8582,10 +8642,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   bool _isAxiPeerJidForCapabilities(String jid) {
     final parsed = parseJid(jid);
-    if (parsed == null || parsed.local.trim().isEmpty) {
+    final parsedDomain = parsed?.domain.trim();
+    if (parsedDomain != null && parsedDomain.isNotEmpty) {
+      return _isAxiCapabilityDomain(parsedDomain);
+    }
+    return _isAxiCapabilityDomain(jid);
+  }
+
+  bool _isAxiCapabilityDomain(String domain) {
+    final normalized = domain.trim().toLowerCase();
+    if (normalized.isEmpty) {
       return false;
     }
-    return isAxiJid(parsed.toBare().toString());
+    final axiDomain = EndpointConfig.axiImDomain;
+    return normalized == axiDomain || normalized.endsWith('.$axiDomain');
   }
 
   bool _isTrustedPeerJidForCapabilities(String jid) {
@@ -10005,6 +10075,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         : event.from.toBare().toString();
     final pinnerIdentity = _resolveInboundPinSenderIdentity(
       senderJid: senderJid,
+      senderRealJid: _senderRealJidForInboundMutationEvent(
+        event,
+        isGroupChat: isGroupChat,
+      ),
       chatJid: normalizedChat,
       isGroupChat: isGroupChat,
       isArchived: _isArchivedOrOfflineMessage(event),
@@ -10302,6 +10376,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final rawSenderJid = isGroupChat
         ? event.from.toString()
         : event.from.toBare().toString();
+    final senderRealJid = _senderRealJidForInboundMutationEvent(
+      event,
+      isGroupChat: isGroupChat,
+    );
     final delayedAt = event.extensions
         .get<mox.DelayedDeliveryData>()
         ?.timestamp
@@ -10319,6 +10397,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         chatJid: reactionChatJid,
         referenceId: referenceId,
         rawSenderJid: rawSenderJid,
+        senderRealJid: senderRealJid,
         isGroupChat: isGroupChat,
         isArchived: _isArchivedOrOfflineMessage(event),
         emojis: sanitizedEmojis,
@@ -10335,6 +10414,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _applyInboundReactionMutation(
       message: message,
       rawSenderJid: rawSenderJid,
+      senderRealJid: senderRealJid,
       isGroupChat: isGroupChat,
       isArchived: _isArchivedOrOfflineMessage(event),
       emojis: sanitizedEmojis,
@@ -10348,6 +10428,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String chatJid,
     required String referenceId,
     required String rawSenderJid,
+    required String? senderRealJid,
     required bool isGroupChat,
     required bool isArchived,
     required List<String> emojis,
@@ -10357,6 +10438,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final normalizedChatJid = chatJid.trim();
     final normalizedReferenceId = referenceId.trim();
     final normalizedSenderJid = rawSenderJid.trim();
+    final normalizedSenderRealJid = bareAddress(senderRealJid)?.trim();
     if (normalizedChatJid.isEmpty ||
         normalizedReferenceId.isEmpty ||
         normalizedSenderJid.isEmpty) {
@@ -10374,6 +10456,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
     final next = _PendingInboundReaction(
       rawSenderJid: normalizedSenderJid,
+      senderRealJid:
+          normalizedSenderRealJid == null || normalizedSenderRealJid.isEmpty
+          ? null
+          : normalizedSenderRealJid,
       isGroupChat: isGroupChat,
       isArchived: isArchived,
       emojis: List<String>.unmodifiable(emojis),
@@ -10410,6 +10496,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await _applyInboundReactionMutation(
         message: message,
         rawSenderJid: pending.rawSenderJid,
+        senderRealJid: pending.senderRealJid,
         isGroupChat: pending.isGroupChat,
         isArchived: pending.isArchived,
         emojis: pending.emojis,
@@ -10430,6 +10517,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<void> _applyInboundReactionMutation({
     required Message message,
     required String rawSenderJid,
+    required String? senderRealJid,
     required bool isGroupChat,
     required bool isArchived,
     required List<String> emojis,
@@ -10438,6 +10526,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     final senderIdentity = _resolveInboundReactionSenderIdentity(
       senderJid: rawSenderJid,
+      senderRealJid: senderRealJid,
       chatJid: message.chatJid,
       isGroupChat: isGroupChat,
       isArchived: isArchived,
@@ -12420,6 +12509,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required bool isGroupChat,
   }) => _resolveInboundReactionSenderIdentity(
     senderJid: senderJid,
+    senderRealJid: null,
     chatJid: chatJid,
     isGroupChat: isGroupChat,
     isArchived: true,
@@ -14205,6 +14295,7 @@ class _UploadSlotHeader {
 class _PendingInboundReaction {
   const _PendingInboundReaction({
     required this.rawSenderJid,
+    required this.senderRealJid,
     required this.isGroupChat,
     required this.isArchived,
     required this.emojis,
@@ -14213,6 +14304,7 @@ class _PendingInboundReaction {
   });
 
   final String rawSenderJid;
+  final String? senderRealJid;
   final bool isGroupChat;
   final bool isArchived;
   final List<String> emojis;
