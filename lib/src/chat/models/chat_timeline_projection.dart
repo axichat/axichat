@@ -10,6 +10,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/share_context.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
+import 'package:axichat/src/chat/models/rfc_email_group.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -475,6 +476,23 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     for (final message in messages)
       if (message.isEmailBackedOpenPgpContent) message.stanzaID,
   };
+  final rfcEmailGroupsByStanzaId = buildRfcEmailGroupsByMessageStanzaId(
+    messages: messages,
+    attachmentsForMessage: attachmentsForMessage,
+    hasMeaningfulBody: (message) => rfcEmailHasMeaningfulBody(
+      message: message,
+      resolvedHtmlBody: _resolvedEmailHtmlBodyForProjection(
+        message: message,
+        emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+      ),
+    ),
+    requireMeaningfulBody: false,
+  );
+  final visibleUnreadBoundary = _visibleUnreadBoundary(
+    unreadBoundaryStanzaId: unreadBoundaryStanzaId,
+    messages: messages,
+    rfcEmailGroupsByStanzaId: rfcEmailGroupsByStanzaId,
+  );
   var unreadDividerInserted = false;
   for (final message in messages) {
     if (message.pseudoMessageType?.isSystemStatus == true) {
@@ -488,8 +506,16 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       }
       continue;
     }
+    final rfcEmailGroup = rfcEmailGroupsByStanzaId[message.stanzaID];
+    if (rfcEmailGroup?.shouldHideTimelineMessage(message) == true) {
+      continue;
+    }
     final timelineItem = buildMainChatTimelineMessageItem(
       message: message,
+      rfcEmailGroup: rfcEmailGroup,
+      includeRfcEmailBodyBlocks: rfcEmailGroup?.isLeader(message) == true,
+      suppressRfcEmailBody:
+          rfcEmailGroup?.shouldSuppressTimelineText(message) == true,
       shownSubjectShares: shownSubjectShares,
       isGroupChat: isGroupChat,
       isEmailChat: isEmailChat,
@@ -535,9 +561,8 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     }
     timelineItems.add(timelineItem);
     if (!unreadDividerInserted &&
-        unreadBoundaryStanzaId != null &&
-        !message.displayed &&
-        message.stanzaID == unreadBoundaryStanzaId) {
+        visibleUnreadBoundary.shouldInsert &&
+        message.stanzaID == visibleUnreadBoundary.stanzaId) {
       unreadDividerInserted = true;
       timelineItems.add(
         ChatTimelineUnreadDividerItem(
@@ -558,6 +583,30 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     );
   }
   return List<ChatTimelineItem>.unmodifiable(timelineItems);
+}
+
+({String? stanzaId, bool shouldInsert}) _visibleUnreadBoundary({
+  required String? unreadBoundaryStanzaId,
+  required List<Message> messages,
+  required Map<String, RfcEmailGroup> rfcEmailGroupsByStanzaId,
+}) {
+  if (unreadBoundaryStanzaId == null) {
+    return (stanzaId: null, shouldInsert: false);
+  }
+  final boundaryMessage = messages
+      .where((message) => message.stanzaID == unreadBoundaryStanzaId)
+      .firstOrNull;
+  if (boundaryMessage == null || boundaryMessage.displayed) {
+    return (stanzaId: unreadBoundaryStanzaId, shouldInsert: false);
+  }
+  final group = rfcEmailGroupsByStanzaId[unreadBoundaryStanzaId];
+  if (group == null) {
+    return (stanzaId: unreadBoundaryStanzaId, shouldInsert: true);
+  }
+  if (!group.shouldHideTimelineMessage(boundaryMessage)) {
+    return (stanzaId: unreadBoundaryStanzaId, shouldInsert: true);
+  }
+  return (stanzaId: group.leader.stanzaID, shouldInsert: true);
 }
 
 ChatTimelineSystemStatusItem? buildSystemStatusTimelineItem(
@@ -644,6 +693,9 @@ resolveActiveInviteLifecycleTokens({
 
 ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   required Message message,
+  RfcEmailGroup? rfcEmailGroup,
+  bool includeRfcEmailBodyBlocks = false,
+  bool suppressRfcEmailBody = false,
   required Set<String> shownSubjectShares,
   required bool isGroupChat,
   required bool isEmailChat,
@@ -813,6 +865,22 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     }
     bodyText = ChatSubjectCodec.previewBodyText(bodyText);
   }
+  if (suppressRfcEmailBody) {
+    showSubjectHeader = false;
+    subjectLabel = null;
+    bodyText = '';
+  }
+  final attachmentIds = attachmentsForMessage(message);
+  final hasAttachment = attachmentIds.isNotEmpty;
+  if (isEmailMessage &&
+      hasAttachment &&
+      bodyText.trim().isNotEmpty &&
+      rfcEmailBodyText(
+        message: message,
+        resolvedHtmlBody: resolvedForwardHtml,
+      ).trim().isEmpty) {
+    bodyText = '';
+  }
   if (!showSubjectHeader &&
       shareContext == null &&
       subjectLabel?.isNotEmpty == true) {
@@ -837,8 +905,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final normalizedPendingEmailContentLabel = pendingEmailContentLabel?.trim();
   final normalizedUnavailableEmailContentLabel = unavailableEmailContentLabel
       ?.trim();
-  final attachmentIds = attachmentsForMessage(message);
-  final hasAttachment = attachmentIds.isNotEmpty;
   final shouldUseUnavailableEmailContentLabel =
       isEmailMessage &&
       message.error.isNone &&
@@ -874,16 +940,35 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
             ? errorLabelWithBody(message.error, bodyTextTrimmed)
             : errorLabel(message.error)
       : displayedBody;
+  final validatedAvailabilityMessage = message
+      .validatedCalendarAvailabilityMessage(ownerJidForShare: ownerJidForShare);
+  final emailBodyBlocks = !includeRfcEmailBodyBlocks || rfcEmailGroup == null
+      ? const <ChatTimelineEmailBodyBlock>[]
+      : _rfcEmailBodyBlocksForGroup(
+          group: rfcEmailGroup,
+          emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+        );
+  final resolvedRenderedText = emailBodyBlocks.isEmpty
+      ? renderedText
+      : emailBodyBlocks
+            .map((block) => block.plainText.trim())
+            .where((text) => text.isNotEmpty)
+            .join('\n\n');
+  final emailVisualKind = _emailVisualKindForTimelineItem(
+    isEmailMessage: isEmailMessage,
+    hasAttachments: hasAttachment,
+    resolvedHtmlBody: resolvedForwardHtml,
+    rfcEmailGroup: rfcEmailGroup,
+    emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+  );
   final hasRenderableSubjectHeader =
       showSubjectHeader && subjectText.isNotEmpty;
   final shouldForceRowText =
-      renderedText.trim().isEmpty &&
+      resolvedRenderedText.trim().isEmpty &&
       (hasAttachment ||
           hasRenderableSubjectHeader ||
           message.retracted ||
           message.edited);
-  final validatedAvailabilityMessage = message
-      .validatedCalendarAvailabilityMessage(ownerJidForShare: ownerJidForShare);
   return ChatTimelineMessageItem(
     id: message.stanzaID,
     createdAt: timestamp.toLocal(),
@@ -900,7 +985,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     ),
     rowText: shouldForceRowText
         ? (hasRenderableSubjectHeader ? subjectText : ' ')
-        : renderedText,
+        : resolvedRenderedText,
     isSelf: isSelf,
     isEmailMessage: isEmailMessage,
     canSendAgain:
@@ -913,7 +998,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     showUnreadIndicator: showUnreadIndicator,
     error: message.error,
     trusted: message.trusted,
-    renderedText: renderedText,
+    renderedText: resolvedRenderedText,
     attachmentIds: attachmentIds,
     edited: message.edited,
     retracted: message.retracted,
@@ -928,7 +1013,13 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
         shareReplies[message.stanzaID] ?? const <chat_models.Chat>[],
     showSubject: showSubjectHeader,
     subjectLabel: subjectLabel,
-    isForwarded: isForwardedMessage,
+    emailRfcGroupKey: rfcEmailGroup == null ? null : message.emailRfcGroupKey,
+    isEmailRfcGroupLeader:
+        rfcEmailGroup == null || rfcEmailGroup.isLeader(message),
+    emailVisualKind: emailVisualKind,
+    isForwarded:
+        isForwardedMessage &&
+        (rfcEmailGroup == null || rfcEmailGroup.isLeader(message)),
     forwardedFromJid: message.forwardedFromJid,
     forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
     forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
@@ -941,6 +1032,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     inviteRoom: inviteRoom,
     inviteRoomName: inviteRoomName,
     resolvedHtmlBody: resolvedForwardHtml,
+    emailBodyBlocks: emailBodyBlocks,
   );
 }
 
@@ -1088,6 +1180,9 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
     replyParticipants: item.replyParticipants,
     showSubject: item.showSubject,
     subjectLabel: item.subjectLabel,
+    emailRfcGroupKey: item.emailRfcGroupKey,
+    isEmailRfcGroupLeader: item.isEmailRfcGroupLeader,
+    emailVisualKind: item.emailVisualKind,
     isForwarded: item.isForwarded,
     forwardedFromJid: item.forwardedFromJid,
     forwardedOriginalSenderLabel: item.forwardedOriginalSenderLabel,
@@ -1101,7 +1196,97 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
     inviteRoom: item.inviteRoom,
     inviteRoomName: item.inviteRoomName,
     resolvedHtmlBody: item.resolvedHtmlBody,
+    emailBodyBlocks: item.emailBodyBlocks,
   );
+}
+
+ChatTimelineEmailVisualKind _emailVisualKindForTimelineItem({
+  required bool isEmailMessage,
+  required bool hasAttachments,
+  required String? resolvedHtmlBody,
+  required RfcEmailGroup? rfcEmailGroup,
+  required Map<int, String> emailFullHtmlByDeltaId,
+}) {
+  if (!isEmailMessage) {
+    return ChatTimelineEmailVisualKind.none;
+  }
+  if (hasAttachments || rfcEmailGroup?.hasAnyAttachments == true) {
+    return ChatTimelineEmailVisualKind.attachment;
+  }
+  if (rfcEmailGroup != null &&
+      _rfcEmailGroupHasHtml(
+        group: rfcEmailGroup,
+        emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+      )) {
+    return ChatTimelineEmailVisualKind.html;
+  }
+  if (_emailBodyHasHtml(resolvedHtmlBody: resolvedHtmlBody)) {
+    return ChatTimelineEmailVisualKind.html;
+  }
+  return ChatTimelineEmailVisualKind.plainText;
+}
+
+bool _rfcEmailGroupHasHtml({
+  required RfcEmailGroup group,
+  required Map<int, String> emailFullHtmlByDeltaId,
+}) {
+  for (final source in group.bodySources) {
+    final resolvedHtmlBody = _resolvedEmailHtmlBodyForProjection(
+      message: source,
+      emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+    );
+    if (_emailBodyHasHtml(resolvedHtmlBody: resolvedHtmlBody)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _emailBodyHasHtml({required String? resolvedHtmlBody}) {
+  final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
+  return normalizedHtmlBody != null;
+}
+
+String? _resolvedEmailHtmlBodyForProjection({
+  required Message message,
+  required Map<int, String> emailFullHtmlByDeltaId,
+}) {
+  final deltaMessageId = message.deltaMsgId;
+  if (deltaMessageId == null) {
+    return message.htmlBody;
+  }
+  return emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
+}
+
+List<ChatTimelineEmailBodyBlock> _rfcEmailBodyBlocksForGroup({
+  required RfcEmailGroup group,
+  required Map<int, String> emailFullHtmlByDeltaId,
+}) {
+  final blocks = <ChatTimelineEmailBodyBlock>[];
+  for (final source in group.bodySources) {
+    final resolvedHtmlBody = _resolvedEmailHtmlBodyForProjection(
+      message: source,
+      emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+    );
+    final plainText = rfcEmailBodyText(
+      message: source,
+      resolvedHtmlBody: resolvedHtmlBody,
+    );
+    if (plainText.trim().isEmpty &&
+        HtmlContentCodec.normalizeHtml(resolvedHtmlBody) == null) {
+      continue;
+    }
+    blocks.add(
+      ChatTimelineEmailBodyBlock(
+        sourceStanzaId: source.stanzaID,
+        sourceMessageDatabaseId: source.id,
+        sourceDeltaMsgId: source.deltaMsgId,
+        plainText: plainText,
+        resolvedHtmlBody: resolvedHtmlBody,
+      ),
+    );
+  }
+  return List<ChatTimelineEmailBodyBlock>.unmodifiable(blocks);
 }
 
 String _resolveTimelineMessageAvatarKey({

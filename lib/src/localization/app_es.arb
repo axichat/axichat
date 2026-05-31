@@ -965,6 +965,8 @@
     }
   },
   "chatAttachmentDownload": "Descargar adjunto",
+  "chatAttachmentPreview": "Previsualizar",
+  "chatAttachmentDownloadAndPreview": "Descargar y previsualizar",
   "chatAttachmentDownloadAndOpen": "Descargar y abrir",
   "chatAttachmentDownloadAndSave": "Descargar y guardar",
   "chatAttachmentDownloadAndShare": "Descargar y compartir",
@@ -1003,6 +1005,7 @@
   "chatAttachmentHighRiskTitle": "Archivo potencialmente inseguro",
   "chatAttachmentHighRiskMessage": "Este tipo de archivo puede ser peligroso al abrirlo. Recomendamos guardarlo y escanearlo antes de abrirlo. ¿Continuar?",
   "chatAttachmentUnknownSize": "Tamaño desconocido",
+  "chatAttachmentOnThisDevice": "En este dispositivo",
   "chatAttachmentNotDownloadedYet": "Aún no descargado",
   "chatAttachmentErrorTooltip": "{message} (archivo: {fileName})",
   "@chatAttachmentErrorTooltip": {

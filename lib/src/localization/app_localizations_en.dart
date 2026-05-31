@@ -2587,6 +2587,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAttachmentDownload => 'Download attachment';
 
   @override
+  String get chatAttachmentPreview => 'Preview';
+
+  @override
+  String get chatAttachmentDownloadAndPreview => 'Download and preview';
+
+  @override
   String get chatAttachmentDownloadAndOpen => 'Download and open';
 
   @override
@@ -2677,6 +2683,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatAttachmentUnknownSize => 'Unknown size';
+
+  @override
+  String get chatAttachmentOnThisDevice => 'On this device';
 
   @override
   String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';

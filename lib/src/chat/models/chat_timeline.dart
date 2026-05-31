@@ -37,6 +37,31 @@ final class ChatTimelineSystemStatusItem extends ChatTimelineSpecialItem {
 
 enum ChatTimelineMessageDelivery { none, pending, sent, received, read, failed }
 
+enum ChatTimelineEmailVisualKind {
+  none,
+  plainText,
+  html,
+  attachment;
+
+  bool get requiresEmailBoundary => this == html || this == attachment;
+}
+
+final class ChatTimelineEmailBodyBlock {
+  const ChatTimelineEmailBodyBlock({
+    required this.sourceStanzaId,
+    required this.sourceMessageDatabaseId,
+    required this.sourceDeltaMsgId,
+    required this.plainText,
+    required this.resolvedHtmlBody,
+  });
+
+  final String sourceStanzaId;
+  final String? sourceMessageDatabaseId;
+  final int? sourceDeltaMsgId;
+  final String plainText;
+  final String? resolvedHtmlBody;
+}
+
 final class ChatTimelineMessageItem extends ChatTimelineItem {
   const ChatTimelineMessageItem({
     required super.id,
@@ -68,6 +93,9 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
     required this.replyParticipants,
     required this.showSubject,
     required this.subjectLabel,
+    required this.emailRfcGroupKey,
+    required this.isEmailRfcGroupLeader,
+    required this.emailVisualKind,
     required this.isForwarded,
     required this.forwardedFromJid,
     required this.forwardedOriginalSenderLabel,
@@ -81,6 +109,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
     required this.inviteRoom,
     required this.inviteRoomName,
     required this.resolvedHtmlBody,
+    required this.emailBodyBlocks,
   });
 
   final Message messageModel;
@@ -110,6 +139,9 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
   final List<chat_models.Chat> replyParticipants;
   final bool showSubject;
   final String? subjectLabel;
+  final String? emailRfcGroupKey;
+  final bool isEmailRfcGroupLeader;
+  final ChatTimelineEmailVisualKind emailVisualKind;
   final bool isForwarded;
   final String? forwardedFromJid;
   final String? forwardedOriginalSenderLabel;
@@ -123,6 +155,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
   final String? inviteRoom;
   final String? inviteRoomName;
   final String? resolvedHtmlBody;
+  final List<ChatTimelineEmailBodyBlock> emailBodyBlocks;
 
   bool get inviteJoinActionEnabled => isInvite && !inviteRevoked;
 

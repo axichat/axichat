@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -10,6 +11,7 @@ import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:mime/mime.dart';
@@ -33,8 +35,87 @@ const ImageDecodeLimits _emailImageDecodeLimits = ImageDecodeLimits(
   minDimension: _emailImageMinDimension,
   decodeTimeout: _emailImageDecodeTimeout,
 );
-final _cachedEmailImageBytes = <String, Uint8List>{};
+final _cachedEmailImageBytes = _EmailImageByteCache();
 final _pendingEmailImageDownloads = <String, Future<Uint8List?>>{};
+
+@visibleForTesting
+void clearEmailImageByteCacheForTesting() {
+  _cachedEmailImageBytes.clear();
+}
+
+@visibleForTesting
+void cacheEmailImageBytesForTesting(String key, Uint8List bytes) {
+  _cachedEmailImageBytes.put(key, bytes);
+}
+
+@visibleForTesting
+Uint8List? cachedEmailImageBytesForTesting(String key) {
+  return _cachedEmailImageBytes.get(key);
+}
+
+@visibleForTesting
+bool emailImageByteCacheContainsForTesting(String key) {
+  return _cachedEmailImageBytes.containsKey(key);
+}
+
+@visibleForTesting
+int emailImageByteCacheEntryCountForTesting() {
+  return _cachedEmailImageBytes.entryCount;
+}
+
+@visibleForTesting
+int emailImageByteCacheSizeBytesForTesting() {
+  return _cachedEmailImageBytes.sizeBytes;
+}
+
+class _EmailImageByteCache {
+  static const int _maxEntries = 64;
+  static const int _maxSizeBytes = 24 * 1024 * 1024;
+
+  final LinkedHashMap<String, Uint8List> _entries =
+      LinkedHashMap<String, Uint8List>();
+  int _sizeBytes = 0;
+
+  int get entryCount => _entries.length;
+
+  int get sizeBytes => _sizeBytes;
+
+  Uint8List? get(String key) {
+    final bytes = _entries.remove(key);
+    if (bytes == null) return null;
+    _entries[key] = bytes;
+    return bytes;
+  }
+
+  void put(String key, Uint8List bytes) {
+    if (key.trim().isEmpty || bytes.isEmpty) return;
+    final previous = _entries.remove(key);
+    if (previous != null) {
+      _sizeBytes -= previous.length;
+    }
+    _entries[key] = bytes;
+    _sizeBytes += bytes.length;
+    _evictIfNeeded();
+  }
+
+  bool containsKey(String key) {
+    return _entries.containsKey(key);
+  }
+
+  void clear() {
+    _entries.clear();
+    _sizeBytes = 0;
+  }
+
+  void _evictIfNeeded() {
+    while (_entries.length > _maxEntries || _sizeBytes > _maxSizeBytes) {
+      final oldestKey = _entries.keys.first;
+      final oldestBytes = _entries.remove(oldestKey);
+      if (oldestBytes == null) continue;
+      _sizeBytes -= oldestBytes.length;
+    }
+  }
+}
 
 /// Creates a flutter_html extension for inline email images.
 TagExtension createEmailImageExtension({required bool shouldLoad}) {
@@ -386,7 +467,7 @@ Future<Uint8List?> _validateEmbeddedEmailImageBytes(Uint8List bytes) async {
 
 Future<Uint8List?> _loadEmailImageBytes(Uri uri) async {
   final cacheKey = uri.toString();
-  final cached = _cachedEmailImageBytes[cacheKey];
+  final cached = _cachedEmailImageBytes.get(cacheKey);
   if (cached != null) {
     return cached;
   }
@@ -397,7 +478,7 @@ Future<Uint8List?> _loadEmailImageBytes(Uri uri) async {
   try {
     final bytes = await pending;
     if (bytes != null && bytes.isNotEmpty) {
-      _cachedEmailImageBytes[cacheKey] = bytes;
+      _cachedEmailImageBytes.put(cacheKey, bytes);
     }
     return bytes;
   } finally {

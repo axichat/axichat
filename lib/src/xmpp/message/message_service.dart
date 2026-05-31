@@ -974,7 +974,6 @@ const int _attachmentMaxUrlLength = 2048;
 const int _attachmentMaxMimeTypeLength = 128;
 const int _attachmentSourceMaxCount = 8;
 const String _attachmentFallbackName = 'attachment';
-const int _attachmentSizeFallbackBytes = 0;
 const int _attachmentCacheEmptyByteCount = 0;
 const int _attachmentCacheMaxBytes = 256 * 1024 * 1024;
 const String _attachmentCacheTempPrefix = '.';
@@ -5335,17 +5334,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         if (shouldPersistAttachment) {
           message = message.copyWith(fileMetadataID: metadata.id);
         }
-        if (metadata != null && (message.body?.trim().isEmpty ?? true)) {
-          const fallbackFilename = 'Attachment';
-          final filename = metadata.filename.trim();
-          final labelFilename = filename.isNotEmpty
-              ? filename
-              : fallbackFilename;
-          final sizeBytes = metadata.sizeBytes ?? 0;
-          message = message.copyWith(
-            body: _attachmentLabel(labelFilename, sizeBytes),
-          );
-        }
         final axiWelcomeDuplicateKey = _axiWelcomeDuplicateKeyForEvent(
           message,
           event,
@@ -6590,8 +6578,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (upload != null) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     }
-    final size = metadata.sizeBytes ?? _attachmentSizeFallbackBytes;
-    final filename = metadata.filename;
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
     final captionText = attachmentWithMetadataId.caption?.trim() ?? '';
     final caption = captionText.isNotEmpty
@@ -6599,9 +6585,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         : (normalizedHtmlCaption == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtmlCaption));
-    final body = caption.isNotEmpty
-        ? caption
-        : _attachmentLabel(filename, size);
+    final body = caption.isNotEmpty ? caption : null;
     final String? resolvedForwardedFrom = forwardedFromJid?.trim();
     final String? resolvedOriginalSender = forwardedOriginalSenderLabel?.trim();
     final DateTime timestamp = demoOfflineMode
@@ -6781,7 +6765,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final extraExtensions = <mox.StanzaHandlerExtension>[
         const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
         sfsData,
-        mox.OOBData(getUrl, filename),
+        mox.OOBData(getUrl, updatedMetadata.filename),
       ];
       final mox.MessageEvent stanza = _buildOutgoingMessageEvent(
         message: message,
@@ -7350,24 +7334,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       client.close();
       stopwatch.stop();
     }
-  }
-
-  String _attachmentLabel(String filename, int sizeBytes) {
-    final prettySize = _formatBytes(sizeBytes);
-    return '📎 $filename ($prettySize)';
-  }
-
-  String _formatBytes(int? bytes) {
-    if (bytes == null || bytes <= 0) return 'Unknown size';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex++;
-    }
-    final precision = value >= 10 || unitIndex == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(precision)} ${units[unitIndex]}';
   }
 
   // ignore: unused_element

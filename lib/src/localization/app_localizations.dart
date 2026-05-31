@@ -4692,6 +4692,18 @@ abstract class AppLocalizations {
   /// **'Download attachment'**
   String get chatAttachmentDownload;
 
+  /// No description provided for @chatAttachmentPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get chatAttachmentPreview;
+
+  /// No description provided for @chatAttachmentDownloadAndPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Download and preview'**
+  String get chatAttachmentDownloadAndPreview;
+
   /// No description provided for @chatAttachmentDownloadAndOpen.
   ///
   /// In en, this message translates to:
@@ -4853,6 +4865,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unknown size'**
   String get chatAttachmentUnknownSize;
+
+  /// No description provided for @chatAttachmentOnThisDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'On this device'**
+  String get chatAttachmentOnThisDevice;
 
   /// No description provided for @chatAttachmentNotDownloadedYet.
   ///

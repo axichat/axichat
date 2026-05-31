@@ -1615,6 +1615,8 @@ class _ChatState extends State<Chat> {
     required Message messageModel,
     required ChatState state,
     required Object bubbleContentKey,
+    required List<InlineSpan> surfaceDetails,
+    required Map<int, double> detailOpticalOffsetFactors,
     required _MessageBubbleExtraAdder addExtra,
   }) {
     final settings = context.watch<SettingsCubit>().state;
@@ -1701,6 +1703,8 @@ class _ChatState extends State<Chat> {
                   senderEmail: state.chat?.emailAddress,
                 ),
           surfaceShape: attachmentShape,
+          messageDetails: surfaceDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         ),
         shape: attachmentShape,
         spacing: context.spacing.s,
@@ -1709,41 +1713,6 @@ class _ChatState extends State<Chat> {
         ),
       );
     }
-  }
-
-  void _appendAttachmentCaptionBubbleContent({
-    required BuildContext context,
-    required ChatState state,
-    required String metadataId,
-    required Object bubbleContentKey,
-    required TextStyle baseTextStyle,
-    required List<InlineSpan> messageDetails,
-    required Map<int, double> detailOpticalOffsetFactors,
-    required List<Widget> bubbleTextChildren,
-  }) {
-    final metadata = _metadataFor(state: state, metadataId: metadataId);
-    final filename = metadata?.filename.trim() ?? _emptyText;
-    final displayFilename = filename.isNotEmpty
-        ? filename
-        : context.l10n.chatAttachmentFallbackLabel;
-    final sizeBytes = metadata?.sizeBytes;
-    final sizeLabel = sizeBytes != null && sizeBytes > 0
-        ? formatBytes(sizeBytes, context.l10n)
-        : context.l10n.chatAttachmentUnknownSize;
-    final caption = context.l10n.chatAttachmentCaption(
-      displayFilename,
-      sizeLabel,
-    );
-    bubbleTextChildren.add(
-      DynamicInlineText(
-        key: ValueKey<Object>(bubbleContentKey),
-        text: TextSpan(text: caption, style: baseTextStyle),
-        details: messageDetails,
-        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-        onLinkTap: _handleLinkTap,
-        onLinkLongPress: _handleLinkTap,
-      ),
-    );
   }
 
   void _appendMessageSubjectBanner({
@@ -1908,6 +1877,99 @@ class _ChatState extends State<Chat> {
             detailOpticalOffsetFactors: detailOpticalOffsetFactors,
           ),
         ),
+      );
+    }
+  }
+
+  void _appendGroupedEmailBodyBubbleContent({
+    required BuildContext context,
+    required bool isSelfBubble,
+    required bool isSingleSelection,
+    required bool autoLoadEmailImages,
+    required Object bubbleContentKey,
+    required TextStyle baseTextStyle,
+    required TextStyle linkStyle,
+    required Color bubbleColor,
+    required Color textColor,
+    required List<InlineSpan> messageDetails,
+    required Map<int, double> detailOpticalOffsetFactors,
+    required List<Widget> bubbleTextChildren,
+    required List<ChatTimelineEmailBodyBlock> emailBodyBlocks,
+  }) {
+    final visibleBlocks = emailBodyBlocks
+        .where(
+          (block) =>
+              block.plainText.trim().isNotEmpty ||
+              HtmlContentCodec.normalizeHtml(block.resolvedHtmlBody) != null,
+        )
+        .toList(growable: false);
+    for (var index = 0; index < visibleBlocks.length; index += 1) {
+      final block = visibleBlocks[index];
+      if (index > 0) {
+        bubbleTextChildren.add(SizedBox(height: context.spacing.s));
+      }
+      final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
+        block.resolvedHtmlBody,
+      );
+      final normalizedHtmlText = normalizedHtmlBody == null
+          ? null
+          : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
+      final visibleSanitizedHtmlText = normalizedHtmlBody == null
+          ? null
+          : HtmlContentCodec.toPlainText(
+              HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+                normalizedHtmlBody,
+                allowRemoteImages: false,
+              ),
+            ).trim();
+      final renderedText = block.plainText.trim().isNotEmpty
+          ? block.plainText
+          : (visibleSanitizedHtmlText ?? _emptyText);
+      final shouldRenderHtmlBody =
+          normalizedHtmlBody != null &&
+          HtmlContentCodec.shouldRenderRichEmailHtml(
+            normalizedHtmlBody: normalizedHtmlBody,
+            normalizedHtmlText: normalizedHtmlText,
+            renderedText: renderedText,
+          );
+      final blockDetails = index == visibleBlocks.length - 1
+          ? messageDetails
+          : const <InlineSpan>[];
+      if (shouldRenderHtmlBody) {
+        final hasRemoteHtmlImages =
+            HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody);
+        _appendInlineEmailHtmlBubbleContent(
+          context: context,
+          isSelfBubble: isSelfBubble,
+          isSingleSelection: isSingleSelection,
+          autoLoadEmailImages: autoLoadEmailImages,
+          hasRemoteHtmlImages: hasRemoteHtmlImages,
+          normalizedHtmlBody: normalizedHtmlBody,
+          normalizedHtmlText: visibleSanitizedHtmlText,
+          messageDatabaseId: block.sourceMessageDatabaseId,
+          bubbleContentKey:
+              '${bubbleContentKey}_email_block_${block.sourceStanzaId}',
+          baseTextStyle: baseTextStyle,
+          linkStyle: linkStyle,
+          bubbleColor: bubbleColor,
+          textColor: textColor,
+          messageDetails: blockDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+          bubbleTextChildren: bubbleTextChildren,
+        );
+        continue;
+      }
+      _appendTextBodyBubbleContent(
+        context: context,
+        bubbleContentKey:
+            '${bubbleContentKey}_email_block_${block.sourceStanzaId}',
+        displayMessageText: renderedText,
+        trimmedDisplayMessageText: renderedText.trim(),
+        baseTextStyle: baseTextStyle,
+        linkStyle: linkStyle,
+        messageDetails: blockDetails,
+        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+        bubbleTextChildren: bubbleTextChildren,
       );
     }
   }
@@ -2193,6 +2255,7 @@ class _ChatState extends State<Chat> {
       );
     }
     final rawRenderedText = timelineMessageItem.renderedText;
+    final groupedEmailBodyBlocks = timelineMessageItem.emailBodyBlocks;
     final messageText = isEmailMessage
         ? ChatSubjectCodec.previewBodyText(rawRenderedText)
         : rawRenderedText;
@@ -2296,16 +2359,21 @@ class _ChatState extends State<Chat> {
     final autoLoadEmailImages =
         state.chat?.emailRemoteImagesEnabled ??
         context.watch<SettingsCubit>().state.autoLoadEmailImages;
-    if (hasAttachmentCaption) {
-      _appendAttachmentCaptionBubbleContent(
+    if (groupedEmailBodyBlocks.isNotEmpty) {
+      _appendGroupedEmailBodyBubbleContent(
         context: context,
-        state: state,
-        metadataId: metadataIdForCaption,
+        isSelfBubble: isSelfBubble,
+        isSingleSelection: isSingleSelection,
+        autoLoadEmailImages: autoLoadEmailImages,
         bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
+        linkStyle: linkStyle,
+        bubbleColor: bubbleColor,
+        textColor: textColor,
         messageDetails: messageDetails,
         detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         bubbleTextChildren: bubbleTextChildren,
+        emailBodyBlocks: groupedEmailBodyBlocks,
       );
     } else if (shouldCollapseEmailPreview) {
       _appendCollapsedEmailPreviewBubbleContent(
@@ -2338,7 +2406,7 @@ class _ChatState extends State<Chat> {
         detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         bubbleTextChildren: bubbleTextChildren,
       );
-    } else if (shouldRenderTextContent) {
+    } else if (shouldRenderTextContent && !hasAttachmentCaption) {
       _appendTextBodyBubbleContent(
         context: context,
         bubbleContentKey: bubbleContentKey,
@@ -2824,6 +2892,8 @@ class _ChatState extends State<Chat> {
         messageModel: messageModel,
         state: state,
         bubbleContentKey: bubbleContentKey,
+        surfaceDetails: surfaceDetails,
+        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         addExtra: addExtra,
       );
     }

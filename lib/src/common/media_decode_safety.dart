@@ -108,11 +108,17 @@ Future<bool> isSafeImageFile(File file, ImageDecodeLimits limits) async {
     if (!_isLengthSafe(length, limits)) {
       return false;
     }
-    final bytes = await file.readAsBytes();
-    if (!_isLengthSafe(bytes.length, limits)) {
-      return false;
+    final buffer = await ui.ImmutableBuffer.fromFilePath(
+      file.path,
+    ).timeout(limits.decodeTimeout);
+    try {
+      if (!_isLengthSafe(buffer.length, limits)) {
+        return false;
+      }
+      return await _isSafeImageBuffer(buffer, limits);
+    } finally {
+      buffer.dispose();
     }
-    return isSafeImageBytes(bytes, limits);
   } on Exception {
     return false;
   }
@@ -123,8 +129,38 @@ Future<bool> isSafeImageBytes(Uint8List bytes, ImageDecodeLimits limits) async {
     return false;
   }
   try {
-    final codec = await ui
-        .instantiateImageCodec(bytes)
+    final buffer = await ui.ImmutableBuffer.fromUint8List(
+      bytes,
+    ).timeout(limits.decodeTimeout);
+    try {
+      return await _isSafeImageBuffer(buffer, limits);
+    } finally {
+      buffer.dispose();
+    }
+  } on Exception {
+    return false;
+  }
+}
+
+Future<bool> _isSafeImageBuffer(
+  ui.ImmutableBuffer buffer,
+  ImageDecodeLimits limits,
+) async {
+  final descriptor = await ui.ImageDescriptor.encoded(
+    buffer,
+  ).timeout(limits.decodeTimeout);
+  try {
+    final width = descriptor.width;
+    final height = descriptor.height;
+    if (width < limits.minDimension || height < limits.minDimension) {
+      return false;
+    }
+    final pixelCount = width * height;
+    if (pixelCount > limits.maxPixels) {
+      return false;
+    }
+    final codec = await descriptor
+        .instantiateCodec(targetWidth: 1, targetHeight: 1)
         .timeout(limits.decodeTimeout);
     try {
       final frameCount = codec.frameCount;
@@ -132,26 +168,13 @@ Future<bool> isSafeImageBytes(Uint8List bytes, ImageDecodeLimits limits) async {
         return false;
       }
       final frame = await codec.getNextFrame().timeout(limits.decodeTimeout);
-      final image = frame.image;
-      try {
-        final width = image.width;
-        final height = image.height;
-        if (width < limits.minDimension || height < limits.minDimension) {
-          return false;
-        }
-        final pixelCount = width * height;
-        if (pixelCount > limits.maxPixels) {
-          return false;
-        }
-      } finally {
-        image.dispose();
-      }
+      frame.image.dispose();
     } finally {
       codec.dispose();
     }
     return true;
-  } on Exception {
-    return false;
+  } finally {
+    descriptor.dispose();
   }
 }
 

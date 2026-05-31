@@ -7904,7 +7904,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             .map((attachment) => attachment.messageId)
             .toSet();
         final leaderId = _selectGroupLeader(
-          messageIds: messageIdsInGroup,
+          attachments: groupEntries,
           messageById: messageById,
           messageIndex: messageIndex,
         );
@@ -7932,6 +7932,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     for (final message in messages) {
       final key = _messageKey(message);
+      final leaderId = groupLeaderByMessageId[key];
+      if (leaderId != null && leaderId != key) continue;
       if (attachmentByMessageId.containsKey(key)) continue;
       final fallback = message.fileMetadataID;
       if (fallback != null && fallback.isNotEmpty) {
@@ -8066,27 +8068,47 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String? _selectGroupLeader({
-    required Set<String> messageIds,
+    required Iterable<MessageAttachmentData> attachments,
     required Map<String, Message> messageById,
     required Map<String, int> messageIndex,
   }) {
-    if (messageIds.isEmpty) return null;
-    final candidates = messageIds
-        .map((id) => messageById[id])
-        .whereType<Message>()
-        .toList();
+    final candidates = attachments
+        .where((attachment) => messageById.containsKey(attachment.messageId))
+        .toList(growable: false);
     if (candidates.isEmpty) return null;
-    final withBody = candidates.where((message) {
-      return message.plainText.trim().isNotEmpty ||
-          message.normalizedHtmlBody?.trim().isNotEmpty == true;
-    }).toList();
-    final prioritized = withBody.isNotEmpty ? withBody : candidates;
-    prioritized.sort((a, b) {
-      final indexA = messageIndex[a.id] ?? 0;
-      final indexB = messageIndex[b.id] ?? 0;
-      return indexA.compareTo(indexB);
-    });
-    return prioritized.first.id;
+    int compareCandidates(
+      MessageAttachmentData left,
+      MessageAttachmentData right,
+    ) {
+      final sortOrder = left.sortOrder.compareTo(right.sortOrder);
+      if (sortOrder != 0) {
+        return sortOrder;
+      }
+      final leftIndex = messageIndex[left.messageId] ?? 0;
+      final rightIndex = messageIndex[right.messageId] ?? 0;
+      return leftIndex.compareTo(rightIndex);
+    }
+
+    final ordered = List<MessageAttachmentData>.from(candidates)
+      ..sort(compareCandidates);
+    final withContent = ordered
+        .where((attachment) {
+          final message = messageById[attachment.messageId];
+          return message != null && _hasRealAttachmentGroupContent(message);
+        })
+        .toList(growable: false);
+    final prioritized = withContent.isNotEmpty ? withContent : ordered;
+    return prioritized.first.messageId;
+  }
+
+  bool _hasRealAttachmentGroupContent(Message message) {
+    final display = ChatSubjectCodec.splitDisplayBody(
+      body: message.body,
+      subject: message.subject,
+    );
+    return display.subject?.trim().isNotEmpty == true ||
+        display.body.trim().isNotEmpty ||
+        message.normalizedHtmlBody?.trim().isNotEmpty == true;
   }
 
   MessageReference? _attachmentGroupQuotedReference({

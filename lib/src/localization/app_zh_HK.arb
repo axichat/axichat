@@ -962,6 +962,8 @@
     }
   },
   "chatAttachmentDownload": "下載附件",
+  "chatAttachmentPreview": "預覽",
+  "chatAttachmentDownloadAndPreview": "下載並預覽",
   "chatAttachmentDownloadAndOpen": "下載並開啟",
   "chatAttachmentDownloadAndSave": "下載並儲存",
   "chatAttachmentDownloadAndShare": "下載並分享",
@@ -1000,6 +1002,7 @@
   "chatAttachmentHighRiskTitle": "可能不安全的檔案",
   "chatAttachmentHighRiskMessage": "此檔案類型在開啟時可能有風險。建議先儲存並掃描後再開啟。要繼續嗎？",
   "chatAttachmentUnknownSize": "大小未知",
+  "chatAttachmentOnThisDevice": "在此裝置上",
   "chatAttachmentNotDownloadedYet": "尚未下載",
   "chatAttachmentErrorTooltip": "{message}（{fileName}）",
   "@chatAttachmentErrorTooltip": {

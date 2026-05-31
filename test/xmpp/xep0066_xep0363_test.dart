@@ -471,7 +471,7 @@ void main() {
       final stored = await database.getMessageByStanzaID(messageId);
       expect(stored, isNotNull);
       expect(stored?.fileMetadataID, isNotNull);
-      expect(stored?.body?.contains(_expectedFilenameFromUrl), isTrue);
+      expect(stored?.body, isNull);
 
       final metadataId = stored!.fileMetadataID!;
       final metadata = await database.getFileMetadata(metadataId);

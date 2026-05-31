@@ -969,6 +969,8 @@
     }
   },
   "chatAttachmentDownload": "下载附件",
+  "chatAttachmentPreview": "预览",
+  "chatAttachmentDownloadAndPreview": "下载并预览",
   "chatAttachmentDownloadAndOpen": "下载并打开",
   "chatAttachmentDownloadAndSave": "下载并保存",
   "chatAttachmentDownloadAndShare": "下载并分享",
@@ -1007,6 +1009,7 @@
   "chatAttachmentHighRiskTitle": "可能不安全的文件",
   "chatAttachmentHighRiskMessage": "此文件类型在打开时可能有风险。建议先保存并扫描后再打开。要继续吗？",
   "chatAttachmentUnknownSize": "大小未知",
+  "chatAttachmentOnThisDevice": "在此设备上",
   "chatAttachmentNotDownloadedYet": "尚未下载",
   "chatAttachmentErrorTooltip": "{message}（{fileName}）",
   "@chatAttachmentErrorTooltip": {

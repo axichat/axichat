@@ -2631,6 +2631,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatAttachmentDownload => 'Descargar adjunto';
 
   @override
+  String get chatAttachmentPreview => 'Previsualizar';
+
+  @override
+  String get chatAttachmentDownloadAndPreview => 'Descargar y previsualizar';
+
+  @override
   String get chatAttachmentDownloadAndOpen => 'Descargar y abrir';
 
   @override
@@ -2725,6 +2731,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatAttachmentUnknownSize => 'Tamaño desconocido';
+
+  @override
+  String get chatAttachmentOnThisDevice => 'En este dispositivo';
 
   @override
   String get chatAttachmentNotDownloadedYet => 'Aún no descargado';

@@ -2492,6 +2492,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentDownload => '下载附件';
 
   @override
+  String get chatAttachmentPreview => '预览';
+
+  @override
+  String get chatAttachmentDownloadAndPreview => '下载并预览';
+
+  @override
   String get chatAttachmentDownloadAndOpen => '下载并打开';
 
   @override
@@ -2579,6 +2585,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
+
+  @override
+  String get chatAttachmentOnThisDevice => '在此设备上';
 
   @override
   String get chatAttachmentNotDownloadedYet => '尚未下载';
@@ -9097,6 +9106,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatAttachmentDownload => '下載附件';
 
   @override
+  String get chatAttachmentPreview => '預覽';
+
+  @override
+  String get chatAttachmentDownloadAndPreview => '下載並預覽';
+
+  @override
   String get chatAttachmentDownloadAndOpen => '下載並開啟';
 
   @override
@@ -9184,6 +9199,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
+
+  @override
+  String get chatAttachmentOnThisDevice => '在此裝置上';
 
   @override
   String get chatAttachmentNotDownloadedYet => '尚未下載';

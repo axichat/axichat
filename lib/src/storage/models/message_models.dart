@@ -13,6 +13,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -782,6 +783,36 @@ abstract class Message with _$Message implements Insertable<Message> {
 
 extension MessageContent on Message {
   bool get isEmailBacked => deltaChatId != null || deltaMsgId != null;
+
+  String? get emailRfcGroupKey {
+    if (!isEmailBacked) {
+      return null;
+    }
+    final originId = normalizeEmailMessageId(originID);
+    if (originId == null || originId.isEmpty) {
+      return null;
+    }
+    final chatKey = normalizedAddressKey(chatJid);
+    if (chatKey == null || chatKey.isEmpty) {
+      return null;
+    }
+    final senderKey =
+        normalizedAddressKey(senderJid) ?? senderJid.trim().toLowerCase();
+    if (senderKey.isEmpty) {
+      return null;
+    }
+    final deltaChatKey = deltaChatId;
+    if (deltaChatKey == null) {
+      return null;
+    }
+    return '$chatKey\u0000$deltaAccountId\u0000$deltaChatKey\u0000$senderKey\u0000$originId';
+  }
+
+  bool hasSameEmailRfcGroup(Message other) =>
+      emailRfcGroupKey != null && emailRfcGroupKey == other.emailRfcGroupKey;
+
+  bool get hasGeneratedEmailAttachmentCaption =>
+      pseudoMessageData?['emailAttachmentCaption'] == true;
 
   bool canSendXmppReaction({required MessageTransport chatDefaultTransport}) =>
       chatDefaultTransport.isXmpp && !isEmailBacked;
