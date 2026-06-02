@@ -68,6 +68,10 @@ String? normalizedBareAddressValue(String? raw) {
   return parsed.toBare().toString().toLowerCase();
 }
 
+bool isAxiImServerAnnouncementJid(String? jid) {
+  return normalizedAddressValue(jid) == EndpointConfig.axiImDomain;
+}
+
 String? bareAddressOrNull(String? raw, {int? maxBytes}) {
   final normalized = normalizeAddress(raw);
   if (normalized == null) return null;

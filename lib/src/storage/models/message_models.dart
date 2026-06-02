@@ -456,6 +456,7 @@ abstract class Message with _$Message implements Insertable<Message> {
               : HtmlContentCodec.toPlainText(normalizedHtml));
     final boundedText = clampMessageText(event.text) ?? '';
     final resolvedText = boundedText.isNotEmpty ? boundedText : fallbackText;
+    final subjectText = get<MessageSubjectData>()?.subject.trim();
     final stableIdData = get<mox.StableIdData>();
     final String? mucStanzaId = isGroupChat
         ? stableIdData?.stanzaIds
@@ -480,7 +481,7 @@ abstract class Message with _$Message implements Insertable<Message> {
       chatJid: chatJid,
       body: invite?.displayBody ?? (resolvedText.isEmpty ? null : resolvedText),
       htmlBody: normalizedHtml,
-      subject: null,
+      subject: subjectText == null || subjectText.isEmpty ? null : subjectText,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
       noStore:
           get<mox.MessageProcessingHintData>()?.hints.contains(
@@ -561,6 +562,11 @@ abstract class Message with _$Message implements Insertable<Message> {
       return sameBareAddress(realJid, accountJid);
     }
     return sameBareAddress(senderJid, accountJid);
+  }
+
+  bool get isAxiImServerAnnouncement {
+    return isAxiImServerAnnouncementJid(senderJid) &&
+        isAxiImServerAnnouncementJid(chatJid);
   }
 
   bool senderMatchesClaimedJid(String claimedJid) {
@@ -801,11 +807,7 @@ extension MessageContent on Message {
     if (senderKey.isEmpty) {
       return null;
     }
-    final deltaChatKey = deltaChatId;
-    if (deltaChatKey == null) {
-      return null;
-    }
-    return '$chatKey\u0000$deltaAccountId\u0000$deltaChatKey\u0000$senderKey\u0000$originId';
+    return '$chatKey\u0000$deltaAccountId\u0000$senderKey\u0000$originId';
   }
 
   bool hasSameEmailRfcGroup(Message other) =>
@@ -813,6 +815,9 @@ extension MessageContent on Message {
 
   bool get hasGeneratedEmailAttachmentCaption =>
       pseudoMessageData?['emailAttachmentCaption'] == true;
+
+  bool get hasRfc822BodyContent =>
+      pseudoMessageData?['emailRfc822Body'] == true;
 
   bool canSendXmppReaction({required MessageTransport chatDefaultTransport}) =>
       chatDefaultTransport.isXmpp && !isEmailBacked;

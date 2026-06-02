@@ -7512,6 +7512,27 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<List<Message>> loadEmailMessagesByRfcGroup(Message message) async {
+    final originId = message.originID?.trim();
+    if (originId == null || originId.isEmpty || !message.isEmailBacked) {
+      return [message];
+    }
+    final messages = await _dbOpReturning<XmppDatabase, List<Message>>(
+      (db) => db.getEmailMessagesByRfcGroup(
+        chatJid: message.chatJid,
+        originID: originId,
+        deltaAccountId: message.deltaAccountId,
+      ),
+    );
+    final groupedMessages = messages
+        .where(message.hasSameEmailRfcGroup)
+        .toList(growable: false);
+    if (groupedMessages.isEmpty) {
+      return [message];
+    }
+    return groupedMessages;
+  }
+
   Future<List<PinnedMessageAggregate>> loadPinnedMessages(
     String chatJid,
   ) async {

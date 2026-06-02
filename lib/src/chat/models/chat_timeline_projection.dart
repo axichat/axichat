@@ -32,17 +32,30 @@ import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
   );
 }
 
-String? previewTextForMessage(Message message) {
+String? previewTextForMessage(
+  Message message, {
+  String? attachmentPreviewFallback,
+}) {
   if (message.isEmailBacked) {
     return ChatSubjectCodec.previewEmailText(
-      body: message.body,
-      subject: message.subject,
-    );
+          body: message.body,
+          subject: message.subject,
+        ) ??
+        _normalizedAttachmentPreviewFallback(attachmentPreviewFallback);
   }
   return ChatSubjectCodec.previewText(
-    body: message.body,
-    subject: message.subject,
-  );
+        body: message.body,
+        subject: message.subject,
+      ) ??
+      _normalizedAttachmentPreviewFallback(attachmentPreviewFallback);
+}
+
+String? _normalizedAttachmentPreviewFallback(String? fallback) {
+  final normalized = fallback?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
 }
 
 bool isMucSelfMessage({
@@ -479,13 +492,14 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   final rfcEmailGroupsByStanzaId = buildRfcEmailGroupsByMessageStanzaId(
     messages: messages,
     attachmentsForMessage: attachmentsForMessage,
-    hasMeaningfulBody: (message) => rfcEmailHasMeaningfulBody(
+    bodyTextForMessage: (message) => rfcEmailBodyText(
       message: message,
       resolvedHtmlBody: _resolvedEmailHtmlBodyForProjection(
         message: message,
         emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
       ),
     ),
+    isAuthoritativeBody: (message) => message.hasRfc822BodyContent,
     requireMeaningfulBody: false,
   );
   final visibleUnreadBoundary = _visibleUnreadBoundary(
@@ -494,23 +508,12 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
     rfcEmailGroupsByStanzaId: rfcEmailGroupsByStanzaId,
   );
   var unreadDividerInserted = false;
-  for (final message in messages) {
-    if (message.pseudoMessageType?.isSystemStatus == true) {
-      final systemStatusItem = buildSystemStatusTimelineItem(
-        message,
-        loadedOpenPgpEmailStanzaIds: loadedOpenPgpEmailStanzaIds,
-        emailEncryptionStatusLabel: emailEncryptionStatusLabel,
-      );
-      if (systemStatusItem != null) {
-        timelineItems.add(systemStatusItem);
-      }
-      continue;
-    }
-    final rfcEmailGroup = rfcEmailGroupsByStanzaId[message.stanzaID];
-    if (rfcEmailGroup?.shouldHideTimelineMessage(message) == true) {
-      continue;
-    }
-    final timelineItem = buildMainChatTimelineMessageItem(
+  final renderedRfcEmailGroupKeys = <String>{};
+  ChatTimelineMessageItem? projectMessage(
+    Message message,
+    RfcEmailGroup? rfcEmailGroup,
+  ) {
+    return buildMainChatTimelineMessageItem(
       message: message,
       rfcEmailGroup: rfcEmailGroup,
       includeRfcEmailBodyBlocks: rfcEmailGroup?.isLeader(message) == true,
@@ -556,13 +559,13 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       errorLabel: errorLabel,
       errorLabelWithBody: errorLabelWithBody,
     );
-    if (timelineItem == null) {
-      continue;
-    }
+  }
+
+  void appendMessageItem(ChatTimelineMessageItem timelineItem) {
     timelineItems.add(timelineItem);
     if (!unreadDividerInserted &&
         visibleUnreadBoundary.shouldInsert &&
-        message.stanzaID == visibleUnreadBoundary.stanzaId) {
+        timelineItem.id == visibleUnreadBoundary.stanzaId) {
       unreadDividerInserted = true;
       timelineItems.add(
         ChatTimelineUnreadDividerItem(
@@ -572,6 +575,53 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
         ),
       );
     }
+  }
+
+  Iterable<Message> orderedVisibleRfcEmailGroupMessages(RfcEmailGroup group) {
+    final visibleRowsBelowLeader = group.messages
+        .where((groupMessage) => groupMessage.stanzaID != group.leader.stanzaID)
+        .where((groupMessage) => !group.shouldHideTimelineMessage(groupMessage))
+        .toList(growable: false);
+    // MessageList is reversed, so emit grouped rows bottom-up.
+    return [
+      ...visibleRowsBelowLeader.reversed,
+      if (!group.shouldHideTimelineMessage(group.leader)) group.leader,
+    ];
+  }
+
+  for (final message in messages) {
+    if (message.pseudoMessageType?.isSystemStatus == true) {
+      final systemStatusItem = buildSystemStatusTimelineItem(
+        message,
+        loadedOpenPgpEmailStanzaIds: loadedOpenPgpEmailStanzaIds,
+        emailEncryptionStatusLabel: emailEncryptionStatusLabel,
+      );
+      if (systemStatusItem != null) {
+        timelineItems.add(systemStatusItem);
+      }
+      continue;
+    }
+    final rfcEmailGroup = rfcEmailGroupsByStanzaId[message.stanzaID];
+    final rfcEmailGroupKey = message.emailRfcGroupKey;
+    if (rfcEmailGroup != null && rfcEmailGroupKey != null) {
+      if (!renderedRfcEmailGroupKeys.add(rfcEmailGroupKey)) {
+        continue;
+      }
+      for (final groupMessage in orderedVisibleRfcEmailGroupMessages(
+        rfcEmailGroup,
+      )) {
+        final timelineItem = projectMessage(groupMessage, rfcEmailGroup);
+        if (timelineItem != null) {
+          appendMessageItem(timelineItem);
+        }
+      }
+      continue;
+    }
+    final timelineItem = projectMessage(message, rfcEmailGroup);
+    if (timelineItem == null) {
+      continue;
+    }
+    appendMessageItem(timelineItem);
   }
   if (!loadingMessages && timelineItems.isEmpty) {
     timelineItems.add(
@@ -742,7 +792,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   required String Function(MessageError error) errorLabel,
   required String Function(MessageError error, String body) errorLabelWithBody,
 }) {
-  if (message.pseudoMessageType == PseudoMessageType.mucInviteAccepted) {
+  if (message.pseudoMessageType?.isHiddenInviteLifecycle == true) {
     return null;
   }
   final timestamp = message.timestamp;
@@ -830,9 +880,10 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final rawSubjectLabel = subjectLabel;
   final rawBodyText = bodyText;
   final deltaMessageId = message.deltaMsgId;
-  final resolvedForwardHtml = deltaMessageId == null
-      ? message.htmlBody
-      : emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
+  final resolvedForwardHtml = _resolvedEmailHtmlBodyForProjection(
+    message: message,
+    emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+  );
   final hasResolvedForwardHtml = resolvedForwardHtml?.trim().isNotEmpty == true;
   final emailFullHtmlIsUnavailable =
       deltaMessageId != null &&
@@ -1031,7 +1082,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     inviteActionLabel: inviteAction,
     inviteRoom: inviteRoom,
     inviteRoomName: inviteRoomName,
-    resolvedHtmlBody: resolvedForwardHtml,
+    resolvedHtmlBody: suppressRfcEmailBody ? null : resolvedForwardHtml,
     emailBodyBlocks: emailBodyBlocks,
   );
 }
@@ -1253,6 +1304,9 @@ String? _resolvedEmailHtmlBodyForProjection({
 }) {
   final deltaMessageId = message.deltaMsgId;
   if (deltaMessageId == null) {
+    return message.htmlBody;
+  }
+  if (message.hasRfc822BodyContent) {
     return message.htmlBody;
   }
   return emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;

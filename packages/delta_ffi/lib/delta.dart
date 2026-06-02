@@ -26,7 +26,12 @@ const int _bundleSearchDepth = 5;
 @ffi.DefaultAsset(_assetId)
 final DeltaChatBindings deltaBindings = DeltaChatBindings(loadDeltaLibrary());
 
-ffi.DynamicLibrary loadDeltaLibrary() {
+ffi.DynamicLibrary? _cachedDeltaLibrary;
+
+ffi.DynamicLibrary loadDeltaLibrary() =>
+    _cachedDeltaLibrary ??= _openDeltaLibrary();
+
+ffi.DynamicLibrary _openDeltaLibrary() {
   Object? lastError;
   final bool traceEnabled = _isTraceEnabled();
   final List<String> trace = <String>[];
@@ -47,6 +52,14 @@ ffi.DynamicLibrary loadDeltaLibrary() {
       library.lookup<ffi.NativeFunction<ffi.Pointer<ffi.Void> Function()>>(
         'dc_context_new',
       );
+      if (Platform.isAndroid) {
+        library.lookup<ffi.NativeFunction<ffi.Pointer<ffi.Char> Function()>>(
+          'axichat_dc_get_msg_rfc724_mid',
+        );
+        library.lookup<ffi.NativeFunction<ffi.Pointer<ffi.Char> Function()>>(
+          'axichat_dc_get_msg_rfc822_body',
+        );
+      }
       recordTrace('loaded: $label');
       return library;
     } catch (error) {
@@ -73,14 +86,6 @@ ffi.DynamicLibrary loadDeltaLibrary() {
     if (configLibrary != null) {
       return configLibrary;
     }
-  }
-
-  final processLibrary = tryLoad(
-    ffi.DynamicLibrary.process,
-    label: 'process',
-  );
-  if (processLibrary != null) {
-    return processLibrary;
   }
 
   final envOverride = Platform.environment['DELTA_FFI_LIBRARY_PATH'];
@@ -126,6 +131,14 @@ ffi.DynamicLibrary loadDeltaLibrary() {
     if (library != null) {
       return library;
     }
+  }
+
+  final processLibrary = tryLoad(
+    ffi.DynamicLibrary.process,
+    label: 'process',
+  );
+  if (processLibrary != null) {
+    return processLibrary;
   }
 
   if (traceEnabled && trace.isNotEmpty) {

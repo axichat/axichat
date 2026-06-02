@@ -126,6 +126,16 @@ typedef _DcGetMsgMimeHeadersDart = ffi.Pointer<ffi.Char> Function(
   int,
 );
 
+typedef _DcGetMsgInfoNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Uint32,
+);
+
+typedef _DcGetMsgInfoDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  int,
+);
+
 typedef _AxichatDcGetMsgRfc724MidNative = ffi.Pointer<ffi.Char> Function(
   ffi.Pointer<dc_context_t>,
   ffi.Uint32,
@@ -141,6 +151,26 @@ typedef _AxichatDcGetMsgIdsByRfc724MidNative = ffi.Pointer<ffi.Char> Function(
 
 typedef _AxichatDcGetMsgIdsByRfc724MidDart = ffi.Pointer<ffi.Char> Function(
     ffi.Pointer<dc_context_t>, int);
+
+typedef _AxichatDcGetMsgDebugInfoNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Uint32,
+);
+
+typedef _AxichatDcGetMsgDebugInfoDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  int,
+);
+
+typedef _AxichatDcGetMsgRfc822BodyNative = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  ffi.Uint32,
+);
+
+typedef _AxichatDcGetMsgRfc822BodyDart = ffi.Pointer<ffi.Char> Function(
+  ffi.Pointer<dc_context_t>,
+  int,
+);
 
 typedef _DcChatGetContactIdNative = ffi.Uint32 Function(
   ffi.Pointer<dc_chat_t>,
@@ -267,10 +297,49 @@ final class _DeltaOptionalMimeHeaders {
 final _DeltaOptionalMimeHeaders _deltaOptionalMimeHeaders =
     _DeltaOptionalMimeHeaders();
 
+final class _DeltaOptionalMsgInfo {
+  _DeltaOptionalMsgInfo() : _getInfo = _loadGetInfo();
+
+  final _DcGetMsgInfoDart? _getInfo;
+
+  bool get isAvailable => _getInfo != null;
+
+  static _DcGetMsgInfoDart? _loadGetInfo() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol = library.lookup<ffi.NativeFunction<_DcGetMsgInfoNative>>(
+        'dc_get_msg_info',
+      );
+      return symbol.asFunction<_DcGetMsgInfoDart>();
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) {
+        rethrow;
+      }
+      return null;
+    }
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    int messageId,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getInfo;
+    if (fn == null) return null;
+    if (messageId <= _zeroValue) return null;
+    final ptr = fn(context, messageId);
+    return _cleanString(_takeString(ptr, bindings: bindings));
+  }
+}
+
+final _DeltaOptionalMsgInfo _deltaOptionalMsgInfo = _DeltaOptionalMsgInfo();
+
 final class _DeltaOptionalMsgRfc724Mid {
   _DeltaOptionalMsgRfc724Mid() : _getRfc724Mid = _loadGetRfc724Mid();
 
   final _AxichatDcGetMsgRfc724MidDart? _getRfc724Mid;
+
+  bool get isAvailable => _getRfc724Mid != null;
 
   static _AxichatDcGetMsgRfc724MidDart? _loadGetRfc724Mid() {
     try {
@@ -355,6 +424,94 @@ final class _DeltaOptionalMsgIdsByRfc724Mid {
 
 final _DeltaOptionalMsgIdsByRfc724Mid _deltaOptionalMsgIdsByRfc724Mid =
     _DeltaOptionalMsgIdsByRfc724Mid();
+
+final class _DeltaOptionalMsgDebugInfo {
+  _DeltaOptionalMsgDebugInfo() : _getDebugInfo = _loadGetDebugInfo();
+
+  final _AxichatDcGetMsgDebugInfoDart? _getDebugInfo;
+
+  bool get isAvailable => _getDebugInfo != null;
+
+  static _AxichatDcGetMsgDebugInfoDart? _loadGetDebugInfo() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol =
+          library.lookup<ffi.NativeFunction<_AxichatDcGetMsgDebugInfoNative>>(
+        'axichat_dc_get_msg_debug_info',
+      );
+      return symbol.asFunction<_AxichatDcGetMsgDebugInfoDart>();
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) {
+        rethrow;
+      }
+      return null;
+    }
+  }
+
+  String? read(
+    ffi.Pointer<dc_context_t> context,
+    int messageId,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getDebugInfo;
+    if (fn == null || messageId <= _zeroValue) {
+      return null;
+    }
+    return _cleanString(
+        _takeString(fn(context, messageId), bindings: bindings));
+  }
+}
+
+final _DeltaOptionalMsgDebugInfo _deltaOptionalMsgDebugInfo =
+    _DeltaOptionalMsgDebugInfo();
+
+final class _DeltaOptionalMsgRfc822Body {
+  _DeltaOptionalMsgRfc822Body() : _getRfc822Body = _loadGetRfc822Body();
+
+  final _AxichatDcGetMsgRfc822BodyDart? _getRfc822Body;
+
+  bool get isAvailable => _getRfc822Body != null;
+
+  static _AxichatDcGetMsgRfc822BodyDart? _loadGetRfc822Body() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol =
+          library.lookup<ffi.NativeFunction<_AxichatDcGetMsgRfc822BodyNative>>(
+        'axichat_dc_get_msg_rfc822_body',
+      );
+      return symbol.asFunction<_AxichatDcGetMsgRfc822BodyDart>();
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) {
+        rethrow;
+      }
+      return null;
+    }
+  }
+
+  DeltaMessageRfc822Body? read(
+    ffi.Pointer<dc_context_t> context,
+    int messageId,
+    DeltaChatBindings bindings,
+  ) {
+    final fn = _getRfc822Body;
+    if (fn == null || messageId <= _zeroValue) {
+      return null;
+    }
+    final raw =
+        _cleanString(_takeString(fn(context, messageId), bindings: bindings));
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      return null;
+    }
+    return DeltaMessageRfc822Body.fromJson(Map<String, Object?>.from(decoded));
+  }
+}
+
+final _DeltaOptionalMsgRfc822Body _deltaOptionalMsgRfc822Body =
+    _DeltaOptionalMsgRfc822Body();
 
 final class _DeltaOptionalChatContactId {
   _DeltaOptionalChatContactId() : _getContactId = _loadGetContactId();
@@ -825,6 +982,14 @@ class DeltaContextHandle {
   static const _lastSpecialContactId = DeltaContactId.lastSpecial;
 
   int? get accountId => _accountId;
+
+  bool get supportsMessageInfo => _deltaOptionalMsgInfo.isAvailable;
+
+  bool get supportsMessageRfc724Mid => _deltaOptionalMsgRfc724Mid.isAvailable;
+
+  bool get supportsMessageDebugInfo => _deltaOptionalMsgDebugInfo.isAvailable;
+
+  bool get supportsMessageRfc822Body => _deltaOptionalMsgRfc822Body.isAvailable;
 
   _DeltaEventLoop? _eventLoop;
 
@@ -1562,6 +1727,12 @@ class DeltaContextHandle {
     return _deltaOptionalMimeHeaders.read(_context, messageId, _bindings);
   }
 
+  Future<String?> getMessageInfo(int messageId) async {
+    _ensureState(_opened, 'get message info');
+    if (messageId <= _zeroValue) return null;
+    return _deltaOptionalMsgInfo.read(_context, messageId, _bindings);
+  }
+
   Future<String?> getMessageRfc724Mid(int messageId) async {
     _ensureState(_opened, 'get message RFC 724 Message-ID');
     if (messageId <= _zeroValue) return null;
@@ -1576,6 +1747,18 @@ class DeltaContextHandle {
       messageId,
       _bindings,
     );
+  }
+
+  Future<String?> getMessageDebugInfo(int messageId) async {
+    _ensureState(_opened, 'get message debug info');
+    if (messageId <= _zeroValue) return null;
+    return _deltaOptionalMsgDebugInfo.read(_context, messageId, _bindings);
+  }
+
+  Future<DeltaMessageRfc822Body?> getMessageRfc822Body(int messageId) async {
+    _ensureState(_opened, 'get message RFC822 body');
+    if (messageId <= _zeroValue) return null;
+    return _deltaOptionalMsgRfc822Body.read(_context, messageId, _bindings);
   }
 
   Future<String?> getMessageFullHtml(int messageId) async {
@@ -2598,6 +2781,30 @@ class DeltaMessage {
   bool get needsDownload =>
       downloadState == DeltaDownloadState.available ||
       downloadState == DeltaDownloadState.failure;
+}
+
+class DeltaMessageRfc822Body {
+  const DeltaMessageRfc822Body({this.plainText, this.htmlBody});
+
+  factory DeltaMessageRfc822Body.fromJson(Map<String, Object?> json) {
+    final ok = json['ok'];
+    if (ok != true) {
+      return const DeltaMessageRfc822Body();
+    }
+    final plainText = json['plainText'];
+    final htmlBody = json['htmlBody'];
+    return DeltaMessageRfc822Body(
+      plainText: plainText is String ? plainText : null,
+      htmlBody: htmlBody is String ? htmlBody : null,
+    );
+  }
+
+  final String? plainText;
+  final String? htmlBody;
+
+  bool get hasBody =>
+      plainText?.trim().isNotEmpty == true ||
+      htmlBody?.trim().isNotEmpty == true;
 }
 
 class DeltaQuotedMessage {

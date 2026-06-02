@@ -1,11 +1,14 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/axi_sizing.dart';
 import 'package:axichat/src/common/ui/axi_spacing.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +17,263 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  test('mobile save branch passes attachment bytes to file picker', () async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'axichat-attachment-save-mobile-test-',
+    );
+    addTearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final file = File('${tempDir.path}/bundle.zip')
+      ..writeAsBytesSync(<int>[1, 2, 3]);
+    final filePicker = _FakeFilePicker();
+
+    await saveAttachmentFileWithPicker(
+      file: file,
+      filename: 'bundle.zip',
+      platform: TargetPlatform.android,
+      filePicker: filePicker,
+    );
+
+    expect(filePicker.savedFileName, 'bundle.zip');
+    expect(filePicker.savedBytes, Uint8List.fromList(<int>[1, 2, 3]));
+  });
+
+  test('desktop save branch asks for a path without bytes', () async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'axichat-attachment-save-desktop-test-',
+    );
+    addTearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final file = File('${tempDir.path}/bundle.zip')
+      ..writeAsBytesSync(<int>[1, 2, 3]);
+    final filePicker = _FakeFilePicker();
+
+    await saveAttachmentFileWithPicker(
+      file: file,
+      filename: 'bundle.zip',
+      platform: TargetPlatform.macOS,
+      filePicker: filePicker,
+    );
+
+    expect(filePicker.savedFileName, 'bundle.zip');
+    expect(filePicker.savedBytes, isNull);
+  });
+
+  testWidgets('type mismatch approval still requires high-risk confirmation', (
+    tester,
+  ) async {
+    bool? allowed;
+
+    await tester.pumpWidget(
+      _wrap(
+        Builder(
+          builder: (context) {
+            return TextButton(
+              onPressed: () async {
+                allowed = await confirmExportAllowed(
+                  context,
+                  metadata: const FileMetadataData(
+                    id: 'risky-mismatch-attachment',
+                    filename: 'payload.html',
+                    mimeType: 'text/plain',
+                  ),
+                  report: const FileTypeReport(
+                    detectedMimeType: 'text/html',
+                    declaredMimeType: 'text/plain',
+                    extensionMimeType: 'text/html',
+                  ),
+                  confirmLabel: 'Save',
+                );
+              },
+              child: const Text('start export'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('start export'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Attachment type mismatch'), findsOneWidget);
+    await tester.tap(find.text('Save').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Potentially unsafe file'), findsOneWidget);
+    expect(allowed, isNull);
+    await tester.tap(find.text('Save').last);
+    await tester.pumpAndSettle();
+
+    expect(allowed, isTrue);
+  });
+
+  testWidgets('file bubbles show local availability in metadata line', (
+    tester,
+  ) async {
+    const remoteMetadata = FileMetadataData(
+      id: 'remote-text-status',
+      filename: 'notes.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          key: const ValueKey('remote-file-status'),
+          stanzaId: 'remote-file-status',
+          metadata: remoteMetadata,
+          allowed: true,
+          downloadDelegate: AttachmentDownloadDelegate(() async => false),
+          metadataReloadDelegate: AttachmentMetadataReloadDelegate(
+            () async => remoteMetadata,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not downloaded yet • 5 B'), findsOneWidget);
+
+    final tempDir = Directory.systemTemp.createTempSync(
+      'axichat-file-status-test-',
+    );
+    addTearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final file = File('${tempDir.path}/notes.txt')..writeAsStringSync('hello');
+    final localMetadata = remoteMetadata.copyWith(
+      id: 'local-text-status',
+      path: file.path,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          key: const ValueKey('local-file-status'),
+          stanzaId: 'local-file-status',
+          metadata: localMetadata,
+          allowed: true,
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.text('On this device • 5 B').evaluate().isNotEmpty,
+    );
+
+    expect(find.text('On this device • 5 B'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('local attachments still render when not allowed', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'axichat-blocked-local-attachment-test-',
+    );
+    addTearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final file = File('${tempDir.path}/notes.txt')..writeAsStringSync('hello');
+
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          stanzaId: 'blocked-local-file',
+          metadata: FileMetadataData(
+            id: 'blocked-local-file',
+            filename: 'notes.txt',
+            path: file.path,
+            mimeType: 'text/plain',
+            sizeBytes: 5,
+          ),
+          allowed: false,
+          onAllowPressed: () {},
+        ),
+      ),
+    );
+    await _pumpUntil(
+      tester,
+      () => find.text('On this device • 5 B').evaluate().isNotEmpty,
+    );
+
+    expect(find.text('On this device • 5 B'), findsOneWidget);
+    expect(find.text('Attachment blocked'), findsNothing);
+    expect(find.text('Load attachment'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('remote attachments still show blocked state when not allowed', (
+    tester,
+  ) async {
+    const metadata = FileMetadataData(
+      id: 'blocked-remote-file',
+      filename: 'notes.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+      sourceUrls: ['https://example.com/notes.txt'],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          stanzaId: 'blocked-remote-file',
+          metadata: metadata,
+          allowed: false,
+          onAllowPressed: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Attachment blocked'), findsOneWidget);
+    expect(find.text('Load attachment'), findsOneWidget);
+    expect(find.text('On this device • 5 B'), findsNothing);
+    expect(find.text('Not downloaded yet • 5 B'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('file bubble status does not overflow at narrow widths', (
+    tester,
+  ) async {
+    const metadata = FileMetadataData(
+      id: 'narrow-remote-text-status',
+      filename: 'very-long-file-name-that-forces-compact-actions.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 5,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          stanzaId: 'narrow-remote-text-status',
+          metadata: metadata,
+          allowed: true,
+          downloadDelegate: AttachmentDownloadDelegate(() async => false),
+          metadataReloadDelegate: AttachmentMetadataReloadDelegate(
+            () async => metadata,
+          ),
+        ),
+        width: 120,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not downloaded yet • 5 B'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'local chat image bubbles decode at display size but previews stay full size',
     (tester) async {
@@ -59,7 +319,7 @@ void main() {
       expect(bubbleResizeProvider.width, lessThan(1200));
       expect(bubbleResizeProvider.height, lessThan(600));
 
-      await tester.tap(find.byType(Image).first, warnIfMissed: false);
+      await tester.tap(find.byIcon(LucideIcons.eye).first);
       await _pumpUntil(
         tester,
         () => tester
@@ -74,6 +334,55 @@ void main() {
       expect(fullPreviewImage.image, isNot(isA<ResizeImage>()));
     },
   );
+
+  testWidgets('local image body tap is handled by parent message wrapper', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'axichat-attachment-parent-tap-test-',
+    );
+    addTearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final image = image_tools.Image(width: 2, height: 1, numChannels: 4);
+    image_tools.fill(image, color: image_tools.ColorRgba8(255, 0, 0, 255));
+    final pngBytes = image_tools.encodePng(image, level: 1);
+    final file = File('${tempDir.path}/image.png')..writeAsBytesSync(pngBytes);
+    var parentTaps = 0;
+
+    await tester.pumpWidget(
+      _wrap(
+        GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            parentTaps += 1;
+          },
+          child: ChatAttachmentPreview(
+            stanzaId: 'stanza-parent-tap',
+            metadata: FileMetadataData(
+              id: 'image-parent-tap',
+              filename: 'image.png',
+              path: file.path,
+              mimeType: 'image/png',
+              sizeBytes: pngBytes.length,
+              width: 1200,
+              height: 600,
+            ),
+            allowed: true,
+          ),
+        ),
+      ),
+    );
+    await _pumpUntil(tester, () => find.byType(Image).evaluate().isNotEmpty);
+
+    await tester.tap(find.byType(Image).first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(parentTaps, 1);
+    expect(find.byType(InteractiveViewer), findsNothing);
+  });
 
   testWidgets('local image attachments show metadata on bubble and preview', (
     tester,
@@ -117,10 +426,7 @@ void main() {
     expect(find.text('narrow-timeline-image.png'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(
-      find.text('narrow-timeline-image.png').first,
-      warnIfMissed: false,
-    );
+    await tester.tap(find.byIcon(LucideIcons.eye).first);
     await _pumpUntil(
       tester,
       () => tester
@@ -173,7 +479,7 @@ void main() {
     );
     await _pumpUntil(tester, () => find.byType(Image).evaluate().isNotEmpty);
 
-    await tester.tap(find.byType(Image).first, warnIfMissed: false);
+    await tester.tap(find.byIcon(LucideIcons.eye).first);
     await _pumpUntil(
       tester,
       () => find.byType(InteractiveViewer).evaluate().isNotEmpty,
@@ -181,7 +487,7 @@ void main() {
 
     final previewSize = tester.getSize(find.byType(InteractiveViewer));
     final previewMinWidth =
-        (axiSizing.iconButtonTapTarget * 3) + (axiSpacing.xs * 2);
+        (axiSizing.iconButtonTapTarget * 4) + (axiSpacing.xs * 3);
     expect(previewSize.width, greaterThanOrEqualTo(previewMinWidth));
     expect(
       tester.getSize(find.text(filename).last).width,
@@ -225,7 +531,7 @@ void main() {
     );
     await _pumpUntil(tester, () => find.byType(Image).evaluate().isNotEmpty);
 
-    await tester.tap(find.byType(Image).first, warnIfMissed: false);
+    await tester.tap(find.byIcon(LucideIcons.eye).first);
     await _pumpUntil(
       tester,
       () => find.byType(InteractiveViewer).evaluate().isNotEmpty,
@@ -234,6 +540,7 @@ void main() {
     final previewSize = tester.getSize(find.byType(InteractiveViewer));
     final saveRect = tester.getRect(find.byIcon(LucideIcons.save).last);
     final closeRect = tester.getRect(find.byIcon(LucideIcons.x).last);
+    expect(find.byIcon(LucideIcons.send), findsOneWidget);
     expect(closeRect.right - saveRect.left, greaterThan(previewSize.width));
     expect(tester.takeException(), isNull);
   });
@@ -339,3 +646,23 @@ Widget _wrap(
 }
 
 class _MockSettingsCubit extends Mock implements SettingsCubit {}
+
+class _FakeFilePicker extends FilePicker {
+  String? savedFileName;
+  Uint8List? savedBytes;
+
+  @override
+  Future<String?> saveFile({
+    String? dialogTitle,
+    String? fileName,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Uint8List? bytes,
+    bool lockParentWindow = false,
+  }) async {
+    savedFileName = fileName;
+    savedBytes = bytes;
+    return null;
+  }
+}

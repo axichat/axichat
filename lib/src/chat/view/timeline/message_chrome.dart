@@ -49,30 +49,6 @@ OutlinedBorder _attachmentSurfaceShape({
   );
 }
 
-bool _chatTimelineItemsShouldChain(
-  ChatTimelineItem current,
-  ChatTimelineItem? neighbor,
-) {
-  if (current is! ChatTimelineMessageItem ||
-      neighbor is! ChatTimelineMessageItem) {
-    return false;
-  }
-  if (neighbor.authorId != current.authorId) {
-    return false;
-  }
-  final neighborDate = DateTime(
-    neighbor.createdAt.year,
-    neighbor.createdAt.month,
-    neighbor.createdAt.day,
-  );
-  final currentDate = DateTime(
-    current.createdAt.year,
-    current.createdAt.month,
-    current.createdAt.day,
-  );
-  return neighborDate == currentDate;
-}
-
 Widget? _senderLabelForTimelineMessage({
   required BuildContext context,
   required bool shouldShow,
@@ -176,6 +152,7 @@ String _timelineQuotedSenderLabel({
 
 Widget? _timelineQuotedPreview({
   required Message? quotedMessage,
+  required ChatState state,
   required bool isGroupChat,
   required RoomState? roomState,
   required String? currentUserId,
@@ -194,6 +171,11 @@ Widget? _timelineQuotedPreview({
   );
   return _QuotedMessagePreview(
     message: quotedMessage,
+    attachmentPreviewText: _timelineAttachmentPreviewTextForMessage(
+      state: state,
+      message: quotedMessage,
+      l10n: l10n,
+    ),
     senderLabel: quotedIsSelf
         ? l10n.chatSenderYou
         : _timelineQuotedSenderLabel(
@@ -205,6 +187,49 @@ Widget? _timelineQuotedPreview({
           ),
     isSelf: isSelfBubble,
   );
+}
+
+String? _timelineAttachmentPreviewTextForMessage({
+  required ChatState state,
+  required Message message,
+  required AppLocalizations l10n,
+}) {
+  final attachmentIds = _timelineAttachmentIdsForMessage(
+    state: state,
+    message: message,
+  );
+  for (final attachmentId in attachmentIds) {
+    final metadata = state.fileMetadataById[attachmentId];
+    if (metadata == null) {
+      continue;
+    }
+    final filename = metadata.filename.trim();
+    if (filename.isNotEmpty) {
+      return filename;
+    }
+  }
+  return attachmentIds.isEmpty ? null : l10n.chatAttachmentFallbackLabel;
+}
+
+List<String> _timelineAttachmentIdsForMessage({
+  required ChatState state,
+  required Message message,
+}) {
+  final databaseId = message.id?.trim();
+  final messageKey = databaseId == null || databaseId.isEmpty
+      ? message.stanzaID
+      : databaseId;
+  final attachmentIds = state.attachmentMetadataIdsByMessageId[messageKey]
+      ?.map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toList(growable: false);
+  if (attachmentIds?.isNotEmpty == true) {
+    return attachmentIds!;
+  }
+  final metadataId = message.fileMetadataID?.trim();
+  return metadataId == null || metadataId.isEmpty
+      ? const <String>[]
+      : <String>[metadataId];
 }
 
 Widget? _timelineForwardedPreview({
@@ -539,6 +564,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required List<InlineSpan> surfaceDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<String> attachmentIds,
+    required bool chainsFromPreviousMessage,
     required bool chainsIntoNextMessage,
   })
   composeBubbleContent;
@@ -696,13 +722,18 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       surfaceDetails: surfaceDetails,
       detailOpticalOffsetFactors: detailOpticalOffsetFactors,
       attachmentIds: attachmentIds,
-      chainsIntoNextMessage: _chatTimelineItemsShouldChain(currentItem, next),
+      chainsFromPreviousMessage: chatTimelineItemsShouldChain(
+        currentItem,
+        previous,
+      ),
+      chainsIntoNextMessage: chatTimelineItemsShouldChain(currentItem, next),
     );
     return _ChatTimelineMessageChromeView(
       currentItem: currentItem,
       previous: previous,
       next: next,
       timelineMessageItem: timelineMessageItem,
+      state: state,
       messageModel: messageModel,
       chatEntity: chatEntity,
       roomState: roomState,
@@ -788,6 +819,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.previous,
     required this.next,
     required this.timelineMessageItem,
+    required this.state,
     required this.messageModel,
     required this.chatEntity,
     required this.roomState,
@@ -838,6 +870,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final ChatTimelineItem? previous;
   final ChatTimelineItem? next;
   final ChatTimelineMessageItem timelineMessageItem;
+  final ChatState state;
   final Message messageModel;
   final chat_models.Chat? chatEntity;
   final RoomState? roomState;
@@ -993,6 +1026,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     ) = _resolveTimelineMessagePreviews(
       timelineMessageItem: timelineMessageItem,
       messageModel: messageModel,
+      state: state,
       roomState: roomState,
       selfNick: selfNick,
       resolvedDirectChatDisplayName: resolvedDirectChatDisplayName,
@@ -1374,7 +1408,7 @@ _resolveTimelineMessageBubbleLayout({
       EdgeInsets.symmetric(vertical: selectionBubbleVerticalInset),
     );
   }
-  final chainedPrevious = _chatTimelineItemsShouldChain(currentItem, previous);
+  final chainedPrevious = chatTimelineItemsShouldChain(currentItem, previous);
   final showAvatarContentInset = hasAvatarSlot && !chainedPrevious;
   if (showAvatarContentInset) {
     bubblePadding = bubblePadding.add(
@@ -1385,7 +1419,7 @@ _resolveTimelineMessageBubbleLayout({
     (child) => child is _MessageExtraItem,
   );
   final chainedPrev = chainedPrevious;
-  final chainedNext = _chatTimelineItemsShouldChain(currentItem, next);
+  final chainedNext = chatTimelineItemsShouldChain(currentItem, next);
   final bubbleBorderRadius = _bubbleBorderRadius(
     baseRadius: bubbleBaseRadius,
     isSelf: self,
@@ -1597,7 +1631,7 @@ _resolveTimelineMessageShellData({
   required void Function(chat_models.Chat chat) onRecipientTap,
 }) {
   final self = viewData.self;
-  final chainedPrevious = _chatTimelineItemsShouldChain(currentItem, previous);
+  final chainedPrevious = chatTimelineItemsShouldChain(currentItem, previous);
   final cutoutData = _resolveTimelineMessageCutoutData(
     context: context,
     timelineMessageItem: timelineMessageItem,
@@ -1720,6 +1754,7 @@ _resolveTimelineMessageShellData({
 _resolveTimelineMessagePreviews({
   required ChatTimelineMessageItem timelineMessageItem,
   required Message messageModel,
+  required ChatState state,
   required RoomState? roomState,
   required String? selfNick,
   required String? resolvedDirectChatDisplayName,
@@ -1730,6 +1765,7 @@ _resolveTimelineMessagePreviews({
 }) {
   final quotedPreview = _timelineQuotedPreview(
     quotedMessage: timelineMessageItem.quotedMessage,
+    state: state,
     isGroupChat: isGroupChat,
     roomState: roomState,
     currentUserId: currentUserId,
@@ -1762,7 +1798,6 @@ _resolveTimelineMessagePreviews({
   VoidCallback onShare,
   VoidCallback onAddToCalendar,
   VoidCallback onDetails,
-  VoidCallback? onSelect,
   VoidCallback? onResend,
   bool resendUsesSendAgainLabel,
   bool resendLoading,
@@ -1819,7 +1854,6 @@ _resolveTimelineMessageActionCallbacks({
   })
   onAddToCalendarRequested,
   required void Function(String detailId) onDetailsRequested,
-  required void Function(Message message) onStartMultiSelectRequested,
   required void Function(Message message, {required chat_models.Chat? chat})
   onResendRequested,
   required Future<void> Function(Message message) onEditRequested,
@@ -1843,7 +1877,6 @@ _resolveTimelineMessageActionCallbacks({
   onToggleQuickReactionRequested,
   required Future<void> Function(Message message) onReactionSelectionRequested,
 }) {
-  final includeSelectAction = !multiSelectActive;
   final canRetry = messageStatus == MessageStatus.failed;
   final canSendAgain = timelineMessageItem.canSendAgain;
   final canShowReactionManager = canReact && isSingleSelection;
@@ -1875,11 +1908,6 @@ _resolveTimelineMessageActionCallbacks({
   );
 
   void onDetails() => onDetailsRequested(detailId);
-
-  VoidCallback? onSelect;
-  if (includeSelectAction) {
-    onSelect = () => onStartMultiSelectRequested(messageModel);
-  }
 
   VoidCallback? onResend;
   VoidCallback? onEdit;
@@ -1942,7 +1970,6 @@ _resolveTimelineMessageActionCallbacks({
     onShare: onShare,
     onAddToCalendar: onAddToCalendar,
     onDetails: onDetails,
-    onSelect: onSelect,
     onResend: onResend,
     resendUsesSendAgainLabel: canSendAgain && !canRetry,
     resendLoading: resendLoading,

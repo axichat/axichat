@@ -21,7 +21,6 @@ import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart'
     as email_headers;
 import 'package:axichat/src/email/util/email_message_ids.dart';
-import 'package:axichat/src/email/util/email_message_merge.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
@@ -380,13 +379,12 @@ String _openPgpArmorChecksum(Uint8List bytes) {
 }
 
 class DeltaEventConsumer {
+  static const String _emailPartDiagPrefix = 'EMAIL_PART_DIAG';
+  static const String _emailUpdateDiffDiagPrefix = 'EMAIL_UPDATE_DIFF_DIAG';
+
   DeltaEventConsumer({
     required Future<XmppDatabase> Function() databaseBuilder,
     required DeltaContextHandle context,
-    bool autoDownloadImages = false,
-    bool autoDownloadVideos = false,
-    bool autoDownloadDocuments = false,
-    bool autoDownloadArchives = false,
     AppLocalizations Function()? localizationsProvider,
     String? Function()? selfJidProvider,
     String? Function()? xmppSelfJidProvider,
@@ -397,10 +395,6 @@ class DeltaEventConsumer {
     databaseOperationTracker,
   }) : _databaseBuilder = databaseBuilder,
        _context = context,
-       _autoDownloadImages = autoDownloadImages,
-       _autoDownloadVideos = autoDownloadVideos,
-       _autoDownloadDocuments = autoDownloadDocuments,
-       _autoDownloadArchives = autoDownloadArchives,
        _localizationsProvider = localizationsProvider,
        _selfJidProvider = selfJidProvider,
        _xmppSelfJidProvider = xmppSelfJidProvider,
@@ -413,10 +407,6 @@ class DeltaEventConsumer {
   final Future<T> Function<T>(Future<T> Function() operation)?
   _databaseOperationTracker;
   final DeltaContextHandle _context;
-  bool _autoDownloadImages;
-  bool _autoDownloadVideos;
-  bool _autoDownloadDocuments;
-  bool _autoDownloadArchives;
   final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _selfJidProvider;
   final String? Function()? _xmppSelfJidProvider;
@@ -435,18 +425,6 @@ class DeltaEventConsumer {
   AppLocalizations get _l10n =>
       _localizationsProvider?.call() ??
       lookupAppLocalizations(const Locale('en'));
-
-  void updateAttachmentAutoDownloadSettings({
-    required bool imagesEnabled,
-    required bool videosEnabled,
-    required bool documentsEnabled,
-    required bool archivesEnabled,
-  }) {
-    _autoDownloadImages = imagesEnabled;
-    _autoDownloadVideos = videosEnabled;
-    _autoDownloadDocuments = documentsEnabled;
-    _autoDownloadArchives = archivesEnabled;
-  }
 
   String get _selfJid =>
       _selfJidProvider?.call().resolveDeltaPlaceholderJid() ?? _emptyJid;
@@ -1168,6 +1146,14 @@ class DeltaEventConsumer {
     }
     final existing = await db.getMessageByStanzaID(stanzaId);
     if (existing != null) {
+      await _logEmailPartDiagnostic(
+        stage: 'ingest-existing-stanza',
+        eventChatId: chatId,
+        msg: msg,
+        resolvedChat: resolvedChat,
+        existingByStanza: existing,
+        storedMessage: existing,
+      );
       await _updateExistingMessage(existing: existing, msg: msg);
       await _scheduleOriginIdHydrationIfNeeded(
         existing: existing,
@@ -1188,29 +1174,17 @@ class DeltaEventConsumer {
       deltaAccountId: deltaAccountId,
     );
     if (existingByDeltaId != null) {
+      await _logEmailPartDiagnostic(
+        stage: 'ingest-existing-delta',
+        eventChatId: chatId,
+        msg: msg,
+        resolvedChat: resolvedChat,
+        existingByDelta: existingByDeltaId,
+        storedMessage: existingByDeltaId,
+      );
       await _updateExistingMessage(existing: existingByDeltaId, msg: msg);
       await _scheduleOriginIdHydrationIfNeeded(
         existing: existingByDeltaId,
-        msgId: msg.id,
-        accountId: deltaAccountId,
-      );
-      if (!msg.isOutgoing) {
-        await _learnAutocryptContactKeyForIncomingMessage(
-          db: db,
-          chat: resolvedChat,
-          msg: msg,
-        );
-      }
-      return;
-    }
-    final existingByChat = await db.getMessageByDeltaId(
-      msg.id,
-      chatJid: resolvedChat.jid,
-    );
-    if (existingByChat != null) {
-      await _updateExistingMessage(existing: existingByChat, msg: msg);
-      await _scheduleOriginIdHydrationIfNeeded(
-        existing: existingByChat,
         msgId: msg.id,
         accountId: deltaAccountId,
       );
@@ -1238,6 +1212,14 @@ class DeltaEventConsumer {
         deltaAccountId: deltaAccountId,
       );
       if (updatedPending != persistedPending) {
+        await _logEmailPartDiagnostic(
+          stage: 'ingest-pending-bind',
+          eventChatId: chatId,
+          msg: msg,
+          resolvedChat: resolvedChat,
+          existingByDelta: persistedPending,
+          storedMessage: updatedPending,
+        );
         await db.updateMessage(updatedPending);
       }
       await _updateExistingMessage(existing: updatedPending, msg: msg);
@@ -1248,7 +1230,7 @@ class DeltaEventConsumer {
       );
       return;
     }
-    const String? originId = null;
+    final String? originId = await _resolveOriginIdForInitialStore(msg.id);
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
     final senderJid = isOutgoing
@@ -1303,6 +1285,14 @@ class DeltaEventConsumer {
       chatId: chatId,
       msg: msg,
     );
+    await _logEmailPartDiagnostic(
+      stage: 'ingest-new-before-store',
+      eventChatId: chatId,
+      msg: msg,
+      resolvedChat: resolvedChat,
+      storedMessage: message,
+      resolvedOriginId: originId,
+    );
     await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
     await _ensureEmailEncryptionStatusMarkerForMessage(
       db: db,
@@ -1316,7 +1306,6 @@ class DeltaEventConsumer {
       );
     }
     await _refreshStoredChatSummary(chatJid: resolvedChat.jid, db: db);
-    await _scheduleOriginIdHydration(msgId: msg.id, accountId: deltaAccountId);
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
     final blockAddress = normalizedAddressValue(
@@ -1333,33 +1322,312 @@ class DeltaEventConsumer {
         !isSpamQuarantined &&
         !isBlocklisted;
     if (shouldAutoDownloadPartial) {
-      final metadataId = message.fileMetadataID?.trim();
-      final attachmentMetadata = metadataId == null || metadataId.isEmpty
-          ? null
-          : await db.getFileMetadata(metadataId);
-      final shouldDownload = msg.hasFile
-          ? attachmentMetadata != null &&
-                allowsAttachmentAutoDownload(
-                  chat: resolvedChat,
-                  metadata: attachmentMetadata,
-                  imagesEnabled: _autoDownloadImages,
-                  videosEnabled: _autoDownloadVideos,
-                  documentsEnabled: _autoDownloadDocuments,
-                  archivesEnabled: _autoDownloadArchives,
-                  chatBlocked: isBlocklisted,
-                  requireKnownSize: true,
-                  maxBytes: maxAttachmentAutoDownloadBytes,
-                )
-          : true;
-      if (shouldDownload) {
-        fireAndForget(
-          () => _autoDownloadQueue.run(
-            () async => _context.downloadFullMessage(msg.id),
-          ),
-          operationName: 'DeltaEventConsumer.downloadFullMessage',
-        );
-      }
+      fireAndForget(
+        () => _autoDownloadQueue.run(
+          () async => _context.downloadFullMessage(msg.id),
+        ),
+        operationName: 'DeltaEventConsumer.downloadFullMessage',
+      );
     }
+  }
+
+  Future<void> _logEmailPartDiagnostic({
+    required String stage,
+    required int eventChatId,
+    required DeltaMessage msg,
+    Chat? resolvedChat,
+    Message? existingByStanza,
+    Message? existingByDelta,
+    Message? storedMessage,
+    String? resolvedOriginId,
+  }) async {
+    if (!_log.isLoggable(Level.FINER)) {
+      return;
+    }
+    final native = await _loadNativeEmailPartDiagnostics(msg.id);
+    _log.log(
+      Level.FINER,
+      '$_emailPartDiagPrefix '
+      'stage=${_diagnosticValue(stage)} '
+      'accountId=$_deltaAccountId '
+      'eventChatId=$eventChatId '
+      'msgChatId=${msg.chatId} '
+      'msgId=${msg.id} '
+      'stanzaId=${_diagnosticValue(_stanzaId(msg.id))} '
+      'existingByStanza=${_diagnosticMessageSummary(existingByStanza)} '
+      'existingByDelta=${_diagnosticMessageSummary(existingByDelta)} '
+      'stored=${_diagnosticMessageSummary(storedMessage)} '
+      'nativeRfc724Supported=${native.nativeRfc724Supported} '
+      'nativeRfc724Mid=${_diagnosticStringStats(native.nativeRfc724Mid)} '
+      'nativeInfoSupported=${native.nativeInfoSupported} '
+      'parsedInfoMessageId=${_diagnosticStringStats(native.parsedInfoMessageId)} '
+      'nativeDebug=${_diagnosticValue(native.nativeDebugInfo)} '
+      'mimeHeadersPresent=${native.mimeHeadersPresent} '
+      'mimeHeadersLength=${native.mimeHeadersLength} '
+      'parsedHeaderMessageId=${_diagnosticStringStats(native.parsedHeaderMessageId)} '
+      'resolvedOriginId=${_diagnosticStringStats(resolvedOriginId)} '
+      'resolvedChatJid=${_diagnosticStringStats(resolvedChat?.jid)} '
+      'resolvedChatDeltaId=${resolvedChat?.deltaChatId} '
+      'subject=${_diagnosticStringStats(msg.subject)} '
+      'textLength=${msg.text?.length ?? 0} '
+      'text=${_diagnosticStringStats(msg.text)} '
+      'htmlPresent=${msg.html?.trim().isNotEmpty == true} '
+      'htmlLength=${msg.html?.length ?? 0} '
+      'html=${_diagnosticStringStats(msg.html)} '
+      'hasFile=${msg.hasFile} '
+      'fileName=${_diagnosticStringStats(msg.fileName)} '
+      'fileMime=${_diagnosticStringStats(msg.fileMime)} '
+      'fileSize=${msg.fileSize} '
+      'filePathPresent=${msg.filePath?.trim().isNotEmpty == true} '
+      'viewType=${msg.viewType} '
+      'infoType=${msg.infoType} '
+      'state=${msg.state} '
+      'downloadState=${msg.downloadState} '
+      'needsDownload=${msg.needsDownload} '
+      'isOutgoing=${msg.isOutgoing}',
+    );
+  }
+
+  Future<
+    ({
+      bool nativeRfc724Supported,
+      String? nativeRfc724Mid,
+      bool nativeInfoSupported,
+      String? parsedInfoMessageId,
+      String? nativeDebugInfo,
+      bool mimeHeadersPresent,
+      int mimeHeadersLength,
+      String? parsedHeaderMessageId,
+    })
+  >
+  _loadNativeEmailPartDiagnostics(int msgId) async {
+    final nativeRfc724Supported = _context.supportsMessageRfc724Mid;
+    final nativeInfoSupported = _context.supportsMessageInfo;
+    String? nativeRfc724Mid;
+    String? nativeInfo;
+    String? nativeDebugInfo;
+    String? mimeHeaders;
+    try {
+      nativeRfc724Mid = normalizeEmailMessageId(
+        await _context.getMessageRfc724Mid(msgId),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        '$_emailPartDiagPrefix stage="native-rfc724-error" msgId=$msgId',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      nativeInfo = await _context.getMessageInfo(msgId);
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        '$_emailPartDiagPrefix stage="native-info-error" msgId=$msgId',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      mimeHeaders = await _context.getMessageMimeHeaders(msgId);
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        '$_emailPartDiagPrefix stage="mime-headers-error" msgId=$msgId',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      if (_context.supportsMessageDebugInfo) {
+        nativeDebugInfo = await _context.getMessageDebugInfo(msgId);
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        '$_emailPartDiagPrefix stage="native-debug-error" msgId=$msgId',
+        error,
+        stackTrace,
+      );
+    }
+    final parsedInfoMessageId = parseDeltaMessageInfoMessageId(nativeInfo);
+    final parsedHeaderMessageId = parseEmailMessageId(mimeHeaders);
+    return (
+      nativeRfc724Supported: nativeRfc724Supported,
+      nativeRfc724Mid: nativeRfc724Mid,
+      nativeInfoSupported: nativeInfoSupported,
+      parsedInfoMessageId: parsedInfoMessageId,
+      nativeDebugInfo: nativeDebugInfo,
+      mimeHeadersPresent: mimeHeaders?.trim().isNotEmpty == true,
+      mimeHeadersLength: mimeHeaders?.length ?? 0,
+      parsedHeaderMessageId: parsedHeaderMessageId,
+    );
+  }
+
+  void _logEmailUpdateDiffDiagnostic({
+    required String updateSummary,
+    required Message existing,
+    required Message next,
+    required DeltaMessage msg,
+    required List<MessageDiffField> updatedFields,
+  }) {
+    if (!_log.isLoggable(Level.FINER)) {
+      return;
+    }
+    final shouldLog =
+        updatedFields.contains(MessageDiffField.body) ||
+        updatedFields.contains(MessageDiffField.subject) ||
+        updatedFields.contains(MessageDiffField.timestamp) ||
+        updatedFields.contains(MessageDiffField.originId) ||
+        updatedFields.contains(MessageDiffField.fileMetadataId);
+    if (!shouldLog) {
+      return;
+    }
+    _log.log(
+      Level.FINER,
+      '$_emailUpdateDiffDiagPrefix '
+      'summary=${_diagnosticValue(updateSummary)} '
+      'msgId=${msg.id} '
+      'msgChatId=${msg.chatId} '
+      'stanzaId=${_diagnosticValue(existing.stanzaID)} '
+      'oldOriginId=${_diagnosticStringStats(existing.originID)} '
+      'newOriginId=${_diagnosticStringStats(next.originID)} '
+      'oldSubject=${_diagnosticStringStats(existing.subject)} '
+      'newSubject=${_diagnosticStringStats(next.subject)} '
+      'oldTimestamp=${_diagnosticValue(existing.timestamp)} '
+      'newTimestamp=${_diagnosticValue(next.timestamp)} '
+      'oldBodyLength=${existing.body?.length ?? 0} '
+      'newBodyLength=${next.body?.length ?? 0} '
+      'oldBody=${_diagnosticStringStats(existing.body)} '
+      'newBody=${_diagnosticStringStats(next.body)} '
+      'oldHtmlLength=${existing.htmlBody?.length ?? 0} '
+      'newHtmlLength=${next.htmlBody?.length ?? 0} '
+      'oldHtml=${_diagnosticStringStats(existing.htmlBody)} '
+      'newHtml=${_diagnosticStringStats(next.htmlBody)} '
+      'oldFileMetadataId=${_diagnosticValue(existing.fileMetadataID)} '
+      'newFileMetadataId=${_diagnosticValue(next.fileMetadataID)} '
+      'deltaSubject=${_diagnosticStringStats(msg.subject)} '
+      'deltaTextLength=${msg.text?.length ?? 0} '
+      'deltaText=${_diagnosticStringStats(msg.text)} '
+      'deltaHtmlPresent=${msg.html?.trim().isNotEmpty == true} '
+      'deltaHtmlLength=${msg.html?.length ?? 0} '
+      'deltaHtml=${_diagnosticStringStats(msg.html)} '
+      'deltaHasFile=${msg.hasFile} '
+      'deltaFileName=${_diagnosticStringStats(msg.fileName)} '
+      'deltaDownloadState=${msg.downloadState} '
+      'deltaNeedsDownload=${msg.needsDownload}',
+    );
+  }
+
+  Future<void> _logOriginResolutionDiagnostic({
+    required int msgId,
+    required String source,
+    required bool nativeRfc724Supported,
+    required String? nativeRfc724Mid,
+    required bool nativeInfoSupported,
+    required String? parsedInfoMessageId,
+    required String? mimeHeaders,
+    required String? parsedHeaderMessageId,
+  }) async {
+    if (!_log.isLoggable(Level.FINER)) {
+      return;
+    }
+    String? nativeDebugInfo;
+    try {
+      if (_context.supportsMessageDebugInfo) {
+        nativeDebugInfo = await _context.getMessageDebugInfo(msgId);
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        '$_emailPartDiagPrefix stage="native-debug-error" msgId=$msgId',
+        error,
+        stackTrace,
+      );
+    }
+    _log.log(
+      Level.FINER,
+      '$_emailPartDiagPrefix '
+      'stage="origin-resolution" '
+      'msgId=$msgId '
+      'source=${_diagnosticValue(source)} '
+      'nativeRfc724Supported=$nativeRfc724Supported '
+      'nativeRfc724Mid=${_diagnosticStringStats(nativeRfc724Mid)} '
+      'nativeInfoSupported=$nativeInfoSupported '
+      'parsedInfoMessageId=${_diagnosticStringStats(parsedInfoMessageId)} '
+      'nativeDebug=${_diagnosticValue(nativeDebugInfo)} '
+      'mimeHeadersPresent=${mimeHeaders?.trim().isNotEmpty == true} '
+      'mimeHeadersLength=${mimeHeaders?.length ?? 0} '
+      'parsedHeaderMessageId=${_diagnosticStringStats(parsedHeaderMessageId)}',
+    );
+  }
+
+  String _diagnosticMessageSummary(Message? message) {
+    if (message == null) {
+      return 'null';
+    }
+    return '{'
+        'stanzaId:${_diagnosticValue(message.stanzaID)},'
+        'originId:${_diagnosticStringStats(message.originID)},'
+        'senderJid:${_diagnosticStringStats(message.senderJid)},'
+        'chatJid:${_diagnosticStringStats(message.chatJid)},'
+        'deltaAccountId:${message.deltaAccountId},'
+        'deltaChatId:${message.deltaChatId},'
+        'deltaMsgId:${message.deltaMsgId},'
+        'subject:${_diagnosticStringStats(message.subject)},'
+        'bodyLength:${message.body?.length ?? 0},'
+        'body:${_diagnosticStringStats(message.body)},'
+        'htmlLength:${message.htmlBody?.length ?? 0},'
+        'html:${_diagnosticStringStats(message.htmlBody)},'
+        'fileMetadataId:${_diagnosticValue(message.fileMetadataID)},'
+        'timestamp:${_diagnosticValue(message.timestamp)},'
+        'received:${message.received},'
+        'displayed:${message.displayed}'
+        '}';
+  }
+
+  String _diagnosticStringStats(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return 'null';
+    }
+    final normalized = trimmed.replaceAll(RegExp(r'\s+'), ' ');
+    return '{'
+        'len:${normalized.length},'
+        'kind:${_diagnosticValue(_diagnosticStringKind(normalized))},'
+        'hash:${_diagnosticValue(_diagnosticFingerprint(normalized))}'
+        '}';
+  }
+
+  String _diagnosticStringKind(String value) {
+    if (value.startsWith('[') && value.endsWith(' message]')) {
+      return 'delta-size-placeholder';
+    }
+    if (value.startsWith('Date: ') && value.contains(' Subject: ')) {
+      return 'forwarded-header';
+    }
+    if (value.startsWith('<') && value.endsWith('>')) {
+      return 'message-id';
+    }
+    return 'text';
+  }
+
+  String _diagnosticFingerprint(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
+  String _diagnosticValue(Object? value) {
+    if (value == null) {
+      return 'null';
+    }
+    if (value is num || value is bool) {
+      return value.toString();
+    }
+    if (value is DateTime) {
+      return jsonEncode(value.toIso8601String());
+    }
+    return jsonEncode(value.toString());
   }
 
   Future<void> _learnAutocryptContactKeyForIncomingMessage({
@@ -1653,6 +1921,13 @@ class DeltaEventConsumer {
             ? unknownLabel
             : updatedLabels.join(separator);
         _log.log(Level.FINE, 'Message update diff: $updateSummary');
+        _logEmailUpdateDiffDiagnostic(
+          updateSummary: updateSummary,
+          existing: existing,
+          next: next,
+          msg: msg,
+          updatedFields: updatedFields,
+        );
       }
       await db.updateMessage(next);
       if (updatedFields.contains(MessageDiffField.displayed) ||
@@ -1760,6 +2035,12 @@ class DeltaEventConsumer {
     if (!existing.isEmailBacked) {
       return;
     }
+    if (normalizeEmailMessageId(existing.originID) != null) {
+      return;
+    }
+    if (!_context.supportsMessageRfc724Mid) {
+      return;
+    }
     await _scheduleOriginIdHydration(msgId: msgId, accountId: accountId);
   }
 
@@ -1779,40 +2060,8 @@ class DeltaEventConsumer {
     if (existing == null) {
       return;
     }
-    final existingOrigin = existing.originID?.trim();
+    final existingOrigin = normalizeEmailMessageId(existing.originID);
     if (existingOrigin == nativeOriginId) {
-      return;
-    }
-    final duplicate = await _originMergeDuplicate(
-      db: db,
-      existing: existing,
-      originId: nativeOriginId,
-    );
-    if (duplicate != null) {
-      final primary = resolveOriginMergePrimary(
-        existing: existing,
-        duplicate: duplicate,
-        selfJid: _selfJid,
-      );
-      final primaryIsExisting = primary.stanzaID == existing.stanzaID;
-      final secondary = primaryIsExisting ? duplicate : existing;
-      final merged = mergeOriginMessages(
-        primary: primary,
-        duplicate: secondary,
-        originId: nativeOriginId,
-      );
-      await db.updateMessage(merged);
-      await db.deleteMessage(
-        secondary.stanzaID,
-        selfJid: _xmppSelfJid,
-        emailSelfJid: _selfJid,
-      );
-      await db.repairUnreadCountForChat(
-        primary.chatJid,
-        selfJid: _xmppSelfJid,
-        emailSelfJid: _selfJid,
-      );
-      await _refreshStoredChatSummary(chatJid: primary.chatJid, db: db);
       return;
     }
     final updated = existing.copyWith(originID: nativeOriginId);
@@ -1826,31 +2075,71 @@ class DeltaEventConsumer {
   }
 
   Future<String?> _resolveOriginId(int msgId) async {
-    final rfc724Mid = normalizeEmailMessageId(
-      await _context.getMessageRfc724Mid(msgId),
-    );
+    final nativeRfc724Supported = _context.supportsMessageRfc724Mid;
+    final nativeInfoSupported = _context.supportsMessageInfo;
+    String? rfc724Mid;
+    try {
+      rfc724Mid = normalizeEmailMessageId(
+        await _context.getMessageRfc724Mid(msgId),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to load Delta RFC724 Message-ID.', error, stackTrace);
+    }
     if (rfc724Mid != null) {
+      await _logOriginResolutionDiagnostic(
+        msgId: msgId,
+        source: 'rfc724_mid',
+        nativeRfc724Supported: nativeRfc724Supported,
+        nativeRfc724Mid: rfc724Mid,
+        nativeInfoSupported: nativeInfoSupported,
+        parsedInfoMessageId: null,
+        mimeHeaders: null,
+        parsedHeaderMessageId: null,
+      );
       return rfc724Mid;
     }
+    String? parsedInfoMessageId;
+    try {
+      final nativeInfo = await _context.getMessageInfo(msgId);
+      parsedInfoMessageId = parseDeltaMessageInfoMessageId(nativeInfo);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to load Delta message info.', error, stackTrace);
+    }
+    if (parsedInfoMessageId != null) {
+      await _logOriginResolutionDiagnostic(
+        msgId: msgId,
+        source: 'message_info',
+        nativeRfc724Supported: nativeRfc724Supported,
+        nativeRfc724Mid: rfc724Mid,
+        nativeInfoSupported: nativeInfoSupported,
+        parsedInfoMessageId: parsedInfoMessageId,
+        mimeHeaders: null,
+        parsedHeaderMessageId: null,
+      );
+      return parsedInfoMessageId;
+    }
     final headers = await _context.getMessageMimeHeaders(msgId);
-    return parseEmailMessageId(headers);
+    final parsedHeaderMessageId = parseEmailMessageId(headers);
+    await _logOriginResolutionDiagnostic(
+      msgId: msgId,
+      source: 'mime_headers',
+      nativeRfc724Supported: nativeRfc724Supported,
+      nativeRfc724Mid: rfc724Mid,
+      nativeInfoSupported: nativeInfoSupported,
+      parsedInfoMessageId: parsedInfoMessageId,
+      mimeHeaders: headers,
+      parsedHeaderMessageId: parsedHeaderMessageId,
+    );
+    return parsedHeaderMessageId;
   }
 
-  Future<Message?> _originMergeDuplicate({
-    required XmppDatabase db,
-    required Message existing,
-    required String originId,
-  }) async {
-    final candidates = await db.getMessagesByOriginID(
-      originId,
-      chatJid: existing.chatJid,
-    );
-    for (final candidate in candidates) {
-      if (canMergeOriginMessages(existing: existing, duplicate: candidate)) {
-        return candidate;
-      }
+  Future<String?> _resolveOriginIdForInitialStore(int msgId) async {
+    try {
+      return await _resolveOriginId(msgId);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to resolve Delta origin ID.', error, stackTrace);
+      return null;
     }
-    return null;
   }
 
   Future<void> _updateChatSummaryForIncomingMessage({
@@ -2169,23 +2458,88 @@ class DeltaEventConsumer {
       htmlBody: normalizedHtml,
       subject: sanitizedSubject,
     );
+    next = await _applyRfc822BodyContentForSplitMessage(
+      previous: message,
+      message: next,
+      msg: msg,
+    );
+    final metadataRawBody = next.hasRfc822BodyContent ? next.body : rawText;
+    final metadataRawHtml = next.hasRfc822BodyContent ? next.htmlBody : rawHtml;
+    final metadataNormalizedHtml = next.hasRfc822BodyContent
+        ? HtmlContentCodec.normalizeHtml(next.htmlBody)
+        : normalizedHtml;
     next = _applyForwardedMetadata(
       message: next,
-      rawBody: rawText,
-      normalizedHtml: normalizedHtml,
+      rawBody: metadataRawBody,
+      normalizedHtml: metadataNormalizedHtml,
       sanitizedSubject: sanitizedSubject,
     );
     next = await _applyShareMetadata(
       db: db,
       message: next,
-      rawBody: rawText,
-      rawHtml: rawHtml,
+      rawBody: metadataRawBody,
+      rawHtml: metadataRawHtml,
       chatId: chatId,
       msgId: msg.id,
       deltaAccountId: message.deltaAccountId,
     );
     next = await _attachFileMetadata(db: db, message: next, delta: msg);
     return next;
+  }
+
+  Future<Message> _applyRfc822BodyContentForSplitMessage({
+    required Message previous,
+    required Message message,
+    required DeltaMessage msg,
+  }) async {
+    if (msg.id <= _deltaMessageIdUnset) {
+      return _preserveExistingRfc822BodyContent(
+        previous: previous,
+        message: message,
+      );
+    }
+    final rfc822Body = await _context.getMessageRfc822Body(msg.id);
+    if (rfc822Body == null || !rfc822Body.hasBody) {
+      return _preserveExistingRfc822BodyContent(
+        previous: previous,
+        message: message,
+      );
+    }
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(rfc822Body.htmlBody);
+    final plainBody = clampMessageText(rfc822Body.plainText)?.trim();
+    final resolvedBody = plainBody?.isNotEmpty == true
+        ? plainBody!
+        : (normalizedHtml == null
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtml).trim());
+    if (resolvedBody.isEmpty && normalizedHtml == null) {
+      return _preserveExistingRfc822BodyContent(
+        previous: previous,
+        message: message,
+      );
+    }
+    return message.copyWith(
+      body: resolvedBody.isEmpty ? null : resolvedBody,
+      htmlBody: normalizedHtml,
+      pseudoMessageData: <String, dynamic>{
+        ...(message.pseudoMessageData ?? const <String, dynamic>{}),
+        'emailRfc822Body': true,
+      },
+    );
+  }
+
+  Message _preserveExistingRfc822BodyContent({
+    required Message previous,
+    required Message message,
+  }) {
+    if (!previous.hasRfc822BodyContent) {
+      return message;
+    }
+    return message.copyWith(
+      body: previous.body,
+      htmlBody: previous.htmlBody,
+      pseudoMessageData: previous.pseudoMessageData,
+    );
   }
 
   Message _applyForwardedMetadata({

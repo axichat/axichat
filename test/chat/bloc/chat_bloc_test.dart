@@ -8,6 +8,7 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
@@ -41,6 +42,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:mocktail/mocktail.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import '../../mocks.dart';
 
@@ -507,6 +509,15 @@ class _ChatBlocScopeHarness extends StatelessWidget {
   }
 }
 
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.temporaryPath);
+
+  final String temporaryPath;
+
+  @override
+  Future<String?> getTemporaryPath() async => temporaryPath;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -827,6 +838,11 @@ void main() {
         chatJid: any(named: 'chatJid'),
       ),
     ).thenAnswer((_) async => const <Message>[]);
+    when(() => messageService.loadEmailMessagesByRfcGroup(any())).thenAnswer((
+      invocation,
+    ) async {
+      return [invocation.positionalArguments.first as Message];
+    });
     when(
       () => messageService.pinnedMessagesStream(any()),
     ).thenAnswer((_) => const Stream<List<PinnedMessageAggregate>>.empty());
@@ -1669,6 +1685,128 @@ void main() {
   );
 
   test(
+    'keeps subject-only attachment group leader and textless attachment row',
+    () async {
+      final createdAt = DateTime.now();
+      final subjectBody = ChatSubjectCodec.composeXmppBody(
+        body: '',
+        subject: 'Trip photos',
+      );
+      final firstMessage = Message(
+        id: 'first-attachment-message',
+        stanzaID: 'first-attachment-stanza',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: subjectBody,
+        timestamp: createdAt,
+        fileMetadataID: 'file-1',
+      );
+      final secondMessage = Message(
+        id: 'second-attachment-message',
+        stanzaID: 'second-attachment-stanza',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        timestamp: createdAt.add(const Duration(seconds: 1)),
+        fileMetadataID: 'file-2',
+      );
+
+      when(
+        () => messageService.loadMessageAttachmentsForMessages(any()),
+      ).thenAnswer(
+        (_) async => const {
+          'first-attachment-message': [
+            MessageAttachmentData(
+              id: 1,
+              messageId: 'first-attachment-message',
+              fileMetadataId: 'file-1',
+              sortOrder: 0,
+              transportGroupId: 'attachment-group',
+            ),
+          ],
+          'second-attachment-message': [
+            MessageAttachmentData(
+              id: 2,
+              messageId: 'second-attachment-message',
+              fileMetadataId: 'file-2',
+              sortOrder: 1,
+              transportGroupId: 'attachment-group',
+            ),
+          ],
+        },
+      );
+      when(() => messageService.loadFileMetadata(any())).thenAnswer((
+        invocation,
+      ) async {
+        final metadataId = invocation.positionalArguments.first as String;
+        return switch (metadataId) {
+          'file-1' => const FileMetadataData(
+            id: 'file-1',
+            filename: 'first.png',
+            sizeBytes: 1024,
+          ),
+          'file-2' => const FileMetadataData(
+            id: 'file-2',
+            filename: 'second.png',
+            sizeBytes: 2048,
+          ),
+          _ => null,
+        };
+      });
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      messageStreamController.add(<Message>[secondMessage, firstMessage]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(
+        bloc.state.attachmentMetadataIdsByMessageId['first-attachment-message'],
+        ['file-1', 'file-2'],
+      );
+      expect(
+        bloc.state.attachmentMetadataIdsByMessageId.containsKey(
+          'second-attachment-message',
+        ),
+        isFalse,
+      );
+      expect(
+        bloc.state.attachmentGroupLeaderByMessageId['first-attachment-message'],
+        'first-attachment-message',
+      );
+      expect(
+        bloc
+            .state
+            .attachmentGroupLeaderByMessageId['second-attachment-message'],
+        'first-attachment-message',
+      );
+      expect(
+        bloc.state.items
+            .singleWhere((message) => message.id == 'first-attachment-message')
+            .body,
+        subjectBody,
+      );
+      expect(
+        bloc.state.items
+            .singleWhere((message) => message.id == 'second-attachment-message')
+            .body,
+        isNull,
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'clears file metadata subscription when message window becomes empty',
     () async {
       final metadataController =
@@ -2268,6 +2406,313 @@ void main() {
     await bloc.close();
   });
 
+  test('calendar task email share sends an ICS attachment', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'chat-task-email-share',
+    );
+    final previousPathProvider = PathProviderPlatform.instance;
+    addTearDown(() => tempDir.delete(recursive: true));
+    addTearDown(() => PathProviderPlatform.instance = previousPathProvider);
+    PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 1,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+    );
+    final task = CalendarTask(
+      id: 'email-task-share',
+      title: 'Review launch plan',
+      createdAt: DateTime.utc(2026, 3, 11, 8),
+      modifiedAt: DateTime.utc(2026, 3, 11, 9),
+    );
+    final sendEventCompleter = Completer<List<PendingAttachment>>();
+    when(
+      () => emailService.sendAttachment(
+        chat: emailChat,
+        attachment: any(named: 'attachment'),
+        subject: null,
+        htmlCaption: null,
+        quotedDraft: null,
+      ),
+    ).thenAnswer((_) async => 1);
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    messageStreamController.add(const <Message>[]);
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+
+    final recipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
+      ),
+    ];
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: '',
+        recipients: recipients,
+        settings: _defaultChatSettings(),
+        calendarTaskIcs: task,
+        calendarTaskShareText: 'Review launch plan',
+        completer: sendEventCompleter,
+      ),
+    );
+
+    expect(await sendEventCompleter.future, isEmpty);
+    verify(
+      () => emailService.sendAttachment(
+        chat: emailChat,
+        attachment: any(
+          named: 'attachment',
+          that: isA<Attachment>()
+              .having(
+                (attachment) => attachment.mimeType,
+                'mimeType',
+                'text/calendar',
+              )
+              .having(
+                (attachment) => attachment.fileName,
+                'fileName',
+                endsWith('.ics'),
+              )
+              .having(
+                (attachment) => attachment.caption,
+                'caption',
+                'Review launch plan',
+              ),
+        ),
+        subject: null,
+        htmlCaption: null,
+        quotedDraft: null,
+      ),
+    ).called(1);
+
+    await bloc.close();
+  });
+
+  test(
+    'calendar task share to unsupported XMPP sends an ICS attachment',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'chat-task-xmpp-ics-share',
+      );
+      final previousPathProvider = PathProviderPlatform.instance;
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => PathProviderPlatform.instance = previousPathProvider);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
+      final foreignChat = Chat(
+        jid: 'peer@conversations.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2026, 3, 11),
+      );
+      final task = CalendarTask(
+        id: 'foreign-xmpp-task-share',
+        title: 'Review launch plan',
+        createdAt: DateTime.utc(2026, 3, 11, 8),
+        modifiedAt: DateTime.utc(2026, 3, 11, 9),
+      );
+      final sendEventCompleter = Completer<List<PendingAttachment>>();
+      final bloc = ChatBloc(
+        jid: foreignChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(foreignChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        _messageSent(
+          chat: foreignChat,
+          text: '',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(
+                chat: foreignChat,
+                shareSignatureEnabled: true,
+              ),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+          supportsHttpFileUpload: true,
+          calendarTaskIcs: task,
+          completer: sendEventCompleter,
+        ),
+      );
+
+      expect(await sendEventCompleter.future, isEmpty);
+      verify(
+        () => messageService.sendAttachment(
+          jid: foreignChat.jid,
+          attachment: any(
+            named: 'attachment',
+            that: isA<Attachment>()
+                .having(
+                  (attachment) => attachment.mimeType,
+                  'mimeType',
+                  'text/calendar',
+                )
+                .having(
+                  (attachment) => attachment.fileName,
+                  'fileName',
+                  endsWith('.ics'),
+                )
+                .having(
+                  (attachment) => attachment.caption,
+                  'caption',
+                  'Review launch plan',
+                ),
+          ),
+          encryptionProtocol: EncryptionProtocol.none,
+          htmlCaption: null,
+          forwarded: false,
+          forwardedFromJid: null,
+          forwardedOriginalSenderLabel: null,
+          transportGroupId: null,
+          attachmentOrder: 0,
+          quotedMessage: null,
+          quotedReference: null,
+          groupQuotedReference: null,
+          chatType: ChatType.chat,
+          upload: null,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendMessage(
+          jid: foreignChat.jid,
+          text: any(named: 'text'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: any(named: 'chatType'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'calendar task share to read-only calendar chat falls back to ICS',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'chat-task-read-only-ics-share',
+      );
+      final previousPathProvider = PathProviderPlatform.instance;
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => PathProviderPlatform.instance = previousPathProvider);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
+      final roomChat = Chat(
+        jid: 'room@conference.axi.im',
+        title: 'Room',
+        type: ChatType.groupChat,
+        lastChangeTimestamp: DateTime.utc(2026, 3, 11),
+      );
+      final roomState = RoomState(roomJid: roomChat.jid);
+      final task = CalendarTask(
+        id: 'read-only-room-task-share',
+        title: 'Room launch plan',
+        createdAt: DateTime.utc(2026, 3, 11, 8),
+        modifiedAt: DateTime.utc(2026, 3, 11, 9),
+      );
+      final sendEventCompleter = Completer<List<PendingAttachment>>();
+      final bloc = ChatBloc(
+        jid: roomChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(roomChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        _messageSent(
+          chat: roomChat,
+          text: '',
+          recipients: [
+            ComposerRecipient(
+              target: Contact.chat(chat: roomChat, shareSignatureEnabled: true),
+            ),
+          ],
+          roomState: roomState,
+          settings: _defaultChatSettings(),
+          supportsHttpFileUpload: true,
+          calendarTaskIcs: task,
+          completer: sendEventCompleter,
+        ),
+      );
+
+      expect(await sendEventCompleter.future, isEmpty);
+      verify(
+        () => messageService.sendAttachment(
+          jid: roomChat.jid,
+          attachment: any(
+            named: 'attachment',
+            that: isA<Attachment>()
+                .having(
+                  (attachment) => attachment.mimeType,
+                  'mimeType',
+                  'text/calendar',
+                )
+                .having(
+                  (attachment) => attachment.caption,
+                  'caption',
+                  'Room launch plan',
+                ),
+          ),
+          encryptionProtocol: EncryptionProtocol.none,
+          htmlCaption: null,
+          forwarded: false,
+          forwardedFromJid: null,
+          forwardedOriginalSenderLabel: null,
+          transportGroupId: null,
+          attachmentOrder: 0,
+          quotedMessage: null,
+          quotedReference: null,
+          groupQuotedReference: null,
+          chatType: ChatType.groupChat,
+          upload: null,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.sendMessage(
+          jid: roomChat.jid,
+          text: any(named: 'text'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: any(named: 'chatType'),
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
   test('failed attachment can be retried', () async {
     final emailService = MockEmailService();
     _mockEmailSync(emailService);
@@ -2524,6 +2969,359 @@ void main() {
 
     await bloc.close();
   });
+
+  test(
+    'split RFC email actions resolve the same target from every bubble',
+    () async {
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 1,
+        emailAddress: initialChat.jid,
+        transport: MessageTransport.email,
+      );
+      final emailTimestamp = DateTime.utc(2024, 1, 1, 12);
+      final messages = [
+        Message(
+          stanzaID: 'attachment-two',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-two',
+          deltaChatId: 1,
+          deltaMsgId: 13,
+        ),
+        Message(
+          stanzaID: 'body-bottom',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Original forwarded text',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          deltaChatId: 1,
+          deltaMsgId: 12,
+        ),
+        Message(
+          stanzaID: 'attachment-one',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-one',
+          deltaChatId: 1,
+          deltaMsgId: 11,
+        ),
+        Message(
+          stanzaID: 'body-top',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Reply text',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          deltaChatId: 1,
+          deltaMsgId: 10,
+        ),
+      ];
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      messageStreamController.add(messages);
+      await _pumpBloc();
+
+      for (final stanzaId in const [
+        'body-top',
+        'attachment-one',
+        'attachment-two',
+      ]) {
+        final pressed = bloc.state.items.singleWhere(
+          (message) => message.stanzaID == stanzaId,
+        );
+        final replyTarget = bloc.resolveReplyTargetForMessage(pressed);
+
+        expect(replyTarget.stanzaID, 'body-top');
+        expect(replyTarget.body, 'Reply text\n\nOriginal forwarded text');
+        expect(replyTarget.fileMetadataID, isNull);
+
+        bloc.add(ChatMessageForwardRequested(message: pressed));
+        await _pumpBloc();
+
+        final draft = bloc.state.pendingForwardDraft;
+        expect(draft, isNotNull);
+        expect(draft!.attachmentMetadataIds, ['file-one', 'file-two']);
+        expect(draft.sources.single.sourceMessageId, 'body-top');
+        expect(
+          draft.sources.single.originalPlainTextBody,
+          'Reply text\n\nOriginal forwarded text',
+        );
+        expect(draft.sources.single.attachmentMetadataIds, [
+          'file-one',
+          'file-two',
+        ]);
+
+        bloc.add(const ChatForwardDraftConsumed());
+        await _pumpBloc();
+      }
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'split RFC email reply clears file when body is on attachment row',
+    () async {
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 1,
+        emailAddress: initialChat.jid,
+        transport: MessageTransport.email,
+      );
+      final emailTimestamp = DateTime.utc(2024, 1, 1, 12);
+      final messages = [
+        Message(
+          stanzaID: 'forwarded-header',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          subject: 'FWD: Photos',
+          body:
+              'Date: Jan 1, 2024\n'
+              'From: Alice <alice@example.com>\n'
+              'To: Me <me@example.com>\n'
+              'Subject: Photos',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          deltaChatId: 1,
+          deltaMsgId: 10,
+        ),
+        Message(
+          stanzaID: 'attachment-one',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          subject: 'FWD: Photos',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-one',
+          deltaChatId: 1,
+          deltaMsgId: 11,
+        ),
+        Message(
+          stanzaID: 'attachment-two',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          subject: 'FWD: Photos',
+          body: 'Real email body',
+          htmlBody: '<p>Real email body</p>',
+          pseudoMessageData: const {'emailRfc822Body': true},
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-two',
+          deltaChatId: 1,
+          deltaMsgId: 12,
+        ),
+      ];
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      messageStreamController.add(messages);
+      await _pumpBloc();
+
+      final attachment = bloc.state.items.singleWhere(
+        (message) => message.stanzaID == 'attachment-two',
+      );
+      final replyTarget = bloc.resolveReplyTargetForMessage(attachment);
+
+      expect(replyTarget.stanzaID, 'attachment-two');
+      expect(replyTarget.body, 'Real email body');
+      expect(replyTarget.htmlBody, '<p>Real email body</p>');
+      expect(replyTarget.fileMetadataID, isNull);
+
+      bloc.add(ChatMessageForwardRequested(message: attachment));
+      await _pumpBloc();
+
+      final draft = bloc.state.pendingForwardDraft;
+      expect(draft, isNotNull);
+      expect(draft!.attachmentMetadataIds, ['file-one', 'file-two']);
+      expect(draft.sources.single.originalPlainTextBody, 'Real email body');
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'split RFC email reply and forward suppress duplicate body fragments',
+    () async {
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 1,
+        emailAddress: initialChat.jid,
+        transport: MessageTransport.email,
+      );
+      final emailTimestamp = DateTime.utc(2024, 1, 1, 12);
+      final messages = [
+        Message(
+          stanzaID: 'attachment-two',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Reply text',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-two',
+          deltaChatId: 1,
+          deltaMsgId: 13,
+        ),
+        Message(
+          stanzaID: 'duplicate-body',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Reply text',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          deltaChatId: 1,
+          deltaMsgId: 12,
+        ),
+        Message(
+          stanzaID: 'attachment-one',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Reply text',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-one',
+          deltaChatId: 1,
+          deltaMsgId: 11,
+        ),
+        Message(
+          stanzaID: 'body-top',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Reply text',
+          originID: '<message@example.com>',
+          timestamp: emailTimestamp,
+          deltaChatId: 1,
+          deltaMsgId: 10,
+        ),
+      ];
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      messageStreamController.add(messages);
+      await _pumpBloc();
+
+      final attachment = bloc.state.items.singleWhere(
+        (message) => message.stanzaID == 'attachment-two',
+      );
+      final replyTarget = bloc.resolveReplyTargetForMessage(attachment);
+
+      expect(replyTarget.stanzaID, 'body-top');
+      expect(replyTarget.body, 'Reply text');
+      expect(replyTarget.fileMetadataID, isNull);
+
+      bloc.add(ChatMessageForwardRequested(message: attachment));
+      await _pumpBloc();
+
+      final draft = bloc.state.pendingForwardDraft;
+      expect(draft, isNotNull);
+      expect(draft!.attachmentMetadataIds, ['file-one', 'file-two']);
+      expect(draft.sources.single.sourceMessageId, 'body-top');
+      expect(draft.sources.single.originalPlainTextBody, 'Reply text');
+      expect(draft.sources.single.attachmentMetadataIds, [
+        'file-one',
+        'file-two',
+      ]);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'attachment-only RFC email forward includes every sibling file',
+    () async {
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 1,
+        emailAddress: initialChat.jid,
+        transport: MessageTransport.email,
+      );
+      final emailTimestamp = DateTime.utc(2024, 1, 1, 12);
+      final messages = [
+        Message(
+          stanzaID: 'attachment-two-only',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          originID: '<attachment-only@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-two',
+          deltaChatId: 1,
+          deltaMsgId: 22,
+        ),
+        Message(
+          stanzaID: 'attachment-one-only',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          originID: '<attachment-only@example.com>',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'file-one',
+          deltaChatId: 1,
+          deltaMsgId: 21,
+        ),
+      ];
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      messageStreamController.add(messages);
+      await _pumpBloc();
+
+      final attachment = bloc.state.items.singleWhere(
+        (message) => message.stanzaID == 'attachment-two-only',
+      );
+
+      bloc.add(ChatMessageForwardRequested(message: attachment));
+      await _pumpBloc();
+
+      final draft = bloc.state.pendingForwardDraft;
+      expect(draft, isNotNull);
+      expect(draft!.attachmentMetadataIds, ['file-one', 'file-two']);
+      expect(draft.sources.single.sourceMessageId, 'attachment-one-only');
+      expect(draft.sources.single.originalPlainTextBody, isEmpty);
+      expect(draft.sources.single.attachmentMetadataIds, [
+        'file-one',
+        'file-two',
+      ]);
+
+      await bloc.close();
+    },
+  );
 
   test('sending supports a raw XMPP address target', () async {
     when(
@@ -4147,6 +4945,75 @@ void main() {
       await pinnedController.close();
     },
   );
+
+  test('opening pinned messages marks composer notice seen', () async {
+    final pinnedController =
+        StreamController<List<PinnedMessageAggregate>>.broadcast();
+    final pinnedAt = DateTime(2026, 5, 26, 12);
+    const pinnedMessage = Message(
+      stanzaID: 'viewed-panel-pin',
+      senderJid: 'peer@axi.im',
+      chatJid: 'peer@axi.im',
+      body: 'viewed pin',
+    );
+    when(
+      () => messageService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => pinnedController.stream);
+    when(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async => const [pinnedMessage]);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    pinnedController.add([
+      _pinnedAggregate(
+        messageStanzaId: pinnedMessage.stanzaID,
+        chatJid: initialChat.remoteJid,
+        pinnedAt: pinnedAt,
+        pinnedBySelf: false,
+      ),
+    ]);
+    await untilCalled(
+      () => messageService.loadMessagesByReferenceIds(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    );
+    await _pumpBloc();
+
+    expect(bloc.state.showPinnedMessageBanner, isTrue);
+
+    bloc.add(const ChatPinnedMessagesOpened());
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.lastSeenPinnedMessageAt, pinnedAt);
+    expect(bloc.state.showPinnedMessageBanner, isFalse);
+    verify(
+      () => messageService.saveLastSeenPinnedMessageAt(
+        chatJid: initialChat.remoteJid,
+        seenAt: pinnedAt,
+      ),
+    ).called(1);
+
+    await bloc.close();
+    await pinnedController.close();
+  });
 
   test('new pinned message shows composer notice until hidden', () async {
     final pinnedController =

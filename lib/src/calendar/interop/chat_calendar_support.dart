@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_eligibility.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
@@ -18,8 +19,10 @@ class CalendarChatSupport {
   CalendarFragmentShareDecision decisionForChat({
     required Chat? chat,
     RoomState? roomState,
+    String? accountJid,
   }) {
-    if (chat == null || !chat.supportsChatCalendar) {
+    if (chat == null ||
+        !chat.supportsChatCalendarForAccount(accountJid: accountJid)) {
       return const CalendarFragmentShareDecision(canWrite: false);
     }
     if (chat.type != ChatType.groupChat) {
@@ -36,4 +39,14 @@ class CalendarChatSupport {
 
 extension ChatCalendarSupportX on Chat {
   bool get supportsChatCalendar => defaultTransport.isXmpp;
+
+  bool supportsChatCalendarForAccount({required String? accountJid}) {
+    if (!supportsChatCalendar) {
+      return false;
+    }
+    return isCalendarSyncTargetAllowed(
+      accountJid: accountJid,
+      targetJid: remoteJid,
+    );
+  }
 }

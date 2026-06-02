@@ -136,7 +136,9 @@ Future<void> main(List<String> args) async {
       isRelease: isRelease,
     );
 
-    output.dependencies.add(crateDir.resolve('Cargo.toml'));
+    for (final dependency in await _rustBuildDependencyUris(crateDir)) {
+      output.dependencies.add(dependency);
+    }
 
     output.assets.code.add(
       CodeAsset(
@@ -147,6 +149,31 @@ Future<void> main(List<String> args) async {
       ),
     );
   });
+}
+
+Future<List<Uri>> _rustBuildDependencyUris(Uri crateDir) async {
+  final dependencies = <Uri>[];
+  for (final uri in [
+    crateDir.resolve('Cargo.toml'),
+    crateDir.resolve('Cargo.lock'),
+    crateDir.resolve('.cargo/config.toml'),
+  ]) {
+    if (await File.fromUri(uri).exists()) {
+      dependencies.add(uri);
+    }
+  }
+  final sourceDirectory = Directory.fromUri(crateDir.resolve('src/'));
+  if (await sourceDirectory.exists()) {
+    await for (final entity in sourceDirectory.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is File) {
+        dependencies.add(entity.uri);
+      }
+    }
+  }
+  return dependencies;
 }
 
 Future<void> _stripBundledLinuxReleaseArtifactIfNeeded({

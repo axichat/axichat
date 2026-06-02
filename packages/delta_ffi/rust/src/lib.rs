@@ -17,12 +17,13 @@ use deltachat_core::key::{DcKey, SignedPublicKey, SignedSecretKey};
 use deltachat_core::message::MsgId;
 use deltachat_core::sql;
 use deltachat_core::EventType;
+use mailparse::{parse_mail, DispositionType, ParsedMail};
 use pgp::types::PublicKeyTrait;
 use serde_json::json;
 use tokio::runtime::Runtime;
 use tokio::sync::Notify;
 
-const MIME_HEADERS_QUERY: &str = "SELECT mime_headers, mime_compressed FROM msgs WHERE id=?";
+const STORED_MIME_QUERY: &str = "SELECT mime_headers, mime_compressed FROM msgs WHERE id=?";
 const RFC724_MID_QUERY: &str = "SELECT rfc724_mid FROM msgs WHERE id=?";
 const RFC724_MID_MESSAGE_IDS_QUERY: &str = r#"
 SELECT related.id
@@ -36,8 +37,25 @@ WHERE source.id = ?
   AND related.hidden = 0
 ORDER BY related.timestamp ASC, related.id ASC
 "#;
-const MIME_HEADERS_COLUMN_HEADERS: usize = 0;
-const MIME_HEADERS_COLUMN_COMPRESSED: usize = 1;
+const MSG_DEBUG_INFO_QUERY: &str = r#"
+SELECT id, rfc724_mid, server_folder, server_uid, chat_id, from_id, to_id,
+       timestamp, type, state, msgrmsg, bytes, hidden,
+       COALESCE(download_state, -1), COALESCE(mime_compressed, 0),
+       COALESCE(LENGTH(txt), 0), COALESCE(LENGTH(subject), 0),
+       COALESCE(LENGTH(param), 0),
+       CASE WHEN mime_headers IS NULL THEN 0 ELSE LENGTH(mime_headers) END,
+       mime_in_reply_to, mime_references
+FROM msgs
+WHERE id=?
+"#;
+const IMAP_MATCH_COUNT_QUERY: &str = r#"
+SELECT COUNT(*)
+FROM imap
+WHERE rfc724_mid = (SELECT rfc724_mid FROM msgs WHERE id=?)
+  AND rfc724_mid != ''
+"#;
+const STORED_MIME_COLUMN_BYTES: usize = 0;
+const STORED_MIME_COLUMN_COMPRESSED: usize = 1;
 const BROTLI_BUFFER_SIZE: usize = 4096;
 const NULL_BYTE: u8 = 0;
 const AXICHAT_OPENPGP_KEY_KIND_PUBLIC: i32 = 1;
@@ -95,22 +113,22 @@ impl Drop for _ActiveBackgroundFetchGuard {
     }
 }
 
-fn _read_mime_headers(context: &Context, msg_id: MsgId) -> Option<Vec<u8>> {
+fn _read_stored_mime(context: &Context, msg_id: MsgId) -> Option<Vec<u8>> {
     let query = context.sql();
-    let fetched = _block_on(query.query_row(MIME_HEADERS_QUERY, (msg_id,), |row| {
-        let headers = sql::row_get_vec(row, MIME_HEADERS_COLUMN_HEADERS)?;
-        let compressed: Option<bool> = row.get(MIME_HEADERS_COLUMN_COMPRESSED)?;
-        Ok((headers, compressed.unwrap_or(false)))
+    let fetched = _block_on(query.query_row(STORED_MIME_QUERY, (msg_id,), |row| {
+        let bytes = sql::row_get_vec(row, STORED_MIME_COLUMN_BYTES)?;
+        let compressed: Option<bool> = row.get(STORED_MIME_COLUMN_COMPRESSED)?;
+        Ok((bytes, compressed.unwrap_or(false)))
     }))
     .ok()?;
-    let (headers, compressed) = fetched;
-    if headers.is_empty() {
+    let (bytes, compressed) = fetched;
+    if bytes.is_empty() {
         return None;
     }
     if !compressed {
-        return Some(headers);
+        return Some(bytes);
     }
-    _decompress_headers(&headers)
+    _decompress_stored_mime(&bytes)
 }
 
 fn _read_msg_rfc724_mid(context: &Context, msg_id: MsgId) -> Option<String> {
@@ -135,7 +153,183 @@ fn _read_msg_ids_by_rfc724_mid(context: &Context, msg_id: MsgId) -> Vec<u32> {
     .unwrap_or_default()
 }
 
-fn _decompress_headers(compressed: &[u8]) -> Option<Vec<u8>> {
+fn _read_msg_debug_info(context: &Context, msg_id: MsgId) -> String {
+    let related_ids = _read_msg_ids_by_rfc724_mid(context, msg_id);
+    let imap_match_count: i64 = _block_on(
+        context
+            .sql()
+            .query_get_value(IMAP_MATCH_COUNT_QUERY, (msg_id,)),
+    )
+    .ok()
+    .flatten()
+    .unwrap_or_default();
+    _block_on(
+        context
+            .sql()
+            .query_row(MSG_DEBUG_INFO_QUERY, (msg_id,), |row| {
+                let rfc724_mid: String = row.get(1)?;
+                let server_folder: String = row.get(2)?;
+                let mime_in_reply_to: Option<String> = row.get(19)?;
+                let mime_references: Option<String> = row.get(20)?;
+                Ok(json!({
+                    "ok": true,
+                    "id": row.get::<_, i64>(0)?,
+                    "rfc724Mid": _debug_string_stats(&rfc724_mid),
+                    "serverFolder": _debug_string_stats(&server_folder),
+                    "serverUid": row.get::<_, i64>(3)?,
+                    "chatId": row.get::<_, i64>(4)?,
+                    "fromId": row.get::<_, i64>(5)?,
+                    "toId": row.get::<_, i64>(6)?,
+                    "timestamp": row.get::<_, i64>(7)?,
+                    "type": row.get::<_, i64>(8)?,
+                    "state": row.get::<_, i64>(9)?,
+                    "msgrmsg": row.get::<_, i64>(10)?,
+                    "bytes": row.get::<_, i64>(11)?,
+                    "hidden": row.get::<_, i64>(12)?,
+                    "downloadState": row.get::<_, i64>(13)?,
+                    "mimeCompressed": row.get::<_, i64>(14)?,
+                    "txtLength": row.get::<_, i64>(15)?,
+                    "subjectLength": row.get::<_, i64>(16)?,
+                    "paramLength": row.get::<_, i64>(17)?,
+                    "mimeHeadersLength": row.get::<_, i64>(18)?,
+                    "mimeInReplyTo": _debug_optional_string_stats(mime_in_reply_to.as_deref()),
+                    "mimeReferences": _debug_optional_string_stats(mime_references.as_deref()),
+                    "relatedByRfc724Mid": related_ids,
+                    "imapMatchCount": imap_match_count,
+                })
+                .to_string())
+            }),
+    )
+    .unwrap_or_else(|error| {
+        json!({
+            "ok": false,
+            "id": msg_id.to_u32(),
+            "error": error.to_string(),
+        })
+        .to_string()
+    })
+}
+
+#[derive(Default)]
+struct _Rfc822BodyParts {
+    plain_text: Option<String>,
+    html_body: Option<String>,
+}
+
+impl _Rfc822BodyParts {
+    fn is_empty(&self) -> bool {
+        self.plain_text.is_none() && self.html_body.is_none()
+    }
+
+    fn is_complete(&self) -> bool {
+        self.plain_text.is_some() && self.html_body.is_some()
+    }
+}
+
+fn _read_msg_rfc822_body_json(context: &Context, msg_id: MsgId) -> String {
+    let Some(raw_mime) = _read_stored_mime(context, msg_id) else {
+        return json!({
+            "ok": false,
+            "reason": "missing_mime",
+        })
+        .to_string();
+    };
+    _rfc822_body_json_from_raw_mime(&raw_mime)
+}
+
+fn _rfc822_body_json_from_raw_mime(raw_mime: &[u8]) -> String {
+    let mail = match parse_mail(&raw_mime) {
+        Ok(mail) => mail,
+        Err(error) => {
+            return json!({
+                "ok": false,
+                "reason": "parse_failed",
+                "error": error.to_string(),
+            })
+            .to_string();
+        }
+    };
+    let mut parts = _Rfc822BodyParts::default();
+    _collect_rfc822_body_parts(&mail, &mut parts);
+    json!({
+        "ok": !parts.is_empty(),
+        "reason": if parts.is_empty() { Some("missing_body") } else { None },
+        "plainText": parts.plain_text,
+        "htmlBody": parts.html_body,
+    })
+    .to_string()
+}
+
+fn _collect_rfc822_body_parts(mail: &ParsedMail<'_>, parts: &mut _Rfc822BodyParts) {
+    if parts.is_complete() {
+        return;
+    }
+    let mimetype = mail.ctype.mimetype.to_ascii_lowercase();
+    if mail.get_content_disposition().disposition == DispositionType::Attachment {
+        return;
+    }
+    if mimetype == "message/rfc822" {
+        if let Ok(raw_body) = mail.get_body_raw() {
+            if let Ok(nested) = parse_mail(&raw_body) {
+                _collect_rfc822_body_parts(&nested, parts);
+            }
+        }
+        return;
+    }
+    if !mail.subparts.is_empty() {
+        for subpart in &mail.subparts {
+            _collect_rfc822_body_parts(subpart, parts);
+            if parts.is_complete() {
+                return;
+            }
+        }
+        return;
+    }
+    if mimetype == "text/plain" && parts.plain_text.is_none() {
+        parts.plain_text = mail.get_body().ok().and_then(_clean_rfc822_body_part);
+        return;
+    }
+    if mimetype == "text/html" && parts.html_body.is_none() {
+        parts.html_body = mail.get_body().ok().and_then(_clean_rfc822_body_part);
+    }
+}
+
+fn _clean_rfc822_body_part(value: String) -> Option<String> {
+    let cleaned = value.replace('\0', "").trim().to_string();
+    if cleaned.is_empty() {
+        return None;
+    }
+    Some(cleaned)
+}
+
+fn _debug_optional_string_stats(value: Option<&str>) -> serde_json::Value {
+    match value {
+        Some(value) => _debug_string_stats(value),
+        None => serde_json::Value::Null,
+    }
+}
+
+fn _debug_string_stats(value: &str) -> serde_json::Value {
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return serde_json::Value::Null;
+    }
+    json!({
+        "len": normalized.len(),
+        "hash": _debug_fingerprint(&normalized),
+    })
+}
+
+fn _debug_fingerprint(value: &str) -> String {
+    let mut hash: u32 = 0x811c9dc5;
+    for byte in value.as_bytes() {
+        hash ^= u32::from(*byte);
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    format!("{hash:08x}")
+}
+
+fn _decompress_stored_mime(compressed: &[u8]) -> Option<Vec<u8>> {
     if compressed.is_empty() {
         return None;
     }
@@ -624,7 +818,7 @@ pub unsafe extern "C" fn dc_get_msg_mime_headers(
         return ptr::null_mut();
     }
     let ctx = &*context;
-    let headers = match _read_mime_headers(ctx, MsgId::new(msg_id)) {
+    let headers = match _read_stored_mime(ctx, MsgId::new(msg_id)) {
         Some(headers) => headers,
         None => return ptr::null_mut(),
     };
@@ -657,6 +851,30 @@ pub unsafe extern "C" fn axichat_dc_get_msg_ids_by_rfc724_mid(
     let ctx = &*context;
     let ids = _read_msg_ids_by_rfc724_mid(ctx, MsgId::new(msg_id));
     _string_to_c(serde_json::to_string(&ids).unwrap_or_else(|_| "[]".to_string()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_get_msg_debug_info(
+    context: *mut dc_context_t,
+    msg_id: u32,
+) -> *mut c_char {
+    if context.is_null() {
+        return _string_to_c(_json_error("missing_context"));
+    }
+    let ctx = &*context;
+    _string_to_c(_read_msg_debug_info(ctx, MsgId::new(msg_id)))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_get_msg_rfc822_body(
+    context: *mut dc_context_t,
+    msg_id: u32,
+) -> *mut c_char {
+    if context.is_null() || msg_id == 0 {
+        return ptr::null_mut();
+    }
+    let ctx = &*(context as *mut Context);
+    _string_to_c(_read_msg_rfc822_body_json(ctx, MsgId::new(msg_id)))
 }
 
 #[no_mangle]
@@ -779,12 +997,183 @@ pub unsafe extern "C" fn axichat_dc_accounts_stop_background_fetch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deltachat_core::context::ContextBuilder;
+    use serde_json::Value;
+    use std::path::PathBuf;
 
     fn unique_accounts_key() -> usize {
         static NEXT_KEY: LazyLock<Mutex<usize>> = LazyLock::new(|| Mutex::new(1000));
         let mut key = NEXT_KEY.lock().expect("test key registry poisoned");
         *key += 1;
         *key
+    }
+
+    fn unique_db_path(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "axichat-delta-ffi-{name}-{}-{}",
+            std::process::id(),
+            unique_accounts_key()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test database directory");
+        dir.join("db.sqlite")
+    }
+
+    fn decode_rfc822_body_json(raw: String) -> Value {
+        serde_json::from_str(&raw).expect("valid RFC822 body JSON")
+    }
+
+    #[test]
+    fn rfc822_body_parser_extracts_full_multipart_mime() {
+        let raw_mime = br#"From: alice@example.org
+To: bob@example.org
+Subject: Multipart
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset=utf-8
+
+Plain body.
+
+--alt
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>HTML body.</p></body></html>
+
+--alt--
+--outer
+Content-Type: text/plain
+Content-Disposition: attachment; filename="notes.txt"
+
+Attachment body.
+--outer--
+"#;
+
+        let decoded = decode_rfc822_body_json(_rfc822_body_json_from_raw_mime(raw_mime));
+
+        assert_eq!(decoded["ok"], true);
+        assert_eq!(decoded["plainText"], "Plain body.");
+        assert_eq!(
+            decoded["htmlBody"],
+            "<html><body><p>HTML body.</p></body></html>"
+        );
+    }
+
+    #[test]
+    fn rfc822_body_parser_reports_header_only_values() {
+        let raw_mime = br#"From: alice@example.org
+To: bob@example.org
+Subject: Header only
+MIME-Version: 1.0
+"#;
+
+        let decoded = decode_rfc822_body_json(_rfc822_body_json_from_raw_mime(raw_mime));
+
+        assert_eq!(decoded["ok"], false);
+        assert_eq!(decoded["reason"], "missing_body");
+    }
+
+    #[test]
+    fn rfc822_body_parser_ignores_attached_message_rfc822_body() {
+        let raw_mime = br#"From: alice@example.org
+To: bob@example.org
+Subject: Attached EML
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="forwarded.eml"
+
+From: carol@example.org
+To: dave@example.org
+Subject: Nested
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Nested attachment body.
+
+--outer--
+"#;
+
+        let decoded = decode_rfc822_body_json(_rfc822_body_json_from_raw_mime(raw_mime));
+
+        assert_eq!(decoded["ok"], false);
+        assert_eq!(decoded["reason"], "missing_body");
+    }
+
+    #[test]
+    fn rfc822_body_reader_parses_delta_stored_mime_blob() {
+        let db_path = unique_db_path("stored-mime");
+        let db_dir = db_path
+            .parent()
+            .expect("test database path has a parent")
+            .to_path_buf();
+        let raw_mime = br#"From: alice@example.org
+To: bob@example.org
+Subject: Stored MIME
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/plain; charset=utf-8
+
+Stored plain body.
+
+--alt
+Content-Type: text/html; charset=utf-8
+
+<p>Stored HTML body.</p>
+
+--alt--
+"#;
+
+        let context = _block_on(async {
+            let context = ContextBuilder::new(db_path)
+                .open()
+                .await
+                .expect("open test Delta context");
+            context
+                .sql()
+                .execute(
+                    "INSERT INTO msgs (
+                        id, rfc724_mid, chat_id, from_id, to_id, timestamp,
+                        timestamp_sent, timestamp_rcvd, type, state, msgrmsg,
+                        txt, subject, mime_headers, mime_compressed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        9001,
+                        "stored-mime@example.org",
+                        1,
+                        1,
+                        2,
+                        1,
+                        1,
+                        1,
+                        20,
+                        10,
+                        2,
+                        "",
+                        "Stored MIME",
+                        raw_mime.as_slice(),
+                        false,
+                    ),
+                )
+                .await
+                .expect("insert stored MIME message");
+            context
+        });
+        let decoded =
+            decode_rfc822_body_json(_read_msg_rfc822_body_json(&context, MsgId::new(9001)));
+        drop(context);
+        std::fs::remove_dir_all(db_dir).expect("remove test database directory");
+
+        assert_eq!(decoded["ok"], true);
+        assert_eq!(decoded["plainText"], "Stored plain body.");
+        assert_eq!(decoded["htmlBody"], "<p>Stored HTML body.</p>");
     }
 
     #[test]

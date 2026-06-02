@@ -1689,11 +1689,13 @@ class _ReactionAddButton extends StatelessWidget {
 class _QuotedMessagePreview extends StatelessWidget {
   const _QuotedMessagePreview({
     required this.message,
+    required this.attachmentPreviewText,
     required this.senderLabel,
     required this.isSelf,
   });
 
   final Message message;
+  final String? attachmentPreviewText;
   final String senderLabel;
   final bool isSelf;
 
@@ -1703,7 +1705,11 @@ class _QuotedMessagePreview extends StatelessWidget {
     return Builder(
       builder: (context) {
         final previewText =
-            previewTextForMessage(message) ?? context.l10n.chatQuotedNoContent;
+            previewTextForMessage(
+              message,
+              attachmentPreviewFallback: attachmentPreviewText,
+            ) ??
+            context.l10n.chatQuotedNoContent;
         return ReplyingToPreviewText(
           senderLabel: senderLabelTrimmed,
           quoteText: previewText,

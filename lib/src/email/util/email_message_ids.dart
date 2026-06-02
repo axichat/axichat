@@ -6,6 +6,7 @@ import 'package:axichat/src/email/util/email_header_safety.dart';
 const String emailMessageIdHeaderName = 'message-id';
 const String _emailHeaderSeparator = ':';
 const String _emailHeaderLineBreak = '\n';
+const String _deltaMessageInfoHopSeparator = '\n\n';
 const String _emailHeaderContinuationSeparator = ' ';
 const String _emailMessageIdWrapperStart = '<';
 const String _emailMessageIdWrapperEnd = '>';
@@ -54,6 +55,16 @@ String? parseEmailMessageId(String? rawHeaders) {
     return normalizeEmailMessageId(value);
   }
   return null;
+}
+
+String? parseDeltaMessageInfoMessageId(String? rawInfo) {
+  final sanitized = sanitizeRawEmailHeaders(rawInfo);
+  if (sanitized == null) return null;
+  final separatorIndex = sanitized.indexOf(_deltaMessageInfoHopSeparator);
+  final metadata = separatorIndex == -1
+      ? sanitized
+      : sanitized.substring(0, separatorIndex);
+  return parseEmailMessageId(metadata);
 }
 
 String? normalizeEmailMessageId(String? value) {

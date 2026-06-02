@@ -12,12 +12,14 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_eligibility.dart';
 import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
 import 'package:axichat/src/calendar/interop/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
+import 'package:axichat/src/chat/models/rfc_email_group.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
@@ -557,7 +559,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatMessageKey? _emailSyncComposerMessage;
   bool _emailHistoryLoading = false;
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
-  final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
@@ -728,9 +729,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_xmppAllowedForChat(chat) && xmppVisibleCandidates.isNotEmpty) {
       await _markMessagesDisplayedLocally(xmppVisibleCandidates);
     }
-    final localEmailReadCandidates = thresholdVisibleUnreadCandidates
-        .where((message) => message.isEmailBacked)
-        .toList(growable: false);
+    final localEmailReadCandidates = await _emailCandidatesWithRfcSiblings(
+      thresholdVisibleUnreadCandidates
+          .where((message) => message.isEmailBacked)
+          .toList(growable: false),
+    );
     if (localEmailReadCandidates.isNotEmpty) {
       await _markMessagesDisplayedLocally(localEmailReadCandidates);
     }
@@ -823,6 +826,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  Future<List<Message>> _emailCandidatesWithRfcSiblings(
+    List<Message> messages,
+  ) async {
+    if (messages.isEmpty) {
+      return const <Message>[];
+    }
+    final candidatesByStanzaId = <String, Message>{};
+    for (final message in messages) {
+      candidatesByStanzaId[message.stanzaID] = message;
+      if (message.emailRfcGroupKey == null) {
+        continue;
+      }
+      final siblings = await _messageService.loadEmailMessagesByRfcGroup(
+        message,
+      );
+      for (final sibling in siblings) {
+        if (sibling.emailRfcGroupKey != message.emailRfcGroupKey ||
+            !_isUnreadCandidate(sibling)) {
+          continue;
+        }
+        candidatesByStanzaId[sibling.stanzaID] = sibling;
+      }
+    }
+    return candidatesByStanzaId.values.toList(growable: false);
+  }
+
   Future<void> _syncReadStateLocallyIfAvailable({
     required Chat? chat,
     required List<Message> items,
@@ -890,6 +919,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       throw XmppMessageException();
     }
     return xmppService.uploadCalendarSnapshot(file);
+  }
+
+  Message resolveReplyTargetForMessage(Message message) {
+    final group = _rfcEmailActionGroupFor(message);
+    return _replyTargetForRfcEmailGroup(message: message, group: group);
+  }
+
+  Future<Message> resolveReplyTargetForMessageAsync(Message message) async {
+    final group = await _loadRfcEmailActionGroupFor(message);
+    return _replyTargetForRfcEmailGroup(message: message, group: group);
+  }
+
+  Message _replyTargetForRfcEmailGroup({
+    required Message message,
+    required RfcEmailGroup? group,
+  }) {
+    if (group == null) {
+      return message;
+    }
+    final body = _rfcEmailGroupPlainBody(group);
+    final htmlBody = _singleRfcEmailGroupHtmlBody(group);
+    return group.quoteTarget.copyWith(
+      body: body.isEmpty ? group.quoteTarget.body : body,
+      htmlBody: htmlBody ?? group.quoteTarget.htmlBody,
+      fileMetadataID: null,
+    );
   }
 
   Future<void> _prefetchPeerAvatar(Chat chat) async {
@@ -1820,7 +1875,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _typingTimer?.cancel();
     _typingTimer = null;
     _autoDownloadAttemptedMetadataIds.clear();
-    _autoDownloadAttemptedEmailMessages.clear();
     _lifecycleListener?.dispose();
     _lifecycleListener = null;
     _messageService.disposeChatArchiveSession(_chatArchiveSessionId);
@@ -4624,6 +4678,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _stopTyping(chat: event.chat);
     emit(state.copyWith(typing: false));
     final chat = event.chat;
+    if (chat.isAxiImServerAnnouncementThread) {
+      event.completer?.complete(
+        List<PendingAttachment>.from(event.pendingAttachments),
+      );
+      return;
+    }
     final subject = event.subject;
     final quotedDraft = event.quotedDraft;
     final settings = event.settings;
@@ -4640,17 +4700,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final storedStanzaIds = <String>{};
     final trimmedText = event.text.trim();
     final CalendarTask? requestedTask = event.calendarTaskIcs;
+    final String? taskSharePreview = _calendarTaskSharePreview(
+      requestedTask,
+      event.calendarTaskShareText,
+    );
     final bool taskReadOnly = event.calendarTaskIcsReadOnly;
-    final CalendarFragmentShareDecision fragmentDecision =
-        _calendarFragmentPolicy.decisionForChat(
-          chat: chat,
-          roomState: event.roomState,
-        );
-    final CalendarTask? effectiveTaskForXmpp =
-        requestedTask == null || !fragmentDecision.canWrite
-        ? null
-        : requestedTask;
-    final CalendarTask? effectiveTaskForEmail = requestedTask;
     final queuedAttachments = attachments
         .where(
           (attachment) =>
@@ -4659,7 +4713,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         )
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
-    final bool hasCalendarTaskIcs = effectiveTaskForEmail != null;
+    final bool hasCalendarTaskIcs = requestedTask != null;
     final hasSubject = subject?.trim().isNotEmpty == true;
     final hasBody = trimmedText.isNotEmpty;
     final emailBody = hasBody ? trimmedText : (hasSubject ? '' : null);
@@ -4697,27 +4751,41 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final isLocalOnlyChat = chat.isAxichatWelcomeThread;
     final emailRecipients = split.emailRecipients;
     final xmppRecipients = split.xmppRecipients;
+    final sendsXmppTaskEnvelope =
+        requestedTask != null &&
+        xmppRecipients.isNotEmpty &&
+        xmppRecipients.every(
+          (recipient) => _canSendCalendarTaskEnvelopeToRecipient(
+            recipient,
+            roomState: event.roomState,
+          ),
+        );
+    final sendsXmppTaskAttachment =
+        requestedTask != null &&
+        xmppRecipients.isNotEmpty &&
+        !sendsXmppTaskEnvelope;
+    final CalendarTask? taskForXmpp = sendsXmppTaskEnvelope
+        ? requestedTask
+        : null;
     final rawAttachmentsViaEmail =
         (hasQueuedAttachments || hasCalendarTaskIcs) &&
         emailRecipients.isNotEmpty;
     final rawAttachmentsViaXmpp =
-        hasQueuedAttachments && xmppRecipients.isNotEmpty;
+        (hasQueuedAttachments || sendsXmppTaskAttachment) &&
+        xmppRecipients.isNotEmpty;
     final rawRequiresEmail =
         emailRecipients.isNotEmpty || rawAttachmentsViaEmail;
     final rawRequiresXmpp = xmppRecipients.isNotEmpty || rawAttachmentsViaXmpp;
     final xmppBody = _composeXmppBody(body: trimmedText, subject: subject);
     final hasXmppBody = xmppBody.isNotEmpty;
-    final CalendarTask? taskForXmpp = effectiveTaskForXmpp;
     final CalendarTaskIcsMessage? emailCalendarTaskMessage =
-        effectiveTaskForEmail == null
+        requestedTask == null
         ? null
-        : CalendarTaskIcsMessage(
-            task: effectiveTaskForEmail,
-            readOnly: taskReadOnly,
-          );
-    final CalendarTaskIcsMessage? xmppCalendarTaskMessage = taskForXmpp == null
+        : CalendarTaskIcsMessage(task: requestedTask, readOnly: taskReadOnly);
+    final CalendarTaskIcsMessage? xmppCalendarTaskMessage =
+        requestedTask == null
         ? null
-        : CalendarTaskIcsMessage(task: taskForXmpp, readOnly: taskReadOnly);
+        : CalendarTaskIcsMessage(task: requestedTask, readOnly: taskReadOnly);
     final String? soleRecipientId = xmppRecipients.length == 1
         ? xmppRecipients.first.recipientId
         : null;
@@ -4834,6 +4902,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     var emailSendSucceeded = emailAlreadySent;
     var xmppSendSucceeded = xmppAlreadySent;
+    String? generatedXmppTaskAttachmentId;
     try {
       if (requiresEmail) {
         final EmailService emailService = service!;
@@ -4934,8 +5003,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           final captionForAttachments = emailBodyTrimmed?.isNotEmpty == true
               ? emailBody
               : null;
-          final calendarTaskCaption =
-              captionForAttachments ?? event.calendarTaskShareText;
+          final calendarTaskCaption = captionForAttachments ?? taskSharePreview;
           var queuedAttachmentsSent = !hasQueuedEmailAttachments;
           if (hasQueuedEmailAttachments) {
             final attachmentsSent = shouldBundleEmailAttachments
@@ -4974,7 +5042,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           var calendarTaskSent = !shouldSendCalendarTaskAttachment;
           if (shouldSendCalendarTaskAttachment) {
             final sent = await _sendCalendarTaskEmailAttachment(
-              task: effectiveTaskForEmail,
+              task: requestedTask,
               taskReadOnly: taskReadOnly,
               chat: chat,
               service: emailService,
@@ -5024,8 +5092,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               shouldAttemptXmppCalendarTaskAfterAttachments);
       var xmppCalendarTaskSent = false;
       if (attachmentsViaXmpp) {
+        final attachmentsForXmpp = <PendingAttachment>[];
+        if (sendsXmppTaskAttachment) {
+          final calendarTaskAttachment = await _buildCalendarTaskIcsAttachment(
+            requestedTask,
+          );
+          if (calendarTaskAttachment == null) {
+            emit(
+              state.copyWith(
+                composerError: ChatMessageKey.calendarTaskShareSendFailed,
+              ),
+            );
+            return;
+          }
+          generatedXmppTaskAttachmentId =
+              'calendar-task-${requestedTask.id}-${DateTime.timestamp().microsecondsSinceEpoch}';
+          final resolvedCalendarTaskAttachment = taskSharePreview == null
+              ? calendarTaskAttachment
+              : calendarTaskAttachment.copyWith(caption: taskSharePreview);
+          attachmentsForXmpp.add(
+            PendingAttachment(
+              id: generatedXmppTaskAttachmentId,
+              attachment: resolvedCalendarTaskAttachment,
+            ),
+          );
+        }
+        attachmentsForXmpp.addAll(queuedAttachments);
         final sent = await _sendXmppAttachments(
-          attachments: queuedAttachments,
+          attachments: attachmentsForXmpp,
           pendingAttachments: attachments,
           chat: chat,
           recipients: xmppRecipients,
@@ -5045,8 +5139,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               shouldAttemptXmppCalendarTaskAfterAttachments
               ? xmppCalendarTaskMessage
               : null,
-          caption: hasXmppBody && !shouldAttemptXmppCalendarTaskAfterAttachments
-              ? xmppBody
+          caption: !shouldAttemptXmppCalendarTaskAfterAttachments
+              ? (hasXmppBody ? xmppBody : taskSharePreview)
               : null,
           onLocalMessageStored: storedStanzaIds.add,
         );
@@ -5117,9 +5211,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (xmppCalendarTaskSent) {
         _messageService.notifyDemoOutboundAttachmentMessage(chatJid: chat.jid);
         if (kEnableDemoChats) {
-          final preview = event.calendarTaskShareText?.trim().isNotEmpty == true
-              ? event.calendarTaskShareText!.trim()
-              : event.attachmentFallbackLabel;
+          final preview = taskSharePreview ?? event.attachmentFallbackLabel;
           await _messageService.updateDemoChatSummary(
             chatJid: chat.jid,
             lastMessage: preview,
@@ -5182,6 +5274,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           queuedAttachments.map((pending) => pending.id),
         );
       }
+      final taskAttachmentId = generatedXmppTaskAttachmentId;
+      if (taskAttachmentId != null) {
+        _removePendingAttachmentFromList(attachments, taskAttachmentId);
+      }
       if (shouldClearComposer) {
         emit(state.copyWith(composerClearId: state.composerClearId + 1));
       }
@@ -5199,7 +5295,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _stopTyping(chat: event.chat);
     emit(state.copyWith(typing: false));
     final chat = event.chat;
-    if (chat.defaultTransport.isEmail) {
+    if (chat.defaultTransport.isEmail || chat.isAxiImServerAnnouncementThread) {
       return;
     }
     if (chat.isAxichatWelcomeThread) {
@@ -6106,29 +6202,149 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    final content = _forwardDraftContent(message);
+    final rfcEmailGroup = await _loadRfcEmailActionGroupFor(message);
+    final sourceMessage = rfcEmailGroup?.leader ?? message;
+    final content = rfcEmailGroup == null
+        ? _forwardDraftContent(message)
+        : _forwardDraftContentForRfcEmailGroup(rfcEmailGroup);
+    final attachmentMetadataIds = rfcEmailGroup == null
+        ? await _attachmentMetadataIdsForForwardDraft(message)
+        : await _attachmentMetadataIdsForRfcEmailForwardDraft(rfcEmailGroup);
     emit(
       state.copyWith(
         pendingForwardDraft: ChatForwardDraft(
           sources: [
             ChatForwardDraftSource(
-              sourceMessageId: message.stanzaID,
-              senderJid: message.senderJid,
+              sourceMessageId: sourceMessage.stanzaID,
+              senderJid: sourceMessage.senderJid,
               resolvedSenderLabel:
-                  message.resolveForwardedOriginalSenderLabel() ??
-                  message.senderJid,
-              timestamp: message.timestamp,
+                  sourceMessage.resolveForwardedOriginalSenderLabel() ??
+                  sourceMessage.senderJid,
+              timestamp: sourceMessage.timestamp,
               originalSubject: content.subject,
               originalPlainTextBody: content.body,
               originalHtmlBody: content.htmlBody,
-              attachmentMetadataIds:
-                  await _attachmentMetadataIdsForForwardDraft(message),
-              quotedContext: _forwardedQuoteContext(message),
+              attachmentMetadataIds: attachmentMetadataIds,
+              quotedContext: _forwardedQuoteContext(sourceMessage),
             ),
           ],
         ),
       ),
     );
+  }
+
+  RfcEmailGroup? _rfcEmailActionGroupFor(Message message) {
+    return _rfcEmailActionGroupForMessages(
+      message: message,
+      messages: state.items,
+    );
+  }
+
+  Future<RfcEmailGroup?> _loadRfcEmailActionGroupFor(Message message) async {
+    if (message.emailRfcGroupKey == null) {
+      return null;
+    }
+    final messagesByStanzaId = <String, Message>{};
+    for (final candidate in state.items) {
+      if (candidate.emailRfcGroupKey == message.emailRfcGroupKey) {
+        messagesByStanzaId[candidate.stanzaID] = candidate;
+      }
+    }
+    final loadedMessages = await _messageService.loadEmailMessagesByRfcGroup(
+      message,
+    );
+    for (final candidate in loadedMessages) {
+      if (candidate.emailRfcGroupKey == message.emailRfcGroupKey) {
+        messagesByStanzaId[candidate.stanzaID] = candidate;
+      }
+    }
+    return _rfcEmailActionGroupForMessages(
+      message: message,
+      messages: messagesByStanzaId.values,
+    );
+  }
+
+  RfcEmailGroup? _rfcEmailActionGroupForMessages({
+    required Message message,
+    required Iterable<Message> messages,
+  }) {
+    final groupsByStanzaId = buildRfcEmailGroupsByMessageStanzaId(
+      messages: messages.toList(growable: false),
+      attachmentsForMessage: _stateAttachmentMetadataIdsForMessage,
+      bodyTextForMessage: _rfcEmailMessagePlainBody,
+      isAuthoritativeBody: (message) => message.hasRfc822BodyContent,
+      requireMeaningfulBody: false,
+    );
+    return groupsByStanzaId[message.stanzaID];
+  }
+
+  List<String> _stateAttachmentMetadataIdsForMessage(Message message) {
+    final stateIds =
+        state.attachmentMetadataIdsByMessageId[_messageKey(message)];
+    if (stateIds != null && stateIds.isNotEmpty) {
+      return _trimmedUniqueMetadataIds(stateIds);
+    }
+    final fallbackId = message.fileMetadataID?.trim();
+    if (fallbackId == null || fallbackId.isEmpty) {
+      return const <String>[];
+    }
+    return [fallbackId];
+  }
+
+  String? _resolvedEmailHtmlBodyForMessage(Message message) {
+    final deltaMessageId = message.deltaMsgId;
+    if (deltaMessageId == null) {
+      return message.htmlBody;
+    }
+    if (message.hasRfc822BodyContent) {
+      return message.htmlBody;
+    }
+    return state.emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
+  }
+
+  String _rfcEmailMessagePlainBody(Message message) => rfcEmailBodyText(
+    message: message,
+    resolvedHtmlBody: _resolvedEmailHtmlBodyForMessage(message),
+  );
+
+  String _rfcEmailGroupPlainBody(RfcEmailGroup group) {
+    return group.bodySources
+        .map(_rfcEmailMessagePlainBody)
+        .map((body) => body.trim())
+        .where((body) => body.isNotEmpty)
+        .join('\n\n');
+  }
+
+  String? _singleRfcEmailGroupHtmlBody(RfcEmailGroup group) {
+    final htmlBodies = group.bodySources
+        .map(_resolvedEmailHtmlBodyForMessage)
+        .map(HtmlContentCodec.normalizeHtml)
+        .whereType<String>()
+        .toList(growable: false);
+    if (htmlBodies.length != 1) {
+      return null;
+    }
+    return htmlBodies.single;
+  }
+
+  ({String? subject, String body, String? htmlBody})
+  _forwardDraftContentForRfcEmailGroup(RfcEmailGroup group) {
+    final leaderContent = _forwardDraftContent(group.leader);
+    return (
+      subject: leaderContent.subject,
+      body: _rfcEmailGroupPlainBody(group),
+      htmlBody: _singleRfcEmailGroupHtmlBody(group),
+    );
+  }
+
+  Future<List<String>> _attachmentMetadataIdsForRfcEmailForwardDraft(
+    RfcEmailGroup group,
+  ) async {
+    final metadataIds = <String>[];
+    for (final message in group.messages) {
+      metadataIds.addAll(await _attachmentMetadataIdsForForwardDraft(message));
+    }
+    return _trimmedUniqueMetadataIds(metadataIds);
   }
 
   DraftForwardedQuoteContext? _forwardedQuoteContext(Message message) {
@@ -6210,7 +6426,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
     }
-    final htmlBody = message.deltaMsgId == null
+    final htmlBody = message.deltaMsgId == null || message.hasRfc822BodyContent
         ? message.normalizedHtmlBody
         : HtmlContentCodec.normalizeHtml(
             state.emailFullHtmlByDeltaId[message.deltaMsgId] ??
@@ -6905,12 +7121,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
-  Future<Attachment?> _buildCalendarTaskEmailAttachment(
-    CalendarTask task,
-  ) async {
+  Future<Attachment?> _buildCalendarTaskIcsAttachment(CalendarTask task) async {
     try {
       const CalendarTransferService transferService = CalendarTransferService();
       final File file = await transferService.exportTaskIcs(task: task);
+      CalendarTransferService.scheduleCleanup(file);
       final int sizeBytes = await file.length();
       final String fileName = p.basename(file.path);
       return Attachment(
@@ -6960,9 +7175,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       return true;
     }
-    final Attachment? attachment = await _buildCalendarTaskEmailAttachment(
-      task,
-    );
+    final Attachment? attachment = await _buildCalendarTaskIcsAttachment(task);
     if (attachment == null) {
       emit(
         state.copyWith(
@@ -7274,6 +7487,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     _removePendingAttachmentFromList(pendingAttachments, pending.id);
+  }
+
+  String? _calendarTaskSharePreview(CalendarTask? task, String? shareText) {
+    final trimmedShareText = shareText?.trim();
+    if (trimmedShareText != null && trimmedShareText.isNotEmpty) {
+      return trimmedShareText;
+    }
+    final title = task?.title.trim();
+    if (title == null || title.isEmpty) {
+      return null;
+    }
+    return title;
   }
 
   Future<bool> _sendXmppAttachments({
@@ -7619,15 +7844,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return File(path).exists();
   }
 
-  Future<bool> _needsAttachmentDownload(
-    FileMetadataData metadata, {
-    required bool isEmailChat,
-  }) async {
+  Future<bool> _needsAttachmentDownload(FileMetadataData metadata) async {
     if (await _hasLocalAttachmentFile(metadata)) {
       return false;
-    }
-    if (isEmailChat) {
-      return true;
     }
     final urls = metadata.sourceUrls;
     return urls != null && urls.isNotEmpty;
@@ -7679,7 +7898,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       for (final metadata in metadataList) metadata.id: metadata,
     };
     final downloads = <({String metadataId, String stanzaId})>[];
-    final emailMessages = <Message>[];
 
     for (final message in messages) {
       final key = _messageKey(message);
@@ -7687,59 +7905,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (ids == null || ids.isEmpty) continue;
 
       if (chat.defaultTransport.isEmail || message.isEmailBacked) {
-        final metadataList = <FileMetadataData>[];
-        for (final metadataId in ids) {
-          final metadata = metadataById[metadataId];
-          if (metadata == null) continue;
-          metadataList.add(metadata);
-        }
-        if (metadataList.any(
-          (metadata) => metadata.isHighRiskForAutoDownload,
-        )) {
-          continue;
-        }
-
-        var shouldDownloadEmail = false;
-        for (final metadata in metadataList) {
-          if (force &&
-              metadata.sizeBytes != null &&
-              metadata.sizeBytes! > maxAttachmentAutoDownloadBytes) {
-            continue;
-          }
-          if (!force &&
-              (_autoDownloadAttemptedMetadataIds.contains(metadata.id) ||
-                  !allowsAttachmentAutoDownload(
-                    chat: chat,
-                    metadata: metadata,
-                    imagesEnabled: _settingsSnapshot.autoDownloadImages,
-                    videosEnabled: _settingsSnapshot.autoDownloadVideos,
-                    documentsEnabled: _settingsSnapshot.autoDownloadDocuments,
-                    archivesEnabled: _settingsSnapshot.autoDownloadArchives,
-                    chatBlocked: isChatBlocked,
-                    requireKnownSize: true,
-                    maxBytes: maxAttachmentAutoDownloadBytes,
-                  ))) {
-            continue;
-          }
-          final needsDownload = await _needsAttachmentDownload(
-            metadata,
-            isEmailChat: true,
-          );
-          if (!needsDownload) continue;
-          if (!force) {
-            _autoDownloadAttemptedMetadataIds.add(metadata.id);
-          }
-          shouldDownloadEmail = true;
-        }
-        if (!shouldDownloadEmail) continue;
-        if (!force &&
-            _autoDownloadAttemptedEmailMessages.contains(message.stanzaID)) {
-          continue;
-        }
-        if (!force) {
-          _autoDownloadAttemptedEmailMessages.add(message.stanzaID);
-        }
-        emailMessages.add(message);
         continue;
       }
 
@@ -7769,10 +7934,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             metadata.sizeBytes! > maxAttachmentAutoDownloadBytes) {
           continue;
         }
-        final needsDownload = await _needsAttachmentDownload(
-          metadata,
-          isEmailChat: false,
-        );
+        final needsDownload = await _needsAttachmentDownload(metadata);
         if (!needsDownload) continue;
         if (!force) {
           _autoDownloadAttemptedMetadataIds.add(metadataId);
@@ -7781,19 +7943,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    if (emailMessages.isNotEmpty) {
-      for (final message in emailMessages) {
-        try {
-          await downloadFullEmailMessage(message);
-        } on DeltaChatException catch (error, stackTrace) {
-          _log.warning(
-            'Auto-download email message failed.',
-            error,
-            stackTrace,
-          );
-        }
-      }
-    }
     for (final download in downloads) {
       try {
         await downloadInboundAttachment(
@@ -7807,10 +7956,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> downloadFullEmailMessage(Message message) async {
+  Future<bool> downloadFullEmailMessage(Message message) async {
     final emailService = _emailService;
-    if (emailService == null) return;
-    await emailService.downloadFullMessage(message);
+    if (emailService == null) return false;
+    return emailService.downloadFullMessage(message);
   }
 
   Future<bool> downloadInboundAttachment({
@@ -8337,6 +8486,53 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   String _composeXmppBody({required String body, required String? subject}) =>
       ChatSubjectCodec.composeXmppBody(body: body, subject: subject);
+
+  String? get _calendarEnvelopeAccountJid =>
+      _xmppService?.myJid ?? _chatsService.myJid;
+
+  bool _canSendCalendarTaskEnvelopeToRecipient(
+    ComposerRecipient recipient, {
+    required RoomState? roomState,
+  }) {
+    final targetJid = _resolvedXmppRecipientJid(recipient);
+    if (targetJid == null) {
+      return false;
+    }
+    final targetChat = recipient.target.chat;
+    if (targetChat != null) {
+      final decision = _calendarFragmentPolicy.decisionForChat(
+        chat: targetChat,
+        roomState: _calendarEnvelopeRoomStateFor(
+          chat: targetChat,
+          roomState: roomState,
+        ),
+        accountJid: _calendarEnvelopeAccountJid,
+      );
+      return decision.canWrite;
+    }
+    return isCalendarSyncTargetAllowed(
+      accountJid: _calendarEnvelopeAccountJid,
+      targetJid: targetJid,
+    );
+  }
+
+  RoomState? _calendarEnvelopeRoomStateFor({
+    required Chat chat,
+    required RoomState? roomState,
+  }) {
+    if (chat.type != ChatType.groupChat) {
+      return roomState;
+    }
+    final chatJid = _bareJid(chat.jid);
+    if (chatJid == null) {
+      return null;
+    }
+    final eventRoomJid = _bareJid(roomState?.roomJid);
+    if (eventRoomJid == chatJid) {
+      return roomState;
+    }
+    return _mucService.roomStateFor(chat.jid);
+  }
 
   Future<void> _sendXmppFanOut({
     required List<ComposerRecipient> recipients,
@@ -8910,23 +9106,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (bundled.isEmpty) {
           return false;
         }
-        for (var index = 0; index < bundled.length; index += 1) {
-          final attachment = bundled[index];
-          final captionedAttachment = index == 0 && caption != null
-              ? attachment.copyWith(caption: caption)
-              : attachment;
-          await service.sendAttachment(
-            chat: chat,
-            attachment: captionedAttachment,
-            subject: shareContext?.subject,
-            htmlCaption: index == 0 ? normalizedHtml : null,
-            forwarded: message.isForwarded,
-            forwardedFromJid: message.forwardedFromJid,
-            forwardedOriginalSenderLabel: message.forwardedOriginalSenderLabel,
-          );
-        }
-        if (shouldBundle && bundled.isNotEmpty) {
-          EmailAttachmentBundler.scheduleCleanup(bundled.first);
+        try {
+          for (var index = 0; index < bundled.length; index += 1) {
+            final attachment = bundled[index];
+            final captionedAttachment = index == 0 && caption != null
+                ? attachment.copyWith(caption: caption)
+                : attachment;
+            await service.sendAttachment(
+              chat: chat,
+              attachment: captionedAttachment,
+              subject: shareContext?.subject,
+              htmlCaption: index == 0 ? normalizedHtml : null,
+              forwarded: message.isForwarded,
+              forwardedFromJid: message.forwardedFromJid,
+              forwardedOriginalSenderLabel:
+                  message.forwardedOriginalSenderLabel,
+            );
+          }
+        } finally {
+          if (shouldBundle && bundled.isNotEmpty) {
+            EmailAttachmentBundler.scheduleCleanup(bundled.first);
+          }
         }
         return true;
       }

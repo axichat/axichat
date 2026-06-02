@@ -1,5 +1,6 @@
 import 'package:axichat/src/chat/models/chat_timeline.dart';
 import 'package:axichat/src/chat/models/chat_timeline_projection.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
@@ -121,6 +122,876 @@ void main() {
       );
     },
   );
+
+  test('split attachment email text renders in one body leader', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'body-top',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'attachment-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+      Message(
+        stanzaID: 'body-bottom',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Original forwarded text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+        deltaChatId: 1,
+        deltaMsgId: 12,
+      ),
+      Message(
+        stanzaID: 'attachment-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 3),
+        fileMetadataID: 'file-two',
+        deltaChatId: 1,
+        deltaMsgId: 13,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      emailFullHtmlByDeltaId: const {
+        12: '<html><body>Date: Jan 1, 2024</body></html>',
+      },
+      attachmentsByMessageId: const {
+        'attachment-one': ['file-one'],
+        'attachment-two': ['file-two'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), [
+      'attachment-two',
+      'attachment-one',
+      'body-top',
+    ]);
+    expect(_visualMessageItemIds(items), [
+      'body-top',
+      'attachment-one',
+      'attachment-two',
+    ]);
+    expect(items.last.renderedText, 'Reply text\n\nOriginal forwarded text');
+    expect(items.last.emailBodyBlocks.map((block) => block.plainText), [
+      'Reply text',
+      'Original forwarded text',
+    ]);
+    expect(items[1].renderedText, isEmpty);
+    expect(items[1].attachmentIds, ['file-one']);
+    expect(items.first.renderedText, isEmpty);
+    expect(items.first.attachmentIds, ['file-two']);
+    expect(items.last.emailVisualKind, ChatTimelineEmailVisualKind.attachment);
+    expect(chatTimelineItemsShouldChain(items[1], items.first), isTrue);
+    expect(chatTimelineItemsShouldChain(items.last, items[1]), isTrue);
+  });
+
+  test('split attachment email renders RFC822 body before attachments', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'forwarded-header',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        subject: 'FWD: Photos',
+        body:
+            'Date: Jan 1, 2024\n'
+            'From: Alice <alice@example.com>\n'
+            'To: Me <me@example.com>\n'
+            'Subject: Photos\n\n'
+            'Real email body',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'attachment-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        subject: 'FWD: Photos',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+      Message(
+        stanzaID: 'attachment-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        subject: 'FWD: Photos',
+        body: 'Real email body',
+        htmlBody: '<p>Real email body</p>',
+        pseudoMessageData: const {'emailRfc822Body': true},
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+        fileMetadataID: 'file-two',
+        deltaChatId: 1,
+        deltaMsgId: 12,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment-one': ['file-one'],
+        'attachment-two': ['file-two'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), [
+      'attachment-two',
+      'attachment-one',
+      'forwarded-header',
+    ]);
+    expect(_visualMessageItemIds(items), [
+      'forwarded-header',
+      'attachment-one',
+      'attachment-two',
+    ]);
+    expect(items.last.renderedText, 'Real email body');
+    expect(items.last.emailBodyBlocks, hasLength(1));
+    expect(
+      items.last.emailBodyBlocks.single.resolvedHtmlBody,
+      '<p>Real email body</p>',
+    );
+    expect(items[1].attachmentIds, ['file-one']);
+    expect(items.first.attachmentIds, ['file-two']);
+    expect(items.map((item) => item.emailRfcGroupKey), everyElement(isNotNull));
+    expect(chatTimelineItemsShouldChain(items[1], items.first), isTrue);
+    expect(chatTimelineItemsShouldChain(items.last, items[1]), isTrue);
+  });
+
+  test('split attachment email duplicate body renders once', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'body-top',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'attachment-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+      Message(
+        stanzaID: 'duplicate-body',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+        deltaChatId: 1,
+        deltaMsgId: 12,
+      ),
+      Message(
+        stanzaID: 'attachment-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 3),
+        fileMetadataID: 'file-two',
+        deltaChatId: 1,
+        deltaMsgId: 13,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment-one': ['file-one'],
+        'attachment-two': ['file-two'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), [
+      'attachment-two',
+      'attachment-one',
+      'body-top',
+    ]);
+    expect(_visualMessageItemIds(items), [
+      'body-top',
+      'attachment-one',
+      'attachment-two',
+    ]);
+    expect(items.last.renderedText, 'Reply text');
+    expect(items.last.emailBodyBlocks.map((block) => block.plainText), [
+      'Reply text',
+    ]);
+    expect(items[1].renderedText, isEmpty);
+    expect(items[1].attachmentIds, ['file-one']);
+    expect(items.first.renderedText, isEmpty);
+    expect(items.first.attachmentIds, ['file-two']);
+  });
+
+  test('split attachment email duplicate attachment body renders once', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'body-top',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'attachment-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+      Message(
+        stanzaID: 'attachment-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+        fileMetadataID: 'file-two',
+        deltaChatId: 1,
+        deltaMsgId: 12,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment-one': ['file-one'],
+        'attachment-two': ['file-two'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), [
+      'attachment-two',
+      'attachment-one',
+      'body-top',
+    ]);
+    expect(_visualMessageItemIds(items), [
+      'body-top',
+      'attachment-one',
+      'attachment-two',
+    ]);
+    expect(items.last.renderedText, 'Reply text');
+    expect(items.last.emailBodyBlocks.map((block) => block.plainText), [
+      'Reply text',
+    ]);
+    expect(items[1].renderedText, isEmpty);
+    expect(items[1].attachmentIds, ['file-one']);
+    expect(items.first.renderedText, isEmpty);
+    expect(items.first.attachmentIds, ['file-two']);
+  });
+
+  test('plain text emails keep normal same sender timeline chaining', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'plain-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'First plain email',
+        originID: '<plain-one@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'plain-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Second plain email',
+        originID: '<plain-two@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.emailVisualKind), [
+      ChatTimelineEmailVisualKind.plainText,
+      ChatTimelineEmailVisualKind.plainText,
+    ]);
+    expect(chatTimelineItemsShouldChain(items.last, items.first), isTrue);
+  });
+
+  test('html emails do not chain across different RFC messages', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'html-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        htmlBody: '<div><strong>First rich email</strong></div>',
+        originID: '<html-one@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'html-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        htmlBody: '<div><em>Second rich email</em></div>',
+        originID: '<html-two@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.emailVisualKind), [
+      ChatTimelineEmailVisualKind.html,
+      ChatTimelineEmailVisualKind.html,
+    ]);
+    expect(chatTimelineItemsShouldChain(items.last, items.first), isFalse);
+  });
+
+  test('email after attachment starts a new visual chain', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'attachment-email',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<attachment@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'plain-email',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Next email',
+        originID: '<plain@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment-email': ['file-one'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), ['attachment-email', 'plain-email']);
+    expect(chatTimelineItemsShouldChain(items.last, items.first), isFalse);
+  });
+
+  test('incompatible RFC subject matches do not chain visually', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'html-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        subject: 'First subject',
+        htmlBody: '<div><strong>First rich email</strong></div>',
+        originID: '<same-origin@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'html-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        subject: 'Second subject',
+        htmlBody: '<div><em>Second rich email</em></div>',
+        originID: '<same-origin@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.emailRfcGroupKey), everyElement(isNull));
+    expect(chatTimelineItemsShouldChain(items.last, items.first), isFalse);
+  });
+
+  test('split forwarded email shows forwarded banner only on leader', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'forwarded-body',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Forwarded body',
+        originID: '<forwarded-message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+        pseudoMessageData: const {
+          'forwarded': true,
+          'forwardedFromJid': 'sender@example.com',
+        },
+      ),
+      Message(
+        stanzaID: 'forwarded-attachment',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<forwarded-message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'forwarded-file',
+        deltaChatId: 1,
+        deltaMsgId: 11,
+        pseudoMessageData: const {
+          'forwarded': true,
+          'forwardedFromJid': 'sender@example.com',
+        },
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'forwarded-attachment': ['forwarded-file'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), [
+      'forwarded-attachment',
+      'forwarded-body',
+    ]);
+    expect(_visualMessageItemIds(items), [
+      'forwarded-body',
+      'forwarded-attachment',
+    ]);
+    expect(items.first.isForwarded, isFalse);
+    expect(items.last.isForwarded, isTrue);
+    expect(items.first.isEmailRfcGroupLeader, isFalse);
+    expect(items.last.isEmailRfcGroupLeader, isTrue);
+  });
+
+  test(
+    'attachment-only RFC email suppresses forwarded banner after leader',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+      );
+      final messages = [
+        Message(
+          stanzaID: 'forwarded-file-one',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          originID: '<forwarded-attachments@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12),
+          fileMetadataID: 'file-one',
+          deltaChatId: 1,
+          deltaMsgId: 10,
+          pseudoMessageData: const {
+            'forwarded': true,
+            'forwardedFromJid': 'sender@example.com',
+          },
+        ),
+        Message(
+          stanzaID: 'forwarded-file-two',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          originID: '<forwarded-attachments@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+          fileMetadataID: 'file-two',
+          deltaChatId: 1,
+          deltaMsgId: 11,
+          pseudoMessageData: const {
+            'forwarded': true,
+            'forwardedFromJid': 'sender@example.com',
+          },
+        ),
+      ];
+
+      final items = _projectMessages(
+        chat: chat,
+        messages: messages,
+        isEmailChat: true,
+        attachmentsByMessageId: const {
+          'forwarded-file-one': ['file-one'],
+          'forwarded-file-two': ['file-two'],
+        },
+      ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+      expect(items.map((item) => item.id), [
+        'forwarded-file-two',
+        'forwarded-file-one',
+      ]);
+      expect(_visualMessageItemIds(items), [
+        'forwarded-file-one',
+        'forwarded-file-two',
+      ]);
+      expect(items.first.renderedText, isEmpty);
+      expect(items.first.rowText, ' ');
+      expect(items.last.renderedText, isEmpty);
+      expect(items.last.rowText, ' ');
+      expect(items.first.isForwarded, isFalse);
+      expect(items.last.isForwarded, isTrue);
+      expect(chatTimelineItemsShouldChain(items.last, items.first), isTrue);
+    },
+  );
+
+  test('originless split email attachments stay out of RFC grouping', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'body-top',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      ),
+      Message(
+        stanzaID: 'attachment-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      ),
+      Message(
+        stanzaID: 'body-bottom',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Original forwarded text',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+        deltaChatId: 1,
+        deltaMsgId: 12,
+      ),
+      Message(
+        stanzaID: 'attachment-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 12, 3),
+        fileMetadataID: 'file-two',
+        deltaChatId: 1,
+        deltaMsgId: 13,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment-one': ['file-one'],
+        'attachment-two': ['file-two'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), [
+      'body-top',
+      'attachment-one',
+      'attachment-two',
+    ]);
+    expect(items.first.renderedText, 'Reply text\n\nOriginal forwarded text');
+    expect(items.first.emailBodyBlocks.map((block) => block.plainText), [
+      'Reply text',
+      'Original forwarded text',
+    ]);
+    expect(items[1].renderedText, isEmpty);
+    expect(items[1].attachmentIds, ['file-one']);
+    expect(items[1].emailRfcGroupKey, isNull);
+    expect(items[2].renderedText, isEmpty);
+    expect(items[2].attachmentIds, ['file-two']);
+    expect(items[2].emailRfcGroupKey, isNull);
+  });
+
+  test(
+    'same RFC origin from different senders does not share a body bubble',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'thread@example.com',
+        title: 'Thread',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+      );
+      final first = Message(
+        stanzaID: 'alice-copy',
+        senderJid: 'alice@example.com',
+        chatJid: chat.jid,
+        body: 'Alice body',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      );
+      final second = Message(
+        stanzaID: 'bob-copy',
+        senderJid: 'bob@example.com',
+        chatJid: chat.jid,
+        body: 'Bob body',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        deltaChatId: 1,
+        deltaMsgId: 11,
+      );
+
+      final items = _projectMessages(
+        chat: chat,
+        messages: [first, second],
+        isEmailChat: true,
+      ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+      expect(items.map((item) => item.id), ['alice-copy', 'bob-copy']);
+      expect(items.first.renderedText, 'Alice body');
+      expect(items.last.renderedText, 'Bob body');
+      expect(items.expand((item) => item.emailBodyBlocks), isEmpty);
+    },
+  );
+
+  test('split attachment email keeps grouped html as separate blocks', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final items = _projectMessages(
+      chat: chat,
+      messages: [
+        Message(
+          stanzaID: 'body-top',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'Top',
+          htmlBody: '<p><strong>Top</strong></p>',
+          originID: '<message@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12),
+          deltaChatId: 1,
+          deltaMsgId: 10,
+        ),
+        Message(
+          stanzaID: 'attachment',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          originID: '<message@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+          fileMetadataID: 'file',
+          deltaChatId: 1,
+          deltaMsgId: 11,
+        ),
+        Message(
+          stanzaID: 'body-bottom',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'Bottom',
+          htmlBody: '<blockquote>Bottom</blockquote>',
+          originID: '<message@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+          deltaChatId: 1,
+          deltaMsgId: 12,
+        ),
+      ],
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment': ['file'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    final blocks = items.last.emailBodyBlocks;
+
+    expect(blocks, hasLength(2));
+    expect(blocks[0].resolvedHtmlBody, '<p><strong>Top</strong></p>');
+    expect(blocks[1].resolvedHtmlBody, '<blockquote>Bottom</blockquote>');
+  });
+
+  test('hidden split email body row preserves unread divider on leader', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final hiddenBoundary = Message(
+      stanzaID: 'body-bottom',
+      senderJid: chat.jid,
+      chatJid: chat.jid,
+      body: 'Unread body',
+      originID: '<message@example.com>',
+      timestamp: DateTime.utc(2024, 1, 1, 12, 2),
+      deltaChatId: 1,
+      deltaMsgId: 12,
+    );
+    final items = _projectMessages(
+      chat: chat,
+      messages: [
+        Message(
+          stanzaID: 'body-top',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'Read body',
+          displayed: true,
+          originID: '<message@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12),
+          deltaChatId: 1,
+          deltaMsgId: 10,
+        ),
+        Message(
+          stanzaID: 'attachment',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          displayed: true,
+          originID: '<message@example.com>',
+          timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+          fileMetadataID: 'file',
+          deltaChatId: 1,
+          deltaMsgId: 11,
+        ),
+        hiddenBoundary,
+      ],
+      isEmailChat: true,
+      unreadBoundaryStanzaId: hiddenBoundary.stanzaID,
+      attachmentsByMessageId: const {
+        'attachment': ['file'],
+      },
+    );
+
+    expect(items.map((item) => item.id), [
+      'attachment',
+      'body-top',
+      'unread-divider',
+    ]);
+  });
 
   test('stale unacked send-again projection requires a cutoff', () {
     final chat = chat_models.Chat(
@@ -828,10 +1699,10 @@ void main() {
     expect(timelineMessage.inviteRevoked, isFalse);
     expect(timelineMessage.inviteLabel, equals('Invite accepted'));
     expect(timelineMessage.inviteJoinActionEnabled, isTrue);
-    expect(timelineMessage.inviteRevokeActionEnabled, isTrue);
+    expect(timelineMessage.inviteRevokeActionEnabled, isFalse);
   });
 
-  test('revoked invite marker disables join but keeps revoke available', () {
+  test('revoked invite marker disables invite actions', () {
     final chat = chat_models.Chat(
       jid: 'invitee@example.com',
       title: 'Invitee',
@@ -879,7 +1750,7 @@ void main() {
         .firstWhere((item) => item.messageModel.stanzaID == invite.stanzaID);
     expect(timelineMessage.inviteRevoked, isTrue);
     expect(timelineMessage.inviteJoinActionEnabled, isFalse);
-    expect(timelineMessage.inviteRevokeActionEnabled, isTrue);
+    expect(timelineMessage.inviteRevokeActionEnabled, isFalse);
   });
 
   test('search-only accepted marker updates visible invite result', () {
@@ -1028,6 +1899,37 @@ void main() {
     },
   );
 
+  test('subject-only XMPP attachment messages keep subject header', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@axi.im',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    final message = Message(
+      stanzaID: 'subject-attachment',
+      senderJid: 'self@example.com',
+      chatJid: chat.jid,
+      body: ChatSubjectCodec.composeXmppBody(body: '', subject: 'Trip photos'),
+      fileMetadataID: 'file-one',
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      attachmentsByMessageId: const {
+        'subject-attachment': ['file-one', 'file-two'],
+      },
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.showSubject, isTrue);
+    expect(item.subjectLabel, 'Trip photos');
+    expect(item.renderedText, isEmpty);
+    expect(item.rowText, 'Trip photos');
+    expect(item.attachmentIds, ['file-one', 'file-two']);
+  });
+
   test(
     'subject-bearing unavailable email delta messages render unavailable body placeholder',
     () {
@@ -1115,6 +2017,78 @@ void main() {
     expect(unavailableItem.rowText, ' ');
     expect(unavailableItem.attachmentIds, ['file-1']);
   });
+
+  test('email attachment rows without body do not render text bubbles', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-generated-caption',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 101,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+      fileMetadataID: 'file-1',
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'email-generated-caption': ['file-1'],
+      },
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.renderedText, isEmpty);
+    expect(item.rowText, ' ');
+    expect(item.attachmentIds, ['file-1']);
+  });
+
+  test(
+    'real email body survives stale generated attachment caption marker',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        deltaChatId: 42,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'email-real-body-with-stale-caption',
+        senderJid: 'peer@example.com',
+        chatJid: chat.jid,
+        body: 'Here is the signed invoice.',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 102,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        fileMetadataID: 'file-1',
+        pseudoMessageData: const {'emailAttachmentCaption': true},
+      );
+
+      final item = _projectMessages(
+        chat: chat,
+        messages: [message],
+        isEmailChat: true,
+        attachmentsByMessageId: const {
+          'email-real-body-with-stale-caption': ['file-1'],
+        },
+      ).whereType<ChatTimelineMessageItem>().single;
+
+      expect(item.renderedText, 'Here is the signed invoice.');
+      expect(item.attachmentIds, ['file-1']);
+    },
+  );
 
   test('unavailable email delta messages stop rendering as loading', () {
     final chat = chat_models.Chat(
@@ -1227,6 +2201,7 @@ List<ChatTimelineItem> _projectMessages({
   bool isEmailChat = false,
   String? pendingEmailContentLabel,
   String? unavailableEmailContentLabel,
+  Map<int, String> emailFullHtmlByDeltaId = const {},
   Set<int> emailFullHtmlUnavailable = const {},
   Map<String, List<String>> attachmentsByMessageId = const {},
   Set<String> revokedInviteTokens = const {},
@@ -1261,7 +2236,7 @@ List<ChatTimelineItem> _projectMessages({
     messageById: const {},
     shareContexts: const {},
     shareReplies: const {},
-    emailFullHtmlByDeltaId: const {},
+    emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
     emailFullHtmlUnavailable: emailFullHtmlUnavailable,
     revokedInviteTokens: revokedInviteTokens,
     acceptedInviteTokens: acceptedInviteTokens,
@@ -1282,4 +2257,8 @@ List<ChatTimelineItem> _projectMessages({
     errorLabel: (_) => 'Error',
     errorLabelWithBody: (_, body) => body,
   );
+}
+
+Iterable<String> _visualMessageItemIds(List<ChatTimelineMessageItem> items) {
+  return items.reversed.map((item) => item.id);
 }

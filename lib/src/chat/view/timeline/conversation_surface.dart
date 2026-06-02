@@ -463,6 +463,7 @@ class _ChatMainConversationSection extends StatelessWidget {
     required List<InlineSpan> surfaceDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<String> attachmentIds,
+    required bool chainsFromPreviousMessage,
     required bool chainsIntoNextMessage,
   })
   composeBubbleContent;
@@ -895,6 +896,9 @@ class _ChatPinnedPanelSection extends StatelessWidget {
       resolvedHtmlBodyFor: (message) {
         final deltaMessageId = message.deltaMsgId;
         if (deltaMessageId == null) {
+          return message.htmlBody;
+        }
+        if (message.hasRfc822BodyContent) {
           return message.htmlBody;
         }
         return emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;

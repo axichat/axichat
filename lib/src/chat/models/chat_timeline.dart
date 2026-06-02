@@ -159,7 +159,43 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
 
   bool get inviteJoinActionEnabled => isInvite && !inviteRevoked;
 
-  bool get inviteRevokeActionEnabled => isInvite && isSelf;
+  bool get inviteRevokeActionEnabled =>
+      isInvite && isSelf && !inviteRevoked && !inviteAccepted;
+}
+
+bool chatTimelineItemsShouldChain(
+  ChatTimelineItem current,
+  ChatTimelineItem? neighbor,
+) {
+  if (current is! ChatTimelineMessageItem ||
+      neighbor is! ChatTimelineMessageItem) {
+    return false;
+  }
+  if (neighbor.authorId != current.authorId) {
+    return false;
+  }
+  final neighborDate = DateTime(
+    neighbor.createdAt.year,
+    neighbor.createdAt.month,
+    neighbor.createdAt.day,
+  );
+  final currentDate = DateTime(
+    current.createdAt.year,
+    current.createdAt.month,
+    current.createdAt.day,
+  );
+  if (neighborDate != currentDate) {
+    return false;
+  }
+  if (!current.emailVisualKind.requiresEmailBoundary &&
+      !neighbor.emailVisualKind.requiresEmailBoundary) {
+    return true;
+  }
+  final currentGroupKey = current.emailRfcGroupKey?.trim();
+  final neighborGroupKey = neighbor.emailRfcGroupKey?.trim();
+  return currentGroupKey != null &&
+      currentGroupKey.isNotEmpty &&
+      currentGroupKey == neighborGroupKey;
 }
 
 final class ChatTimelineComposerOverlaySpacerItem

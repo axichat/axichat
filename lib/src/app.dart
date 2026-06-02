@@ -191,10 +191,6 @@ class _AxichatState extends State<Axichat> {
                   databaseBuilder: () => context.read<XmppService>().database,
                   notificationService: context.read<NotificationService>(),
                   emailReadReceiptsEnabled: settingsState.emailReadReceipts,
-                  autoDownloadImages: settingsState.autoDownloadImages,
-                  autoDownloadVideos: settingsState.autoDownloadVideos,
-                  autoDownloadDocuments: settingsState.autoDownloadDocuments,
-                  autoDownloadArchives: settingsState.autoDownloadArchives,
                   emailEncryptionBetaEnabledByAddress:
                       settingsState.emailEncryptionBetaEnabledByAddress,
                   xmppSelfJidProvider: () => _xmppService.myJid,
@@ -534,22 +530,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<SettingsCubit, SettingsState>(
-      listener: (context, state) async {
+      listener: (context, state) {
         final notificationService = context.read<NotificationService>();
-        final endpointConfig = state.endpointConfig;
-        final EmailService? emailService = endpointConfig.smtpEnabled
-            ? context.read<EmailService>()
-            : null;
         notificationService
           ..chatNotificationsMuted = state.chatNotificationsMuted
           ..emailNotificationsMuted = state.emailNotificationsMuted
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
-        emailService?.updateAttachmentAutoDownloadSettings(
-          imagesEnabled: state.autoDownloadImages,
-          videosEnabled: state.autoDownloadVideos,
-          documentsEnabled: state.autoDownloadDocuments,
-          archivesEnabled: state.autoDownloadArchives,
-        );
       },
       builder: (context, state) {
         final localeOverride = state.language.locale;

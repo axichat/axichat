@@ -606,10 +606,6 @@ class EmailService {
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
     bool emailReadReceiptsEnabled = false,
-    bool autoDownloadImages = false,
-    bool autoDownloadVideos = false,
-    bool autoDownloadDocuments = false,
-    bool autoDownloadArchives = false,
     Map<String, bool> emailEncryptionBetaEnabledByAddress =
         const <String, bool>{},
     String? Function()? xmppSelfJidProvider,
@@ -617,10 +613,6 @@ class EmailService {
        _databaseBuilder = databaseBuilder,
        _endpointConfig = endpointConfig,
        _emailReadReceiptsEnabled = emailReadReceiptsEnabled,
-       _autoDownloadImages = autoDownloadImages,
-       _autoDownloadVideos = autoDownloadVideos,
-       _autoDownloadDocuments = autoDownloadDocuments,
-       _autoDownloadArchives = autoDownloadArchives,
        _emailEncryptionBetaEnabledByAddress = _normalizedEncryptionBetaMap(
          emailEncryptionBetaEnabledByAddress,
        ),
@@ -680,10 +672,6 @@ class EmailService {
   final Logger _log;
   EndpointConfig _endpointConfig;
   bool _emailReadReceiptsEnabled;
-  bool _autoDownloadImages;
-  bool _autoDownloadVideos;
-  bool _autoDownloadDocuments;
-  bool _autoDownloadArchives;
   Map<String, bool> _emailEncryptionBetaEnabledByAddress;
   final String? Function()? _xmppSelfJidProvider;
   final NotificationService? _notificationService;
@@ -782,32 +770,8 @@ class EmailService {
     );
   }
 
-  void updateAttachmentAutoDownloadSettings({
-    required bool imagesEnabled,
-    required bool videosEnabled,
-    required bool documentsEnabled,
-    required bool archivesEnabled,
-  }) {
-    _autoDownloadImages = imagesEnabled;
-    _autoDownloadVideos = videosEnabled;
-    _autoDownloadDocuments = documentsEnabled;
-    _autoDownloadArchives = archivesEnabled;
-    _transport.updateAttachmentAutoDownloadSettings(
-      imagesEnabled: imagesEnabled,
-      videosEnabled: videosEnabled,
-      documentsEnabled: documentsEnabled,
-      archivesEnabled: archivesEnabled,
-    );
-  }
-
   void _configureTransport(EmailDeltaTransport transport) {
     transport.updateDatabaseOperationTracker(_trackAppDatabaseOperation);
-    transport.updateAttachmentAutoDownloadSettings(
-      imagesEnabled: _autoDownloadImages,
-      videosEnabled: _autoDownloadVideos,
-      documentsEnabled: _autoDownloadDocuments,
-      archivesEnabled: _autoDownloadArchives,
-    );
     transport.updateEmailEncryptionBetaSettings(
       _emailEncryptionBetaEnabledByAddress,
     );
@@ -6872,6 +6836,56 @@ class EmailService {
     return null;
   }
 
+  Future<List<int>> _deltaChatIdsForReadState({
+    required Chat chat,
+    required int deltaAccountId,
+  }) async {
+    if (_blocksRuntimeReentry) {
+      return const <int>[];
+    }
+    final primaryChatId = await _deltaChatIdForAccount(
+      chat: chat,
+      deltaAccountId: deltaAccountId,
+    );
+    if (_blocksRuntimeReentry) {
+      return const <int>[];
+    }
+    final Chat resolvedChat = await _trackAppDatabaseOperation(
+      () => _storedEmailChatForAccount(
+        chat: chat,
+        deltaAccountId: deltaAccountId,
+      ),
+    );
+    if (_blocksRuntimeReentry) {
+      return const <int>[];
+    }
+    final mappedDeltaChatIds = await _trackAppDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      return db.getDeltaChatIdsForAccount(
+        chatJid: resolvedChat.jid,
+        deltaAccountId: deltaAccountId,
+      );
+    });
+    final activeDeltaChatId = resolvedChat.deltaChatId;
+    final activeDeltaChatIdForAccount =
+        activeDeltaChatId != null &&
+            (mappedDeltaChatIds.contains(activeDeltaChatId) ||
+                deltaAccountId == _transport.activeAccountId)
+        ? activeDeltaChatId
+        : null;
+    final ordered = <int>{};
+    if (primaryChatId != null) {
+      ordered.add(primaryChatId);
+    }
+    ordered.addAll(
+      _deltaChatIdCandidates(
+        mappedDeltaChatIds: mappedDeltaChatIds,
+        activeDeltaChatId: activeDeltaChatIdForAccount,
+      ),
+    );
+    return ordered.toList(growable: false);
+  }
+
   Future<bool> _isEncryptedSendableDeltaChat({
     required int chatId,
     required int deltaAccountId,
@@ -7053,17 +7067,20 @@ class EmailService {
       if (_blocksRuntimeReentry) {
         return;
       }
-      final chatId = await _deltaChatIdForAccount(
+      final chatIds = await _deltaChatIdsForReadState(
         chat: resolvedChat,
         deltaAccountId: account.deltaAccountId,
       );
-      if (chatId == null) {
+      if (chatIds.isEmpty) {
         return;
       }
-      noticed = await _transport.markNoticedChat(
-        chatId,
-        accountId: account.deltaAccountId,
-      );
+      for (final chatId in chatIds) {
+        final result = await _transport.markNoticedChat(
+          chatId,
+          accountId: account.deltaAccountId,
+        );
+        noticed = noticed || result;
+      }
     });
     return noticed;
   }
@@ -7180,17 +7197,21 @@ class EmailService {
   Future<int> getFreshMessageCount(Chat chat) async {
     await _ensureReady();
     final account = await _accountBindingForChat(chat);
-    final chatId = await _deltaChatIdForAccount(
+    final chatIds = await _deltaChatIdsForReadState(
       chat: chat,
       deltaAccountId: account.deltaAccountId,
     );
-    if (chatId == null) {
+    if (chatIds.isEmpty) {
       return 0;
     }
-    return _transport.getFreshMessageCount(
-      chatId,
-      accountId: account.deltaAccountId,
-    );
+    var count = 0;
+    for (final chatId in chatIds) {
+      count += await _transport.getFreshMessageCount(
+        chatId,
+        accountId: account.deltaAccountId,
+      );
+    }
+    return count;
   }
 
   /// Returns the oldest fresh (unread) message ID for a chat.
@@ -7199,13 +7220,14 @@ class EmailService {
   Future<int?> getOldestFreshMessageId(Chat chat) async {
     await _ensureReady();
     final account = await _accountBindingForChat(chat);
-    final chatId = await _deltaChatIdForAccount(
+    final chatIds = await _deltaChatIdsForReadState(
       chat: chat,
       deltaAccountId: account.deltaAccountId,
     );
-    if (chatId == null) {
+    if (chatIds.isEmpty) {
       return null;
     }
+    final chatIdSet = chatIds.toSet();
     final freshIds = await _transport.getFreshMessageIds(
       accountId: account.deltaAccountId,
     );
@@ -7221,7 +7243,7 @@ class EmailService {
         freshId,
         accountId: account.deltaAccountId,
       );
-      if (message == null || message.chatId != chatId) {
+      if (message == null || !chatIdSet.contains(message.chatId)) {
         continue;
       }
       if (oldest == null) {
@@ -7760,6 +7782,17 @@ class EmailService {
     if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
     await _ensureReady();
     return _transport.getMessageFullHtml(
+      deltaId,
+      accountId: message.deltaAccountId,
+    );
+  }
+
+  /// Gets body-only content parsed from the stored RFC822 MIME, if available.
+  Future<DeltaMessageRfc822Body?> getMessageRfc822Body(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
+    await _ensureReady();
+    return _transport.getMessageRfc822Body(
       deltaId,
       accountId: message.deltaAccountId,
     );

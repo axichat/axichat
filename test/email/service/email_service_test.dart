@@ -670,28 +670,6 @@ void main() {
     },
   );
 
-  test('seeds attachment auto-download settings into injected transport', () {
-    final service = EmailService(
-      credentialStore: credentialStore,
-      databaseBuilder: () async => database,
-      transport: transport,
-      notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
-      autoDownloadImages: true,
-      autoDownloadDocuments: true,
-    );
-    addTearDown(service.shutdown);
-
-    verify(
-      () => transport.updateAttachmentAutoDownloadSettings(
-        imagesEnabled: true,
-        videosEnabled: false,
-        documentsEnabled: true,
-        archivesEnabled: false,
-      ),
-    ).called(1);
-  });
-
   test('per-chat MDN override restores global read receipt config', () async {
     when(() => transport.accountIds()).thenAnswer((_) async => const <int>[1]);
     final service = EmailService(
@@ -6944,6 +6922,147 @@ void main() {
       addTearDown(service.shutdown);
     },
   );
+
+  test('getFreshMessageCount checks every mapped Delta chat', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    when(
+      () => database.getDeltaChatIdsForAccount(
+        chatJid: 'peer@example.com',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => const [91, 92]);
+    when(
+      () => transport.ensureChatForAddress(
+        address: 'peer@example.com',
+        displayName: 'Peer',
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => 91);
+    when(
+      () => transport.getFreshMessageCount(
+        91,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => 1);
+    when(
+      () => transport.getFreshMessageCount(
+        92,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => 2);
+
+    final count = await service.getFreshMessageCount(
+      Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      ),
+    );
+
+    expect(count, 3);
+
+    addTearDown(service.shutdown);
+  });
+
+  test('getOldestFreshMessageId checks every mapped Delta chat', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    when(
+      () => database.getDeltaChatIdsForAccount(
+        chatJid: 'peer@example.com',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => const [91, 92]);
+    when(
+      () => transport.ensureChatForAddress(
+        address: 'peer@example.com',
+        displayName: 'Peer',
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => 91);
+    when(
+      () => transport.getFreshMessageIds(
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => const [1001, 1002, 1003]);
+    when(
+      () =>
+          transport.getMessage(1001, accountId: DeltaAccountDefaults.legacyId),
+    ).thenAnswer(
+      (_) async => DeltaMessage(
+        id: 1001,
+        chatId: 91,
+        timestamp: DateTime.utc(2024, 1, 2),
+      ),
+    );
+    when(
+      () =>
+          transport.getMessage(1002, accountId: DeltaAccountDefaults.legacyId),
+    ).thenAnswer(
+      (_) async => DeltaMessage(
+        id: 1002,
+        chatId: 92,
+        timestamp: DateTime.utc(2024, 1, 1),
+      ),
+    );
+    when(
+      () =>
+          transport.getMessage(1003, accountId: DeltaAccountDefaults.legacyId),
+    ).thenAnswer(
+      (_) async => DeltaMessage(
+        id: 1003,
+        chatId: 93,
+        timestamp: DateTime.utc(2023, 12, 31),
+      ),
+    );
+
+    final oldest = await service.getOldestFreshMessageId(
+      Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      ),
+    );
+
+    expect(oldest, 1002);
+
+    addTearDown(service.shutdown);
+  });
 
   test(
     'markNoticedChat resolves the canonical direct chat row before delegating',

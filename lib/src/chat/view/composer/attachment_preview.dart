@@ -8,6 +8,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/attachments/view/attachment_file_preview.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
@@ -88,6 +89,20 @@ const ImageDecodeLimits _attachmentImageDecodeLimits = ImageDecodeLimits(
 );
 const int _attachmentMillisecondsPerSecond = 1000;
 const int _attachmentMacOsQuarantineRadix = 16;
+
+void openSingleAttachmentComposeDraft({
+  required BuildContext context,
+  required FileMetadataData metadata,
+}) {
+  final metadataId = metadata.id.trim();
+  if (metadataId.isEmpty || !context.mounted) return;
+  openComposeDraft(
+    context,
+    jids: const [''],
+    forwardedSourceAttachmentMetadataIds: [metadataId],
+  );
+}
+
 const String _attachmentMacOsQuarantineAgent = appDisplayName;
 const String _attachmentMacOsQuarantineCommand = 'xattr';
 const String _attachmentMacOsQuarantineWriteArg = '-w';
@@ -231,14 +246,12 @@ Future<bool> confirmExportAllowed(
         declaredLabel,
         detectedLabel,
       ),
-      confirmLabel: l10n.chatAttachmentTypeMismatchConfirm,
+      confirmLabel: confirmLabel,
       destructiveConfirm: true,
     );
-    if (approved == true) {
-      _registerHighRiskAcknowledgement(metadata.riskAcknowledgementId);
-      return true;
+    if (approved != true || !context.mounted) {
+      return false;
     }
-    return false;
   }
   if (!context.mounted) {
     return false;
@@ -667,13 +680,25 @@ class _BlockedAttachment extends StatelessWidget {
               details: messageDetails,
               detailOpticalOffsetFactors: detailOpticalOffsetFactors,
             ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: AxiButton(
-              variant: AxiButtonVariant.secondary,
-              onPressed: onAllowPressed,
-              child: Text(l10n.chatAttachmentLoad),
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                  child: AxiButton(
+                    variant: AxiButtonVariant.secondary,
+                    constrainChild: true,
+                    onPressed: onAllowPressed,
+                    child: Text(
+                      l10n.chatAttachmentLoad,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -821,39 +846,41 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                   padding: EdgeInsets.zero,
                   backgroundColor: Colors.transparent,
                   borderSide: BorderSide.none,
-                  child: _AttachmentImageTapTarget(
-                    onTap: () => _openImagePreview(
-                      context,
-                      file: previewFile,
-                      metadata: metadata,
-                      typeReport: widget.typeReport,
-                      messageDetails: widget.messageDetails,
-                      detailOpticalOffsetFactors:
-                          widget.detailOpticalOffsetFactors,
-                    ),
-                    child: AspectRatio(
-                      aspectRatio: aspectRatio,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.file(
-                            previewFile,
-                            fit: BoxFit.cover,
-                            cacheWidth: cacheDimensions?.width,
-                            cacheHeight: cacheDimensions?.height,
-                            errorBuilder: (_, _, _) => const Center(
-                              child: Icon(Icons.broken_image_outlined),
+                  child: AspectRatio(
+                    aspectRatio: aspectRatio,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.file(
+                          previewFile,
+                          fit: BoxFit.cover,
+                          cacheWidth: cacheDimensions?.width,
+                          cacheHeight: cacheDimensions?.height,
+                          errorBuilder: (_, _, _) => const Center(
+                            child: Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
+                        _AttachmentMetadataVignette(
+                          metadata: metadata,
+                          hasLocalFile: hasLocalFile,
+                          details: widget.messageDetails,
+                          detailOpticalOffsetFactors:
+                              widget.detailOpticalOffsetFactors,
+                          trailing: AxiIconButton.ghost(
+                            iconData: LucideIcons.eye,
+                            tooltip: context.l10n.chatAttachmentPreview,
+                            onPressed: () => _openImagePreview(
+                              context,
+                              file: previewFile,
+                              metadata: metadata,
+                              typeReport: widget.typeReport,
+                              messageDetails: widget.messageDetails,
+                              detailOpticalOffsetFactors:
+                                  widget.detailOpticalOffsetFactors,
                             ),
                           ),
-                          _AttachmentMetadataVignette(
-                            metadata: metadata,
-                            hasLocalFile: hasLocalFile,
-                            details: widget.messageDetails,
-                            detailOpticalOffsetFactors:
-                                widget.detailOpticalOffsetFactors,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1513,6 +1540,7 @@ Future<void> _openImagePreview(
     barrierDismissible: true,
     builder: (dialogContext) {
       return _ImageAttachmentPreviewDialog(
+        composeContext: context,
         file: file,
         metadata: metadata,
         typeReport: typeReport,
@@ -1525,6 +1553,7 @@ Future<void> _openImagePreview(
 
 class _ImageAttachmentPreviewDialog extends StatelessWidget {
   const _ImageAttachmentPreviewDialog({
+    required this.composeContext,
     required this.file,
     required this.metadata,
     this.typeReport,
@@ -1532,6 +1561,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
     required this.detailOpticalOffsetFactors,
   });
 
+  final BuildContext composeContext;
   final File file;
   final FileMetadataData metadata;
   final FileTypeReport? typeReport;
@@ -1567,7 +1597,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
         final double maxHeight = math.max(0.0, availableHeight - spacing.xl);
         final double actionRowHeight = sizing.iconButtonTapTarget;
         final double actionRowMinWidth =
-            (sizing.iconButtonTapTarget * 3) + (spacing.xs * 2);
+            (sizing.iconButtonTapTarget * 4) + (spacing.xs * 3);
         final double minimumPreviewWidth = math.max(
           _attachmentMetadataOverlayMinWidth(context),
           actionRowMinWidth,
@@ -1675,6 +1705,20 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                             context,
                             file: file,
                             filename: metadata.filename,
+                          );
+                        },
+                      ),
+                      SizedBox(width: spacing.xs),
+                      AxiIconButton.ghost(
+                        iconData: LucideIcons.send,
+                        tooltip: l10n.commonSend,
+                        color: ghostColors.foreground,
+                        backgroundColor: ghostColors.background,
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          openSingleAttachmentComposeDraft(
+                            context: composeContext,
+                            metadata: metadata,
                           );
                         },
                       ),
@@ -1896,13 +1940,35 @@ class _AttachmentDownloadCancelledException implements Exception {
 class _FileAttachmentState extends State<_FileAttachment> {
   _FileAttachmentAction? _activeAction;
   late final ShadPopoverController _actionsController;
+  String? _downloadedLocalPath;
 
   bool get _busy => _activeAction != null;
+
+  String? get _effectiveLocalPath {
+    final metadataPath = widget.metadata.path?.trim();
+    if (widget.hasLocalFile && metadataPath?.isNotEmpty == true) {
+      return metadataPath;
+    }
+    final downloadedPath = _downloadedLocalPath?.trim();
+    if (downloadedPath?.isNotEmpty == true) {
+      return downloadedPath;
+    }
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
     _actionsController = ShadPopoverController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FileAttachment oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.metadata.id != widget.metadata.id ||
+        oldWidget.metadata.path != widget.metadata.path) {
+      _downloadedLocalPath = null;
+    }
   }
 
   @override
@@ -1923,10 +1989,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final url = metadata.sourceUrls == null || metadata.sourceUrls!.isEmpty
         ? null
         : metadata.sourceUrls!.first;
-    final path = metadata.path?.trim();
-    final localFile = widget.hasLocalFile && path?.isNotEmpty == true
-        ? File(path!)
-        : null;
+    final localPath = _effectiveLocalPath;
+    final localFile = localPath == null ? null : File(localPath);
     final hasLocalFile = localFile != null;
     final canDownload = url != null || widget.downloadDelegate != null;
     final saveEnabled = hasLocalFile || canDownload;
@@ -1941,8 +2005,12 @@ class _FileAttachmentState extends State<_FileAttachment> {
         (hasLocalFile || canDownload) &&
         (previewKind == AttachmentPreviewKind.pdf ||
             previewKind == AttachmentPreviewKind.text);
-    final String downloadAndSaveTooltip = l10n.chatAttachmentDownloadAndSave;
-    final String downloadAndShareTooltip = l10n.chatAttachmentDownloadAndShare;
+    final String saveTooltip = hasLocalFile
+        ? l10n.chatAttachmentExportConfirm
+        : l10n.chatAttachmentDownloadAndSave;
+    final String shareTooltip = hasLocalFile
+        ? l10n.chatActionShare
+        : l10n.chatAttachmentDownloadAndShare;
     final String previewTooltip = hasLocalFile
         ? l10n.chatAttachmentPreview
         : l10n.chatAttachmentDownloadAndPreview;
@@ -1978,14 +2046,14 @@ class _FileAttachmentState extends State<_FileAttachment> {
       children: [
         AxiIconButton(
           iconData: LucideIcons.save,
-          tooltip: downloadAndSaveTooltip,
+          tooltip: saveTooltip,
           loading: _activeAction == _FileAttachmentAction.save,
           onPressed: saveEnabled && !_busy ? _saveAttachment : null,
         ),
         SizedBox(width: actionSpacing),
         AxiIconButton(
           iconData: LucideIcons.share2,
-          tooltip: downloadAndShareTooltip,
+          tooltip: shareTooltip,
           loading: _activeAction == _FileAttachmentAction.share,
           onPressed: shareEnabled && !_busy ? _shareAttachment : null,
         ),
@@ -2020,6 +2088,10 @@ class _FileAttachmentState extends State<_FileAttachment> {
               !shouldMeasureText ||
               detailsWidth <= 0 ||
               (painter..layout(maxWidth: detailsWidth)).didExceedMaxLines;
+          final compactRowMinWidth =
+              (sizing.iconButtonTapTarget * 2) + (spacing.s * 2);
+          final placeActionsBelow =
+              stackActions && availableWidth < compactRowMinWidth;
           final int filenameMaxLines = stackActions ? 2 : 1;
           final Widget actionRow = stackActions
               ? AxiPopover(
@@ -2033,7 +2105,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
                       actions: [
                         AxiMenuAction(
                           icon: LucideIcons.save,
-                          label: downloadAndSaveTooltip,
+                          label: saveTooltip,
                           onPressed: () {
                             _actionsController.hide();
                             _saveAttachment();
@@ -2042,7 +2114,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
                         ),
                         AxiMenuAction(
                           icon: LucideIcons.share2,
-                          label: downloadAndShareTooltip,
+                          label: shareTooltip,
                           onPressed: () {
                             _actionsController.hide();
                             _shareAttachment();
@@ -2065,7 +2137,9 @@ class _FileAttachmentState extends State<_FileAttachment> {
                   child: AxiTooltip(
                     builder: (_) => Text(l10n.commonMoreOptions),
                     child: AxiIconButton(
-                      iconData: _busy ? LucideIcons.loaderCircle : Icons.more_horiz,
+                      iconData: _busy
+                          ? LucideIcons.loaderCircle
+                          : Icons.more_horiz,
                       loading: _busy,
                       onPressed: _busy ? null : _actionsController.toggle,
                     ),
@@ -2085,6 +2159,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
               ),
               Text(
                 sizeLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: context.textTheme.small.copyWith(
                   color: colors.mutedForeground,
                 ),
@@ -2096,6 +2172,23 @@ class _FileAttachmentState extends State<_FileAttachment> {
                 ),
             ],
           );
+          if (placeActionsBelow) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: spacing.s,
+              children: [
+                Row(
+                  children: [
+                    attachmentIcon,
+                    SizedBox(width: spacing.s),
+                    Expanded(child: attachmentDetails),
+                  ],
+                ),
+                Align(alignment: Alignment.centerRight, child: actionRow),
+              ],
+            );
+          }
           if (stackActions) {
             return Row(
               children: [
@@ -2136,7 +2229,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final toaster = ShadToaster.maybeOf(context);
     try {
       final path = await _resolveLocalPath(
-        existingPath: widget.metadata.path,
+        existingPath: _effectiveLocalPath,
         requireConfirmation: true,
         typeReport: widget.typeReport,
       );
@@ -2205,7 +2298,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final toaster = ShadToaster.maybeOf(context);
     try {
       final path = await _resolveLocalPath(
-        existingPath: widget.metadata.path,
+        existingPath: _effectiveLocalPath,
         requireConfirmation: true,
         typeReport: widget.typeReport,
       );
@@ -2279,7 +2372,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final toaster = ShadToaster.maybeOf(context);
     try {
       final path = await _resolveLocalPath(
-        existingPath: widget.metadata.path,
+        existingPath: _effectiveLocalPath,
         requireConfirmation: true,
         typeReport: widget.typeReport,
       );
@@ -2330,6 +2423,19 @@ class _FileAttachmentState extends State<_FileAttachment> {
         context: context,
         data: previewData,
         closeTooltip: l10n.commonClose,
+        actions: [
+          AttachmentPreviewDialogAction(
+            iconData: LucideIcons.send,
+            tooltip: l10n.commonSend,
+            onPressed: (dialogContext) {
+              Navigator.of(dialogContext).pop();
+              openSingleAttachmentComposeDraft(
+                context: context,
+                metadata: widget.metadata,
+              );
+            },
+          ),
+        ],
       );
     } on _AttachmentDownloadCancelledException {
       return;
@@ -2368,7 +2474,9 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final refreshedPath = refreshed?.path?.trim();
     if (refreshedPath == null || refreshedPath.isEmpty) return null;
     final refreshedFile = File(refreshedPath);
-    return await refreshedFile.exists() ? refreshedFile.path : null;
+    if (!await refreshedFile.exists()) return null;
+    _downloadedLocalPath = refreshedFile.path;
+    return refreshedFile.path;
   }
 
   Future<String?> _resolveLocalPath({
@@ -2470,6 +2578,8 @@ class _EncryptedAttachment extends StatelessWidget {
                   ),
                   Text(
                     sizeLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: context.textTheme.small.copyWith(
                       color: colors.mutedForeground,
                     ),
@@ -2569,6 +2679,8 @@ class _RemoteImageAttachment extends StatelessWidget {
                   ),
                   Text(
                     sizeLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: context.textTheme.small.copyWith(
                       color: colors.mutedForeground,
                     ),
@@ -2668,6 +2780,8 @@ class _RemoteVideoAttachment extends StatelessWidget {
                   ),
                   Text(
                     sizeLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: context.textTheme.small.copyWith(
                       color: colors.mutedForeground,
                     ),
@@ -2728,47 +2842,58 @@ class _AttachmentMetadataVignette extends StatelessWidget {
     required this.hasLocalFile,
     required this.details,
     required this.detailOpticalOffsetFactors,
+    this.trailing,
   });
 
   final FileMetadataData metadata;
   final bool hasLocalFile;
   final List<InlineSpan> details;
   final Map<int, double> detailOpticalOffsetFactors;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final curveDepth = spacing.m;
+    final metadataSummary = _AttachmentMetadataSummary(
+      metadata: metadata,
+      hasLocalFile: hasLocalFile,
+      details: details,
+      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+      foregroundColor: colors.foreground,
+      supportingColor: colors.foreground,
+    );
+    final content = CustomPaint(
+      painter: _AttachmentVignettePainter(
+        topColor: colors.card.withValues(alpha: 0),
+        bottomColor: colors.card.withValues(alpha: 0.88),
+        curveDepth: curveDepth,
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          spacing.s,
+          spacing.l + curveDepth,
+          spacing.s,
+          spacing.s,
+        ),
+        child: trailing == null
+            ? metadataSummary
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(child: IgnorePointer(child: metadataSummary)),
+                  SizedBox(width: spacing.s),
+                  trailing!,
+                ],
+              ),
+      ),
+    );
     return Positioned(
       left: 0,
       right: 0,
       bottom: 0,
-      child: IgnorePointer(
-        child: CustomPaint(
-          painter: _AttachmentVignettePainter(
-            topColor: colors.card.withValues(alpha: 0),
-            bottomColor: colors.card.withValues(alpha: 0.88),
-            curveDepth: curveDepth,
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.s,
-              spacing.l + curveDepth,
-              spacing.s,
-              spacing.s,
-            ),
-            child: _AttachmentMetadataSummary(
-              metadata: metadata,
-              hasLocalFile: hasLocalFile,
-              details: details,
-              detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-              foregroundColor: colors.foreground,
-              supportingColor: colors.foreground,
-            ),
-          ),
-        ),
-      ),
+      child: trailing == null ? IgnorePointer(child: content) : content,
     );
   }
 }
@@ -2859,7 +2984,7 @@ class _AttachmentMetadataSummary extends StatelessWidget {
         ),
         Text(
           sizeLabel,
-          maxLines: 2,
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: context.textTheme.muted.copyWith(color: resolvedSupporting),
         ),
@@ -2932,38 +3057,6 @@ class _AttachmentSurface extends StatelessWidget {
           ),
           child: child,
         ),
-      ),
-    );
-  }
-}
-
-class _AttachmentImageTapTarget extends StatefulWidget {
-  const _AttachmentImageTapTarget({required this.onTap, required this.child});
-
-  final VoidCallback onTap;
-  final Widget child;
-
-  @override
-  State<_AttachmentImageTapTarget> createState() =>
-      _AttachmentImageTapTargetState();
-}
-
-class _AttachmentImageTapTargetState extends State<_AttachmentImageTapTarget> {
-  final AxiTapBounceController _bounceController = AxiTapBounceController();
-
-  @override
-  Widget build(BuildContext context) {
-    return ShadFocusable(
-      canRequestFocus: true,
-      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
-      child: ShadGestureDetector(
-        cursor: SystemMouseCursors.click,
-        hoverStrategies: mobileHoverStrategies,
-        onTap: widget.onTap,
-        onTapDown: _bounceController.handleTapDown,
-        onTapUp: _bounceController.handleTapUp,
-        onTapCancel: _bounceController.handleTapCancel,
-        child: AxiTapBounce(controller: _bounceController, child: widget.child),
       ),
     );
   }
@@ -3369,12 +3462,15 @@ String _formatAttachmentSize({
   required bool hasLocalFile,
   required AppLocalizations l10n,
 }) {
+  final status = hasLocalFile
+      ? l10n.chatAttachmentOnThisDevice
+      : l10n.chatAttachmentNotDownloadedYet;
   if (bytes == null || bytes <= 0) {
     return hasLocalFile
-        ? l10n.chatAttachmentUnknownSize
-        : l10n.chatAttachmentNotDownloadedYet;
+        ? '$status • ${l10n.chatAttachmentUnknownSize}'
+        : status;
   }
-  return _formatSize(bytes, l10n);
+  return '$status • ${_formatSize(bytes, l10n)}';
 }
 
 String _formatSize(int? bytes, AppLocalizations l10n) {

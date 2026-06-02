@@ -203,6 +203,24 @@ List<BoxShadow> _scaleShadows(List<BoxShadow> shadows, double factor) => shadows
     )
     .toList();
 
+bool _emailHtmlHasVisibleTimelineContent({
+  required String? normalizedHtmlBody,
+  required String? normalizedHtmlText,
+}) {
+  if (normalizedHtmlText?.trim().isNotEmpty == true) {
+    return true;
+  }
+  if (normalizedHtmlBody == null) {
+    return false;
+  }
+  if (HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody)) {
+    return true;
+  }
+  return HtmlContentCodec.imageSources(
+    normalizedHtmlBody,
+  ).any((source) => source.trim().toLowerCase().startsWith('data:'));
+}
+
 double _bubbleCornerClearance(BorderRadius baseRadius) =>
     math.max(baseRadius.topLeft.x, baseRadius.topLeft.y);
 
@@ -341,13 +359,12 @@ class _ChatState extends State<Chat> {
       StreamController<void>();
   late final StreamSubscription<void> _shareComposerSeedConsumptionSubscription;
   RequestStatus _shareRequestStatus = RequestStatus.none;
-  static const CalendarChatSupport _calendarFragmentPolicy =
-      CalendarChatSupport();
   CalendarTask? _pendingCalendarTaskIcs;
   bool _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
   String? _pendingCalendarSeedText;
   Completer<Object?>? _pendingCalendarImportCompleter;
   Message? _quotedDraft;
+  var _replyResolveRequestId = 0;
   List<PendingAttachment> _pendingAttachments = const [];
   var _pendingAttachmentSeed = 0;
   var _handledPendingOpenMessageRequestId = 0;
@@ -723,21 +740,7 @@ class _ChatState extends State<Chat> {
   }
 
   _CalendarTaskShare? _resolveCalendarTaskShare(CalendarTask task) {
-    if (context.read<ChatBloc>().state.chat == null) {
-      return null;
-    }
-    final decision = _calendarFragmentPolicy.decisionForChat(
-      chat: context.read<ChatBloc>().state.chat!,
-      roomState: context.read<ChatBloc>().state.roomState,
-    );
     final String shareText = task.toShareText(context.l10n).trim();
-    final bool canShareIcs =
-        decision.canWrite ||
-        context.read<ChatBloc>().state.chat!.defaultTransport.isEmail;
-    if (!canShareIcs) {
-      _showSnackbar(context.l10n.chatCalendarFragmentShareDeniedMessage);
-      return _CalendarTaskShare(task: null, text: shareText);
-    }
     return _CalendarTaskShare(task: task, text: shareText);
   }
 
@@ -1096,12 +1099,16 @@ class _ChatState extends State<Chat> {
     required Duration duration,
   }) async {
     final l10n = context.l10n;
-    if (context.read<ChatBloc>().state.chat == null ||
-        !context.read<ChatBloc>().state.chat!.supportsChatCalendar) {
+    final locate = context.read;
+    final chat = locate<ChatBloc>().state.chat;
+    if (chat == null ||
+        !chat.supportsChatCalendarForAccount(
+          accountJid: locate<XmppService>().myJid,
+        )) {
       _showSnackbar(l10n.chatAvailabilityRequestChatCalendarUnavailableMessage);
       return;
     }
-    final storageManager = context.read<CalendarStorageManager>();
+    final storageManager = locate<CalendarStorageManager>();
     final coordinator = _readChatCalendarCoordinator(
       context,
       calendarAvailable: storageManager.isAuthStorageReady,
@@ -1608,6 +1615,7 @@ class _ChatState extends State<Chat> {
     required BuildContext context,
     required List<String> attachmentIds,
     required bool hasBubbleAnchor,
+    required bool chainsFromPreviousMessage,
     required bool chainsIntoNextMessage,
     required bool isSelfBubble,
     required bool isEmailChat,
@@ -1624,16 +1632,11 @@ class _ChatState extends State<Chat> {
         ? false
         : _isOneTimeAttachmentAllowed(messageModel.stanzaID);
     final locate = context.read;
-    final emailDownloadDelegate = isEmailChat
+    final attachmentUsesEmailProtocol =
+        isEmailChat || messageModel.isEmailBacked;
+    final emailDownloadDelegate = attachmentUsesEmailProtocol
         ? AttachmentDownloadDelegate(() async {
-            final approved = await _confirmManualAttachmentDownload(
-              senderJid: messageModel.senderJid,
-              isSelf: isSelfBubble,
-              senderEmail: state.chat?.emailAddress,
-            );
-            if (!approved || !mounted) return false;
-            await locate<ChatBloc>().downloadFullEmailMessage(messageModel);
-            return true;
+            return locate<ChatBloc>().downloadFullEmailMessage(messageModel);
           })
         : null;
     for (var index = 0; index < attachmentIds.length; index += 1) {
@@ -1648,8 +1651,10 @@ class _ChatState extends State<Chat> {
       );
       final allowAttachment =
           !attachmentsBlockedForChat &&
-          (allowAttachmentByTrust || allowAttachmentOnce);
-      final downloadDelegate = isEmailChat
+          (attachmentUsesEmailProtocol ||
+              allowAttachmentByTrust ||
+              allowAttachmentOnce);
+      final downloadDelegate = attachmentUsesEmailProtocol
           ? emailDownloadDelegate
           : AttachmentDownloadDelegate(() async {
               final approved = await _confirmManualAttachmentDownload(
@@ -1666,7 +1671,8 @@ class _ChatState extends State<Chat> {
       final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
         () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
       );
-      final hasAttachmentAbove = index > 0 || hasBubbleAnchor;
+      final hasAttachmentAbove =
+          index > 0 || hasBubbleAnchor || chainsFromPreviousMessage;
       final hasAttachmentBelow =
           index < attachmentIds.length - 1 ||
           (chainsIntoNextMessage && index == attachmentIds.length - 1);
@@ -1808,10 +1814,16 @@ class _ChatState extends State<Chat> {
     final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
         ? normalizedHtmlText
         : null;
-    final shouldRenderHtmlBody = preparedHtmlBody.trim().isNotEmpty;
+    final shouldRenderHtmlBody =
+        preparedHtmlBody.trim().isNotEmpty &&
+        _emailHtmlHasVisibleTimelineContent(
+          normalizedHtmlBody: normalizedHtmlBody,
+          normalizedHtmlText: normalizedHtmlText,
+        );
     final shouldUseSelectedInlineEmailWebView =
         isSingleSelection && shouldRenderHtmlBody;
     final shouldShowImageGallery = hasRemoteHtmlImages && shouldRenderHtmlBody;
+    final initialChildCount = bubbleTextChildren.length;
     if (!shouldRenderHtmlBody &&
         emailFallbackText != null &&
         emailFallbackText.isNotEmpty) {
@@ -1868,7 +1880,8 @@ class _ChatState extends State<Chat> {
               ),
       );
     }
-    if (messageDetails.isNotEmpty) {
+    if (messageDetails.isNotEmpty &&
+        bubbleTextChildren.length > initialChildCount) {
       bubbleTextChildren.add(
         Padding(
           padding: EdgeInsets.only(top: context.spacing.xs),
@@ -1927,11 +1940,12 @@ class _ChatState extends State<Chat> {
           : (visibleSanitizedHtmlText ?? _emptyText);
       final shouldRenderHtmlBody =
           normalizedHtmlBody != null &&
-          HtmlContentCodec.shouldRenderRichEmailHtml(
-            normalizedHtmlBody: normalizedHtmlBody,
-            normalizedHtmlText: normalizedHtmlText,
-            renderedText: renderedText,
-          );
+          (isSingleSelection ||
+              HtmlContentCodec.shouldRenderRichEmailHtml(
+                normalizedHtmlBody: normalizedHtmlBody,
+                normalizedHtmlText: normalizedHtmlText,
+                renderedText: renderedText,
+              ));
       final blockDetails = index == visibleBlocks.length - 1
           ? messageDetails
           : const <InlineSpan>[];
@@ -2261,9 +2275,16 @@ class _ChatState extends State<Chat> {
         : rawRenderedText;
     final trimmedRenderedText = messageText.trim();
     final deltaMessageId = messageModel.deltaMsgId;
+    final suppressGroupedEmailHtml =
+        timelineMessageItem.emailRfcGroupKey != null &&
+        !timelineMessageItem.isEmailRfcGroupLeader;
     final resolvedHtmlBody = isWelcomeChat
         ? null
+        : suppressGroupedEmailHtml
+        ? null
         : deltaMessageId == null
+        ? timelineMessageItem.resolvedHtmlBody ?? messageModel.htmlBody
+        : messageModel.hasRfc822BodyContent
         ? timelineMessageItem.resolvedHtmlBody ?? messageModel.htmlBody
         : state.emailFullHtmlByDeltaId[deltaMessageId] ??
               timelineMessageItem.resolvedHtmlBody ??
@@ -2280,6 +2301,10 @@ class _ChatState extends State<Chat> {
               allowRemoteImages: false,
             ),
           ).trim();
+    final hasVisibleEmailHtmlContent = _emailHtmlHasVisibleTimelineContent(
+      normalizedHtmlBody: normalizedHtmlBody,
+      normalizedHtmlText: visibleSanitizedHtmlText,
+    );
     final displayMessageText = messageText;
     final trimmedDisplayMessageText = displayMessageText.trim();
     final textBubbleMessageText =
@@ -2315,16 +2340,13 @@ class _ChatState extends State<Chat> {
       surfaceDetails: surfaceDetails,
       addExtra: addExtra,
     );
-    final metadataIdForCaption = attachmentIds.isNotEmpty
-        ? attachmentIds.first
-        : messageModel.fileMetadataID;
     final shouldRenderTextContent =
         !hideFragmentText && !hideAvailabilityText && !hideTaskText;
-    final hasAttachmentCaption =
+    final showsAttachmentOnlySurface =
         shouldRenderTextContent &&
         trimmedDisplayMessageText.isEmpty &&
-        metadataIdForCaption != null &&
-        metadataIdForCaption.isNotEmpty;
+        !hasVisibleEmailHtmlContent &&
+        attachmentIds.isNotEmpty;
     final fullEmailPreviewText = displayMessageText.trim().isNotEmpty
         ? displayMessageText.trim()
         : (visibleSanitizedHtmlText?.trim() ?? _emptyText);
@@ -2334,7 +2356,7 @@ class _ChatState extends State<Chat> {
         _collapseLongEmailMessages &&
         isEmailMessage &&
         shouldRenderTextContent &&
-        !hasAttachmentCaption &&
+        !showsAttachmentOnlySurface &&
         !isSingleSelection &&
         collapsedEmailPreviewText.isNotEmpty &&
         collapsedEmailPreviewText != fullEmailPreviewText;
@@ -2346,15 +2368,18 @@ class _ChatState extends State<Chat> {
           renderedText: displayMessageText,
         );
     final hasEmailHtmlBody = isEmailMessage && normalizedHtmlBody != null;
-    final hasRichEmailHtmlBody = hasEmailHtmlBody && shouldPreferRichEmailHtml;
+    final hasRichEmailHtmlBody =
+        hasEmailHtmlBody &&
+        hasVisibleEmailHtmlContent &&
+        shouldPreferRichEmailHtml;
     final defaultShowsInlineEmailHtmlBody =
         shouldRenderTextContent &&
-        !hasAttachmentCaption &&
+        !showsAttachmentOnlySurface &&
         hasRichEmailHtmlBody;
     final shouldRenderInlineEmailHtmlBody =
         hasRichEmailHtmlBody &&
         shouldRenderTextContent &&
-        !hasAttachmentCaption &&
+        !showsAttachmentOnlySurface &&
         (defaultShowsInlineEmailHtmlBody || isSingleSelection);
     final autoLoadEmailImages =
         state.chat?.emailRemoteImagesEnabled ??
@@ -2406,7 +2431,7 @@ class _ChatState extends State<Chat> {
         detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         bubbleTextChildren: bubbleTextChildren,
       );
-    } else if (shouldRenderTextContent && !hasAttachmentCaption) {
+    } else if (shouldRenderTextContent && !showsAttachmentOnlySurface) {
       _appendTextBodyBubbleContent(
         context: context,
         bubbleContentKey: bubbleContentKey,
@@ -2772,6 +2797,7 @@ class _ChatState extends State<Chat> {
     required List<InlineSpan> surfaceDetails,
     required Map<int, double> detailOpticalOffsetFactors,
     required List<String> attachmentIds,
+    required bool chainsFromPreviousMessage,
     required bool chainsIntoNextMessage,
   }) {
     final bubbleContentKey = detailId;
@@ -2885,6 +2911,7 @@ class _ChatState extends State<Chat> {
         context: context,
         attachmentIds: attachmentIds,
         hasBubbleAnchor: hasBubbleAnchor,
+        chainsFromPreviousMessage: chainsFromPreviousMessage,
         chainsIntoNextMessage: chainsIntoNextMessage,
         isSelfBubble: self,
         isEmailChat: isEmailChat,
@@ -2945,10 +2972,35 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleReplyRequested(Message message) {
+    final locate = context.read;
+    final requestId = ++_replyResolveRequestId;
+    unawaited(
+      _resolveReplyRequested(
+        bloc: locate<ChatBloc>(),
+        message: message,
+        requestId: requestId,
+      ),
+    );
+  }
+
+  Future<void> _resolveReplyRequested({
+    required ChatBloc bloc,
+    required Message message,
+    required int requestId,
+  }) async {
+    final quotedMessage = await bloc.resolveReplyTargetForMessageAsync(message);
+    if (!mounted || requestId != _replyResolveRequestId) {
+      return;
+    }
     setState(() {
-      _quotedDraft = message;
+      _quotedDraft = quotedMessage;
     });
     _inlineComposerController.requestTextFocus();
+  }
+
+  void _clearQuotedDraftAndInvalidateReplyResolution() {
+    _replyResolveRequestId += 1;
+    _quotedDraft = null;
   }
 
   void _handleTimelineBubbleTap(
@@ -4215,7 +4267,7 @@ class _ChatState extends State<Chat> {
   void _clearInlineComposerState({required bool clearInlineComposerDraftId}) {
     _cancelInlineAttachmentPreparation();
     _composerHasText = false;
-    _quotedDraft = null;
+    _clearQuotedDraftAndInvalidateReplyResolution();
     _pendingAttachments = const [];
     _pendingCalendarTaskIcs = null;
     _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
@@ -4820,7 +4872,7 @@ class _ChatState extends State<Chat> {
     }
     if (_quotedDraft != null) {
       setState(() {
-        _quotedDraft = null;
+        _clearQuotedDraftAndInvalidateReplyResolution();
       });
     }
     _inlineComposerController.requestTextFocus();
@@ -6176,7 +6228,10 @@ class _ChatState extends State<Chat> {
                 final bool personalCalendarAvailable =
                     storageManager.isAuthStorageReady;
                 final bool supportsChatCalendar =
-                    chatEntity?.supportsChatCalendar ?? false;
+                    chatEntity?.supportsChatCalendarForAccount(
+                      accountJid: selfXmppJid,
+                    ) ??
+                    false;
                 final bool chatCalendarReady =
                     storageManager.isAuthStorageReady &&
                     chatCalendarCoordinator != null;
@@ -6391,7 +6446,7 @@ class _ChatState extends State<Chat> {
                   onClearQuote: _quotedDraft == null
                       ? () {}
                       : () => setState(() {
-                          _quotedDraft = null;
+                          _clearQuotedDraftAndInvalidateReplyResolution();
                         }),
                   storageManager: storageManager,
                 );

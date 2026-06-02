@@ -1303,6 +1303,8 @@ bool isAxichatWelcomeThreadJid(String? jid) {
 
 extension ChatSystemThreadExtension on Chat {
   bool get isAxichatWelcomeThread => isAxichatWelcomeThreadJid(jid);
+
+  bool get isAxiImServerAnnouncementThread => isAxiImServerAnnouncementJid(jid);
 }
 
 extension ChatPrimaryViewExtension on Chat {

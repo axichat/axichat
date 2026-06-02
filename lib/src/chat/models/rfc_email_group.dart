@@ -10,13 +10,19 @@ final class RfcEmailGroup {
     required this.messages,
     required this.bodySources,
     required this.attachmentIdsByStanzaId,
+    required this.duplicateBodyStanzaIds,
   });
 
   final List<Message> messages;
   final List<Message> bodySources;
   final Map<String, List<String>> attachmentIdsByStanzaId;
+  final Set<String> duplicateBodyStanzaIds;
 
-  Message get leader => bodySources.firstOrNull ?? messages.first;
+  Message get leader =>
+      bodySources.where((message) => !hasAttachments(message)).firstOrNull ??
+      messages.where((message) => !hasAttachments(message)).firstOrNull ??
+      bodySources.firstOrNull ??
+      messages.first;
 
   Message get quoteTarget =>
       bodySources.where(_hasDeltaMessageId).firstOrNull ??
@@ -31,6 +37,9 @@ final class RfcEmailGroup {
   bool isBodySource(Message message) =>
       bodySources.any((item) => item.stanzaID == message.stanzaID);
 
+  bool isDuplicateBodyMessage(Message message) =>
+      duplicateBodyStanzaIds.contains(message.stanzaID);
+
   bool hasAttachments(Message message) =>
       attachmentIdsByStanzaId[message.stanzaID]?.isNotEmpty == true;
 
@@ -38,10 +47,13 @@ final class RfcEmailGroup {
       attachmentIdsByStanzaId.values.any((ids) => ids.isNotEmpty);
 
   bool shouldHideTimelineMessage(Message message) =>
-      !isLeader(message) && isBodySource(message) && !hasAttachments(message);
+      !isLeader(message) &&
+      !hasAttachments(message) &&
+      (isBodySource(message) || isDuplicateBodyMessage(message));
 
   bool shouldSuppressTimelineText(Message message) =>
-      !isLeader(message) && hasAttachments(message);
+      !isLeader(message) &&
+      (hasAttachments(message) || isDuplicateBodyMessage(message));
 
   static bool _hasDeltaMessageId(Message message) {
     final deltaMsgId = message.deltaMsgId;
@@ -52,7 +64,8 @@ final class RfcEmailGroup {
 Map<String, RfcEmailGroup> buildRfcEmailGroupsByMessageStanzaId({
   required List<Message> messages,
   required List<String> Function(Message message) attachmentsForMessage,
-  required bool Function(Message message) hasMeaningfulBody,
+  required String Function(Message message) bodyTextForMessage,
+  bool Function(Message message)? isAuthoritativeBody,
   bool requireMeaningfulBody = true,
 }) {
   final grouped = <String, List<Message>>{};
@@ -80,9 +93,39 @@ Map<String, RfcEmailGroup> buildRfcEmailGroupsByMessageStanzaId({
           .toList(growable: false);
       attachmentIdsByStanzaId[message.stanzaID] = attachmentIds;
     }
-    final bodySources = orderedMessages
-        .where(hasMeaningfulBody)
-        .toList(growable: false);
+    final candidates = <_RfcEmailBodyCandidate>[];
+    final duplicateBodyStanzaIds = <String>{};
+    for (final message in orderedMessages) {
+      final bodyText = bodyTextForMessage(message);
+      final canonicalText = _canonicalRfcEmailBodyText(bodyText);
+      if (canonicalText.isEmpty) {
+        continue;
+      }
+      candidates.add(
+        _RfcEmailBodyCandidate(
+          message: message,
+          bodyText: bodyText,
+          canonicalText: canonicalText,
+          authoritative: isAuthoritativeBody?.call(message) ?? false,
+        ),
+      );
+    }
+    final hasAuthoritativeCandidate = candidates.any(
+      (candidate) => candidate.authoritative,
+    );
+    final bodySources = <Message>[];
+    final bodyCanonicalTexts = <String>{};
+    for (final candidate in candidates) {
+      if (hasAuthoritativeCandidate && !candidate.authoritative) {
+        duplicateBodyStanzaIds.add(candidate.message.stanzaID);
+        continue;
+      }
+      if (bodyCanonicalTexts.add(candidate.canonicalText)) {
+        bodySources.add(candidate.message);
+      } else {
+        duplicateBodyStanzaIds.add(candidate.message.stanzaID);
+      }
+    }
     if (requireMeaningfulBody && bodySources.isEmpty) {
       continue;
     }
@@ -92,12 +135,21 @@ Map<String, RfcEmailGroup> buildRfcEmailGroupsByMessageStanzaId({
       attachmentIdsByStanzaId: Map<String, List<String>>.unmodifiable(
         attachmentIdsByStanzaId,
       ),
+      duplicateBodyStanzaIds: Set<String>.unmodifiable(duplicateBodyStanzaIds),
     );
     for (final message in orderedMessages) {
       byStanzaId[message.stanzaID] = group;
     }
   }
   return Map<String, RfcEmailGroup>.unmodifiable(byStanzaId);
+}
+
+String _canonicalRfcEmailBodyText(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return trimmed.replaceAll(RegExp(r'\s+'), ' ');
 }
 
 List<Message> _messagesInRfcEmailOrder(List<Message> messages) {
@@ -157,6 +209,10 @@ String rfcEmailBodyText({
   required String? resolvedHtmlBody,
 }) {
   final body = _plainEmailBodyCandidate(message);
+  if (message.hasGeneratedEmailAttachmentCaption &&
+      _looksGeneratedEmailAttachmentCaption(body)) {
+    return '';
+  }
   if (body.isNotEmpty) {
     return body;
   }
@@ -167,23 +223,6 @@ String rfcEmailBodyText({
     return '';
   }
   return HtmlContentCodec.toPlainText(normalizedHtml).trim();
-}
-
-bool rfcEmailHasMeaningfulBody({
-  required Message message,
-  required String? resolvedHtmlBody,
-}) {
-  final body = _plainEmailBodyCandidate(message);
-  if (body.isNotEmpty) {
-    return true;
-  }
-  final normalizedHtml = HtmlContentCodec.normalizeHtml(
-    resolvedHtmlBody ?? message.htmlBody,
-  );
-  if (normalizedHtml == null) {
-    return false;
-  }
-  return HtmlContentCodec.toPlainText(normalizedHtml).trim().isNotEmpty;
 }
 
 String _plainEmailBodyCandidate(Message message) {
@@ -199,4 +238,26 @@ String _plainEmailBodyCandidate(Message message) {
         )
       : split.body;
   return ChatSubjectCodec.previewBodyText(body).trim();
+}
+
+bool _looksGeneratedEmailAttachmentCaption(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty || trimmed.startsWith('\u{1F4CE} ')) {
+    return true;
+  }
+  return RegExp(r'^[^\r\n]+\.[^\s./\\]{1,16}\s+\([^)]+\)$').hasMatch(trimmed);
+}
+
+final class _RfcEmailBodyCandidate {
+  const _RfcEmailBodyCandidate({
+    required this.message,
+    required this.bodyText,
+    required this.canonicalText,
+    required this.authoritative,
+  });
+
+  final Message message;
+  final String bodyText;
+  final String canonicalText;
+  final bool authoritative;
 }
