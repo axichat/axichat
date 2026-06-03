@@ -648,7 +648,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatAttachmentConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'Only load attachments from contacts you trust.\n\n{sender} is not in your contacts yet. Continue?'**
+  /// **'Only load attachments from senders you trust.\n\nContinue loading from {sender}?'**
   String chatAttachmentConfirmMessage(Object sender);
 
   /// No description provided for @chatAttachmentConfirmButton.
@@ -1442,6 +1442,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Rename contact'**
   String get chatContactRenameTooltip;
+
+  /// No description provided for @chatVerifiedServerAnnouncementTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified server announcement'**
+  String get chatVerifiedServerAnnouncementTooltip;
 
   /// No description provided for @chatContactRenameTitle.
   ///
@@ -2365,6 +2371,24 @@ abstract class AppLocalizations {
   /// **'Title cannot be blank.'**
   String get calendarSelectionTitleBlank;
 
+  /// No description provided for @calendarSelectionUnsavedChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending selection changes'**
+  String get calendarSelectionUnsavedChangesTitle;
+
+  /// No description provided for @calendarSelectionUnsavedChangesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply changes before leaving selection mode?'**
+  String get calendarSelectionUnsavedChangesMessage;
+
+  /// No description provided for @calendarSelectionDiscardChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get calendarSelectionDiscardChanges;
+
   /// No description provided for @calendarExportReady.
   ///
   /// In en, this message translates to:
@@ -2638,7 +2662,7 @@ abstract class AppLocalizations {
   /// No description provided for @authSignupWelcomeMessage.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to Axichat!\n\nStorage limits are currently low and will be expanded over time.\n\nMany features are available by tapping on message bubbles; try tapping this one!\n\nFor reliable message delivery, it is strongly recommended to enable background notifications in the Profile screen.\n\nIf you find any bugs, please report them at https://github.com/axichat/axichat/issues so I can fix them!'**
+  /// **'Welcome to the next evolution of messaging and email.\n\nAxichat is currently under the radar, so storage limits are currently low and will be expanded over time. Please report bugs at https://github.com/axichat/axichat/issues.\n\nMany features are available by tapping message bubbles. Try tapping this one.\n\nFor reliable message delivery, we recommend turning on background notifications in the Profile screen.'**
   String get authSignupWelcomeMessage;
 
   /// No description provided for @signupTitle.
@@ -2686,7 +2710,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupCustomEndpointRequired.
   ///
   /// In en, this message translates to:
-  /// **'Choose a custom server to sign up in the app. Create axi.im accounts on the website.'**
+  /// **'Axichat is currently under the radar, so account creation for axi.im is only available on the website. Choose a custom server to sign up in the app.'**
   String get signupCustomEndpointRequired;
 
   /// No description provided for @signupCaptchaUnavailable.
@@ -2991,7 +3015,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsRestartTitle.
   ///
   /// In en, this message translates to:
-  /// **'Restart app to enable notifications'**
+  /// **'Restart the app'**
   String get notificationsRestartTitle;
 
   /// No description provided for @notificationsRestartSubtitle.
@@ -3077,6 +3101,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Task copied'**
   String get calendarTaskCopied;
+
+  /// No description provided for @calendarTaskCopiedPasteInstructionPointer.
+  ///
+  /// In en, this message translates to:
+  /// **'Task copied. Right-click a calendar cell to paste.'**
+  String get calendarTaskCopiedPasteInstructionPointer;
+
+  /// No description provided for @calendarTaskCopiedPasteInstructionTouch.
+  ///
+  /// In en, this message translates to:
+  /// **'Task copied. Long-press a calendar cell to paste.'**
+  String get calendarTaskCopiedPasteInstructionTouch;
 
   /// No description provided for @calendarTaskCopiedClipboard.
   ///
@@ -4371,8 +4407,14 @@ abstract class AppLocalizations {
   /// No description provided for @authCustomServerDescription.
   ///
   /// In en, this message translates to:
-  /// **'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields blank to keep defaults. Custom servers must be created following the steps at https://github.com/axichat/server or they probably won\'t work.'**
+  /// **'Choose the account domain. Leave it blank to use axi.im. For a custom server, enter its domain; setup steps are at https://github.com/axichat/selfhost.'**
   String get authCustomServerDescription;
+
+  /// No description provided for @authCustomServerSignupDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the domain for the custom server you want to sign up on. Custom servers must be set up with https://github.com/axichat/selfhost before this app can create accounts on them.'**
+  String get authCustomServerSignupDescription;
 
   /// No description provided for @authCustomServerDomainOrIp.
   ///
@@ -5003,6 +5045,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Edit task'**
   String get calendarEditTaskTitle;
+
+  /// No description provided for @calendarEditUnsavedChangesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved changes'**
+  String get calendarEditUnsavedChangesTitle;
+
+  /// No description provided for @calendarEditUnsavedChangesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes before closing this task?'**
+  String get calendarEditUnsavedChangesMessage;
+
+  /// No description provided for @calendarEditDiscardChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get calendarEditDiscardChanges;
 
   /// No description provided for @calendarDateTimeLabel.
   ///
@@ -11995,6 +12055,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'New messages in this chat use email instead of XMPP.'**
   String get chatEmailOutboundOverrideSubtitle;
+
+  /// No description provided for @commonChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get commonChange;
+
+  /// No description provided for @commonRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get commonRefresh;
+
+  /// No description provided for @authForgotUsernameOrPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot username or password?'**
+  String get authForgotUsernameOrPassword;
+
+  /// No description provided for @authAccountRepairRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Account repair is required. Contact support or your server administrator.'**
+  String get authAccountRepairRequired;
+
+  /// No description provided for @authIdempotencyConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'This request no longer matches the previous attempt. Check the form and try again.'**
+  String get authIdempotencyConflict;
+
+  /// No description provided for @authRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Try again later.'**
+  String get authRateLimited;
+
+  /// No description provided for @signupAxiImUnavailableDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat is currently under the radar, so account creation for axi.im is only available on the website. This app can log in to existing accounts.'**
+  String get signupAxiImUnavailableDescription;
+
+  /// No description provided for @recoveryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account recovery'**
+  String get recoveryTitle;
+
+  /// No description provided for @recoverySettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Account recovery'**
+  String get recoverySettingsTitle;
+
+  /// No description provided for @recoverySettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Review or change the recovery methods for this axi.im account.'**
+  String get recoverySettingsDescription;
+
+  /// No description provided for @recoverySettingsPasswordDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock recovery settings for this axi.im account.'**
+  String get recoverySettingsPasswordDescription;
+
+  /// No description provided for @recoveryWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up account recovery'**
+  String get recoveryWelcomeTitle;
+
+  /// No description provided for @recoveryWelcomeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a recovery email or authenticator app for password resets.'**
+  String get recoveryWelcomeDescription;
+
+  /// No description provided for @recoveryAddEmailAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add recovery email'**
+  String get recoveryAddEmailAction;
+
+  /// No description provided for @recoveryAddTotpAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Add authenticator app'**
+  String get recoveryAddTotpAction;
+
+  /// No description provided for @recoverySkipForNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip for now'**
+  String get recoverySkipForNow;
+
+  /// No description provided for @recoveryChooseMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose recovery method'**
+  String get recoveryChooseMethod;
+
+  /// No description provided for @recoveryEmailCodeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Email code'**
+  String get recoveryEmailCodeAction;
+
+  /// No description provided for @recoveryAuthenticatorCodeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticator code'**
+  String get recoveryAuthenticatorCodeAction;
+
+  /// No description provided for @recoveryUsernamePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Username or axi.im address'**
+  String get recoveryUsernamePlaceholder;
+
+  /// No description provided for @recoveryAxiAccountRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an axi.im account.'**
+  String get recoveryAxiAccountRequired;
+
+  /// No description provided for @recoveryEmailPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery email'**
+  String get recoveryEmailPlaceholder;
+
+  /// No description provided for @recoveryEmailRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a recovery email.'**
+  String get recoveryEmailRequired;
+
+  /// No description provided for @recoveryCodePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get recoveryCodePlaceholder;
+
+  /// No description provided for @recoveryCodeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the code.'**
+  String get recoveryCodeRequired;
+
+  /// No description provided for @recoveryCodeIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code.'**
+  String get recoveryCodeIncomplete;
+
+  /// No description provided for @recoveryNeutralEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If the account and recovery email match, a code was sent.'**
+  String get recoveryNeutralEmailSent;
+
+  /// No description provided for @recoveryAuthenticatorCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the code from your authenticator app.'**
+  String get recoveryAuthenticatorCodeHint;
+
+  /// No description provided for @recoveryNewPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a new password for this account.'**
+  String get recoveryNewPasswordHint;
+
+  /// No description provided for @recoveryPasswordResetComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Password reset complete. You can log in with the new password.'**
+  String get recoveryPasswordResetComplete;
+
+  /// No description provided for @recoveryRestartRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Restart account recovery and try again.'**
+  String get recoveryRestartRequired;
+
+  /// No description provided for @recoveryInvalidCode.
+  ///
+  /// In en, this message translates to:
+  /// **'The code is not valid.'**
+  String get recoveryInvalidCode;
+
+  /// No description provided for @recoveryChallengeExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'That code expired. Restart this step.'**
+  String get recoveryChallengeExpired;
+
+  /// No description provided for @recoveryChallengeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many incorrect codes. Restart this step.'**
+  String get recoveryChallengeFailed;
+
+  /// No description provided for @recoveryNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Account recovery is not configured for this account.'**
+  String get recoveryNotConfigured;
+
+  /// No description provided for @recoveryGenericError.
+  ///
+  /// In en, this message translates to:
+  /// **'Account recovery failed. Try again.'**
+  String get recoveryGenericError;
+
+  /// No description provided for @recoveryEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery email'**
+  String get recoveryEmailTitle;
+
+  /// No description provided for @recoveryTotpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticator app'**
+  String get recoveryTotpTitle;
+
+  /// No description provided for @recoveryEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get recoveryEnabled;
+
+  /// No description provided for @recoveryNotSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get recoveryNotSet;
+
+  /// No description provided for @recoveryEmailSetupCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the code sent to your recovery email.'**
+  String get recoveryEmailSetupCodeHint;
+
+  /// No description provided for @recoveryTotpSetupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add this secret to your authenticator app, then enter the 6-digit code.'**
+  String get recoveryTotpSetupHint;
+
+  /// No description provided for @recoveryTotpSetupStartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate an authenticator secret for this account, then enter the 6-digit code from your app.'**
+  String get recoveryTotpSetupStartHint;
+
+  /// No description provided for @recoveryRemoveEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove recovery email'**
+  String get recoveryRemoveEmailTitle;
+
+  /// No description provided for @recoveryRemoveTotpTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove authenticator app'**
+  String get recoveryRemoveTotpTitle;
+
+  /// No description provided for @recoveryRemoveConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this recovery method?'**
+  String get recoveryRemoveConfirmMessage;
 }
 
 class _AppLocalizationsDelegate

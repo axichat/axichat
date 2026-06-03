@@ -53,12 +53,12 @@ void main() {
     expect(find.text('Link existing email'), findsOneWidget);
   });
 
-  testWidgets('signup welcome uses background messaging setting', (
+  testWidgets('email onboarding welcome uses background messaging setting', (
     tester,
   ) async {
     await _pumpEmailForwardingApp(
       tester,
-      child: EmailForwardingWelcomeContent(
+      child: EmailOnboardingWelcomeContent(
         onForegroundActivationStarted: () {},
         onForegroundActivationFinished: () {},
         onForegroundActivated: () async {},
@@ -73,14 +73,14 @@ void main() {
     expect(find.text('Strongly recommended'), findsOneWidget);
   });
 
-  testWidgets('signup background messaging setting updates SettingsCubit', (
+  testWidgets('email onboarding updates background messaging setting', (
     tester,
   ) async {
     final settingsCubit = _settingsCubit();
     await _pumpEmailForwardingApp(
       tester,
       settingsCubit: settingsCubit,
-      child: EmailForwardingWelcomeContent(
+      child: EmailOnboardingWelcomeContent(
         onForegroundActivationStarted: () {},
         onForegroundActivationFinished: () {},
         onForegroundActivated: () async {},
@@ -99,6 +99,42 @@ void main() {
     ).called(1);
   });
 
+  testWidgets(
+    'background messaging switch shows restart after deferred start',
+    (tester) async {
+      var settingsState = const SettingsState();
+      final settingsCubit = _settingsCubit();
+      when(() => settingsCubit.state).thenAnswer((_) => settingsState);
+      when(
+        () => settingsCubit.toggleBackgroundMessaging(
+          true,
+          accountJid: any(named: 'accountJid'),
+        ),
+      ).thenAnswer((_) async {
+        settingsState = settingsState.copyWith(
+          backgroundMessagingEnabled: true,
+        );
+      });
+      await _pumpEmailForwardingApp(
+        tester,
+        settingsCubit: settingsCubit,
+        xmppService: _xmppService(usingForegroundSocket: false),
+        child: const NotificationRequest(
+          displayMode: NotificationRequestDisplayMode.always,
+        ),
+      );
+
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ShadSwitch));
+      await tester.pumpAndSettle();
+
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Restart the app'), findsOneWidget);
+    },
+  );
+
   testWidgets('background messaging switch is disabled while starting', (
     tester,
   ) async {
@@ -112,7 +148,7 @@ void main() {
       tester,
       settingsCubit: settingsCubit,
       emailService: emailService,
-      child: EmailForwardingWelcomeContent(
+      child: EmailOnboardingWelcomeContent(
         onForegroundActivationStarted: () {},
         onForegroundActivationFinished: () {},
         onForegroundActivated: () async {},
@@ -146,7 +182,7 @@ void main() {
     ).called(1);
   });
 
-  testWidgets('signup welcome gate ignores the persisted guide-seen setting', (
+  testWidgets('account welcome ignores the persisted guide-seen setting', (
     tester,
   ) async {
     await _pumpEmailForwardingApp(
@@ -157,7 +193,7 @@ void main() {
       authenticationCubit: _authenticationCubit(
         state: const AuthenticationCompleteFromSignup(),
       ),
-      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
     );
 
     await tester.pumpAndSettle();
@@ -167,7 +203,7 @@ void main() {
     expect(find.text('Background notifications'), findsOneWidget);
   });
 
-  testWidgets('signup welcome gate skips normal login for non-axi accounts', (
+  testWidgets('normal first login for non-axi account skips email onboarding', (
     tester,
   ) async {
     await _pumpEmailForwardingApp(
@@ -175,23 +211,56 @@ void main() {
       authenticationCubit: _authenticationCubit(
         state: const AuthenticationComplete(),
       ),
-      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
     );
 
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Axichat'), findsNothing);
+    expect(find.text('Background notifications'), findsNothing);
+    expect(find.text('Set up account recovery'), findsNothing);
   });
 
-  testWidgets('first axi.im login shows recovery setup when unconfigured', (
+  testWidgets('first axi.im login shows email onboarding then recovery', (
     tester,
   ) async {
-    final settingsCubit = _settingsCubit(
-      recoveryStatus: const provisioning.RecoveryStatus(
-        recoveryEmailConfigured: false,
-        totpConfigured: false,
+    final settingsCubit = _settingsCubit();
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: settingsCubit,
+      xmppService: _xmppService(jid: 'alice@axi.im'),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationCompleteFromSignup(),
       ),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
     );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsOneWidget);
+    expect(find.text('Setup forwarding from:'), findsOneWidget);
+    expect(find.text('Background notifications'), findsOneWidget);
+    expect(find.text('Set up account recovery'), findsOneWidget);
+    expect(find.widgetWithText(AxiButton, 'Account recovery'), findsNothing);
+    expect(find.text('Add recovery email'), findsOneWidget);
+    expect(find.text('Add authenticator app'), findsOneWidget);
+    expect(find.text('Password'), findsNothing);
+    expect(find.text('Old password'), findsNothing);
+    expect(find.text('Skip for now'), findsNWidgets(2));
+    expect(
+      tester.getTopLeft(find.text('Set up account recovery')).dy,
+      greaterThan(tester.getTopLeft(find.text('Background notifications')).dy),
+    );
+    verify(
+      () => settingsCubit.recoveryStatus(
+        accountJid: any(named: 'accountJid'),
+        password: any(named: 'password'),
+      ),
+    ).called(1);
+  });
+
+  testWidgets('recovery welcome shows no password fields', (tester) async {
+    final settingsCubit = _settingsCubit();
     await _pumpEmailForwardingApp(
       tester,
       settingsCubit: settingsCubit,
@@ -199,20 +268,26 @@ void main() {
       authenticationCubit: _authenticationCubit(
         state: const AuthenticationComplete(),
       ),
-      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
     );
 
     await tester.pumpAndSettle();
 
     expect(find.text('Set up account recovery'), findsOneWidget);
+    expect(find.widgetWithText(AxiButton, 'Account recovery'), findsNothing);
     expect(find.text('Add recovery email'), findsOneWidget);
     expect(find.text('Add authenticator app'), findsOneWidget);
+    expect(find.text('Password'), findsNothing);
+    expect(find.text('Old password'), findsNothing);
     verify(
-      () => settingsCubit.recoveryStatus(accountJid: 'alice@axi.im'),
+      () => settingsCubit.recoveryStatus(
+        accountJid: any(named: 'accountJid'),
+        password: any(named: 'password'),
+      ),
     ).called(1);
   });
 
-  testWidgets('signup welcome gate skips smtp-disabled signups', (
+  testWidgets('account welcome skips smtp-disabled non-axi accounts', (
     tester,
   ) async {
     await _pumpEmailForwardingApp(
@@ -223,9 +298,9 @@ void main() {
         ),
       ),
       authenticationCubit: _authenticationCubit(
-        state: const AuthenticationCompleteFromSignup(),
+        state: const AuthenticationComplete(),
       ),
-      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
     );
 
     await tester.pumpAndSettle();
@@ -233,33 +308,67 @@ void main() {
     expect(find.text('Welcome to Axichat'), findsNothing);
   });
 
-  testWidgets('signup welcome gate releases post-login hold after unmount', (
+  testWidgets('account welcome skips dismissed account on same device', (
     tester,
   ) async {
-    final recoveryStatus = Completer<provisioning.RecoveryStatus>();
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.recoveryWelcomeDismissedFor('alice@axi.im'),
+    ).thenAnswer((_) async => true);
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: settingsCubit,
+      xmppService: _xmppService(jid: 'alice@axi.im'),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationComplete(),
+      ),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: settingsCubit,
+      xmppService: _xmppService(jid: 'bob@axi.im'),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationComplete(),
+      ),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsOneWidget);
+  });
+
+  testWidgets('account welcome gate releases post-login hold after unmount', (
+    tester,
+  ) async {
+    final recoveryWelcomeDismissed = Completer<bool>();
     final settingsCubit = _settingsCubit();
     final authenticationCubit = _authenticationCubit(
-      state: const AuthenticationCompleteFromSignup(),
+      state: const AuthenticationComplete(),
     );
     when(
-      () => settingsCubit.recoveryStatus(accountJid: any(named: 'accountJid')),
-    ).thenAnswer((_) => recoveryStatus.future);
+      () => settingsCubit.recoveryWelcomeDismissedFor(any()),
+    ).thenAnswer((_) => recoveryWelcomeDismissed.future);
     await _pumpEmailForwardingApp(
       tester,
       settingsCubit: settingsCubit,
       authenticationCubit: authenticationCubit,
       xmppService: _xmppService(jid: 'alice@axi.im'),
-      child: const EmailForwardingWelcomeGate(child: SizedBox.shrink()),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
     );
     await tester.pump();
 
     await tester.pumpWidget(const SizedBox.shrink());
-    recoveryStatus.complete(
-      const provisioning.RecoveryStatus(
-        recoveryEmailConfigured: false,
-        totpConfigured: false,
-      ),
-    );
+    recoveryWelcomeDismissed.complete(false);
     await tester.pump();
 
     verify(
@@ -341,11 +450,6 @@ Future<void> _pumpEmailForwardingApp(
 _MockSettingsCubit _settingsCubit({
   SettingsState state = const SettingsState(),
   bool recoveryWelcomeDismissed = false,
-  provisioning.RecoveryStatus recoveryStatus =
-      const provisioning.RecoveryStatus(
-        recoveryEmailConfigured: true,
-        totpConfigured: false,
-      ),
 }) {
   final settingsCubit = _MockSettingsCubit();
   when(() => settingsCubit.state).thenReturn(state);
@@ -369,11 +473,19 @@ _MockSettingsCubit _settingsCubit({
     () => settingsCubit.recoveryWelcomeDismissedFor(any()),
   ).thenAnswer((_) async => recoveryWelcomeDismissed);
   when(
-    () => settingsCubit.recoveryStatus(accountJid: any(named: 'accountJid')),
-  ).thenAnswer((_) async => recoveryStatus);
-  when(
     () => settingsCubit.dismissRecoveryWelcomeFor(any()),
   ).thenAnswer((_) async {});
+  when(
+    () => settingsCubit.recoveryStatus(
+      accountJid: any(named: 'accountJid'),
+      password: any(named: 'password'),
+    ),
+  ).thenAnswer(
+    (_) async => const provisioning.RecoveryStatus(
+      recoveryEmailConfigured: false,
+      totpConfigured: false,
+    ),
+  );
   when(
     () => settingsCubit.markEmailForwardingGuideSeen(),
   ).thenAnswer((_) async {});
@@ -399,12 +511,17 @@ _MockNotificationService _notificationService() {
   return notificationService;
 }
 
-_MockXmppService _xmppService({String jid = 'user@example.com'}) {
+_MockXmppService _xmppService({
+  String jid = 'user@example.com',
+  bool usingForegroundSocket = true,
+}) {
   final xmppService = _MockXmppService();
   when(xmppService.ensureForegroundSocketIfActive).thenAnswer((_) async {});
   when(() => xmppService.connected).thenReturn(true);
   when(() => xmppService.hasConnectionSettings).thenReturn(true);
-  when(() => xmppService.usingForegroundSocket).thenReturn(true);
+  when(
+    () => xmppService.usingForegroundSocket,
+  ).thenReturn(usingForegroundSocket);
   when(() => xmppService.myJid).thenReturn(jid);
   return xmppService;
 }
@@ -439,6 +556,9 @@ class _RunningForegroundTaskBridge implements ForegroundTaskBridge {
 
   @override
   Future<bool> isRunning() async => true;
+
+  @override
+  Future<bool> stopIfRunning() async => true;
 
   @override
   Future<void> release(String clientId) async {}

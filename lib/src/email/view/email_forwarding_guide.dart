@@ -154,12 +154,12 @@ class EmailForwardingGuideDialog extends StatelessWidget {
   }
 }
 
-class EmailForwardingWelcomeDialog extends StatelessWidget {
-  const EmailForwardingWelcomeDialog({
+class AccountWelcomeDialog extends StatelessWidget {
+  const AccountWelcomeDialog({
     super.key,
     required this.accountJid,
-    required this.showEmailForwarding,
-    required this.showRecoverySetup,
+    required this.showEmailOnboarding,
+    required this.showRecoveryPrompt,
     required this.onForegroundActivationStarted,
     required this.onForegroundActivationFinished,
     required this.onForegroundActivated,
@@ -168,8 +168,8 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
   });
 
   final String accountJid;
-  final bool showEmailForwarding;
-  final bool showRecoverySetup;
+  final bool showEmailOnboarding;
+  final bool showRecoveryPrompt;
   final void Function() onForegroundActivationStarted;
   final void Function() onForegroundActivationFinished;
   final Future<void> Function() onForegroundActivated;
@@ -177,7 +177,7 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
   final Future<void> Function() onRecoveryConfigured;
 
   Future<void> _dismiss(BuildContext context) async {
-    if (showRecoverySetup) {
+    if (showRecoveryPrompt) {
       await onRecoveryDismissed();
     }
     if (context.mounted) {
@@ -212,7 +212,7 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (showEmailForwarding) ...[
+                  if (showEmailOnboarding) ...[
                     Text(
                       l10n.emailForwardingGuideSettingsHint,
                       style: context.textTheme.muted,
@@ -230,15 +230,15 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
               ),
             ),
             children: [
-              if (showEmailForwarding)
-                EmailForwardingWelcomeContent(
+              if (showEmailOnboarding)
+                EmailOnboardingWelcomeContent(
                   onForegroundActivationStarted: onForegroundActivationStarted,
                   onForegroundActivationFinished:
                       onForegroundActivationFinished,
                   onForegroundActivated: onForegroundActivated,
                 ),
-              if (showRecoverySetup) ...[
-                if (showEmailForwarding) SizedBox(height: spacing.xl),
+              if (showRecoveryPrompt) ...[
+                if (showEmailOnboarding) SizedBox(height: spacing.xl),
                 AccountRecoveryWelcomeContent(
                   accountJid: accountJid,
                   onRecoveryDismissed: onRecoveryDismissed,
@@ -253,8 +253,8 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
   }
 }
 
-class EmailForwardingWelcomeContent extends StatelessWidget {
-  const EmailForwardingWelcomeContent({
+class EmailOnboardingWelcomeContent extends StatelessWidget {
+  const EmailOnboardingWelcomeContent({
     super.key,
     required this.onForegroundActivationStarted,
     required this.onForegroundActivationFinished,
@@ -546,18 +546,16 @@ class EmailForwardingProviderLinkList extends StatelessWidget {
   }
 }
 
-class EmailForwardingWelcomeGate extends StatefulWidget {
-  const EmailForwardingWelcomeGate({super.key, required this.child});
+class AccountWelcomeGate extends StatefulWidget {
+  const AccountWelcomeGate({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<EmailForwardingWelcomeGate> createState() =>
-      _EmailForwardingWelcomeGateState();
+  State<AccountWelcomeGate> createState() => _AccountWelcomeGateState();
 }
 
-class _EmailForwardingWelcomeGateState
-    extends State<EmailForwardingWelcomeGate> {
+class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
   final bool _debugAlwaysShowWelcome = false;
   String? _dialogShownForAccount;
   bool _dialogScheduled = false;
@@ -609,10 +607,10 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     final settingsCubit = context.read<SettingsCubit>();
-    final showEmailForwarding =
+    final showEmailOnboarding =
         settingsCubit.state.endpointConfig.smtpEnabled &&
         authState is AuthenticationCompleteFromSignup;
-    final showRecoverySetup = await _shouldShowRecoverySetup(
+    final showRecoveryPrompt = await _shouldShowRecoverySetup(
       settingsCubit: settingsCubit,
       accountJid: accountJid,
     );
@@ -620,7 +618,7 @@ class _EmailForwardingWelcomeGateState
       await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
-    if (!showEmailForwarding && !showRecoverySetup) {
+    if (!showEmailOnboarding && !showRecoveryPrompt) {
       await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
@@ -629,10 +627,10 @@ class _EmailForwardingWelcomeGateState
       await showFadeScaleDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => EmailForwardingWelcomeDialog(
+        builder: (dialogContext) => AccountWelcomeDialog(
           accountJid: accountJid,
-          showEmailForwarding: showEmailForwarding,
-          showRecoverySetup: showRecoverySetup,
+          showEmailOnboarding: showEmailOnboarding,
+          showRecoveryPrompt: showRecoveryPrompt,
           onForegroundActivationStarted: _handleForegroundActivationStarted,
           onForegroundActivationFinished: _handleForegroundActivationFinished,
           onForegroundActivated:
@@ -650,7 +648,7 @@ class _EmailForwardingWelcomeGateState
     if (!mounted || _debugAlwaysShowWelcome) {
       return;
     }
-    if (showEmailForwarding) {
+    if (showEmailOnboarding) {
       settingsCubit.markEmailForwardingGuideSeen();
     }
   }

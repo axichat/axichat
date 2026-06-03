@@ -20,6 +20,7 @@ import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
 import 'package:axichat/src/profile/view/profile_fingerprint.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/settings/view/account_recovery_settings.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/update/view/update_prompt.dart';
@@ -34,7 +35,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/authentication/view/logout_button.dart';
 
-enum _ProfileRoute { main, changePassword, delete }
+enum _ProfileRoute { main, accountRecovery, changePassword, delete }
 
 ConnectionState _xmppStateFor(
   ConnectivityState state, {
@@ -60,7 +61,9 @@ EmailSyncState _emailStateFor(
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.initialAccountRecovery = false});
+
+  final bool initialAccountRecovery;
 
   @override
   Widget build(BuildContext context) {
@@ -93,16 +96,23 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ],
-        child: _ProfileBody(locate: locate),
+        child: _ProfileBody(
+          locate: locate,
+          initialAccountRecovery: initialAccountRecovery,
+        ),
       ),
     );
   }
 }
 
 class _ProfileBody extends StatefulWidget {
-  const _ProfileBody({required this.locate});
+  const _ProfileBody({
+    required this.locate,
+    required this.initialAccountRecovery,
+  });
 
   final T Function<T>() locate;
+  final bool initialAccountRecovery;
 
   @override
   State<_ProfileBody> createState() => _ProfileBodyState();
@@ -130,7 +140,23 @@ class _ProfileBodyState extends State<_ProfileBody> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialAccountRecovery) {
+      _profileRoute = _ProfileRoute.accountRecovery;
+    }
     _getApplicationVersion();
+  }
+
+  @override
+  void didUpdateWidget(_ProfileBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialAccountRecovery == widget.initialAccountRecovery) {
+      return;
+    }
+    _setRoute(
+      widget.initialAccountRecovery
+          ? _ProfileRoute.accountRecovery
+          : _ProfileRoute.main,
+    );
   }
 
   Future<void> _getApplicationVersion() async {
@@ -254,6 +280,12 @@ class _ProfileBodyState extends State<_ProfileBody> {
                         settingsScrollOffset: _settingsScrollOffset,
                         locate: widget.locate,
                         onNavigate: _setRoute,
+                      ),
+                      _ProfileFormPage(
+                        child: AccountRecoverySettingsPage(
+                          active:
+                              _profileRoute == _ProfileRoute.accountRecovery,
+                        ),
                       ),
                       const _ProfileFormPage(child: ChangePasswordForm()),
                       const _ProfileFormPage(child: UnregisterForm()),
@@ -735,6 +767,7 @@ class _SettingsPanel extends StatelessWidget {
           fullWidthDividers: true,
           anchors: anchors,
           locate: locate,
+          onAccountRecovery: () => onNavigate(_ProfileRoute.accountRecovery),
           onChangePassword: () => onNavigate(_ProfileRoute.changePassword),
           onDeleteAccount: () => onNavigate(_ProfileRoute.delete),
           applicationVersion: applicationVersion,

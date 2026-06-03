@@ -2283,7 +2283,7 @@ class _HomeContent extends StatelessWidget {
             child: _HomeTabIndexSync(
               child: _HomeCoordinatorBridge(
                 storage: calendarStorage,
-                child: EmailForwardingWelcomeGate(child: calendarAwareContent),
+                child: AccountWelcomeGate(child: calendarAwareContent),
               ),
             ),
           ),

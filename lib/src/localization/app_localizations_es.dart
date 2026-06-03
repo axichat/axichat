@@ -104,31 +104,35 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo quitar este mensaje de la carpeta.';
 
   @override
-  String get contactFolderRuleAction => 'File incoming items in...';
+  String get contactFolderRuleAction => 'Archivar elementos entrantes en...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
+  String get contactFolderRuleMessagesAction =>
+      'Archivar mensajes entrantes en...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
+  String get contactFolderRuleEmailsAction =>
+      'Archivar correos entrantes en...';
 
   @override
   String get contactFolderRuleMessagesAndEmailsAction =>
-      'File incoming messages and emails in...';
+      'Archivar mensajes y correos entrantes en...';
 
   @override
-  String get contactFolderRuleTitle => 'File incoming items in folder';
+  String get contactFolderRuleTitle =>
+      'Archivar elementos entrantes en carpeta';
 
   @override
   String get contactFolderRuleMessagesTitle =>
-      'File incoming messages in folder';
+      'Archivar mensajes entrantes en carpeta';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
+  String get contactFolderRuleEmailsTitle =>
+      'Archivar correos entrantes en carpeta';
 
   @override
   String get contactFolderRuleMessagesAndEmailsTitle =>
-      'File incoming messages and emails in folder';
+      'Archivar mensajes y correos entrantes en carpeta';
 
   @override
   String get contactFolderRuleClear => 'Borrar regla';
@@ -311,7 +315,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String chatAttachmentConfirmMessage(Object sender) {
-    return 'Solo carga adjuntos de contactos de confianza.\n\n$sender no está en tus contactos. ¿Continuar?';
+    return 'Carga solo adjuntos de remitentes de confianza.\n\n¿Cargar adjuntos de $sender?';
   }
 
   @override
@@ -763,6 +767,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatContactRenameTooltip => 'Renombrar contacto';
+
+  @override
+  String get chatVerifiedServerAnnouncementTooltip =>
+      'Anuncio verificado del servidor';
 
   @override
   String get chatContactRenameTitle => 'Renombrar contacto';
@@ -1298,6 +1306,17 @@ class AppLocalizationsEs extends AppLocalizations {
   String get calendarSelectionTitleBlank => 'El título no puede estar vacío.';
 
   @override
+  String get calendarSelectionUnsavedChangesTitle =>
+      'Cambios de selección pendientes';
+
+  @override
+  String get calendarSelectionUnsavedChangesMessage =>
+      '¿Aplicar cambios antes de salir del modo de selección?';
+
+  @override
+  String get calendarSelectionDiscardChanges => 'Descartar';
+
+  @override
   String get calendarExportReady => 'Exportación lista para compartir.';
 
   @override
@@ -1451,7 +1470,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authSignupWelcomeMessage =>
-      '¡Bienvenido a Axichat!\n\nLos límites de almacenamiento son actualmente bajos y se ampliarán con el tiempo.\n\nHay muchas funciones disponibles al tocar las burbujas de mensaje; ¡toca esta!\n\nPara una entrega fiable de mensajes, se recomienda encarecidamente activar las notificaciones en segundo plano desde la pantalla de Perfil.\n\nSi encuentras errores, repórtalos en https://github.com/axichat/axichat/issues para que pueda arreglarlos.';
+      'Bienvenido a la próxima evolución de la mensajería y el correo electrónico.\n\nAxichat todavía está bajo el radar, así que los límites de almacenamiento son actualmente bajos y se ampliarán con el tiempo. Reporta bugs en https://github.com/axichat/axichat/issues.\n\nHay muchas funciones disponibles al tocar las burbujas de mensaje. Toca esta.\n\nPara una entrega fiable de mensajes, recomendamos activar las notificaciones en segundo plano desde la pantalla de Perfil.';
 
   @override
   String get signupTitle => 'Registrarse';
@@ -1478,7 +1497,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get signupCustomEndpointRequired =>
-      'Elige un servidor personalizado para registrarte en la app. Crea cuentas de axi.im en el sitio web.';
+      'Axichat aún está bajo el radar, así que la creación de cuentas de axi.im solo está disponible en el sitio web. Elige un servidor personalizado para registrarte en la app.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha no disponible';
@@ -1696,6 +1715,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get calendarTaskCopied => 'Tarea copiada';
+
+  @override
+  String get calendarTaskCopiedPasteInstructionPointer =>
+      'Tarea copiada. Haz clic derecho en una celda del calendario para pegarla.';
+
+  @override
+  String get calendarTaskCopiedPasteInstructionTouch =>
+      'Tarea copiada. Mantén pulsada una celda del calendario para pegarla.';
 
   @override
   String get calendarTaskCopiedClipboard => 'Tarea copiada al portapapeles';
@@ -2453,7 +2480,11 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authCustomServerDescription =>
-      'Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados. Los servidores personalizados deben crearse siguiendo los pasos en https://github.com/axichat/server o probablemente no funcionen.';
+      'Elige el dominio de la cuenta. Déjalo vacío para usar axi.im. Para un servidor personalizado, introduce su dominio; los pasos de configuración están en https://github.com/axichat/selfhost.';
+
+  @override
+  String get authCustomServerSignupDescription =>
+      'Introduce el dominio del servidor personalizado en el que quieres registrarte. Los servidores personalizados deben configurarse con https://github.com/axichat/selfhost antes de que esta app pueda crear cuentas en ellos.';
 
   @override
   String get authCustomServerDomainOrIp => 'Dominio';
@@ -2814,6 +2845,16 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get calendarEditTaskTitle => 'Editar tarea';
+
+  @override
+  String get calendarEditUnsavedChangesTitle => 'Cambios sin guardar';
+
+  @override
+  String get calendarEditUnsavedChangesMessage =>
+      '¿Guardar cambios antes de cerrar esta tarea?';
+
+  @override
+  String get calendarEditDiscardChanges => 'Descartar';
 
   @override
   String get calendarDateTimeLabel => 'Fecha y hora';
@@ -7044,4 +7085,162 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get chatEmailOutboundOverrideSubtitle =>
       'Los mensajes nuevos en este chat usan correo en lugar de XMPP.';
+
+  @override
+  String get commonChange => 'Cambiar';
+
+  @override
+  String get commonRefresh => 'Actualizar';
+
+  @override
+  String get authForgotUsernameOrPassword =>
+      '¿Olvidaste tu nombre de usuario o contraseña?';
+
+  @override
+  String get authAccountRepairRequired =>
+      'La cuenta necesita reparación. Contacta con soporte o con el administrador de tu servidor.';
+
+  @override
+  String get authIdempotencyConflict =>
+      'Esta solicitud ya no coincide con el intento anterior. Revisa el formulario e inténtalo de nuevo.';
+
+  @override
+  String get authRateLimited => 'Demasiados intentos. Inténtalo más tarde.';
+
+  @override
+  String get signupAxiImUnavailableDescription =>
+      'Axichat aún está bajo el radar, así que la creación de cuentas de axi.im solo está disponible en el sitio web. Esta app puede iniciar sesión en cuentas existentes.';
+
+  @override
+  String get recoveryTitle => 'Recuperación de cuenta';
+
+  @override
+  String get recoverySettingsTitle => 'Recuperación de cuenta';
+
+  @override
+  String get recoverySettingsDescription =>
+      'Revisa o cambia los métodos de recuperación de esta cuenta de axi.im.';
+
+  @override
+  String get recoverySettingsPasswordDescription =>
+      'Desbloquea los ajustes de recuperación de esta cuenta de axi.im.';
+
+  @override
+  String get recoveryWelcomeTitle => 'Configurar recuperación de cuenta';
+
+  @override
+  String get recoveryWelcomeDescription =>
+      'Añade un correo de recuperación o una app autenticadora para restablecer contraseñas.';
+
+  @override
+  String get recoveryAddEmailAction => 'Añadir correo de recuperación';
+
+  @override
+  String get recoveryAddTotpAction => 'Añadir app autenticadora';
+
+  @override
+  String get recoverySkipForNow => 'Omitir por ahora';
+
+  @override
+  String get recoveryChooseMethod => 'Elegir método de recuperación';
+
+  @override
+  String get recoveryEmailCodeAction => 'Código por correo';
+
+  @override
+  String get recoveryAuthenticatorCodeAction => 'Código de autenticador';
+
+  @override
+  String get recoveryUsernamePlaceholder => 'Usuario o dirección de axi.im';
+
+  @override
+  String get recoveryAxiAccountRequired => 'Introduce una cuenta de axi.im.';
+
+  @override
+  String get recoveryEmailPlaceholder => 'Correo de recuperación';
+
+  @override
+  String get recoveryEmailRequired => 'Introduce un correo de recuperación.';
+
+  @override
+  String get recoveryCodePlaceholder => 'Código';
+
+  @override
+  String get recoveryCodeRequired => 'Introduce el código.';
+
+  @override
+  String get recoveryCodeIncomplete => 'Introduce el código de 6 dígitos.';
+
+  @override
+  String get recoveryNeutralEmailSent =>
+      'Si la cuenta y el correo de recuperación coinciden, se envió un código.';
+
+  @override
+  String get recoveryAuthenticatorCodeHint =>
+      'Introduce el código de tu app autenticadora.';
+
+  @override
+  String get recoveryNewPasswordHint =>
+      'Elige una nueva contraseña para esta cuenta.';
+
+  @override
+  String get recoveryPasswordResetComplete =>
+      'Contraseña restablecida. Puedes iniciar sesión con la nueva contraseña.';
+
+  @override
+  String get recoveryRestartRequired =>
+      'Reinicia la recuperación de cuenta e inténtalo de nuevo.';
+
+  @override
+  String get recoveryInvalidCode => 'El código no es válido.';
+
+  @override
+  String get recoveryChallengeExpired =>
+      'Ese código ha caducado. Reinicia este paso.';
+
+  @override
+  String get recoveryChallengeFailed =>
+      'Demasiados códigos incorrectos. Reinicia este paso.';
+
+  @override
+  String get recoveryNotConfigured =>
+      'La recuperación de cuenta no está configurada para esta cuenta.';
+
+  @override
+  String get recoveryGenericError =>
+      'La recuperación de cuenta falló. Inténtalo de nuevo.';
+
+  @override
+  String get recoveryEmailTitle => 'Correo de recuperación';
+
+  @override
+  String get recoveryTotpTitle => 'App autenticadora';
+
+  @override
+  String get recoveryEnabled => 'Activado';
+
+  @override
+  String get recoveryNotSet => 'No configurado';
+
+  @override
+  String get recoveryEmailSetupCodeHint =>
+      'Introduce el código enviado a tu correo de recuperación.';
+
+  @override
+  String get recoveryTotpSetupHint =>
+      'Añade este secreto a tu app autenticadora y luego introduce el código de 6 dígitos.';
+
+  @override
+  String get recoveryTotpSetupStartHint =>
+      'Genera un secreto de autenticador para esta cuenta y luego introduce el código de 6 dígitos de tu app.';
+
+  @override
+  String get recoveryRemoveEmailTitle => 'Quitar correo de recuperación';
+
+  @override
+  String get recoveryRemoveTotpTitle => 'Quitar app autenticadora';
+
+  @override
+  String get recoveryRemoveConfirmMessage =>
+      '¿Quitar este método de recuperación?';
 }

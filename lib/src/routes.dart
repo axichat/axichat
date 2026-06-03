@@ -213,6 +213,10 @@ class ProfileRoute extends TransitionGoRouteData
   const ProfileRoute();
 
   static const path = '/profile';
+  static const accountRecoverySection = 'account-recovery';
+  static const _sectionQueryKey = 'section';
+  static const accountRecoveryLocation =
+      '$path?$_sectionQueryKey=$accountRecoverySection';
 
   @override
   bool get authenticationRequired => true;
@@ -234,8 +238,10 @@ class ProfileRoute extends TransitionGoRouteData
   void replace(BuildContext context) => context.replace(location);
 
   @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      const ProfileScreen();
+  Widget build(BuildContext context, GoRouterState state) => ProfileScreen(
+    initialAccountRecovery:
+        state.uri.queryParameters[_sectionQueryKey] == accountRecoverySection,
+  );
 }
 
 @TypedGoRoute<AvatarEditorRoute>(path: AvatarEditorRoute.path)

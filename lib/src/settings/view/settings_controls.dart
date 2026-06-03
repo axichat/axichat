@@ -66,6 +66,7 @@ class SettingsControls extends StatelessWidget {
     this.fullWidthDividers = false,
     this.anchors,
     required this.locate,
+    required this.onAccountRecovery,
     required this.onChangePassword,
     required this.onDeleteAccount,
     required this.applicationVersion,
@@ -75,6 +76,7 @@ class SettingsControls extends StatelessWidget {
   final bool fullWidthDividers;
   final SettingsSectionAnchors? anchors;
   final T Function<T>() locate;
+  final VoidCallback onAccountRecovery;
   final VoidCallback onChangePassword;
   final VoidCallback onDeleteAccount;
   final String? applicationVersion;
@@ -117,6 +119,11 @@ class SettingsControls extends StatelessWidget {
             .state
             .endpointConfig
             .smtpEnabled;
+        final profileJid = context.select<ProfileCubit, String>(
+          (cubit) => cubit.state.jid,
+        );
+        final recoveryAvailable =
+            state.endpointConfig.isAxiImDomain && isAxiJid(profileJid);
         final double dividerIndent = fullWidthDividers
             ? 0.0
             : sectionHeaderPadding.horizontal;
@@ -180,6 +187,12 @@ class SettingsControls extends StatelessWidget {
                   ? () async => await showEmailForwardingGuideDialog(context)
                   : null,
             ),
+            if (recoveryAvailable)
+              _SettingsActionButton(
+                iconData: LucideIcons.shieldCheck,
+                label: context.l10n.recoverySettingsTitle,
+                onPressed: onAccountRecovery,
+              ),
             _SettingsActionButton(
               iconData: LucideIcons.image,
               label: context.l10n.draftAttachmentsLabel,

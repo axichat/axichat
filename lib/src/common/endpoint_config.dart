@@ -25,7 +25,8 @@ class EndpointConfig extends Equatable {
 
   static const Object _unset = Object();
 
-  static const String defaultDomain = 'axi.im';
+  static const String axiImDomain = 'axi.im';
+  static const String defaultDomain = axiImDomain;
   static const int defaultXmppPort = 5222;
   static const int defaultImapPort = 993;
   static const int defaultSmtpPort = 465;
@@ -47,8 +48,10 @@ class EndpointConfig extends Equatable {
 
   bool get isDefaultDomain => domain.trim().toLowerCase() == defaultDomain;
 
+  bool get isAxiImDomain => domain.trim().toLowerCase() == axiImDomain;
+
   bool requiresCustomSignupEndpoint({bool allowDefaultEndpoint = kDebugMode}) =>
-      isDefaultDomain && !allowDefaultEndpoint;
+      isAxiImDomain && !allowDefaultEndpoint;
 
   EndpointConfig copyWith({
     String? domain,

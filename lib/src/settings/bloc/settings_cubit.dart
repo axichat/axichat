@@ -9,6 +9,8 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
+    as provisioning;
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -18,6 +20,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 
 part 'settings_cubit.freezed.dart';
@@ -29,9 +32,17 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     XmppService? xmppService,
     Capability? capability,
     CredentialStore? credentialStore,
+    http.Client? httpClient,
+    provisioning.EmailProvisioningClient? recoveryClient,
   }) : _xmppService = xmppService,
        _capability = capability,
        _credentialStore = credentialStore,
+       _recoveryClient =
+           recoveryClient ??
+           provisioning.EmailProvisioningClient.fromEnvironment(
+             httpClient: httpClient,
+           ),
+       _ownsRecoveryClient = recoveryClient == null,
        super(const SettingsState()) {
     _initialStoredLoginJid = _readStoredLoginJid();
     _applyAttachmentAutoDownloadSettings(state);
@@ -53,6 +64,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   final XmppService? _xmppService;
   final Capability? _capability;
   final CredentialStore? _credentialStore;
+  final provisioning.EmailProvisioningClient _recoveryClient;
+  final bool _ownsRecoveryClient;
   late final Future<String?> _initialStoredLoginJid;
   final Logger _log = Logger('SettingsCubit');
   StreamSubscription<Map<String, dynamic>>? _settingsSyncSubscription;
@@ -60,6 +73,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       CredentialStore.registerKey(_storedLoginJidKeyName);
   final RegisteredCredentialKey _backgroundMessagingPreferencesKey =
       CredentialStore.registerKey('background_messaging_by_address_v1');
+  final RegisteredCredentialKey _recoveryWelcomeDismissedKey =
+      CredentialStore.registerKey('recovery_welcome_dismissed_by_address_v1');
   SettingsState _bootstrapState = const SettingsState();
   final Map<String, Map<String, dynamic>> _accountSettingsJsonByKey =
       <String, Map<String, dynamic>>{};
@@ -289,6 +304,245 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     await _emitLocalSettingsState(
       state.copyWith(emailForwardingGuideSeen: true),
       changedSettingIds: const {GlobalSettingId.emailForwardingGuideSeen},
+    );
+  }
+
+  bool recoveryAvailableForAccount(String? accountJid) =>
+      _normalizedAxiRecoveryAccountJid(accountJid) != null;
+
+  Future<bool> recoveryWelcomeDismissedFor(String? accountJid) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return true;
+    }
+    final dismissed = await _readRecoveryWelcomeDismissals();
+    return dismissed.contains(normalized);
+  }
+
+  Future<void> dismissRecoveryWelcomeFor(String? accountJid) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    final dismissed = await _readRecoveryWelcomeDismissals();
+    if (dismissed.contains(normalized)) {
+      return;
+    }
+    await _writeRecoveryWelcomeDismissals({...dismissed, normalized});
+  }
+
+  Future<provisioning.RecoveryStatus?> recoveryStatus({
+    required String? accountJid,
+    String? password,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    final normalizedPassword = password?.trim();
+    final passwordProvided =
+        normalizedPassword != null && normalizedPassword.isNotEmpty;
+    _log.info(
+      'Loading recovery status: '
+      'accountDomain=${addressDomainPart(normalized) ?? ''} '
+      'passwordProvided=$passwordProvided',
+    );
+    try {
+      final status = await _recoveryClient.recoveryStatus(
+        email: normalized,
+        password: passwordProvided ? password : null,
+      );
+      _log.info(
+        'Loaded recovery status: '
+        'emailConfigured=${status.recoveryEmailConfigured} '
+        'totpConfigured=${status.totpConfigured}',
+      );
+      return status;
+    } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
+      _log.warning(
+        'Recovery status failed: '
+        'type=${error.runtimeType} '
+        'status=${error.statusCode ?? ''} '
+        'recoverable=${error.isRecoverable} '
+        'debug=${error.debugMessage ?? ''}',
+        error,
+        stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<provisioning.RecoveryEmailChallenge?> startRecoveryEmailSetup({
+    required String? accountJid,
+    required String password,
+    required String recoveryEmail,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    _log.info(
+      'Starting recovery email setup: '
+      'accountDomain=${addressDomainPart(normalized) ?? ''} '
+      'recoveryEmailProvided=${recoveryEmail.trim().isNotEmpty}',
+    );
+    try {
+      final challenge = await _recoveryClient.startRecoveryEmailSetup(
+        email: normalized,
+        password: password,
+        recoveryEmail: recoveryEmail,
+      );
+      _log.info('Started recovery email setup.');
+      return challenge;
+    } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
+      _log.warning(
+        'Recovery email setup failed: '
+        'type=${error.runtimeType} '
+        'status=${error.statusCode ?? ''} '
+        'recoverable=${error.isRecoverable} '
+        'debug=${error.debugMessage ?? ''}',
+        error,
+        stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> confirmRecoveryEmailSetup({
+    required String? accountJid,
+    required String password,
+    required String challenge,
+    required String code,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    await _recoveryClient.confirmRecoveryEmailSetup(
+      email: normalized,
+      password: password,
+      challenge: challenge,
+      code: code,
+    );
+  }
+
+  Future<void> removeRecoveryEmail({
+    required String? accountJid,
+    required String password,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    await _recoveryClient.removeRecoveryEmail(
+      email: normalized,
+      password: password,
+    );
+  }
+
+  Future<provisioning.RecoveryTotpSetup?> startRecoveryTotpSetup({
+    required String? accountJid,
+    required String password,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    return _recoveryClient.startRecoveryTotpSetup(
+      email: normalized,
+      password: password,
+    );
+  }
+
+  Future<void> confirmRecoveryTotpSetup({
+    required String? accountJid,
+    required String password,
+    required String code,
+    String? challenge,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    await _recoveryClient.confirmRecoveryTotpSetup(
+      email: normalized,
+      password: password,
+      code: code,
+      challenge: challenge,
+    );
+  }
+
+  Future<void> removeRecoveryTotp({
+    required String? accountJid,
+    required String password,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    await _recoveryClient.removeRecoveryTotp(
+      email: normalized,
+      password: password,
+    );
+  }
+
+  Future<provisioning.RecoveryEmailChallenge?> startRecoveryEmailReset({
+    required String? accountJid,
+    required String recoveryEmail,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    return _recoveryClient.startRecoveryEmailReset(
+      email: normalized,
+      recoveryEmail: recoveryEmail,
+    );
+  }
+
+  Future<provisioning.RecoveryResetToken?> verifyRecoveryEmailReset({
+    required String? accountJid,
+    required String challenge,
+    required String code,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    return _recoveryClient.verifyRecoveryEmailReset(
+      email: normalized,
+      challenge: challenge,
+      code: code,
+    );
+  }
+
+  Future<provisioning.RecoveryResetToken?> verifyRecoveryTotpReset({
+    required String? accountJid,
+    required String code,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return null;
+    }
+    return _recoveryClient.verifyRecoveryTotpReset(
+      email: normalized,
+      code: code,
+    );
+  }
+
+  Future<void> resetPasswordWithRecovery({
+    required String? accountJid,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    await _recoveryClient.resetPasswordWithRecovery(
+      email: normalized,
+      resetToken: resetToken,
+      newPassword: newPassword,
     );
   }
 
@@ -744,6 +998,81 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     return normalized;
   }
 
+  String? _normalizedAxiAccountJid(String? accountJid) {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null || !isAxiJid(normalized)) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String? _normalizedAxiRecoveryAccountJid(String? accountJid) {
+    if (!state.endpointConfig.isAxiImDomain) {
+      return null;
+    }
+    return _normalizedAxiAccountJid(accountJid);
+  }
+
+  Future<Set<String>> _readRecoveryWelcomeDismissals() async {
+    return _readDismissedAccounts(_recoveryWelcomeDismissedKey);
+  }
+
+  Future<void> _writeRecoveryWelcomeDismissals(
+    Set<String> dismissedAccounts,
+  ) async {
+    await _writeDismissedAccounts(
+      key: _recoveryWelcomeDismissedKey,
+      dismissedAccounts: dismissedAccounts,
+    );
+  }
+
+  Future<Set<String>> _readDismissedAccounts(
+    RegisteredCredentialKey key,
+  ) async {
+    final credentialStore = _credentialStore;
+    if (credentialStore == null) {
+      return const {};
+    }
+    final serialized = await credentialStore.read(key: key);
+    if (serialized == null || serialized.trim().isEmpty) {
+      return const {};
+    }
+    try {
+      final decoded = jsonDecode(serialized);
+      if (decoded is! Map<String, dynamic>) {
+        await credentialStore.delete(key: key);
+        return const {};
+      }
+      return decoded.entries
+          .where((entry) => entry.value == true)
+          .map((entry) => entry.key.trim().toLowerCase())
+          .where((entry) => entry.isNotEmpty)
+          .toSet();
+    } on FormatException {
+      await credentialStore.delete(key: key);
+      return const {};
+    }
+  }
+
+  Future<void> _writeDismissedAccounts({
+    required RegisteredCredentialKey key,
+    required Set<String> dismissedAccounts,
+  }) async {
+    final credentialStore = _credentialStore;
+    if (credentialStore == null) {
+      return;
+    }
+    final values = <String, bool>{
+      for (final account in dismissedAccounts)
+        if (account.trim().isNotEmpty) account.trim().toLowerCase(): true,
+    };
+    if (values.isEmpty) {
+      await credentialStore.delete(key: key);
+      return;
+    }
+    await credentialStore.write(key: key, value: jsonEncode(values));
+  }
+
   Future<String?> _readStoredLoginJid() async {
     final credentialStore = _credentialStore;
     if (credentialStore == null) {
@@ -826,6 +1155,9 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   Future<void> close() async {
     await _settingsSyncSubscription?.cancel();
     _settingsSyncSubscription = null;
+    if (_ownsRecoveryClient) {
+      _recoveryClient.close();
+    }
     return super.close();
   }
 

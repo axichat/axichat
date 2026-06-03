@@ -41,6 +41,7 @@ export 'axi_modal_scaffold.dart';
 export 'axi_more.dart';
 export 'axi_now_ticker.dart';
 export 'axi_navigation_rail.dart';
+export 'axi_otp_form_field.dart';
 export 'axi_popover.dart';
 export 'axi_progress_indicator.dart';
 export 'axi_sheet_scaffold.dart';

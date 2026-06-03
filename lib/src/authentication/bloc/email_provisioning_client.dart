@@ -2,10 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:logging/logging.dart';
 
 class EmailProvisioningCredentials {
@@ -16,6 +18,116 @@ class EmailProvisioningCredentials {
 
   final String email;
   final String password;
+}
+
+enum EmailProvisioningApiErrorCode {
+  authFailed('auth_failed'),
+  invalidCode('invalid_code'),
+  challengeExpired('challenge_expired'),
+  challengeFailed('challenge_failed'),
+  rateLimited('rate_limited'),
+  recoveryNotConfigured('recovery_not_configured'),
+  repairRequired('repair_required'),
+  idempotencyConflict('idempotency_conflict'),
+  invalidResetToken('invalid_reset_token'),
+  resetTokenExpired('reset_token_expired'),
+  xmppServiceUnavailable('xmpp_service_unavailable'),
+  unknown('unknown');
+
+  const EmailProvisioningApiErrorCode(this.wireValue);
+
+  final String wireValue;
+
+  static EmailProvisioningApiErrorCode fromWire(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    for (final code in values) {
+      if (code.wireValue == normalized) {
+        return code;
+      }
+    }
+    return unknown;
+  }
+}
+
+class RecoveryStatus {
+  const RecoveryStatus({
+    required this.recoveryEmailConfigured,
+    required this.totpConfigured,
+    this.maskedRecoveryEmail,
+  });
+
+  final bool recoveryEmailConfigured;
+  final bool totpConfigured;
+  final String? maskedRecoveryEmail;
+
+  bool get hasRecoveryMethod => recoveryEmailConfigured || totpConfigured;
+
+  factory RecoveryStatus.fromJson(Map<String, dynamic> json) {
+    bool readBool(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is bool) return value;
+      }
+      return false;
+    }
+
+    String? readString(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+      return null;
+    }
+
+    final maskedRecoveryEmail = readString([
+      'masked_recovery_email',
+      'recovery_email_masked',
+      'recovery_email',
+    ]);
+    return RecoveryStatus(
+      recoveryEmailConfigured:
+          readBool([
+            'recovery_email_enabled',
+            'recovery_email_configured',
+            'email_enabled',
+            'has_recovery_email',
+          ]) ||
+          maskedRecoveryEmail != null,
+      totpConfigured: readBool([
+        'totp_enabled',
+        'totp_configured',
+        'authenticator_enabled',
+        'has_totp',
+      ]),
+      maskedRecoveryEmail: maskedRecoveryEmail,
+    );
+  }
+}
+
+class RecoveryEmailChallenge {
+  const RecoveryEmailChallenge({required this.challenge});
+
+  final String challenge;
+}
+
+class RecoveryTotpSetup {
+  const RecoveryTotpSetup({
+    required this.otpauthUri,
+    required this.secret,
+    required this.challenge,
+  });
+
+  final String otpauthUri;
+  final String secret;
+  final String? challenge;
+}
+
+class RecoveryResetToken {
+  const RecoveryResetToken({required this.resetToken});
+
+  final String resetToken;
 }
 
 sealed class EmailProvisioningApiException implements Exception {
@@ -100,6 +212,18 @@ final class EmailProvisioningApiAlreadyExistsException
   });
 }
 
+final class EmailProvisioningApiRejectedException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiRejectedException({
+    required this.code,
+    super.statusCode,
+    super.isRecoverable,
+    super.debugMessage,
+  });
+
+  final EmailProvisioningApiErrorCode code;
+}
+
 class EmailProvisioningClient {
   static const String _defaultProvisioningBaseUrl = 'https://axi.im:8443';
   static const String _baseUrlDefineKey = 'EMAIL_PROVISIONING_BASE_URL';
@@ -116,10 +240,19 @@ class EmailProvisioningClient {
   }) : _baseUrl = _normalizeBase(baseUrl),
        _publicToken = _normalizePublicToken(publicToken),
        _requirePublicToken = requirePublicToken,
-       _httpClient = httpClient ?? http.Client(),
+       _httpClient = httpClient ?? _buildHttpClient(),
        _ownsClient = httpClient == null,
+       _debugBadCertificateCallbackEnabled = httpClient == null && kDebugMode,
        _log = logger ?? Logger('EmailProvisioningClient') {
     _validateBaseUrl(_baseUrl);
+    _log.info(
+      'Email provisioning client configured: '
+      'base=$_baseUrl '
+      'ownsClient=$_ownsClient '
+      'badCertAllowed=$_debugBadCertificateCallbackEnabled '
+      'requirePublicToken=$_requirePublicToken '
+      'publicTokenConfigured=$_publicTokenConfigured',
+    );
     if (_requirePublicToken && !_publicTokenConfigured) {
       _log.warning('Email provisioning public token missing.');
     }
@@ -168,6 +301,7 @@ class EmailProvisioningClient {
   final bool _requirePublicToken;
   final http.Client _httpClient;
   final bool _ownsClient;
+  final bool _debugBadCertificateCallbackEnabled;
   final Logger _log;
 
   bool get _publicTokenConfigured =>
@@ -192,6 +326,13 @@ class EmailProvisioningClient {
     if (!_requirePublicToken) return;
     if (_publicTokenConfigured) return;
     throw const EmailProvisioningApiUnavailableException();
+  }
+
+  static http.Client _buildHttpClient() {
+    if (!kDebugMode) {
+      return http.Client();
+    }
+    return IOClient(HttpClient()..badCertificateCallback = (_, _, _) => true);
   }
 
   Future<EmailProvisioningCredentials> createAccount({
@@ -416,20 +557,458 @@ class EmailProvisioningClient {
     );
   }
 
+  Future<void> changeHostedPassword({
+    required String email,
+    required String oldPassword,
+    required String newPassword,
+    required String idempotencyKey,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['password'],
+      payload: {
+        'email': email.trim(),
+        'old_password': oldPassword,
+        'new_password': newPassword,
+      },
+      idempotencyKey: idempotencyKey,
+      logContext: 'axi.im password change',
+    );
+    if (response.statusCode == 200) {
+      return;
+    }
+    _throwV1Exception(response, fallbackMessage: 'Password change rejected.');
+  }
+
+  Future<void> deleteHostedAccount({
+    required String email,
+    required String password,
+    required String idempotencyKey,
+  }) async {
+    final response = await _deleteV1Json(
+      pathSegments: const ['account'],
+      payload: {'email': email.trim(), 'password': password},
+      idempotencyKey: idempotencyKey,
+      logContext: 'axi.im account deletion',
+    );
+    if (response.statusCode == 200) {
+      return;
+    }
+    _throwV1Exception(response, fallbackMessage: 'Account deletion rejected.');
+  }
+
+  Future<RecoveryStatus> recoveryStatus({
+    required String email,
+    String? password,
+  }) async {
+    final payload = <String, Object?>{'email': email.trim()};
+    if (password != null) {
+      payload['password'] = password;
+    }
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'status'],
+      payload: payload,
+      logContext: 'recovery status',
+    );
+    if (response.statusCode == 200) {
+      return RecoveryStatus.fromJson(_decodeObject(response.body));
+    }
+    _throwV1Exception(response, fallbackMessage: 'Recovery status rejected.');
+  }
+
+  Future<RecoveryEmailChallenge> startRecoveryEmailSetup({
+    required String email,
+    required String password,
+    required String recoveryEmail,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'email', 'start'],
+      payload: {
+        'email': email.trim(),
+        'password': password,
+        'recovery_email': recoveryEmail.trim(),
+      },
+      logContext: 'recovery email setup start',
+    );
+    if (response.statusCode == 200) {
+      return RecoveryEmailChallenge(
+        challenge: _requiredString(_decodeObject(response.body), const [
+          'challenge',
+          'challenge_id',
+        ]),
+      );
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Recovery email setup rejected.',
+    );
+  }
+
+  Future<void> confirmRecoveryEmailSetup({
+    required String email,
+    required String password,
+    required String challenge,
+    required String code,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'email', 'confirm'],
+      payload: {
+        'email': email.trim(),
+        'password': password,
+        'challenge': challenge.trim(),
+        'code': code.trim(),
+      },
+      logContext: 'recovery email setup confirm',
+    );
+    if (response.statusCode == 200) {
+      return;
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Recovery email confirmation rejected.',
+    );
+  }
+
+  Future<void> removeRecoveryEmail({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'email', 'remove'],
+      payload: {'email': email.trim(), 'password': password},
+      logContext: 'recovery email remove',
+    );
+    if (response.statusCode == 200 || response.statusCode == 404) {
+      return;
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Recovery email removal rejected.',
+    );
+  }
+
+  Future<RecoveryTotpSetup> startRecoveryTotpSetup({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'totp', 'start'],
+      payload: {'email': email.trim(), 'password': password},
+      logContext: 'recovery authenticator setup start',
+    );
+    if (response.statusCode == 200) {
+      final decoded = _decodeObject(response.body);
+      return RecoveryTotpSetup(
+        otpauthUri: _requiredString(decoded, const ['otpauth_uri']),
+        secret: _requiredString(decoded, const ['secret']),
+        challenge: _optionalString(decoded, const [
+          'challenge',
+          'challenge_id',
+        ]),
+      );
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Authenticator setup rejected.',
+    );
+  }
+
+  Future<void> confirmRecoveryTotpSetup({
+    required String email,
+    required String password,
+    required String code,
+    String? challenge,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'totp', 'confirm'],
+      payload: {
+        'email': email.trim(),
+        'password': password,
+        if (challenge != null) 'challenge': challenge.trim(),
+        'code': code.trim(),
+      },
+      logContext: 'recovery authenticator setup confirm',
+    );
+    if (response.statusCode == 200) {
+      return;
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Authenticator confirmation rejected.',
+    );
+  }
+
+  Future<void> removeRecoveryTotp({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'totp', 'remove'],
+      payload: {'email': email.trim(), 'password': password},
+      logContext: 'recovery authenticator remove',
+    );
+    if (response.statusCode == 200 || response.statusCode == 404) {
+      return;
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Authenticator removal rejected.',
+    );
+  }
+
+  Future<RecoveryEmailChallenge> startRecoveryEmailReset({
+    required String email,
+    required String recoveryEmail,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'email', 'start-reset'],
+      payload: {'email': email.trim(), 'recovery_email': recoveryEmail.trim()},
+      logContext: 'recovery email reset start',
+    );
+    if (response.statusCode == 200) {
+      return RecoveryEmailChallenge(
+        challenge: _requiredString(_decodeObject(response.body), const [
+          'challenge',
+          'challenge_id',
+        ]),
+      );
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Recovery email reset rejected.',
+    );
+  }
+
+  Future<RecoveryResetToken> verifyRecoveryEmailReset({
+    required String email,
+    required String challenge,
+    required String code,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'email', 'verify'],
+      payload: {
+        'email': email.trim(),
+        'challenge': challenge.trim(),
+        'code': code.trim(),
+      },
+      logContext: 'recovery email reset verify',
+    );
+    if (response.statusCode == 200) {
+      return RecoveryResetToken(
+        resetToken: _requiredString(_decodeObject(response.body), const [
+          'reset_token',
+        ]),
+      );
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Recovery email code rejected.',
+    );
+  }
+
+  Future<RecoveryResetToken> verifyRecoveryTotpReset({
+    required String email,
+    required String code,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'totp', 'verify'],
+      payload: {'email': email.trim(), 'code': code.trim()},
+      logContext: 'recovery authenticator reset verify',
+    );
+    if (response.statusCode == 200) {
+      return RecoveryResetToken(
+        resetToken: _requiredString(_decodeObject(response.body), const [
+          'reset_token',
+        ]),
+      );
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Authenticator code rejected.',
+    );
+  }
+
+  Future<void> resetPasswordWithRecovery({
+    required String email,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    final response = await _postV1Json(
+      pathSegments: const ['recovery', 'password', 'reset'],
+      payload: {
+        'email': email.trim(),
+        'reset_token': resetToken.trim(),
+        'new_password': newPassword,
+      },
+      logContext: 'recovery password reset',
+    );
+    if (response.statusCode == 200) {
+      return;
+    }
+    _throwV1Exception(
+      response,
+      fallbackMessage: 'Recovery password reset rejected.',
+    );
+  }
+
   Uri _buildEndpoint(String resource) {
+    return _buildEndpointSegments([resource]);
+  }
+
+  Uri _buildV1Endpoint(Iterable<String> resourceSegments) {
+    return _buildEndpointSegments(['v1', ...resourceSegments]);
+  }
+
+  Uri _buildEndpointSegments(Iterable<String> resourceSegments) {
     final segments = [
       ..._baseUrl.pathSegments.where((segment) => segment.isNotEmpty),
-      resource,
+      ...resourceSegments.where((segment) => segment.trim().isNotEmpty),
     ];
     return _baseUrl.replace(pathSegments: segments);
   }
 
-  Map<String, String> _headers() {
+  Map<String, String> _headers({String? idempotencyKey}) {
     final headers = <String, String>{'Content-Type': 'application/json'};
-    if (_publicToken.isNotEmpty) {
+    if (_publicTokenConfigured) {
+      headers['X-Client-Token'] = _publicToken;
       headers['X-Auth-Token'] = _publicToken;
     }
+    final normalizedIdempotencyKey = idempotencyKey?.trim();
+    if (normalizedIdempotencyKey != null &&
+        normalizedIdempotencyKey.isNotEmpty) {
+      headers['Idempotency-Key'] = normalizedIdempotencyKey;
+    }
     return headers;
+  }
+
+  Future<http.Response> _postV1Json({
+    required Iterable<String> pathSegments,
+    required Map<String, Object?> payload,
+    required String logContext,
+    String? idempotencyKey,
+  }) async {
+    final uri = _buildV1Endpoint(pathSegments);
+    final headers = _headers(idempotencyKey: idempotencyKey);
+    _log.info(
+      'Email provisioning POST $logContext: '
+      'url=$uri '
+      'ownsClient=$_ownsClient '
+      'badCertAllowed=$_debugBadCertificateCallbackEnabled '
+      'clientToken=${headers.containsKey('X-Client-Token')}',
+    );
+    try {
+      final response = await _httpClient
+          .post(uri, headers: headers, body: jsonEncode(payload))
+          .timeout(_requestTimeout);
+      _log.info(
+        'Email provisioning POST $logContext response: '
+        'url=$uri '
+        'status=${response.statusCode} '
+        'errorCode=${_errorCodeFrom(response.body).wireValue} '
+        'detail=${_errorMessageFrom(response.body) ?? ''}',
+      );
+      return response;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to reach $logContext service at $uri '
+        '(ownsClient=$_ownsClient, '
+        'badCertAllowed=$_debugBadCertificateCallbackEnabled).',
+        error,
+        stackTrace,
+      );
+      throw EmailProvisioningApiNetworkException(
+        debugMessage: '$logContext request failed: network error.',
+      );
+    }
+  }
+
+  Future<http.Response> _deleteV1Json({
+    required Iterable<String> pathSegments,
+    required Map<String, Object?> payload,
+    required String logContext,
+    String? idempotencyKey,
+  }) async {
+    final uri = _buildV1Endpoint(pathSegments);
+    final headers = _headers(idempotencyKey: idempotencyKey);
+    _log.info(
+      'Email provisioning DELETE $logContext: '
+      'url=$uri '
+      'ownsClient=$_ownsClient '
+      'badCertAllowed=$_debugBadCertificateCallbackEnabled '
+      'clientToken=${headers.containsKey('X-Client-Token')}',
+    );
+    try {
+      final response = await _httpClient
+          .delete(uri, headers: headers, body: jsonEncode(payload))
+          .timeout(_requestTimeout);
+      _log.info(
+        'Email provisioning DELETE $logContext response: '
+        'url=$uri '
+        'status=${response.statusCode} '
+        'errorCode=${_errorCodeFrom(response.body).wireValue} '
+        'detail=${_errorMessageFrom(response.body) ?? ''}',
+      );
+      return response;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to reach $logContext service at $uri '
+        '(ownsClient=$_ownsClient, '
+        'badCertAllowed=$_debugBadCertificateCallbackEnabled).',
+        error,
+        stackTrace,
+      );
+      throw EmailProvisioningApiNetworkException(
+        debugMessage: '$logContext request failed: network error.',
+      );
+    }
+  }
+
+  Never _throwV1Exception(
+    http.Response response, {
+    required String fallbackMessage,
+  }) {
+    final detail = _errorMessageFrom(response.body);
+    final code = _errorCodeFrom(response.body);
+    _log.warning(
+      'Email provisioning v1 rejection: '
+      'status=${response.statusCode} '
+      'code=${code.wireValue} '
+      'detail=${detail ?? ''} '
+      'fallback=$fallbackMessage',
+    );
+    if (code != EmailProvisioningApiErrorCode.unknown) {
+      throw EmailProvisioningApiRejectedException(
+        code: code,
+        statusCode: response.statusCode,
+        isRecoverable:
+            code == EmailProvisioningApiErrorCode.xmppServiceUnavailable,
+        debugMessage: detail ?? fallbackMessage,
+      );
+    }
+    if (response.statusCode == 503 || response.statusCode >= 500) {
+      throw EmailProvisioningApiUnavailableException(
+        statusCode: response.statusCode,
+        debugMessage: fallbackMessage,
+      );
+    }
+    if (response.statusCode == 429) {
+      throw EmailProvisioningApiRejectedException(
+        code: EmailProvisioningApiErrorCode.rateLimited,
+        statusCode: response.statusCode,
+        debugMessage: detail ?? fallbackMessage,
+      );
+    }
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw EmailProvisioningApiRejectedException(
+        code: EmailProvisioningApiErrorCode.authFailed,
+        statusCode: response.statusCode,
+        debugMessage: detail ?? fallbackMessage,
+      );
+    }
+    throw EmailProvisioningApiRejectedException(
+      code: code,
+      statusCode: response.statusCode,
+      debugMessage: detail ?? fallbackMessage,
+    );
   }
 
   static Uri _normalizeBase(Uri baseUrl) {
@@ -478,14 +1057,75 @@ class EmailProvisioningClient {
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map<String, dynamic>) {
-        final error = decoded['error'];
-        if (error is String && error.trim().isNotEmpty) {
-          return error.trim();
+        for (final key in const [
+          'detail',
+          'message',
+          'error_description',
+          'error',
+        ]) {
+          final value = decoded[key];
+          if (value is String && value.trim().isNotEmpty) {
+            return value.trim();
+          }
         }
       }
     } on FormatException {
       return null;
     }
     return null;
+  }
+
+  EmailProvisioningApiErrorCode _errorCodeFrom(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final code =
+            decoded['code'] ??
+            decoded['error_code'] ??
+            decoded['error'] ??
+            decoded['detail'];
+        return code is String
+            ? EmailProvisioningApiErrorCode.fromWire(code)
+            : EmailProvisioningApiErrorCode.unknown;
+      }
+    } on FormatException {
+      return EmailProvisioningApiErrorCode.unknown;
+    }
+    return EmailProvisioningApiErrorCode.unknown;
+  }
+
+  Map<String, dynamic> _decodeObject(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      throw const FormatException('Expected JSON object');
+    } on FormatException catch (error, stackTrace) {
+      _log.warning('Invalid email provisioning response', error, stackTrace);
+      throw const EmailProvisioningApiInvalidResponseException(
+        debugMessage: 'Response invalid.',
+      );
+    }
+  }
+
+  String? _optionalString(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final value = json[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  String _requiredString(Map<String, dynamic> json, List<String> keys) {
+    final value = _optionalString(json, keys);
+    if (value != null) {
+      return value;
+    }
+    throw const EmailProvisioningApiInvalidResponseException(
+      debugMessage: 'Response invalid.',
+    );
   }
 }

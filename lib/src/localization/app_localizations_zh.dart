@@ -99,31 +99,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get folderRemoveMessageFailed => '无法从文件夹移除此消息。';
 
   @override
-  String get contactFolderRuleAction => 'File incoming items in...';
+  String get contactFolderRuleAction => '将传入项目归档到...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
+  String get contactFolderRuleMessagesAction => '将传入消息归档到...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
+  String get contactFolderRuleEmailsAction => '将传入邮件归档到...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction =>
-      'File incoming messages and emails in...';
+  String get contactFolderRuleMessagesAndEmailsAction => '将传入消息和邮件归档到...';
 
   @override
-  String get contactFolderRuleTitle => 'File incoming items in folder';
+  String get contactFolderRuleTitle => '将传入项目归档到文件夹';
 
   @override
-  String get contactFolderRuleMessagesTitle =>
-      'File incoming messages in folder';
+  String get contactFolderRuleMessagesTitle => '将传入消息归档到文件夹';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
+  String get contactFolderRuleEmailsTitle => '将传入邮件归档到文件夹';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle =>
-      'File incoming messages and emails in folder';
+  String get contactFolderRuleMessagesAndEmailsTitle => '将传入消息和邮件归档到文件夹';
 
   @override
   String get contactFolderRuleClear => '清除规则';
@@ -303,7 +300,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatAttachmentConfirmMessage(Object sender) {
-    return '请只加载信任的联系人的附件。\n\n$sender 还未在你的联系人中。是否继续？';
+    return '请只加载你信任的发件人的附件。\n\n是否加载来自 $sender 的附件？';
   }
 
   @override
@@ -715,6 +712,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatContactRenameTooltip => '重命名联系人';
+
+  @override
+  String get chatVerifiedServerAnnouncementTooltip => '已验证的服务器公告';
 
   @override
   String get chatContactRenameTitle => '重命名联系人';
@@ -1222,6 +1222,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarSelectionTitleBlank => '标题不能为空。';
 
   @override
+  String get calendarSelectionUnsavedChangesTitle => '待处理的选择更改';
+
+  @override
+  String get calendarSelectionUnsavedChangesMessage => '离开选择模式前应用更改？';
+
+  @override
+  String get calendarSelectionDiscardChanges => '放弃';
+
+  @override
   String get calendarExportReady => '导出已准备好分享。';
 
   @override
@@ -1372,7 +1381,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authSignupWelcomeMessage =>
-      '欢迎使用 Axichat！\n\n当前存储空间限制较低，后续会逐步提高。\n\n点按消息气泡可以使用很多功能；试着点一下这一条！\n\n为了更可靠地接收消息，强烈建议你通过个人资料页面启用后台通知。\n\n如果你发现 bug，请到 https://github.com/axichat/axichat/issues 提交，这样我就能修复它们！';
+      '欢迎来到消息和电子邮件的下一次进化。\n\nAxichat 仍然鲜为人知，所以当前存储空间限制较低，后续会逐步提高。请在 https://github.com/axichat/axichat/issues 报告 bug。\n\n点按消息气泡可以使用很多功能。试着点一下这一条。\n\n为了更可靠地接收消息，我们建议通过个人资料页面启用后台通知。';
 
   @override
   String get signupTitle => '注册';
@@ -1399,7 +1408,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get signupCustomEndpointRequired =>
-      '请选择自定义服务器以在应用内注册。axi.im 账户需要在网站上创建。';
+      'Axichat 仍处于低调运行阶段，因此 axi.im 账号创建目前仅可在网站上完成。请选择自定义服务器以在应用内注册。';
 
   @override
   String get signupCaptchaUnavailable => '验证码不可用';
@@ -1604,6 +1613,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get calendarTaskCopied => '任务已复制';
+
+  @override
+  String get calendarTaskCopiedPasteInstructionPointer => '任务已复制。右键点击日历单元格以粘贴。';
+
+  @override
+  String get calendarTaskCopiedPasteInstructionTouch => '任务已复制。长按日历单元格以粘贴。';
 
   @override
   String get calendarTaskCopiedClipboard => '任务已复制到剪贴板';
@@ -2324,7 +2339,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authCustomServerDescription =>
-      '覆盖 XMPP/SMTP 端点或启用 DNS 查询。留空以使用默认值。自定义服务器必须按照 https://github.com/axichat/server 的步骤创建，否则很可能无法工作。';
+      '选择账户域名。留空则使用 axi.im。若使用自定义服务器，请输入其域名；配置步骤见 https://github.com/axichat/selfhost。';
+
+  @override
+  String get authCustomServerSignupDescription =>
+      '输入要注册的自定义服务器域名。自定义服务器必须先按照 https://github.com/axichat/selfhost 配置，此应用才能在其上创建账户。';
 
   @override
   String get authCustomServerDomainOrIp => '域名';
@@ -2662,6 +2681,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get calendarEditTaskTitle => '编辑任务';
+
+  @override
+  String get calendarEditUnsavedChangesTitle => '未保存的更改';
+
+  @override
+  String get calendarEditUnsavedChangesMessage => '关闭此任务前保存更改？';
+
+  @override
+  String get calendarEditDiscardChanges => '放弃';
 
   @override
   String get calendarDateTimeLabel => '日期和时间';
@@ -6621,6 +6649,145 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatEmailOutboundOverrideSubtitle => '此聊天中的新消息将使用电子邮件而不是 XMPP。';
+
+  @override
+  String get commonChange => '更改';
+
+  @override
+  String get commonRefresh => '刷新';
+
+  @override
+  String get authForgotUsernameOrPassword => '忘记用户名或密码？';
+
+  @override
+  String get authAccountRepairRequired => '账号需要修复。请联系支持人员或你的服务器管理员。';
+
+  @override
+  String get authIdempotencyConflict => '此请求与上一次尝试不再匹配。请检查表单并重试。';
+
+  @override
+  String get authRateLimited => '尝试次数过多。请稍后再试。';
+
+  @override
+  String get signupAxiImUnavailableDescription =>
+      'Axichat 仍处于低调运行阶段，因此 axi.im 账号创建目前仅可在网站上完成。此应用可以登录现有账号。';
+
+  @override
+  String get recoveryTitle => '账号恢复';
+
+  @override
+  String get recoverySettingsTitle => '账号恢复';
+
+  @override
+  String get recoverySettingsDescription => '查看或更改此 axi.im 账号的恢复方式。';
+
+  @override
+  String get recoverySettingsPasswordDescription => '解锁此 axi.im 账号的恢复设置。';
+
+  @override
+  String get recoveryWelcomeTitle => '设置账号恢复';
+
+  @override
+  String get recoveryWelcomeDescription => '添加恢复邮箱或身份验证器应用，用于密码重置。';
+
+  @override
+  String get recoveryAddEmailAction => '添加恢复邮箱';
+
+  @override
+  String get recoveryAddTotpAction => '添加身份验证器应用';
+
+  @override
+  String get recoverySkipForNow => '暂时跳过';
+
+  @override
+  String get recoveryChooseMethod => '选择恢复方式';
+
+  @override
+  String get recoveryEmailCodeAction => '邮箱验证码';
+
+  @override
+  String get recoveryAuthenticatorCodeAction => '身份验证器验证码';
+
+  @override
+  String get recoveryUsernamePlaceholder => '用户名或 axi.im 地址';
+
+  @override
+  String get recoveryAxiAccountRequired => '请输入 axi.im 账号。';
+
+  @override
+  String get recoveryEmailPlaceholder => '恢复邮箱';
+
+  @override
+  String get recoveryEmailRequired => '请输入恢复邮箱。';
+
+  @override
+  String get recoveryCodePlaceholder => '验证码';
+
+  @override
+  String get recoveryCodeRequired => '请输入验证码。';
+
+  @override
+  String get recoveryCodeIncomplete => '请输入 6 位验证码。';
+
+  @override
+  String get recoveryNeutralEmailSent => '如果账号和恢复邮箱匹配，验证码已发送。';
+
+  @override
+  String get recoveryAuthenticatorCodeHint => '请输入身份验证器应用中的验证码。';
+
+  @override
+  String get recoveryNewPasswordHint => '为此账号选择新密码。';
+
+  @override
+  String get recoveryPasswordResetComplete => '密码已重置。你可以使用新密码登录。';
+
+  @override
+  String get recoveryRestartRequired => '请重新开始账号恢复并重试。';
+
+  @override
+  String get recoveryInvalidCode => '验证码无效。';
+
+  @override
+  String get recoveryChallengeExpired => '该验证码已过期。请重新开始此步骤。';
+
+  @override
+  String get recoveryChallengeFailed => '错误验证码次数过多。请重新开始此步骤。';
+
+  @override
+  String get recoveryNotConfigured => '此账号未配置账号恢复。';
+
+  @override
+  String get recoveryGenericError => '账号恢复失败。请重试。';
+
+  @override
+  String get recoveryEmailTitle => '恢复邮箱';
+
+  @override
+  String get recoveryTotpTitle => '身份验证器应用';
+
+  @override
+  String get recoveryEnabled => '已启用';
+
+  @override
+  String get recoveryNotSet => '未设置';
+
+  @override
+  String get recoveryEmailSetupCodeHint => '请输入发送到你的恢复邮箱的验证码。';
+
+  @override
+  String get recoveryTotpSetupHint => '将此密钥添加到你的身份验证器应用，然后输入 6 位验证码。';
+
+  @override
+  String get recoveryTotpSetupStartHint => '为此账号生成身份验证器密钥，然后输入应用中的 6 位验证码。';
+
+  @override
+  String get recoveryRemoveEmailTitle => '移除恢复邮箱';
+
+  @override
+  String get recoveryRemoveTotpTitle => '移除身份验证器应用';
+
+  @override
+  String get recoveryRemoveConfirmMessage => '移除此恢复方式？';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -6718,31 +6885,28 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get folderRemoveMessageFailed => '無法從資料夾移除此訊息。';
 
   @override
-  String get contactFolderRuleAction => 'File incoming items in...';
+  String get contactFolderRuleAction => '將傳入項目歸檔到...';
 
   @override
-  String get contactFolderRuleMessagesAction => 'File incoming messages in...';
+  String get contactFolderRuleMessagesAction => '將傳入訊息歸檔到...';
 
   @override
-  String get contactFolderRuleEmailsAction => 'File incoming emails in...';
+  String get contactFolderRuleEmailsAction => '將傳入電郵歸檔到...';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsAction =>
-      'File incoming messages and emails in...';
+  String get contactFolderRuleMessagesAndEmailsAction => '將傳入訊息和電郵歸檔到...';
 
   @override
-  String get contactFolderRuleTitle => 'File incoming items in folder';
+  String get contactFolderRuleTitle => '將傳入項目歸檔到資料夾';
 
   @override
-  String get contactFolderRuleMessagesTitle =>
-      'File incoming messages in folder';
+  String get contactFolderRuleMessagesTitle => '將傳入訊息歸檔到資料夾';
 
   @override
-  String get contactFolderRuleEmailsTitle => 'File incoming emails in folder';
+  String get contactFolderRuleEmailsTitle => '將傳入電郵歸檔到資料夾';
 
   @override
-  String get contactFolderRuleMessagesAndEmailsTitle =>
-      'File incoming messages and emails in folder';
+  String get contactFolderRuleMessagesAndEmailsTitle => '將傳入訊息和電郵歸檔到資料夾';
 
   @override
   String get contactFolderRuleClear => '清除規則';
@@ -6922,7 +7086,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String chatAttachmentConfirmMessage(Object sender) {
-    return '請只載入信任聯絡人的附件。\n\n$sender 尚未在你的聯絡人中。是否繼續？';
+    return '請只載入你信任寄件者的附件。\n\n是否載入來自 $sender 的附件？';
   }
 
   @override
@@ -7334,6 +7498,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatContactRenameTooltip => '重新命名聯絡人';
+
+  @override
+  String get chatVerifiedServerAnnouncementTooltip => '已驗證的伺服器公告';
 
   @override
   String get chatContactRenameTitle => '重新命名聯絡人';
@@ -7842,6 +8009,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarSelectionTitleBlank => '標題不能為空。';
 
   @override
+  String get calendarSelectionUnsavedChangesTitle => '待處理的選取變更';
+
+  @override
+  String get calendarSelectionUnsavedChangesMessage => '離開選取模式前套用變更？';
+
+  @override
+  String get calendarSelectionDiscardChanges => '放棄';
+
+  @override
   String get calendarExportReady => '匯出可供分享。';
 
   @override
@@ -7992,7 +8168,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authSignupWelcomeMessage =>
-      '歡迎使用 Axichat！\n\n目前儲存空間限制較低，之後會逐步提高。\n\n點按訊息氣泡即可使用很多功能；試試點一下這則！\n\n為了更可靠地接收訊息，強烈建議你透過個人資料畫面啟用背景通知。\n\n如果你發現 bug，請到 https://github.com/axichat/axichat/issues 回報，這樣我就能修復它們！';
+      '歡迎來到訊息和電郵的下一次進化。\n\nAxichat 仍然鮮為人知，所以目前儲存空間限制較低，之後會逐步提高。請在 https://github.com/axichat/axichat/issues 回報 bug。\n\n點按訊息氣泡即可使用很多功能。試試點一下這則。\n\n為了更可靠地接收訊息，我們建議透過個人資料畫面啟用背景通知。';
 
   @override
   String get signupTitle => '註冊';
@@ -8019,7 +8195,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get signupCustomEndpointRequired =>
-      '請選擇自訂伺服器以在應用程式內註冊。axi.im 帳戶需要在網站上建立。';
+      'Axichat 仍處於低調運行階段，因此 axi.im 帳號建立目前僅可在網站上完成。請選擇自訂伺服器以在應用程式內註冊。';
 
   @override
   String get signupCaptchaUnavailable => '驗證碼無法使用';
@@ -8224,6 +8400,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarTaskCopied => '已複製任務';
+
+  @override
+  String get calendarTaskCopiedPasteInstructionPointer => '已複製任務。右鍵點擊日曆格以貼上。';
+
+  @override
+  String get calendarTaskCopiedPasteInstructionTouch => '已複製任務。長按日曆格以貼上。';
 
   @override
   String get calendarTaskCopiedClipboard => '任務已複製到剪貼簿';
@@ -8944,7 +9126,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authCustomServerDescription =>
-      '覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。自訂伺服器必須依照 https://github.com/axichat/server 的步驟建立，否則很可能無法運作。';
+      '選擇帳戶網域。留空則使用 axi.im。若使用自訂伺服器，請輸入其網域；設定步驟見 https://github.com/axichat/selfhost。';
+
+  @override
+  String get authCustomServerSignupDescription =>
+      '輸入要註冊的自訂伺服器網域。自訂伺服器必須先按照 https://github.com/axichat/selfhost 設定，此應用程式才能在其上建立帳戶。';
 
   @override
   String get authCustomServerDomainOrIp => '網域';
@@ -9283,6 +9469,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarEditTaskTitle => '編輯任務';
+
+  @override
+  String get calendarEditUnsavedChangesTitle => '未儲存的變更';
+
+  @override
+  String get calendarEditUnsavedChangesMessage => '關閉此任務前儲存變更？';
+
+  @override
+  String get calendarEditDiscardChanges => '放棄';
 
   @override
   String get calendarDateTimeLabel => '日期與時間';
@@ -13243,4 +13438,143 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatEmailOutboundOverrideSubtitle => '此聊天中的新訊息將使用電郵而不是 XMPP。';
+
+  @override
+  String get commonChange => '更改';
+
+  @override
+  String get commonRefresh => '重新整理';
+
+  @override
+  String get authForgotUsernameOrPassword => '忘記用戶名或密碼？';
+
+  @override
+  String get authAccountRepairRequired => '帳號需要修復。請聯絡支援人員或你的伺服器管理員。';
+
+  @override
+  String get authIdempotencyConflict => '此請求與上一次嘗試不再相符。請檢查表單並再試一次。';
+
+  @override
+  String get authRateLimited => '嘗試次數過多。請稍後再試。';
+
+  @override
+  String get signupAxiImUnavailableDescription =>
+      'Axichat 仍處於低調運行階段，因此 axi.im 帳號建立目前僅可在網站上完成。此應用程式可以登入現有帳號。';
+
+  @override
+  String get recoveryTitle => '帳號復原';
+
+  @override
+  String get recoverySettingsTitle => '帳號復原';
+
+  @override
+  String get recoverySettingsDescription => '查看或更改此 axi.im 帳號的復原方式。';
+
+  @override
+  String get recoverySettingsPasswordDescription => '解鎖此 axi.im 帳號的復原設定。';
+
+  @override
+  String get recoveryWelcomeTitle => '設定帳號復原';
+
+  @override
+  String get recoveryWelcomeDescription => '加入復原電郵或驗證器應用程式，用於密碼重設。';
+
+  @override
+  String get recoveryAddEmailAction => '加入復原電郵';
+
+  @override
+  String get recoveryAddTotpAction => '加入驗證器應用程式';
+
+  @override
+  String get recoverySkipForNow => '暫時略過';
+
+  @override
+  String get recoveryChooseMethod => '選擇復原方式';
+
+  @override
+  String get recoveryEmailCodeAction => '電郵驗證碼';
+
+  @override
+  String get recoveryAuthenticatorCodeAction => '驗證器驗證碼';
+
+  @override
+  String get recoveryUsernamePlaceholder => '用戶名或 axi.im 地址';
+
+  @override
+  String get recoveryAxiAccountRequired => '請輸入 axi.im 帳號。';
+
+  @override
+  String get recoveryEmailPlaceholder => '復原電郵';
+
+  @override
+  String get recoveryEmailRequired => '請輸入復原電郵。';
+
+  @override
+  String get recoveryCodePlaceholder => '驗證碼';
+
+  @override
+  String get recoveryCodeRequired => '請輸入驗證碼。';
+
+  @override
+  String get recoveryCodeIncomplete => '請輸入 6 位驗證碼。';
+
+  @override
+  String get recoveryNeutralEmailSent => '如果帳號和復原電郵相符，驗證碼已傳送。';
+
+  @override
+  String get recoveryAuthenticatorCodeHint => '請輸入驗證器應用程式中的驗證碼。';
+
+  @override
+  String get recoveryNewPasswordHint => '為此帳號選擇新密碼。';
+
+  @override
+  String get recoveryPasswordResetComplete => '密碼已重設。你可以使用新密碼登入。';
+
+  @override
+  String get recoveryRestartRequired => '請重新開始帳號復原並再試一次。';
+
+  @override
+  String get recoveryInvalidCode => '驗證碼無效。';
+
+  @override
+  String get recoveryChallengeExpired => '該驗證碼已過期。請重新開始此步驟。';
+
+  @override
+  String get recoveryChallengeFailed => '錯誤驗證碼次數過多。請重新開始此步驟。';
+
+  @override
+  String get recoveryNotConfigured => '此帳號未設定帳號復原。';
+
+  @override
+  String get recoveryGenericError => '帳號復原失敗。請再試一次。';
+
+  @override
+  String get recoveryEmailTitle => '復原電郵';
+
+  @override
+  String get recoveryTotpTitle => '驗證器應用程式';
+
+  @override
+  String get recoveryEnabled => '已啟用';
+
+  @override
+  String get recoveryNotSet => '未設定';
+
+  @override
+  String get recoveryEmailSetupCodeHint => '請輸入傳送到你的復原電郵的驗證碼。';
+
+  @override
+  String get recoveryTotpSetupHint => '將此密鑰加入你的驗證器應用程式，然後輸入 6 位驗證碼。';
+
+  @override
+  String get recoveryTotpSetupStartHint => '為此帳號產生驗證器密鑰，然後輸入應用程式中的 6 位驗證碼。';
+
+  @override
+  String get recoveryRemoveEmailTitle => '移除復原電郵';
+
+  @override
+  String get recoveryRemoveTotpTitle => '移除驗證器應用程式';
+
+  @override
+  String get recoveryRemoveConfirmMessage => '移除此復原方式？';
 }

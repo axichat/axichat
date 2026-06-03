@@ -32,7 +32,8 @@ const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 const signupWelcomeTitle = 'Axichat';
-const signupWelcomeBody = 'Welcome to Axichat!';
+const signupWelcomeBody =
+    'Welcome to the next evolution of messaging and email.';
 const _welcomeChatJid = 'axichat@welcome.axichat.invalid';
 const _welcomeStanzaId = 'signup-welcome.axichat';
 const bool clearEmailCredentialsOnLogout = true;
