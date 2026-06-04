@@ -4,7 +4,9 @@
 import 'dart:convert';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 enum CalendarArchiveCoverageStatus {
   unknown,
@@ -45,7 +47,8 @@ class CalendarSyncState {
     this.lastSnapshotChecksum,
   });
 
-  /// Registered key for persisting calendar sync state.
+  /// Legacy registered key for calendar sync state persisted outside the
+  /// account-scoped calendar store.
   static final stateKey = XmppStateStore.registerKey('calendar_sync_state_v1');
   static const Duration _futureTimestampTolerance = Duration(minutes: 2);
 
@@ -307,8 +310,14 @@ class CalendarSyncState {
     );
   }
 
-  /// Reads the current state from [XmppStateStore].
+  /// Reads the current personal calendar sync state from account-scoped
+  /// calendar storage.
   static CalendarSyncState read() {
+    return const PersonalCalendarSyncStateStore().read();
+  }
+
+  /// Reads the legacy split sync state from [XmppStateStore].
+  static CalendarSyncState readLegacy() {
     final raw = XmppStateStore().read(key: stateKey);
     if (raw == null || raw is! String) {
       return const CalendarSyncState();
@@ -320,13 +329,23 @@ class CalendarSyncState {
     }
   }
 
-  /// Writes this state to [XmppStateStore].
+  /// Writes this state to account-scoped calendar storage.
   Future<void> write() async {
+    await const PersonalCalendarSyncStateStore().write(this);
+  }
+
+  /// Writes this state to the legacy split [XmppStateStore].
+  Future<void> writeLegacy() async {
     await XmppStateStore().write(key: stateKey, value: toJson());
   }
 
-  /// Deletes the persisted state from [XmppStateStore].
+  /// Deletes the persisted state from account-scoped calendar storage.
   static Future<void> clear() async {
+    await const PersonalCalendarSyncStateStore().delete();
+  }
+
+  /// Deletes the legacy split state from [XmppStateStore].
+  static Future<void> clearLegacy() async {
     await XmppStateStore().delete(key: stateKey);
   }
 
@@ -380,6 +399,59 @@ class CalendarSyncState {
     coverageStatus,
     lastSnapshotChecksum,
   );
+}
+
+class PersonalCalendarSyncStateStore {
+  const PersonalCalendarSyncStateStore({Storage? storage}) : _storage = storage;
+
+  static String get _storageKey =>
+      '${authStoragePrefix}personal_calendar_sync_state_v1';
+
+  final Storage? _storage;
+
+  CalendarSyncState read() {
+    return readOrNull() ?? const CalendarSyncState();
+  }
+
+  CalendarSyncState? readOrNull() {
+    final storage = _resolvedStorage();
+    if (storage == null) {
+      return null;
+    }
+    final raw = storage.read(_storageKey);
+    if (raw == null || raw is! String) {
+      return null;
+    }
+    try {
+      return CalendarSyncState.fromJson(raw);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> write(CalendarSyncState state) async {
+    final storage = _resolvedStorage();
+    if (storage == null) {
+      return;
+    }
+    await storage.write(_storageKey, state.toJson());
+  }
+
+  Future<void> delete() async {
+    final storage = _resolvedStorage();
+    if (storage == null) {
+      return;
+    }
+    await storage.delete(_storageKey);
+  }
+
+  Storage? _resolvedStorage() {
+    try {
+      return _storage ?? HydratedBloc.storage;
+    } on StorageNotFound {
+      return null;
+    }
+  }
 }
 
 const Object _calendarSyncStateUnset = Object();

@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'calendar_storage_registry.dart';
 import 'storage_builders.dart';
@@ -23,6 +24,8 @@ class CalendarStorageManager extends ChangeNotifier {
   final CalendarStorageRegistry _registry;
   ImpatientCompleter<Storage>? _guestStorageCompleter;
   ImpatientCompleter<Storage>? _authStorageCompleter;
+  String? _authStorageAccountAddress;
+  Future<void> _authStorageQueue = Future<void>.value();
 
   /// The currently registered guest storage, if any.
   Storage? get guestStorage => _guestStorageCompleter?.value;
@@ -78,20 +81,53 @@ class CalendarStorageManager extends ChangeNotifier {
   ///
   /// The [passphrase] is used to derive an AES encryption key for the storage.
   /// Returns a future that completes when storage is ready.
-  Future<Storage> ensureAuthStorage({required String passphrase}) async {
-    if (_authStorageCompleter != null) {
-      return _authStorageCompleter!.future;
+  Future<Storage> ensureAuthStorage({
+    required String accountAddress,
+    required String passphrase,
+    required String storageRootPath,
+  }) async {
+    final normalizedAccountAddress = normalizedAddressKey(accountAddress);
+    if (normalizedAccountAddress == null) {
+      throw ArgumentError.value(
+        accountAddress,
+        'accountAddress',
+        'Authenticated calendar storage requires an account address.',
+      );
+    }
+    return _enqueueAuthStorageOperation(
+      () => _ensureAuthStorage(
+        accountAddress: normalizedAccountAddress,
+        passphrase: passphrase,
+        storageRootPath: storageRootPath,
+      ),
+    );
+  }
+
+  Future<Storage> _ensureAuthStorage({
+    required String accountAddress,
+    required String passphrase,
+    required String storageRootPath,
+  }) async {
+    final existingCompleter = _authStorageCompleter;
+    if (existingCompleter != null) {
+      if (_authStorageAccountAddress == accountAddress) {
+        return existingCompleter.future;
+      }
+      await _closeAuthStorage(existingCompleter);
     }
 
     final ImpatientCompleter<Storage> completer = ImpatientCompleter<Storage>(
       Completer<Storage>(),
     );
     _authStorageCompleter = completer;
+    _authStorageAccountAddress = accountAddress;
 
     try {
       final encryptionKey = deriveCalendarEncryptionKey(passphrase);
       final storage = await buildAuthCalendarStorage(
         encryptionKey: encryptionKey,
+        accountAddress: accountAddress,
+        storageRootPath: storageRootPath,
       );
 
       _registry.registerPrefix(authStoragePrefix, storage);
@@ -101,13 +137,49 @@ class CalendarStorageManager extends ChangeNotifier {
     } catch (e, st) {
       completer.completeError(e, st);
       _authStorageCompleter = null;
+      _authStorageAccountAddress = null;
       rethrow;
     }
   }
 
   /// Unregisters and forgets the authenticated storage reference.
-  void clearAuthStorage() {
+  Future<void> clearAuthStorage() {
+    return _enqueueAuthStorageOperation(_clearAuthStorage);
+  }
+
+  Future<void> _clearAuthStorage() async {
+    final existingCompleter = _authStorageCompleter;
+    if (existingCompleter == null) {
+      _registry.unregisterPrefix(authStoragePrefix);
+      _authStorageAccountAddress = null;
+      return;
+    }
+    await _closeAuthStorage(existingCompleter);
+  }
+
+  Future<void> _closeAuthStorage(ImpatientCompleter<Storage> completer) async {
     _registry.unregisterPrefix(authStoragePrefix);
     _authStorageCompleter = null;
+    _authStorageAccountAddress = null;
+    final storage = completer.value;
+    try {
+      await storage?.close();
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  Future<T> _enqueueAuthStorageOperation<T>(
+    Future<T> Function() operation,
+  ) async {
+    final previousOperation = _authStorageQueue;
+    final release = Completer<void>();
+    _authStorageQueue = release.future;
+    await previousOperation;
+    try {
+      return await operation();
+    } finally {
+      release.complete();
+    }
   }
 }

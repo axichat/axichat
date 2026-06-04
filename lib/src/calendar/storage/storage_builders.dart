@@ -2,10 +2,14 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:crypto/crypto.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:path/path.dart' as p;
 
 import 'calendar_hydrated_storage.dart';
 
@@ -26,11 +30,20 @@ Future<Storage> buildGuestCalendarStorage() {
   );
 }
 
-Future<Storage> buildAuthCalendarStorage({required List<int> encryptionKey}) {
+Future<Storage> buildAuthCalendarStorage({
+  required List<int> encryptionKey,
+  required String accountAddress,
+  required String storageRootPath,
+}) async {
+  final storagePath = await _authCalendarStoragePath(
+    accountAddress: accountAddress,
+    storageRootPath: storageRootPath,
+  );
   return CalendarHydratedStorage.open(
     boxName: _authBoxName,
     prefix: _authPrefix,
     encryptionCipher: HiveAesCipher(encryptionKey),
+    path: storagePath,
   );
 }
 
@@ -38,4 +51,27 @@ Future<Storage> buildAuthCalendarStorage({required List<int> encryptionKey}) {
 List<int> deriveCalendarEncryptionKey(String secret) {
   final digest = sha256.convert(utf8.encode(secret));
   return digest.bytes;
+}
+
+Future<String> _authCalendarStoragePath({
+  required String accountAddress,
+  required String storageRootPath,
+}) async {
+  final normalizedAddress = normalizedAddressKey(accountAddress);
+  if (normalizedAddress == null) {
+    throw ArgumentError.value(
+      accountAddress,
+      'accountAddress',
+      'Authenticated calendar storage requires an account address.',
+    );
+  }
+  final addressHash = sha256.convert(utf8.encode(normalizedAddress));
+  final directory = Directory(
+    p.join(
+      storageRootPath,
+      normalizeAppOwnedPathSegment('calendar_auth_v2_$addressHash'),
+    ),
+  );
+  await directory.create(recursive: true);
+  return directory.path;
 }

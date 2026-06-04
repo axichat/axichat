@@ -1,8 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
+import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:crypto/crypto.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,6 +52,7 @@ void main() {
       await manager.guestStorage?.close();
       await manager.authStorage?.clear();
       await manager.authStorage?.close();
+      await Hive.close();
       if (tempDir.existsSync()) {
         await tempDir.delete(recursive: true);
       }
@@ -63,15 +69,153 @@ void main() {
 
     test('ensureAuthStorage registers encrypted storage once', () async {
       final storage = await manager.ensureAuthStorage(
+        accountAddress: 'account-a@example.com',
         passphrase: 'secret-passphrase',
+        storageRootPath: tempDir.path,
       );
 
       expect(registry.storageForPrefix(authStoragePrefix), same(storage));
 
       final secondCall = await manager.ensureAuthStorage(
+        accountAddress: 'account-a@example.com',
         passphrase: 'secret-passphrase',
+        storageRootPath: tempDir.path,
       );
       expect(identical(storage, secondCall), isTrue);
+    });
+
+    test(
+      'switches authenticated storage without leaking account data',
+      () async {
+        final accountADirectory = await Directory(
+          '${tempDir.path}/account-a',
+        ).create();
+        final accountBDirectory = await Directory(
+          '${tempDir.path}/account-b',
+        ).create();
+
+        Hive.init(accountADirectory.path);
+        final firstStorage = await manager.ensureAuthStorage(
+          accountAddress: 'first@example.com',
+          passphrase: 'first-passphrase',
+          storageRootPath: tempDir.path,
+        );
+        await firstStorage.write(authStoragePrefix, {'account': 'first'});
+
+        Hive.init(accountBDirectory.path);
+        final secondStorage = await manager.ensureAuthStorage(
+          accountAddress: 'second@example.com',
+          passphrase: 'second-passphrase',
+          storageRootPath: tempDir.path,
+        );
+
+        expect(identical(firstStorage, secondStorage), isFalse);
+        expect(
+          registry.storageForPrefix(authStoragePrefix),
+          same(secondStorage),
+        );
+        expect(secondStorage.read(authStoragePrefix), isNull);
+        await secondStorage.write(authStoragePrefix, {'account': 'second'});
+
+        Hive.init(accountADirectory.path);
+        final restoredFirstStorage = await manager.ensureAuthStorage(
+          accountAddress: 'first@example.com',
+          passphrase: 'first-passphrase',
+          storageRootPath: tempDir.path,
+        );
+
+        expect(restoredFirstStorage.read(authStoragePrefix), {
+          'account': 'first',
+        });
+      },
+    );
+
+    test('scopes linked task registry to authenticated account', () async {
+      final linkedTaskRegistry = CalendarLinkedTaskRegistry(storage: registry);
+
+      await manager.ensureAuthStorage(
+        accountAddress: 'first@example.com',
+        passphrase: 'first-passphrase',
+        storageRootPath: tempDir.path,
+      );
+      await linkedTaskRegistry.addLinks(
+        taskId: 'shared-task',
+        storageIds: <String>['', 'calendar-chat-a'],
+      );
+      expect(linkedTaskRegistry.linkedStorageIds('shared-task'), {
+        '',
+        'calendar-chat-a',
+      });
+
+      await manager.ensureAuthStorage(
+        accountAddress: 'second@example.com',
+        passphrase: 'second-passphrase',
+        storageRootPath: tempDir.path,
+      );
+      expect(linkedTaskRegistry.linkedStorageIds('shared-task'), isEmpty);
+
+      await manager.ensureAuthStorage(
+        accountAddress: 'first@example.com',
+        passphrase: 'first-passphrase',
+        storageRootPath: tempDir.path,
+      );
+      expect(linkedTaskRegistry.linkedStorageIds('shared-task'), {
+        '',
+        'calendar-chat-a',
+      });
+    });
+
+    test('does not copy legacy prefix storage into address storage', () async {
+      final legacyDirectory = await Directory(
+        '${tempDir.path}/legacy-prefix',
+      ).create();
+      final legacyBox = await Hive.openBox<dynamic>(
+        authStorageBoxName,
+        path: legacyDirectory.path,
+        encryptionCipher: HiveAesCipher(
+          deriveCalendarEncryptionKey('legacy-passphrase'),
+        ),
+      );
+      await legacyBox.put('${authStoragePrefix}_$authStoragePrefix', {
+        'account': 'legacy',
+      });
+      await legacyBox.close();
+
+      final storage = await manager.ensureAuthStorage(
+        accountAddress: 'legacy@example.com',
+        passphrase: 'legacy-passphrase',
+        storageRootPath: tempDir.path,
+      );
+
+      expect(storage.read(authStoragePrefix), isNull);
+    });
+
+    test('does not reuse previous address-scoped migration storage', () async {
+      final String normalized = normalizedAddressKey('legacy@example.com')!;
+      final Digest addressHash = sha256.convert(utf8.encode(normalized));
+      final oldScopedDirectory = await Directory(
+        '${tempDir.path}/'
+        '${normalizeAppOwnedPathSegment('calendar_auth_$addressHash')}',
+      ).create();
+      final oldScopedBox = await Hive.openBox<dynamic>(
+        authStorageBoxName,
+        path: oldScopedDirectory.path,
+        encryptionCipher: HiveAesCipher(
+          deriveCalendarEncryptionKey('legacy-passphrase'),
+        ),
+      );
+      await oldScopedBox.put('${authStoragePrefix}_$authStoragePrefix', {
+        'account': 'legacy',
+      });
+      await oldScopedBox.close();
+
+      final storage = await manager.ensureAuthStorage(
+        accountAddress: 'legacy@example.com',
+        passphrase: 'legacy-passphrase',
+        storageRootPath: tempDir.path,
+      );
+
+      expect(storage.read(authStoragePrefix), isNull);
     });
   });
 }

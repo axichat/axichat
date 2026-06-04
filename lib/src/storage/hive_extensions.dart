@@ -21,12 +21,17 @@ extension HiveInterfaceOpenBoxRetry on HiveInterface {
     String name, {
     HiveCipher? encryptionCipher,
     Logger? logger,
+    String? path,
     int lockRetryAttempts = 10,
     Duration lockRetryDelay = const Duration(milliseconds: 200),
   }) async {
     for (var attempt = 0; attempt < lockRetryAttempts; attempt++) {
       try {
-        return await openBox<T>(name, encryptionCipher: encryptionCipher);
+        return await openBox<T>(
+          name,
+          encryptionCipher: encryptionCipher,
+          path: path,
+        );
       } catch (error, stackTrace) {
         final bool shouldRetry =
             isHiveLockUnavailable(error) && attempt < lockRetryAttempts - 1;

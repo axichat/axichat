@@ -93,6 +93,7 @@ class _AxichatState extends State<Axichat> {
         notificationService: widget._notificationService,
       );
   late final XmppService _xmppService;
+  String? _pendingAuthCalendarAccountJid;
 
   @override
   void initState() {
@@ -106,6 +107,7 @@ class _AxichatState extends State<Axichat> {
           buildStateStore: (prefix, passphrase) async {
             final Logger logger = Logger('XmppStateStore');
             final hiveDirectory = await prepareAppStorageSubdirectory(prefix);
+            final storageRootDirectory = await prepareAppStorageDirectory();
             Hive.init(hiveDirectory.path);
             if (!Hive.isAdapterRegistered(1)) {
               Hive.registerAdapter(PresenceAdapter());
@@ -115,9 +117,21 @@ class _AxichatState extends State<Axichat> {
               encryptionCipher: HiveAesCipher(utf8.encode(passphrase)),
               logger: logger,
             );
+            final accountJid =
+                _pendingAuthCalendarAccountJid ?? _xmppService.myJid;
+            if (accountJid == null || accountJid.trim().isEmpty) {
+              throw StateError(
+                'Authenticated calendar storage requires an account address.',
+              );
+            }
             await widget._storageManager.ensureAuthStorage(
+              accountAddress: accountJid,
               passphrase: passphrase,
+              storageRootPath: storageRootDirectory.path,
             );
+            if (accountJid == _pendingAuthCalendarAccountJid) {
+              _pendingAuthCalendarAccountJid = null;
+            }
             return XmppStateStore();
           },
           buildDatabase: (prefix, passphrase) async {
@@ -239,6 +253,7 @@ class _AxichatState extends State<Axichat> {
                               );
                         },
                         beforeXmppConnect: (accountJid) async {
+                          _pendingAuthCalendarAccountJid = accountJid;
                           final settingsCubit = context.read<SettingsCubit>();
                           await context
                               .read<ForegroundRuntimeController>()

@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
-const String _linkedTaskRegistryStorageKey = 'calendar_linked_tasks_v1';
+const String _linkedTaskRegistryStorageKey = 'calendar_auth_linked_tasks_v1';
 
 enum CalendarLinkedTaskOperation { update, delete }
 
@@ -138,12 +138,7 @@ class CalendarLinkedTaskRegistry {
         continue;
       }
       final List<String> values =
-          entry.value
-              .map((value) => value.trim())
-              .where((value) => value.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
+          entry.value.map((value) => value.trim()).toSet().toList()..sort();
       if (values.isEmpty) {
         continue;
       }
