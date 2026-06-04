@@ -538,6 +538,7 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
           failureMessageBuilder: (_, _) => 'Failed to rotate pre-keys',
         );
     }
+    return null;
   }
 
   static OmemoOperationType _defaultTypeForOperation(

@@ -301,6 +301,7 @@ class TaskShareFormatter {
       case TaskPriority.critical:
         return l10n.taskSharePriorityCritical;
     }
+    return null;
   }
 
   static String _formatDateTime(
