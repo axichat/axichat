@@ -130,6 +130,65 @@ void main() {
       },
     );
 
+    test(
+      'opens empty account storage when database passphrase changes',
+      () async {
+        final storage = await manager.ensureAuthStorage(
+          accountAddress: 'account-a@example.com',
+          passphrase: 'first-passphrase',
+          storageRootPath: tempDir.path,
+        );
+        await storage.write(authStoragePrefix, {'account': 'first'});
+
+        final restoredStorage = await manager.ensureAuthStorage(
+          accountAddress: 'account-a@example.com',
+          passphrase: 'second-passphrase',
+          storageRootPath: tempDir.path,
+        );
+
+        expect(restoredStorage.read(authStoragePrefix), isNull);
+        await restoredStorage.write(authStoragePrefix, {'account': 'second'});
+
+        final originalStorage = await manager.ensureAuthStorage(
+          accountAddress: 'account-a@example.com',
+          passphrase: 'first-passphrase',
+          storageRootPath: tempDir.path,
+        );
+
+        expect(originalStorage.read(authStoragePrefix), {'account': 'first'});
+      },
+    );
+
+    test('isolates accounts that use the same passphrase', () async {
+      final sharedPassphrase = 'shared-passphrase';
+
+      final firstStorage = await manager.ensureAuthStorage(
+        accountAddress: 'first@example.com',
+        passphrase: sharedPassphrase,
+        storageRootPath: tempDir.path,
+      );
+      await firstStorage.write(authStoragePrefix, {'account': 'first'});
+
+      final secondStorage = await manager.ensureAuthStorage(
+        accountAddress: 'second@example.com',
+        passphrase: sharedPassphrase,
+        storageRootPath: tempDir.path,
+      );
+
+      expect(secondStorage.read(authStoragePrefix), isNull);
+      await secondStorage.write(authStoragePrefix, {'account': 'second'});
+
+      final restoredFirstStorage = await manager.ensureAuthStorage(
+        accountAddress: 'first@example.com',
+        passphrase: sharedPassphrase,
+        storageRootPath: tempDir.path,
+      );
+
+      expect(restoredFirstStorage.read(authStoragePrefix), {
+        'account': 'first',
+      });
+    });
+
     test('scopes linked task registry to authenticated account', () async {
       final linkedTaskRegistry = CalendarLinkedTaskRegistry(storage: registry);
 
@@ -217,5 +276,36 @@ void main() {
 
       expect(storage.read(authStoragePrefix), isNull);
     });
+
+    test(
+      'does not open old passphrase-keyed storage with a new passphrase',
+      () async {
+        final String normalized = normalizedAddressKey('legacy@example.com')!;
+        final Digest addressHash = sha256.convert(utf8.encode(normalized));
+        final oldScopedDirectory = await Directory(
+          '${tempDir.path}/'
+          '${normalizeAppOwnedPathSegment('calendar_auth_v2_$addressHash')}',
+        ).create();
+        final oldScopedBox = await Hive.openBox<dynamic>(
+          authStorageBoxName,
+          path: oldScopedDirectory.path,
+          encryptionCipher: HiveAesCipher(
+            deriveCalendarEncryptionKey('legacy-passphrase'),
+          ),
+        );
+        await oldScopedBox.put('${authStoragePrefix}_$authStoragePrefix', {
+          'account': 'legacy',
+        });
+        await oldScopedBox.close();
+
+        final storage = await manager.ensureAuthStorage(
+          accountAddress: 'legacy@example.com',
+          passphrase: 'new-passphrase',
+          storageRootPath: tempDir.path,
+        );
+
+        expect(storage.read(authStoragePrefix), isNull);
+      },
+    );
   });
 }

@@ -17,6 +17,7 @@ const _guestPrefix = 'calendar_guest';
 const _authPrefix = 'calendar_auth';
 const _guestBoxName = 'guest_calendar_state';
 const _authBoxName = 'auth_calendar';
+const _authDirectoryPrefix = 'calendar_auth_v3';
 
 String get guestStoragePrefix => _guestPrefix;
 String get authStoragePrefix => _authPrefix;
@@ -37,6 +38,7 @@ Future<Storage> buildAuthCalendarStorage({
 }) async {
   final storagePath = await _authCalendarStoragePath(
     accountAddress: accountAddress,
+    encryptionKey: encryptionKey,
     storageRootPath: storageRootPath,
   );
   return CalendarHydratedStorage.open(
@@ -53,10 +55,10 @@ List<int> deriveCalendarEncryptionKey(String secret) {
   return digest.bytes;
 }
 
-Future<String> _authCalendarStoragePath({
+String authCalendarStorageScopeKey({
   required String accountAddress,
-  required String storageRootPath,
-}) async {
+  required List<int> encryptionKey,
+}) {
   final normalizedAddress = normalizedAddressKey(accountAddress);
   if (normalizedAddress == null) {
     throw ArgumentError.value(
@@ -65,11 +67,26 @@ Future<String> _authCalendarStoragePath({
       'Authenticated calendar storage requires an account address.',
     );
   }
-  final addressHash = sha256.convert(utf8.encode(normalizedAddress));
+  final scopeHash = sha256.convert(<int>[
+    ...utf8.encode(normalizedAddress),
+    0,
+    ...encryptionKey,
+  ]);
+  return normalizeAppOwnedPathSegment('${_authDirectoryPrefix}_$scopeHash');
+}
+
+Future<String> _authCalendarStoragePath({
+  required String accountAddress,
+  required List<int> encryptionKey,
+  required String storageRootPath,
+}) async {
   final directory = Directory(
     p.join(
       storageRootPath,
-      normalizeAppOwnedPathSegment('calendar_auth_v2_$addressHash'),
+      authCalendarStorageScopeKey(
+        accountAddress: accountAddress,
+        encryptionKey: encryptionKey,
+      ),
     ),
   );
   await directory.create(recursive: true);

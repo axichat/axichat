@@ -25,6 +25,7 @@ class CalendarStorageManager extends ChangeNotifier {
   ImpatientCompleter<Storage>? _guestStorageCompleter;
   ImpatientCompleter<Storage>? _authStorageCompleter;
   String? _authStorageAccountAddress;
+  String? _authStorageScopeKey;
   Future<void> _authStorageQueue = Future<void>.value();
 
   /// The currently registered guest storage, if any.
@@ -79,7 +80,6 @@ class CalendarStorageManager extends ChangeNotifier {
 
   /// Ensures authenticated calendar hydrated storage exists and is registered.
   ///
-  /// The [passphrase] is used to derive an AES encryption key for the storage.
   /// Returns a future that completes when storage is ready.
   Future<Storage> ensureAuthStorage({
     required String accountAddress,
@@ -94,10 +94,16 @@ class CalendarStorageManager extends ChangeNotifier {
         'Authenticated calendar storage requires an account address.',
       );
     }
+    final encryptionKey = deriveCalendarEncryptionKey(passphrase);
+    final storageScopeKey = authCalendarStorageScopeKey(
+      accountAddress: normalizedAccountAddress,
+      encryptionKey: encryptionKey,
+    );
     return _enqueueAuthStorageOperation(
       () => _ensureAuthStorage(
         accountAddress: normalizedAccountAddress,
-        passphrase: passphrase,
+        encryptionKey: encryptionKey,
+        storageScopeKey: storageScopeKey,
         storageRootPath: storageRootPath,
       ),
     );
@@ -105,12 +111,14 @@ class CalendarStorageManager extends ChangeNotifier {
 
   Future<Storage> _ensureAuthStorage({
     required String accountAddress,
-    required String passphrase,
+    required List<int> encryptionKey,
+    required String storageScopeKey,
     required String storageRootPath,
   }) async {
     final existingCompleter = _authStorageCompleter;
     if (existingCompleter != null) {
-      if (_authStorageAccountAddress == accountAddress) {
+      if (_authStorageAccountAddress == accountAddress &&
+          _authStorageScopeKey == storageScopeKey) {
         return existingCompleter.future;
       }
       await _closeAuthStorage(existingCompleter);
@@ -121,9 +129,9 @@ class CalendarStorageManager extends ChangeNotifier {
     );
     _authStorageCompleter = completer;
     _authStorageAccountAddress = accountAddress;
+    _authStorageScopeKey = storageScopeKey;
 
     try {
-      final encryptionKey = deriveCalendarEncryptionKey(passphrase);
       final storage = await buildAuthCalendarStorage(
         encryptionKey: encryptionKey,
         accountAddress: accountAddress,
@@ -138,6 +146,7 @@ class CalendarStorageManager extends ChangeNotifier {
       completer.completeError(e, st);
       _authStorageCompleter = null;
       _authStorageAccountAddress = null;
+      _authStorageScopeKey = null;
       rethrow;
     }
   }
@@ -152,6 +161,7 @@ class CalendarStorageManager extends ChangeNotifier {
     if (existingCompleter == null) {
       _registry.unregisterPrefix(authStoragePrefix);
       _authStorageAccountAddress = null;
+      _authStorageScopeKey = null;
       return;
     }
     await _closeAuthStorage(existingCompleter);
@@ -161,6 +171,7 @@ class CalendarStorageManager extends ChangeNotifier {
     _registry.unregisterPrefix(authStoragePrefix);
     _authStorageCompleter = null;
     _authStorageAccountAddress = null;
+    _authStorageScopeKey = null;
     final storage = completer.value;
     try {
       await storage?.close();
