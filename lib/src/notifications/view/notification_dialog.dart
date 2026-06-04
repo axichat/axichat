@@ -12,45 +12,48 @@ import 'package:go_router/go_router.dart';
 Future<bool?> showNotificationDialog(
   BuildContext context,
   T Function<T>() locate,
-) => showFadeScaleDialog<bool>(
-  context: context,
-  builder: (context) =>
-      BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
-        bloc: locate<NotificationRequestCubit>(),
-        builder: (context, state) {
-          return AxiDialog(
-            constraints: BoxConstraints(
-              maxWidth: context.sizing.dialogMaxWidth,
-            ),
-            title: Text(
-              context.l10n.notificationsDialogTitle,
-              style: context.modalHeaderTextStyle,
-            ),
-            actions: [
-              AxiButton.destructive(
-                onPressed: state.isRequestingPermissions
-                    ? null
-                    : () => context.pop(false),
-                child: Text(context.l10n.notificationsDialogIgnore),
+) {
+  final notificationCubit = locate<NotificationRequestCubit>();
+  return showFadeScaleDialog<bool>(
+    context: context,
+    builder: (context) =>
+        BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
+          bloc: notificationCubit,
+          builder: (context, state) {
+            return AxiDialog(
+              constraints: BoxConstraints(
+                maxWidth: context.sizing.dialogMaxWidth,
               ),
-              AxiButton.primary(
-                onPressed: state.isRequestingPermissions
-                    ? null
-                    : () async {
-                        final granted = await locate<NotificationRequestCubit>()
-                            .requestPermissions();
-                        if (granted && context.mounted) {
-                          context.pop(true);
-                        }
-                      },
-                child: Text(context.l10n.notificationsDialogContinue),
+              title: Text(
+                context.l10n.notificationsDialogTitle,
+                style: context.modalHeaderTextStyle,
               ),
-            ],
-            child: Text(context.l10n.notificationsDialogDescription),
-          );
-        },
-      ),
-);
+              actions: [
+                AxiButton.destructive(
+                  onPressed: state.isRequestingPermissions
+                      ? null
+                      : () => context.pop(false),
+                  child: Text(context.l10n.notificationsDialogIgnore),
+                ),
+                AxiButton.primary(
+                  onPressed: state.isRequestingPermissions
+                      ? null
+                      : () async {
+                          final granted = await notificationCubit
+                              .requestPermissions();
+                          if (granted && context.mounted) {
+                            context.pop(true);
+                          }
+                        },
+                  child: Text(context.l10n.notificationsDialogContinue),
+                ),
+              ],
+              child: Text(context.l10n.notificationsDialogDescription),
+            );
+          },
+        ),
+  );
+}
 
 Future<void> showNotificationRestartDialog(BuildContext context) =>
     showFadeScaleDialog<void>(
