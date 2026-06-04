@@ -279,6 +279,42 @@ void main() {
     });
   });
 
+  group('Message subject parsing', () {
+    test('adds direct message subjects to handler extensions', () async {
+      final manager = MessageStanzaManager();
+      final stanza = mox.Stanza.message(
+        from: 'axi.im',
+        to: _accountBareJid,
+        type: _messageTypeChat,
+        id: _stanzaId,
+        children: [mox.XMLNode(tag: 'subject', text: '  Server notice  ')],
+      );
+      final extensions = mox.TypedMap<mox.StanzaHandlerExtension>();
+
+      await manager.getIncomingPreStanzaHandlers().single.callback(
+        stanza,
+        mox.StanzaHandlerData(false, false, stanza, extensions),
+      );
+
+      expect(
+        extensions.get<MessageSubjectData>()?.subject,
+        equals('Server notice'),
+      );
+    });
+
+    test('does not convert groupchat subject changes to message subjects', () {
+      final stanza = mox.Stanza.message(
+        from: _roomOccupantJid,
+        to: _accountBareJid,
+        type: _messageTypeGroupchat,
+        id: _stanzaId,
+        children: [mox.XMLNode(tag: 'subject', text: 'Room topic')],
+      );
+
+      expect(MessageSubjectData.fromStanza(stanza), isNull);
+    });
+  });
+
   group('MUC user item parsing', () {
     test('MUCUSER-010 [HP] parses the MUC user item real JID', () {
       final stanza = mox.Stanza.message(

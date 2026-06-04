@@ -500,6 +500,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final availableChats = widget.availableChats
         .where((chat) => !chat.hidden)
         .where((chat) => !chat.isAxichatWelcomeThread)
+        .where((chat) => !chat.isAxiImServerAnnouncementThread)
         .toList(growable: false);
     final recipients = widget.recipients;
     final nextAvailable = availableChats
@@ -652,6 +653,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return _handleRecipientAdded(displayNameTargets.single);
     }
     if (displayNameTargets.length > 1) {
+      return false;
+    }
+    if (_isServerAnnouncementAddress(trimmed)) {
       return false;
     }
     if (!widget.allowAddressTargets) {
@@ -834,6 +838,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return pendingSubmission;
     }
     final submission = Future<bool>.sync(() async {
+      if (isAxiImServerAnnouncementRecipientTarget(target)) {
+        return false;
+      }
       final addError = widget.recipientAddError?.call(target);
       if (addError != null) {
         ShadToaster.maybeOf(
@@ -977,6 +984,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return isAxichatWelcomeThreadJid(bare);
   }
 
+  bool _isServerAnnouncementAddress(String? raw) {
+    return isAxiImServerAnnouncementJid(raw);
+  }
+
   Iterable<Contact> _autocompleteOptions(
     String raw,
     List<Chat> candidates,
@@ -1004,7 +1015,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       if (normalizedKey == null ||
           normalizedKey.isEmpty ||
           seen.contains(normalizedKey) ||
-          excludedKeys.contains(normalizedKey)) {
+          excludedKeys.contains(normalizedKey) ||
+          isAxiImServerAnnouncementRecipientTarget(target)) {
         return false;
       }
       results.add(target);

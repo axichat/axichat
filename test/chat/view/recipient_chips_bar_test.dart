@@ -37,6 +37,75 @@ void main() {
     expect(added?.address, 'new@example.com');
   });
 
+  testWidgets('submitting axi.im user address adds recipient', (tester) async {
+    Contact? added;
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: const [],
+          latestStatuses: const {},
+          selfIdentity: const SelfAvatar(),
+          onRecipientAdded: (target) {
+            added = target;
+            return true;
+          },
+          onRecipientRemoved: (_) {},
+        ),
+      ),
+    );
+    await _submitRecipientText(tester, 'new@axi.im');
+    expect(added?.address, 'new@axi.im');
+  });
+
+  testWidgets('submitting raw axi.im does not add a recipient', (tester) async {
+    final added = <Contact>[];
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: [_chat(jid: 'axi.im', title: 'axi.im')],
+          latestStatuses: const {},
+          selfIdentity: const SelfAvatar(),
+          onRecipientAdded: (target) {
+            added.add(target);
+            return true;
+          },
+          onRecipientRemoved: (_) {},
+        ),
+      ),
+    );
+
+    await _submitRecipientText(tester, 'axi.im');
+
+    expect(added, isEmpty);
+  });
+
+  testWidgets('submitting axi.im display name can add a normal contact', (
+    tester,
+  ) async {
+    final added = <Contact>[];
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: [_chat(jid: 'team@example.com', title: 'axi.im')],
+          latestStatuses: const {},
+          selfIdentity: const SelfAvatar(),
+          onRecipientAdded: (target) {
+            added.add(target);
+            return true;
+          },
+          onRecipientRemoved: (_) {},
+        ),
+      ),
+    );
+
+    await _submitRecipientText(tester, 'axi.im');
+
+    expect(added.single.chat?.jid, 'team@example.com');
+  });
+
   testWidgets('manual recipient entry rejects invalid email addresses', (
     tester,
   ) async {
@@ -598,6 +667,37 @@ void main() {
     expect(
       options.map((option) => option.chat?.title ?? option.displayName),
       isNot(contains('Opus')),
+    );
+  });
+
+  testWidgets('autocomplete excludes raw axi.im server announcement chat', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: const [],
+          availableChats: [
+            _chat(jid: 'axi.im', title: 'axi.im'),
+            _chat(jid: 'alice@axi.im', title: 'Alice'),
+          ],
+          latestStatuses: const {},
+          selfIdentity: const SelfAvatar(),
+          onRecipientAdded: (_) => true,
+          onRecipientRemoved: (_) {},
+        ),
+      ),
+    );
+
+    final options = _autocompleteOptionsFor(tester, 'a');
+
+    expect(
+      options.map((option) => option.recipientId),
+      isNot(contains('axi.im')),
+    );
+    expect(
+      options.map((option) => option.recipientId),
+      contains('alice@axi.im'),
     );
   });
 

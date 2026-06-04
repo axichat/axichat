@@ -1,10 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 
 const int composeRecipientLimit = 12;
+
+bool isAxiImServerAnnouncementRecipientTarget(Contact target) {
+  for (final address in target.identityAddresses) {
+    if (isAxiImServerAnnouncementJid(address)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 bool exceedsComposeRecipientLimit({
   required Iterable<ComposerRecipient> recipients,

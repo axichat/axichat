@@ -684,7 +684,7 @@ bool _hasInvalidAxiImServerAnnouncementOrigin(
   mox.MessageEvent event,
   String? accountJid,
 ) {
-  if (!isAxiImServerAnnouncementJid(event.from.toString())) {
+  if (!isAxiImServerAnnouncementJid(event.from.toBare().toString())) {
     return false;
   }
   if (event.type == _messageTypeGroupchat) {

@@ -30,6 +30,51 @@ void main() {
     registerFallbackValue(<DraftForwardedBlock>[]);
   });
 
+  testWidgets('drops stale raw axi.im recipient seed', (tester) async {
+    final harness = _DraftFormHarness();
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          jids: const ['axi.im', 'peer@axi.im'],
+          initialRecipients: harness.initialRecipients(const [
+            'axi.im',
+            'peer@axi.im',
+          ]),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('axi.im'), findsNothing);
+    expect(find.text('peer@axi.im'), findsOneWidget);
+  });
+
+  testWidgets('can add recipient after dropping stale raw axi.im seed', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    when(() => harness.settingsCubit.state).thenReturn(
+      const SettingsState(endpointConfig: EndpointConfig(smtpEnabled: false)),
+    );
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          jids: const ['axi.im'],
+          initialRecipients: harness.initialRecipients(const ['axi.im']),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _submitRecipientText(tester, 'peer@example.com');
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('peer@example.com'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
   testWidgets(
     'does not delete tracked draft when autosaved form becomes empty',
     (tester) async {
@@ -1601,6 +1646,13 @@ Future<void> _enterBodyText(WidgetTester tester, String text) async {
   expect(field, findsOneWidget);
   await tester.tap(field, warnIfMissed: false);
   tester.testTextInput.enterText(text);
+  await tester.pump();
+}
+
+Future<void> _submitRecipientText(WidgetTester tester, String text) async {
+  final field = tester.widget<AxiTextField>(find.byType(AxiTextField));
+  field.controller!.text = text;
+  field.onSubmitted?.call(text);
   await tester.pump();
 }
 

@@ -82,12 +82,11 @@ int _compareVisibleChats(
   Chat b, {
   required SearchSortOrder searchSortOrder,
 }) {
-  if (a.favorited != b.favorited) {
-    return a.favorited ? -1 : 1;
-  }
-  return searchSortOrder.isNewestFirst
-      ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-      : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp);
+  return compareChatsByLastChangeTimestamp(
+    a,
+    b,
+    newestFirst: searchSortOrder.isNewestFirst,
+  );
 }
 
 enum ChatsCreateRoomFailure {
@@ -362,9 +361,13 @@ class ChatsCubit extends Cubit<ChatsState> {
     bool matchesFilter(Chat chat) {
       return switch (searchFilter ?? SearchFilterId.all) {
         SearchFilterId.contacts =>
-          !chat.hidden && rosterContacts.contains(chat.jid),
+          !chat.hidden &&
+              (chat.isAxiImServerAnnouncementThread ||
+                  rosterContacts.contains(chat.jid)),
         SearchFilterId.nonContacts =>
-          !chat.hidden && !rosterContacts.contains(chat.jid),
+          !chat.hidden &&
+              !chat.isAxiImServerAnnouncementThread &&
+              !rosterContacts.contains(chat.jid),
         SearchFilterId.xmpp => !chat.hidden && chat.transport.isXmpp,
         SearchFilterId.email => !chat.hidden && chat.transport.isEmail,
         SearchFilterId.contactFolderImportant =>

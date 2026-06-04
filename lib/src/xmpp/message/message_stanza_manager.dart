@@ -298,6 +298,23 @@ final class StanzaErrorConditionData implements mox.StanzaHandlerExtension {
   final String? type;
 }
 
+final class MessageSubjectData implements mox.StanzaHandlerExtension {
+  const MessageSubjectData(this.subject);
+
+  final String subject;
+
+  static MessageSubjectData? fromStanza(mox.Stanza stanza) {
+    final type = (stanza.type ?? stanza.attributes[_iqTypeAttr]?.toString())
+        ?.trim();
+    if (type == _messageTypeGroupchat) return null;
+    final subject = clampMessageText(
+      stanza.firstTag(_subjectTag)?.innerText(),
+    )?.trim();
+    if (subject == null || subject.isEmpty) return null;
+    return MessageSubjectData(subject);
+  }
+}
+
 final class MucUserItemData implements mox.StanzaHandlerExtension {
   const MucUserItemData({required this.jid});
 
@@ -880,6 +897,11 @@ class MessageStanzaManager extends mox.XmppManagerBase {
     final pinMutation = PinMessageMutationData.fromStanza(stanza);
     if (pinMutation != null) {
       state.extensions.set(pinMutation);
+    }
+
+    final subject = MessageSubjectData.fromStanza(stanza);
+    if (subject != null) {
+      state.extensions.set(subject);
     }
 
     final subjectNode = stanza.firstTag(_subjectTag);

@@ -1,4 +1,5 @@
 import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/models/avatar_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,5 +51,26 @@ void main() {
     );
 
     expect(welcomeChat.avatarPresentation().kind, AvatarKind.appIcon);
+  });
+
+  test('avatar data uses the app icon for axi.im server announcements', () {
+    final announcementChat = Chat(
+      jid: 'axi.im',
+      title: 'axi.im',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime(2024, 1, 1),
+    );
+
+    expect(announcementChat.avatarPresentation().kind, AvatarKind.appIcon);
+  });
+
+  test('only literal axi.im is a server announcement thread', () {
+    expect(isAxiImServerAnnouncementJid('axi.im'), isTrue);
+    expect(isAxiImServerAnnouncementJid('AXI.IM'), isTrue);
+    expect(isAxiImServerAnnouncementJid('user@axi.im'), isFalse);
+    expect(isAxiImServerAnnouncementJid('evil.axi.im'), isFalse);
+    expect(isAxiImServerAnnouncementJid('notaxi.im'), isFalse);
+    expect(isAxiImServerAnnouncementJid('axi.im.example'), isFalse);
+    expect(isAxiImServerAnnouncementJid('axi.im/resource'), isFalse);
   });
 }

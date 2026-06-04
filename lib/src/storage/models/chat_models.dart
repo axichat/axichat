@@ -1307,6 +1307,20 @@ extension ChatSystemThreadExtension on Chat {
   bool get isAxiImServerAnnouncementThread => isAxiImServerAnnouncementJid(jid);
 }
 
+int compareChatsByLastChangeTimestamp(
+  Chat a,
+  Chat b, {
+  bool newestFirst = true,
+}) {
+  final timestampOrder = newestFirst
+      ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+      : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp);
+  if (timestampOrder != 0) {
+    return timestampOrder;
+  }
+  return a.jid.compareTo(b.jid);
+}
+
 extension ChatPrimaryViewExtension on Chat {
   bool get opensToCalendar => primaryView.isCalendar;
 

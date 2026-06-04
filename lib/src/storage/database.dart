@@ -1723,14 +1723,24 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   @override
   Stream<List<Chat>> watchAll() =>
       (select(table)..orderBy([
-            (t) =>
-                OrderingTerm(expression: t.favorited, mode: OrderingMode.desc),
             (t) => OrderingTerm(
               expression: t.lastChangeTimestamp,
               mode: OrderingMode.desc,
             ),
+            (t) => OrderingTerm(expression: t.jid, mode: OrderingMode.asc),
           ]))
           .watch();
+
+  @override
+  Future<List<Chat>> selectAll() =>
+      (select(table)..orderBy([
+            (t) => OrderingTerm(
+              expression: t.lastChangeTimestamp,
+              mode: OrderingMode.desc,
+            ),
+            (t) => OrderingTerm(expression: t.jid, mode: OrderingMode.asc),
+          ]))
+          .get();
 
   Stream<Chat?> watchOne(String jid) => (select(
     table,
@@ -3558,6 +3568,7 @@ WHERE transport = ${MessageTransport.email.index}
     final bool shouldUpdateChatSummary =
         !isInternalSync && !_messageExcludedFromChatSummary(message);
     final currentChat = await getChat(message.chatJid);
+    final isAxiImServerAnnouncement = message.isAxiImServerAnnouncement;
     final bool isSelfMessage = message.isFromAccount(selfJid);
     final bool isSelfChat = sameNormalizedAddressValue(
       message.chatJid,
@@ -3610,6 +3621,7 @@ WHERE transport = ${MessageTransport.email.index}
           lastMessage: Value.absentIfNull(lastMessagePreview),
           lastChangeTimestamp: resolvedLastChangeTimestamp,
           encryptionProtocol: Value(message.encryptionProtocol),
+          favorited: Value(isAxiImServerAnnouncement),
           contactJid: Value(
             chatType == ChatType.groupChat ? null : message.chatJid,
           ),
@@ -3648,6 +3660,10 @@ WHERE transport = ${MessageTransport.email.index}
       if (shouldNormalizeSelfChatTitle) {
         await (update(chats)..where((tbl) => tbl.jid.equals(message.chatJid)))
             .write(ChatsCompanion(title: Value(chatTitle)));
+      }
+      if (isAxiImServerAnnouncement && currentChat?.favorited == false) {
+        await (update(chats)..where((tbl) => tbl.jid.equals(message.chatJid)))
+            .write(const ChatsCompanion(favorited: Value(true)));
       }
       final persisted = await messagesAccessor.selectOne(message.stanzaID);
       if (persisted == null) {

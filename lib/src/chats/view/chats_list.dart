@@ -515,6 +515,46 @@ class _GroupChatTitle extends StatelessWidget {
   }
 }
 
+class _VerifiedChatTitle extends StatelessWidget {
+  const _VerifiedChatTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          fit: FlexFit.loose,
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.small.copyWith(
+              color: colors.foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        SizedBox(width: spacing.xs),
+        AxiTooltip(
+          builder: (context) =>
+              Text(context.l10n.chatVerifiedServerAnnouncementTooltip),
+          child: Icon(
+            LucideIcons.shieldCheck,
+            size: sizing.menuItemIconSize,
+            color: colors.primary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ChatAvatar extends StatelessWidget {
   const _ChatAvatar({
     required this.chat,
@@ -939,9 +979,12 @@ class _ChatListTileState extends State<ChatListTile> {
       };
     }
     final leadingAvatarSize = sizing.iconButtonSize;
+    final cutoutGap = spacing.xxs;
+    final iconButtonSize = sizing.iconButtonSize;
+    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final tilePadding = EdgeInsetsDirectional.only(
       start: scaled(spacing.s),
-      end: scaled(showUnreadBadge ? spacing.m : spacing.s),
+      end: scaled((showUnreadBadge ? spacing.m : spacing.s) + iconCutoutDepth),
       top: scaled(isEmailChatRow ? spacing.xxs : spacing.xs),
       bottom: scaled(isEmailChatRow ? spacing.xxs : spacing.xs),
     );
@@ -989,7 +1032,8 @@ class _ChatListTileState extends State<ChatListTile> {
       title:
           isCalendarFirstRoom ||
               isEmailChatRow ||
-              item.type == ChatType.groupChat
+              item.type == ChatType.groupChat ||
+              item.isAxiImServerAnnouncementThread
           ? null
           : displayName,
       titleWidget: isCalendarFirstRoom
@@ -1002,6 +1046,8 @@ class _ChatListTileState extends State<ChatListTile> {
             )
           : item.type == ChatType.groupChat
           ? _GroupChatTitle(title: displayName)
+          : item.isAxiImServerAnnouncementThread
+          ? _VerifiedChatTitle(title: displayName)
           : null,
       subtitle: subtitleText,
       subtitlePlaceholder: isCalendarFirstRoom
@@ -1010,10 +1056,7 @@ class _ChatListTileState extends State<ChatListTile> {
       actions: tileActions,
     );
 
-    final cutoutGap = spacing.xxs;
-    final iconButtonSize = sizing.iconButtonSize;
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
-    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
@@ -1532,7 +1575,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           },
         ),
         if (widget.chat.type == ChatType.chat &&
-            !widget.chat.isAxichatWelcomeThread)
+            !widget.chat.isAxichatWelcomeThread &&
+            !widget.chat.isAxiImServerAnnouncementThread)
           ContextActionButton(
             icon: Icon(LucideIcons.pencilLine, size: iconSize),
             label: l10n.chatContactRenameAction,
@@ -1776,7 +1820,9 @@ ContactDirectoryEntry? _editableContactForChat({
   required Map<String, ContactDirectoryEntry> contactsByAddressKey,
   required Chat chat,
 }) {
-  if (chat.type != ChatType.chat || chat.isAxichatWelcomeThread) {
+  if (chat.type != ChatType.chat ||
+      chat.isAxichatWelcomeThread ||
+      chat.isAxiImServerAnnouncementThread) {
     return null;
   }
   for (final candidate in chat.identityAddresses) {

@@ -114,6 +114,57 @@ void main() {
   });
 
   group('chatsStream', () {
+    test('sortChats uses last change before favorite or unread state', () {
+      final now = DateTime.utc(2026, 1, 1, 12);
+      final sorted = ChatsService.sortChats([
+        Chat(
+          jid: 'older@axi.im',
+          title: 'Older',
+          type: ChatType.chat,
+          lastChangeTimestamp: now,
+          favorited: true,
+          unreadCount: 3,
+        ),
+        Chat(
+          jid: 'newer@axi.im',
+          title: 'Newer',
+          type: ChatType.chat,
+          lastChangeTimestamp: now.add(const Duration(minutes: 1)),
+        ),
+      ]);
+
+      expect(sorted.map((chat) => chat.jid), ['newer@axi.im', 'older@axi.im']);
+    });
+
+    test(
+      'database chats are ordered by last change before favorites',
+      () async {
+        final now = DateTime.utc(2026, 1, 1, 12);
+        await database.createChat(
+          Chat(
+            jid: 'older@axi.im',
+            title: 'Older',
+            type: ChatType.chat,
+            lastChangeTimestamp: now,
+            favorited: true,
+            unreadCount: 3,
+          ),
+        );
+        await database.createChat(
+          Chat(
+            jid: 'newer@axi.im',
+            title: 'Newer',
+            type: ChatType.chat,
+            lastChangeTimestamp: now.add(const Duration(minutes: 1)),
+          ),
+        );
+
+        final chats = await database.getChats(start: 0, end: 10);
+
+        expect(chats.map((chat) => chat.jid), ['newer@axi.im', 'older@axi.im']);
+      },
+    );
+
     //TODO(eliot): Fix test flakiness due to unstable sort.
     test(
       'When chats are added to the database, emits the new chat list in order.',
@@ -313,6 +364,92 @@ void main() {
           .first;
 
       expect(suggestions, [peerJid]);
+    },
+  );
+
+  test(
+    'Signup welcome sync stores the first paragraph as the chat subtitle.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+      const welcomeStanzaId = 'signup-welcome.axichat';
+      const welcomeTitle = 'Axichat';
+      const welcomeBody =
+          'Welcome to the next evolution of messaging and email.\n\n'
+          'Axichat is still under the radar.';
+
+      await xmppService.syncSignupWelcomeMessage(
+        allowInsert: true,
+        title: welcomeTitle,
+        body: welcomeBody,
+      );
+
+      final message = await database.getMessageByStanzaID(welcomeStanzaId);
+      final chat = await database.getChat(welcomeChatJid);
+      expect(message?.body, welcomeBody);
+      expect(chat?.title, welcomeTitle);
+      expect(
+        chat?.lastMessage,
+        'Welcome to the next evolution of messaging and email.',
+      );
+    },
+  );
+
+  test(
+    'Signup welcome sync repairs an existing stale chat subtitle.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+      const welcomeStanzaId = 'signup-welcome.axichat';
+      const welcomeTitle = 'Axichat';
+      const welcomeBody =
+          'Welcome to the next evolution of messaging and email.\n\n'
+          'Axichat is still under the radar.';
+      final timestamp = DateTime.utc(2026, 3, 6);
+
+      await database.createChat(
+        Chat(
+          jid: welcomeChatJid,
+          title: welcomeTitle,
+          type: ChatType.chat,
+          lastChangeTimestamp: timestamp,
+          lastMessage: 'Old welcome body',
+          contactDisplayName: welcomeTitle,
+          contactJid: welcomeChatJid,
+        ),
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: welcomeStanzaId,
+          senderJid: welcomeChatJid,
+          chatJid: welcomeChatJid,
+          body: 'Old welcome body',
+          timestamp: timestamp,
+          acked: true,
+          received: true,
+          displayed: true,
+        ),
+      );
+      final staleChat = await database.getChat(welcomeChatJid);
+      await database.updateChat(
+        staleChat!.copyWith(lastMessage: 'Old welcome body'),
+      );
+
+      await xmppService.syncSignupWelcomeMessage(
+        allowInsert: false,
+        title: welcomeTitle,
+        body: welcomeBody,
+      );
+
+      final message = await database.getMessageByStanzaID(welcomeStanzaId);
+      final chat = await database.getChat(welcomeChatJid);
+      expect(message?.body, welcomeBody);
+      expect(
+        chat?.lastMessage,
+        'Welcome to the next evolution of messaging and email.',
+      );
     },
   );
 

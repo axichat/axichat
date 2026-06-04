@@ -128,7 +128,7 @@ extension ChatAvatarPresentation on Chat {
     SelfAvatar? selfAvatar,
     Avatar? avatarOverride,
   }) {
-    if (isAxichatWelcomeThread) {
+    if (isAxichatWelcomeThread || isAxiImServerAnnouncementThread) {
       return AvatarPresentation.appIcon(
         label: avatarLabel,
         colorSeed: avatarColorSeed,

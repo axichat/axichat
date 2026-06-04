@@ -19,6 +19,7 @@ Chat _chat({
   required DateTime timestamp,
   bool spam = false,
   bool favorited = false,
+  int unreadCount = 0,
   DateTime? spamUpdatedAt,
   ChatPrimaryView primaryView = ChatPrimaryView.chat,
   MessageTransport transport = MessageTransport.xmpp,
@@ -32,6 +33,7 @@ Chat _chat({
     transport: transport,
     spam: spam,
     favorited: favorited,
+    unreadCount: unreadCount,
     spamUpdatedAt: spamUpdatedAt,
   );
 }
@@ -220,27 +222,65 @@ void main() {
     expect(cubit.state.spamVisibleItems.first.jid, 'first@example.com');
   });
 
-  test('visible chats keep favorites at the top', () async {
-    final now = DateTime(2024, 1, 1, 12, 0);
-    final items = <Chat>[
-      _chat(
-        jid: 'newest@axi.im',
-        title: 'Newest',
-        timestamp: now.add(const Duration(hours: 1)),
-      ),
-      _chat(
-        jid: 'favorite@axi.im',
-        title: 'Favorite',
-        timestamp: now,
-        favorited: true,
-      ),
-    ];
-    when(() => xmppService.cachedChatList).thenReturn(items);
+  test(
+    'visible chats sort by last change before favorite or unread state',
+    () async {
+      final now = DateTime(2024, 1, 1, 12, 0);
+      final items = <Chat>[
+        _chat(
+          jid: 'newest@axi.im',
+          title: 'Newest',
+          timestamp: now.add(const Duration(hours: 1)),
+        ),
+        _chat(
+          jid: 'favorite@axi.im',
+          title: 'Favorite',
+          timestamp: now,
+          favorited: true,
+          unreadCount: 3,
+        ),
+      ];
+      when(() => xmppService.cachedChatList).thenReturn(items);
+
+      final cubit = ChatsCubit(xmppService: xmppService);
+      addTearDown(cubit.close);
+
+      expect(cubit.state.visibleItems.map((chat) => chat.jid), [
+        'newest@axi.im',
+        'favorite@axi.im',
+      ]);
+    },
+  );
+
+  test('axi.im server announcements count as contacts in chat filters', () {
+    final now = DateTime(2024, 1, 1, 12);
+    when(() => xmppService.cachedChatList).thenReturn([
+      _chat(jid: 'axi.im', title: 'axi.im', timestamp: now),
+      _chat(jid: 'stranger@example.com', title: 'Stranger', timestamp: now),
+    ]);
 
     final cubit = ChatsCubit(xmppService: xmppService);
     addTearDown(cubit.close);
 
-    expect(cubit.state.visibleItems.first.jid, 'favorite@axi.im');
+    cubit.updateSearchSnapshot(
+      active: true,
+      query: '',
+      filterId: SearchFilterId.contacts,
+      sortOrder: SearchSortOrder.newestFirst,
+    );
+
+    expect(cubit.state.visibleItems.map((chat) => chat.jid), ['axi.im']);
+
+    cubit.updateSearchSnapshot(
+      active: true,
+      query: '',
+      filterId: SearchFilterId.nonContacts,
+      sortOrder: SearchSortOrder.newestFirst,
+    );
+
+    expect(cubit.state.visibleItems.map((chat) => chat.jid), [
+      'stranger@example.com',
+    ]);
   });
 
   test('contact folder filters match contact rules only', () async {

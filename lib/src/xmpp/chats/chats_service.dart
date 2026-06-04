@@ -174,25 +174,14 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required String body,
   }) async {
     const welcomeStanzaId = 'signup-welcome.axichat';
+    final lastMessagePreview = _signupWelcomeLastMessagePreview(body);
     Message? insertedMessage;
     try {
       final db = await database;
       final existingMessage = await db.getMessageByStanzaID(welcomeStanzaId);
-      final existingChat = await db.getChat(_signupWelcomeChatJid);
+      var existingChat = await db.getChat(_signupWelcomeChatJid);
       if (existingMessage == null) {
-        if (existingChat != null) {
-          if (existingChat.title != title ||
-              existingChat.contactDisplayName != title ||
-              existingChat.contactJid != _signupWelcomeChatJid) {
-            await db.updateChat(
-              existingChat.copyWith(
-                title: title,
-                contactDisplayName: title,
-                contactJid: _signupWelcomeChatJid,
-              ),
-            );
-          }
-        } else if (!allowInsert) {
+        if (existingChat == null && !allowInsert) {
           return;
         }
         if (allowInsert) {
@@ -225,6 +214,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
           ),
         );
       }
+      existingChat ??= await db.getChat(_signupWelcomeChatJid);
       if (existingChat == null) {
         if (!allowInsert) {
           return;
@@ -239,18 +229,26 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
             title: title,
             type: ChatType.chat,
             lastChangeTimestamp: chatTimestamp,
+            lastMessage: lastMessagePreview,
             contactDisplayName: title,
             contactJid: _signupWelcomeChatJid,
           ),
         );
         return;
       }
+      final shouldSyncLastMessage =
+          existingMessage != null || insertedMessage != null;
       if (existingChat.title != title ||
           existingChat.contactDisplayName != title ||
-          existingChat.contactJid != _signupWelcomeChatJid) {
+          existingChat.contactJid != _signupWelcomeChatJid ||
+          (shouldSyncLastMessage &&
+              existingChat.lastMessage != lastMessagePreview)) {
         await db.updateChat(
           existingChat.copyWith(
             title: title,
+            lastMessage: shouldSyncLastMessage
+                ? lastMessagePreview
+                : existingChat.lastMessage,
             contactDisplayName: title,
             contactJid: _signupWelcomeChatJid,
           ),
@@ -263,6 +261,16 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         stackTrace,
       );
     }
+  }
+
+  String _signupWelcomeLastMessagePreview(String body) {
+    for (final line in body.split('\n')) {
+      final preview = line.trim();
+      if (preview.isNotEmpty) {
+        return preview;
+      }
+    }
+    return body.trim();
   }
 
   @override
@@ -713,10 +721,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
   static List<Chat> sortChats(List<Chat> chats) => chats.toList()
     ..sort((a, b) {
-      if (a.favorited == b.favorited) {
-        return b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp);
-      }
-      return (!a.favorited).toSign;
+      return compareChatsByLastChangeTimestamp(a, b);
     });
 
   Future<void> sendChatState({

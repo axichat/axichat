@@ -246,6 +246,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
     return values
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
+        .where((value) => !isAxiImServerAnnouncementJid(value))
         .toList(growable: false);
   }
 }
@@ -260,6 +261,7 @@ List<ComposerRecipient> _initialRecipients({
   for (final value in jids) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) continue;
+    if (isAxiImServerAnnouncementJid(trimmed)) continue;
     final transportOverride =
         recipientTransportOverrides[contactDirectoryAddressKey(trimmed)];
     Chat? match;

@@ -187,7 +187,12 @@ class DraftFormState extends State<DraftForm> {
     _subjectFocusNode = FocusNode();
     _pendingAttachments = const [];
     _pendingCalendarTaskIcsMessage = widget.calendarTaskIcsMessage;
-    _recipients = List<ComposerRecipient>.from(widget.initialRecipients);
+    _recipients = widget.initialRecipients
+        .where(
+          (recipient) =>
+              !isAxiImServerAnnouncementRecipientTarget(recipient.target),
+        )
+        .toList();
     _autosaveEnabled = widget.autosaveEnabled;
     _lastSavedSignature = _savedSignatureFromSeed();
   }
@@ -996,6 +1001,9 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<bool> _handleRecipientAdded(Contact target) async {
+    if (isAxiImServerAnnouncementRecipientTarget(target)) {
+      return false;
+    }
     final address = target.resolvedAddress;
     if (target.needsTransportSelection &&
         address != null &&
@@ -1106,6 +1114,9 @@ class DraftFormState extends State<DraftForm> {
   }
 
   bool _applyRecipient(Contact target) {
+    if (isAxiImServerAnnouncementRecipientTarget(target)) {
+      return false;
+    }
     final addError = _recipientAddError(target);
     if (addError != null) {
       _showToast(addError);

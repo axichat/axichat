@@ -237,7 +237,7 @@ bool _isAxiJidInternal(String? raw, {String? axiDomain}) {
 }
 
 String? _normalizeDomain(String? domain) {
-  final resolved = domain ?? EndpointConfig.defaultDomain;
+  final resolved = domain ?? EndpointConfig.axiImDomain;
   final trimmed = resolved.trim().toLowerCase();
   return trimmed.isEmpty ? null : trimmed;
 }
