@@ -53,6 +53,8 @@ abstract class ForegroundTaskBridge {
 
   Future<void> release(String clientId);
 
+  Future<bool> stopIfRunning();
+
   Future<bool> isRunning();
 
   Future<void> send(List<Object> parts);
@@ -240,6 +242,34 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   @override
   Future<bool> isRunning() => _isRunningService();
 
+  @override
+  Future<bool> stopIfRunning() async {
+    final pendingStart = _startCompleter;
+    if (pendingStart != null) {
+      try {
+        await pendingStart.future;
+      } on Exception {
+        // Continue with cleanup; explicit teardown owns the final state.
+      }
+    }
+    final running = await _isRunningService();
+    if (!running) {
+      _usageCounts.clear();
+      _listeners.clear();
+      _resetTaskReady();
+      _detachCallbackIfUnused();
+      return false;
+    }
+    _usageCounts.clear();
+    try {
+      await _stopService(forceStop: true);
+    } finally {
+      _listeners.clear();
+      _detachCallbackIfUnused();
+    }
+    return true;
+  }
+
   void _decrementUsage(String clientId) {
     final current = _usageCounts[clientId];
     if (current == null) {
@@ -423,55 +453,6 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   static void _defaultSendDataToTask(String data) {
     FlutterForegroundTask.sendDataToTask(data);
   }
-}
-
-final _foregroundTaskResetLog = Logger('ForegroundTaskReset');
-
-Future<bool> resetForegroundServiceIfRunning({
-  bool? isAndroid,
-  Future<bool> Function()? isRunningService,
-  Future<ServiceRequestResult> Function()? stopForegroundService,
-}) async {
-  if (!(isAndroid ?? Platform.isAndroid)) {
-    return false;
-  }
-
-  final checkService =
-      isRunningService ?? () => FlutterForegroundTask.isRunningService;
-  final stopService =
-      stopForegroundService ?? () => FlutterForegroundTask.stopService();
-
-  try {
-    if (!await checkService()) {
-      return false;
-    }
-    final result = await stopService();
-    if (result is ServiceRequestSuccess) {
-      _foregroundTaskResetLog.info(
-        'Stopped stale foreground service before session startup.',
-      );
-      return true;
-    }
-    final error = result is ServiceRequestFailure ? result.error : null;
-    _foregroundTaskResetLog.warning(
-      'Failed to stop stale foreground service before session startup.',
-      error is Exception ? error : null,
-    );
-  } on MissingPluginException catch (error, stackTrace) {
-    _foregroundTaskResetLog.warning(
-      'Foreground task plugin unavailable while resetting service.',
-      error,
-      stackTrace,
-    );
-  } on Exception catch (error, stackTrace) {
-    _foregroundTaskResetLog.warning(
-      'Failed to reset running foreground service.',
-      error,
-      stackTrace,
-    );
-  }
-
-  return false;
 }
 
 Future<void> _waitForResume() async {

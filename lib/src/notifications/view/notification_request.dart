@@ -88,6 +88,7 @@ class _NotificationRequestBody extends StatefulWidget {
 class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
   bool _backgroundMessagingToggleInFlight = false;
   bool? _pendingBackgroundMessagingEnabled;
+  bool _foregroundActivationDeferredUntilRestart = false;
 
   @override
   Widget build(BuildContext context) {
@@ -104,14 +105,19 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
         final switchValue =
             _pendingBackgroundMessagingEnabled ?? backgroundMessagingEnabled;
         final switchBusy = state.isBusy || _backgroundMessagingToggleInFlight;
-        final String? sublabel = switch ((
-          switchValue,
-          state.foregroundServiceActive,
-          state.hasPermissions,
-        )) {
-          (true, true, true) => null,
-          (_, _, _) => l10n.notificationsRequiresRestart,
-        };
+        final String? sublabel;
+        if (switchValue &&
+            state.hasPermissions == true &&
+            (_foregroundActivationDeferredUntilRestart ||
+                !state.foregroundServiceActive)) {
+          sublabel = l10n.notificationsRestartTitle;
+        } else if (switchValue &&
+            state.foregroundServiceActive &&
+            state.hasPermissions == true) {
+          sublabel = null;
+        } else {
+          sublabel = l10n.notificationsRequiresRestart;
+        }
 
         return ShadSwitch(
           label: Text(l10n.notificationsMessageToggle),
@@ -151,6 +157,7 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
         if (!context.mounted || !foregroundDisabled) {
           return;
         }
+        _foregroundActivationDeferredUntilRestart = false;
         await settingsCubit.toggleBackgroundMessaging(
           false,
           accountJid: xmppService.myJid,
@@ -180,7 +187,14 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
         emailKeepaliveEnabled: settingsCubit.state.endpointConfig.smtpEnabled,
         allowCurrentSessionMigration: widget.allowCurrentSessionMigration,
       );
-      if (!context.mounted || !foregroundResult.shouldPersistPreference) {
+      if (!context.mounted) {
+        return;
+      }
+      setState(() {
+        _foregroundActivationDeferredUntilRestart =
+            foregroundResult == ForegroundActivationResult.deferredUntilRestart;
+      });
+      if (!foregroundResult.shouldPersistPreference) {
         return;
       }
       await settingsCubit.toggleBackgroundMessaging(

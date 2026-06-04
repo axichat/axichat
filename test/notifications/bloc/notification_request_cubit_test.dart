@@ -290,6 +290,29 @@ void main() {
   );
 
   test(
+    'disableForegroundService force-stops stale service after transport cleanup',
+    () async {
+      foregroundTaskBridge = _RunningForegroundTaskBridge();
+      final cubit = _buildCubit(
+        notificationService: notificationService,
+        emailService: emailService,
+        xmppService: xmppService,
+      );
+
+      final disabled = await cubit.disableForegroundService();
+
+      expect(disabled, isTrue);
+      expect(foregroundServiceActive.value, isFalse);
+      expect(withForeground, isFalse);
+      expect(cubit.state.foregroundServiceActive, isFalse);
+      verify(() => emailService.setForegroundKeepalive(false)).called(1);
+      verify(() => xmppService.disableForegroundSocketIfActive()).called(1);
+
+      await cubit.close();
+    },
+  );
+
+  test(
     'disableForegroundService preserves the runtime flag if XMPP cannot leave foreground',
     () async {
       foregroundTaskBridge = _RunningForegroundTaskBridge();
@@ -510,6 +533,9 @@ class _StoppedForegroundTaskBridge implements ForegroundTaskBridge {
   Future<bool> isRunning() async => false;
 
   @override
+  Future<bool> stopIfRunning() async => false;
+
+  @override
   Future<void> release(String clientId) async {}
 
   @override
@@ -526,6 +552,8 @@ class _StoppedForegroundTaskBridge implements ForegroundTaskBridge {
 }
 
 class _RunningForegroundTaskBridge implements ForegroundTaskBridge {
+  var _running = true;
+
   @override
   Future<void> acquire({
     required String clientId,
@@ -533,7 +561,14 @@ class _RunningForegroundTaskBridge implements ForegroundTaskBridge {
   }) async {}
 
   @override
-  Future<bool> isRunning() async => true;
+  Future<bool> isRunning() async => _running;
+
+  @override
+  Future<bool> stopIfRunning() async {
+    final wasRunning = _running;
+    _running = false;
+    return wasRunning;
+  }
 
   @override
   Future<void> release(String clientId) async {}

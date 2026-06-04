@@ -145,28 +145,6 @@ class ForegroundRuntimeController {
   }
 
   Future<bool> disableForUserToggle() async {
-    final running = await refreshActualState(
-      fallback: foregroundServiceActive.value,
-    );
-    if (!running) {
-      var migrationSucceeded = false;
-      var emailKeepaliveStopped = false;
-      try {
-        migrationSucceeded = await _xmppService
-            .disableForegroundSocketIfActive();
-        if (migrationSucceeded) {
-          emailKeepaliveStopped = await _setEmailKeepaliveStopped();
-        }
-      } on Exception catch (error, stackTrace) {
-        _log.warning('Failed to stop foreground runtime.', error, stackTrace);
-      }
-      await refreshActualState();
-      if (migrationSucceeded && emailKeepaliveStopped) {
-        _setForegroundIntent(false);
-      }
-      return migrationSucceeded && emailKeepaliveStopped;
-    }
-
     var migrationSucceeded = false;
     var emailKeepaliveStopped = false;
     try {
@@ -178,13 +156,56 @@ class ForegroundRuntimeController {
       _log.warning('Failed to stop foreground runtime.', error, stackTrace);
     }
 
-    final stillRunning = await refreshActualState(fallback: true);
+    var stillRunning = await refreshActualState(
+      fallback: foregroundServiceActive.value,
+    );
+    if (migrationSucceeded && emailKeepaliveStopped && stillRunning) {
+      await _forceStopForegroundService(
+        reason: 'foreground runtime disabled by user',
+      );
+      stillRunning = await refreshActualState(fallback: false);
+    }
     final disabled =
         migrationSucceeded && emailKeepaliveStopped && !stillRunning;
     if (disabled) {
       _setForegroundIntent(false);
     }
     return disabled;
+  }
+
+  Future<bool> forceStopAfterExplicitSessionEnd() async {
+    var emailKeepaliveStopped = false;
+    try {
+      emailKeepaliveStopped = await _setEmailKeepaliveStopped();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to stop email keepalive after explicit session end.',
+        error,
+        stackTrace,
+      );
+    }
+    var foregroundSocketReleased = false;
+    try {
+      foregroundSocketReleased = await _xmppService
+          .disableForegroundSocketIfActive();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to release foreground socket after explicit session end.',
+        error,
+        stackTrace,
+      );
+    }
+    final wasRunning = await _forceStopForegroundService(
+      reason: 'explicit session end',
+    );
+    final stillRunning = await refreshActualState(fallback: false);
+    if (!stillRunning) {
+      _setForegroundIntent(false);
+    }
+    return (emailKeepaliveStopped &&
+            foregroundSocketReleased &&
+            !stillRunning) ||
+        (wasRunning && !stillRunning);
   }
 
   Future<bool> refreshAfterSessionEnd() async {
@@ -210,6 +231,23 @@ class ForegroundRuntimeController {
     }
     _setRuntimeActive(running);
     return running;
+  }
+
+  Future<bool> _forceStopForegroundService({required String reason}) async {
+    try {
+      final stopped = await _bridge.stopIfRunning();
+      if (stopped) {
+        _log.info('Force-stopped foreground service: reason=$reason');
+      }
+      return stopped;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to force-stop foreground service: reason=$reason',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
   }
 
   Future<bool> _refreshActiveRuntime({

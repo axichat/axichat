@@ -20,7 +20,6 @@ import 'package:axichat/src/common/ui/ui.dart' show compactDeviceBreakpoint;
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:axichat/src/storage/credential_store.dart';
-import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Column, Table;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -88,12 +87,6 @@ Future<void> main(List<String> args) async {
   await storageManager.ensureGuestStorage();
 
   await notificationInitFuture;
-  if (capability.canForegroundService) {
-    await resetForegroundServiceIfRunning();
-  }
-
-  withForeground = false;
-  foregroundServiceActive.value = false;
 
   final bool hasStoredLoginCredentials = await storedCredentialsFuture;
   final AuthBootstrap authBootstrap = AuthBootstrap(

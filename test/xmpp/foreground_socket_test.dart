@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -273,40 +272,40 @@ void main() {
 
       expect(stopCalls, equals(1));
     });
-  });
 
-  group('resetForegroundServiceIfRunning', () {
-    test('stops a running foreground service', () async {
-      var stopped = false;
+    test(
+      'stopIfRunning force-stops service and clears retained clients',
+      () async {
+        var running = true;
+        var stopCalls = 0;
+        var removeCallbackCalls = 0;
 
-      final result = await resetForegroundServiceIfRunning(
-        isAndroid: true,
-        isRunningService: () async => true,
-        stopForegroundService: () async {
-          stopped = true;
-          return const ServiceRequestSuccess();
-        },
-      );
+        final bridge = FlutterForegroundTaskBridge(
+          isRunningService: () async => running,
+          startForegroundService: (_) async {},
+          stopForegroundService: () async {
+            stopCalls++;
+            running = false;
+          },
+          waitForResume: () async {},
+          initCommunicationPort: () {},
+          addTaskDataCallback: (_) {},
+          removeTaskDataCallback: (_) {
+            removeCallbackCalls++;
+          },
+          sendDataToTask: (_) {},
+        );
 
-      expect(result, isTrue);
-      expect(stopped, isTrue);
-    });
+        await bridge.acquire(clientId: foregroundClientXmpp);
+        bridge.registerListener(foregroundClientEmailKeepalive, (_) {});
 
-    test('does nothing when no foreground service is running', () async {
-      var stopCalls = 0;
+        final stopped = await bridge.stopIfRunning();
 
-      final result = await resetForegroundServiceIfRunning(
-        isAndroid: true,
-        isRunningService: () async => false,
-        stopForegroundService: () async {
-          stopCalls++;
-          return const ServiceRequestSuccess();
-        },
-      );
-
-      expect(result, isFalse);
-      expect(stopCalls, isZero);
-    });
+        expect(stopped, isTrue);
+        expect(stopCalls, equals(1));
+        expect(removeCallbackCalls, equals(1));
+      },
+    );
   });
 
   group('ForegroundSocketWrapper', () {
@@ -348,6 +347,9 @@ class _NoReplyForegroundTaskBridge implements ForegroundTaskBridge {
 
   @override
   Future<bool> isRunning() async => false;
+
+  @override
+  Future<bool> stopIfRunning() async => false;
 
   @override
   Future<void> acquire({
