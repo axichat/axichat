@@ -119,6 +119,7 @@ class SettingsControls extends StatelessWidget {
             .state
             .endpointConfig
             .smtpEnabled;
+        final xmppEnabled = state.endpointConfig.xmppEnabled;
         final profileJid = context.select<ProfileCubit, String>(
           (cubit) => cubit.state.jid,
         );
@@ -502,74 +503,6 @@ class SettingsControls extends StatelessWidget {
                   .read<SettingsCubit>()
                   .toggleAutoLoadEmailImages(enabled),
             ),
-            _SettingsSwitchRow(
-              title: context.l10n.settingsAutoDownloadImages,
-              subtitle: context.l10n.settingsAutoDownloadImagesDescription,
-              state: state,
-              settingId: GlobalSettingId.attachmentAutoDownloadImages,
-              value: state.autoDownloadImages,
-              chats: chatItems,
-              contentPadding: switchPadding,
-              onChanged: (enabled) => context
-                  .read<SettingsCubit>()
-                  .setAttachmentAutoDownloadSettings(
-                    imagesEnabled: enabled,
-                    videosEnabled: state.autoDownloadVideos,
-                    documentsEnabled: state.autoDownloadDocuments,
-                    archivesEnabled: state.autoDownloadArchives,
-                  ),
-            ),
-            _SettingsSwitchRow(
-              title: context.l10n.settingsAutoDownloadVideos,
-              subtitle: context.l10n.settingsAutoDownloadVideosDescription,
-              state: state,
-              settingId: GlobalSettingId.attachmentAutoDownloadVideos,
-              value: state.autoDownloadVideos,
-              chats: chatItems,
-              contentPadding: switchPadding,
-              onChanged: (enabled) => context
-                  .read<SettingsCubit>()
-                  .setAttachmentAutoDownloadSettings(
-                    imagesEnabled: state.autoDownloadImages,
-                    videosEnabled: enabled,
-                    documentsEnabled: state.autoDownloadDocuments,
-                    archivesEnabled: state.autoDownloadArchives,
-                  ),
-            ),
-            _SettingsSwitchRow(
-              title: context.l10n.settingsAutoDownloadDocuments,
-              subtitle: context.l10n.settingsAutoDownloadDocumentsDescription,
-              state: state,
-              settingId: GlobalSettingId.attachmentAutoDownloadDocuments,
-              value: state.autoDownloadDocuments,
-              chats: chatItems,
-              contentPadding: switchPadding,
-              onChanged: (enabled) => context
-                  .read<SettingsCubit>()
-                  .setAttachmentAutoDownloadSettings(
-                    imagesEnabled: state.autoDownloadImages,
-                    videosEnabled: state.autoDownloadVideos,
-                    documentsEnabled: enabled,
-                    archivesEnabled: state.autoDownloadArchives,
-                  ),
-            ),
-            _SettingsSwitchRow(
-              title: context.l10n.settingsAutoDownloadArchives,
-              subtitle: context.l10n.settingsAutoDownloadArchivesDescription,
-              state: state,
-              settingId: GlobalSettingId.attachmentAutoDownloadArchives,
-              value: state.autoDownloadArchives,
-              chats: chatItems,
-              contentPadding: switchPadding,
-              onChanged: (enabled) => context
-                  .read<SettingsCubit>()
-                  .setAttachmentAutoDownloadSettings(
-                    imagesEnabled: state.autoDownloadImages,
-                    videosEnabled: state.autoDownloadVideos,
-                    documentsEnabled: state.autoDownloadDocuments,
-                    archivesEnabled: enabled,
-                  ),
-            ),
             anchors?.chatPreferencesKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionChats,
@@ -584,6 +517,76 @@ class SettingsControls extends StatelessWidget {
                       padding: sectionHeaderPadding,
                     ),
                   ),
+            if (xmppEnabled) ...[
+              _SettingsSwitchRow(
+                title: context.l10n.settingsAutoDownloadImages,
+                subtitle: context.l10n.settingsAutoDownloadImagesDescription,
+                state: state,
+                settingId: GlobalSettingId.attachmentAutoDownloadImages,
+                value: state.autoDownloadImages,
+                chats: chatItems,
+                contentPadding: switchPadding,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: enabled,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: state.autoDownloadArchives,
+                    ),
+              ),
+              _SettingsSwitchRow(
+                title: context.l10n.settingsAutoDownloadVideos,
+                subtitle: context.l10n.settingsAutoDownloadVideosDescription,
+                state: state,
+                settingId: GlobalSettingId.attachmentAutoDownloadVideos,
+                value: state.autoDownloadVideos,
+                chats: chatItems,
+                contentPadding: switchPadding,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: enabled,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: state.autoDownloadArchives,
+                    ),
+              ),
+              _SettingsSwitchRow(
+                title: context.l10n.settingsAutoDownloadDocuments,
+                subtitle: context.l10n.settingsAutoDownloadDocumentsDescription,
+                state: state,
+                settingId: GlobalSettingId.attachmentAutoDownloadDocuments,
+                value: state.autoDownloadDocuments,
+                chats: chatItems,
+                contentPadding: switchPadding,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: enabled,
+                      archivesEnabled: state.autoDownloadArchives,
+                    ),
+              ),
+              _SettingsSwitchRow(
+                title: context.l10n.settingsAutoDownloadArchives,
+                subtitle: context.l10n.settingsAutoDownloadArchivesDescription,
+                state: state,
+                settingId: GlobalSettingId.attachmentAutoDownloadArchives,
+                value: state.autoDownloadArchives,
+                chats: chatItems,
+                contentPadding: switchPadding,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: enabled,
+                    ),
+              ),
+            ],
             _SettingsSwitchRow(
               title: context.l10n.settingsMuteChatNotifications,
               subtitle: context.l10n.settingsMuteChatNotificationsDescription,
