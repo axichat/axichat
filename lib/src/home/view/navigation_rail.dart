@@ -341,70 +341,94 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
     if (widget.tabs.isEmpty) {
       return const SizedBox.shrink();
     }
-    final calendarDestinationIndex = _calendarDestinationIndex();
-    final destinations = <AxiRailDestination>[];
-    for (final tab in widget.tabs) {
-      destinations.add(
-        AxiRailDestination(
-          icon: _tabIcon(tab.id),
-          label: tab.label,
-          badgeCount: widget.badgeCounts[tab.id] ?? 0,
-        ),
-      );
-      if (calendarDestinationIndex != null &&
-          destinations.length == calendarDestinationIndex) {
-        destinations.add(
-          AxiRailDestination(
-            icon: LucideIcons.calendarClock,
-            label: l10n.homeRailCalendar,
-          ),
+    return AxiNowTicker(
+      interval: calendarClockTickInterval,
+      builder: (context, nowListenable) {
+        return ValueListenableBuilder<DateTime>(
+          valueListenable: nowListenable,
+          builder: (context, now, _) {
+            final int calendarBadgeCount = widget.calendarAvailable
+                ? context
+                      .watch<CalendarBloc>()
+                      .state
+                      .alertBadgeCounts(now)
+                      .total
+                : 0;
+            final calendarDestinationIndex = _calendarDestinationIndex();
+            final destinations = <AxiRailDestination>[];
+            for (final tab in widget.tabs) {
+              destinations.add(
+                AxiRailDestination(
+                  icon: _tabIcon(tab.id),
+                  label: tab.label,
+                  badgeCount: widget.badgeCounts[tab.id] ?? 0,
+                ),
+              );
+              if (calendarDestinationIndex != null &&
+                  destinations.length == calendarDestinationIndex) {
+                destinations.add(
+                  AxiRailDestination(
+                    icon: LucideIcons.calendarClock,
+                    label: l10n.homeRailCalendar,
+                    badgeCount: calendarBadgeCount,
+                  ),
+                );
+              }
+            }
+            assert(
+              selectedIndex >= 0 && selectedIndex < widget.tabs.length,
+              'selectedIndex must be within tab bounds',
+            );
+            final effectiveSelectedIndex =
+                widget.calendarActive && calendarDestinationIndex != null
+                ? calendarDestinationIndex
+                : _destinationIndexForTab(
+                    selectedIndex,
+                    calendarDestinationIndex,
+                  );
+            assert(
+              effectiveSelectedIndex >= 0 &&
+                  effectiveSelectedIndex < destinations.length,
+              'effectiveSelectedIndex must be within destination bounds',
+            );
+            return SafeArea(
+              left: false,
+              right: false,
+              child: AxiNavigationRail(
+                destinations: destinations,
+                selectedIndex: effectiveSelectedIndex,
+                showSelection: !widget.profileActive,
+                collapsed: widget.collapsed,
+                onToggleCollapse: widget.onCollapsedChanged == null
+                    ? null
+                    : () => widget.onCollapsedChanged!(!widget.collapsed),
+                toggleExpandedTooltip: l10n.homeRailHideMenu,
+                toggleCollapsedTooltip: l10n.homeRailShowMenu,
+                backgroundColor: context.colorScheme.background,
+                footer: _HomeNavigationRailFooter(
+                  collapsed: widget.collapsed,
+                  profileActive: widget.profileActive,
+                  onBottomNavSelected: widget.onBottomNavSelected,
+                ),
+                onDestinationSelected: (index) {
+                  final calendarIndex = _calendarDestinationIndex();
+                  if (calendarIndex != null && index == calendarIndex) {
+                    widget.onCalendarSelected();
+                    return;
+                  }
+                  final tabIndex = _tabIndexForDestination(
+                    index,
+                    calendarIndex,
+                  );
+                  if (tabIndex == null) return;
+                  setState(() => _controllerIndex = tabIndex);
+                  widget.onDestinationSelected(tabIndex);
+                },
+              ),
+            );
+          },
         );
-      }
-    }
-    assert(
-      selectedIndex >= 0 && selectedIndex < widget.tabs.length,
-      'selectedIndex must be within tab bounds',
-    );
-    final effectiveSelectedIndex =
-        widget.calendarActive && calendarDestinationIndex != null
-        ? calendarDestinationIndex
-        : _destinationIndexForTab(selectedIndex, calendarDestinationIndex);
-    assert(
-      effectiveSelectedIndex >= 0 &&
-          effectiveSelectedIndex < destinations.length,
-      'effectiveSelectedIndex must be within destination bounds',
-    );
-    return SafeArea(
-      left: false,
-      right: false,
-      child: AxiNavigationRail(
-        destinations: destinations,
-        selectedIndex: effectiveSelectedIndex,
-        showSelection: !widget.profileActive,
-        collapsed: widget.collapsed,
-        onToggleCollapse: widget.onCollapsedChanged == null
-            ? null
-            : () => widget.onCollapsedChanged!(!widget.collapsed),
-        toggleExpandedTooltip: l10n.homeRailHideMenu,
-        toggleCollapsedTooltip: l10n.homeRailShowMenu,
-        backgroundColor: context.colorScheme.background,
-        footer: _HomeNavigationRailFooter(
-          collapsed: widget.collapsed,
-          profileActive: widget.profileActive,
-          onBottomNavSelected: widget.onBottomNavSelected,
-        ),
-        onDestinationSelected: (index) {
-          final calendarIndex = _calendarDestinationIndex();
-          if (calendarIndex != null && index == calendarIndex) {
-            widget.onCalendarSelected();
-            return;
-          }
-          final tabIndex = _tabIndexForDestination(index, calendarIndex);
-          if (tabIndex == null) return;
-          setState(() => _controllerIndex = tabIndex);
-          widget.onDestinationSelected(tabIndex);
-        },
-      ),
+      },
     );
   }
 

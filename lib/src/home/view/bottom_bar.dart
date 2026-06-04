@@ -566,244 +566,242 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final colors = context.colorScheme;
     final chatsState = context.watch<ChatsCubit>().state;
     final homeBadgeCount = widget.homeBadgeCount;
-    int scheduledAlertsCount = 0;
-    int unscheduledAlertsCount = 0;
-    if (widget.calendarAvailable) {
-      final tasks = context.watch<CalendarBloc>().state.model.tasks.values;
-      for (final task in tasks) {
-        if (task.isCompleted) {
-          continue;
-        }
-        final hasReminderOffsets = task.effectiveReminders.isEnabled;
-        final hasIcsAlarm = task.icsMeta?.alarms.isNotEmpty ?? false;
-        if (!hasReminderOffsets && !hasIcsAlarm) {
-          continue;
-        }
-        if (task.isScheduled) {
-          scheduledAlertsCount += 1;
-        } else {
-          unscheduledAlertsCount += 1;
-        }
-      }
-    }
     final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(top: context.borderSide),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsetsDirectional.only(top: spacing.s),
-          child: ValueListenableBuilder<CalendarBottomDragSession?>(
-            valueListenable: widget.calendarBottomDragSession,
-            builder: (context, dragSession, _) {
-              final Duration animationDuration = context
-                  .watch<SettingsCubit>()
-                  .animationDuration;
-              final int safeSelectedIndex = _clampBottomNavIndex(
-                widget.selectedBottomIndex,
-              );
-              final bool openCalendar =
-                  safeSelectedIndex == 1 || safeSelectedIndex == 2;
-              final bool chatCalendarActive =
-                  chatsState.openJid != null &&
-                  chatsState.openChatRoute.isCalendar;
-              final int safeCalendarTab = safeSelectedIndex == 2
-                  ? 1
-                  : safeSelectedIndex == 1
-                  ? 0
-                  : 0;
-              final bool calendarDisabled = !widget.calendarAvailable;
-              final Color disabledColor = colors.mutedForeground.withValues(
-                alpha: 0.45,
-              );
-              final homeColor = safeSelectedIndex == 0
-                  ? colors.foreground
-                  : colors.mutedForeground;
-              final scheduleColor = calendarDisabled
-                  ? disabledColor
-                  : safeSelectedIndex == 1
-                  ? colors.foreground
-                  : colors.mutedForeground;
-              final tasksColor = calendarDisabled
-                  ? disabledColor
-                  : safeSelectedIndex == 2
-                  ? colors.foreground
-                  : colors.mutedForeground;
-              final int? dragSourceTab = dragSession == null
-                  ? null
-                  : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
-                        safeCalendarTab;
-              final bool dragHintActive =
-                  !lowMotion &&
-                  widget.calendarAvailable &&
-                  (openCalendar || chatCalendarActive) &&
-                  dragSourceTab != null;
-              final bool scheduleSwitchHintActive =
-                  dragHintActive && dragSourceTab == 1;
-              final bool tasksSwitchHintActive =
-                  dragHintActive && dragSourceTab == 0;
-              final avatar = SelfAxiAvatar(
-                size: sizing.iconButtonIconSize + spacing.xxs,
-              );
-              final Widget navBar = GNav(
-                key: _bottomNavBarKey,
-                selectedIndex: safeSelectedIndex,
-                duration: animationDuration,
-                haptic: true,
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
-                tabBorderRadius: context.radii.squircle,
-                curve: Curves.easeInOutCubic,
-                gap: spacing.s,
-                iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                color: colors.mutedForeground,
-                activeColor: colors.foreground,
-                textStyle: context.textTheme.small.strong,
-                tabBackgroundColor: colors.secondary.withValues(
-                  alpha: context.motion.tapHoverAlpha,
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: spacing.s,
-                  vertical: spacing.s,
-                ),
-                onTabChange: (index) {
-                  assert(index >= 0 && index <= 3);
-                  if (index == safeSelectedIndex) {
-                    return;
-                  }
-                  if (!widget.calendarAvailable && (index == 1 || index == 2)) {
-                    return;
-                  }
-                  _setBottomNavIndex(index);
-                },
-                tabs: [
-                  GButton(
-                    icon: LucideIcons.house,
-                    text: context.l10n.homeBottomNavHome,
-                    leading: _HomeBottomNavBadgeIcon(
-                      iconData: LucideIcons.house,
-                      badgeCount: homeBadgeCount,
-                      color: homeColor,
-                      iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                      badgeKey: const ValueKey<String>(
-                        'home-bottom-nav-badge-home',
-                      ),
-                    ),
-                    iconColor: colors.mutedForeground,
-                    iconActiveColor: colors.foreground,
-                  ),
-                  GButton(
-                    icon: LucideIcons.calendarClock,
-                    text: context.l10n.homeRailCalendar,
-                    leading: AxiAttentionShake(
-                      enabled: scheduleSwitchHintActive,
-                      child: _HomeBottomNavBadgeIcon(
-                        iconData: LucideIcons.calendarClock,
-                        badgeCount: scheduledAlertsCount,
-                        color: scheduleColor,
+    return AxiNowTicker(
+      interval: calendarClockTickInterval,
+      builder: (context, nowListenable) {
+        return ValueListenableBuilder<DateTime>(
+          valueListenable: nowListenable,
+          builder: (context, now, _) {
+            final CalendarAlertBadgeCounts alertBadgeCounts =
+                widget.calendarAvailable
+                ? context.watch<CalendarBloc>().state.alertBadgeCounts(now)
+                : CalendarAlertBadgeCounts.empty;
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.background,
+                border: Border(top: context.borderSide),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsetsDirectional.only(top: spacing.s),
+                  child: ValueListenableBuilder<CalendarBottomDragSession?>(
+                    valueListenable: widget.calendarBottomDragSession,
+                    builder: (context, dragSession, _) {
+                      final Duration animationDuration = context
+                          .watch<SettingsCubit>()
+                          .animationDuration;
+                      final int safeSelectedIndex = _clampBottomNavIndex(
+                        widget.selectedBottomIndex,
+                      );
+                      final bool openCalendar =
+                          safeSelectedIndex == 1 || safeSelectedIndex == 2;
+                      final bool chatCalendarActive =
+                          chatsState.openJid != null &&
+                          chatsState.openChatRoute.isCalendar;
+                      final int safeCalendarTab = safeSelectedIndex == 2
+                          ? 1
+                          : safeSelectedIndex == 1
+                          ? 0
+                          : 0;
+                      final bool calendarDisabled = !widget.calendarAvailable;
+                      final Color disabledColor = colors.mutedForeground
+                          .withValues(alpha: 0.45);
+                      final homeColor = safeSelectedIndex == 0
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                      final scheduleColor = calendarDisabled
+                          ? disabledColor
+                          : safeSelectedIndex == 1
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                      final tasksColor = calendarDisabled
+                          ? disabledColor
+                          : safeSelectedIndex == 2
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                      final int? dragSourceTab = dragSession == null
+                          ? null
+                          : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
+                                safeCalendarTab;
+                      final bool dragHintActive =
+                          !lowMotion &&
+                          widget.calendarAvailable &&
+                          (openCalendar || chatCalendarActive) &&
+                          dragSourceTab != null;
+                      final bool scheduleSwitchHintActive =
+                          dragHintActive && dragSourceTab == 1;
+                      final bool tasksSwitchHintActive =
+                          dragHintActive && dragSourceTab == 0;
+                      final avatar = SelfAxiAvatar(
+                        size: sizing.iconButtonIconSize + spacing.xxs,
+                      );
+                      final Widget navBar = GNav(
+                        key: _bottomNavBarKey,
+                        selectedIndex: safeSelectedIndex,
+                        duration: animationDuration,
+                        haptic: true,
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        tabMargin: EdgeInsets.symmetric(
+                          horizontal: spacing.xxs,
+                        ),
+                        tabBorderRadius: context.radii.squircle,
+                        curve: Curves.easeInOutCubic,
+                        gap: spacing.s,
                         iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                      ),
-                    ),
-                    iconColor: calendarDisabled
-                        ? disabledColor
-                        : colors.mutedForeground,
-                    iconActiveColor: calendarDisabled
-                        ? disabledColor
-                        : colors.foreground,
+                        color: colors.mutedForeground,
+                        activeColor: colors.foreground,
+                        textStyle: context.textTheme.small.strong,
+                        tabBackgroundColor: colors.secondary.withValues(
+                          alpha: context.motion.tapHoverAlpha,
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: spacing.s,
+                          vertical: spacing.s,
+                        ),
+                        onTabChange: (index) {
+                          assert(index >= 0 && index <= 3);
+                          if (index == safeSelectedIndex) {
+                            return;
+                          }
+                          if (!widget.calendarAvailable &&
+                              (index == 1 || index == 2)) {
+                            return;
+                          }
+                          _setBottomNavIndex(index);
+                        },
+                        tabs: [
+                          GButton(
+                            icon: LucideIcons.house,
+                            text: context.l10n.homeBottomNavHome,
+                            leading: _HomeBottomNavBadgeIcon(
+                              iconData: LucideIcons.house,
+                              badgeCount: homeBadgeCount,
+                              color: homeColor,
+                              iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                              badgeKey: const ValueKey<String>(
+                                'home-bottom-nav-badge-home',
+                              ),
+                            ),
+                            iconColor: colors.mutedForeground,
+                            iconActiveColor: colors.foreground,
+                          ),
+                          GButton(
+                            icon: LucideIcons.calendarClock,
+                            text: context.l10n.homeRailCalendar,
+                            leading: AxiAttentionShake(
+                              enabled: scheduleSwitchHintActive,
+                              child: _HomeBottomNavBadgeIcon(
+                                iconData: LucideIcons.calendarClock,
+                                badgeCount: alertBadgeCounts.scheduled,
+                                color: scheduleColor,
+                                iconSize:
+                                    sizing.iconButtonIconSize + spacing.xxs,
+                              ),
+                            ),
+                            iconColor: calendarDisabled
+                                ? disabledColor
+                                : colors.mutedForeground,
+                            iconActiveColor: calendarDisabled
+                                ? disabledColor
+                                : colors.foreground,
+                          ),
+                          GButton(
+                            icon: LucideIcons.squareCheck,
+                            text: context.l10n.calendarFragmentTaskLabel,
+                            leading: AxiAttentionShake(
+                              enabled: tasksSwitchHintActive,
+                              child: _HomeBottomNavBadgeIcon(
+                                iconData: LucideIcons.squareCheck,
+                                badgeCount: alertBadgeCounts.unscheduled,
+                                color: tasksColor,
+                                iconSize:
+                                    sizing.iconButtonIconSize + spacing.xxs,
+                              ),
+                            ),
+                            iconColor: calendarDisabled
+                                ? disabledColor
+                                : colors.mutedForeground,
+                            iconActiveColor: calendarDisabled
+                                ? disabledColor
+                                : colors.foreground,
+                          ),
+                          GButton(
+                            icon: LucideIcons.user,
+                            text: context.l10n.settingsButtonLabel,
+                            leading: avatar,
+                            iconColor: colors.mutedForeground,
+                            iconActiveColor: colors.foreground,
+                          ),
+                        ],
+                      );
+                      final bool showCancelBucket = dragSession != null;
+                      final Widget cancelBucket = CalendarDragCancelBucket(
+                        key: _cancelBucketKey,
+                        visible: showCancelBucket,
+                        bottomInset: 0,
+                        hovering: _cancelBucketHovering,
+                        onWillAcceptWithDetails: (details) {
+                          _setBottomDragHovering(true);
+                          if (!_cancelBucketHovering) {
+                            setState(() {
+                              _cancelBucketHovering = true;
+                            });
+                          }
+                          return true;
+                        },
+                        onMove: (_) {
+                          _setBottomDragHovering(true);
+                          if (!_cancelBucketHovering) {
+                            setState(() {
+                              _cancelBucketHovering = true;
+                            });
+                          }
+                        },
+                        onLeave: (_) {
+                          if (_cancelBucketHovering) {
+                            setState(() {
+                              _cancelBucketHovering = false;
+                            });
+                          }
+                          _handleCalendarDragSignal();
+                        },
+                        onAcceptWithDetails: (details) {
+                          final CalendarTask restored =
+                              restoreCalendarTaskFromDragPayload(details.data);
+                          context.read<CalendarBloc>().add(
+                            CalendarEvent.taskUpdated(task: restored),
+                          );
+                          widget.calendarBottomDragSession.value = null;
+                          _setBottomDragHovering(false);
+                          setState(() {
+                            _cancelBucketHovering = false;
+                          });
+                        },
+                      );
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: EdgeInsetsDirectional.only(
+                              start: spacing.xs,
+                              end: spacing.xs,
+                              bottom: showCancelBucket ? 0 : spacing.s,
+                            ),
+                            child: navBar,
+                          ),
+                          cancelBucket,
+                        ],
+                      );
+                    },
                   ),
-                  GButton(
-                    icon: LucideIcons.squareCheck,
-                    text: context.l10n.calendarFragmentTaskLabel,
-                    leading: AxiAttentionShake(
-                      enabled: tasksSwitchHintActive,
-                      child: _HomeBottomNavBadgeIcon(
-                        iconData: LucideIcons.squareCheck,
-                        badgeCount: unscheduledAlertsCount,
-                        color: tasksColor,
-                        iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                      ),
-                    ),
-                    iconColor: calendarDisabled
-                        ? disabledColor
-                        : colors.mutedForeground,
-                    iconActiveColor: calendarDisabled
-                        ? disabledColor
-                        : colors.foreground,
-                  ),
-                  GButton(
-                    icon: LucideIcons.user,
-                    text: context.l10n.settingsButtonLabel,
-                    leading: avatar,
-                    iconColor: colors.mutedForeground,
-                    iconActiveColor: colors.foreground,
-                  ),
-                ],
-              );
-              final bool showCancelBucket = dragSession != null;
-              final Widget cancelBucket = CalendarDragCancelBucket(
-                key: _cancelBucketKey,
-                visible: showCancelBucket,
-                bottomInset: 0,
-                hovering: _cancelBucketHovering,
-                onWillAcceptWithDetails: (details) {
-                  _setBottomDragHovering(true);
-                  if (!_cancelBucketHovering) {
-                    setState(() {
-                      _cancelBucketHovering = true;
-                    });
-                  }
-                  return true;
-                },
-                onMove: (_) {
-                  _setBottomDragHovering(true);
-                  if (!_cancelBucketHovering) {
-                    setState(() {
-                      _cancelBucketHovering = true;
-                    });
-                  }
-                },
-                onLeave: (_) {
-                  if (_cancelBucketHovering) {
-                    setState(() {
-                      _cancelBucketHovering = false;
-                    });
-                  }
-                  _handleCalendarDragSignal();
-                },
-                onAcceptWithDetails: (details) {
-                  final CalendarTask restored =
-                      restoreCalendarTaskFromDragPayload(details.data);
-                  context.read<CalendarBloc>().add(
-                    CalendarEvent.taskUpdated(task: restored),
-                  );
-                  widget.calendarBottomDragSession.value = null;
-                  _setBottomDragHovering(false);
-                  setState(() {
-                    _cancelBucketHovering = false;
-                  });
-                },
-              );
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: EdgeInsetsDirectional.only(
-                      start: spacing.xs,
-                      end: spacing.xs,
-                      bottom: showCancelBucket ? 0 : spacing.s,
-                    ),
-                    child: navBar,
-                  ),
-                  cancelBucket,
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

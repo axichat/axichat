@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
+import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'calendar_event.dart';
 
 part 'calendar_state.freezed.dart';
@@ -35,6 +36,24 @@ class CalendarSyncWarning {
 }
 
 enum CalendarSyncWarningType { snapshotUnavailable, archiveIncomplete }
+
+@immutable
+class CalendarAlertBadgeCounts {
+  const CalendarAlertBadgeCounts({
+    required this.scheduled,
+    required this.unscheduled,
+  });
+
+  static const CalendarAlertBadgeCounts empty = CalendarAlertBadgeCounts(
+    scheduled: 0,
+    unscheduled: 0,
+  );
+
+  final int scheduled;
+  final int unscheduled;
+
+  int get total => scheduled + unscheduled;
+}
 
 @freezed
 abstract class CalendarState with _$CalendarState {
@@ -75,6 +94,9 @@ abstract class CalendarState with _$CalendarState {
 }
 
 extension CalendarStateExtensions on CalendarState {
+  CalendarAlertBadgeCounts alertBadgeCounts(DateTime now) =>
+      model.alertBadgeCounts(now);
+
   List<CalendarTask> get unscheduledTasks =>
       model.tasks.values.where((task) => task.isUnscheduled).toList();
 
@@ -333,5 +355,153 @@ extension CalendarStateExtensions on CalendarState {
     DateTime rangeEnd,
   ) {
     return !eventEnd.isBefore(rangeStart) && !eventStart.isAfter(rangeEnd);
+  }
+}
+
+extension CalendarAlertBadgeModelExtensions on CalendarModel {
+  CalendarAlertBadgeCounts alertBadgeCounts(DateTime now) {
+    var scheduled = 0;
+    var unscheduled = 0;
+
+    for (final CalendarTask task in tasks.values) {
+      final CalendarTask? dueTask = _dueAlertTaskFor(task, now);
+      if (dueTask == null) {
+        continue;
+      }
+      if (dueTask.scheduledTime == null) {
+        unscheduled += 1;
+      } else {
+        scheduled += 1;
+      }
+    }
+
+    if (scheduled == 0 && unscheduled == 0) {
+      return CalendarAlertBadgeCounts.empty;
+    }
+    return CalendarAlertBadgeCounts(
+      scheduled: scheduled,
+      unscheduled: unscheduled,
+    );
+  }
+
+  CalendarTask? _dueAlertTaskFor(CalendarTask task, DateTime now) {
+    if (!task.hasRecurrenceData) {
+      return _hasDueCalendarAlert(task, now) ? task : null;
+    }
+
+    final Map<String, CalendarTask> candidates = <String, CalendarTask>{};
+    final CalendarTask? baseInstance = task.baseOccurrenceInstance();
+    if (baseInstance != null) {
+      candidates[baseInstance.id] = baseInstance;
+    } else {
+      candidates[task.id] = task;
+    }
+
+    final Duration maxOffset = _maxReminderOffset(task.effectiveReminders);
+    final DateTime rangeStart = now.subtract(const Duration(days: 366));
+    final DateTime rangeEnd = now.add(maxOffset);
+    for (final CalendarTask occurrence in task.occurrencesWithin(
+      rangeStart,
+      rangeEnd,
+    )) {
+      candidates[occurrence.id] = occurrence;
+    }
+
+    final List<CalendarTask> due =
+        candidates.values
+            .where(
+              (CalendarTask candidate) => _hasDueCalendarAlert(candidate, now),
+            )
+            .toList()
+          ..sort((CalendarTask left, CalendarTask right) {
+            final DateTime leftTime = _calendarAlertSortTime(left, now);
+            final DateTime rightTime = _calendarAlertSortTime(right, now);
+            return leftTime.compareTo(rightTime);
+          });
+
+    return due.isEmpty ? null : due.first;
+  }
+
+  bool _hasDueCalendarAlert(CalendarTask task, DateTime now) {
+    if (task.isCompleted) {
+      return false;
+    }
+    final DateTime? deadline = task.deadline;
+    if (deadline != null && !deadline.isAfter(now)) {
+      return true;
+    }
+
+    final ReminderPreferences reminders = task.effectiveReminders;
+    if (!reminders.isEnabled) {
+      return false;
+    }
+    final DateTime? scheduled = task.scheduledTime;
+    if (scheduled != null &&
+        _hasDueReminderFireTime(scheduled, reminders.startOffsets, now)) {
+      return true;
+    }
+    if (deadline != null &&
+        _hasDueReminderFireTime(deadline, reminders.deadlineOffsets, now)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _hasDueReminderFireTime(
+    DateTime anchor,
+    List<Duration> offsets,
+    DateTime now,
+  ) {
+    for (final Duration offset in offsets) {
+      if (!anchor.subtract(offset).isAfter(now)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Duration _maxReminderOffset(ReminderPreferences reminders) {
+    Duration maxOffset = Duration.zero;
+    for (final Duration offset in reminders.startOffsets) {
+      if (offset > maxOffset) {
+        maxOffset = offset;
+      }
+    }
+    for (final Duration offset in reminders.deadlineOffsets) {
+      if (offset > maxOffset) {
+        maxOffset = offset;
+      }
+    }
+    return maxOffset;
+  }
+
+  DateTime _calendarAlertSortTime(CalendarTask task, DateTime now) {
+    DateTime? earliest;
+    void consider(DateTime value) {
+      if (value.isAfter(now)) {
+        return;
+      }
+      if (earliest == null || value.isBefore(earliest!)) {
+        earliest = value;
+      }
+    }
+
+    final DateTime? deadline = task.deadline;
+    if (deadline != null) {
+      consider(deadline);
+    }
+    final ReminderPreferences reminders = task.effectiveReminders;
+    final DateTime? scheduled = task.scheduledTime;
+    if (scheduled != null) {
+      for (final Duration offset in reminders.startOffsets) {
+        consider(scheduled.subtract(offset));
+      }
+    }
+    if (deadline != null) {
+      for (final Duration offset in reminders.deadlineOffsets) {
+        consider(deadline.subtract(offset));
+      }
+    }
+    return earliest ?? now;
   }
 }
