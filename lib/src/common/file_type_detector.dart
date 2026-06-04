@@ -146,18 +146,18 @@ class FileTypeReport {
   bool get hasMismatch {
     final normalizedDetected = _normalizeMimeType(detectedMimeType);
     if (!_isReliableMimeType(normalizedDetected)) return false;
-    final normalizedDeclared =
-        _normalizeMimeType(declaredMimeType) ??
-        _normalizeMimeType(extensionMimeType);
+    final normalizedDeclared = declaredLabel;
     if (normalizedDeclared == null) return false;
     return normalizedDeclared != normalizedDetected;
   }
 
   String? get detectedLabel => _normalizeMimeType(detectedMimeType);
 
-  String? get declaredLabel =>
-      _normalizeMimeType(declaredMimeType) ??
-      _normalizeMimeType(extensionMimeType);
+  String? get declaredLabel {
+    final declared = _normalizeMimeType(declaredMimeType);
+    if (_isReliableMimeType(declared)) return declared;
+    return _normalizeMimeType(extensionMimeType);
+  }
 }
 
 extension FileTypeReportPreferredMimeType on FileTypeReport {

@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/file_metadata_tools.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -477,7 +478,8 @@ class AttachmentGalleryBloc
           allowOnce: allowedOnceStanzaIds.contains(
             _normalizeStanzaId(item.message.stanzaID),
           ),
-          allowByTrust: isSelf || _chatAllowsAutoDownload(chat),
+          allowByTrust:
+              isSelf || _chatAllowsAutoDownload(chat, metadata: item.metadata),
         ),
       );
     }
@@ -489,16 +491,22 @@ class AttachmentGalleryBloc
     return item.metadata.id.trim();
   }
 
-  bool _chatAllowsAutoDownload(Chat? chat) {
-    return switch (chat?.attachmentAutoDownload) {
-      AttachmentAutoDownload.allowed => true,
-      AttachmentAutoDownload.blocked => false,
-      null =>
-        _xmppService.autoDownloadImages ||
-            _xmppService.autoDownloadVideos ||
-            _xmppService.autoDownloadDocuments ||
-            _xmppService.autoDownloadArchives,
-    };
+  bool _chatAllowsAutoDownload(
+    Chat? chat, {
+    required FileMetadataData metadata,
+  }) {
+    if (chat == null) return false;
+    return allowsAttachmentAutoDownload(
+      chat: chat,
+      metadata: metadata,
+      imagesEnabled: _xmppService.autoDownloadImages,
+      videosEnabled: _xmppService.autoDownloadVideos,
+      documentsEnabled: _xmppService.autoDownloadDocuments,
+      archivesEnabled: _xmppService.autoDownloadArchives,
+      chatBlocked: false,
+      requireKnownSize: false,
+      maxBytes: maxAttachmentAutoDownloadBytes,
+    );
   }
 
   Map<String, FileMetadataData?> _pruneFileMetadataById({

@@ -2,22 +2,27 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
+import 'package:axichat/src/attachments/view/attachment_file_preview.dart';
 import 'package:axichat/src/chat/view/composer/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -852,6 +857,17 @@ class AttachmentGalleryTile extends StatelessWidget {
     const metaMaxLines = 1;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
+    if (metadata?.mediaKind == FileMetadataMediaKind.file) {
+      return AttachmentGalleryFileTile(
+        metadata: metadata!,
+        metadataPending: metadataPending,
+        allowed: allowed,
+        downloadDelegate: downloadDelegate,
+        metadataReloadDelegate: metadataReloadDelegate,
+        onAllowPressed: onAllowPressed,
+        metaText: metaLabel,
+      );
+    }
     final showFilename = metadata?.mediaKind != FileMetadataMediaKind.file;
     final preview = ChatAttachmentPreview(
       stanzaId: stanzaId,
@@ -888,4 +904,455 @@ class AttachmentGalleryTile extends StatelessWidget {
       ],
     );
   }
+}
+
+class AttachmentGalleryFileTile extends StatefulWidget {
+  const AttachmentGalleryFileTile({
+    super.key,
+    required this.metadata,
+    required this.metadataPending,
+    required this.allowed,
+    required this.downloadDelegate,
+    required this.metadataReloadDelegate,
+    required this.onAllowPressed,
+    required this.metaText,
+  });
+
+  final FileMetadataData metadata;
+  final bool metadataPending;
+  final bool allowed;
+  final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate metadataReloadDelegate;
+  final VoidCallback? onAllowPressed;
+  final String? metaText;
+
+  @override
+  State<AttachmentGalleryFileTile> createState() =>
+      _AttachmentGalleryFileTileState();
+}
+
+class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
+  final ShadPopoverController _actionsController = ShadPopoverController();
+  _FileTileAction? _activeAction;
+  String? _downloadedLocalPath;
+
+  bool get _busy => _activeAction != null;
+
+  String? get _effectiveLocalPath {
+    final metadataPath = widget.metadata.path?.trim();
+    if (metadataPath?.isNotEmpty == true) {
+      return metadataPath;
+    }
+    final downloadedPath = _downloadedLocalPath?.trim();
+    if (downloadedPath?.isNotEmpty == true) {
+      return downloadedPath;
+    }
+    return null;
+  }
+
+  @override
+  void didUpdateWidget(covariant AttachmentGalleryFileTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.metadata.id != widget.metadata.id ||
+        oldWidget.metadata.path != widget.metadata.path) {
+      _downloadedLocalPath = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _actionsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = widget.metadata;
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final sizing = context.sizing;
+    final localPath = _effectiveLocalPath;
+    final hasPath = localPath != null;
+    final canResolve = hasPath || widget.downloadDelegate != null;
+    final saveLabel = hasPath
+        ? l10n.chatAttachmentExportConfirm
+        : l10n.chatAttachmentDownloadAndSave;
+    final shareLabel = hasPath
+        ? l10n.chatActionShare
+        : l10n.chatAttachmentDownloadAndShare;
+    final declaredReport = buildDeclaredFileTypeReport(
+      declaredMimeType: metadata.mimeType,
+      fileName: metadata.filename,
+      path: metadata.path,
+    );
+    final previewKind = resolveAttachmentPreviewKind(
+      report: declaredReport,
+      fileName: metadata.filename,
+      path: metadata.path,
+      declaredMimeType: metadata.mimeType,
+    );
+    final previewEnabled =
+        canResolve &&
+        (previewKind == AttachmentPreviewKind.pdf ||
+            previewKind == AttachmentPreviewKind.text);
+
+    return AxiModalSurface(
+      padding: EdgeInsets.all(spacing.s),
+      backgroundColor: colors.card,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: sizing.attachmentPreviewExtent),
+        child: widget.metadataPending
+            ? Center(child: AxiProgressIndicator(color: colors.primary))
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: spacing.xs,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        LucideIcons.file,
+                        size: sizing.menuItemIconSize,
+                        color: colors.primary,
+                      ),
+                      const Spacer(),
+                      if (widget.allowed || hasPath)
+                        AxiPopover(
+                          controller: _actionsController,
+                          closeOnTapOutside: true,
+                          padding: EdgeInsets.zero,
+                          decoration: ShadDecoration.none,
+                          shadows: const <BoxShadow>[],
+                          popover: (context) {
+                            return AxiMenu(
+                              actions: [
+                                AxiMenuAction(
+                                  icon: LucideIcons.save,
+                                  label: saveLabel,
+                                  enabled: canResolve && !_busy,
+                                  onPressed: () {
+                                    _actionsController.hide();
+                                    _saveAttachment();
+                                  },
+                                ),
+                                AxiMenuAction(
+                                  icon: LucideIcons.share2,
+                                  label: shareLabel,
+                                  enabled: canResolve && !_busy,
+                                  onPressed: () {
+                                    _actionsController.hide();
+                                    _shareAttachment();
+                                  },
+                                ),
+                                if (previewEnabled)
+                                  AxiMenuAction(
+                                    icon: LucideIcons.eye,
+                                    label: hasPath
+                                        ? l10n.chatAttachmentPreview
+                                        : l10n.chatAttachmentDownloadAndPreview,
+                                    enabled: !_busy,
+                                    onPressed: () {
+                                      _actionsController.hide();
+                                      _previewAttachment();
+                                    },
+                                  ),
+                              ],
+                            );
+                          },
+                          child: AxiIconButton.ghost(
+                            iconData: Icons.more_horiz,
+                            tooltip: l10n.commonMoreOptions,
+                            loading: _busy,
+                            iconSize: sizing.menuItemIconSize,
+                            buttonSize: sizing.menuItemHeight,
+                            tapTargetSize: sizing.menuItemHeight,
+                            onPressed: _busy ? null : _actionsController.toggle,
+                          ),
+                        )
+                      else
+                        AxiIconButton.ghost(
+                          iconData: LucideIcons.download,
+                          tooltip: l10n.chatAttachmentLoad,
+                          iconSize: sizing.menuItemIconSize,
+                          buttonSize: sizing.menuItemHeight,
+                          tapTargetSize: sizing.menuItemHeight,
+                          onPressed: widget.onAllowPressed,
+                        ),
+                    ],
+                  ),
+                  Text(
+                    metadata.filename,
+                    style: context.textTheme.small.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _galleryFileTileSizeLabel(
+                      bytes: metadata.sizeBytes,
+                      hasPath: hasPath,
+                      l10n: l10n,
+                    ),
+                    style: context.textTheme.muted,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (widget.metaText != null)
+                    Text(
+                      widget.metaText!,
+                      style: context.textTheme.muted,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Future<void> _saveAttachment() async {
+    await _withAction(_FileTileAction.save, () async {
+      final file = await _resolveLocalFile();
+      if (!mounted || file == null) return;
+      final report = await _inspectResolvedFile(file);
+      if (!mounted) return;
+      final allowed = await confirmExportAllowed(
+        context,
+        metadata: widget.metadata,
+        report: report,
+        confirmLabel: context.l10n.chatAttachmentExportConfirm,
+      );
+      if (!mounted || !allowed) return;
+      await saveAttachmentToDevice(
+        context,
+        file: file,
+        filename: widget.metadata.filename,
+      );
+    });
+  }
+
+  Future<void> _shareAttachment() async {
+    await _withAction(_FileTileAction.share, () async {
+      final file = await _resolveLocalFile();
+      if (!mounted || file == null) return;
+      final report = await _inspectResolvedFile(file);
+      if (!mounted) return;
+      final allowed = await confirmExportAllowed(
+        context,
+        metadata: widget.metadata,
+        report: report,
+        confirmLabel: context.l10n.chatActionShare,
+      );
+      if (!mounted || !allowed) return;
+      await shareAttachmentFromFile(
+        context,
+        file: file,
+        filename: widget.metadata.filename,
+      );
+    });
+  }
+
+  Future<void> _previewAttachment() async {
+    await _withAction(_FileTileAction.preview, () async {
+      final file = await _resolveLocalFile();
+      if (!mounted || file == null) return;
+      final report = await _inspectResolvedFile(file);
+      if (!mounted) return;
+      final allowed = await confirmExportAllowed(
+        context,
+        metadata: widget.metadata,
+        report: report,
+        confirmLabel: context.l10n.chatAttachmentPreview,
+      );
+      if (!mounted || !allowed) return;
+      final previewData = await resolveAttachmentPreviewData(
+        file: file,
+        attachment: attachmentPreviewSourceFromMetadata(
+          metadata: widget.metadata,
+          file: file,
+        ),
+        typeReport: report,
+      );
+      if (!mounted) return;
+      if (previewData == null || !previewData.kind.opensDialog) {
+        _showGalleryAttachmentToast(
+          context,
+          context.l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+        return;
+      }
+      await showAttachmentPreviewDialog(
+        context: context,
+        data: previewData,
+        closeTooltip: context.l10n.commonClose,
+        actions: [
+          AttachmentPreviewDialogAction(
+            iconData: LucideIcons.send,
+            tooltip: context.l10n.commonSend,
+            onPressed: (dialogContext) {
+              Navigator.of(dialogContext).pop();
+              openSingleAttachmentComposeDraft(
+                context: context,
+                metadata: widget.metadata,
+              );
+            },
+          ),
+        ],
+      );
+    });
+  }
+
+  Future<FileTypeReport> _inspectResolvedFile(File file) {
+    return inspectFileType(
+      file: file,
+      declaredMimeType: widget.metadata.mimeType,
+      fileName: widget.metadata.filename,
+    );
+  }
+
+  Future<File?> _resolveLocalFile() async {
+    final path = _effectiveLocalPath;
+    if (path != null && path.isNotEmpty) {
+      final file = File(path);
+      if (await file.exists()) return file;
+    }
+    if (!mounted) return null;
+    final l10n = context.l10n;
+    final declaredReport = buildDeclaredFileTypeReport(
+      declaredMimeType: widget.metadata.mimeType,
+      fileName: widget.metadata.filename,
+      path: widget.metadata.path,
+    );
+    final allowed = await confirmExportAllowed(
+      context,
+      metadata: widget.metadata,
+      report: declaredReport,
+      confirmLabel: l10n.chatAttachmentDownload,
+    );
+    if (!mounted || !allowed) return null;
+    final downloaded = await widget.downloadDelegate?.download() ?? false;
+    if (!mounted || !downloaded) {
+      if (mounted) {
+        _showGalleryAttachmentToast(
+          context,
+          context.l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
+      return null;
+    }
+    final refreshed = await widget.metadataReloadDelegate.reload();
+    final refreshedPath = refreshed?.path?.trim();
+    if (refreshedPath == null || refreshedPath.isEmpty) {
+      if (mounted) {
+        _showGalleryAttachmentToast(
+          context,
+          context.l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+      }
+      return null;
+    }
+    final file = File(refreshedPath);
+    if (await file.exists()) {
+      _downloadedLocalPath = file.path;
+      return file;
+    }
+    if (mounted) {
+      _showGalleryAttachmentToast(
+        context,
+        context.l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    }
+    return null;
+  }
+
+  Future<void> _withAction(
+    _FileTileAction action,
+    Future<void> Function() operation,
+  ) async {
+    if (_busy) return;
+    setState(() {
+      _activeAction = action;
+    });
+    try {
+      await operation();
+    } on XmppFileTooBigException {
+      if (!mounted) return;
+      _showGalleryAttachmentToast(
+        context,
+        context.l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } on PlatformException {
+      if (!mounted) return;
+      _showGalleryAttachmentToast(
+        context,
+        context.l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } on FileSystemException {
+      if (!mounted) return;
+      _showGalleryAttachmentToast(
+        context,
+        context.l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _activeAction = null;
+        });
+      }
+    }
+  }
+}
+
+enum _FileTileAction { save, share, preview }
+
+String _galleryFileTileSizeLabel({
+  required int? bytes,
+  required bool hasPath,
+  required AppLocalizations l10n,
+}) {
+  final status = hasPath
+      ? l10n.chatAttachmentOnThisDevice
+      : l10n.chatAttachmentNotDownloadedYet;
+  if (bytes == null || bytes <= 0) {
+    return hasPath ? '$status • ${l10n.chatAttachmentUnknownSize}' : status;
+  }
+  final units = [
+    l10n.commonFileSizeUnitBytes,
+    l10n.commonFileSizeUnitKilobytes,
+    l10n.commonFileSizeUnitMegabytes,
+    l10n.commonFileSizeUnitGigabytes,
+    l10n.commonFileSizeUnitTerabytes,
+  ];
+  var size = bytes.toDouble();
+  var unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  final formatted = unit == 0
+      ? size.toStringAsFixed(0)
+      : size.toStringAsFixed(size >= 10 ? 0 : 1);
+  return '$status • $formatted ${units[unit]}';
+}
+
+void _showGalleryAttachmentToast(
+  BuildContext context,
+  String message, {
+  bool destructive = false,
+}) {
+  final l10n = context.l10n;
+  final toaster = ShadToaster.maybeOf(context);
+  final toast = destructive
+      ? FeedbackToast.error(title: l10n.toastWhoopsTitle, message: message)
+      : FeedbackToast.info(title: l10n.toastHeadsUpTitle, message: message);
+  toaster?.show(toast);
 }
