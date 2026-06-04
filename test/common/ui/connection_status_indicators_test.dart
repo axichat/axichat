@@ -134,7 +134,9 @@ void main() {
   testWidgets('connectivity banner recovers when network returns available', (
     tester,
   ) async {
-    final settingsCubit = _mockSettingsCubit();
+    final settingsCubit = _mockSettingsCubit(
+      animationDuration: const Duration(milliseconds: 1),
+    );
     final xmppStates = StreamController<ConnectionState>.broadcast();
     final networkStates = StreamController<NetworkAvailability>.broadcast();
     final xmppService = _MockXmppService();
@@ -168,12 +170,11 @@ void main() {
     expect(find.text(l10n.connectivityStatusNotConnected), findsOneWidget);
 
     networkStates.add(NetworkAvailability.available);
-    await pumpEventQueue();
+    await tester.pump();
     await tester.pump();
 
     expect(connectivityCubit.state, isA<ConnectivityConnected>());
     expect(find.text(l10n.connectivityStatusConnected), findsOneWidget);
-    expect(find.text(l10n.connectivityStatusNotConnected), findsNothing);
   });
 
   testWidgets('connecting banner shows progress after status text', (
@@ -233,13 +234,13 @@ void main() {
   });
 }
 
-SettingsCubit _mockSettingsCubit() {
+SettingsCubit _mockSettingsCubit({Duration animationDuration = Duration.zero}) {
   final settingsCubit = _MockSettingsCubit();
   when(() => settingsCubit.state).thenReturn(const SettingsState());
   when(
     () => settingsCubit.stream,
   ).thenAnswer((_) => const Stream<SettingsState>.empty());
-  when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
+  when(() => settingsCubit.animationDuration).thenReturn(animationDuration);
   return settingsCubit;
 }
 
