@@ -21,17 +21,12 @@ class AxiAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasLeading = leading != null;
     final hasTitle = showTitle;
-    final platform = Theme.of(context).platform;
     final spacing = context.spacing;
     final double titleGap = spacing.s;
-    final baseTitleStyle = context.textTheme.h3;
-    final titleStyle = platform.isApple
-        ? baseTitleStyle.copyWith(fontWeight: appBarTitleFontWeight)
-        : baseTitleStyle.copyWith(
-            fontFamily: interFontFamily,
-            fontFamilyFallback: interFontFallback,
-            fontWeight: appBarTitleFontWeight,
-          );
+    final titleStyle = context.textTheme.h4.copyWith(
+      color: context.colorScheme.foreground,
+      fontSize: context.textTheme.large.fontSize,
+    );
     final trailingContent = trailing == null
         ? null
         : Align(alignment: Alignment.centerRight, child: trailing);

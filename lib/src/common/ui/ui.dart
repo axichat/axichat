@@ -97,7 +97,7 @@ export 'string_to_color.dart';
 export 'typing_text_input.dart';
 export 'transport_choice_dialog.dart';
 
-const appDisplayName = 'axichat';
+const appDisplayName = 'Axichat';
 const androidIconPath = '@mipmap/ic_launcher';
 
 const emojiFontFamily = 'NotoColorEmoji';
