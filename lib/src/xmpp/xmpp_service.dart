@@ -31,7 +31,6 @@ import 'package:axichat/src/calendar/sync/chat_calendar_sync_state_store.dart';
 import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
 import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
-import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -755,6 +754,7 @@ class XmppService extends XmppBase
     this._notificationService,
     this._capability,
     this._connectingWatchdogTimeout,
+    this._lifecycleStateProvider,
   ) {
     _pingController = XmppPingController(owner: this);
   }
@@ -779,6 +779,7 @@ class XmppService extends XmppBase
     NotificationService? notificationService,
     Capability capability = const Capability(),
     Duration connectingWatchdogTimeout = _defaultConnectingWatchdogTimeout,
+    AppLifecycleState? Function()? lifecycleStateProvider,
   }) => _instance ??= XmppService._(
     buildConnection,
     buildStateStore,
@@ -786,9 +787,11 @@ class XmppService extends XmppBase
     notificationService ?? NotificationService(),
     capability,
     connectingWatchdogTimeout,
+    lifecycleStateProvider ?? () => SchedulerBinding.instance.lifecycleState,
   );
 
   final Logger _xmppLogger = Logger('XmppService');
+  final AppLifecycleState? Function() _lifecycleStateProvider;
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
   StreamController<void> _databaseReloadController =
@@ -3165,6 +3168,12 @@ class XmppService extends XmppBase
     return true;
   }
 
+  bool get _clientLifecycleActive {
+    final lifecycleState = _lifecycleStateProvider();
+    return lifecycleState == AppLifecycleState.resumed ||
+        lifecycleState == AppLifecycleState.inactive;
+  }
+
   Future<bool> _enableReconnectIfNeeded() async {
     final bool shouldReconnect = await _connection.reconnectionPolicy
         .getShouldReconnect();
@@ -3280,10 +3289,21 @@ class XmppService extends XmppBase
       '${await _reconnectStateSummary()}',
     );
     if (_automaticReconnectPaused && trigger.keepsAutomaticReconnectPaused) {
-      _xmppLogger.info(
-        'Reconnect request ignored: automatic reconnect paused.',
-      );
-      return false;
+      if (trigger == ReconnectTrigger.networkAvailable &&
+          _clientLifecycleActive) {
+        if (!await _restoreAutomaticReconnectAfterPause()) {
+          _xmppLogger.info(
+            'Reconnect request failed while restoring automatic reconnect '
+            'after active network availability.',
+          );
+          return false;
+        }
+      } else {
+        _xmppLogger.info(
+          'Reconnect request ignored: automatic reconnect paused.',
+        );
+        return false;
+      }
     }
     if (trigger == ReconnectTrigger.autoFailure) {
       return _requestAutoFailureReconnect();

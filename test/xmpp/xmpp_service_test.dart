@@ -6634,10 +6634,12 @@ void main() {
   group('reconnect admission', () {
     late XmppReconnectionPolicy reconnectionPolicy;
     late List<ReconnectTrigger> reconnectTriggers;
+    late AppLifecycleState? lifecycleState;
 
     setUp(() async {
       reconnectionPolicy = XmppReconnectionPolicy.exponential();
       reconnectTriggers = <ReconnectTrigger>[];
+      lifecycleState = null;
       when(
         () => mockConnection.reconnectionPolicy,
       ).thenReturn(reconnectionPolicy);
@@ -6665,6 +6667,7 @@ void main() {
         buildStateStore: (_, _) => mockStateStore,
         buildDatabase: (_, _) => database,
         notificationService: mockNotificationService,
+        lifecycleStateProvider: () => lifecycleState,
       );
       await connectSuccessfully(xmppService);
     });
@@ -6868,6 +6871,31 @@ void main() {
 
         expect(reconnectTriggers, isEmpty);
         expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+      },
+    );
+
+    test(
+      'networkAvailable clears reconnect pause when client lifecycle is active.',
+      () async {
+        lifecycleState = AppLifecycleState.resumed;
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.notConnected,
+            mox.XmppConnectionState.connected,
+          ),
+        );
+        await pumpEventQueue(times: 10);
+        expect(xmppService.connectionState, ConnectionState.notConnected);
+        await xmppService.pauseAutomaticReconnect();
+        reconnectTriggers.clear();
+
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isTrue,
+        );
+
+        expect(reconnectTriggers, [ReconnectTrigger.networkAvailable]);
+        expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
       },
     );
 

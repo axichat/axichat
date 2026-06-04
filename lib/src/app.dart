@@ -817,6 +817,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       previous.networkAvailability !=
                       current.networkAvailability,
                   listener: (context, state) {
+                    if (!state.demoOffline &&
+                        state.networkAvailability.isAvailable) {
+                      final xmppService = context.read<XmppService>();
+                      fireAndForget(
+                        () => xmppService.requestReconnect(
+                          ReconnectTrigger.networkAvailable,
+                        ),
+                        operationName: 'App.xmppNetworkAvailable',
+                      );
+                    }
                     if (!state.emailEnabled) return;
                     final emailService = context.read<EmailService>();
                     if (state.networkAvailability.isUnavailable) {

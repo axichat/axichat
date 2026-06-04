@@ -1,8 +1,9 @@
 import 'dart:async';
 
-import 'package:axichat/src/home/bloc/home_bloc.dart';
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
+import 'package:axichat/src/home/bloc/home_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -140,6 +141,28 @@ void main() {
     await pumpEventQueue();
 
     verify(() => emailService.refreshUnreadForHomeRefresh()).called(1);
+    expect(emittedStates, isEmpty);
+  });
+
+  test('offline email ready refresh avoids unread sync work', () async {
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+      initialNetworkAvailability: NetworkAvailability.unavailable,
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(bloc.close);
+    addTearDown(subscription.cancel);
+
+    await pumpEventQueue();
+    emailReadyTransitionController.add(null);
+    await pumpEventQueue();
+
+    verifyNever(() => emailService.refreshUnreadForHomeRefresh());
+    verifyNever(() => emailService.syncSessionState());
+    verifyNever(() => xmppService.syncSessionState());
     expect(emittedStates, isEmpty);
   });
 
@@ -394,6 +417,64 @@ void main() {
       RequestStatus.failure,
     ]);
     expect(emittedStates.last.refreshFailure, HomeRefreshFailure.email);
+    verify(() => emailService.syncSessionState()).called(1);
+    verifyNever(() => xmppService.syncSessionState());
+  });
+
+  test('offline SMTP-only refresh fails without email sync work', () async {
+    when(() => xmppService.hasConnectionSettings).thenReturn(false);
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+      initialNetworkAvailability: NetworkAvailability.unavailable,
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(() async {
+      await subscription.cancel();
+      await bloc.close();
+    });
+
+    bloc.add(const HomeRefreshRequested());
+    await pumpEventQueue();
+
+    expect(emittedStates.map((state) => state.refreshStatus), [
+      RequestStatus.loading,
+      RequestStatus.failure,
+    ]);
+    expect(emittedStates.last.refreshFailure, HomeRefreshFailure.email);
+    verifyNever(() => emailService.syncSessionState());
+    verifyNever(() => xmppService.syncSessionState());
+  });
+
+  test('network available restores email refresh delegation', () async {
+    when(() => xmppService.hasConnectionSettings).thenReturn(false);
+
+    final bloc = HomeBloc(
+      xmppService: xmppService,
+      emailService: emailService,
+      tabs: const [HomeTab.chats],
+      initialNetworkAvailability: NetworkAvailability.unavailable,
+    );
+    final emittedStates = <HomeState>[];
+    final subscription = bloc.stream.listen(emittedStates.add);
+    addTearDown(() async {
+      await subscription.cancel();
+      await bloc.close();
+    });
+
+    bloc.add(
+      const HomeNetworkAvailabilityChanged(NetworkAvailability.available),
+    );
+    bloc.add(const HomeRefreshRequested());
+    await pumpEventQueue();
+
+    expect(emittedStates.map((state) => state.refreshStatus), [
+      RequestStatus.loading,
+      RequestStatus.success,
+    ]);
     verify(() => emailService.syncSessionState()).called(1);
     verifyNever(() => xmppService.syncSessionState());
   });

@@ -79,6 +79,15 @@ final class HomeEmailServiceChanged extends HomeEvent {
   List<Object?> get props => [emailService];
 }
 
+final class HomeNetworkAvailabilityChanged extends HomeEvent {
+  const HomeNetworkAvailabilityChanged(this.availability);
+
+  final NetworkAvailability availability;
+
+  @override
+  List<Object?> get props => [availability];
+}
+
 final class _HomeEmailUnreadRefreshRequested extends HomeEvent {
   const _HomeEmailUnreadRefreshRequested();
 }
