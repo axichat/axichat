@@ -18,6 +18,7 @@ class ConnectionStatusIndicators extends StatelessWidget {
     required this.emailEnabled,
     this.compact = false,
     this.collapseReadyStatus = false,
+    this.networkUnavailable = false,
   });
 
   final ConnectionState xmppState;
@@ -25,6 +26,7 @@ class ConnectionStatusIndicators extends StatelessWidget {
   final bool emailEnabled;
   final bool compact;
   final bool collapseReadyStatus;
+  final bool networkUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -76,12 +78,14 @@ class ConnectionStatusIndicators extends StatelessWidget {
     ShadColorScheme colors,
     AppLocalizations l10n,
   ) {
-    final level = switch (xmppState) {
-      ConnectionState.connected => _CapabilityLevel.ready,
-      ConnectionState.connecting => _CapabilityLevel.syncing,
-      ConnectionState.error => _CapabilityLevel.error,
-      _ => _CapabilityLevel.offline,
-    };
+    final level = networkUnavailable
+        ? _CapabilityLevel.offline
+        : switch (xmppState) {
+            ConnectionState.connected => _CapabilityLevel.ready,
+            ConnectionState.connecting => _CapabilityLevel.syncing,
+            ConnectionState.error => _CapabilityLevel.error,
+            _ => _CapabilityLevel.offline,
+          };
     final palette = _paletteForLevel(level, colors);
     return _CapabilityChipData(
       icon: LucideIcons.messageCircle,
@@ -111,6 +115,7 @@ class ConnectionStatusIndicators extends StatelessWidget {
 
   _CapabilityLevel _emailLevel() {
     if (!emailEnabled) return _CapabilityLevel.disabled;
+    if (networkUnavailable) return _CapabilityLevel.offline;
     return switch (emailState.status) {
       EmailSyncStatus.ready => _CapabilityLevel.ready,
       EmailSyncStatus.recovering => _CapabilityLevel.syncing,
@@ -120,6 +125,7 @@ class ConnectionStatusIndicators extends StatelessWidget {
   }
 
   String _chatStatusLabel(AppLocalizations l10n) {
+    if (networkUnavailable) return l10n.sessionCapabilityStatusOffline;
     switch (xmppState) {
       case ConnectionState.connected:
         return l10n.sessionCapabilityStatusConnected;
@@ -134,6 +140,7 @@ class ConnectionStatusIndicators extends StatelessWidget {
 
   String _emailStatusLabel(AppLocalizations l10n) {
     if (!emailEnabled) return l10n.sessionCapabilityStatusOff;
+    if (networkUnavailable) return l10n.sessionCapabilityStatusOffline;
     switch (emailState.status) {
       case EmailSyncStatus.ready:
         return l10n.sessionCapabilityStatusConnected;

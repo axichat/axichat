@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 
 enum NetworkAvailability {
   unknown,
@@ -19,6 +20,10 @@ class NetworkAvailabilityService {
   NetworkAvailabilityService._({Connectivity? connectivity})
     : _connectivity = connectivity ?? Connectivity();
 
+  @visibleForTesting
+  NetworkAvailabilityService.forTesting({Connectivity? connectivity})
+    : _connectivity = connectivity ?? Connectivity();
+
   static final NetworkAvailabilityService instance =
       NetworkAvailabilityService._();
 
@@ -28,22 +33,61 @@ class NetworkAvailabilityService {
 
   StreamSubscription<Object?>? _subscription;
   NetworkAvailability _current = NetworkAvailability.unknown;
+  Future<void>? _startFuture;
+  int _startRequests = 0;
 
   NetworkAvailability get current => _current;
 
   Stream<NetworkAvailability> get stream => _controller.stream;
 
+  Future<NetworkAvailability> refresh() async {
+    final availability = await _resolveAvailability(
+      await _connectivity.checkConnectivity(),
+    );
+    _updateAvailability(availability);
+    return availability;
+  }
+
   Future<void> start() async {
+    _startRequests += 1;
     if (_subscription != null) return;
-    _updateAvailability(
-      await _resolveAvailability(await _connectivity.checkConnectivity()),
-    );
-    _subscription = _connectivity.onConnectivityChanged.cast<Object?>().listen(
-      _handleConnectivityChange,
-    );
+    final existingStart = _startFuture;
+    if (existingStart != null) {
+      try {
+        await existingStart;
+      } on Exception {
+        _releaseStartRequest();
+        rethrow;
+      }
+      return;
+    }
+    late final Future<void> startFuture;
+    startFuture = _startListener().whenComplete(() {
+      if (identical(_startFuture, startFuture)) {
+        _startFuture = null;
+      }
+    });
+    _startFuture = startFuture;
+    try {
+      await startFuture;
+    } on Exception {
+      _releaseStartRequest();
+      rethrow;
+    }
   }
 
   Future<void> stop() async {
+    _releaseStartRequest();
+    if (_startRequests > 0) return;
+    final startFuture = _startFuture;
+    if (startFuture != null) {
+      try {
+        await startFuture;
+      } on Exception {
+        // The matching start caller reports the failure.
+      }
+      if (_startRequests > 0) return;
+    }
     final subscription = _subscription;
     _subscription = null;
     await subscription?.cancel();
@@ -63,6 +107,20 @@ class NetworkAvailabilityService {
 
   Future<void> _handleConnectivityChange(Object? result) async {
     _updateAvailability(await _resolveAvailability(result));
+  }
+
+  Future<void> _startListener() async {
+    await refresh();
+    if (_startRequests <= 0 || _subscription != null) return;
+    _subscription = _connectivity.onConnectivityChanged.cast<Object?>().listen(
+      _handleConnectivityChange,
+    );
+  }
+
+  void _releaseStartRequest() {
+    if (_startRequests > 0) {
+      _startRequests -= 1;
+    }
   }
 
   void _updateAvailability(NetworkAvailability availability) {

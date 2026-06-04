@@ -466,6 +466,7 @@ void main() {
     credentialStore: credentialStore,
     databaseBuilder: () async => database,
     transport: transport,
+    transportFactory: () => transport,
     notificationService: notificationService,
     foregroundBridge: foregroundBridge,
   );
@@ -2093,6 +2094,7 @@ void main() {
 
     verify(() => transport.notifyNetworkAvailable()).called(1);
     verify(() => transport.notifyNetworkLost()).called(1);
+    expect(service.syncState.status, EmailSyncStatus.offline);
 
     addTearDown(service.shutdown);
   });

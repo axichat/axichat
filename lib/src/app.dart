@@ -812,6 +812,22 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     context.read<UpdateCubit>().refresh();
                   },
                 ),
+                BlocListener<ConnectivityCubit, ConnectivityState>(
+                  listenWhen: (previous, current) =>
+                      previous.networkAvailability !=
+                      current.networkAvailability,
+                  listener: (context, state) async {
+                    if (!state.emailEnabled) return;
+                    final emailService = context.read<EmailService>();
+                    if (state.networkAvailability.isUnavailable) {
+                      await emailService.handleNetworkLost();
+                      return;
+                    }
+                    if (state.networkAvailability.isAvailable) {
+                      await emailService.handleNetworkAvailable();
+                    }
+                  },
+                ),
                 BlocListener<ChatsCubit, ChatsState>(
                   listenWhen: (previous, current) =>
                       !listEquals(previous.items, current.items),

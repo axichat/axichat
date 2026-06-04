@@ -16,6 +16,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
@@ -66,6 +67,7 @@ enum _EmailSyncSource {
   connectivityChangedEvent,
   backgroundFetchDone,
   networkAvailable,
+  networkLost,
   reconnectRestart,
   channelOverflow,
   channelOverflowFailure,
@@ -3276,6 +3278,10 @@ class EmailService {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return;
     }
+    if (_deviceNetworkUnavailable) {
+      _applyDeviceNetworkLostState(source: _EmailSyncSource.networkAvailable);
+      return;
+    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
@@ -3294,6 +3300,7 @@ class EmailService {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return;
     }
+    _applyDeviceNetworkLostState(source: _EmailSyncSource.networkLost);
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
@@ -3304,6 +3311,12 @@ class EmailService {
     Duration timeout = _imapSyncFetchTimeout,
   }) async {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
+      return false;
+    }
+    if (_deviceNetworkUnavailable) {
+      _applyDeviceNetworkLostState(
+        source: _EmailSyncSource.backgroundFetchDone,
+      );
       return false;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -3401,6 +3414,10 @@ class EmailService {
   }
 
   Future<bool> recoverForHomeRefresh() async {
+    if (_deviceNetworkUnavailable) {
+      _applyDeviceNetworkLostState(source: _EmailSyncSource.networkAvailable);
+      return false;
+    }
     if (!await canReconnectConfiguredSession()) {
       return true;
     }
@@ -3445,6 +3462,12 @@ class EmailService {
   }
 
   Future<bool> _refreshHomeEmailSnapshot() async {
+    if (_deviceNetworkUnavailable) {
+      _applyDeviceNetworkLostState(
+        source: _EmailSyncSource.backgroundFetchDone,
+      );
+      return false;
+    }
     if (_transport.isIoRunning) {
       await refreshChatlistFromCore();
       return true;
@@ -4504,6 +4527,10 @@ class EmailService {
     if (!_acceptsRuntimeWork) {
       return null;
     }
+    if (_deviceNetworkUnavailable) {
+      _applyDeviceNetworkLostState(source: source);
+      return 0;
+    }
     try {
       final connectivity = await _readTransportConnectivity(source: source);
       if (!_acceptsRuntimeWork) {
@@ -4551,6 +4578,18 @@ class EmailService {
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
       return null;
     }
+  }
+
+  bool get _deviceNetworkUnavailable =>
+      NetworkAvailabilityService.instance.current.isUnavailable;
+
+  void _applyDeviceNetworkLostState({required _EmailSyncSource source}) {
+    _cancelConnectivityDowngrade();
+    _consecutiveConnectingSamples = 0;
+    _updateSyncState(
+      EmailSyncState.offline(_l10n.emailSyncMessageDisconnected),
+      source: source,
+    );
   }
 
   Future<int?> _readTransportConnectivity({

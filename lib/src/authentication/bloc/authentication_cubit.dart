@@ -14,6 +14,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -30,6 +31,7 @@ import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:uuid/uuid.dart';
@@ -179,6 +181,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
     Future<void> Function()? beforeStickyReconnect,
     Future<void> Function(String accountJid)? beforeXmppConnect,
+    Future<NetworkAvailability> Function()? resolveNetworkAvailability,
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
@@ -188,6 +191,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
        _beforeStickyReconnect = beforeStickyReconnect,
        _beforeXmppConnect = beforeXmppConnect,
+       _resolveNetworkAvailability =
+           resolveNetworkAvailability ??
+           NetworkAvailabilityService.instance.refresh,
        super(initialState ?? const AuthenticationNone()) {
     _ownedHttpClient = httpClient == null ? http.Client() : null;
     _httpClient = httpClient ?? _ownedHttpClient!;
@@ -362,6 +368,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final Duration _xmppReconnectPauseDelay;
   final Future<void> Function()? _beforeStickyReconnect;
   final Future<void> Function(String accountJid)? _beforeXmppConnect;
+  final Future<NetworkAvailability> Function() _resolveNetworkAvailability;
   Timer? _xmppReconnectPauseTimer;
   AppLifecycleState? _latestLifecycleState;
 
@@ -2251,6 +2258,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
     }
 
+    final deviceNetworkUnavailable =
+        usingStoredCredentials &&
+        hasStoredDatabaseSecrets &&
+        await _deviceNetworkUnavailable();
+
     final String? fallbackEmailPassword = passwordPreHashed
         ? null
         : provisioningPasswordCandidate;
@@ -2299,6 +2311,54 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           ? _EmailProvisioningMode.blocking
           : _EmailProvisioningMode.deferred;
 
+      void applyEmailSessionCredentials() {
+        if (smtpEnabled) {
+          final sessionEmailAddress = emailCredentials?.email ?? accountJid;
+          emailService?.cacheSessionCredentials(
+            address: sessionEmailAddress,
+            password: emailPassword,
+          );
+        } else {
+          emailService?.clearSessionCredentials();
+        }
+      }
+
+      if (deviceNetworkUnavailable) {
+        applyEmailSessionCredentials();
+        final resumeResult = await _resumeOfflineLogin(
+          config: config,
+          jid: accountJid,
+          displayName: displayName,
+          databasePrefix: ensuredDatabasePrefix,
+          databasePassphrase: ensuredDatabasePassphrase,
+          rememberMe: rememberMe,
+          password: effectivePassword,
+          passwordPreHashed: passwordPreHashed,
+          passwordWasSkipped: effectivePasswordWasSkipped,
+          skippedPasswordRaw: skippedPasswordRaw,
+          emailPassword: emailPassword,
+          emailCredentials: emailCredentials,
+          enforceEmailProvisioning: enforceEmailProvisioning,
+          databasePrefixStorageKey: databasePrefixStorageKey,
+          databasePassphraseStorageKey: databasePassphraseStorageKey,
+          pendingAvatar: pendingAvatar,
+        );
+        if (resumeResult.isResumed) {
+          authenticationCommitted = true;
+          return;
+        }
+        if (resumeResult.shouldWipeCredentials) {
+          credentialDisposition = _CredentialDisposition.wipeLoginCredentials;
+          await _updateAuthTransactionCredentialClearance(true);
+        }
+        _emit(
+          const AuthenticationFailure(
+            AuthKeyMessage(AuthMessageKey.emailServerUnreachable),
+          ),
+        );
+        return;
+      }
+
       final reuseExistingSession =
           _xmppService.databasesInitialized && _xmppService.myJid == accountJid;
 
@@ -2313,15 +2373,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       }
 
-      if (smtpEnabled) {
-        final sessionEmailAddress = emailCredentials?.email ?? accountJid;
-        emailService?.cacheSessionCredentials(
-          address: sessionEmailAddress,
-          password: emailPassword,
-        );
-      } else {
-        emailService?.clearSessionCredentials();
-      }
+      applyEmailSessionCredentials();
 
       if (xmppEnabled) {
         try {
@@ -3190,6 +3242,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return _looksLikeConnectivityError(error.wrapped!);
     }
     return false;
+  }
+
+  Future<bool> _deviceNetworkUnavailable() async {
+    const timeout = Duration(seconds: 2);
+    try {
+      final availability = await _resolveNetworkAvailability().timeout(timeout);
+      return availability.isUnavailable;
+    } on TimeoutException catch (error, stackTrace) {
+      _log.fine('Timed out checking network availability.', error, stackTrace);
+      return false;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.fine('Network availability plugin unavailable.', error, stackTrace);
+      return false;
+    } on PlatformException catch (error, stackTrace) {
+      _log.fine('Failed to check network availability.', error, stackTrace);
+      return false;
+    }
   }
 
   bool _looksLikeStorageLock(Object error) {

@@ -8,11 +8,16 @@ sealed class ConnectivityState {
     required this.emailState,
     required this.emailEnabled,
     required this.demoOffline,
+    this.networkAvailability = NetworkAvailability.unknown,
   });
 
   final EmailSyncState emailState;
   final bool emailEnabled;
   final bool demoOffline;
+  final NetworkAvailability networkAvailability;
+
+  bool get isNetworkUnavailable =>
+      networkAvailability.isUnavailable && !demoOffline;
 }
 
 final class ConnectivityConnected extends ConnectivityState {
@@ -20,6 +25,7 @@ final class ConnectivityConnected extends ConnectivityState {
     required super.emailState,
     required super.emailEnabled,
     required super.demoOffline,
+    super.networkAvailability,
   });
 }
 
@@ -28,6 +34,7 @@ final class ConnectivityConnecting extends ConnectivityState {
     required super.emailState,
     required super.emailEnabled,
     required super.demoOffline,
+    super.networkAvailability,
   });
 }
 
@@ -36,6 +43,7 @@ final class ConnectivityNotConnected extends ConnectivityState {
     required super.emailState,
     required super.emailEnabled,
     required super.demoOffline,
+    super.networkAvailability,
   });
 }
 
@@ -44,5 +52,6 @@ final class ConnectivityError extends ConnectivityState {
     required super.emailState,
     required super.emailEnabled,
     required super.demoOffline,
+    super.networkAvailability,
   });
 }

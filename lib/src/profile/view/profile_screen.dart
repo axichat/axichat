@@ -613,6 +613,7 @@ class _ProfileCardSection extends StatelessWidget {
                     emailEnabled: demoOffline
                         ? true
                         : connectivityState.emailEnabled,
+                    networkUnavailable: connectivityState.isNetworkUnavailable,
                     compact: !wideCard,
                   ),
                 ),

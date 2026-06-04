@@ -7,6 +7,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
@@ -19,6 +20,7 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
@@ -750,6 +752,47 @@ void main() {
         const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
         const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
       ],
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Stored login continues normally when network availability plugin is unavailable.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        resolveNetworkAvailability: () async =>
+            throw MissingPluginException('connectivity unavailable'),
+      ),
+      act: (bloc) => bloc.login(),
+      expect: () => [
+        const AuthenticationLogInInProgress(
+          phase: AuthenticationLoginPhase.preNetwork,
+          config: _xmppOnlyEndpointConfig,
+        ),
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
+      ],
+      verify: (_) {
+        verify(
+          () => mockXmppService.connect(
+            jid: validJid,
+            password: validPassword,
+            databasePrefix: 'prefix',
+            databasePassphrase: 'passphrase',
+            preHashed: true,
+            reuseExistingSession: false,
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).called(1);
+      },
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -1505,6 +1548,66 @@ void main() {
           ),
         ).called(1);
         expect(bloc.state, isA<AuthenticationComplete>());
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Stored login resumes offline immediately when device network is unavailable.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(
+          () => mockXmppService.resumeOfflineSession(
+            jid: any(named: 'jid'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            password: any(named: 'password'),
+            preHashed: any(named: 'preHashed'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenAnswer((_) async {});
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        resolveNetworkAvailability: () async => NetworkAvailability.unavailable,
+      ),
+      act: (bloc) => bloc.login(),
+      expect: () => const [
+        AuthenticationLogInInProgress(
+          phase: AuthenticationLoginPhase.preNetwork,
+        ),
+        AuthenticationLogInInProgress(),
+        AuthenticationComplete(),
+      ],
+      verify: (_) {
+        verifyNever(
+          () => mockXmppService.connect(
+            jid: any(named: 'jid'),
+            password: any(named: 'password'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        );
+        verify(
+          () => mockXmppService.resumeOfflineSession(
+            jid: validJid,
+            databasePrefix: 'prefix',
+            databasePassphrase: 'passphrase',
+            password: validPassword,
+            preHashed: true,
+            endpoint: null,
+          ),
+        ).called(1);
       },
     );
 

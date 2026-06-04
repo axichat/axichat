@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -17,6 +18,37 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  test(
+    'network unavailable maps connected transport to not connected',
+    () async {
+      final xmppStates = StreamController<ConnectionState>.broadcast();
+      final networkStates = StreamController<NetworkAvailability>.broadcast();
+      final xmppService = _MockXmppService();
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(ConnectionState.connected);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => xmppStates.stream);
+      when(() => xmppService.demoOfflineMode).thenReturn(false);
+      final connectivityCubit = ConnectivityCubit(
+        xmppBase: xmppService,
+        emailEnabled: true,
+        networkAvailabilityStream: networkStates.stream,
+        initialNetworkAvailability: NetworkAvailability.available,
+      );
+      addTearDown(connectivityCubit.close);
+      addTearDown(xmppStates.close);
+      addTearDown(networkStates.close);
+
+      networkStates.add(NetworkAvailability.unavailable);
+      await pumpEventQueue();
+
+      expect(connectivityCubit.state, isA<ConnectivityNotConnected>());
+      expect(connectivityCubit.state.isNetworkUnavailable, isTrue);
+    },
+  );
+
   testWidgets('syncing transport chips do not show progress indicators', (
     tester,
   ) async {
@@ -31,6 +63,32 @@ void main() {
     );
 
     expect(find.byType(AxiProgressIndicator), findsNothing);
+  });
+
+  testWidgets('network unavailable renders ready transports as offline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _ConnectionStatusTestApp(
+        child: ConnectionStatusIndicators(
+          xmppState: ConnectionState.connected,
+          emailState: EmailSyncState.ready(),
+          emailEnabled: true,
+          networkUnavailable: true,
+        ),
+      ),
+    );
+
+    final l10n = lookupAppLocalizations(const Locale('en'));
+
+    expect(
+      find.textContaining(l10n.sessionCapabilityStatusOffline),
+      findsWidgets,
+    );
+    expect(
+      find.textContaining(l10n.sessionCapabilityStatusConnected),
+      findsNothing,
+    );
   });
 
   testWidgets('connecting banner shows progress after status text', (
@@ -49,6 +107,8 @@ void main() {
     final connectivityCubit = ConnectivityCubit(
       xmppBase: xmppService,
       emailEnabled: true,
+      networkAvailabilityStream: const Stream<NetworkAvailability>.empty(),
+      initialNetworkAvailability: NetworkAvailability.available,
     );
     addTearDown(connectivityCubit.close);
     addTearDown(xmppStates.close);

@@ -57,6 +57,7 @@ class ProfileTile extends StatelessWidget {
                     connectionState: connectionState,
                     sessionEmailState: sessionEmailState,
                     emailEnabled: emailEnabled,
+                    networkUnavailable: connectivityState.isNetworkUnavailable,
                   ),
                 );
               },
@@ -148,6 +149,7 @@ class _ProfileTileLayout extends StatelessWidget {
     required this.connectionState,
     required this.sessionEmailState,
     required this.emailEnabled,
+    required this.networkUnavailable,
   });
 
   final String username;
@@ -158,6 +160,7 @@ class _ProfileTileLayout extends StatelessWidget {
   final ConnectionState connectionState;
   final EmailSyncState sessionEmailState;
   final bool emailEnabled;
+  final bool networkUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +212,7 @@ class _ProfileTileLayout extends StatelessWidget {
                 xmppState: connectionState,
                 emailState: sessionEmailState,
                 emailEnabled: emailEnabled,
+                networkUnavailable: networkUnavailable,
                 compact: true,
               ),
             ),

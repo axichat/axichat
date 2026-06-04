@@ -386,6 +386,7 @@ class _TransportStatusChips extends StatelessWidget {
             xmppState: connectionState,
             emailState: sessionEmailState,
             emailEnabled: emailEnabled,
+            networkUnavailable: connectivityState.isNetworkUnavailable,
             compact: true,
             collapseReadyStatus: true,
           ),
