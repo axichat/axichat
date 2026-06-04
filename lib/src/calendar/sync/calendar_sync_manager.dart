@@ -160,8 +160,10 @@ class CalendarSyncManager {
 
       if (snapshotChecksum != null && localModel.checksum == snapshotChecksum) {
         final CalendarSyncState state = _stateWithAdvancedCursor(
-          _readSyncState().resetCounter().copyWith(
-            lastSnapshotChecksum: snapshotChecksum,
+          _stateAfterSnapshotApplied(
+            _readSyncState(),
+            inbound: inbound,
+            snapshotChecksum: snapshotChecksum,
           ),
           inbound,
         );
@@ -175,8 +177,10 @@ class CalendarSyncManager {
       await _applyModel(mergedModel);
 
       final CalendarSyncState state = _stateWithAdvancedCursor(
-        _readSyncState().resetCounter().copyWith(
-          lastSnapshotChecksum: snapshotChecksum,
+        _stateAfterSnapshotApplied(
+          _readSyncState(),
+          inbound: inbound,
+          snapshotChecksum: snapshotChecksum,
         ),
         inbound,
       );
@@ -186,6 +190,26 @@ class CalendarSyncManager {
       SafeLogging.debugLog('Error handling snapshot message: $e');
     }
     return false;
+  }
+
+  CalendarSyncState _stateAfterSnapshotApplied(
+    CalendarSyncState state, {
+    required CalendarSyncInbound inbound,
+    required String? snapshotChecksum,
+  }) {
+    final resetState = state.resetCounter();
+    final trimmedChecksum = snapshotChecksum?.trim();
+    if (trimmedChecksum == null || trimmedChecksum.isEmpty) {
+      return resetState.copyWith(lastSnapshotChecksum: null);
+    }
+    if (!inbound.isFromMam) {
+      return resetState.copyWith(lastSnapshotChecksum: trimmedChecksum);
+    }
+    return resetState.markSnapshotVerified(
+      checksum: trimmedChecksum,
+      stanzaId: inbound.stanzaId,
+      verifiedAt: inbound.receivedAt,
+    );
   }
 
   Future<bool> _handleRequestMessage(
@@ -469,9 +493,11 @@ class CalendarSyncManager {
       return false;
     }
 
+    final inlineSnapshot = _buildInlineSnapshotOutbound(model);
     final sendSnapshot = _sendSnapshotFile;
-    if (sendSnapshot == null) {
-      return _sendInlineSnapshot(model);
+    if (sendSnapshot == null ||
+        _isInlineSnapshotWithinLimit(inlineSnapshot.outbound)) {
+      return _sendInlineSnapshotOutbound(inlineSnapshot);
     }
 
     bool sent = false;
@@ -511,8 +537,8 @@ class CalendarSyncManager {
           return false;
         }
 
-        final state = _readSyncState().resetCounter().copyWith(
-          lastSnapshotChecksum: result.checksum,
+        final state = _readSyncState().resetCounter().markSnapshotPublished(
+          result.checksum,
         );
         await _writeSyncState(state);
 
@@ -538,30 +564,49 @@ class CalendarSyncManager {
     return sent;
   }
 
+  ({CalendarSyncOutbound outbound, String checksum})
+  _buildInlineSnapshotOutbound(CalendarModel model) {
+    final checksum = CalendarSnapshotCodec.computeChecksum(model);
+    final syncMessage = CalendarSyncMessage(
+      type: CalendarSyncType.snapshot,
+      timestamp: _syncNowUtc(),
+      data: model.toJson(),
+      checksum: checksum,
+      isSnapshot: true,
+      snapshotChecksum: checksum,
+      snapshotVersion: CalendarSnapshotCodec.currentVersion,
+    );
+
+    final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
+    return (
+      outbound: CalendarSyncOutbound(envelope: messageJson),
+      checksum: checksum,
+    );
+  }
+
+  bool _isInlineSnapshotWithinLimit(CalendarSyncOutbound outbound) {
+    return utf8.encode(outbound.envelope).length <=
+            CalendarSyncMessage.maxEnvelopeLength &&
+        CalendarSyncMessage.tryParseEnvelope(outbound.envelope) != null;
+  }
+
   Future<bool> _sendInlineSnapshot(CalendarModel model) async {
+    return _sendInlineSnapshotOutbound(_buildInlineSnapshotOutbound(model));
+  }
+
+  Future<bool> _sendInlineSnapshotOutbound(
+    ({CalendarSyncOutbound outbound, String checksum}) snapshot,
+  ) async {
     try {
-      final checksum = CalendarSnapshotCodec.computeChecksum(model);
-      final syncMessage = CalendarSyncMessage(
-        type: CalendarSyncType.snapshot,
-        timestamp: _syncNowUtc(),
-        data: model.toJson(),
-        checksum: checksum,
-        isSnapshot: true,
-        snapshotChecksum: checksum,
-        snapshotVersion: CalendarSnapshotCodec.currentVersion,
-      );
+      await _sendEnvelope(snapshot.outbound);
 
-      final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
-
-      await _sendCalendarMessage(CalendarSyncOutbound(envelope: messageJson));
-
-      final state = _readSyncState().resetCounter().copyWith(
-        lastSnapshotChecksum: checksum,
+      final state = _readSyncState().resetCounter().markSnapshotPublished(
+        snapshot.checksum,
       );
       await _writeSyncState(state);
 
       SafeLogging.debugLog(
-        '$_inlineSnapshotSentLog (checksum: $checksum)',
+        '$_inlineSnapshotSentLog (checksum: ${snapshot.checksum})',
         name: 'CalendarSyncManager',
       );
       return true;

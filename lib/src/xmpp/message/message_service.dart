@@ -1068,6 +1068,7 @@ const String _calendarSnapshotChecksumMismatchMessage =
     'Snapshot checksum mismatch';
 const String _calendarSnapshotFallbackRequestFailedMessage =
     'Failed to request calendar snapshot fallback';
+const String _calendarSyncWarningStorageKeyName = 'calendar_sync_warning_v1';
 const Set<String> _safeHttpUploadLogHeaders = {
   HttpHeaders.contentLengthHeader,
   HttpHeaders.contentTypeHeader,
@@ -2623,6 +2624,19 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   Stream<CalendarSyncWarning> get calendarSyncWarningStream =>
       _calendarSyncWarningController.stream;
+
+  CalendarSyncWarning? takePendingCalendarSyncWarning() {
+    final storage = _calendarSyncWarningStorage();
+    if (storage == null) {
+      return null;
+    }
+    final raw = storage.read(_calendarSyncWarningStorageKey);
+    final warning = raw is String ? _calendarSyncWarningFromWire(raw) : null;
+    if (warning != null) {
+      unawaited(storage.delete(_calendarSyncWarningStorageKey));
+    }
+    return warning;
+  }
 
   void registerCalendarSyncFlushCallback(Future<void> Function() callback) {
     _calendarSyncFlushCallbacks.add(callback);
@@ -4672,6 +4686,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         limit: _inboundAttachmentAutoDownloadPerChatRateLimit,
         cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
       );
+  final WindowRateLimiter _liveRemoteCalendarSyncLimiter = WindowRateLimiter(
+    const WindowRateLimit(maxEvents: 120, window: Duration(seconds: 60)),
+  );
   bool _pendingPinSyncLoaded = false;
   final Map<String, _PinChatSyncSession> _pinChatSyncSessions = {};
   final Set<String> _activePinSyncChats = <String>{};
@@ -9868,6 +9885,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _inboundAttachmentDownloads.clear();
     _inboundAttachmentAutoDownloadGlobalLimiter.reset();
     _inboundAttachmentAutoDownloadChatLimiter.reset();
+    _liveRemoteCalendarSyncLimiter.reset();
     _attachmentDirectory = null;
     _attachmentCacheSessionPrefix = null;
     _attachmentCacheBytes = null;
@@ -11106,12 +11124,28 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final selfJid = bareAddress(myJid) ?? myJid;
     final chatJid = _calendarSyncChatJid(event, selfJid);
     final chatType = _calendarSyncChatType(event);
-    final bool isSelfSender = sameBareAddress(senderJid, selfJid);
+    final bool isSelfSender = _isSelfCalendarSyncSender(
+      event: event,
+      chatJid: chatJid,
+      chatType: chatType,
+      senderJid: senderJid,
+      selfJid: selfJid,
+    );
     final bool isSelfCalendar = sameBareAddress(chatJid, selfJid);
 
     var syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
     if (syncMessage == null) {
       _log.info('Dropped malformed calendar sync envelope');
+      if (!event.isFromMAM) {
+        return true;
+      }
+    }
+
+    if (_isLiveRemoteCalendarSyncRateLimited(
+      event,
+      isSelfSender: isSelfSender,
+    )) {
+      return true;
     }
 
     _enqueueCalendarSyncWork(
@@ -11126,6 +11160,32 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
 
     return true; // Handled - don't process as regular chat message
+  }
+
+  bool _isSelfCalendarSyncSender({
+    required mox.MessageEvent event,
+    required String chatJid,
+    required ChatType chatType,
+    required String senderJid,
+    required String? selfJid,
+  }) {
+    return sameBareAddress(senderJid, selfJid);
+  }
+
+  bool _isLiveRemoteCalendarSyncRateLimited(
+    mox.MessageEvent event, {
+    required bool isSelfSender,
+  }) {
+    if (event.isFromMAM || isSelfSender) {
+      return false;
+    }
+    if (_liveRemoteCalendarSyncLimiter.allowEvent()) {
+      return false;
+    }
+    _log.warning(
+      'Dropping live remote calendar sync message due to rate limits',
+    );
+    return true;
   }
 
   Future<void> _processQueuedCalendarSyncWork(_CalendarSyncWork work) async {
@@ -11969,33 +12029,65 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Future<void> _emitCalendarSnapshotWarning() async {
-    if (!_calendarSyncWarningController.hasListener) {
-      _log.info('No calendar sync warning listeners registered');
-      return;
-    }
     const warning = CalendarSyncWarning(
       type: CalendarSyncWarningType.snapshotUnavailable,
     );
-    try {
-      _calendarSyncWarningController.add(warning);
-    } catch (e) {
-      _log.warning('Calendar sync warning dispatch failed: $e');
-    }
+    await _emitCalendarSyncWarning(warning);
   }
 
   Future<void> _emitCalendarArchiveIncompleteWarning() async {
-    if (!_calendarSyncWarningController.hasListener) {
-      _log.info('No calendar sync warning listeners registered');
-      return;
-    }
     const warning = CalendarSyncWarning(
       type: CalendarSyncWarningType.archiveIncomplete,
     );
+    await _emitCalendarSyncWarning(warning);
+  }
+
+  Future<void> _emitCalendarSyncWarning(CalendarSyncWarning warning) async {
+    if (!_calendarSyncWarningController.hasListener) {
+      _log.info('No calendar sync warning listeners registered');
+      await _storePendingCalendarSyncWarning(warning);
+      return;
+    }
     try {
       _calendarSyncWarningController.add(warning);
     } catch (e) {
       _log.warning('Calendar sync warning dispatch failed: $e');
+      await _storePendingCalendarSyncWarning(warning);
     }
+  }
+
+  Future<void> _storePendingCalendarSyncWarning(
+    CalendarSyncWarning warning,
+  ) async {
+    final storage = _calendarSyncWarningStorage();
+    if (storage == null) {
+      return;
+    }
+    try {
+      await storage.write(_calendarSyncWarningStorageKey, warning.type.name);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to persist calendar sync warning.', error, stackTrace);
+    }
+  }
+
+  Storage? _calendarSyncWarningStorage() {
+    try {
+      return HydratedBloc.storage;
+    } on StorageNotFound {
+      return null;
+    }
+  }
+
+  String get _calendarSyncWarningStorageKey =>
+      '$authStoragePrefix$_calendarSyncWarningStorageKeyName';
+
+  CalendarSyncWarning? _calendarSyncWarningFromWire(String value) {
+    for (final type in CalendarSyncWarningType.values) {
+      if (type.name == value) {
+        return CalendarSyncWarning(type: type);
+      }
+    }
+    return null;
   }
 
   CalendarSyncManager _directPersonalCalendarSyncManager() {
@@ -12611,15 +12703,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         return CalendarMamOutcome.skippedUnsupported;
       }
       final state = _readPersonalCalendarSyncState();
+      final storedCalendarState = _readDirectPersonalCalendarStateOrNull();
       if (state.hasCompleteCoverage &&
           _mamGlobalSyncCompletedSinceConnect &&
-          _readDirectPersonalCalendarStateOrNull() != null) {
+          storedCalendarState != null &&
+          state.hasVerifiedRecoveryBoundary) {
         await _ensurePersonalCalendarSyncStateStored(state);
         _log.info('Calendar rehydration skipped; global MAM covered calendar');
         return CalendarMamOutcome.skippedCoveredByGlobal;
       }
       final recoveryTimestamp = state.recoveryTimestamp;
-      if (recoveryTimestamp != null) {
+      if (recoveryTimestamp != null &&
+          (!state.hasCompleteCoverage || state.hasVerifiedRecoveryBoundary)) {
         final completed = await _catchUpCalendarFromArchive(
           jid: selfJid,
           since: recoveryTimestamp,
@@ -12663,19 +12758,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (!session.snapshotSeen && session.snapshotUnavailableNotified) {
         await _requestCalendarSnapshotFallback(selfJid);
       }
-      await _writePersonalCalendarCoverageState(
-        complete: completed,
+      final complete = _isPersonalBackfillComplete(
+        completed: completed,
+        snapshotSeen: session.snapshotSeen,
+      );
+      await _writePersonalCalendarBackfillCoverageState(
+        complete: complete,
+        snapshotSeen: session.snapshotSeen,
         calendarJid: selfJid,
         archiveJid: selfJid,
       );
-      if (completed) {
+      if (complete) {
         await _ensureDirectPersonalCalendarStateStored();
       }
       _log.info('Calendar rehydration query complete');
-      if (!completed) {
+      if (!complete) {
         await _emitCalendarArchiveIncompleteWarning();
       }
-      return completed
+      return complete
           ? CalendarMamOutcome.completed
           : CalendarMamOutcome.incomplete;
     } on Exception catch (e) {
@@ -12795,6 +12895,44 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             archiveJid: bareAddress(archiveJid) ?? archiveJid,
           )
         : _readPersonalCalendarSyncState().markCoverageIncomplete();
+    await _writePersonalCalendarSyncState(state);
+  }
+
+  bool _isPersonalBackfillComplete({
+    required bool completed,
+    required bool snapshotSeen,
+  }) {
+    if (!completed) {
+      return false;
+    }
+    if (!snapshotSeen) {
+      return true;
+    }
+    return _readPersonalCalendarSyncState().snapshotCoverageStatus ==
+        CalendarSnapshotCoverageStatus.verified;
+  }
+
+  Future<void> _writePersonalCalendarBackfillCoverageState({
+    required bool complete,
+    required bool snapshotSeen,
+    required String calendarJid,
+    required String archiveJid,
+  }) async {
+    if (!complete) {
+      await _writePersonalCalendarCoverageState(
+        complete: false,
+        calendarJid: calendarJid,
+        archiveJid: archiveJid,
+      );
+      return;
+    }
+    var state = _readPersonalCalendarSyncState().markCoverageComplete(
+      calendarJid: bareAddress(calendarJid) ?? calendarJid,
+      archiveJid: bareAddress(archiveJid) ?? archiveJid,
+    );
+    if (!snapshotSeen) {
+      state = state.markArchiveCompleteWithoutSnapshot();
+    }
     await _writePersonalCalendarSyncState(state);
   }
 

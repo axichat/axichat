@@ -52,6 +52,8 @@ class MockPubSubManager extends Mock implements mox.PubSubManager {}
 
 class MockDiscoManager extends Mock implements mox.DiscoManager {}
 
+class MockMucManager extends Mock implements MUCManager {}
+
 class FakeJid extends Fake implements mox.JID {}
 
 class _FakePathProviderPlatform extends PathProviderPlatform {
@@ -4263,6 +4265,7 @@ void main() {
         );
         await const CalendarSyncState()
             .markCoverageComplete(calendarJid: selfBare, archiveJid: selfBare)
+            .markArchiveCompleteWithoutSnapshot()
             .write();
         final mamManager = ScriptedMamManager(
           eventStreamController: eventStreamController,
@@ -4388,6 +4391,7 @@ void main() {
         );
         await const CalendarSyncState()
             .markCoverageComplete(calendarJid: selfBare, archiveJid: selfBare)
+            .markArchiveCompleteWithoutSnapshot()
             .write();
         final mamManager = ScriptedMamManager(
           eventStreamController: eventStreamController,
@@ -4812,10 +4816,96 @@ void main() {
       expect(mamManager.calls.single.withJid, selfBare);
       expect(CalendarSyncState.read().hasCompleteCoverage, isTrue);
       expect(
+        CalendarSyncState.read().snapshotCoverageStatus,
+        CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot,
+      );
+      expect(
         jsonEncode(HydratedBloc.storage.read(authStoragePrefix)),
         contains('Personal unknown task'),
       );
     });
+
+    test(
+      'Personal calendar MAM backfills when complete cursor lacks verified snapshot',
+      () async {
+        await _openXmppStateStore('axichat_personal_unverified_cursor_mam');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        await HydratedBloc.storage.write(
+          authStoragePrefix,
+          CalendarStateStorageCodec.encode(CalendarState.initial()),
+        );
+        final cursor = DateTime.utc(2026, 5, 3, 18);
+        await CalendarSyncState(
+              lastHandledTimestamp: cursor,
+              lastHandledStanzaId: 'unverified-cursor-stanza',
+              lastArchiveResumeId: 'unverified-cursor-resume',
+            )
+            .markCoverageComplete(calendarJid: selfBare, archiveJid: selfBare)
+            .write();
+        final snapshotTimestamp = DateTime.utc(2026, 5, 3, 17);
+        final snapshotTask = _task(
+          id: 'unverified-cursor-recovered-task',
+          title: 'Recovered from unverified cursor',
+          timestamp: snapshotTimestamp,
+        );
+        final snapshotModel = CalendarModel.empty().addTask(snapshotTask);
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'unverified-cursor-snapshot',
+                  timestamp: snapshotTimestamp,
+                  message: _inlineSnapshot(
+                    model: snapshotModel,
+                    timestamp: snapshotTimestamp,
+                  ),
+                ),
+              ],
+              complete: true,
+              first: 'unverified-cursor-first',
+              last: 'unverified-cursor-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.completed,
+        );
+
+        expect(mamManager.queryCount, 1);
+        expect(mamManager.calls.single.start, isNull);
+        expect(mamManager.calls.single.after, isNull);
+        expect(mamManager.calls.single.before, '');
+        expect(
+          jsonEncode(HydratedBloc.storage.read(authStoragePrefix)),
+          contains('Recovered from unverified cursor'),
+        );
+        final syncState = CalendarSyncState.read();
+        expect(syncState.hasCompleteCoverage, isTrue);
+        expect(
+          syncState.snapshotCoverageStatus,
+          CalendarSnapshotCoverageStatus.verified,
+        );
+        expect(syncState.lastVerifiedSnapshotChecksum, snapshotModel.checksum);
+        expect(
+          syncState.lastVerifiedSnapshotStanzaId,
+          'unverified-cursor-snapshot',
+        );
+      },
+    );
 
     test('Direct chat calendar MAM runs when coverage is incomplete', () async {
       const peerJid = 'peer@axi.im';
@@ -6086,6 +6176,87 @@ void main() {
       },
     );
 
+    test('Group calendar MAM supports account default MUC hosts', () async {
+      await xmppService.close();
+      await _openXmppStateStore('axichat_group_calendar_mam_default_host');
+      database = XmppDrift(
+        file: File(''),
+        passphrase: '',
+        executor: NativeDatabase.memory(),
+      );
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(
+        xmppService,
+        accountJid: 'jid@conversations.im/resource',
+      );
+      const roomJid = 'room@conference.conversations.im';
+      const selfNick = 'me';
+      const senderNick = 'alice';
+      const senderOccupantId = '$roomJid/$senderNick';
+      const stanzaId = 'default-host-group-calendar-mam-envelope';
+      final timestamp = DateTime.utc(2026, 5, 2, 14);
+      final storage = _InMemoryStorage();
+      final mamManager = BlockingMamManager();
+      HydratedBloc.storage = storage;
+      await xmppService.setMamSupportOverride(true);
+      when(
+        () => mockConnection.getManager<mox.MAMManager>(),
+      ).thenReturn(mamManager);
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: '$roomJid/$selfNick',
+        nick: selfNick,
+        realJid: xmppService.myJid,
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+        fromPresence: true,
+      );
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: senderOccupantId,
+        nick: senderNick,
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+      );
+
+      final task = _task(
+        id: 'default-host-group-calendar-task',
+        title: 'Default host group calendar task',
+        timestamp: timestamp,
+      );
+      final syncFuture = xmppService.rehydrateChatCalendarFromMam(
+        chatJid: roomJid,
+        chatType: ChatType.groupChat,
+      );
+      await mamManager.queryStarted.future;
+      eventStreamController.add(
+        _groupCalendarMamEvent(
+          roomJid: roomJid,
+          senderOccupantId: senderOccupantId,
+          selfBare: xmppService.myJid!,
+          stanzaId: stanzaId,
+          timestamp: timestamp,
+          message: _taskUpdate(task: task, operation: 'add'),
+        ),
+      );
+      await pumpEventQueue(times: 20);
+      mamManager.finishQuery.complete();
+
+      expect(await syncFuture, CalendarMamOutcome.completed);
+      final model = ChatCalendarStorage(storage: storage).readModel(roomJid);
+      expect(model.tasks[task.id]?.title, 'Default host group calendar task');
+      final state = const ChatCalendarSyncStateStore().read(roomJid);
+      expect(state.hasCompleteCoverage, isTrue);
+      expect(state.lastHandledStanzaId, stanzaId);
+    });
+
     test('MAM calendar envelopes bypass the live inbound rate limit', () async {
       const envelopeCount = 121;
       final storage = _InMemoryStorage();
@@ -6142,6 +6313,101 @@ void main() {
       expect(
         state.lastHandledStanzaId,
         'mam-calendar-envelope-${envelopeCount - 1}',
+      );
+    });
+
+    test('Live self calendar envelopes bypass the remote rate limit', () async {
+      const envelopeCount = 121;
+      final storage = _InMemoryStorage();
+      await _openXmppStateStore('axichat_calendar_live_self_rate_limit');
+      HydratedBloc.storage = storage;
+
+      final selfBare = mox.JID.fromString(xmppService.myJid!).toBare();
+      final baseTimestamp = DateTime.utc(2026, 5, 2, 12);
+      for (var index = 0; index < envelopeCount; index += 1) {
+        final timestamp = baseTimestamp.add(Duration(seconds: index));
+        final task = _task(
+          id: 'live-self-calendar-task-$index',
+          title: 'Live self calendar task $index',
+          timestamp: timestamp,
+        );
+        final stanzaId = 'live-self-calendar-envelope-$index';
+        eventStreamController.add(
+          mox.MessageEvent(
+            selfBare,
+            selfBare,
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              mox.MessageBodyData(
+                _calendarEnvelope(_taskUpdate(task: task, operation: 'update')),
+              ),
+              mox.MessageIdData(stanzaId),
+            ]),
+            id: stanzaId,
+          ),
+        );
+      }
+
+      await pumpEventQueue(times: 300);
+
+      final state = CalendarSyncState.read();
+      expect(
+        state.lastHandledStanzaId,
+        'live-self-calendar-envelope-${envelopeCount - 1}',
+      );
+    });
+
+    test('Live remote calendar envelopes are rate limited', () async {
+      const envelopeCount = 121;
+      const peerJid = 'peer@axi.im';
+      final admitted = <ChatCalendarSyncEnvelope>[];
+      final subscription = xmppService.chatCalendarSyncDispatchStream.listen((
+        dispatch,
+      ) {
+        admitted.add(dispatch.envelope);
+        dispatch.complete(true);
+      });
+      addTearDown(subscription.cancel);
+
+      final peerBare = mox.JID.fromString(peerJid).toBare();
+      final selfBare = mox.JID.fromString(xmppService.myJid!).toBare();
+      final baseTimestamp = DateTime.utc(2026, 5, 2, 12);
+      for (var index = 0; index < envelopeCount; index += 1) {
+        final timestamp = baseTimestamp.add(Duration(seconds: index));
+        final task = _task(
+          id: 'live-remote-calendar-task-$index',
+          title: 'Live remote calendar task $index',
+          timestamp: timestamp,
+        );
+        eventStreamController.add(
+          mox.MessageEvent(
+            peerBare,
+            selfBare,
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              mox.MessageBodyData(
+                _calendarEnvelope(_taskUpdate(task: task, operation: 'update')),
+              ),
+              mox.MessageIdData('live-remote-calendar-envelope-$index'),
+            ]),
+            id: 'live-remote-calendar-envelope-$index',
+          ),
+        );
+      }
+
+      await pumpEventQueue(times: 300);
+
+      expect(admitted.length, 120);
+      expect(
+        admitted.last.inbound.stanzaId,
+        'live-remote-calendar-envelope-119',
+      );
+      expect(
+        admitted.any(
+          (envelope) =>
+              envelope.inbound.stanzaId == 'live-remote-calendar-envelope-120',
+        ),
+        isFalse,
       );
     });
 
@@ -6212,6 +6478,67 @@ void main() {
       );
 
       verifyNever(() => mockConnection.sendMessage(any()));
+    });
+
+    test('Calendar sync outbound allows account default MUC hosts', () async {
+      await xmppService.close();
+      database = XmppDrift(
+        file: File(''),
+        passphrase: '',
+        executor: NativeDatabase.memory(),
+      );
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(
+        xmppService,
+        accountJid: 'jid@conversations.im/resource',
+      );
+      const roomJid = 'room@conference.conversations.im';
+      final mucManager = MockMucManager();
+      final envelope = _calendarEnvelope(CalendarSyncMessage.request());
+      when(
+        () => mockConnection.getManager<MUCManager>(),
+      ).thenReturn(mucManager);
+      when(
+        () => mucManager.getRoomState(mox.JID.fromString(roomJid)),
+      ).thenAnswer(
+        (_) async => mox.RoomState(
+          roomJid: mox.JID.fromString(roomJid),
+          joined: true,
+          nick: 'me',
+        ),
+      );
+      when(() => mockConnection.generateId()).thenReturn('calendar-muc-host');
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: '$roomJid/me',
+        nick: 'me',
+        realJid: xmppService.myJid,
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+        fromPresence: true,
+      );
+
+      await xmppService.sendCalendarSyncMessage(
+        jid: roomJid,
+        outbound: CalendarSyncOutbound(envelope: envelope),
+        chatType: ChatType.groupChat,
+      );
+
+      final sent =
+          verify(() => mockConnection.sendMessage(captureAny())).captured.single
+              as mox.MessageEvent;
+      expect(sent.to.toString(), roomJid);
+      expect(sent.type, 'groupchat');
+      expect(sent.text, envelope);
     });
 
     test('Read-only task shares persist the task owner map.', () async {

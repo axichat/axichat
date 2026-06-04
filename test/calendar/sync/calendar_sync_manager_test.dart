@@ -39,6 +39,17 @@ Future<void> _useTemporaryPathProvider(String name) async {
   });
 }
 
+String _largeCalendarPayloadText() {
+  var value = 0x12345678;
+  final codeUnits = List<int>.generate(CalendarSyncMessage.maxEnvelopeLength, (
+    _,
+  ) {
+    value = (value * 1103515245 + 12345) & 0x7fffffff;
+    return 33 + value % 90;
+  });
+  return String.fromCharCodes(codeUnits);
+}
+
 void main() {
   CalendarSyncManager buildManager({
     required CalendarModel Function() readModel,
@@ -1491,6 +1502,11 @@ void main() {
         expect(snapshotPayload['data'], isA<Map<String, dynamic>>());
         expect(syncState.updatesSinceSnapshot, 0);
         expect(syncState.lastSnapshotChecksum, isNotNull);
+        expect(
+          syncState.snapshotCoverageStatus,
+          CalendarSnapshotCoverageStatus.unknown,
+        );
+        expect(syncState.lastVerifiedSnapshotChecksum, isNull);
       });
 
       test('MAM replay does not echo updates or trigger snapshots', () async {
@@ -1566,6 +1582,58 @@ void main() {
         expect(payload['data'], isA<Map<String, dynamic>>());
       });
 
+      test('MAM snapshot marks recovery boundary verified', () async {
+        final modifiedAt = DateTime.utc(2024, 6, 1, 15, 30);
+        final task = CalendarTask(
+          id: 'mam-verified-snapshot-task',
+          title: 'MAM verified snapshot task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        CalendarModel model = CalendarModel.empty();
+        CalendarSyncState syncState = const CalendarSyncState();
+        final manager = CalendarSyncManager(
+          readModel: () => model,
+          applyModel: (next) async {
+            model = next;
+          },
+          sendCalendarMessage: (_) async {},
+          readSyncState: () => syncState,
+          writeSyncState: (state) async {
+            syncState = state;
+          },
+        );
+        final snapshotModel = CalendarModel.empty().addTask(task);
+        final checksum = snapshotModel.calculateChecksum();
+
+        await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage(
+              type: CalendarSyncType.snapshot,
+              timestamp: modifiedAt,
+              data: snapshotModel.toJson(),
+              checksum: checksum,
+              isSnapshot: true,
+              snapshotChecksum: checksum,
+              snapshotVersion: CalendarSnapshotCodec.currentVersion,
+            ),
+            receivedAt: modifiedAt,
+            isFromMam: true,
+            stanzaId: 'mam-verified-snapshot',
+          ),
+        );
+
+        expect(model.tasks[task.id]?.title, task.title);
+        expect(
+          syncState.snapshotCoverageStatus,
+          CalendarSnapshotCoverageStatus.verified,
+        );
+        expect(syncState.lastSnapshotChecksum, checksum);
+        expect(syncState.lastVerifiedSnapshotChecksum, checksum);
+        expect(syncState.lastVerifiedSnapshotStanzaId, 'mam-verified-snapshot');
+        expect(syncState.lastVerifiedSnapshotAt, modifiedAt);
+      });
+
       test('pushFullSync skips empty calendars', () async {
         final sent = <CalendarSyncOutbound>[];
         final manager = CalendarSyncManager(
@@ -1581,14 +1649,53 @@ void main() {
         expect(sent, isEmpty);
       });
 
+      test('small snapshots stay inline when upload is available', () async {
+        final modifiedAt = DateTime.utc(2024, 6, 1, 15, 45);
+        final task = CalendarTask(
+          id: 'small-inline-snapshot-task',
+          title: 'Small inline snapshot task',
+          createdAt: modifiedAt,
+          modifiedAt: modifiedAt,
+        );
+        var uploadCalled = false;
+        final sent = <CalendarSyncOutbound>[];
+        final manager = CalendarSyncManager(
+          readModel: () => CalendarModel.empty().addTask(task),
+          applyModel: (_) async {},
+          sendCalendarMessage: (outbound) async {
+            sent.add(outbound);
+          },
+          sendSnapshotFile: (_) async {
+            uploadCalled = true;
+            return const CalendarSnapshotUploadResult(
+              url: 'https://files.example.com/unused.snapshot',
+              checksum: 'unused-checksum',
+              version: CalendarSnapshotCodec.currentVersion,
+            );
+          },
+        );
+
+        await manager.pushFullSync();
+
+        expect(uploadCalled, isFalse);
+        expect(sent, hasLength(1));
+        final payload = _decodeEnvelope(sent.single);
+        expect(payload['type'], CalendarSyncType.snapshot);
+        expect(payload['data'], isA<Map<String, dynamic>>());
+        expect(payload['snapshot_url'], isNull);
+        expect(sent.single.attachment, isNull);
+      });
+
       test(
         'attachment snapshot path sends snapshot metadata and attachment',
         () async {
           await _useTemporaryPathProvider('axichat_snapshot_attachment');
           final modifiedAt = DateTime.utc(2024, 6, 1, 16);
+          final oversizedDescription = _largeCalendarPayloadText();
           final task = CalendarTask(
             id: 'attachment-snapshot-task',
             title: 'Attachment snapshot task',
+            description: oversizedDescription,
             createdAt: modifiedAt,
             modifiedAt: modifiedAt,
           );
@@ -1623,6 +1730,10 @@ void main() {
             isTrue,
           );
           expect(uploadedSnapshot!.model.tasks[task.id]?.title, task.title);
+          expect(
+            uploadedSnapshot!.model.tasks[task.id]?.description,
+            oversizedDescription,
+          );
           final outbound = sent.single;
           final payload = _decodeEnvelope(outbound);
           expect(payload['type'], CalendarSyncType.snapshot);
@@ -1690,9 +1801,11 @@ void main() {
       test('inline snapshot fallback sends data when upload fails', () async {
         await _useTemporaryPathProvider('axichat_snapshot_upload_failure');
         final modifiedAt = DateTime.utc(2024, 6, 1, 18);
+        final oversizedDescription = _largeCalendarPayloadText();
         final task = CalendarTask(
           id: 'upload-fallback-task',
           title: 'Upload fallback task',
+          description: oversizedDescription,
           createdAt: modifiedAt,
           modifiedAt: modifiedAt,
         );
@@ -1720,9 +1833,11 @@ void main() {
       test('queued attachment snapshot preserves metadata on flush', () async {
         await _useTemporaryPathProvider('axichat_snapshot_queue');
         final modifiedAt = DateTime.utc(2024, 6, 1, 19);
+        final oversizedDescription = _largeCalendarPayloadText();
         final task = CalendarTask(
           id: 'queued-attachment-task',
           title: 'Queued attachment task',
+          description: oversizedDescription,
           createdAt: modifiedAt,
           modifiedAt: modifiedAt,
         );

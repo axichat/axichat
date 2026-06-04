@@ -27,13 +27,34 @@ enum CalendarArchiveCoverageStatus {
   }
 }
 
+enum CalendarSnapshotCoverageStatus {
+  unknown,
+  verified,
+  archiveCompleteWithoutSnapshot;
+
+  bool get isRecoveryBoundary =>
+      this == CalendarSnapshotCoverageStatus.verified ||
+      this == CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot;
+
+  String get wireValue => name;
+
+  static CalendarSnapshotCoverageStatus parse(String? value) {
+    for (final status in CalendarSnapshotCoverageStatus.values) {
+      if (status.wireValue == value) {
+        return status;
+      }
+    }
+    return CalendarSnapshotCoverageStatus.unknown;
+  }
+}
+
 /// Local-only state for calendar sync, stored in [XmppStateStore].
 ///
 /// Tracks counters and markers to avoid redundant MAM paging and
 /// prevent blind overwrites during calendar rehydration.
 class CalendarSyncState {
   const CalendarSyncState({
-    this.schemaVersion = 3,
+    this.schemaVersion = 4,
     this.updatesSinceSnapshot = 0,
     this.lastAppliedTimestamp,
     this.lastAppliedStanzaId,
@@ -45,6 +66,10 @@ class CalendarSyncState {
     this.archiveJid,
     this.coverageStatus = CalendarArchiveCoverageStatus.unknown,
     this.lastSnapshotChecksum,
+    this.snapshotCoverageStatus = CalendarSnapshotCoverageStatus.unknown,
+    this.lastVerifiedSnapshotChecksum,
+    this.lastVerifiedSnapshotStanzaId,
+    this.lastVerifiedSnapshotAt,
   });
 
   /// Legacy registered key for calendar sync state persisted outside the
@@ -86,7 +111,18 @@ class CalendarSyncState {
   /// Checksum of the most recently applied snapshot.
   final String? lastSnapshotChecksum;
 
+  final CalendarSnapshotCoverageStatus snapshotCoverageStatus;
+
+  final String? lastVerifiedSnapshotChecksum;
+
+  final String? lastVerifiedSnapshotStanzaId;
+
+  final DateTime? lastVerifiedSnapshotAt;
+
   bool get hasCompleteCoverage => coverageStatus.isComplete;
+
+  bool get hasVerifiedRecoveryBoundary =>
+      snapshotCoverageStatus.isRecoveryBoundary;
 
   DateTime? get recoveryTimestamp =>
       lastHandledTimestamp ?? lastAppliedTimestamp;
@@ -105,6 +141,10 @@ class CalendarSyncState {
     Object? archiveJid = _calendarSyncStateUnset,
     CalendarArchiveCoverageStatus? coverageStatus,
     Object? lastSnapshotChecksum = _calendarSyncStateUnset,
+    CalendarSnapshotCoverageStatus? snapshotCoverageStatus,
+    Object? lastVerifiedSnapshotChecksum = _calendarSyncStateUnset,
+    Object? lastVerifiedSnapshotStanzaId = _calendarSyncStateUnset,
+    Object? lastVerifiedSnapshotAt = _calendarSyncStateUnset,
   }) {
     final DateTime? resolvedLastAppliedTimestamp =
         lastAppliedTimestamp == _calendarSyncStateUnset
@@ -118,6 +158,10 @@ class CalendarSyncState {
         lastCoverageCompletedAt == _calendarSyncStateUnset
         ? this.lastCoverageCompletedAt
         : lastCoverageCompletedAt as DateTime?;
+    final DateTime? resolvedLastVerifiedSnapshotAt =
+        lastVerifiedSnapshotAt == _calendarSyncStateUnset
+        ? this.lastVerifiedSnapshotAt
+        : lastVerifiedSnapshotAt as DateTime?;
     return CalendarSyncState(
       schemaVersion: schemaVersion ?? this.schemaVersion,
       updatesSinceSnapshot: updatesSinceSnapshot ?? this.updatesSinceSnapshot,
@@ -143,6 +187,17 @@ class CalendarSyncState {
       lastSnapshotChecksum: lastSnapshotChecksum == _calendarSyncStateUnset
           ? this.lastSnapshotChecksum
           : lastSnapshotChecksum as String?,
+      snapshotCoverageStatus:
+          snapshotCoverageStatus ?? this.snapshotCoverageStatus,
+      lastVerifiedSnapshotChecksum:
+          lastVerifiedSnapshotChecksum == _calendarSyncStateUnset
+          ? this.lastVerifiedSnapshotChecksum
+          : lastVerifiedSnapshotChecksum as String?,
+      lastVerifiedSnapshotStanzaId:
+          lastVerifiedSnapshotStanzaId == _calendarSyncStateUnset
+          ? this.lastVerifiedSnapshotStanzaId
+          : lastVerifiedSnapshotStanzaId as String?,
+      lastVerifiedSnapshotAt: resolvedLastVerifiedSnapshotAt?.toUtc(),
     );
   }
 
@@ -220,6 +275,49 @@ class CalendarSyncState {
     );
   }
 
+  CalendarSyncState markSnapshotPublished(String? checksum) {
+    final trimmed = checksum?.trim();
+    return copyWith(
+      lastSnapshotChecksum: trimmed == null || trimmed.isEmpty ? null : trimmed,
+      snapshotCoverageStatus: CalendarSnapshotCoverageStatus.unknown,
+      lastVerifiedSnapshotChecksum: null,
+      lastVerifiedSnapshotStanzaId: null,
+      lastVerifiedSnapshotAt: null,
+    );
+  }
+
+  CalendarSyncState markSnapshotVerified({
+    required String checksum,
+    String? stanzaId,
+    DateTime? verifiedAt,
+  }) {
+    final trimmedChecksum = checksum.trim();
+    if (trimmedChecksum.isEmpty) {
+      return this;
+    }
+    final trimmedStanzaId = stanzaId?.trim();
+    return copyWith(
+      lastSnapshotChecksum: trimmedChecksum,
+      snapshotCoverageStatus: CalendarSnapshotCoverageStatus.verified,
+      lastVerifiedSnapshotChecksum: trimmedChecksum,
+      lastVerifiedSnapshotStanzaId:
+          trimmedStanzaId == null || trimmedStanzaId.isEmpty
+          ? null
+          : trimmedStanzaId,
+      lastVerifiedSnapshotAt: (verifiedAt ?? DateTime.now()).toUtc(),
+    );
+  }
+
+  CalendarSyncState markArchiveCompleteWithoutSnapshot() {
+    return copyWith(
+      snapshotCoverageStatus:
+          CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot,
+      lastVerifiedSnapshotChecksum: null,
+      lastVerifiedSnapshotStanzaId: null,
+      lastVerifiedSnapshotAt: null,
+    );
+  }
+
   CalendarSyncState markArchivePageHandled({
     required String resumeId,
     String? calendarJid,
@@ -230,7 +328,7 @@ class CalendarSyncState {
       return this;
     }
     return copyWith(
-      schemaVersion: 3,
+      schemaVersion: 4,
       lastArchiveResumeId: trimmed,
       calendarJid: calendarJid,
       archiveJid: archiveJid,
@@ -253,6 +351,10 @@ class CalendarSyncState {
       archiveJid: archiveJid,
       coverageStatus: coverageStatus,
       lastSnapshotChecksum: lastSnapshotChecksum,
+      snapshotCoverageStatus: snapshotCoverageStatus,
+      lastVerifiedSnapshotChecksum: lastVerifiedSnapshotChecksum,
+      lastVerifiedSnapshotStanzaId: lastVerifiedSnapshotStanzaId,
+      lastVerifiedSnapshotAt: lastVerifiedSnapshotAt,
     );
   }
 
@@ -273,6 +375,12 @@ class CalendarSyncState {
       'archiveJid': archiveJid,
       'coverageStatus': coverageStatus.wireValue,
       'lastSnapshotChecksum': lastSnapshotChecksum,
+      'snapshotCoverageStatus': snapshotCoverageStatus.wireValue,
+      'lastVerifiedSnapshotChecksum': lastVerifiedSnapshotChecksum,
+      'lastVerifiedSnapshotStanzaId': lastVerifiedSnapshotStanzaId,
+      'lastVerifiedSnapshotAt': lastVerifiedSnapshotAt
+          ?.toUtc()
+          .toIso8601String(),
     });
   }
 
@@ -290,8 +398,12 @@ class CalendarSyncState {
         map['lastCoverageCompletedAt'] != null
         ? DateTime.parse(map['lastCoverageCompletedAt'] as String).toUtc()
         : null;
+    final DateTime? lastVerifiedSnapshotAt =
+        map['lastVerifiedSnapshotAt'] != null
+        ? DateTime.parse(map['lastVerifiedSnapshotAt'] as String).toUtc()
+        : null;
     return CalendarSyncState(
-      schemaVersion: 3,
+      schemaVersion: 4,
       updatesSinceSnapshot: map['updatesSinceSnapshot'] as int? ?? 0,
       lastAppliedTimestamp: lastAppliedTimestamp,
       lastAppliedStanzaId: map['lastAppliedStanzaId'] as String?,
@@ -307,6 +419,16 @@ class CalendarSyncState {
               map['coverageStatus'] as String?,
             ),
       lastSnapshotChecksum: map['lastSnapshotChecksum'] as String?,
+      snapshotCoverageStatus: schemaVersion < 4
+          ? CalendarSnapshotCoverageStatus.unknown
+          : CalendarSnapshotCoverageStatus.parse(
+              map['snapshotCoverageStatus'] as String?,
+            ),
+      lastVerifiedSnapshotChecksum:
+          map['lastVerifiedSnapshotChecksum'] as String?,
+      lastVerifiedSnapshotStanzaId:
+          map['lastVerifiedSnapshotStanzaId'] as String?,
+      lastVerifiedSnapshotAt: lastVerifiedSnapshotAt,
     );
   }
 
@@ -363,7 +485,11 @@ class CalendarSyncState {
         'calendarJid: $calendarJid, '
         'archiveJid: $archiveJid, '
         'coverageStatus: $coverageStatus, '
-        'lastSnapshotChecksum: $lastSnapshotChecksum)';
+        'lastSnapshotChecksum: $lastSnapshotChecksum, '
+        'snapshotCoverageStatus: $snapshotCoverageStatus, '
+        'lastVerifiedSnapshotChecksum: $lastVerifiedSnapshotChecksum, '
+        'lastVerifiedSnapshotStanzaId: $lastVerifiedSnapshotStanzaId, '
+        'lastVerifiedSnapshotAt: $lastVerifiedSnapshotAt)';
   }
 
   @override
@@ -381,7 +507,11 @@ class CalendarSyncState {
         other.calendarJid == calendarJid &&
         other.archiveJid == archiveJid &&
         other.coverageStatus == coverageStatus &&
-        other.lastSnapshotChecksum == lastSnapshotChecksum;
+        other.lastSnapshotChecksum == lastSnapshotChecksum &&
+        other.snapshotCoverageStatus == snapshotCoverageStatus &&
+        other.lastVerifiedSnapshotChecksum == lastVerifiedSnapshotChecksum &&
+        other.lastVerifiedSnapshotStanzaId == lastVerifiedSnapshotStanzaId &&
+        other.lastVerifiedSnapshotAt == lastVerifiedSnapshotAt;
   }
 
   @override
@@ -398,6 +528,10 @@ class CalendarSyncState {
     archiveJid,
     coverageStatus,
     lastSnapshotChecksum,
+    snapshotCoverageStatus,
+    lastVerifiedSnapshotChecksum,
+    lastVerifiedSnapshotStanzaId,
+    lastVerifiedSnapshotAt,
   );
 }
 

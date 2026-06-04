@@ -239,6 +239,10 @@ class CalendarBloc extends BaseCalendarBloc {
         .listen((warning) {
           add(CalendarEvent.syncWarningRaised(warning: warning));
         });
+    final pendingWarning = _xmppService.takePendingCalendarSyncWarning();
+    if (pendingWarning != null) {
+      add(CalendarEvent.syncWarningRaised(warning: pendingWarning));
+    }
   }
 
   void _ensureChatCalendarSyncSubscription() {

@@ -1434,6 +1434,29 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     return _mucOccupantForSender(event, roomState: roomState);
   }
 
+  @override
+  bool _isSelfCalendarSyncSender({
+    required mox.MessageEvent event,
+    required String chatJid,
+    required ChatType chatType,
+    required String senderJid,
+    required String? selfJid,
+  }) {
+    if (super._isSelfCalendarSyncSender(
+      event: event,
+      chatJid: chatJid,
+      chatType: chatType,
+      senderJid: senderJid,
+      selfJid: selfJid,
+    )) {
+      return true;
+    }
+    if (chatType != ChatType.groupChat) {
+      return false;
+    }
+    return roomStateFor(chatJid)?.isSelfOccupantId(senderJid) ?? false;
+  }
+
   Occupant? _mucOccupantForSender(
     mox.MessageEvent event, {
     required RoomState roomState,
