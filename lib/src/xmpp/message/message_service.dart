@@ -7136,7 +7136,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (chatType == ChatType.note) {
       return false;
     }
-    return isCalendarSyncTargetAllowed(accountJid: myJid, targetJid: jid);
+    return isCalendarSyncChatTargetAllowed(
+      accountJid: myJid,
+      targetJid: jid,
+      isGroupChat: chatType == ChatType.groupChat,
+    );
   }
 
   Future<void> sendCalendarSyncMessage({

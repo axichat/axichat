@@ -44,9 +44,10 @@ extension ChatCalendarSupportX on Chat {
     if (!supportsChatCalendar) {
       return false;
     }
-    return isCalendarSyncTargetAllowed(
+    return isCalendarSyncChatTargetAllowed(
       accountJid: accountJid,
       targetJid: remoteJid,
+      isGroupChat: type == ChatType.groupChat,
     );
   }
 }

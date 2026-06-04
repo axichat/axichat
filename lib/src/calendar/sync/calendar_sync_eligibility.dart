@@ -27,6 +27,31 @@ bool isCalendarSyncTargetAllowed({
   return targetDomain == accountDomain;
 }
 
+bool isCalendarSyncChatTargetAllowed({
+  required String? accountJid,
+  required String? targetJid,
+  required bool isGroupChat,
+}) {
+  if (!isGroupChat) {
+    return isCalendarSyncTargetAllowed(
+      accountJid: accountJid,
+      targetJid: targetJid,
+    );
+  }
+  final targetDomain = _calendarSyncDomain(targetJid);
+  if (targetDomain == null) {
+    return false;
+  }
+  if (targetDomain == 'conference.${EndpointConfig.axiImDomain}') {
+    return true;
+  }
+  final accountDomain = _calendarSyncDomain(accountJid);
+  if (accountDomain == null) {
+    return false;
+  }
+  return targetDomain == 'conference.$accountDomain';
+}
+
 String? _calendarSyncDomain(String? jid) {
   final bare = bareAddress(jid);
   final domain = addressDomainPart(bare)?.trim().toLowerCase();

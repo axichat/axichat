@@ -49,7 +49,10 @@ void main() {
   group('CalendarChatSupport', () {
     test('allows direct XMPP chats', () {
       const policy = CalendarChatSupport();
-      final decision = policy.decisionForChat(chat: createChat());
+      final decision = policy.decisionForChat(
+        chat: createChat(),
+        accountJid: _axiJid,
+      );
 
       expect(decision.canWrite, isTrue);
     });
@@ -62,6 +65,7 @@ void main() {
           transport: MessageTransport.email,
           emailAddress: _emailJid,
         ),
+        accountJid: _axiJid,
       );
 
       expect(decision.canWrite, isFalse);
@@ -72,9 +76,35 @@ void main() {
       final decision = policy.decisionForChat(
         chat: createChat(type: ChatType.groupChat, jid: _roomJid),
         roomState: createRoomState(affiliation: OccupantAffiliation.member),
+        accountJid: _axiJid,
       );
 
       expect(decision.canWrite, isTrue);
+    });
+
+    test('allows group rooms on account default MUC host', () {
+      const policy = CalendarChatSupport();
+      final decision = policy.decisionForChat(
+        chat: createChat(
+          type: ChatType.groupChat,
+          jid: 'room@conference.example.com',
+        ),
+        roomState: createRoomState(affiliation: OccupantAffiliation.member),
+        accountJid: 'me@example.com',
+      );
+
+      expect(decision.canWrite, isTrue);
+    });
+
+    test('blocks group rooms on unsupported axi.im subdomains', () {
+      const policy = CalendarChatSupport();
+      final decision = policy.decisionForChat(
+        chat: createChat(type: ChatType.groupChat, jid: 'room@upload.axi.im'),
+        roomState: createRoomState(affiliation: OccupantAffiliation.member),
+        accountJid: 'me@example.com',
+      );
+
+      expect(decision.canWrite, isFalse);
     });
 
     test('blocks group visitors', () {
@@ -85,9 +115,40 @@ void main() {
           affiliation: OccupantAffiliation.none,
           role: OccupantRole.visitor,
         ),
+        accountJid: _axiJid,
       );
 
       expect(decision.canWrite, isFalse);
+    });
+
+    test('blocks unrelated domains', () {
+      const policy = CalendarChatSupport();
+      final decision = policy.decisionForChat(
+        chat: createChat(jid: 'friend@example.net'),
+        accountJid: 'me@example.com',
+      );
+
+      expect(decision.canWrite, isFalse);
+    });
+
+    test('allows same-domain chats', () {
+      const policy = CalendarChatSupport();
+      final decision = policy.decisionForChat(
+        chat: createChat(jid: 'friend@example.com'),
+        accountJid: 'me@example.com',
+      );
+
+      expect(decision.canWrite, isTrue);
+    });
+
+    test('allows axi.im chats from another account domain', () {
+      const policy = CalendarChatSupport();
+      final decision = policy.decisionForChat(
+        chat: createChat(jid: 'friend@axi.im'),
+        accountJid: 'me@example.com',
+      );
+
+      expect(decision.canWrite, isTrue);
     });
   });
 }
