@@ -7,8 +7,9 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
 import 'package:axichat/src/authentication/view/login_form.dart';
-import 'package:axichat/src/authentication/view/signup_form.dart';
 import 'package:axichat/src/authentication/view/operation_progress_bar.dart';
+import 'package:axichat/src/authentication/view/recovery_dialog.dart';
+import 'package:axichat/src/authentication/view/signup_form.dart';
 import 'package:axichat/src/avatar/avatar_decode_safety.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
@@ -119,6 +120,10 @@ class _LoginScreenState extends State<LoginScreen>
       _selectedFlow = flow;
     });
     _completionHandled = false;
+  }
+
+  Future<void> _showRecoveryDialog() async {
+    await showAccountRecoveryDialog(context);
   }
 
   Future<void> _handleAuthState(AuthenticationState state) async {
@@ -494,7 +499,34 @@ class _LoginScreenState extends State<LoginScreen>
                                                   ),
                                                 ),
                                               ),
-                                              SizedBox(height: spacing.s),
+                                              SizedBox(height: spacing.m),
+                                              BlocSelector<
+                                                AuthenticationCubit,
+                                                AuthenticationState,
+                                                bool
+                                              >(
+                                                selector: (state) =>
+                                                    state.config.isAxiImDomain,
+                                                builder: (context, isAxiImDomain) {
+                                                  if (showProgressBar ||
+                                                      _selectedFlow !=
+                                                          _AuthFlow.login ||
+                                                      !isAxiImDomain) {
+                                                    return const SizedBox.shrink();
+                                                  }
+                                                  return Center(
+                                                    child: AxiButton.ghost(
+                                                      onPressed: formsDisabled
+                                                          ? null
+                                                          : () async =>
+                                                                await _showRecoveryDialog(),
+                                                      child: Text(
+                                                        l10n.authForgotUsernameOrPassword,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
                                             ],
                                           ),
                                         ),

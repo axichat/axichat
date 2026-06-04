@@ -1019,7 +1019,7 @@
   "settingsShareTokenFooter": "Include share token footer",
   "settingsShareTokenFooterDescription": "Adds Axichat share tokens for multi-recipient email fan-out to preserve linking and threading.",
   "authCustomServerTitle": "Custom server",
-  "authCustomServerDescription": "Choose the account domain. Leave it blank to use axi.im. For a custom server, enter its domain; setup steps are at https://github.com/axichat/selfhost.",
+  "authCustomServerDescription": "Choose the account domain. Leave it blank to keep the current domain. Use Reset to return to axi.im. For a custom server, enter its domain; setup steps are at https://github.com/axichat/selfhost.",
   "authCustomServerSignupDescription": "Enter the domain for the custom server you want to sign up on. Custom servers must be set up with https://github.com/axichat/selfhost before this app can create accounts on them.",
   "authCustomServerDomainOrIp": "Domain",
   "authCustomServerXmppLabel": "XMPP",

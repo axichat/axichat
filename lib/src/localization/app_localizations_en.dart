@@ -2435,7 +2435,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authCustomServerDescription =>
-      'Choose the account domain. Leave it blank to use axi.im. For a custom server, enter its domain; setup steps are at https://github.com/axichat/selfhost.';
+      'Choose the account domain. Leave it blank to keep the current domain. Use Reset to return to axi.im. For a custom server, enter its domain; setup steps are at https://github.com/axichat/selfhost.';
 
   @override
   String get authCustomServerSignupDescription =>
