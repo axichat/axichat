@@ -620,6 +620,7 @@ class CalendarBloc extends BaseCalendarBloc {
         );
         return;
       }
+      final shareText = _calendarTaskShareText(event.task, event.shareText);
       final emailTargets = recipients
           .where((target) => !target.hasBackingChat || target.hasEmailThread)
           .toList(growable: false);
@@ -641,30 +642,35 @@ class CalendarBloc extends BaseCalendarBloc {
         );
         return;
       }
-      if (xmppChats.isNotEmpty) {
-        for (final chat in xmppChats) {
-          final decision = _xmppService.calendarFragmentDecisionForChat(chat);
-          if (!decision.canWrite) {
-            completer.complete(
-              const CalendarShareResult.failure(
-                CalendarShareFailure.permissionDenied,
-              ),
-            );
-            return;
-          }
-        }
-      }
       if (demoOfflineTaskShare) {
         await _sendDemoTaskShare(
           recipients: recipients,
           task: event.task,
-          shareText: event.shareText,
+          shareText: shareText,
         );
         completer.complete(const CalendarShareResult.success());
         return;
       }
-      if (emailTargets.isNotEmpty) {
-        final attachment = await _buildCalendarTaskAttachment(event.task);
+      final envelopeChats = <Chat>[];
+      final attachmentChats = <Chat>[];
+      for (final chat in xmppChats) {
+        if (!_xmppService.canUseCalendarSyncWithJid(
+          jid: chat.remoteJid,
+          chatType: chat.type,
+        )) {
+          attachmentChats.add(chat);
+          continue;
+        }
+        final decision = _xmppService.calendarFragmentDecisionForChat(chat);
+        if (decision.canWrite) {
+          envelopeChats.add(chat);
+        } else {
+          attachmentChats.add(chat);
+        }
+      }
+      Attachment? attachment;
+      if (emailTargets.isNotEmpty || attachmentChats.isNotEmpty) {
+        attachment = await _buildCalendarTaskAttachment(event.task);
         if (attachment == null) {
           completer.complete(
             const CalendarShareResult.failure(
@@ -673,22 +679,31 @@ class CalendarBloc extends BaseCalendarBloc {
           );
           return;
         }
-        final resolvedAttachment = attachment.copyWith(
-          caption: event.shareText,
-        );
+        attachment = attachment.copyWith(caption: shareText);
+      }
+      if (emailTargets.isNotEmpty) {
         await emailService!.fanOutSend(
           targets: emailTargets,
-          attachment: resolvedAttachment,
+          attachment: attachment!,
         );
       }
       if (xmppChats.isNotEmpty) {
-        for (final chat in xmppChats) {
+        for (final chat in envelopeChats) {
           await _xmppService.sendMessage(
             jid: chat.jid,
-            text: event.shareText,
+            text: shareText,
             encryptionProtocol: chat.encryptionProtocol,
             calendarTaskIcs: event.task,
             calendarTaskIcsReadOnly: true,
+            chatType: chat.type,
+          );
+          _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: chat.jid);
+        }
+        for (final chat in attachmentChats) {
+          await _xmppService.sendAttachment(
+            jid: chat.jid,
+            attachment: attachment!,
+            encryptionProtocol: chat.encryptionProtocol,
             chatType: chat.type,
           );
           _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: chat.jid);
@@ -853,6 +868,18 @@ class CalendarBloc extends BaseCalendarBloc {
     } catch (_) {
       return null;
     }
+  }
+
+  String _calendarTaskShareText(CalendarTask task, String shareText) {
+    final trimmedShareText = shareText.trim();
+    if (trimmedShareText.isNotEmpty) {
+      return trimmedShareText;
+    }
+    final title = task.title.trim();
+    if (title.isNotEmpty) {
+      return title;
+    }
+    return shareText;
   }
 
   String? _resolveAvailabilityOwnerJid({

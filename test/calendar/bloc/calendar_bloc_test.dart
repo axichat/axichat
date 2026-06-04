@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
@@ -12,13 +14,19 @@ import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
+import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/models/fan_out_send_report.dart';
+import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
+import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 class _InMemoryStorage implements Storage {
   final Map<String, dynamic> _store = {};
@@ -42,6 +50,19 @@ class _InMemoryStorage implements Storage {
 class _MockCalendarSyncManager extends Mock implements CalendarSyncManager {}
 
 class _MockXmppService extends Mock implements XmppService {}
+
+class _MockEmailService extends Mock implements EmailService {}
+
+class _FakeXmppAttachmentUpload extends Fake implements XmppAttachmentUpload {}
+
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.temporaryPath);
+
+  final String temporaryPath;
+
+  @override
+  Future<String?> getTemporaryPath() async => temporaryPath;
+}
 
 Map<String, dynamic> _decodeCalendarEnvelope(CalendarSyncOutbound outbound) {
   final decoded = jsonDecode(outbound.envelope) as Map<String, dynamic>;
@@ -76,6 +97,15 @@ void main() {
       );
       registerFallbackValue(const CalendarSyncOutbound(envelope: '{}'));
       registerFallbackValue(ChatType.chat);
+      registerFallbackValue(EncryptionProtocol.none);
+      registerFallbackValue(false);
+      registerFallbackValue(
+        const Attachment(
+          path: '/tmp/fallback.ics',
+          fileName: 'fallback.ics',
+          sizeBytes: 0,
+        ),
+      );
     });
 
     setUp(() {
@@ -115,6 +145,256 @@ void main() {
       expect(bloc.state.viewMode, CalendarView.week);
       expect(bloc.state.model.tasks, isEmpty);
     });
+
+    test('task share sends ICS attachment to unsupported XMPP chats', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'calendar-task-share',
+      );
+      final previousPathProvider = PathProviderPlatform.instance;
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => PathProviderPlatform.instance = previousPathProvider);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
+      final task = CalendarTask.create(title: 'Share as ICS');
+      final chat = Chat.fromJid('peer@conversations.im');
+      final completer = Completer<CalendarShareResult>();
+
+      when(() => xmppService.demoOfflineMode).thenReturn(false);
+      when(
+        () => xmppService.canUseCalendarSyncWithJid(
+          jid: chat.remoteJid,
+          chatType: ChatType.chat,
+        ),
+      ).thenReturn(false);
+      when(
+        () => xmppService.sendAttachment(
+          jid: chat.jid,
+          attachment: any(named: 'attachment'),
+          encryptionProtocol: chat.encryptionProtocol,
+          chatType: ChatType.chat,
+        ),
+      ).thenAnswer((_) async => _FakeXmppAttachmentUpload());
+
+      bloc.add(
+        CalendarEvent.taskShareRequested(
+          task: task,
+          recipients: [Contact.chat(chat: chat, shareSignatureEnabled: true)],
+          shareText: 'Share as ICS',
+          completer: completer,
+        ),
+      );
+
+      expect(await completer.future, const CalendarShareResult.success());
+      verify(
+        () => xmppService.sendAttachment(
+          jid: chat.jid,
+          attachment: any(
+            named: 'attachment',
+            that: isA<Attachment>()
+                .having(
+                  (attachment) => attachment.mimeType,
+                  'mimeType',
+                  'text/calendar',
+                )
+                .having(
+                  (attachment) => attachment.fileName,
+                  'fileName',
+                  endsWith('.ics'),
+                )
+                .having(
+                  (attachment) => attachment.caption,
+                  'caption',
+                  'Share as ICS',
+                ),
+          ),
+          encryptionProtocol: chat.encryptionProtocol,
+          chatType: ChatType.chat,
+        ),
+      ).called(1);
+      verifyNever(
+        () => xmppService.sendMessage(
+          jid: chat.jid,
+          text: any(named: 'text'),
+          encryptionProtocol: any(named: 'encryptionProtocol'),
+          calendarTaskIcs: any(named: 'calendarTaskIcs'),
+          calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+    });
+
+    test('task share sends ICS attachment to email targets', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'calendar-task-share-email',
+      );
+      final previousPathProvider = PathProviderPlatform.instance;
+      addTearDown(() => tempDir.delete(recursive: true));
+      addTearDown(() => PathProviderPlatform.instance = previousPathProvider);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
+      final emailService = _MockEmailService();
+      final task = CalendarTask.create(title: 'Email as ICS');
+      final recipient = Contact.address(
+        address: 'peer@example.com',
+        displayName: 'Peer',
+      );
+      final completer = Completer<CalendarShareResult>();
+
+      bloc.updateEmailService(emailService);
+      when(() => xmppService.demoOfflineMode).thenReturn(false);
+      when(
+        () => emailService.fanOutSend(
+          targets: [recipient],
+          attachment: any(named: 'attachment'),
+        ),
+      ).thenAnswer(
+        (_) async => const FanOutSendReport(shareId: 'share', statuses: []),
+      );
+
+      bloc.add(
+        CalendarEvent.taskShareRequested(
+          task: task,
+          recipients: [recipient],
+          shareText: 'Email as ICS',
+          completer: completer,
+        ),
+      );
+
+      expect(await completer.future, const CalendarShareResult.success());
+      verify(
+        () => emailService.fanOutSend(
+          targets: [recipient],
+          attachment: any(
+            named: 'attachment',
+            that: isA<Attachment>()
+                .having(
+                  (attachment) => attachment.mimeType,
+                  'mimeType',
+                  'text/calendar',
+                )
+                .having(
+                  (attachment) => attachment.fileName,
+                  'fileName',
+                  endsWith('.ics'),
+                )
+                .having(
+                  (attachment) => attachment.caption,
+                  'caption',
+                  'Email as ICS',
+                ),
+          ),
+        ),
+      ).called(1);
+    });
+
+    test(
+      'task share falls back to ICS attachment when chat calendar is read-only',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'calendar-task-share-read-only',
+        );
+        final previousPathProvider = PathProviderPlatform.instance;
+        addTearDown(() => tempDir.delete(recursive: true));
+        addTearDown(() => PathProviderPlatform.instance = previousPathProvider);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
+        final emailService = _MockEmailService();
+        final task = CalendarTask.create(title: 'Read-only share');
+        final chat = Chat(
+          jid: 'room@conference.axi.im',
+          title: 'Room',
+          type: ChatType.groupChat,
+          lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+          transport: MessageTransport.xmpp,
+        );
+        final emailTarget = Contact.address(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+        );
+        final completer = Completer<CalendarShareResult>();
+
+        bloc.updateEmailService(emailService);
+        when(() => xmppService.demoOfflineMode).thenReturn(false);
+        when(
+          () => xmppService.canUseCalendarSyncWithJid(
+            jid: chat.remoteJid,
+            chatType: ChatType.groupChat,
+          ),
+        ).thenReturn(true);
+        when(
+          () => xmppService.calendarFragmentDecisionForChat(chat),
+        ).thenReturn(const CalendarFragmentShareDecision(canWrite: false));
+        when(
+          () => emailService.fanOutSend(
+            targets: [emailTarget],
+            attachment: any(named: 'attachment'),
+          ),
+        ).thenAnswer(
+          (_) async => const FanOutSendReport(shareId: 'share', statuses: []),
+        );
+        when(
+          () => xmppService.sendAttachment(
+            jid: chat.jid,
+            attachment: any(named: 'attachment'),
+            encryptionProtocol: chat.encryptionProtocol,
+            chatType: ChatType.groupChat,
+          ),
+        ).thenAnswer((_) async => _FakeXmppAttachmentUpload());
+
+        bloc.add(
+          CalendarEvent.taskShareRequested(
+            task: task,
+            recipients: [
+              emailTarget,
+              Contact.chat(chat: chat, shareSignatureEnabled: true),
+            ],
+            shareText: 'Read-only share',
+            completer: completer,
+          ),
+        );
+
+        expect(await completer.future, const CalendarShareResult.success());
+        verify(
+          () => emailService.fanOutSend(
+            targets: [emailTarget],
+            attachment: any(named: 'attachment'),
+          ),
+        ).called(1);
+        verify(
+          () => xmppService.sendAttachment(
+            jid: chat.jid,
+            attachment: any(
+              named: 'attachment',
+              that: isA<Attachment>()
+                  .having(
+                    (attachment) => attachment.mimeType,
+                    'mimeType',
+                    'text/calendar',
+                  )
+                  .having(
+                    (attachment) => attachment.fileName,
+                    'fileName',
+                    endsWith('.ics'),
+                  )
+                  .having(
+                    (attachment) => attachment.caption,
+                    'caption',
+                    'Read-only share',
+                  ),
+            ),
+            encryptionProtocol: chat.encryptionProtocol,
+            chatType: ChatType.groupChat,
+          ),
+        ).called(1);
+        verifyNever(
+          () => xmppService.sendMessage(
+            jid: chat.jid,
+            text: any(named: 'text'),
+            encryptionProtocol: any(named: 'encryptionProtocol'),
+            calendarTaskIcs: any(named: 'calendarTaskIcs'),
+            calendarTaskIcsReadOnly: any(named: 'calendarTaskIcsReadOnly'),
+            chatType: any(named: 'chatType'),
+          ),
+        );
+      },
+    );
 
     test('taskAdded updates the local model before sync completes', () async {
       final syncCompleter = Completer<void>();
