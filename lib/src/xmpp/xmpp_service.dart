@@ -22,6 +22,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_eligibility.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
@@ -32,6 +33,7 @@ import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/defer.dart';
@@ -1077,6 +1079,14 @@ class XmppService extends XmppBase
         _xmppLogger.fine('FAST token persisted.');
       })
       ..registerHandler<mox.NonRecoverableErrorEvent>((event) async {
+        if (event.error is mox.IncomingStanzaQueueOverflowError) {
+          if (await _recoverFromIncomingStanzaQueueOverflow()) {
+            return;
+          }
+          _xmppLogger.info(
+            'Incoming stanza queue overflow recovery reconnect was not accepted.',
+          );
+        }
         if (event.error is mox.StreamUndefinedConditionError) {
           if (!await _recoverFromStreamUndefinedCondition()) {
             _xmppLogger.info(
@@ -2057,9 +2067,10 @@ class XmppService extends XmppBase
         return;
       }
       final isGroupConversation = chat?.type == ChatType.groupChat;
+      final notificationBody = await _notificationBodyForMessage(message);
       await _notificationService.sendMessageNotification(
         title: chat?.displayName ?? message.senderJid,
-        body: message.body,
+        body: notificationBody,
         senderName: _notificationSenderName(chat: chat, message: message),
         senderKey: message.senderJid,
         conversationTitle: _notificationConversationTitle(
@@ -2076,6 +2087,71 @@ class XmppService extends XmppBase
         channel: MessageNotificationChannel.chat,
       );
     });
+  }
+
+  Future<String?> _notificationBodyForMessage(Message message) async {
+    final text = ChatSubjectCodec.previewText(
+      body: message.body,
+      subject: message.subject,
+    );
+    if (text != null) {
+      return text;
+    }
+    final attachment = await _notificationAttachmentForMessage(message);
+    if (!attachment.hasAttachment) {
+      return null;
+    }
+    return _notificationAttachmentLabel(attachment.metadata);
+  }
+
+  Future<({bool hasAttachment, FileMetadataData? metadata})>
+  _notificationAttachmentForMessage(Message message) async {
+    final messageId = message.id?.trim();
+    final metadataId = message.fileMetadataID?.trim();
+    if ((messageId == null || messageId.isEmpty) &&
+        (metadataId == null || metadataId.isEmpty)) {
+      return (hasAttachment: false, metadata: null);
+    }
+    return _dbOpReturning<
+      XmppDatabase,
+      ({bool hasAttachment, FileMetadataData? metadata})
+    >((db) async {
+      if (messageId != null && messageId.isNotEmpty) {
+        var attachments = await db.getMessageAttachments(messageId);
+        if (attachments.isNotEmpty) {
+          final transportGroupId = attachments.first.transportGroupId?.trim();
+          if (transportGroupId != null && transportGroupId.isNotEmpty) {
+            attachments = await db.getMessageAttachmentsForGroup(
+              transportGroupId,
+            );
+          }
+          if (attachments.isEmpty) {
+            return (hasAttachment: true, metadata: null);
+          }
+          final ordered = attachments.toList(growable: false)
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          return (
+            hasAttachment: true,
+            metadata: await db.getFileMetadata(ordered.first.fileMetadataId),
+          );
+        }
+      }
+      if (metadataId == null || metadataId.isEmpty) {
+        return (hasAttachment: false, metadata: null);
+      }
+      return (
+        hasAttachment: true,
+        metadata: await db.getFileMetadata(metadataId),
+      );
+    });
+  }
+
+  String _notificationAttachmentLabel(FileMetadataData? metadata) {
+    final filename = metadata?.filename.trim();
+    if (filename == null || filename.isEmpty) {
+      return localizations.notificationAttachmentLabel;
+    }
+    return localizations.notificationAttachmentLabelWithName(filename);
   }
 
   String _notificationConversationTitle({
@@ -2858,9 +2934,11 @@ class XmppService extends XmppBase
   }
 
   Future<void> clearSessionTokens() async {
-    final sm = _connection.getManager<XmppStreamManagementManager>();
-    await sm?.resetState();
-    await sm?.clearPersistedState();
+    if (_hasInitializedConnection) {
+      final sm = _connection.getManager<XmppStreamManagementManager>();
+      await sm?.resetState();
+      await sm?.clearPersistedState();
+    }
     await _dbOp<XmppStateStore>(
       (ss) => ss.delete(key: fastTokenStorageKey),
       awaitDatabase: true,
@@ -3174,6 +3252,26 @@ class XmppService extends XmppBase
     await sm?.clearPersistedState();
     _reconnectBlocked = false;
     return requestReconnect(ReconnectTrigger.autoFailure);
+  }
+
+  Future<bool> _recoverFromIncomingStanzaQueueOverflow() async {
+    if (!_sessionReconnectEnabled ||
+        _connectInFlight ||
+        !_synchronousConnection.isCompleted ||
+        !_connection.hasConnectionSettings ||
+        !databasesInitialized) {
+      return false;
+    }
+    _xmppLogger.warning(
+      'Recovering from incoming stanza queue overflow by reconnecting.',
+    );
+    _markCalendarArchiveReplayInterrupted();
+    _reconnectBlocked = false;
+    if (connectionState == ConnectionState.connected ||
+        connectionState == ConnectionState.error) {
+      _setConnectionState(ConnectionState.notConnected);
+    }
+    return requestReconnect(ReconnectTrigger.immediateRetry);
   }
 
   Future<bool> requestReconnect(ReconnectTrigger trigger) async {
@@ -4566,7 +4664,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       final records = await InternetAddress.lookup(
         'axi.im',
         type: InternetAddressType.IPv4,
-      );
+      ).timeout(const Duration(seconds: 10));
       final seenHosts = <String>{};
       for (final record in records) {
         final host = record.address;
@@ -4584,6 +4682,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       }
     } on SocketException catch (error) {
       _log.warning('axi.im DNS A fallback lookup failed: $error');
+    } on TimeoutException catch (error) {
+      _log.warning('axi.im DNS A fallback lookup timed out: $error');
     } on Exception catch (error) {
       _log.warning('axi.im DNS A fallback failed: $error');
     }

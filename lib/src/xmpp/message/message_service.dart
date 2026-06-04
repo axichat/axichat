@@ -256,6 +256,8 @@ const String _carbonOriginRejectedLog =
     'Rejected carbon message with unexpected sender.';
 const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
+const String _serverAnnouncementOriginRejectedLog =
+    'Rejected server announcement with unexpected origin.';
 const String _mamGlobalNoProgressLog =
     'Global MAM sync stalled; stopping to avoid churn.';
 const String _mamQueryHardTimeoutLog =
@@ -585,7 +587,12 @@ extension MessageEvent on mox.MessageEvent {
     final hasSfs = get<mox.StatelessFileSharingData>() != null;
     final hasFun = get<mox.FileUploadNotificationData>() != null;
     final hasOob = get<mox.OOBData>() != null;
-    return hasBody || hasHtml || hasSfs || hasFun || hasOob;
+    return hasBody ||
+        hasHtml ||
+        hasSfs ||
+        hasFun ||
+        hasOob ||
+        (get<MessageSubjectData>()?.subject.isNotEmpty ?? false);
   }
 }
 
@@ -671,6 +678,26 @@ bool _isDefaultDomainSystemMessage(Message message) {
   }
   final chat = normalizedBareAddressValue(message.chatJid);
   return chat == defaultDomain;
+}
+
+bool _hasInvalidAxiImServerAnnouncementOrigin(
+  mox.MessageEvent event,
+  String? accountJid,
+) {
+  if (!isAxiImServerAnnouncementJid(event.from.toString())) {
+    return false;
+  }
+  if (event.type == _messageTypeGroupchat) {
+    return true;
+  }
+  if (event.from.resource.trim().isNotEmpty) {
+    return true;
+  }
+  if (addressDomainPart(accountJid)?.toLowerCase() !=
+      EndpointConfig.axiImDomain) {
+    return true;
+  }
+  return !sameBareAddress(event.to.toBare().toString(), accountJid);
 }
 
 bool _isArchivedOrOfflineMessage(mox.MessageEvent event) {
@@ -897,6 +924,28 @@ final class _CalendarMamSession {
   }
 }
 
+final class _CalendarSyncWork {
+  const _CalendarSyncWork({
+    required this.syncMessage,
+    required this.event,
+    required this.chatJid,
+    required this.chatType,
+    required this.senderJid,
+    required this.isSelfCalendar,
+    required this.isSelfSender,
+    this.metadata,
+  });
+
+  final CalendarSyncMessage? syncMessage;
+  final mox.MessageEvent event;
+  final FileMetadataData? metadata;
+  final String chatJid;
+  final ChatType chatType;
+  final String senderJid;
+  final bool isSelfCalendar;
+  final bool isSelfSender;
+}
+
 enum MamGlobalSyncOutcome {
   completed,
   skippedUnsupported,
@@ -998,13 +1047,11 @@ const WindowRateLimit _inboundAttachmentAutoDownloadGlobalRateLimit =
       window: _inboundAttachmentAutoDownloadRateLimitWindow,
     );
 const int mamLoginBackfillMessageLimit = 50;
-const int _sharedPinBootstrapPageSize = 200;
+const int _sharedPinBootstrapPageSize = mamLoginBackfillMessageLimit;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
-const int _calendarMamPageSize = 100;
+const int _calendarMamPageSize = mamLoginBackfillMessageLimit;
 const int _calendarSnapshotDownloadMaxBytes =
     CalendarSnapshotCodec.maxCompressedBytes;
-const Duration _calendarSyncInboundWindow = Duration(seconds: 60);
-const int _calendarSyncInboundMaxMessages = 120;
 const String _calendarSnapshotDefaultName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _calendarSnapshotNoJidMessage =
@@ -4538,17 +4585,36 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
+  static const _calendarSyncMamWorkOutcomeLimit = 1000;
   bool _mamGlobalSyncInFlight = false;
   bool _hasMamNegotiatedStream = false;
   bool _mamNegotiationResumed = false;
   bool _mamGlobalSyncCompletedSinceConnect = false;
   bool _mamGlobalCalendarProcessingFailed = false;
+  bool _mamGlobalArchiveReplayInterrupted = false;
   final Map<String, _CalendarMamSession> _calendarMamSessions =
       <String, _CalendarMamSession>{};
   final Set<String> _mamGlobalCompleteChatCalendarCandidates = <String>{};
   final Set<Future<void> Function()> _calendarSyncFlushCallbacks =
       <Future<void> Function()>{};
-  final Queue<DateTime> _calendarSyncInboundTimestamps = Queue<DateTime>();
+  StreamController<_CalendarSyncWork> _calendarSyncQueue =
+      StreamController<_CalendarSyncWork>();
+  StreamSubscription<void>? _calendarSyncQueueSubscription;
+  Completer<void> _calendarSyncAbortSignal = Completer<void>();
+  final Map<({String mamId, String queryId}), Completer<void>>
+  _calendarSyncMamWorkWaiters =
+      <({String mamId, String queryId}), Completer<void>>{};
+  final Map<
+    ({String mamId, String queryId}),
+    ({Object? error, StackTrace? stackTrace})
+  >
+  _calendarSyncMamWorkOutcomes =
+      <
+        ({String mamId, String queryId}),
+        ({Object? error, StackTrace? stackTrace})
+      >{};
+  final Queue<({String mamId, String queryId})>
+  _calendarSyncMamWorkOutcomeOrder = Queue<({String mamId, String queryId})>();
   final Set<String> _mucJoinMamSyncRooms = {};
   DateTime? _mamGlobalDeniedUntil;
   String? _mamGlobalDeniedUntilScope;
@@ -5276,18 +5342,33 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         await _hydrateInboundGroupchatMucStanzaId(event);
       })
       ..registerHandler<mox.MessageEvent>((event) async {
-        if (await _handleError(event)) return;
-        if (_isOversizedMessage(event, _log)) return;
+        if (await _handleError(event)) {
+          _failCalendarSyncMamEvent(event, XmppMessageException());
+          return;
+        }
+        if (_isOversizedMessage(event, _log)) {
+          _failCalendarSyncMamEvent(event, XmppMessageException());
+          return;
+        }
         if (_hasInvalidArchiveOrigin(event, myJid)) {
           if (event.isCarbon) {
             _log.warning(_carbonOriginRejectedLog);
           }
           if (event.isFromMAM) {
             _log.warning(_mamOriginRejectedLog);
+            _failCalendarSyncMamEvent(event, XmppMessageException());
           }
           return;
         }
+        if (_hasInvalidAxiImServerAnnouncementOrigin(event, myJid)) {
+          _log.warning(_serverAnnouncementOriginRejectedLog);
+          _failCalendarSyncMamEvent(event, XmppMessageException());
+          return;
+        }
         _trackMamGlobalAnchor(event);
+        final metadata = _extractFileMetadata(event);
+        if (_handleCalendarSync(event, metadata: metadata)) return;
+
         final accountJidValue = myJid?.toString();
         if (await _isBlockedInboundSender(
           event,
@@ -5300,7 +5381,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         final reactionOnly = await _handleReactions(event);
         if (reactionOnly) return;
 
-        final metadata = _extractFileMetadata(event);
         final hasAttachmentMetadata = metadata != null;
 
         final isGroupChat = event.type == 'groupchat';
@@ -5368,7 +5448,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         if (await _handleRetraction(event, message.senderJid)) return;
         if (await _handlePinMessageMutation(event)) return;
 
-        if (await _handleCalendarSync(event, metadata: metadata)) return;
         if (_isInternalSyncEnvelope(message.body)) {
           await _acknowledgeMessage(event);
           return;
@@ -5583,6 +5662,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await database;
       _mamGlobalMaxTimestamp = null;
       _mamGlobalCalendarProcessingFailed = false;
+      _mamGlobalArchiveReplayInterrupted = false;
       _mamGlobalCompleteChatCalendarCandidates.clear();
       await _resolveMamSupportForAccount();
       if (_mamSupportResolved && !_mamSupported) {
@@ -5596,7 +5676,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
       started = true;
       final privateCalendarHadCompleteCoverage =
-          CalendarSyncState.read().hasCompleteCoverage;
+          _readPersonalCalendarSyncState().hasCompleteCoverage;
       emitXmppOperation(_mamGlobalStartEvent);
       String? after = await _loadMamGlobalLastId();
       final anchor = await _loadMamGlobalLastSync();
@@ -5612,6 +5692,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           start: start,
           pageSize: pageSize,
         );
+        if (_mamGlobalArchiveReplayInterrupted) {
+          throw XmppMessageException();
+        }
         final lastId = result.lastId;
         final hasProgress = lastId != null && lastId != after;
         if (hasProgress) {
@@ -5635,13 +5718,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await _storeMamGlobalDeniedUntil(null);
       if (privateCalendarHadCompleteCoverage &&
           !_mamGlobalCalendarProcessingFailed) {
-        await CalendarSyncState.read()
-            .markCoverageComplete(
-              completedAt: anchorTimestamp,
-              calendarJid: bareAddress(myJid) ?? myJid,
-              archiveJid: bareAddress(myJid) ?? myJid,
-            )
-            .write();
+        await _writePersonalCalendarSyncState(
+          _readPersonalCalendarSyncState().markCoverageComplete(
+            completedAt: anchorTimestamp,
+            calendarJid: bareAddress(myJid) ?? myJid,
+            archiveJid: bareAddress(myJid) ?? myJid,
+          ),
+        );
       }
       if (!_mamGlobalCalendarProcessingFailed) {
         await _markMamGlobalChatCalendarCoverageComplete(anchorTimestamp);
@@ -5684,11 +5767,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         _log.warning('MAM manager unavailable; ensure it is registered.');
         throw XmppMessageException();
       }
+      final queryId = 'axi-mam-${uuid.v4()}';
       final options = mox.MAMQueryOptions(
         withJid: null,
         start: start,
         formType: mox.mamXmlns,
         forceForm: true,
+        queryId: queryId,
       );
       final result = await _queryMamArchive(
         mamManager: mamManager,
@@ -5704,6 +5789,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         _log.warning('Global MAM query failed.');
         throw XmppMessageException();
       }
+      await _waitForCalendarSyncMamResults(queryId: queryId, result: result);
       final rsm = result.rsm;
       success = true;
       return MamPageResult(
@@ -6245,13 +6331,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         ? null
         : CalendarTaskIcsPayload(
             ics: _calendarTaskIcsCodec.encode(calendarTaskIcs),
-            readOnly: CalendarTaskIcsMessage.defaultReadOnly,
+            readOnly: calendarTaskIcsReadOnly,
           );
     final CalendarTaskIcsMessage? taskIcsMessage = calendarTaskIcs == null
         ? null
         : CalendarTaskIcsMessage(
             task: calendarTaskIcs,
-            readOnly: CalendarTaskIcsMessage.defaultReadOnly,
+            readOnly: calendarTaskIcsReadOnly,
           );
     final CalendarAvailabilityMessagePayload? availabilityPayload =
         calendarAvailabilityMessage == null
@@ -7015,11 +7101,53 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
+  bool canUseCalendarSyncWithJid({
+    required String jid,
+    ChatType chatType = ChatType.chat,
+  }) {
+    return _canUseCalendarSyncWithJid(jid: jid, chatType: chatType);
+  }
+
+  bool get canUsePersonalCalendarSync {
+    return isPersonalCalendarSyncAccount(myJid);
+  }
+
+  bool _canSendCalendarSyncMessage({
+    required String jid,
+    required ChatType chatType,
+  }) {
+    if (chatType == ChatType.note) {
+      return false;
+    }
+    final accountJid = myJid;
+    if (accountJid == null) {
+      return false;
+    }
+    if (chatType == ChatType.chat && sameBareAddress(jid, accountJid)) {
+      return isPersonalCalendarSyncAccount(accountJid);
+    }
+    return _canUseCalendarSyncWithJid(jid: jid, chatType: chatType);
+  }
+
+  bool _canUseCalendarSyncWithJid({
+    required String jid,
+    required ChatType chatType,
+  }) {
+    if (chatType == ChatType.note) {
+      return false;
+    }
+    return isCalendarSyncTargetAllowed(accountJid: myJid, targetJid: jid);
+  }
+
   Future<void> sendCalendarSyncMessage({
     required String jid,
     required CalendarSyncOutbound outbound,
     ChatType chatType = ChatType.chat,
   }) async {
+    if (!_canSendCalendarSyncMessage(jid: jid, chatType: chatType)) {
+      _log.info('Skipping calendar sync send for unsupported target.');
+      return;
+    }
     const hint = mox.MessageProcessingHintData([
       mox.MessageProcessingHint.store,
     ]);
@@ -7786,6 +7914,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _mamNegotiationResumed = false;
     _mamGlobalSyncCompletedSinceConnect = false;
     _mamGlobalCalendarProcessingFailed = false;
+    _mamGlobalArchiveReplayInterrupted = false;
   }
 
   bool _shouldSkipInitialMamSyncForChat(Chat chat) {
@@ -8471,12 +8600,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         throw XmppMessageException();
       }
       final peerJid = mox.JID.fromString(jid);
+      final queryId = 'axi-mam-${uuid.v4()}';
       final options = mox.MAMQueryOptions(
         withJid: isMuc ? null : peerJid,
         start: start,
         end: end,
         formType: mox.mamXmlns,
         forceForm: true,
+        queryId: queryId,
       );
       final result = await _queryMamArchive(
         mamManager: mamManager,
@@ -8492,6 +8623,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         _log.warning('MAM query failed.');
         throw XmppMessageException();
       }
+      await _waitForCalendarSyncMamResults(queryId: queryId, result: result);
       final rsm = result.rsm;
       success = true;
       return MamPageResult(
@@ -9702,6 +9834,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   @override
   Future<void> _reset() async {
+    await _abortCalendarSyncQueue(XmppAbortedException(), StackTrace.current);
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
     await super._reset();
 
@@ -10615,18 +10748,347 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return newestState;
   }
 
-  Future<bool> _handleCalendarSync(
+  void _enqueueCalendarSyncWork({
+    required CalendarSyncMessage? syncMessage,
+    required mox.MessageEvent event,
+    required FileMetadataData? metadata,
+    required String chatJid,
+    required ChatType chatType,
+    required String senderJid,
+    required bool isSelfCalendar,
+    required bool isSelfSender,
+  }) {
+    _ensureCalendarSyncQueueWorker();
+    _calendarSyncQueue.add(
+      _CalendarSyncWork(
+        syncMessage: syncMessage,
+        event: event,
+        metadata: metadata,
+        chatJid: chatJid,
+        chatType: chatType,
+        senderJid: senderJid,
+        isSelfCalendar: isSelfCalendar,
+        isSelfSender: isSelfSender,
+      ),
+    );
+  }
+
+  void _ensureCalendarSyncQueueWorker() {
+    if (_calendarSyncQueue.isClosed) {
+      _calendarSyncQueue = StreamController<_CalendarSyncWork>();
+    }
+    if (_calendarSyncQueueSubscription != null) {
+      return;
+    }
+    late final StreamSubscription<void> subscription;
+    subscription = _calendarSyncQueue.stream
+        .asyncMap(_runCalendarSyncWork)
+        .listen(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            _log.warning(
+              'Calendar sync queue worker failed.',
+              error,
+              stackTrace,
+            );
+          },
+          onDone: () {
+            if (identical(_calendarSyncQueueSubscription, subscription)) {
+              _calendarSyncQueueSubscription = null;
+            }
+          },
+        );
+    _calendarSyncQueueSubscription = subscription;
+  }
+
+  Future<void> _runCalendarSyncWork(_CalendarSyncWork work) async {
+    Object? completionError;
+    StackTrace? completionStackTrace;
+    try {
+      await _processQueuedCalendarSyncWork(work);
+    } on XmppAbortedException catch (error, stackTrace) {
+      completionError = error;
+      completionStackTrace = stackTrace;
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Queued calendar sync work failed.', error, stackTrace);
+      try {
+        await _recordCalendarSyncWorkFailure(work);
+      } on XmppAbortedException catch (abortError, abortStackTrace) {
+        completionError = abortError;
+        completionStackTrace = abortStackTrace;
+      }
+    } finally {
+      _completeCalendarSyncMamWork(
+        work,
+        error: completionError,
+        stackTrace: completionStackTrace,
+      );
+    }
+  }
+
+  Future<void> _abortCalendarSyncQueue(
+    Object error,
+    StackTrace stackTrace,
+  ) async {
+    final abortSignal = _calendarSyncAbortSignal;
+    _calendarSyncAbortSignal = Completer<void>();
+    if (!abortSignal.isCompleted) {
+      abortSignal.complete();
+    }
+
+    final subscription = _calendarSyncQueueSubscription;
+    final queue = _calendarSyncQueue;
+    _calendarSyncQueueSubscription = null;
+    _calendarSyncQueue = StreamController<_CalendarSyncWork>();
+    final cancel = subscription?.cancel();
+    if (cancel != null) {
+      unawaited(
+        cancel.catchError((Object error, StackTrace stackTrace) {
+          _log.fine('Failed to cancel calendar sync queue.', error, stackTrace);
+        }),
+      );
+    }
+    if (!queue.isClosed) {
+      unawaited(
+        queue.close().catchError((Object error, StackTrace stackTrace) {
+          _log.fine('Failed to close calendar sync queue.', error, stackTrace);
+        }),
+      );
+    }
+
+    final waiters = Map<({String mamId, String queryId}), Completer<void>>.of(
+      _calendarSyncMamWorkWaiters,
+    );
+    _calendarSyncMamWorkWaiters.clear();
+    _calendarSyncMamWorkOutcomes.clear();
+    _calendarSyncMamWorkOutcomeOrder.clear();
+    for (final waiter in waiters.values) {
+      if (!waiter.isCompleted) {
+        waiter.completeError(error, stackTrace);
+      }
+    }
+  }
+
+  Future<T> _awaitCalendarSyncQueueWork<T>(Future<T> future) {
+    return Future.any<T>([
+      future,
+      _calendarSyncAbortSignal.future.then<T>(
+        (_) => throw XmppAbortedException(),
+      ),
+    ]);
+  }
+
+  Future<void> _waitForCalendarSyncMamResults({
+    required String queryId,
+    required mox.MAMQueryResult result,
+  }) async {
+    final resolvedQueryId = _resolvedCalendarSyncMamQueryId(
+      queryId: queryId,
+      result: result,
+    );
+    if (resolvedQueryId == null) {
+      return;
+    }
+    final keys = _calendarSyncMamWorkKeysForResult(
+      queryId: resolvedQueryId,
+      result: result,
+    ).toSet();
+    if (keys.isEmpty) {
+      return;
+    }
+    final waits = <Future<void>>[];
+    for (final key in keys) {
+      final outcome = _calendarSyncMamWorkOutcomes[key];
+      if (outcome != null) {
+        final error = outcome.error;
+        if (error != null) {
+          return Future<void>.error(
+            error,
+            outcome.stackTrace ?? StackTrace.current,
+          );
+        }
+        continue;
+      }
+      final waiter = _calendarSyncMamWorkWaiters.putIfAbsent(
+        key,
+        Completer<void>.new,
+      );
+      waits.add(waiter.future);
+    }
+    if (waits.isNotEmpty) {
+      await Future.wait(waits);
+    }
+  }
+
+  String? _resolvedCalendarSyncMamQueryId({
+    required String queryId,
+    required mox.MAMQueryResult result,
+  }) {
+    final resultQueryId = result.queryId?.trim();
+    if (resultQueryId != null && resultQueryId.isNotEmpty) {
+      return resultQueryId;
+    }
+    final fallbackQueryId = queryId.trim();
+    return fallbackQueryId.isEmpty ? null : fallbackQueryId;
+  }
+
+  Iterable<({String mamId, String queryId})> _calendarSyncMamWorkKeysForResult({
+    required String queryId,
+    required mox.MAMQueryResult result,
+  }) sync* {
+    for (final message in result.messages) {
+      final mamId = message.id.trim();
+      if (mamId.isEmpty) {
+        continue;
+      }
+      final body = message.message.firstTag('body')?.innerText();
+      if (body == null || body.isEmpty) {
+        continue;
+      }
+      if (!CalendarSyncMessage.looksLikeEnvelope(body)) {
+        continue;
+      }
+      yield (queryId: queryId, mamId: mamId);
+    }
+  }
+
+  ({String mamId, String queryId})? _calendarSyncMamWorkKeyForEvent(
+    mox.MessageEvent event,
+  ) {
+    final mamContext = event.get<mox.MAMContextData>();
+    final queryId = mamContext?.queryId?.trim();
+    final mamId = mamContext?.mamId?.trim();
+    if (queryId == null || queryId.isEmpty || mamId == null || mamId.isEmpty) {
+      return null;
+    }
+    return (queryId: queryId, mamId: mamId);
+  }
+
+  void _failCalendarSyncMamEvent(
+    mox.MessageEvent event,
+    Object error, [
+    StackTrace? stackTrace,
+  ]) {
+    final key = _calendarSyncMamWorkKeyForEvent(event);
+    final body = event.extensions.get<mox.MessageBodyData>()?.body;
+    final text = body != null && body.isNotEmpty ? body : event.text;
+    if (key == null || !CalendarSyncMessage.looksLikeEnvelope(text)) {
+      return;
+    }
+    _completeCalendarSyncMamWorkKey(
+      key,
+      error: error,
+      stackTrace: stackTrace ?? StackTrace.current,
+    );
+  }
+
+  void _completeCalendarSyncMamWork(
+    _CalendarSyncWork work, {
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    final key = _calendarSyncMamWorkKeyForEvent(work.event);
+    if (key == null) {
+      return;
+    }
+    _completeCalendarSyncMamWorkKey(key, error: error, stackTrace: stackTrace);
+  }
+
+  void _completeCalendarSyncMamWorkKey(
+    ({String mamId, String queryId}) key, {
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    final waiter = _calendarSyncMamWorkWaiters.remove(key);
+    if (waiter != null) {
+      if (waiter.isCompleted) {
+        return;
+      }
+      if (error == null) {
+        waiter.complete();
+      } else {
+        waiter.completeError(error, stackTrace ?? StackTrace.current);
+      }
+      return;
+    }
+    _rememberCalendarSyncMamWorkOutcome(
+      key,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  void _rememberCalendarSyncMamWorkOutcome(
+    ({String mamId, String queryId}) key, {
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    if (!_calendarSyncMamWorkOutcomes.containsKey(key)) {
+      _calendarSyncMamWorkOutcomeOrder.add(key);
+    }
+    _calendarSyncMamWorkOutcomes[key] = (error: error, stackTrace: stackTrace);
+    while (_calendarSyncMamWorkOutcomeOrder.length >
+        _calendarSyncMamWorkOutcomeLimit) {
+      _calendarSyncMamWorkOutcomes.remove(
+        _calendarSyncMamWorkOutcomeOrder.removeFirst(),
+      );
+    }
+  }
+
+  Future<void> _recordCalendarSyncWorkFailure(_CalendarSyncWork work) async {
+    try {
+      await _recordCalendarMamEnvelopeFailure(
+        mamSession: _calendarMamSessionFor(
+          chatJid: work.chatJid,
+          isSelfCalendar: work.isSelfCalendar,
+        ),
+        event: work.event,
+        isSelfCalendar: work.isSelfCalendar,
+        chatJid: work.chatJid,
+      );
+    } on XmppAbortedException {
+      rethrow;
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to record calendar sync work failure.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  void _markCalendarArchiveReplayInterrupted() {
+    _mamGlobalSyncCompletedSinceConnect = false;
+    if (_mamGlobalSyncInFlight) {
+      _mamGlobalArchiveReplayInterrupted = true;
+      _mamGlobalCalendarProcessingFailed = true;
+    }
+    for (final session in _calendarMamSessions.values) {
+      if (session.inFlight) {
+        session.recordPageProcessingFailure();
+      }
+    }
+  }
+
+  bool _handleCalendarSync(
     mox.MessageEvent event, {
     FileMetadataData? metadata,
-  }) async {
+  }) {
     // Check if this is a calendar sync message by looking at the message body
     final messageText = event.text;
     if (messageText.isEmpty) return false;
+    final looksLikeCalendarSync = CalendarSyncMessage.looksLikeEnvelope(
+      messageText,
+    );
+    if (!looksLikeCalendarSync) {
+      return false;
+    }
     if (!isWithinUtf8ByteLimit(
       messageText,
       maxBytes: CalendarSyncMessage.maxEnvelopeLength,
     )) {
       _log.warning('Dropped calendar sync message exceeding size limits');
+      _failCalendarSyncMamEvent(event, XmppMessageException());
       return true;
     }
 
@@ -10642,40 +11104,66 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final chatType = _calendarSyncChatType(event);
     final bool isSelfSender = sameBareAddress(senderJid, selfJid);
     final bool isSelfCalendar = sameBareAddress(chatJid, selfJid);
+
+    var syncMessage = CalendarSyncMessage.tryParseEnvelope(messageText);
+    if (syncMessage == null) {
+      _log.info('Dropped malformed calendar sync envelope');
+    }
+
+    _enqueueCalendarSyncWork(
+      syncMessage: syncMessage,
+      event: event,
+      metadata: metadata,
+      chatJid: chatJid,
+      chatType: chatType,
+      senderJid: senderJid,
+      isSelfCalendar: isSelfCalendar,
+      isSelfSender: isSelfSender,
+    );
+
+    return true; // Handled - don't process as regular chat message
+  }
+
+  Future<void> _processQueuedCalendarSyncWork(_CalendarSyncWork work) async {
+    var syncMessage = work.syncMessage;
+    if (syncMessage == null) {
+      await _recordCalendarSyncWorkFailure(work);
+      return;
+    }
+    final event = work.event;
+    final chatJid = work.chatJid;
+    final chatType = work.chatType;
+    final senderJid = work.senderJid;
+    final isSelfCalendar = work.isSelfCalendar;
     final calendarMamSession = _calendarMamSessionFor(
       chatJid: chatJid,
       isSelfCalendar: isSelfCalendar,
     );
 
-    final looksLikeCalendarSync = CalendarSyncMessage.looksLikeEnvelope(
-      messageText,
-    );
-    var syncMessage = looksLikeCalendarSync
-        ? CalendarSyncMessage.tryParseEnvelope(messageText)
-        : null;
-    if (syncMessage == null) {
-      if (looksLikeCalendarSync) {
-        _log.info('Dropped malformed calendar sync envelope');
-        await _recordCalendarMamEnvelopeFailure(
-          mamSession: calendarMamSession,
+    if (await _isBlockedInboundSender(event, isJidBlocked, myJid?.toString())) {
+      if (event.isFromMAM) {
+        await _recordRejectedCalendarEnvelope(
+          syncMessage: syncMessage,
           event: event,
           isSelfCalendar: isSelfCalendar,
           chatJid: chatJid,
         );
-        return true;
+        await _recordCalendarMamEnvelopeResult(
+          mamSession: calendarMamSession,
+          event: event,
+          isSelfCalendar: isSelfCalendar,
+          chatJid: chatJid,
+          inbound: _calendarSyncInbound(syncMessage, event),
+        );
       }
-      return false;
+      return;
     }
 
-    if (!event.isFromMAM && _isCalendarSyncRateLimited()) {
-      _log.warning('Dropping calendar sync message due to rate limits');
-      return true;
-    }
-
-    if (isSelfCalendar && !isSelfSender) {
+    if (isSelfCalendar && !work.isSelfSender) {
       _log.warning('Rejected calendar sync message from unauthorized sender');
       _trackMamGlobalChatCalendarCoverageCandidate(
         chatJid: chatJid,
+        chatType: chatType,
         isSelfCalendar: isSelfCalendar,
         mamSession: calendarMamSession,
       );
@@ -10692,7 +11180,30 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         chatJid: chatJid,
         inbound: _calendarSyncInbound(syncMessage, event),
       );
-      return true;
+      return;
+    }
+    if (!_canApplyCalendarSyncEnvelope(
+      isSelfCalendar: isSelfCalendar,
+      chatJid: chatJid,
+      chatType: chatType,
+    )) {
+      _log.info('Dropped calendar sync envelope for unsupported sync scope');
+      if (event.isFromMAM) {
+        await _recordRejectedCalendarEnvelope(
+          syncMessage: syncMessage,
+          event: event,
+          isSelfCalendar: isSelfCalendar,
+          chatJid: chatJid,
+        );
+        await _recordCalendarMamEnvelopeResult(
+          mamSession: calendarMamSession,
+          event: event,
+          isSelfCalendar: isSelfCalendar,
+          chatJid: chatJid,
+          inbound: _calendarSyncInbound(syncMessage, event),
+        );
+      }
+      return;
     }
     if (!isSelfCalendar) {
       final authorization = _chatCalendarSyncAuthorization(
@@ -10705,6 +11216,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         if (authorization == _CalendarSyncAuthorizationResult.rejected) {
           _trackMamGlobalChatCalendarCoverageCandidate(
             chatJid: chatJid,
+            chatType: chatType,
             isSelfCalendar: isSelfCalendar,
             mamSession: calendarMamSession,
           );
@@ -10729,7 +11241,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             chatJid: chatJid,
           );
         }
-        return true;
+        return;
       }
     }
     if (!isSelfCalendar &&
@@ -10741,6 +11253,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _log.warning(_calendarSyncReadOnlyRejectedLog);
       _trackMamGlobalChatCalendarCoverageCandidate(
         chatJid: chatJid,
+        chatType: chatType,
         isSelfCalendar: isSelfCalendar,
         mamSession: calendarMamSession,
       );
@@ -10757,7 +11270,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         chatJid: chatJid,
         inbound: _calendarSyncInbound(syncMessage, event),
       );
-      return true;
+      return;
     }
     if (!isSelfCalendar) {
       syncMessage = await _sanitizeChatCalendarSyncMessageForReadOnly(
@@ -10770,6 +11283,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _log.info('Received calendar sync message type: ${syncMessage.type}');
     _trackMamGlobalChatCalendarCoverageCandidate(
       chatJid: chatJid,
+      chatType: chatType,
       isSelfCalendar: isSelfCalendar,
       mamSession: calendarMamSession,
     );
@@ -10779,10 +11293,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final applied = await _handleCalendarSnapshot(
         syncMessage,
         event,
-        metadata: metadata,
+        metadata: work.metadata,
         isSelfCalendar: isSelfCalendar,
         allowRemoteDownload: true,
-        allowSelfDownloadOverrides: isSelfSender,
+        allowSelfDownloadOverrides: work.isSelfSender,
         mamSession: calendarMamSession,
         onMessageDecoded: (fullMessage, decodedEvent) async {
           if (isSelfCalendar) {
@@ -10819,7 +11333,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           inbound: _calendarSyncInbound(syncMessage, event),
         );
       }
-      return true;
+      return;
     }
 
     if (isSelfCalendar) {
@@ -10841,8 +11355,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       chatJid: chatJid,
       inbound: _calendarSyncInbound(syncMessage, event),
     );
+  }
 
-    return true; // Handled - don't process as regular chat message
+  bool _canApplyCalendarSyncEnvelope({
+    required bool isSelfCalendar,
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    if (isSelfCalendar) {
+      return canUsePersonalCalendarSync;
+    }
+    return _canUseCalendarSyncWithJid(jid: chatJid, chatType: chatType);
   }
 
   _CalendarSyncAuthorizationResult _chatCalendarSyncAuthorization({
@@ -11170,21 +11693,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  bool _isCalendarSyncRateLimited() {
-    final now = DateTime.now();
-    final windowStart = now.subtract(_calendarSyncInboundWindow);
-    while (_calendarSyncInboundTimestamps.isNotEmpty &&
-        _calendarSyncInboundTimestamps.first.isBefore(windowStart)) {
-      _calendarSyncInboundTimestamps.removeFirst();
-    }
-    if (_calendarSyncInboundTimestamps.length >=
-        _calendarSyncInboundMaxMessages) {
-      return true;
-    }
-    _calendarSyncInboundTimestamps.addLast(now);
-    return false;
-  }
-
   bool _isSnapshotCalendarMessage(CalendarSyncMessage message) {
     if (message.type == CalendarSyncType.snapshot) {
       return true;
@@ -11423,14 +11931,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final dispatch = CalendarSyncDispatch(inbound: inbound);
     _calendarSyncDispatchController.add(dispatch);
     try {
-      final applied = await dispatch.result;
+      final applied = await _awaitCalendarSyncQueueWork(dispatch.result);
       try {
         await _acknowledgeMessage(event);
       } catch (error, stackTrace) {
         _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
       }
       return applied;
-    } catch (error, stackTrace) {
+    } on XmppAbortedException {
+      rethrow;
+    } on Exception catch (error, stackTrace) {
       _log.warning('Calendar sync handler failed.', error, stackTrace);
       return _processPersonalCalendarSyncDirect(syncMessage, event);
     }
@@ -11501,14 +12011,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   CalendarModel _readDirectPersonalCalendarModel() {
     try {
-      return _readDirectPersonalCalendarState().model;
+      return _readDirectPersonalCalendarStateOrNull()?.model ??
+          CalendarState.initial().model;
     } on StorageNotFound {
       return CalendarModel.empty();
     }
   }
 
   CalendarState _readDirectPersonalCalendarState() {
-    final raw = HydratedBloc.storage.read(authStoragePrefix);
+    return _readDirectPersonalCalendarStateOrNull() ?? CalendarState.initial();
+  }
+
+  CalendarState? _readDirectPersonalCalendarStateOrNull() {
+    final Object? raw;
+    try {
+      raw = HydratedBloc.storage.read(authStoragePrefix);
+    } on StorageNotFound {
+      return null;
+    }
     if (raw is Map) {
       final decoded = CalendarStateStorageCodec.decode(
         Map<String, dynamic>.from(raw),
@@ -11517,7 +12037,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         return decoded;
       }
     }
-    return CalendarState.initial();
+    return null;
   }
 
   Future<void> _writeDirectPersonalCalendarModel(CalendarModel model) async {
@@ -11527,6 +12047,96 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return;
     }
     await HydratedBloc.storage.write(authStoragePrefix, encoded);
+  }
+
+  Future<void> _ensureDirectPersonalCalendarStateStored() async {
+    if (_readDirectPersonalCalendarStateOrNull() != null) {
+      return;
+    }
+    final encoded = CalendarStateStorageCodec.encode(CalendarState.initial());
+    if (encoded == null) {
+      return;
+    }
+    try {
+      await HydratedBloc.storage.write(authStoragePrefix, encoded);
+    } on StorageNotFound {
+      return;
+    }
+  }
+
+  CalendarSyncState _readPersonalCalendarSyncState() {
+    final store = const PersonalCalendarSyncStateStore();
+    final stored = store.readOrNull();
+    if (stored != null) {
+      return stored;
+    }
+    final state = _readDirectPersonalCalendarStateOrNull();
+    if (state?.model.hasCalendarData != true) {
+      return const CalendarSyncState();
+    }
+    return CalendarSyncState.readLegacy();
+  }
+
+  Future<void> _writePersonalCalendarSyncState(CalendarSyncState state) async {
+    await const PersonalCalendarSyncStateStore().write(state);
+  }
+
+  Future<void> _ensurePersonalCalendarSyncStateStored(
+    CalendarSyncState state,
+  ) async {
+    if (state == const CalendarSyncState()) {
+      return;
+    }
+    final store = const PersonalCalendarSyncStateStore();
+    if (store.readOrNull() != null) {
+      return;
+    }
+    await store.write(state);
+  }
+
+  CalendarSyncState _readChatCalendarSyncState(String chatJid) {
+    final normalizedChatJid = bareAddress(chatJid) ?? chatJid.trim();
+    final store = const ChatCalendarSyncStateStore();
+    final stored = store.readOrNull(normalizedChatJid);
+    if (stored != null) {
+      return stored;
+    }
+    final state = _readDirectChatCalendarStateOrNull(normalizedChatJid);
+    if (state?.model.hasCalendarData != true) {
+      return const CalendarSyncState();
+    }
+    return const LegacyChatCalendarSyncStateStore().read(normalizedChatJid);
+  }
+
+  Future<void> _writeChatCalendarSyncState(
+    String chatJid,
+    CalendarSyncState state,
+  ) async {
+    await const ChatCalendarSyncStateStore().write(chatJid, state);
+  }
+
+  Future<void> _ensureChatCalendarSyncStateStored(
+    String chatJid,
+    CalendarSyncState state,
+  ) async {
+    if (state == const CalendarSyncState()) {
+      return;
+    }
+    final store = const ChatCalendarSyncStateStore();
+    if (store.readOrNull(chatJid) != null) {
+      return;
+    }
+    await store.write(chatJid, state);
+  }
+
+  CalendarState? _readDirectChatCalendarStateOrNull(String chatJid) {
+    try {
+      return ChatCalendarStorage(
+        storage: HydratedBloc.storage,
+      ).readState(chatJid);
+    } on StorageNotFound {
+      return null;
+    }
   }
 
   ChatCalendarSyncCoordinator _directChatCalendarSyncCoordinator() {
@@ -11668,13 +12278,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     final inbound = _calendarSyncInbound(syncMessage, event);
     if (isSelfCalendar) {
-      final state = CalendarSyncState.read().markHandled(inbound);
-      await state.write();
+      final state = _readPersonalCalendarSyncState().markHandled(inbound);
+      await _writePersonalCalendarSyncState(state);
       return;
     }
-    final store = const ChatCalendarSyncStateStore();
-    final state = store.read(chatJid).markHandled(inbound);
-    await store.write(chatJid, state);
+    final state = _readChatCalendarSyncState(chatJid).markHandled(inbound);
+    await _writeChatCalendarSyncState(chatJid, state);
   }
 
   Future<void> _recordCalendarMamEnvelopeResult({
@@ -11720,7 +12329,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     _mamGlobalCalendarProcessingFailed = true;
     if (isSelfCalendar) {
-      await CalendarSyncState.read().markCoverageIncomplete().write();
+      await _writePersonalCalendarSyncState(
+        _readPersonalCalendarSyncState().markCoverageIncomplete(),
+      );
       return;
     }
     final normalizedChatJid = bareAddress(chatJid) ?? chatJid.trim();
@@ -11737,10 +12348,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String chatJid,
   }) {
     final state = isSelfCalendar
-        ? CalendarSyncState.read()
-        : const ChatCalendarSyncStateStore().read(
-            bareAddress(chatJid) ?? chatJid,
-          );
+        ? _readPersonalCalendarSyncState()
+        : _readChatCalendarSyncState(bareAddress(chatJid) ?? chatJid);
     final inboundId = inbound.stanzaId?.trim();
     if (inboundId != null &&
         inboundId.isNotEmpty &&
@@ -11804,14 +12413,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final dispatch = ChatCalendarSyncDispatch(envelope: envelope);
     _chatCalendarSyncDispatchController.add(dispatch);
     try {
-      final applied = await dispatch.result;
+      final applied = await _awaitCalendarSyncQueueWork(dispatch.result);
       try {
         await _acknowledgeMessage(event);
       } catch (error, stackTrace) {
         _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
       }
       return applied;
-    } catch (error, stackTrace) {
+    } on XmppAbortedException {
+      rethrow;
+    } on Exception catch (error, stackTrace) {
       _log.warning('Chat calendar sync handler failed.', error, stackTrace);
       return _processChatCalendarSyncDirect(
         syncMessage,
@@ -11852,6 +12463,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   void _trackMamGlobalChatCalendarCoverageCandidate({
     required String chatJid,
+    required ChatType chatType,
     required bool isSelfCalendar,
     required _CalendarMamSession mamSession,
   }) {
@@ -11865,7 +12477,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (normalizedChatJid.isEmpty) {
       return;
     }
-    final state = const ChatCalendarSyncStateStore().read(normalizedChatJid);
+    if (!_canUseCalendarSyncWithJid(
+      jid: normalizedChatJid,
+      chatType: chatType,
+    )) {
+      return;
+    }
+    final state = _readChatCalendarSyncState(normalizedChatJid);
     if (state.hasCompleteCoverage) {
       _mamGlobalCompleteChatCalendarCandidates.add(normalizedChatJid);
     }
@@ -11988,8 +12606,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         _log.info('MAM not supported, skipping calendar rehydration');
         return CalendarMamOutcome.skippedUnsupported;
       }
-      final state = CalendarSyncState.read();
-      if (state.hasCompleteCoverage && _mamGlobalSyncCompletedSinceConnect) {
+      final state = _readPersonalCalendarSyncState();
+      if (state.hasCompleteCoverage &&
+          _mamGlobalSyncCompletedSinceConnect &&
+          _readDirectPersonalCalendarStateOrNull() != null) {
+        await _ensurePersonalCalendarSyncStateStored(state);
         _log.info('Calendar rehydration skipped; global MAM covered calendar');
         return CalendarMamOutcome.skippedCoveredByGlobal;
       }
@@ -12013,6 +12634,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           calendarJid: selfJid,
           archiveJid: selfJid,
         );
+        if (completed) {
+          await _ensureDirectPersonalCalendarStateStored();
+        }
         _log.info('Calendar rehydration catch-up complete');
         if (!completed) {
           await _emitCalendarArchiveIncompleteWarning();
@@ -12040,6 +12664,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         calendarJid: selfJid,
         archiveJid: selfJid,
       );
+      if (completed) {
+        await _ensureDirectPersonalCalendarStateStored();
+      }
       _log.info('Calendar rehydration query complete');
       if (!completed) {
         await _emitCalendarArchiveIncompleteWarning();
@@ -12091,12 +12718,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       )) {
         return CalendarMamOutcome.skippedUnauthorized;
       }
+      if (!_canUseCalendarSyncWithJid(
+        jid: normalizedChatJid,
+        chatType: chatType,
+      )) {
+        return CalendarMamOutcome.skippedUnauthorized;
+      }
 
-      final store = const ChatCalendarSyncStateStore();
-      final state = store.read(normalizedChatJid);
+      final state = _readChatCalendarSyncState(normalizedChatJid);
       if (chatType == ChatType.chat &&
           state.hasCompleteCoverage &&
           _mamGlobalSyncCompletedSinceConnect) {
+        await _ensureChatCalendarSyncStateStored(normalizedChatJid, state);
         return CalendarMamOutcome.skippedCoveredByGlobal;
       }
       final isMuc = chatType == ChatType.groupChat;
@@ -12153,12 +12786,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String archiveJid,
   }) async {
     final state = complete
-        ? CalendarSyncState.read().markCoverageComplete(
+        ? _readPersonalCalendarSyncState().markCoverageComplete(
             calendarJid: bareAddress(calendarJid) ?? calendarJid,
             archiveJid: bareAddress(archiveJid) ?? archiveJid,
           )
-        : CalendarSyncState.read().markCoverageIncomplete();
-    await state.write();
+        : _readPersonalCalendarSyncState().markCoverageIncomplete();
+    await _writePersonalCalendarSyncState(state);
   }
 
   Future<void> _writeChatCalendarCoverageState({
@@ -12166,18 +12799,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required bool complete,
     DateTime? completedAt,
   }) async {
-    final store = const ChatCalendarSyncStateStore();
     final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
     final state = complete
-        ? store
-              .read(normalizedChatJid)
-              .markCoverageComplete(
-                calendarJid: normalizedChatJid,
-                archiveJid: normalizedChatJid,
-                completedAt: completedAt,
-              )
-        : store.read(normalizedChatJid).markCoverageIncomplete();
-    await store.write(normalizedChatJid, state);
+        ? _readChatCalendarSyncState(normalizedChatJid).markCoverageComplete(
+            calendarJid: normalizedChatJid,
+            archiveJid: normalizedChatJid,
+            completedAt: completedAt,
+          )
+        : _readChatCalendarSyncState(
+            normalizedChatJid,
+          ).markCoverageIncomplete();
+    await _writeChatCalendarSyncState(normalizedChatJid, state);
   }
 
   Future<void> _writePersonalCalendarArchiveResumeState({
@@ -12185,28 +12817,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String calendarJid,
     required String archiveJid,
   }) async {
-    final state = CalendarSyncState.read().markArchivePageHandled(
+    final state = _readPersonalCalendarSyncState().markArchivePageHandled(
       resumeId: resumeId,
       calendarJid: bareAddress(calendarJid) ?? calendarJid,
       archiveJid: bareAddress(archiveJid) ?? archiveJid,
     );
-    await state.write();
+    await _writePersonalCalendarSyncState(state);
   }
 
   Future<void> _writeChatCalendarArchiveResumeState({
     required String chatJid,
     required String resumeId,
   }) async {
-    final store = const ChatCalendarSyncStateStore();
     final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
-    final state = store
-        .read(normalizedChatJid)
+    final state = _readChatCalendarSyncState(normalizedChatJid)
         .markArchivePageHandled(
           resumeId: resumeId,
           calendarJid: normalizedChatJid,
           archiveJid: normalizedChatJid,
         );
-    await store.write(normalizedChatJid, state);
+    await _writeChatCalendarSyncState(normalizedChatJid, state);
   }
 
   Future<bool> _catchUpCalendarFromArchive({

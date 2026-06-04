@@ -10,9 +10,12 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
+import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_state_store.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -196,6 +199,14 @@ class _FakeForegroundBridge implements ForegroundTaskBridge {
   Future<bool> isRunning() async => acquiredClients.isNotEmpty;
 
   @override
+  Future<bool> stopIfRunning() async {
+    final running = acquiredClients.isNotEmpty;
+    acquiredClients.clear();
+    _listeners.clear();
+    return running;
+  }
+
+  @override
   Future<void> acquire({
     required String clientId,
     ForegroundServiceConfig? config,
@@ -323,7 +334,38 @@ class ScriptedMamManager extends mox.MAMManager {
       throw Exception('Unexpected MAM query');
     }
     final page = _pages.removeFirst();
+    final queryId = options?.queryId;
+    final messages = <mox.MAMMessage>[];
     for (final event in page.events) {
+      if (event is mox.MessageEvent && queryId != null) {
+        final mamId = event.id?.trim().isNotEmpty ?? false
+            ? event.id!
+            : 'scripted-mam-${messages.length}';
+        event.extensions.set(
+          mox.MAMContextData(
+            isFromMAM: true,
+            queryId: queryId,
+            mamId: mamId,
+            delay: event.get<mox.DelayedDeliveryData>(),
+          ),
+        );
+        final body = event.get<mox.MessageBodyData>()?.body;
+        messages.add(
+          mox.MAMMessage(
+            id: mamId,
+            message: mox.Stanza.message(
+              from: event.from.toString(),
+              to: event.to.toString(),
+              id: event.id,
+              type: event.type,
+              children: body == null
+                  ? const <mox.XMLNode>[]
+                  : <mox.XMLNode>[mox.XMLNode(tag: 'body', text: body)],
+            ),
+            delay: event.get<mox.DelayedDeliveryData>(),
+          ),
+        );
+      }
       eventStreamController.add(event);
     }
     await pumpEventQueue(times: page.pumpTimes);
@@ -332,13 +374,14 @@ class ScriptedMamManager extends mox.MAMManager {
       await release;
     }
     return mox.MAMQueryResult(
-      messages: const <mox.MAMMessage>[],
+      messages: List<mox.MAMMessage>.unmodifiable(messages),
       complete: page.complete,
       rsm: mox.ResultSetManagement(
         first: page.first,
         last: page.last,
         count: page.count,
       ),
+      queryId: queryId,
     );
   }
 }
@@ -904,6 +947,7 @@ void main() {
       );
       expect(xmppService.usingForegroundSocket, isFalse);
       expect(await xmppService.disableForegroundSocketIfActive(), isTrue);
+      await expectLater(xmppService.clearSessionTokens(), completes);
       expect(xmppService.pubSubSupport, isNotNull);
       expect(() => xmppService.pubSubSupportStream, returnsNormally);
     },
@@ -3704,6 +3748,74 @@ void main() {
     );
 
     test(
+      'Given a headline message from the bare account domain with a subject, writes the subject to the database.',
+      () async {
+        const stanzaId = 'server-domain-headline-subject';
+        const body = 'Account created';
+        const subject = 'Server announcement';
+        final systemMessageEvent = mox.MessageEvent(
+          mox.JID.fromString('axi.im'),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData(body),
+            const MessageSubjectData(subject),
+            const mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+          type: 'headline',
+        );
+
+        final beforeMessage = await database.getMessageByStanzaID(stanzaId);
+        expect(beforeMessage, isNull);
+
+        eventStreamController.add(systemMessageEvent);
+
+        await pumpEventQueue();
+
+        final afterMessage = await database.getMessageByStanzaID(stanzaId);
+        expect(afterMessage?.stanzaID, equals(stanzaId));
+        expect(afterMessage?.body, equals(body));
+        expect(afterMessage?.subject, equals(subject));
+        expect(afterMessage?.chatJid, equals('axi.im'));
+        expect(afterMessage?.senderJid, equals('axi.im'));
+      },
+    );
+
+    test(
+      'Given a subject-only headline from the bare account domain, writes the subject to the database.',
+      () async {
+        const stanzaId = 'server-domain-headline-subject-only';
+        const subject = 'Maintenance notice';
+        final systemMessageEvent = mox.MessageEvent(
+          mox.JID.fromString('axi.im'),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const MessageSubjectData(subject),
+            const mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+          type: 'headline',
+        );
+
+        final beforeMessage = await database.getMessageByStanzaID(stanzaId);
+        expect(beforeMessage, isNull);
+
+        eventStreamController.add(systemMessageEvent);
+
+        await pumpEventQueue();
+
+        final afterMessage = await database.getMessageByStanzaID(stanzaId);
+        expect(afterMessage?.stanzaID, equals(stanzaId));
+        expect(afterMessage?.body, isNull);
+        expect(afterMessage?.subject, equals(subject));
+        expect(afterMessage?.chatJid, equals('axi.im'));
+        expect(afterMessage?.senderJid, equals('axi.im'));
+      },
+    );
+
+    test(
       'Given archived duplicate welcome messages from the bare account domain, trims and stores only one.',
       () async {
         const trimmedBody = 'Welcome to Axichat';
@@ -3746,7 +3858,7 @@ void main() {
     test(
       'Given an archived inbound direct message, increments the chat unread count.',
       () async {
-        const peerJid = 'peer@example.com';
+        const peerJid = 'peer@axi.im';
         const stanzaId = 'mam-inbound-unread';
         final timestamp = DateTime.utc(2026, 3, 1, 12, 0, 0);
         final event = mox.MessageEvent(
@@ -3804,7 +3916,10 @@ void main() {
       verify(
         () => mockNotificationService.sendMessageNotification(
           title: any(named: 'title'),
-          body: messageEvent.text,
+          body: ChatSubjectCodec.previewText(
+            body: messageEvent.text,
+            subject: null,
+          ),
           senderName: any(named: 'senderName'),
           senderKey: any(named: 'senderKey'),
           conversationTitle: any(named: 'conversationTitle'),
@@ -4040,6 +4155,72 @@ void main() {
       expect(mamManager.calls, isEmpty);
     });
 
+    test('Personal calendar MAM runs for non-axi accounts', () async {
+      await xmppService.close();
+      await _openXmppStateStore('conversations_personal_calendar_mam');
+      database = XmppDrift(
+        file: File(''),
+        passphrase: '',
+        executor: NativeDatabase.memory(),
+      );
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(
+        xmppService,
+        accountJid: 'jid@conversations.im/resource',
+      );
+      HydratedBloc.storage = _InMemoryStorage();
+      final selfBare = mox.JID
+          .fromString(xmppService.myJid!)
+          .toBare()
+          .toString();
+      final timestamp = DateTime.utc(2026, 5, 4, 12);
+      final task = _task(
+        id: 'third-party-personal-calendar-task',
+        title: 'Recovered conversations.im task',
+        timestamp: timestamp,
+      );
+      final mamManager = ScriptedMamManager(
+        eventStreamController: eventStreamController,
+        pages: [
+          ScriptedMamPage(
+            events: [
+              _personalCalendarMamEvent(
+                selfBare: selfBare,
+                stanzaId: 'third-party-personal-calendar',
+                timestamp: timestamp,
+                message: _taskUpdate(task: task, operation: 'add'),
+              ),
+            ],
+            complete: true,
+            first: 'third-party-personal-first',
+            last: 'third-party-personal-last',
+            count: 1,
+          ),
+        ],
+      );
+      await xmppService.setMamSupportOverride(true);
+      when(
+        () => mockConnection.getManager<mox.MAMManager>(),
+      ).thenReturn(mamManager);
+
+      expect(
+        await xmppService.rehydrateCalendarFromMam(),
+        CalendarMamOutcome.completed,
+      );
+
+      expect(mamManager.queryCount, 1);
+      expect(mamManager.calls.single.withJid, selfBare);
+      expect(
+        jsonEncode(HydratedBloc.storage.read(authStoragePrefix)),
+        contains('Recovered conversations.im task'),
+      );
+    });
+
     test('Calendar MAM skips duplicate runs while one is in flight', () async {
       final release = Completer<void>();
       final mamManager = ScriptedMamManager(
@@ -4124,9 +4305,123 @@ void main() {
     );
 
     test(
+      'Personal calendar MAM runs when coverage survived without calendar data',
+      () async {
+        await _openXmppStateStore('axichat_personal_empty_local_calendar_mam');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final timestamp = DateTime.utc(2026, 5, 3, 12, 30);
+        final task = _task(
+          id: 'personal-empty-local-task',
+          title: 'Recovered after reinstall',
+          timestamp: timestamp,
+        );
+        await HydratedBloc.storage.write(
+          authStoragePrefix,
+          CalendarStateStorageCodec.encode(CalendarState.initial()),
+        );
+        await const CalendarSyncState()
+            .markCoverageComplete(calendarJid: selfBare, archiveJid: selfBare)
+            .writeLegacy();
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            const ScriptedMamPage(
+              complete: true,
+              first: 'global-empty-first',
+              last: 'global-empty-last',
+              count: 0,
+            ),
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'personal-empty-local-calendar',
+                  timestamp: timestamp,
+                  message: _taskUpdate(task: task, operation: 'add'),
+                ),
+              ],
+              complete: true,
+              first: 'personal-empty-local-first',
+              last: 'personal-empty-local-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.syncGlobalMamCatchUp(),
+          MamGlobalSyncOutcome.completed,
+        );
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.completed,
+        );
+
+        expect(mamManager.queryCount, 2);
+        expect(
+          jsonEncode(HydratedBloc.storage.read(authStoragePrefix)),
+          contains('Recovered after reinstall'),
+        );
+      },
+    );
+
+    test(
+      'Personal calendar MAM skips covered empty persisted calendar',
+      () async {
+        await _openXmppStateStore('axichat_personal_persisted_empty_calendar');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        await HydratedBloc.storage.write(
+          authStoragePrefix,
+          CalendarStateStorageCodec.encode(CalendarState.initial()),
+        );
+        await const CalendarSyncState()
+            .markCoverageComplete(calendarJid: selfBare, archiveJid: selfBare)
+            .write();
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: const [
+            ScriptedMamPage(
+              complete: true,
+              first: 'global-empty-first',
+              last: 'global-empty-last',
+              count: 0,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.syncGlobalMamCatchUp(),
+          MamGlobalSyncOutcome.completed,
+        );
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.skippedCoveredByGlobal,
+        );
+
+        expect(mamManager.queryCount, 1);
+      },
+    );
+
+    test(
       'Direct chat calendar MAM skips after global MAM covers that chat',
       () async {
-        const peerJid = 'peer@example.com';
+        const peerJid = 'peer@axi.im';
         await _openXmppStateStore('axichat_direct_global_calendar_mam');
         final storage = _InMemoryStorage();
         HydratedBloc.storage = storage;
@@ -4186,6 +4481,196 @@ void main() {
         expect(mamManager.queryCount, 1);
         final model = ChatCalendarStorage(storage: storage).readModel(peerJid);
         expect(model.tasks[task.id]?.title, 'Direct global task');
+      },
+    );
+
+    test(
+      'Global MAM waits for queued calendar sync before storing its cursor',
+      () async {
+        await _openXmppStateStore('axichat_global_mam_calendar_queue_barrier');
+        HydratedBloc.storage = _InMemoryStorage();
+        final stateValues = <String, Object?>{};
+        _stubStateStoreValues(stateValues);
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final timestamp = DateTime.utc(2026, 5, 3, 13, 30);
+        final task = _task(
+          id: 'queued-global-calendar-task',
+          title: 'Queued global task',
+          timestamp: timestamp,
+        );
+        final dispatches = <CalendarSyncDispatch>[];
+        final dispatchReceived = Completer<void>();
+        final subscription = xmppService.calendarSyncDispatchStream.listen((
+          dispatch,
+        ) {
+          dispatches.add(dispatch);
+          if (!dispatchReceived.isCompleted) {
+            dispatchReceived.complete();
+          }
+        });
+        addTearDown(subscription.cancel);
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'queued-global-calendar',
+                  timestamp: timestamp,
+                  message: _taskUpdate(task: task, operation: 'add'),
+                ),
+              ],
+              complete: true,
+              first: 'queued-global-first',
+              last: 'queued-global-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        var syncCompleted = false;
+        final syncFuture = xmppService.syncGlobalMamCatchUp().then((outcome) {
+          syncCompleted = true;
+          return outcome;
+        });
+        await dispatchReceived.future;
+        await pumpEventQueue(times: 5);
+
+        expect(syncCompleted, isFalse);
+        expect(stateValues.containsValue('queued-global-last'), isFalse);
+
+        await const PersonalCalendarSyncStateStore().write(
+          const CalendarSyncState().markHandled(dispatches.single.inbound),
+        );
+        dispatches.single.complete(true);
+
+        expect(await syncFuture, MamGlobalSyncOutcome.completed);
+        expect(stateValues.containsValue('queued-global-last'), isTrue);
+      },
+    );
+
+    test(
+      'Calendar sync queue aborts active dispatch on reset and drains after reconnect',
+      () async {
+        await _openXmppStateStore('axichat_calendar_queue_reset_reconnect');
+        HydratedBloc.storage = _InMemoryStorage();
+        final stateValues = <String, Object?>{};
+        _stubStateStoreValues(stateValues);
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final firstDispatchReceived = Completer<void>();
+        final secondDispatchReceived = Completer<void>();
+        final dispatches = <CalendarSyncDispatch>[];
+        final subscription = xmppService.calendarSyncDispatchStream.listen((
+          dispatch,
+        ) {
+          dispatches.add(dispatch);
+          if (dispatches.length == 1) {
+            firstDispatchReceived.complete();
+            return;
+          }
+          unawaited(() async {
+            await const PersonalCalendarSyncStateStore().write(
+              const CalendarSyncState().markHandled(dispatch.inbound),
+            );
+            dispatch.complete(true);
+            secondDispatchReceived.complete();
+          }());
+        });
+        addTearDown(subscription.cancel);
+
+        final firstMamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'reset-held-calendar',
+                  timestamp: DateTime.utc(2026, 5, 3, 14),
+                  message: _taskUpdate(
+                    task: _task(
+                      id: 'reset-held-calendar-task',
+                      title: 'Held calendar task',
+                      timestamp: DateTime.utc(2026, 5, 3, 14),
+                    ),
+                    operation: 'add',
+                  ),
+                ),
+              ],
+              complete: true,
+              first: 'reset-held-first',
+              last: 'reset-held-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(firstMamManager);
+
+        final firstSyncFuture = xmppService.syncGlobalMamCatchUp();
+        await firstDispatchReceived.future;
+        await xmppService.disconnect();
+        expect(await firstSyncFuture, MamGlobalSyncOutcome.failed);
+
+        database = XmppDrift(
+          file: File(''),
+          passphrase: '',
+          executor: NativeDatabase.memory(),
+        );
+        await connectSuccessfully(xmppService);
+        _stubStateStoreValues(stateValues);
+        await xmppService.setMamSupportOverride(true);
+
+        final secondMamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'reset-reconnected-calendar',
+                  timestamp: DateTime.utc(2026, 5, 3, 14, 1),
+                  message: _taskUpdate(
+                    task: _task(
+                      id: 'reset-reconnected-calendar-task',
+                      title: 'Reconnected calendar task',
+                      timestamp: DateTime.utc(2026, 5, 3, 14, 1),
+                    ),
+                    operation: 'add',
+                  ),
+                ),
+              ],
+              complete: true,
+              first: 'reset-reconnected-first',
+              last: 'reset-reconnected-last',
+              count: 1,
+            ),
+          ],
+        );
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(secondMamManager);
+
+        expect(
+          await xmppService.syncGlobalMamCatchUp(),
+          MamGlobalSyncOutcome.completed,
+        );
+        await secondDispatchReceived.future;
+        expect(dispatches, hasLength(2));
+        expect(stateValues.containsValue('reset-reconnected-last'), isTrue);
       },
     );
 
@@ -4333,7 +4818,7 @@ void main() {
     });
 
     test('Direct chat calendar MAM runs when coverage is incomplete', () async {
-      const peerJid = 'peer@example.com';
+      const peerJid = 'peer@axi.im';
       await _openXmppStateStore('axichat_direct_incomplete_calendar_mam');
       final storage = _InMemoryStorage();
       HydratedBloc.storage = storage;
@@ -4398,9 +4883,74 @@ void main() {
     });
 
     test(
+      'Direct chat calendar MAM runs when legacy coverage has no calendar data',
+      () async {
+        const peerJid = 'peer@axi.im';
+        await _openXmppStateStore('axichat_direct_empty_legacy_calendar_mam');
+        final storage = _InMemoryStorage();
+        HydratedBloc.storage = storage;
+        await ChatCalendarStorage(
+          storage: storage,
+        ).writeState(peerJid, CalendarState.initial());
+        await XmppStateStore().write(
+          key: XmppStateStore.registerKey(chatCalendarSyncStateKey(peerJid)),
+          value: const CalendarSyncState()
+              .markCoverageComplete(calendarJid: peerJid, archiveJid: peerJid)
+              .toJson(),
+        );
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final timestamp = DateTime.utc(2026, 5, 3, 16, 30);
+        final task = _task(
+          id: 'direct-empty-legacy-task',
+          title: 'Direct empty legacy task',
+          timestamp: timestamp,
+        );
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _directCalendarMamEvent(
+                  peerBare: peerJid,
+                  selfBare: selfBare,
+                  stanzaId: 'direct-empty-legacy-calendar',
+                  timestamp: timestamp,
+                  message: _taskUpdate(task: task, operation: 'add'),
+                ),
+              ],
+              complete: true,
+              first: 'direct-empty-legacy-first',
+              last: 'direct-empty-legacy-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateChatCalendarFromMam(
+            chatJid: peerJid,
+            chatType: ChatType.chat,
+          ),
+          CalendarMamOutcome.completed,
+        );
+
+        expect(mamManager.queryCount, 1);
+        final model = ChatCalendarStorage(storage: storage).readModel(peerJid);
+        expect(model.tasks[task.id]?.title, 'Direct empty legacy task');
+      },
+    );
+
+    test(
       'Global MAM preserves complete coverage for chat calendars it updates.',
       () async {
-        const peerJid = 'peer@example.com';
+        const peerJid = 'peer@axi.im';
         const stanzaId = 'chat-calendar-global-mam';
         final timestamp = DateTime.utc(2026, 5, 1, 12);
         final stateStoreValues = <String, Object?>{};
@@ -4496,6 +5046,7 @@ void main() {
           await Hive.deleteFromDisk();
           await tempDir.delete(recursive: true);
         });
+        HydratedBloc.storage = _InMemoryStorage();
         await CalendarSyncState()
             .markCoverageComplete(calendarJid: selfJid, archiveJid: selfJid)
             .write();
@@ -4633,6 +5184,7 @@ void main() {
         await Hive.deleteFromDisk();
         await tempDir.delete(recursive: true);
       });
+      HydratedBloc.storage = _InMemoryStorage();
       await CalendarSyncState(
         lastHandledTimestamp: cursorTimestamp,
         lastHandledStanzaId: 'calendar-cursor-id',
@@ -5011,6 +5563,14 @@ void main() {
         expect(mamManager.queryCount, 1);
         expect(warnings, isEmpty);
         expect(CalendarSyncState.read().hasCompleteCoverage, isTrue);
+        expect(
+          CalendarStateStorageCodec.decode(
+            Map<String, dynamic>.from(
+              HydratedBloc.storage.read(authStoragePrefix) as Map,
+            ),
+          )?.model.hasCalendarData,
+          isFalse,
+        );
       },
     );
 
@@ -5186,7 +5746,7 @@ void main() {
     test(
       'Unsupported chat snapshot leaves calendar MAM incomplete without advancing page resume',
       () async {
-        const peerJid = 'peer@example.com';
+        const peerJid = 'peer@axi.im';
         await _openXmppStateStore('axichat_chat_calendar_mam_bad_snapshot');
         final storage = _InMemoryStorage();
         HydratedBloc.storage = storage;
@@ -5250,6 +5810,69 @@ void main() {
         expect(state.lastHandledStanzaId, 'unsupported-chat-calendar-snapshot');
         expect(state.lastArchiveResumeId, isNot('bad-chat-snapshot-last'));
         expect(model.tasks, isEmpty);
+      },
+    );
+
+    test(
+      'Calendar MAM error envelope fails page instead of waiting forever',
+      () async {
+        await _openXmppStateStore('axichat_calendar_mam_error_envelope');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final selfJid = mox.JID.fromString(selfBare);
+        final timestamp = DateTime.utc(2026, 5, 4, 14, 30);
+        final task = _task(
+          id: 'page-error-calendar-task',
+          title: 'Page error calendar task',
+          timestamp: timestamp,
+        );
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                mox.MessageEvent(
+                  selfJid,
+                  selfJid,
+                  false,
+                  mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+                    mox.MessageBodyData(
+                      _calendarEnvelope(
+                        _taskUpdate(task: task, operation: 'add'),
+                      ),
+                    ),
+                    const mox.MessageIdData('page-error-calendar'),
+                    mox.DelayedDeliveryData(selfJid, timestamp),
+                  ]),
+                  id: 'page-error-calendar',
+                  isFromMAM: true,
+                  type: 'error',
+                ),
+              ],
+              complete: true,
+              first: 'page-error-first',
+              last: 'page-error-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam().timeout(
+            const Duration(seconds: 1),
+          ),
+          CalendarMamOutcome.failed,
+        );
+
+        final state = CalendarSyncState.read();
+        expect(state.lastArchiveResumeId, isNot('page-error-last'));
       },
     );
 
@@ -5336,6 +5959,7 @@ void main() {
           await Hive.deleteFromDisk();
           await tempDir.delete(recursive: true);
         });
+        HydratedBloc.storage = _InMemoryStorage();
         await xmppService.setMamSupportOverride(true);
         when(
           () => mockConnection.getManager<mox.MAMManager>(),
@@ -5524,7 +6148,7 @@ void main() {
     test(
       'Calendar sync outbound messages are stored in the XMPP archive',
       () async {
-        const peerJid = 'peer@example.com';
+        const peerJid = 'peer@axi.im';
         const snapshotUrl = 'https://files.example.com/calendar.snapshot';
         const snapshotName = 'calendar.snapshot';
         final timestamp = DateTime.utc(2026, 5, 4, 16);
@@ -5578,8 +6202,20 @@ void main() {
       },
     );
 
-    test('Read-only task shares persist the task owner map.', () async {
+    test('Calendar sync outbound skips unsupported domains', () async {
       const peerJid = 'peer@example.com';
+      final envelope = _calendarEnvelope(CalendarSyncMessage.request());
+
+      await xmppService.sendCalendarSyncMessage(
+        jid: peerJid,
+        outbound: CalendarSyncOutbound(envelope: envelope),
+      );
+
+      verifyNever(() => mockConnection.sendMessage(any()));
+    });
+
+    test('Read-only task shares persist the task owner map.', () async {
+      const peerJid = 'peer@axi.im';
       const taskId = 'shared-read-only-task';
       final createdAt = DateTime.utc(2026, 5, 2, 12);
       final stateStoreValues = <String, Object?>{};
@@ -5610,7 +6246,7 @@ void main() {
     });
 
     test('Loaded read-only task owners block peer calendar updates.', () async {
-      const peerJid = 'peer@example.com';
+      const peerJid = 'peer@axi.im';
       const taskId = 'shared-read-only-task';
       const stanzaId = 'blocked-read-only-calendar-sync';
       final createdAt = DateTime.utc(2026, 5, 2, 12);
@@ -5675,7 +6311,7 @@ void main() {
     });
 
     test('Read-only task owners are enforced for snapshots.', () async {
-      const peerJid = 'peer@example.com';
+      const peerJid = 'peer@axi.im';
       const taskId = 'shared-read-only-task';
       const stanzaId = 'blocked-read-only-calendar-snapshot';
       final createdAt = DateTime.utc(2026, 5, 2, 12);
@@ -6417,6 +7053,49 @@ void main() {
 
         expect(reconnectTriggers, isEmpty);
         expect(await reconnectionPolicy.getIsReconnecting(), isTrue);
+      },
+    );
+
+    test(
+      'Incoming stanza queue overflow reconnects instead of disabling reconnect.',
+      () async {
+        clearInteractions(mockConnection);
+
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(
+            mox.IncomingStanzaQueueOverflowError(256),
+          ),
+        );
+        await pumpEventQueue(times: 10);
+
+        expect(reconnectTriggers, [ReconnectTrigger.immediateRetry]);
+        expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
+        expect(xmppService.connectionState, ConnectionState.connecting);
+        verifyNever(() => mockConnection.setShouldReconnect(false));
+      },
+    );
+
+    test(
+      'Incoming stanza queue overflow is fatal when recovery is rejected.',
+      () async {
+        when(() => mockConnection.requestReconnect(any())).thenAnswer((
+          _,
+        ) async {
+          return ReconnectRequestOutcome.ignored;
+        });
+
+        eventStreamController.add(
+          mox.NonRecoverableErrorEvent(
+            mox.IncomingStanzaQueueOverflowError(256),
+          ),
+        );
+        await pumpEventQueue(times: 10);
+
+        expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+        expect(
+          await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
+          isFalse,
+        );
       },
     );
 
