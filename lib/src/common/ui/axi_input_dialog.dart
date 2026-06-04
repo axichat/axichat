@@ -18,6 +18,7 @@ class AxiInputDialog extends StatelessWidget {
     this.canPop = true,
     this.showCloseButton = true,
     this.actions = const [],
+    this.showPrimaryButton = true,
     this.maxWidth,
   });
 
@@ -29,6 +30,7 @@ class AxiInputDialog extends StatelessWidget {
   final bool canPop;
   final bool showCloseButton;
   final List<Widget> actions;
+  final bool showPrimaryButton;
   final double? maxWidth;
 
   @override
@@ -46,11 +48,12 @@ class AxiInputDialog extends StatelessWidget {
         child: Text(context.l10n.commonCancel),
       ),
       ...actions,
-      AxiButton.primary(
-        onPressed: loading ? null : callback,
-        loading: loading,
-        child: Text(resolvedCallbackText),
-      ),
+      if (showPrimaryButton)
+        AxiButton.primary(
+          onPressed: loading ? null : callback,
+          loading: loading,
+          child: Text(resolvedCallbackText),
+        ),
     ];
     final resolvedMaxWidth = maxWidth ?? context.sizing.dialogMaxWidth;
     final dialogChild = ConstrainedBox(

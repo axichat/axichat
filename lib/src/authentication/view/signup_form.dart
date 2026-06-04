@@ -11,6 +11,7 @@ import 'package:axichat/src/authentication/view/endpoint_config_sheet.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/signup_avatar_selector.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -86,6 +87,7 @@ class _SignupFormState extends State<SignupForm>
   int _captchaAutoRetryAttempts = 0;
   int _captchaRequestSerial = 0;
   String? _lastCaptchaServer;
+  EndpointConfig? _signupEndpointConfig;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
 
@@ -150,11 +152,7 @@ class _SignupFormState extends State<SignupForm>
       text: context.l10n.authUsernameCaseInsensitive,
       style: context.textTheme.small,
     );
-    if (context
-        .read<AuthenticationCubit>()
-        .state
-        .config
-        .requiresCustomSignupEndpoint()) {
+    if (!_signupEndpointConfigured) {
       _clearCaptcha();
       return;
     }
@@ -230,15 +228,15 @@ class _SignupFormState extends State<SignupForm>
   void _onPressed(BuildContext context) async {
     if (context.read<SignupAvatarCubit>().state.processing) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    if (context
-        .read<AuthenticationCubit>()
-        .state
-        .config
-        .requiresCustomSignupEndpoint()) {
+    if (!_signupEndpointConfigured) {
       _goToSignupStep(0);
       setState(() {
         _errorText = context.l10n.signupCustomEndpointRequired;
       });
+      return;
+    }
+    final signupEndpointConfig = _resolvedSignupEndpointConfig;
+    if (signupEndpointConfig == null) {
       return;
     }
     final captchaSrc = _captchaSrcUrl?.trim() ?? '';
@@ -257,9 +255,14 @@ class _SignupFormState extends State<SignupForm>
         .read<SignupAvatarCubit>()
         .buildSelectedAvatarPayload();
     if (!context.mounted) return;
+    await context.read<SettingsCubit>().updateEndpointConfig(
+      signupEndpointConfig,
+    );
+    if (!context.mounted) return;
     widget.onSubmitStart?.call();
     final effectiveRememberMe = _passwordWasSkipped ? true : rememberMe;
     await context.read<AuthenticationCubit>().signup(
+      endpointConfigOverride: signupEndpointConfig,
       username: _jidTextController.value.text,
       password: _passwordTextController.value.text,
       confirmPassword: _password2TextController.value.text,
@@ -293,15 +296,17 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<String> _loadCaptchaSrc() async {
-    if (context
-        .read<AuthenticationCubit>()
-        .state
-        .config
-        .requiresCustomSignupEndpoint()) {
+    if (!_signupEndpointConfigured) {
       return '';
     }
-    _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
-    return context.read<AuthenticationCubit>().fetchCaptchaSrcWithRetry();
+    final signupEndpointConfig = _resolvedSignupEndpointConfig;
+    if (!mounted || signupEndpointConfig == null) {
+      return '';
+    }
+    _lastCaptchaServer = signupEndpointConfig.domain;
+    return context.read<AuthenticationCubit>().fetchCaptchaSrcWithRetry(
+      config: signupEndpointConfig,
+    );
   }
 
   void _clearCaptcha() {
@@ -313,11 +318,7 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha() {
-    if (context
-        .read<AuthenticationCubit>()
-        .state
-        .config
-        .requiresCustomSignupEndpoint()) {
+    if (!_signupEndpointConfigured) {
       _clearCaptcha();
       if (mounted) {
         setState(() {});
@@ -326,6 +327,24 @@ class _SignupFormState extends State<SignupForm>
     }
     _captchaTextController.clear();
     unawaited(_startCaptchaLoad(resetAutoRetry: true));
+  }
+
+  void _handleSignupEndpointChanged(EndpointConfig config) {
+    setState(() {
+      _signupEndpointConfig = config;
+      _errorText = null;
+    });
+    _reloadCaptcha();
+  }
+
+  EndpointConfig? get _resolvedSignupEndpointConfig {
+    final config = _signupEndpointConfig;
+    if (config == null ||
+        config.domain.trim().isEmpty ||
+        config.requiresCustomSignupEndpoint) {
+      return null;
+    }
+    return config;
   }
 
   Future<void> _startCaptchaLoad({required bool resetAutoRetry}) async {
@@ -481,6 +500,13 @@ class _SignupFormState extends State<SignupForm>
 
   bool get _captchaComplete => _captchaTextController.text.trim().isNotEmpty;
 
+  bool get _signupEndpointConfigured {
+    final config = _signupEndpointConfig;
+    return config != null &&
+        config.domain.trim().isNotEmpty &&
+        !config.requiresCustomSignupEndpoint;
+  }
+
   bool get _hasStartedPasswordConfirmation =>
       _passwordTextController.text.isNotEmpty &&
       _password2TextController.text.isNotEmpty;
@@ -634,16 +660,14 @@ class _SignupFormState extends State<SignupForm>
     return BlocConsumer<AuthenticationCubit, AuthenticationState>(
       // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
       listener: (context, state) {
-        if (_lastCaptchaServer != state.server) {
-          _lastCaptchaServer = state.server;
-          if (state.config.requiresCustomSignupEndpoint()) {
-            _clearCaptcha();
-          } else {
-            _reloadCaptcha();
-          }
+        final selectedSignupServer = _signupEndpointConfig?.domain;
+        if (selectedSignupServer != null &&
+            _lastCaptchaServer != selectedSignupServer) {
+          _lastCaptchaServer = selectedSignupServer;
+          _reloadCaptcha();
         }
         if (state is AuthenticationSignupFailure) {
-          if (state.config.requiresCustomSignupEndpoint()) {
+          if (!_signupEndpointConfigured) {
             _clearCaptcha();
           } else {
             _reloadCaptcha();
@@ -844,11 +868,14 @@ class _SignupFormState extends State<SignupForm>
                                               _handleContinuePressed(context),
                                             ),
                                             trailing: SignupEndpointSuffix(
-                                              config: state.config,
+                                              config: _signupEndpointConfig,
+                                              onChanged: (config) =>
+                                                  _handleSignupEndpointChanged(
+                                                    config,
+                                                  ),
                                             ),
                                             validator: (text) {
-                                              if (state.config
-                                                  .requiresCustomSignupEndpoint()) {
+                                              if (!_signupEndpointConfigured) {
                                                 return context
                                                     .l10n
                                                     .signupCustomEndpointRequired;

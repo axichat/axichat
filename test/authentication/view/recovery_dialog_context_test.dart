@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
+    as provisioning;
 import 'package:axichat/src/authentication/view/recovery_dialog.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -107,7 +109,82 @@ void main() {
 
     expect(find.byType(AxiOtpFormField), findsOneWidget);
     expect(find.byType(ShadInputOTP), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byType(ShadInputOTP),
+        matching: find.byType(Center),
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(ShadInputOTPSlot), findsNWidgets(6));
+  });
+
+  testWidgets('recovery email verify sends challenge and code', (tester) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.startRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        recoveryEmail: 'recovery@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'challenge-id'),
+    );
+    when(
+      () => settingsCubit.verifyRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        challenge: 'challenge-id',
+        code: '123456',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryResetToken(resetToken: 'reset-token'),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showAccountRecoveryDialog(
+                context,
+                initialUsername: 'alice@axi.im',
+              ),
+            );
+          },
+          child: const Text('Open account recovery'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open account recovery'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Email code'));
+    await tester.pumpAndSettle();
+    tester
+            .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+            .last
+            .controller
+            ?.text =
+        'recovery@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(ShadInput).first, '123456');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.verifyRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        challenge: 'challenge-id',
+        code: '123456',
+      ),
+    ).called(1);
   });
 }
 

@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -53,11 +54,13 @@ class RecoveryStatus {
   const RecoveryStatus({
     required this.recoveryEmailConfigured,
     required this.totpConfigured,
+    this.recoveryEmail,
     this.maskedRecoveryEmail,
   });
 
   final bool recoveryEmailConfigured;
   final bool totpConfigured;
+  final String? recoveryEmail;
   final String? maskedRecoveryEmail;
 
   bool get hasRecoveryMethod => recoveryEmailConfigured || totpConfigured;
@@ -81,11 +84,19 @@ class RecoveryStatus {
       return null;
     }
 
-    final maskedRecoveryEmail = readString([
+    final explicitMaskedRecoveryEmail = readString([
       'masked_recovery_email',
       'recovery_email_masked',
-      'recovery_email',
     ]);
+    final recoveryEmailValue = readString(['recovery_email']);
+    final recoveryEmail =
+        recoveryEmailValue != null &&
+            !recoveryEmailValue.contains('*') &&
+            isValidAddress(recoveryEmailValue)
+        ? recoveryEmailValue
+        : null;
+    final maskedRecoveryEmail =
+        explicitMaskedRecoveryEmail ?? recoveryEmailValue;
     return RecoveryStatus(
       recoveryEmailConfigured:
           readBool([
@@ -101,6 +112,7 @@ class RecoveryStatus {
         'authenticator_enabled',
         'has_totp',
       ]),
+      recoveryEmail: recoveryEmail,
       maskedRecoveryEmail: maskedRecoveryEmail,
     );
   }
@@ -600,7 +612,7 @@ class EmailProvisioningClient {
     required String email,
     String? password,
   }) async {
-    final payload = <String, Object?>{'email': email.trim()};
+    final payload = <String, Object?>{'username': _recoveryUsername(email)};
     if (password != null) {
       payload['password'] = password;
     }
@@ -623,7 +635,7 @@ class EmailProvisioningClient {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'email', 'start'],
       payload: {
-        'email': email.trim(),
+        'username': _recoveryUsername(email),
         'password': password,
         'recovery_email': recoveryEmail.trim(),
       },
@@ -652,9 +664,9 @@ class EmailProvisioningClient {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'email', 'confirm'],
       payload: {
-        'email': email.trim(),
+        'username': _recoveryUsername(email),
         'password': password,
-        'challenge': challenge.trim(),
+        'challenge_id': challenge.trim(),
         'code': code.trim(),
       },
       logContext: 'recovery email setup confirm',
@@ -674,7 +686,7 @@ class EmailProvisioningClient {
   }) async {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'email', 'remove'],
-      payload: {'email': email.trim(), 'password': password},
+      payload: {'username': _recoveryUsername(email), 'password': password},
       logContext: 'recovery email remove',
     );
     if (response.statusCode == 200 || response.statusCode == 404) {
@@ -692,7 +704,7 @@ class EmailProvisioningClient {
   }) async {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'totp', 'start'],
-      payload: {'email': email.trim(), 'password': password},
+      payload: {'username': _recoveryUsername(email), 'password': password},
       logContext: 'recovery authenticator setup start',
     );
     if (response.statusCode == 200) {
@@ -721,9 +733,9 @@ class EmailProvisioningClient {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'totp', 'confirm'],
       payload: {
-        'email': email.trim(),
+        'username': _recoveryUsername(email),
         'password': password,
-        if (challenge != null) 'challenge': challenge.trim(),
+        if (challenge != null) 'challenge_id': challenge.trim(),
         'code': code.trim(),
       },
       logContext: 'recovery authenticator setup confirm',
@@ -743,7 +755,7 @@ class EmailProvisioningClient {
   }) async {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'totp', 'remove'],
-      payload: {'email': email.trim(), 'password': password},
+      payload: {'username': _recoveryUsername(email), 'password': password},
       logContext: 'recovery authenticator remove',
     );
     if (response.statusCode == 200 || response.statusCode == 404) {
@@ -759,18 +771,24 @@ class EmailProvisioningClient {
     required String email,
     required String recoveryEmail,
   }) async {
+    final username = _recoveryUsername(email);
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'email', 'start-reset'],
-      payload: {'email': email.trim(), 'recovery_email': recoveryEmail.trim()},
+      payload: {'username': username, 'recovery_email': recoveryEmail.trim()},
       logContext: 'recovery email reset start',
     );
     if (response.statusCode == 200) {
-      return RecoveryEmailChallenge(
-        challenge: _requiredString(_decodeObject(response.body), const [
-          'challenge',
-          'challenge_id',
-        ]),
+      final challenge = _requiredString(_decodeObject(response.body), const [
+        'challenge',
+        'challenge_id',
+      ]);
+      _log.info(
+        'Recovery email reset start challenge received: '
+        'usernameLength=${username.length} '
+        'challengeLength=${challenge.length} '
+        'challengeIdPrefix=${_debugTokenPrefix(challenge)}',
       );
+      return RecoveryEmailChallenge(challenge: challenge);
     }
     _throwV1Exception(
       response,
@@ -783,12 +801,22 @@ class EmailProvisioningClient {
     required String challenge,
     required String code,
   }) async {
+    final username = _recoveryUsername(email);
+    final challengeId = challenge.trim();
+    final recoveryCode = code.trim();
+    _log.info(
+      'Recovery email reset verify request metadata: '
+      'usernameLength=${username.length} '
+      'challengeLength=${challengeId.length} '
+      'challengeIdPrefix=${_debugTokenPrefix(challengeId)} '
+      'codeLength=${recoveryCode.length}',
+    );
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'email', 'verify'],
       payload: {
-        'email': email.trim(),
-        'challenge': challenge.trim(),
-        'code': code.trim(),
+        'username': username,
+        'challenge_id': challengeId,
+        'code': recoveryCode,
       },
       logContext: 'recovery email reset verify',
     );
@@ -811,7 +839,7 @@ class EmailProvisioningClient {
   }) async {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'totp', 'verify'],
-      payload: {'email': email.trim(), 'code': code.trim()},
+      payload: {'username': _recoveryUsername(email), 'code': code.trim()},
       logContext: 'recovery authenticator reset verify',
     );
     if (response.statusCode == 200) {
@@ -835,7 +863,7 @@ class EmailProvisioningClient {
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'password', 'reset'],
       payload: {
-        'email': email.trim(),
+        'username': _recoveryUsername(email),
         'reset_token': resetToken.trim(),
         'new_password': newPassword,
       },
@@ -1117,6 +1145,23 @@ class EmailProvisioningClient {
       }
     }
     return null;
+  }
+
+  String _recoveryUsername(String email) {
+    final localPart = addressLocalPart(email);
+    if (localPart != null && localPart.trim().isNotEmpty) {
+      return localPart.trim().toLowerCase();
+    }
+    return email.trim().toLowerCase();
+  }
+
+  String _debugTokenPrefix(String token) {
+    final trimmed = token.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    final end = trimmed.length < 8 ? trimmed.length : 8;
+    return trimmed.substring(0, end);
   }
 
   String _requiredString(Map<String, dynamic> json, List<String> keys) {

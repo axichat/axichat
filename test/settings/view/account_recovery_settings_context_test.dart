@@ -71,6 +71,202 @@ void main() {
     expect(find.text('Old password'), findsNothing);
   });
 
+  testWidgets('wrong recovery settings password keeps entered value', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.recoveryStatus(
+        accountJid: 'alpha@axi.im',
+        password: 'wrong-password',
+      ),
+    ).thenThrow(
+      const provisioning.EmailProvisioningApiRejectedException(
+        code: provisioning.EmailProvisioningApiErrorCode.authFailed,
+        statusCode: 401,
+        isRecoverable: true,
+      ),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        profileCubit: _profileCubit(jid: 'alpha@axi.im'),
+        showOpener: showOpener,
+        childBuilder: (_) => const AccountRecoverySettingsPage(),
+      ),
+    );
+
+    final passwordField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    passwordField.controller?.text = 'wrong-password';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    final submittedField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    expect(submittedField.controller?.text, 'wrong-password');
+    expect(find.text('Incorrect password. Please try again.'), findsOneWidget);
+  });
+
+  testWidgets('configured recovery email edit dialog can remove method', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.recoveryStatus(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).thenAnswer(
+      (_) async => const provisioning.RecoveryStatus(
+        recoveryEmailConfigured: true,
+        recoveryEmail: 'recovery@example.com',
+        maskedRecoveryEmail: 'r***@example.com',
+        totpConfigured: false,
+      ),
+    );
+    when(
+      () => settingsCubit.removeRecoveryEmail(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).thenAnswer((_) async {});
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        profileCubit: _profileCubit(jid: 'alpha@axi.im'),
+        showOpener: showOpener,
+        childBuilder: (_) => const AccountRecoverySettingsPage(),
+      ),
+    );
+
+    final passwordField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    passwordField.controller?.text = 'current-password';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Recovery email'));
+    await tester.pumpAndSettle();
+
+    final field = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    expect(field.controller?.text, 'recovery@example.com');
+
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.removeRecoveryEmail(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).called(1);
+  });
+
+  testWidgets('recovery email add dialog ignores stale current email', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showRecoveryEmailSetupDialog(
+                context,
+                accountJid: 'alpha@axi.im',
+                currentPassword: 'current-password',
+                currentRecoveryEmail: 'stale@example.com',
+              ),
+            );
+          },
+          child: const Text('Open recovery email'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open recovery email'));
+    await tester.pumpAndSettle();
+
+    final field = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    expect(field.controller?.text, isEmpty);
+  });
+
+  testWidgets('configured authenticator edit dialog can remove method', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.recoveryStatus(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).thenAnswer(
+      (_) async => const provisioning.RecoveryStatus(
+        recoveryEmailConfigured: false,
+        totpConfigured: true,
+      ),
+    );
+    when(
+      () => settingsCubit.removeRecoveryTotp(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).thenAnswer((_) async {});
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        profileCubit: _profileCubit(jid: 'alpha@axi.im'),
+        showOpener: showOpener,
+        childBuilder: (_) => const AccountRecoverySettingsPage(),
+      ),
+    );
+
+    final passwordField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    passwordField.controller?.text = 'current-password';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Authenticator app'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create new'), findsOneWidget);
+    expect(find.text('Save'), findsNothing);
+
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.removeRecoveryTotp(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).called(1);
+  });
+
   testWidgets('showRecoveryEmailSetupDialog survives opener disposal', (
     tester,
   ) async {
@@ -218,7 +414,87 @@ void main() {
 
     expect(find.byType(AxiOtpFormField), findsOneWidget);
     expect(find.byType(ShadInputOTP), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byType(ShadInputOTP),
+        matching: find.byType(Center),
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(ShadInputOTPSlot), findsNWidgets(6));
+  });
+
+  testWidgets('recovery email setup confirmation sends OTP input', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.startRecoveryEmailSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+        recoveryEmail: 'recovery@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'challenge-id'),
+    );
+    when(
+      () => settingsCubit.confirmRecoveryEmailSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+        challenge: 'challenge-id',
+        code: '123456',
+      ),
+    ).thenThrow(
+      const provisioning.EmailProvisioningApiRejectedException(
+        code: provisioning.EmailProvisioningApiErrorCode.invalidCode,
+        statusCode: 401,
+        isRecoverable: true,
+      ),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showRecoveryEmailSetupDialog(
+                context,
+                accountJid: 'alpha@axi.im',
+                currentPassword: 'current-password',
+              ),
+            );
+          },
+          child: const Text('Open recovery email'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open recovery email'));
+    await tester.pumpAndSettle();
+    final field = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    field.controller?.text = 'recovery@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(ShadInput).first, '123456');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.confirmRecoveryEmailSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+        challenge: 'challenge-id',
+        code: '123456',
+      ),
+    ).called(1);
   });
 }
 

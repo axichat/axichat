@@ -12,7 +12,6 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -32,12 +31,16 @@ Future<bool> showRecoveryEmailSetupDialog(
   BuildContext context, {
   required String accountJid,
   String? currentPassword,
+  String? currentRecoveryEmail,
+  bool recoveryEmailConfigured = false,
   bool allowPasswordPrompt = true,
 }) async {
   final result = await _showRecoveryEmailSetupDialog(
     context,
     accountJid: accountJid,
     currentPassword: currentPassword,
+    currentRecoveryEmail: currentRecoveryEmail,
+    recoveryEmailConfigured: recoveryEmailConfigured,
     allowPasswordPrompt: allowPasswordPrompt,
   );
   return result != null;
@@ -47,6 +50,8 @@ Future<_RecoveryMutationResult?> _showRecoveryEmailSetupDialog(
   BuildContext context, {
   required String accountJid,
   String? currentPassword,
+  String? currentRecoveryEmail,
+  bool recoveryEmailConfigured = false,
   bool allowPasswordPrompt = true,
 }) async {
   if (!context.read<SettingsCubit>().state.endpointConfig.isAxiImDomain ||
@@ -58,6 +63,8 @@ Future<_RecoveryMutationResult?> _showRecoveryEmailSetupDialog(
     builder: (_) => _RecoveryEmailSetupDialog(
       accountJid: accountJid,
       currentPassword: currentPassword,
+      currentRecoveryEmail: currentRecoveryEmail,
+      recoveryEmailConfigured: recoveryEmailConfigured,
       allowPasswordPrompt: allowPasswordPrompt,
     ),
   );
@@ -67,12 +74,14 @@ Future<bool> showRecoveryTotpSetupDialog(
   BuildContext context, {
   required String accountJid,
   String? currentPassword,
+  bool totpConfigured = false,
   bool allowPasswordPrompt = true,
 }) async {
   final result = await _showRecoveryTotpSetupDialog(
     context,
     accountJid: accountJid,
     currentPassword: currentPassword,
+    totpConfigured: totpConfigured,
     allowPasswordPrompt: allowPasswordPrompt,
   );
   return result != null;
@@ -82,6 +91,7 @@ Future<_RecoveryMutationResult?> _showRecoveryTotpSetupDialog(
   BuildContext context, {
   required String accountJid,
   String? currentPassword,
+  bool totpConfigured = false,
   bool allowPasswordPrompt = true,
 }) async {
   if (!context.read<SettingsCubit>().state.endpointConfig.isAxiImDomain ||
@@ -93,6 +103,7 @@ Future<_RecoveryMutationResult?> _showRecoveryTotpSetupDialog(
     builder: (_) => _RecoveryTotpSetupDialog(
       accountJid: accountJid,
       currentPassword: currentPassword,
+      totpConfigured: totpConfigured,
       allowPasswordPrompt: allowPasswordPrompt,
     ),
   );
@@ -176,7 +187,6 @@ class _AccountRecoverySettingsPageState
       return;
     }
     final password = _statusPasswordController.text;
-    _statusPasswordController.clear();
     await _loadStatus(password);
   }
 
@@ -201,6 +211,7 @@ class _AccountRecoverySettingsPageState
       if (!mounted) {
         return;
       }
+      _statusPasswordController.clear();
       setState(() {
         _rememberRecoveryPassword(currentPassword);
         _status = status;
@@ -226,7 +237,10 @@ class _AccountRecoverySettingsPageState
     }
   }
 
-  Future<void> _showEmailSetup() async {
+  Future<void> _showEmailSetup({
+    required bool recoveryEmailConfigured,
+    String? currentRecoveryEmail,
+  }) async {
     final currentPassword = await _currentRecoveryPassword();
     if (!mounted || currentPassword == null) {
       return;
@@ -235,6 +249,8 @@ class _AccountRecoverySettingsPageState
       context,
       accountJid: _accountJid,
       currentPassword: currentPassword,
+      currentRecoveryEmail: currentRecoveryEmail,
+      recoveryEmailConfigured: recoveryEmailConfigured,
     );
     if (!mounted || result == null) {
       return;
@@ -243,7 +259,7 @@ class _AccountRecoverySettingsPageState
     await _loadStatus(result.currentPassword);
   }
 
-  Future<void> _showTotpSetup() async {
+  Future<void> _showTotpSetup({required bool totpConfigured}) async {
     final currentPassword = await _currentRecoveryPassword();
     if (!mounted || currentPassword == null) {
       return;
@@ -252,46 +268,7 @@ class _AccountRecoverySettingsPageState
       context,
       accountJid: _accountJid,
       currentPassword: currentPassword,
-    );
-    if (!mounted || result == null) {
-      return;
-    }
-    _rememberRecoveryPassword(result.currentPassword);
-    await _loadStatus(result.currentPassword);
-  }
-
-  Future<void> _showRemoveEmail() async {
-    final currentPassword = await _currentRecoveryPassword();
-    if (!mounted || currentPassword == null) {
-      return;
-    }
-    final result = await showFadeScaleDialog<_RecoveryMutationResult>(
-      context: context,
-      builder: (_) => _RecoveryRemoveDialog(
-        accountJid: _accountJid,
-        method: _RecoveryRemoveMethod.email,
-        currentPassword: currentPassword,
-      ),
-    );
-    if (!mounted || result == null) {
-      return;
-    }
-    _rememberRecoveryPassword(result.currentPassword);
-    await _loadStatus(result.currentPassword);
-  }
-
-  Future<void> _showRemoveTotp() async {
-    final currentPassword = await _currentRecoveryPassword();
-    if (!mounted || currentPassword == null) {
-      return;
-    }
-    final result = await showFadeScaleDialog<_RecoveryMutationResult>(
-      context: context,
-      builder: (_) => _RecoveryRemoveDialog(
-        accountJid: _accountJid,
-        method: _RecoveryRemoveMethod.totp,
-        currentPassword: currentPassword,
-      ),
+      totpConfigured: totpConfigured,
     );
     if (!mounted || result == null) {
       return;
@@ -346,17 +323,12 @@ class _AccountRecoverySettingsPageState
             actionIconData: status.recoveryEmailConfigured
                 ? LucideIcons.pencil
                 : LucideIcons.plus,
-            onPressed: _showEmailSetup,
+            onPressed: () => _showEmailSetup(
+              recoveryEmailConfigured: status.recoveryEmailConfigured,
+              currentRecoveryEmail: status.recoveryEmail,
+            ),
           ),
           SizedBox(height: spacing.s),
-          if (status.recoveryEmailConfigured) ...[
-            _RecoverySettingsRemoveButton(
-              iconData: LucideIcons.trash2,
-              title: context.l10n.recoveryRemoveEmailTitle,
-              onPressed: _showRemoveEmail,
-            ),
-            SizedBox(height: spacing.s),
-          ],
           _RecoverySettingsMethodButton(
             iconData: LucideIcons.smartphone,
             title: context.l10n.recoveryTotpTitle,
@@ -366,16 +338,9 @@ class _AccountRecoverySettingsPageState
             actionIconData: status.totpConfigured
                 ? LucideIcons.pencil
                 : LucideIcons.plus,
-            onPressed: _showTotpSetup,
+            onPressed: () =>
+                _showTotpSetup(totpConfigured: status.totpConfigured),
           ),
-          if (status.totpConfigured) ...[
-            SizedBox(height: spacing.s),
-            _RecoverySettingsRemoveButton(
-              iconData: LucideIcons.trash2,
-              title: context.l10n.recoveryRemoveTotpTitle,
-              onPressed: _showRemoveTotp,
-            ),
-          ],
         ],
         if (status != null) ...[
           SizedBox(height: spacing.s),
@@ -422,7 +387,7 @@ class _RecoveryStatusPasswordForm extends StatelessWidget {
             padding: EdgeInsets.all(spacing.s),
             child: PasswordInput(
               controller: controller,
-              enabled: !loading,
+              enabled: true,
               placeholder: context.l10n.authPasswordPlaceholder,
               textInputAction: TextInputAction.done,
               onEditingComplete: () async => await onSubmit(),
@@ -487,32 +452,13 @@ class _RecoverySettingsMethodButton extends StatelessWidget {
   }
 }
 
-class _RecoverySettingsRemoveButton extends StatelessWidget {
-  const _RecoverySettingsRemoveButton({
-    required this.iconData,
-    required this.title,
-    required this.onPressed,
-  });
-
-  final IconData iconData;
-  final String title;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return AxiListButton.destructiveGhost(
-      leading: Icon(iconData, size: context.sizing.menuItemIconSize),
-      onPressed: onPressed,
-      child: Text(title),
-    );
-  }
-}
-
 class _RecoveryMutationResult {
   const _RecoveryMutationResult({required this.currentPassword});
 
   final String currentPassword;
 }
+
+enum _RecoveryMutationOperation { save, remove }
 
 class _RecoveryPasswordPromptDialog extends StatefulWidget {
   const _RecoveryPasswordPromptDialog();
@@ -568,11 +514,15 @@ class _RecoveryEmailSetupDialog extends StatefulWidget {
   const _RecoveryEmailSetupDialog({
     required this.accountJid,
     this.currentPassword,
+    this.currentRecoveryEmail,
+    required this.recoveryEmailConfigured,
     required this.allowPasswordPrompt,
   });
 
   final String accountJid;
   final String? currentPassword;
+  final String? currentRecoveryEmail;
+  final bool recoveryEmailConfigured;
   final bool allowPasswordPrompt;
 
   @override
@@ -583,12 +533,22 @@ class _RecoveryEmailSetupDialog extends StatefulWidget {
 class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
-  final _emailController = TextEditingController();
+  late final TextEditingController _emailController;
   final _codeController = TextEditingController();
   String? _challenge;
   String? _errorText;
   bool _passwordOverrideRequired = false;
-  bool _loading = false;
+  _RecoveryMutationOperation? _operation;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(
+      text: widget.recoveryEmailConfigured
+          ? widget.currentRecoveryEmail ?? ''
+          : '',
+    );
+  }
 
   @override
   void dispose() {
@@ -618,8 +578,10 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
     if (form == null || !form.validate()) {
       return;
     }
+    final password = _password;
+    final recoveryEmail = _emailController.text;
     setState(() {
-      _loading = true;
+      _operation = _RecoveryMutationOperation.save;
       _errorText = null;
     });
     try {
@@ -629,8 +591,8 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
             .read<SettingsCubit>()
             .startRecoveryEmailSetup(
               accountJid: widget.accountJid,
-              password: _password,
-              recoveryEmail: _emailController.text,
+              password: password,
+              recoveryEmail: recoveryEmail,
             );
         if (!mounted) {
           return;
@@ -642,12 +604,14 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
       }
       await context.read<SettingsCubit>().confirmRecoveryEmailSetup(
         accountJid: widget.accountJid,
-        password: _password,
+        password: password,
         challenge: challenge,
         code: _codeController.text,
       );
       if (mounted) {
-        context.pop(_RecoveryMutationResult(currentPassword: _password));
+        Navigator.of(
+          context,
+        ).pop(_RecoveryMutationResult(currentPassword: password));
       }
     } on provisioning.EmailProvisioningApiException catch (error) {
       if (!mounted) {
@@ -659,7 +623,46 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
     } finally {
       if (mounted) {
         setState(() {
-          _loading = false;
+          _operation = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _remove() async {
+    if ((widget.currentPassword == null || _passwordOverrideRequired) &&
+        _passwordController.text.isEmpty) {
+      setState(() {
+        _errorText = context.l10n.authPasswordRequired;
+      });
+      return;
+    }
+    final password = _password;
+    setState(() {
+      _operation = _RecoveryMutationOperation.remove;
+      _errorText = null;
+    });
+    try {
+      await context.read<SettingsCubit>().removeRecoveryEmail(
+        accountJid: widget.accountJid,
+        password: password,
+      );
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pop(_RecoveryMutationResult(currentPassword: password));
+      }
+    } on provisioning.EmailProvisioningApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _handleApiError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _operation = null;
         });
       }
     }
@@ -671,12 +674,23 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
         !isAxiJid(widget.accountJid)) {
       return const SizedBox.shrink();
     }
+    final operation = _operation;
     return AxiInputDialog(
       title: Text(context.l10n.recoveryEmailTitle),
-      loading: _loading,
-      callback: _submit,
-      callbackText: context.l10n.commonContinue,
-      canPop: !_loading,
+      loading: operation == _RecoveryMutationOperation.save,
+      callback: operation == null ? _submit : null,
+      callbackText: widget.recoveryEmailConfigured
+          ? context.l10n.commonSave
+          : context.l10n.commonContinue,
+      canPop: operation == null,
+      actions: [
+        if (widget.recoveryEmailConfigured)
+          AxiButton.destructive(
+            loading: operation == _RecoveryMutationOperation.remove,
+            onPressed: operation == null ? _remove : null,
+            child: Text(context.l10n.commonRemove),
+          ),
+      ],
       content: _RecoveryEmailSetupFields(
         formKey: _formKey,
         passwordController: _passwordController,
@@ -688,7 +702,7 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
             (_passwordOverrideRequired ||
                 (widget.currentPassword == null && _challenge == null)),
         errorText: _errorText,
-        enabled: !_loading,
+        enabled: true,
       ),
     );
   }
@@ -783,11 +797,13 @@ class _RecoveryTotpSetupDialog extends StatefulWidget {
   const _RecoveryTotpSetupDialog({
     required this.accountJid,
     this.currentPassword,
+    required this.totpConfigured,
     required this.allowPasswordPrompt,
   });
 
   final String accountJid;
   final String? currentPassword;
+  final bool totpConfigured;
   final bool allowPasswordPrompt;
 
   @override
@@ -802,7 +818,7 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
   provisioning.RecoveryTotpSetup? _setup;
   String? _errorText;
   bool _passwordOverrideRequired = false;
-  bool _loading = false;
+  _RecoveryMutationOperation? _operation;
 
   @override
   void dispose() {
@@ -831,8 +847,9 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
     if (form == null || !form.validate()) {
       return;
     }
+    final password = _password;
     setState(() {
-      _loading = true;
+      _operation = _RecoveryMutationOperation.save;
       _errorText = null;
     });
     try {
@@ -842,7 +859,7 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
             .read<SettingsCubit>()
             .startRecoveryTotpSetup(
               accountJid: widget.accountJid,
-              password: _password,
+              password: password,
             );
         if (!mounted) {
           return;
@@ -854,12 +871,14 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
       }
       await context.read<SettingsCubit>().confirmRecoveryTotpSetup(
         accountJid: widget.accountJid,
-        password: _password,
+        password: password,
         challenge: setup.challenge,
         code: _codeController.text,
       );
       if (mounted) {
-        context.pop(_RecoveryMutationResult(currentPassword: _password));
+        Navigator.of(
+          context,
+        ).pop(_RecoveryMutationResult(currentPassword: password));
       }
     } on provisioning.EmailProvisioningApiException catch (error) {
       if (!mounted) {
@@ -871,7 +890,46 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
     } finally {
       if (mounted) {
         setState(() {
-          _loading = false;
+          _operation = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _remove() async {
+    if ((widget.currentPassword == null || _passwordOverrideRequired) &&
+        _passwordController.text.isEmpty) {
+      setState(() {
+        _errorText = context.l10n.authPasswordRequired;
+      });
+      return;
+    }
+    final password = _password;
+    setState(() {
+      _operation = _RecoveryMutationOperation.remove;
+      _errorText = null;
+    });
+    try {
+      await context.read<SettingsCubit>().removeRecoveryTotp(
+        accountJid: widget.accountJid,
+        password: password,
+      );
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pop(_RecoveryMutationResult(currentPassword: password));
+      }
+    } on provisioning.EmailProvisioningApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _handleApiError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _operation = null;
         });
       }
     }
@@ -883,12 +941,23 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
         !isAxiJid(widget.accountJid)) {
       return const SizedBox.shrink();
     }
+    final operation = _operation;
     return AxiInputDialog(
       title: Text(context.l10n.recoveryTotpTitle),
-      loading: _loading,
-      callback: _submit,
-      callbackText: context.l10n.commonContinue,
-      canPop: !_loading,
+      loading: operation == _RecoveryMutationOperation.save,
+      callback: operation == null ? _submit : null,
+      callbackText: widget.totpConfigured
+          ? context.l10n.recoveryCreateNewTotpAction
+          : context.l10n.commonContinue,
+      canPop: operation == null,
+      actions: [
+        if (widget.totpConfigured)
+          AxiButton.destructive(
+            loading: operation == _RecoveryMutationOperation.remove,
+            onPressed: operation == null ? _remove : null,
+            child: Text(context.l10n.commonRemove),
+          ),
+      ],
       content: _RecoveryTotpSetupFields(
         formKey: _formKey,
         passwordController: _passwordController,
@@ -899,7 +968,7 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
             (_passwordOverrideRequired ||
                 (widget.currentPassword == null && _setup == null)),
         errorText: _errorText,
-        enabled: !_loading,
+        enabled: true,
       ),
     );
   }
@@ -1029,136 +1098,6 @@ class _RecoveryTotpQrCode extends StatelessWidget {
   }
 }
 
-enum _RecoveryRemoveMethod {
-  email,
-  totp;
-
-  String title(AppLocalizations l10n) => switch (this) {
-    email => l10n.recoveryRemoveEmailTitle,
-    totp => l10n.recoveryRemoveTotpTitle,
-  };
-}
-
-class _RecoveryRemoveDialog extends StatefulWidget {
-  const _RecoveryRemoveDialog({
-    required this.accountJid,
-    required this.method,
-    required this.currentPassword,
-  });
-
-  final String accountJid;
-  final _RecoveryRemoveMethod method;
-  final String currentPassword;
-
-  @override
-  State<_RecoveryRemoveDialog> createState() => _RecoveryRemoveDialogState();
-}
-
-class _RecoveryRemoveDialogState extends State<_RecoveryRemoveDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _passwordController = TextEditingController();
-  String? _errorText;
-  bool _passwordOverrideRequired = false;
-  bool _loading = false;
-
-  @override
-  void dispose() {
-    _passwordController.clear();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  String get _password => _passwordOverrideRequired
-      ? _passwordController.text
-      : widget.currentPassword;
-
-  void _handleApiError(provisioning.EmailProvisioningApiException error) {
-    if (error is provisioning.EmailProvisioningApiRejectedException &&
-        error.code == provisioning.EmailProvisioningApiErrorCode.authFailed) {
-      _passwordOverrideRequired = true;
-    }
-    _errorText = recoveryErrorText(context, error);
-  }
-
-  Future<void> _submit() async {
-    final form = _formKey.currentState;
-    if (form == null || !form.validate()) {
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _errorText = null;
-    });
-    try {
-      switch (widget.method) {
-        case _RecoveryRemoveMethod.email:
-          await context.read<SettingsCubit>().removeRecoveryEmail(
-            accountJid: widget.accountJid,
-            password: _password,
-          );
-        case _RecoveryRemoveMethod.totp:
-          await context.read<SettingsCubit>().removeRecoveryTotp(
-            accountJid: widget.accountJid,
-            password: _password,
-          );
-      }
-      if (mounted) {
-        context.pop(_RecoveryMutationResult(currentPassword: _password));
-      }
-    } on provisioning.EmailProvisioningApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _handleApiError(error);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!context.watch<SettingsCubit>().state.endpointConfig.isAxiImDomain ||
-        !isAxiJid(widget.accountJid)) {
-      return const SizedBox.shrink();
-    }
-    return AxiInputDialog(
-      title: Text(widget.method.title(context.l10n)),
-      loading: _loading,
-      callback: _submit,
-      callbackText: context.l10n.commonRemove,
-      canPop: !_loading,
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _RecoverySettingsErrorText(errorText: _errorText),
-            Text(
-              context.l10n.recoveryRemoveConfirmMessage,
-              style: context.textTheme.muted,
-            ),
-            if (_passwordOverrideRequired) ...[
-              SizedBox(height: context.spacing.s),
-              PasswordInput(
-                enabled: !_loading,
-                controller: _passwordController,
-                placeholder: context.l10n.authPasswordPlaceholder,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _RecoverySettingsErrorText extends StatelessWidget {
   const _RecoverySettingsErrorText({required this.errorText});
 
@@ -1171,12 +1110,11 @@ class _RecoverySettingsErrorText extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return Padding(
-      padding: EdgeInsets.only(bottom: context.spacing.s),
+      padding: EdgeInsets.all(context.spacing.s),
       child: Text(
         value,
-        style: context.textTheme.small.copyWith(
-          color: context.colorScheme.destructive,
-        ),
+        textAlign: TextAlign.center,
+        style: context.textTheme.small,
       ),
     );
   }

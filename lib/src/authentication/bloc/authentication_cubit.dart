@@ -32,6 +32,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 
 part 'authentication_state.dart';
@@ -93,6 +94,9 @@ enum AuthMessageKey {
   accountAlreadyExists,
   accountDeletionDisabled,
   accountDeletionFailed,
+  accountRepairRequired,
+  idempotencyConflict,
+  rateLimited,
   deviceOnlyPasswordUnavailable,
   demoModeFailed,
 }
@@ -140,6 +144,9 @@ extension AuthMessageKeyLocalization on AuthMessageKey {
     AuthMessageKey.accountAlreadyExists => l10n.authAccountAlreadyExists,
     AuthMessageKey.accountDeletionDisabled => l10n.authAccountDeletionDisabled,
     AuthMessageKey.accountDeletionFailed => l10n.authAccountDeletionFailed,
+    AuthMessageKey.accountRepairRequired => l10n.authAccountRepairRequired,
+    AuthMessageKey.idempotencyConflict => l10n.authIdempotencyConflict,
+    AuthMessageKey.rateLimited => l10n.authRateLimited,
     AuthMessageKey.deviceOnlyPasswordUnavailable =>
       l10n.authDeviceOnlyPasswordUnavailable,
     AuthMessageKey.demoModeFailed => l10n.authDemoModeFailed,
@@ -170,7 +177,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     EndpointResolver endpointResolver = const EndpointResolver(),
     Duration authRequestTimeout = const Duration(minutes: 1),
     Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
-    bool allowDefaultSignupEndpoint = kDebugMode,
     Future<void> Function()? beforeStickyReconnect,
     Future<void> Function(String accountJid)? beforeXmppConnect,
   }) : _credentialStore = credentialStore,
@@ -180,7 +186,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
-       _allowDefaultSignupEndpoint = allowDefaultSignupEndpoint,
        _beforeStickyReconnect = beforeStickyReconnect,
        _beforeXmppConnect = beforeXmppConnect,
        super(initialState ?? const AuthenticationNone()) {
@@ -190,7 +195,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emailProvisioningClient =
         emailProvisioningClient ??
         provisioning.EmailProvisioningClient.fromEnvironment(
-          httpClient: _httpClient,
+          httpClient: _emailProvisioningHttpClient,
         );
     final initialConfig =
         initialState?.config ?? initialEndpointConfig ?? const EndpointConfig();
@@ -322,28 +327,39 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
   _AuthTransaction? _authTransaction;
+  _AxiV1PasswordChangeRequest? _hostedPasswordChangeRequest;
+  String? _hostedPasswordChangeIdempotencyKey;
+  _AxiV1DeleteRequest? _hostedDeleteRequest;
+  String? _hostedDeleteIdempotencyKey;
   var _passwordWasSkipped = false;
+
+  http.Client? get _emailProvisioningHttpClient =>
+      _ownedHttpClient == null ? _httpClient : null;
 
   bool get passwordWasSkipped => _passwordWasSkipped;
 
   bool get _stickyAuthActive => state is AuthenticationComplete;
-  bool _requiresCustomSignupEndpoint(EndpointConfig config) =>
-      config.requiresCustomSignupEndpoint(
-        allowDefaultEndpoint: _allowDefaultSignupEndpoint,
-      );
+
+  void _invalidateEmailReconnectGeneration() {
+    _emailReconnectGeneration += 1;
+  }
+
+  bool _emailReconnectGenerationIsCurrent(int? generation) =>
+      generation == null || generation == _emailReconnectGeneration;
 
   Completer<void>? _deferredEmailProvisioningCompleter;
   Future<void>? _activeLifecycleResume;
   Future<void>? _pendingLogoutRecovery;
+  int _emailReconnectGeneration = 0;
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
   final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
   final _CoalescingAsyncQueue _emailProvisioningRecoveryQueue =
       _CoalescingAsyncQueue();
   DateTime? _lastEmailProvisioningRecoveryAt;
+  _LoginAttempt? _activeLoginAttempt;
   final Duration _authRequestTimeout;
   final Duration _xmppReconnectPauseDelay;
-  final bool _allowDefaultSignupEndpoint;
   final Future<void> Function()? _beforeStickyReconnect;
   final Future<void> Function(String accountJid)? _beforeXmppConnect;
   Timer? _xmppReconnectPauseTimer;
@@ -412,9 +428,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await updateEndpointConfig(const EndpointConfig());
   }
 
-  void _handleEndpointConfigUpdated(EndpointConfig config) {
+  void _configureEndpointDependencies(EndpointConfig config) {
     _rebuildEmailProvisioningClient(config);
     _emailService?.updateEndpointConfig(config);
+  }
+
+  void _handleEndpointConfigUpdated(EndpointConfig config) {
+    _configureEndpointDependencies(config);
     emit(state.copyWithConfig(config));
     _syncXmppReconnectPauseTimer();
   }
@@ -444,7 +464,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return override;
     }
     final domain = config.domain.trim().toLowerCase();
-    if (domain.isEmpty || domain == EndpointConfig.defaultDomain) {
+    if (domain.isEmpty || EndpointConfig(domain: domain).isAxiImDomain) {
       return null;
     }
     const provisioningPort = 8443;
@@ -457,7 +477,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final baseUrlOverride = _resolveEmailProvisioningBaseUrl(config);
     final domain = config.domain.trim().toLowerCase();
-    final publicTokenOverride = domain == EndpointConfig.defaultDomain
+    final publicTokenOverride = EndpointConfig(domain: domain).isAxiImDomain
         ? null
         : config.emailProvisioningPublicToken ?? '';
     provisioning.EmailProvisioningClient next;
@@ -465,7 +485,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       next = provisioning.EmailProvisioningClient.fromEnvironment(
         baseUrlOverride: baseUrlOverride,
         publicTokenOverride: publicTokenOverride,
-        httpClient: _httpClient,
+        httpClient: _emailProvisioningHttpClient,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -474,31 +494,34 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         stackTrace,
       );
       next = provisioning.EmailProvisioningClient.fromEnvironment(
-        httpClient: _httpClient,
+        httpClient: _emailProvisioningHttpClient,
       );
     }
     _emailProvisioningClient.close();
     _emailProvisioningClient = next;
   }
 
-  String _resolveAuthApiScheme() {
+  String _resolveAuthApiScheme(EndpointConfig config) {
     const httpsScheme = 'https';
     const httpScheme = 'http';
     if (kReleaseMode) {
       return httpsScheme;
     }
-    return endpointConfig.apiUseTls ? httpsScheme : httpScheme;
+    return config.apiUseTls ? httpsScheme : httpScheme;
   }
 
-  Uri _buildBaseUrl() => Uri(
-    scheme: _resolveAuthApiScheme(),
-    host: endpointConfig.domain,
-    port: endpointConfig.apiPort,
-  );
+  Uri _buildBaseUrl([EndpointConfig? config]) {
+    final resolvedConfig = config ?? endpointConfig;
+    return Uri(
+      scheme: _resolveAuthApiScheme(resolvedConfig),
+      host: resolvedConfig.domain,
+      port: resolvedConfig.apiPort,
+    );
+  }
 
-  Uri _buildRegistrationUrl() {
+  Uri _buildRegistrationUrl([EndpointConfig? config]) {
     const registerPath = '/register/new/';
-    return _buildBaseUrl().replace(path: registerPath);
+    return _buildBaseUrl(config).replace(path: registerPath);
   }
 
   Uri _buildChangePasswordUrl() {
@@ -647,6 +670,45 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
   }
 
+  AuthMessage _hostedAccountFailureMessage(
+    provisioning.EmailProvisioningApiException error, {
+    required AuthMessageKey fallback,
+  }) {
+    if (error is provisioning.EmailProvisioningApiNetworkException ||
+        error is provisioning.EmailProvisioningApiUnavailableException) {
+      return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
+    }
+    if (error is provisioning.EmailProvisioningApiRejectedException) {
+      return switch (error.code) {
+        provisioning.EmailProvisioningApiErrorCode.authFailed =>
+          const AuthKeyMessage(AuthMessageKey.passwordIncorrect),
+        provisioning.EmailProvisioningApiErrorCode.repairRequired =>
+          const AuthKeyMessage(AuthMessageKey.accountRepairRequired),
+        provisioning.EmailProvisioningApiErrorCode.idempotencyConflict =>
+          const AuthKeyMessage(AuthMessageKey.idempotencyConflict),
+        provisioning.EmailProvisioningApiErrorCode.rateLimited =>
+          const AuthKeyMessage(AuthMessageKey.rateLimited),
+        _ => _visibleHostedAccountDetail(error, fallback: fallback),
+      };
+    }
+    if (error
+        is provisioning.EmailProvisioningApiInvalidConfigurationException) {
+      return AuthKeyMessage(fallback);
+    }
+    return _visibleHostedAccountDetail(error, fallback: fallback);
+  }
+
+  AuthMessage _visibleHostedAccountDetail(
+    provisioning.EmailProvisioningApiException error, {
+    required AuthMessageKey fallback,
+  }) {
+    final detail = _userVisibleProvisioningErrorDetail(error.debugMessage);
+    if (detail != null) {
+      return AuthRawMessage(detail);
+    }
+    return AuthKeyMessage(fallback);
+  }
+
   AuthMessage _passwordChangeSuccessMessage(
     EmailPasswordRefreshResult refreshResult,
   ) => AuthKeyMessage(
@@ -692,10 +754,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return response;
   }
 
-  void _emit(AuthenticationState state) {
+  void _emit(AuthenticationState state, {EndpointConfig? config}) {
     // Always allow transitions away from an authenticated session (e.g. logout).
     _updateLoginBackoff(state);
-    final nextState = state.copyWithConfig(endpointConfig);
+    final nextState = state.copyWithConfig(config ?? endpointConfig);
     emit(nextState);
     if (nextState is AuthenticationComplete) {
       _syncXmppReconnectPauseTimer();
@@ -763,17 +825,70 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return true;
   }
 
+  _LoginAttempt _beginLoginAttempt({
+    required EndpointConfig config,
+    required bool fromSignup,
+    required AuthenticationLoginPhase phase,
+  }) {
+    final attempt = _LoginAttempt(
+      config: config,
+      fromSignup: fromSignup,
+      phase: phase,
+    );
+    _activeLoginAttempt = attempt;
+    return attempt;
+  }
+
+  bool _isLoginAttemptActive(_LoginAttempt loginAttempt) =>
+      identical(_activeLoginAttempt, loginAttempt);
+
+  void _clearLoginAttempt(_LoginAttempt loginAttempt) {
+    if (_isLoginAttemptActive(loginAttempt)) {
+      _activeLoginAttempt = null;
+    }
+  }
+
+  bool _markLoginNetworkPhase(_LoginAttempt loginAttempt) {
+    if (!_isLoginAttemptActive(loginAttempt)) {
+      return false;
+    }
+    if (loginAttempt.phase == AuthenticationLoginPhase.network) {
+      return true;
+    }
+    loginAttempt.phase = AuthenticationLoginPhase.network;
+    final stateSnapshot = state;
+    if (stateSnapshot is! AuthenticationLogInInProgress ||
+        stateSnapshot.phase == AuthenticationLoginPhase.network) {
+      return true;
+    }
+    _emit(
+      AuthenticationLogInInProgress(
+        fromSignup: loginAttempt.fromSignup,
+        phase: AuthenticationLoginPhase.network,
+      ),
+      config: loginAttempt.config,
+    );
+    return true;
+  }
+
+  bool _stopLoginIfCancelled(_LoginAttempt loginAttempt) {
+    if (_isLoginAttemptActive(loginAttempt)) {
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _recoverAuthTransaction() async {
     final txn = await _readAuthTransaction();
     if (txn == null) return;
     if (txn.committed) {
-      await _clearAuthTransaction();
+      await _clearAuthTransaction(expected: txn);
       return;
     }
-    _authTransaction = txn;
     await _rollbackAuthTransaction(
       clearCredentials: txn.clearCredentialsOnFailure,
       jid: txn.jid,
+      transaction: txn,
     );
   }
 
@@ -802,13 +917,38 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> _clearAuthTransaction() async {
+  Future<void> _clearAuthTransaction({_AuthTransaction? expected}) async {
+    if (expected != null) {
+      final current = _authTransaction ?? await _readAuthTransaction();
+      if (current != null && !current.hasSameIdentity(expected)) {
+        return;
+      }
+      final stored = await _readAuthTransaction();
+      if (stored != null && !stored.hasSameIdentity(expected)) {
+        return;
+      }
+    }
     _authTransaction = null;
     try {
       await _credentialStore.delete(key: authTransactionStorageKey);
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to clear auth transaction', error, stackTrace);
     }
+  }
+
+  Future<bool> _authTransactionStillMatches(
+    _AuthTransaction expected, {
+    required bool allowMissing,
+  }) async {
+    final current = _authTransaction;
+    if (current != null && !current.hasSameIdentity(expected)) {
+      return false;
+    }
+    final stored = await _readAuthTransaction();
+    if (stored == null) {
+      return allowMissing;
+    }
+    return stored.hasSameIdentity(expected);
   }
 
   Future<void> _clearLoginSecrets({String? jid}) async {
@@ -895,6 +1035,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (pendingLogout == null) {
       return;
     }
+    _invalidateEmailReconnectGeneration();
     final pendingJid = pendingLogout == true.toString() ? null : pendingLogout;
     final accountJid = await _resolveLoginClearJid(pendingJid);
     try {
@@ -909,6 +1050,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _clearStoredLoginCredentialsForLogout();
     if (accountJid != null) {
       await _clearStoredSmtpCredentials(accountJid);
+    }
+    final foregroundStopped =
+        await _foregroundRuntimeController
+            ?.forceStopAfterExplicitSessionEnd() ??
+        true;
+    if (!foregroundStopped) {
+      _log.warning('Leaving logout barrier in place for foreground recovery.');
+      return;
     }
     _emailService?.clearSessionCredentials();
     await _clearPendingLogoutBarrier();
@@ -1368,11 +1517,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     bool waitForNetworkAvailable = true,
     _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
   }) async {
+    final emailReconnectGeneration = _emailReconnectGeneration;
     await _resumeEmailReconnectIfPossible(
       jid: _xmppService.myJid,
       requireStoredCredentials: state is! AuthenticationLogInInProgress,
       waitForNetworkAvailable: waitForNetworkAvailable,
       recovery: recovery,
+      emailReconnectGeneration: emailReconnectGeneration,
     );
   }
 
@@ -1381,7 +1532,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool requireStoredCredentials,
     bool waitForNetworkAvailable = true,
     _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
+    required int emailReconnectGeneration,
   }) async {
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) return;
     final EndpointConfig config = endpointConfig;
     if (!config.smtpEnabled) return;
     final EmailService? emailService = _emailService;
@@ -1393,10 +1546,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (isReady && emailService.hasActiveSession) {
       if (recovery == _EmailReconnectRecovery.foregroundResume) {
         if (waitForNetworkAvailable) {
-          await _notifyEmailNetworkAvailable(emailService, recovery: recovery);
+          await _notifyEmailNetworkAvailable(
+            emailService,
+            recovery: recovery,
+            emailReconnectGeneration: emailReconnectGeneration,
+          );
         } else {
           unawaited(
-            _notifyEmailNetworkAvailable(emailService, recovery: recovery),
+            _notifyEmailNetworkAvailable(
+              emailService,
+              recovery: recovery,
+              emailReconnectGeneration: emailReconnectGeneration,
+            ),
           );
         }
       }
@@ -1404,21 +1565,40 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     if (requireStoredCredentials && jid != null) {
       final hasCredentials = await _hasEmailReconnectCredentials(jid);
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return;
+      }
       if (!hasCredentials) {
         await logout(severity: LogoutSeverity.auto);
         return;
       }
     }
     try {
-      await _attemptEmailProvisioningRecovery();
+      await _attemptEmailProvisioningRecovery(
+        emailReconnectGeneration: emailReconnectGeneration,
+      );
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return;
+      }
       if (!await emailService.canReconnectConfiguredSession(jid: jid)) {
         return;
       }
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return;
+      }
       if (waitForNetworkAvailable) {
-        await _notifyEmailNetworkAvailable(emailService, recovery: recovery);
+        await _notifyEmailNetworkAvailable(
+          emailService,
+          recovery: recovery,
+          emailReconnectGeneration: emailReconnectGeneration,
+        );
       } else {
         unawaited(
-          _notifyEmailNetworkAvailable(emailService, recovery: recovery),
+          _notifyEmailNetworkAvailable(
+            emailService,
+            recovery: recovery,
+            emailReconnectGeneration: emailReconnectGeneration,
+          ),
         );
       }
     } on Exception catch (error, stackTrace) {
@@ -1429,8 +1609,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _notifyEmailNetworkAvailable(
     EmailService emailService, {
     required _EmailReconnectRecovery recovery,
+    required int emailReconnectGeneration,
   }) async {
     try {
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return;
+      }
       switch (recovery) {
         case _EmailReconnectRecovery.normal:
           await emailService.handleNetworkAvailable();
@@ -1473,8 +1657,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
   }
 
-  Future<void> _attemptEmailProvisioningRecovery() async {
+  Future<void> _attemptEmailProvisioningRecovery({
+    required int emailReconnectGeneration,
+  }) async {
     await _emailProvisioningRecoveryQueue.enqueue(() async {
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return;
+      }
       const cooldown = Duration(seconds: 30);
       final now = DateTime.timestamp();
       final lastAttempt = _lastEmailProvisioningRecoveryAt;
@@ -1482,11 +1671,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       _lastEmailProvisioningRecoveryAt = now;
-      await _attemptEmailProvisioningRecoveryInternal();
+      await _attemptEmailProvisioningRecoveryInternal(
+        emailReconnectGeneration: emailReconnectGeneration,
+      );
     });
   }
 
-  Future<void> _attemptEmailProvisioningRecoveryInternal() async {
+  Future<void> _attemptEmailProvisioningRecoveryInternal({
+    required int emailReconnectGeneration,
+  }) async {
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+      return;
+    }
     if (!endpointConfig.smtpEnabled) {
       return;
     }
@@ -1506,6 +1702,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final secrets = await _readDatabaseSecrets(jid);
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+      return;
+    }
     if (!secrets.hasSecrets) {
       return;
     }
@@ -1515,6 +1714,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } on Exception catch (error, stackTrace) {
       const logMessage = 'Failed to read email credentials for retry';
       _log.finer(logMessage, error, stackTrace);
+      return;
+    }
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
       return;
     }
     String? normalizeCredential(String? value) {
@@ -1541,6 +1743,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         storedAddress ?? sessionAddress ?? activeAddress;
     final displayName = addressLocalPart(jid) ?? jid;
     final rememberMe = await loadRememberMeChoice();
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+      return;
+    }
     await _ensureEmailProvisioned(
       displayName: displayName,
       databasePrefix: secrets.prefix!,
@@ -1552,8 +1757,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       emailPassword: provisioningPasswordCandidate,
       addressOverride: provisioningAddressCandidate,
       persistCredentials: rememberMe,
+      emailReconnectGeneration: emailReconnectGeneration,
     );
     final fatalError = _lastEmailProvisioningError;
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+      return;
+    }
     if (fatalError != null && !fatalError.isRecoverable && _stickyAuthActive) {
       await logout(severity: LogoutSeverity.auto);
       _emit(
@@ -1708,7 +1917,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String jid,
     required bool clearCredentialsOnFailure,
   }) async {
+    _invalidateEmailReconnectGeneration();
     final txn = _AuthTransaction(
+      id: const Uuid().v4(),
       jid: jid,
       clearCredentialsOnFailure: clearCredentialsOnFailure,
     );
@@ -1744,14 +1955,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final committed = txn.copyWith(committed: true);
     _authTransaction = committed;
     await _persistAuthTransaction(committed);
-    await _clearAuthTransaction();
+    await _clearAuthTransaction(expected: committed);
   }
 
   Future<void> _rollbackAuthTransaction({
     required bool clearCredentials,
     String? jid,
+    _AuthTransaction? transaction,
   }) async {
-    final txn = _authTransaction ?? await _readAuthTransaction();
+    final txn = transaction ?? _authTransaction ?? await _readAuthTransaction();
     if (txn == null) {
       if (clearCredentials) {
         await _clearLoginSecrets(jid: jid);
@@ -1761,7 +1973,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       return;
     }
-    _authTransaction = txn;
+    if (transaction == null) {
+      _authTransaction = txn;
+    } else if (!await _authTransactionStillMatches(txn, allowMissing: false)) {
+      return;
+    }
     final shouldClearCredentials =
         clearCredentials || txn.clearCredentialsOnFailure;
     if (shouldClearCredentials || txn.smtpProvisioned) {
@@ -1770,14 +1986,26 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         txn.jid,
         clearCredentials: shouldClearCredentials,
       );
+      if (!await _authTransactionStillMatches(
+        txn,
+        allowMissing: transaction == null,
+      )) {
+        return;
+      }
     }
     if (txn.xmppConnected || _xmppService.connected) {
       await _xmppService.disconnect();
+      if (!await _authTransactionStillMatches(
+        txn,
+        allowMissing: transaction == null,
+      )) {
+        return;
+      }
     }
     if (shouldClearCredentials) {
       await _clearLoginSecrets(jid: txn.jid);
     }
-    await _clearAuthTransaction();
+    await _clearAuthTransaction(expected: txn);
   }
 
   EndpointOverride? _overrideFrom(IOEndpoint? endpoint) {
@@ -1789,6 +2017,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   @override
   Future<void> close() async {
+    _invalidateEmailReconnectGeneration();
     _cancelXmppReconnectPauseTimer();
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
@@ -1810,6 +2039,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return super.close();
   }
 
+  Future<void> cancelLogin() async {
+    final stateSnapshot = state;
+    if (stateSnapshot is! AuthenticationLogInInProgress ||
+        !stateSnapshot.phase.canCancel) {
+      return;
+    }
+    final activeAttempt = _activeLoginAttempt;
+    if (activeAttempt == null || !activeAttempt.phase.canCancel) {
+      return;
+    }
+    _activeLoginAttempt = null;
+    _emit(const AuthenticationNone(), config: stateSnapshot.config);
+  }
+
   Future<void> login({
     String? username,
     String? password,
@@ -1820,6 +2063,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     AvatarUploadPayload? pendingAvatar,
     String? signupWelcomeTitle,
     String? signupWelcomeBody,
+    EndpointConfig? endpointConfigOverride,
   }) async {
     if (kEnableDemoChats) {
       await _loginToDemoMode();
@@ -1858,7 +2102,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
     }
-    final currentConfig = endpointConfig;
+    final currentConfig = endpointConfigOverride ?? endpointConfig;
+    if (endpointConfigOverride != null) {
+      _configureEndpointDependencies(currentConfig);
+    }
     _log.info(
       'Login requested '
       '(usingStoredCredentials: ${username == null && password == null}, '
@@ -1868,24 +2115,45 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _lastEmailProvisioningError = null;
     final AuthenticationState previousState = state;
     final wasAuthenticated = previousState is AuthenticationComplete;
-    final loginState = _activeSignupCredentialKey != null
-        ? AuthenticationLogInInProgress(fromSignup: true, config: currentConfig)
-        : AuthenticationLogInInProgress(config: currentConfig);
+    final loginPhase =
+        usingStoredCredentials &&
+            !wasAuthenticated &&
+            _activeSignupCredentialKey == null
+        ? AuthenticationLoginPhase.preNetwork
+        : AuthenticationLoginPhase.network;
+    final fromSignup = _activeSignupCredentialKey != null;
+    final loginAttempt = _beginLoginAttempt(
+      config: currentConfig,
+      fromSignup: fromSignup,
+      phase: loginPhase,
+    );
+    final loginState = fromSignup
+        ? AuthenticationLogInInProgress(
+            fromSignup: true,
+            phase: loginPhase,
+            config: currentConfig,
+          )
+        : AuthenticationLogInInProgress(
+            phase: loginPhase,
+            config: currentConfig,
+          );
     if ((!wasAuthenticated || !usingStoredCredentials) &&
         previousState is! AuthenticationLogInInProgress) {
-      _emit(loginState);
+      _emit(loginState, config: currentConfig);
     }
     final blocked = await _awaitLoginBackoff();
     if (blocked) {
+      _clearLoginAttempt(loginAttempt);
       return;
     }
     await _recoverAuthTransaction();
-    final EndpointConfig config = endpointConfig;
+    final EndpointConfig config = currentConfig;
     final bool shouldSkipLogin =
         previousState is AuthenticationComplete &&
         _xmppService.connected &&
         _hasEmailReconnectContext(config);
     if (shouldSkipLogin) {
+      _clearLoginAttempt(loginAttempt);
       return;
     }
     final bool xmppEnabled = config.xmppEnabled;
@@ -1896,6 +2164,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           AuthKeyMessage(AuthMessageKey.enableXmppOrSmtp),
         ),
       );
+      _clearLoginAttempt(loginAttempt);
       return;
     }
     if ((username == null) != (password == null)) {
@@ -1904,9 +2173,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           AuthKeyMessage(AuthMessageKey.usernamePasswordMismatch),
         ),
       );
+      _clearLoginAttempt(loginAttempt);
       return;
     }
     storedLogin ??= await _readStoredLoginCredentials();
+    if (_stopLoginIfCancelled(loginAttempt)) {
+      return;
+    }
     var credentialDisposition = _CredentialDisposition.keep;
 
     late final String accountJid;
@@ -1919,7 +2192,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       accountJid = loginFromStore.jid!;
       provisioningPasswordCandidate = loginFromStore.password!;
       effectivePasswordWasSkipped = await loadPasswordWasSkippedChoice();
+      if (_stopLoginIfCancelled(loginAttempt)) {
+        return;
+      }
       skippedPasswordRaw = await _readStoredSkippedPasswordRaw();
+      if (_stopLoginIfCancelled(loginAttempt)) {
+        return;
+      }
       if (!loginFromStore.hasPreHashedFlag) {
         if (!wasAuthenticated) {
           await persistRememberMeChoice(false);
@@ -1937,6 +2216,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             'Stored credentials missing pre-hash flag; preserving session.',
           );
         }
+        _clearLoginAttempt(loginAttempt);
         return;
       }
       passwordPreHashed = loginFromStore.passwordPreHashed ?? false;
@@ -1949,6 +2229,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     final storedSecrets = await _readDatabaseSecrets(accountJid);
+    if (_stopLoginIfCancelled(loginAttempt)) {
+      return;
+    }
     final bool hasStoredDatabaseSecrets = storedSecrets.hasSecrets;
     final bool hasStoredLoginForJid = storedLogin.matches(accountJid);
     if (hasStoredLoginForJid && !hasStoredDatabaseSecrets) {
@@ -1963,6 +2246,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             AuthKeyMessage(AuthMessageKey.missingDatabaseSecrets),
           ),
         );
+        _clearLoginAttempt(loginAttempt);
         return;
       }
     }
@@ -1989,6 +2273,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     String? effectivePassword = provisioningPasswordCandidate;
 
+    if (!_markLoginNetworkPhase(loginAttempt)) {
+      return;
+    }
     await _startAuthTransaction(
       jid: accountJid,
       clearCredentialsOnFailure: credentialDisposition.shouldWipe,
@@ -2000,16 +2287,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final emailService = smtpEnabled ? _emailService : null;
       if (emailPassword == null && emailService != null) {
         final existing = await emailService.currentAccount(accountJid);
+        if (_stopLoginIfCancelled(loginAttempt)) {
+          return;
+        }
         emailPassword = existing?.password;
-      }
-      if (smtpEnabled) {
-        final sessionEmailAddress = emailCredentials?.email ?? accountJid;
-        emailService?.cacheSessionCredentials(
-          address: sessionEmailAddress,
-          password: emailPassword,
-        );
-      } else {
-        emailService?.clearSessionCredentials();
       }
 
       final enforceEmailProvisioning =
@@ -2027,6 +2308,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           config,
           fallback: _overrideFrom(serverLookup[config.domain]),
         );
+        if (_stopLoginIfCancelled(loginAttempt)) {
+          return;
+        }
+      }
+
+      if (smtpEnabled) {
+        final sessionEmailAddress = emailCredentials?.email ?? accountJid;
+        emailService?.cacheSessionCredentials(
+          address: sessionEmailAddress,
+          password: emailPassword,
+        );
+      } else {
+        emailService?.clearSessionCredentials();
       }
 
       if (xmppEnabled) {
@@ -2061,6 +2355,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               usingStoredCredentials && hasStoredDatabaseSecrets;
           if (canResumeOffline) {
             final resumeResult = await _resumeOfflineLogin(
+              config: config,
               jid: accountJid,
               displayName: displayName,
               databasePrefix: ensuredDatabasePrefix,
@@ -2123,6 +2418,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               _looksLikeConnectivityError(error);
           if (canResumeOffline) {
             final resumeResult = await _resumeOfflineLogin(
+              config: config,
               jid: accountJid,
               displayName: displayName,
               databasePrefix: ensuredDatabasePrefix,
@@ -2175,6 +2471,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         _deferredEmailProvisioningCompleter =
             deferredEmailProvisioningCompleter;
         await _finalizeAuthentication(
+          config: config,
           jid: accountJid,
           rememberMe: rememberMe,
           password: effectivePassword,
@@ -2224,10 +2521,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             if (_stickyAuthActive &&
                 _xmppService.connectionState == ConnectionState.connected &&
                 sameNormalizedAddressValue(_xmppService.myJid, accountJid)) {
+              final emailReconnectGeneration = _emailReconnectGeneration;
               unawaited(
                 _resumeEmailReconnectIfPossible(
                   jid: accountJid,
                   requireStoredCredentials: false,
+                  emailReconnectGeneration: emailReconnectGeneration,
                 ),
               );
             }
@@ -2278,6 +2577,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
 
       await _finalizeAuthentication(
+        config: config,
         jid: accountJid,
         rememberMe: rememberMe,
         password: effectivePassword,
@@ -2294,7 +2594,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       authenticationCommitted = true;
     } finally {
-      if (!authenticationCommitted) {
+      if (!authenticationCommitted && _isLoginAttemptActive(loginAttempt)) {
         await _rollbackAuthTransaction(
           clearCredentials: credentialDisposition.shouldWipe,
           jid: accountJid,
@@ -2310,6 +2610,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           !deferredEmailProvisioningCompleter.isCompleted) {
         deferredEmailProvisioningCompleter.complete();
       }
+      _clearLoginAttempt(loginAttempt);
     }
   }
 
@@ -2392,6 +2693,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<_ResumeResult> _resumeOfflineLogin({
+    required EndpointConfig config,
     required String jid,
     required String displayName,
     required String databasePrefix,
@@ -2448,6 +2750,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
 
     await _finalizeAuthentication(
+      config: config,
       jid: jid,
       rememberMe: rememberMe,
       password: password,
@@ -2483,7 +2786,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     var attempts = 0;
     var delay = initialDelay;
     final start = DateTime.timestamp();
+    final emailReconnectGeneration = _emailReconnectGeneration;
     while (true) {
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return _ProvisioningStatus.blockedTransient;
+      }
       final status = await _ensureEmailProvisioned(
         displayName: displayName,
         databasePrefix: databasePrefix,
@@ -2495,6 +2802,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         emailPassword: emailPassword,
         emailCredentials: emailCredentials,
         persistCredentials: persistCredentials,
+        emailReconnectGeneration: emailReconnectGeneration,
       );
       if (status == _ProvisioningStatus.ready || status.shouldAbort) {
         return status;
@@ -2533,7 +2841,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     provisioning.EmailProvisioningCredentials? emailCredentials,
     String? addressOverride,
     bool persistCredentials = true,
+    int? emailReconnectGeneration,
   }) async {
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+      return _ProvisioningStatus.blockedTransient;
+    }
     if (!endpointConfig.smtpEnabled) {
       return _ProvisioningStatus.ready;
     }
@@ -2547,6 +2859,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     if (provisioningPassword == null) {
       final existing = await emailService.currentAccount(jid);
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return _ProvisioningStatus.blockedTransient;
+      }
       provisioningPassword = existing?.password;
     }
     if (provisioningPassword == null && enforceProvisioning) {
@@ -2572,10 +2887,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         addressOverride: addressOverrideValue,
         persistCredentials: persistCredentials,
       );
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return _ProvisioningStatus.blockedTransient;
+      }
       _lastEmailProvisioningError = null;
       await _markSmtpProvisioned();
+      if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+        return _ProvisioningStatus.blockedTransient;
+      }
       try {
         await emailService.start();
+        if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+          return _ProvisioningStatus.blockedTransient;
+        }
         await emailService.handleNetworkAvailable();
       } on Exception catch (error, stackTrace) {
         _log.finer('Failed to start email sync', error, stackTrace);
@@ -2675,6 +2999,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   };
 
   Future<void> _finalizeAuthentication({
+    required EndpointConfig config,
     required String jid,
     required bool rememberMe,
     required String? password,
@@ -2690,6 +3015,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? signupWelcomeBody,
   }) async {
     await _persistLoginSecrets(
+      config: config,
       jid: jid,
       rememberMe: rememberMe,
       password: password,
@@ -2723,9 +3049,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     await _clearPartialUnregisterJidIfMatches(jid);
     final AuthenticationState completedState = fromSignup
-        ? const AuthenticationCompleteFromSignup()
-        : const AuthenticationComplete();
-    _emit(completedState);
+        ? AuthenticationCompleteFromSignup(config: config)
+        : AuthenticationComplete(config: config);
+    _emit(completedState, config: config);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     unawaited(_triggerEmailReconnect());
@@ -2752,6 +3078,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _persistLoginSecrets({
+    required EndpointConfig config,
     required String jid,
     required bool rememberMe,
     required String? password,
@@ -2765,7 +3092,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }) async {
     if (!rememberMe) {
       await _clearLoginSecrets(jid: jid);
-      if (endpointConfig.smtpEnabled) {
+      if (config.smtpEnabled) {
         await _emailService?.clearStoredCredentials(
           jid: jid,
           preserveActiveSession: true,
@@ -2781,7 +3108,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphraseStorageKey: databasePassphraseStorageKey,
         databasePassphrase: databasePassphrase,
       );
-      if (endpointConfig.smtpEnabled) {
+      if (config.smtpEnabled) {
         await _emailService?.persistActiveCredentials(jid: jid);
       }
       await _credentialStore.write(key: jidStorageKey, value: jid);
@@ -2800,7 +3127,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      if (endpointConfig.smtpEnabled) {
+      if (config.smtpEnabled) {
         await _emailService?.clearStoredCredentials(
           jid: jid,
           preserveActiveSession: true,
@@ -2895,6 +3222,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> signup({
+    EndpointConfig? endpointConfigOverride,
     required String username,
     required String password,
     required String confirmPassword,
@@ -2911,18 +3239,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await recoverPendingLogoutBarrier();
-    final config = endpointConfig;
+    final config = endpointConfigOverride ?? endpointConfig;
+    if (endpointConfigOverride != null) {
+      _configureEndpointDependencies(config);
+    }
     _log.info(
       'Signup requested '
       '(xmppEnabled: ${config.xmppEnabled}, '
       'smtpEnabled: ${config.smtpEnabled})',
     );
-    _emit(const AuthenticationSignUpInProgress());
-    if (_requiresCustomSignupEndpoint(config)) {
+    _emit(const AuthenticationSignUpInProgress(), config: config);
+    if (config.requiresCustomSignupEndpoint) {
       _emit(
         const AuthenticationSignupFailure(
           AuthKeyMessage(AuthMessageKey.signupCustomEndpointRequired),
         ),
+        config: config,
       );
       return;
     }
@@ -2937,6 +3269,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           AuthKeyMessage(AuthMessageKey.signupCleanupInProgress),
           isCleanupBlocked: true,
         ),
+        config: config,
       );
       return;
     }
@@ -2952,7 +3285,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       const registerValue = 'Register';
       final response = await _httpClient
           .post(
-            registrationUrl,
+            _buildRegistrationUrl(config),
             body: {
               _registerBodyKeyUsername: username,
               _registerBodyKeyHost: host,
@@ -2969,6 +3302,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           AuthenticationSignupFailure(
             _signupFailureMessageForResponse(response),
           ),
+          config: config,
         );
         return;
       }
@@ -3002,6 +3336,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         pendingAvatar: avatar,
         signupWelcomeTitle: welcomeTitle,
         signupWelcomeBody: welcomeBody,
+        endpointConfigOverride: config,
       );
       signupComplete = state is AuthenticationComplete;
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
@@ -3014,6 +3349,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         AuthenticationSignupFailure(
           _signupFailureMessageForProvisioningError(error),
         ),
+        config: config,
       );
       return;
     } on Exception catch (error, stackTrace) {
@@ -3022,6 +3358,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         const AuthenticationSignupFailure(
           AuthKeyMessage(AuthMessageKey.signupFailedTryAgain),
         ),
+        config: config,
       );
       return;
     } finally {
@@ -3145,14 +3482,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<String> fetchCaptchaHtml() async {
-    if (_requiresCustomSignupEndpoint(endpointConfig)) {
+  Future<String> fetchCaptchaHtml({EndpointConfig? config}) async {
+    final resolvedConfig = config ?? endpointConfig;
+    if (resolvedConfig.requiresCustomSignupEndpoint) {
       return '';
     }
     try {
       const okStatus = 200;
       final response = await _httpClient
-          .get(registrationUrl)
+          .get(_buildRegistrationUrl(resolvedConfig))
           .timeout(_authRequestTimeout);
       if (response.statusCode != okStatus) return '';
       return response.body;
@@ -3161,8 +3499,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<String> fetchCaptchaSrc() async {
-    final captchaHtml = await fetchCaptchaHtml();
+  Future<String> fetchCaptchaSrc({EndpointConfig? config}) async {
+    final resolvedConfig = config ?? endpointConfig;
+    final captchaHtml = await fetchCaptchaHtml(config: resolvedConfig);
     if (captchaHtml.isEmpty) {
       return '';
     }
@@ -3171,18 +3510,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final images = document.findAllElements('img');
       final first = images.isEmpty ? null : images.first;
       final src = first?.getAttribute('src')?.trim() ?? '';
-      return _normalizeCaptchaSrc(src);
+      return _normalizeCaptchaSrc(src, config: resolvedConfig);
     } on Exception catch (_) {
       return '';
     }
   }
 
-  String _normalizeCaptchaSrc(String src) {
+  String _normalizeCaptchaSrc(String src, {EndpointConfig? config}) {
     final trimmed = src.trim();
     if (trimmed.isEmpty) {
       return '';
     }
-    final host = endpointConfig.domain.trim();
+    final resolvedConfig = config ?? endpointConfig;
+    final host = resolvedConfig.domain.trim();
     final effectiveHost = host.isEmpty ? EndpointConfig.defaultDomain : host;
     final hostSubstituted = trimmed.replaceAll('@HOST@', effectiveHost);
     final parsed = Uri.tryParse(hostSubstituted);
@@ -3192,17 +3532,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (parsed.hasScheme) {
       return parsed.toString();
     }
-    return _buildBaseUrl().resolveUri(parsed).toString();
+    return _buildBaseUrl(resolvedConfig).resolveUri(parsed).toString();
   }
 
-  Future<String> fetchCaptchaSrcWithRetry() async {
-    if (_requiresCustomSignupEndpoint(endpointConfig)) {
+  Future<String> fetchCaptchaSrcWithRetry({EndpointConfig? config}) async {
+    final resolvedConfig = config ?? endpointConfig;
+    if (resolvedConfig.requiresCustomSignupEndpoint) {
       return '';
     }
     const retryDelay = Duration(seconds: 1);
     const maxAttempts = 3;
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      final src = await fetchCaptchaSrc();
+      final src = await fetchCaptchaSrc(config: resolvedConfig);
       if (src.trim().isNotEmpty) {
         return src;
       }
@@ -3219,6 +3560,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Normal logout blocked for device-only password account.');
       return;
     }
+    _invalidateEmailReconnectGeneration();
     String? logoutJid;
     var normalCleanupSucceeded = true;
     if (severity == LogoutSeverity.normal) {
@@ -3268,7 +3610,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           stackTrace,
         );
       }
-      await _markForegroundInactiveIfStopped();
+      if (severity == LogoutSeverity.normal) {
+        final foregroundStopped = await _runTimedLogoutStep(
+          'foreground service stop',
+          () async {
+            final controller = _foregroundRuntimeController;
+            if (controller == null) {
+              return true;
+            }
+            return controller.forceStopAfterExplicitSessionEnd();
+          },
+        );
+        if (!foregroundStopped) {
+          normalCleanupSucceeded = false;
+        }
+      } else {
+        await _markForegroundInactiveIfStopped();
+      }
     }
 
     if (severity == LogoutSeverity.normal) {
@@ -3307,11 +3665,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String jid,
     required bool clearEmail,
   }) async {
+    _invalidateEmailReconnectGeneration();
     await _xmppService.clearSessionTokens();
     if (endpointConfig.smtpEnabled) {
       await _emailService?.shutdown(jid: jid, clearCredentials: clearEmail);
     }
     await _xmppService.disconnect();
+    await _foregroundRuntimeController?.forceStopAfterExplicitSessionEnd();
   }
 
   // Full unregister removes local secrets/resume state and the safe
@@ -3427,6 +3787,33 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       effectiveOldPassword = resolvedPassword;
+    }
+    if (EndpointConfig(domain: effectiveHost).isAxiImDomain) {
+      final email = normalizedAddressValue(accountJid) ?? accountJid;
+      final hostedError = await _changeHostedAccountPassword(
+        email: email,
+        oldPassword: effectiveOldPassword,
+        newPassword: password,
+      );
+      if (hostedError != null) {
+        _emit(AuthenticationPasswordChangeFailure(hostedError));
+        return;
+      }
+      const bool passwordIsPreHashed = false;
+      final rememberMe = await loadRememberMeChoice();
+      final refreshResult = await _updateStoredPasswords(
+        jid: accountJid,
+        newPassword: password,
+        rememberMe: rememberMe,
+        passwordPreHashed: passwordIsPreHashed,
+      );
+      await _clearSkippedPasswordSecrets();
+      _emit(
+        AuthenticationPasswordChangeSuccess(
+          _passwordChangeSuccessMessage(refreshResult),
+        ),
+      );
+      return;
     }
     final shouldChangeXmppPassword = endpointConfig.xmppEnabled;
     final shouldChangeEmailPassword = endpointConfig.smtpEnabled;
@@ -3578,6 +3965,61 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  String _idempotencyKeyForHostedPasswordChange(
+    _AxiV1PasswordChangeRequest request,
+  ) {
+    final existingRequest = _hostedPasswordChangeRequest;
+    final existingKey = _hostedPasswordChangeIdempotencyKey;
+    if (existingRequest == request && existingKey != null) {
+      return existingKey;
+    }
+    final key = const Uuid().v4();
+    _hostedPasswordChangeRequest = request;
+    _hostedPasswordChangeIdempotencyKey = key;
+    return key;
+  }
+
+  void _clearHostedPasswordChangeIdempotency() {
+    _hostedPasswordChangeRequest = null;
+    _hostedPasswordChangeIdempotencyKey = null;
+  }
+
+  Future<AuthMessage?> _changeHostedAccountPassword({
+    required String email,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final request = _AxiV1PasswordChangeRequest(
+      email: email,
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+    );
+    final idempotencyKey = _idempotencyKeyForHostedPasswordChange(request);
+    try {
+      await _emailProvisioningClient.changeHostedPassword(
+        email: email,
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+        idempotencyKey: idempotencyKey,
+      );
+      _clearHostedPasswordChangeIdempotency();
+      return null;
+    } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
+      _log.warning('Hosted password change failed', error, stackTrace);
+      if (!error.isRecoverable) {
+        _clearHostedPasswordChangeIdempotency();
+      }
+      return _hostedAccountFailureMessage(
+        error,
+        fallback: AuthMessageKey.passwordChangeFailed,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Hosted password change failed', error, stackTrace);
+      _clearHostedPasswordChangeIdempotency();
+      return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
+    }
+  }
+
   Future<bool> _attemptXmppPasswordRollback({
     required String username,
     required String host,
@@ -3626,6 +4068,53 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  String _idempotencyKeyForHostedDelete(_AxiV1DeleteRequest request) {
+    final existingRequest = _hostedDeleteRequest;
+    final existingKey = _hostedDeleteIdempotencyKey;
+    if (existingRequest == request && existingKey != null) {
+      return existingKey;
+    }
+    final key = const Uuid().v4();
+    _hostedDeleteRequest = request;
+    _hostedDeleteIdempotencyKey = key;
+    return key;
+  }
+
+  void _clearHostedDeleteIdempotency() {
+    _hostedDeleteRequest = null;
+    _hostedDeleteIdempotencyKey = null;
+  }
+
+  Future<AuthMessage?> _deleteHostedAccount({
+    required String email,
+    required String password,
+  }) async {
+    final request = _AxiV1DeleteRequest(email: email, password: password);
+    final idempotencyKey = _idempotencyKeyForHostedDelete(request);
+    try {
+      await _emailProvisioningClient.deleteHostedAccount(
+        email: email,
+        password: password,
+        idempotencyKey: idempotencyKey,
+      );
+      _clearHostedDeleteIdempotency();
+      return null;
+    } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
+      _log.warning('Hosted account deletion failed', error, stackTrace);
+      if (!error.isRecoverable) {
+        _clearHostedDeleteIdempotency();
+      }
+      return _hostedAccountFailureMessage(
+        error,
+        fallback: AuthMessageKey.accountDeletionFailed,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Hosted account deletion failed', error, stackTrace);
+      _clearHostedDeleteIdempotency();
+      return const AuthKeyMessage(AuthMessageKey.accountDeletionFailed);
+    }
+  }
+
   Future<void> unregister({
     required String username,
     required String host,
@@ -3661,6 +4150,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       effectivePassword = resolvedPassword;
+    }
+    if (EndpointConfig(domain: effectiveHost).isAxiImDomain) {
+      final email = normalizedAddressValue(accountJid) ?? accountJid;
+      final hostedDeletionError = await _deleteHostedAccount(
+        email: email,
+        password: effectivePassword,
+      );
+      if (hostedDeletionError != null) {
+        _emit(AuthenticationUnregisterFailure(hostedDeletionError));
+        return;
+      }
+      await _finishUnregister(
+        jid: accountJid,
+        user: normalizedUsername,
+        host: effectiveHost,
+      );
+      return;
     }
     if (!shouldDeleteEmailAccount && !shouldDeleteXmppAccount) {
       _emit(
@@ -4282,8 +4788,46 @@ class _DatabaseSecrets {
   bool get hasSecrets => prefix != null && passphrase != null;
 }
 
+class _AxiV1PasswordChangeRequest extends Equatable {
+  const _AxiV1PasswordChangeRequest({
+    required this.email,
+    required this.oldPassword,
+    required this.newPassword,
+  });
+
+  final String email;
+  final String oldPassword;
+  final String newPassword;
+
+  @override
+  List<Object?> get props => [email, oldPassword, newPassword];
+}
+
+class _AxiV1DeleteRequest extends Equatable {
+  const _AxiV1DeleteRequest({required this.email, required this.password});
+
+  final String email;
+  final String password;
+
+  @override
+  List<Object?> get props => [email, password];
+}
+
+class _LoginAttempt {
+  _LoginAttempt({
+    required this.config,
+    required this.fromSignup,
+    required this.phase,
+  });
+
+  final EndpointConfig config;
+  final bool fromSignup;
+  AuthenticationLoginPhase phase;
+}
+
 class _AuthTransaction {
   const _AuthTransaction({
+    this.id,
     required this.jid,
     required this.clearCredentialsOnFailure,
     this.xmppConnected = false,
@@ -4306,6 +4850,7 @@ class _AuthTransaction {
     }
 
     return _AuthTransaction(
+      id: (json['id'] as String?)?.trim(),
       jid: (json['jid'] as String? ?? '').trim(),
       clearCredentialsOnFailure: asBool(
         json['clearCredentialsOnFailure'] ??
@@ -4317,6 +4862,7 @@ class _AuthTransaction {
     );
   }
 
+  final String? id;
   final String jid;
   final bool xmppConnected;
   final bool smtpProvisioned;
@@ -4324,6 +4870,7 @@ class _AuthTransaction {
   final bool clearCredentialsOnFailure;
 
   Map<String, dynamic> toJson() => {
+    'id': id,
     'jid': jid,
     'xmppConnected': xmppConnected,
     'smtpProvisioned': smtpProvisioned,
@@ -4338,6 +4885,7 @@ class _AuthTransaction {
     bool? clearCredentialsOnFailure,
   }) {
     return _AuthTransaction(
+      id: id,
       jid: jid,
       xmppConnected: xmppConnected ?? this.xmppConnected,
       smtpProvisioned: smtpProvisioned ?? this.smtpProvisioned,
@@ -4345,6 +4893,22 @@ class _AuthTransaction {
       clearCredentialsOnFailure:
           clearCredentialsOnFailure ?? this.clearCredentialsOnFailure,
     );
+  }
+
+  bool hasSameIdentity(_AuthTransaction other) {
+    final currentId = id;
+    final otherId = other.id;
+    if (currentId != null && currentId.isNotEmpty) {
+      return currentId == otherId;
+    }
+    if (otherId != null && otherId.isNotEmpty) {
+      return false;
+    }
+    return jid == other.jid &&
+        xmppConnected == other.xmppConnected &&
+        smtpProvisioned == other.smtpProvisioned &&
+        committed == other.committed &&
+        clearCredentialsOnFailure == other.clearCredentialsOnFailure;
   }
 }
 

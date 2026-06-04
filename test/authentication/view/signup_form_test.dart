@@ -17,7 +17,11 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../mocks.dart';
 
 void main() {
-  testWidgets('Signup first step allows default server in debug', (
+  setUpAll(() {
+    registerFallbackValue(const EndpointConfig());
+  });
+
+  testWidgets('Signup first step blocks until a custom server is selected', (
     tester,
   ) async {
     await tester.pumpSignupForm(const EndpointConfig());
@@ -26,16 +30,22 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pump();
 
-    expect(find.text('@axi.im'), findsNothing);
-    expect(find.text('Back'), findsOneWidget);
+    expect(find.textContaining('Choose a custom server'), findsOneWidget);
+    expect(find.text('Back'), findsNothing);
   });
 
   testWidgets('Signup first step advances after choosing a custom server', (
     tester,
   ) async {
-    await tester.pumpSignupForm(
-      const EndpointConfig(domain: 'selfhosted.example'),
-    );
+    await tester.pumpSignupForm(const EndpointConfig());
+
+    await tester.tap(find.text('Choose server'));
+    await tester.pumpAndSettle();
+    tester.enterEndpointDomain('selfhosted.example');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    verifyNever(() => tester.authenticationCubit.updateEndpointConfig(any()));
+    verifyNever(() => tester.settingsCubit.updateEndpointConfig(any()));
 
     tester.enterUsername('validusername');
     await tester.tap(find.text('Continue'));
@@ -47,10 +57,27 @@ void main() {
 }
 
 extension on WidgetTester {
+  _MockAuthenticationCubit get authenticationCubit =>
+      element(find.byType(SignupForm)).read<AuthenticationCubit>()
+          as _MockAuthenticationCubit;
+
+  MockSettingsCubit get settingsCubit =>
+      element(find.byType(SignupForm)).read<SettingsCubit>()
+          as MockSettingsCubit;
+
   void enterUsername(String username) {
     widgetList<AxiTextFormField>(
       find.byType(AxiTextFormField),
     ).first.controller?.text = username;
+  }
+
+  void enterEndpointDomain(String domain) {
+    final field = widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .singleWhere((field) {
+          final placeholder = field.placeholder;
+          return placeholder is Text && placeholder.data == 'Domain';
+        });
+    field.controller?.text = domain;
   }
 
   Future<void> pumpSignupForm(EndpointConfig config) async {
@@ -62,12 +89,13 @@ extension on WidgetTester {
       () => authenticationCubit.stream,
     ).thenAnswer((_) => const Stream<AuthenticationState>.empty());
     when(
-      authenticationCubit.fetchCaptchaSrcWithRetry,
+      () => authenticationCubit.fetchCaptchaSrcWithRetry(
+        config: any(named: 'config'),
+      ),
     ).thenAnswer((_) async => '');
     when(
       authenticationCubit.loadRememberMeChoice,
     ).thenAnswer((_) async => true);
-
     await pumpWidget(
       MultiBlocProvider(
         providers: [
@@ -113,6 +141,9 @@ MockSettingsCubit _settingsCubit({required EndpointConfig config}) {
     () => settingsCubit.stream,
   ).thenAnswer((_) => const Stream<SettingsState>.empty());
   when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
+  when(
+    () => settingsCubit.updateEndpointConfig(any()),
+  ).thenAnswer((_) async {});
   return settingsCubit;
 }
 

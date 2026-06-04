@@ -35,32 +35,34 @@ class AxiOtpFormField extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ShadInputOTP(
-              maxLength: length,
-              enabled: enabled,
-              gap: spacing.xs,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              initialValue: field.value,
-              onChanged: (value) {
-                final digits = _digitsOnly(value);
-                if (controller.text != digits) {
-                  controller.value = TextEditingValue(
-                    text: digits,
-                    selection: TextSelection.collapsed(offset: digits.length),
-                  );
-                }
-                field.didChange(digits);
-                onChanged?.call(digits);
-              },
-              children: [
-                ShadInputOTPGroup(
-                  children: [
-                    for (var index = 0; index < length; index++)
-                      const ShadInputOTPSlot(),
-                  ],
-                ),
-              ],
+            Center(
+              child: ShadInputOTP(
+                maxLength: length,
+                enabled: enabled,
+                gap: spacing.xs,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                initialValue: field.value,
+                onChanged: (value) {
+                  final digits = _digitsOnly(value);
+                  if (controller.text != digits) {
+                    controller.value = TextEditingValue(
+                      text: digits,
+                      selection: TextSelection.collapsed(offset: digits.length),
+                    );
+                  }
+                  field.didChange(digits);
+                  onChanged?.call(digits);
+                },
+                children: [
+                  ShadInputOTPGroup(
+                    children: [
+                      for (var index = 0; index < length; index++)
+                        const ShadInputOTPSlot(),
+                    ],
+                  ),
+                ],
+              ),
             ),
             if (field.hasError) ...[
               SizedBox(height: spacing.xs),

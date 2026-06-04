@@ -15,23 +15,15 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../../mocks.dart';
 
 void main() {
-  test(
-    'Endpoint signup policy requires custom server without debug allowance',
-    () {
-      expect(
-        const EndpointConfig().requiresCustomSignupEndpoint(
-          allowDefaultEndpoint: false,
-        ),
-        isTrue,
-      );
-      expect(
-        const EndpointConfig(
-          domain: 'selfhosted.example',
-        ).requiresCustomSignupEndpoint(allowDefaultEndpoint: false),
-        isFalse,
-      );
-    },
-  );
+  test('Endpoint signup policy requires selfhost for axi.im', () {
+    expect(const EndpointConfig().requiresCustomSignupEndpoint, isTrue);
+    expect(
+      const EndpointConfig(
+        domain: 'selfhosted.example',
+      ).requiresCustomSignupEndpoint,
+      isFalse,
+    );
+  });
 
   testWidgets('Login endpoint suffix keeps default axi.im label', (
     tester,
@@ -46,26 +38,27 @@ void main() {
     expect(find.text('Choose server'), findsNothing);
   });
 
-  testWidgets('Signup endpoint suffix keeps default axi.im label in debug', (
+  testWidgets('Signup endpoint suffix asks for a server by default', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const _EndpointSuffixTestApp(
-        child: SignupEndpointSuffix(config: EndpointConfig()),
+      _EndpointSuffixTestApp(
+        child: SignupEndpointSuffix(config: null, onChanged: (_) {}),
       ),
     );
 
-    expect(find.text('@axi.im'), findsOneWidget);
-    expect(find.text('Choose server'), findsNothing);
+    expect(find.text('@axi.im'), findsNothing);
+    expect(find.text('Choose server'), findsOneWidget);
   });
 
   testWidgets('Signup endpoint suffix shows selected custom endpoint', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const _EndpointSuffixTestApp(
+      _EndpointSuffixTestApp(
         child: SignupEndpointSuffix(
-          config: EndpointConfig(domain: 'selfhosted.example'),
+          config: const EndpointConfig(domain: 'selfhosted.example'),
+          onChanged: (_) {},
         ),
       ),
     );
@@ -73,11 +66,32 @@ void main() {
     expect(find.text('@selfhosted.example'), findsOneWidget);
   });
 
+  testWidgets('Signup endpoint suffix treats blank endpoint as unconfigured', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _EndpointSuffixTestApp(
+        child: SignupEndpointSuffix(
+          config: const EndpointConfig(domain: ''),
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('Choose server'), findsOneWidget);
+    expect(find.text('@'), findsNothing);
+  });
+
   testWidgets('Endpoint config sheet leaves default domain empty', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const _EndpointSuffixTestApp(child: EndpointConfigSheet(compact: false)),
+      const _EndpointSuffixTestApp(
+        child: EndpointConfigSheet(
+          compact: false,
+          mode: EndpointConfigSheetMode.login,
+        ),
+      ),
     );
 
     expect(_textFormFieldAt(tester, 0).controller?.text, isEmpty);
@@ -89,11 +103,75 @@ void main() {
         settingsState: SettingsState(
           endpointConfig: EndpointConfig(domain: 'selfhosted.example'),
         ),
-        child: EndpointConfigSheet(compact: false),
+        child: EndpointConfigSheet(
+          compact: false,
+          mode: EndpointConfigSheetMode.login,
+        ),
       ),
     );
 
     expect(_textFormFieldAt(tester, 0).controller?.text, 'selfhosted.example');
+  });
+
+  testWidgets('Signup endpoint config sheet rejects blank domain', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _EndpointSuffixTestApp(
+        child: EndpointConfigSheet(
+          compact: false,
+          mode: EndpointConfigSheetMode.signup,
+          initialConfig: EndpointConfig(domain: ''),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+
+    expect(find.textContaining('Choose a custom server'), findsOneWidget);
+  });
+
+  testWidgets('Endpoint config sheet describes login and signup modes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const _EndpointSuffixTestApp(
+        child: EndpointConfigSheet(
+          compact: false,
+          mode: EndpointConfigSheetMode.login,
+        ),
+      ),
+    );
+
+    expect(
+      find.textContaining('Leave it blank to keep the current domain'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Use Reset to return to axi.im'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('axichat/selfhost'), findsOneWidget);
+    expect(find.textContaining('axichat/server'), findsNothing);
+
+    await tester.pumpWidget(
+      const _EndpointSuffixTestApp(
+        child: EndpointConfigSheet(
+          compact: false,
+          mode: EndpointConfigSheetMode.signup,
+          initialConfig: EndpointConfig(domain: ''),
+        ),
+      ),
+    );
+
+    expect(
+      find.textContaining('custom server you want to sign up on'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Leave it blank'), findsNothing);
+    expect(find.textContaining('axichat/selfhost'), findsOneWidget);
+    expect(find.textContaining('axichat/server'), findsNothing);
   });
 }
 

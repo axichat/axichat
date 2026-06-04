@@ -23,6 +23,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.composerBannerMinVisibilityDuration,
     required this.statusBannerSlideOffset,
     required this.statusBannerSuccessDuration,
+    required this.authLoginCancelRevealDelay,
+    required this.endpointBorderShineDuration,
+    required this.endpointBorderShinePauseDuration,
   });
 
   final double buttonBounceScale;
@@ -43,6 +46,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final Duration composerBannerMinVisibilityDuration;
   final Offset statusBannerSlideOffset;
   final Duration statusBannerSuccessDuration;
+  final Duration authLoginCancelRevealDelay;
+  final Duration endpointBorderShineDuration;
+  final Duration endpointBorderShinePauseDuration;
 
   @override
   AxiMotion copyWith({
@@ -64,6 +70,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     Duration? composerBannerMinVisibilityDuration,
     Offset? statusBannerSlideOffset,
     Duration? statusBannerSuccessDuration,
+    Duration? authLoginCancelRevealDelay,
+    Duration? endpointBorderShineDuration,
+    Duration? endpointBorderShinePauseDuration,
   }) {
     return AxiMotion(
       buttonBounceScale: buttonBounceScale ?? this.buttonBounceScale,
@@ -99,6 +108,13 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
           statusBannerSlideOffset ?? this.statusBannerSlideOffset,
       statusBannerSuccessDuration:
           statusBannerSuccessDuration ?? this.statusBannerSuccessDuration,
+      authLoginCancelRevealDelay:
+          authLoginCancelRevealDelay ?? this.authLoginCancelRevealDelay,
+      endpointBorderShineDuration:
+          endpointBorderShineDuration ?? this.endpointBorderShineDuration,
+      endpointBorderShinePauseDuration:
+          endpointBorderShinePauseDuration ??
+          this.endpointBorderShinePauseDuration,
     );
   }
 
@@ -128,4 +144,7 @@ const AxiMotion axiMotion = AxiMotion(
   composerBannerMinVisibilityDuration: Duration(milliseconds: 500),
   statusBannerSlideOffset: Offset(0.0, -(1 / 12)),
   statusBannerSuccessDuration: Duration(milliseconds: 900),
+  authLoginCancelRevealDelay: Duration(milliseconds: 500),
+  endpointBorderShineDuration: Duration(milliseconds: 1800),
+  endpointBorderShinePauseDuration: Duration(seconds: 5),
 );

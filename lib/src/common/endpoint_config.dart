@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:equatable/equatable.dart';
-import 'package:flutter/foundation.dart';
 
 class EndpointConfig extends Equatable {
   const EndpointConfig({
@@ -50,8 +50,7 @@ class EndpointConfig extends Equatable {
 
   bool get isAxiImDomain => domain.trim().toLowerCase() == axiImDomain;
 
-  bool requiresCustomSignupEndpoint({bool allowDefaultEndpoint = kDebugMode}) =>
-      isAxiImDomain && !allowDefaultEndpoint;
+  bool get requiresCustomSignupEndpoint => isAxiImDomain;
 
   EndpointConfig copyWith({
     String? domain,
@@ -174,9 +173,13 @@ class EndpointOverride extends Equatable {
 }
 
 class EndpointResolver {
-  const EndpointResolver({this.lookup = InternetAddress.lookup});
+  const EndpointResolver({
+    this.lookup = InternetAddress.lookup,
+    this.lookupTimeout = const Duration(seconds: 10),
+  });
 
   final Future<List<InternetAddress>> Function(String host) lookup;
+  final Duration lookupTimeout;
 
   Future<EndpointOverride> resolveXmpp(
     EndpointConfig config, {
@@ -229,11 +232,13 @@ class EndpointResolver {
       final lookupHost = preferred != null && preferred.isNotEmpty
           ? preferred
           : config.domain.trim();
-      final addresses = await lookup(lookupHost);
+      final addresses = await lookup(lookupHost).timeout(lookupTimeout);
       final resolvedHost = addresses.isNotEmpty
           ? addresses.first.address
           : host;
       return EndpointOverride(host: resolvedHost, port: selectedPort);
+    } on TimeoutException {
+      return EndpointOverride(host: host, port: selectedPort);
     } on SocketException {
       return EndpointOverride(host: host, port: selectedPort);
     } on FormatException {

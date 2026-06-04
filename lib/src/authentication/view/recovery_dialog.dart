@@ -11,7 +11,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 Future<String?> showAccountRecoveryDialog(
   BuildContext context, {
@@ -294,9 +293,9 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
       _RecoveryStep.emailCode => () async => await _verifyEmailCode(),
       _RecoveryStep.totpCode => () async => await _verifyTotpCode(),
       _RecoveryStep.newPassword => () async => await _resetPassword(),
-      _RecoveryStep.complete => () => context.pop(
-        addressLocalPart(_accountJid) ?? _accountJid,
-      ),
+      _RecoveryStep.complete => () => Navigator.of(
+        context,
+      ).pop(addressLocalPart(_accountJid) ?? _accountJid),
     };
   }
 
@@ -384,12 +383,11 @@ class _RecoveryErrorText extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return Padding(
-      padding: EdgeInsets.only(bottom: context.spacing.s),
+      padding: EdgeInsets.all(context.spacing.s),
       child: Text(
         value,
-        style: context.textTheme.small.copyWith(
-          color: context.colorScheme.destructive,
-        ),
+        textAlign: TextAlign.center,
+        style: context.textTheme.small,
       ),
     );
   }

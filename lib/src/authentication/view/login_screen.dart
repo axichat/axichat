@@ -47,7 +47,10 @@ class _LoginScreenState extends State<LoginScreen>
   bool _didSeedAuthState = false;
   bool _didPrecacheAxichatAppIcon = false;
   bool _completionHandled = false;
+  bool _cancelLoginInProgress = false;
+  bool _showLoginCancel = false;
   DateTime? _autoLoginRequestedAt;
+  int _loginCancelRevealGeneration = 0;
 
   @override
   void initState() {
@@ -126,7 +129,65 @@ class _LoginScreenState extends State<LoginScreen>
     await showAccountRecoveryDialog(context);
   }
 
+  Future<void> _handleCancelLoginPressed() async {
+    setState(() {
+      _cancelLoginInProgress = true;
+    });
+    try {
+      await context.read<AuthenticationCubit>().cancelLogin();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cancelLoginInProgress = false;
+        });
+      }
+    }
+  }
+
+  void _syncLoginCancelReveal(AuthenticationState state) {
+    if (state is AuthenticationLogInInProgress && state.phase.canCancel) {
+      _scheduleLoginCancelReveal();
+      return;
+    }
+    _hideLoginCancelReveal();
+  }
+
+  void _scheduleLoginCancelReveal() {
+    if (_showLoginCancel) {
+      return;
+    }
+    final generation = _loginCancelRevealGeneration + 1;
+    _loginCancelRevealGeneration = generation;
+    final delay = context.motion.authLoginCancelRevealDelay;
+    unawaited(
+      Future<void>.delayed(delay).then((_) {
+        if (!mounted || generation != _loginCancelRevealGeneration) {
+          return;
+        }
+        final stateSnapshot = context.read<AuthenticationCubit>().state;
+        if (stateSnapshot is! AuthenticationLogInInProgress ||
+            !stateSnapshot.phase.canCancel) {
+          return;
+        }
+        setState(() {
+          _showLoginCancel = true;
+        });
+      }),
+    );
+  }
+
+  void _hideLoginCancelReveal() {
+    _loginCancelRevealGeneration++;
+    if (!_showLoginCancel) {
+      return;
+    }
+    setState(() {
+      _showLoginCancel = false;
+    });
+  }
+
   Future<void> _handleAuthState(AuthenticationState state) async {
+    _syncLoginCancelReveal(state);
     if (state is AuthenticationSignUpInProgress && !state.fromSubmission) {
       _completionHandled = false;
       return;
@@ -207,6 +268,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
+    _loginCancelRevealGeneration++;
     _authProgressController.dispose();
     super.dispose();
   }
@@ -561,17 +623,70 @@ class _LoginScreenState extends State<LoginScreen>
                                                         EdgeInsets.symmetric(
                                                           horizontal: spacing.m,
                                                         ),
-                                                    child: OperationProgressBar(
-                                                      animation:
-                                                          _authProgressController
-                                                              .animation,
-                                                      visible: showProgressBar,
-                                                      label: progress.label,
-                                                      animationDuration: context
-                                                          .watch<
-                                                            SettingsCubit
-                                                          >()
-                                                          .animationDuration,
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        OperationProgressBar(
+                                                          animation:
+                                                              _authProgressController
+                                                                  .animation,
+                                                          visible:
+                                                              showProgressBar,
+                                                          label: progress.label,
+                                                          animationDuration: context
+                                                              .watch<
+                                                                SettingsCubit
+                                                              >()
+                                                              .animationDuration,
+                                                        ),
+                                                        BlocSelector<
+                                                          AuthenticationCubit,
+                                                          AuthenticationState,
+                                                          bool
+                                                        >(
+                                                          selector: (state) =>
+                                                              state
+                                                                  is AuthenticationLogInInProgress &&
+                                                              state
+                                                                  .phase
+                                                                  .canCancel,
+                                                          builder:
+                                                              (
+                                                                context,
+                                                                showLoginCancel,
+                                                              ) {
+                                                                if (!showLoginCancel ||
+                                                                    !_showLoginCancel) {
+                                                                  return const SizedBox.shrink();
+                                                                }
+                                                                return Column(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    SizedBox(
+                                                                      height:
+                                                                          spacing
+                                                                              .m,
+                                                                    ),
+                                                                    AxiButton.outline(
+                                                                      key: const ValueKey(
+                                                                        'login-cancel-button',
+                                                                      ),
+                                                                      onPressed:
+                                                                          _cancelLoginInProgress
+                                                                          ? null
+                                                                          : _handleCancelLoginPressed,
+                                                                      child: Text(
+                                                                        l10n.commonCancel,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                );
+                                                              },
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),

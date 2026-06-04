@@ -34,17 +34,33 @@ abstract final class AuthenticationInProgress extends AuthenticationState {
   AuthenticationInProgress copyWithConfig(EndpointConfig config);
 }
 
+enum AuthenticationLoginPhase {
+  preNetwork,
+  network;
+
+  bool get canCancel => this == preNetwork;
+}
+
 final class AuthenticationLogInInProgress extends AuthenticationInProgress {
-  const AuthenticationLogInInProgress({this.fromSignup = false, super.config});
+  const AuthenticationLogInInProgress({
+    this.fromSignup = false,
+    this.phase = AuthenticationLoginPhase.network,
+    super.config,
+  });
 
   final bool fromSignup;
+  final AuthenticationLoginPhase phase;
 
   @override
   AuthenticationLogInInProgress copyWithConfig(EndpointConfig config) =>
-      AuthenticationLogInInProgress(fromSignup: fromSignup, config: config);
+      AuthenticationLogInInProgress(
+        fromSignup: fromSignup,
+        phase: phase,
+        config: config,
+      );
 
   @override
-  List<Object?> get props => [config, fromSignup];
+  List<Object?> get props => [config, fromSignup, phase];
 }
 
 final class AuthenticationSignUpInProgress extends AuthenticationInProgress {
