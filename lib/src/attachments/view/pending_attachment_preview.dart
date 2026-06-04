@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:axichat/src/attachments/view/attachment_file_preview.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -32,23 +33,29 @@ Future<void> showPendingAttachmentPreview({
     return;
   }
 
+  final report = await inspectFileType(
+    file: file,
+    declaredMimeType: pending.attachment.mimeType,
+    fileName: pending.attachment.fileName,
+  );
+  if (!context.mounted) return;
   final previewData = await resolveAttachmentPreviewData(
     file: file,
     attachment: pending.attachment,
+    typeReport: report,
   );
   if (!context.mounted) return;
-  if (previewData == null || !previewData.kind.opensDialog) {
-    showAttachmentPreviewToast(
-      context,
-      l10n.chatAttachmentUnavailable,
-      destructive: true,
-    );
-    return;
-  }
+  final dialogData = previewData?.kind.opensDialog == true
+      ? previewData!
+      : AttachmentPreviewData.unsupported(
+          file: file,
+          attachment: pending.attachment,
+          report: report,
+        );
 
   await showAttachmentPreviewDialog(
     context: context,
-    data: previewData,
+    data: dialogData,
     closeTooltip: closeLabel,
     actions: [
       AttachmentPreviewDialogAction(

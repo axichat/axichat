@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -22,12 +23,14 @@ enum AttachmentPreviewKind {
   image,
   video,
   pdf,
-  text;
+  text,
+  unsupported;
 
   bool get opensDialog => switch (this) {
     AttachmentPreviewKind.image ||
     AttachmentPreviewKind.pdf ||
-    AttachmentPreviewKind.text => true,
+    AttachmentPreviewKind.text ||
+    AttachmentPreviewKind.unsupported => true,
     AttachmentPreviewKind.video => false,
   };
 }
@@ -91,6 +94,17 @@ class AttachmentPreviewData {
     kind: AttachmentPreviewKind.text,
     textContent: textContent,
     truncatedText: truncated,
+  );
+
+  factory AttachmentPreviewData.unsupported({
+    required File file,
+    required Attachment attachment,
+    required FileTypeReport report,
+  }) => AttachmentPreviewData._(
+    file: file,
+    attachment: attachment,
+    report: report,
+    kind: AttachmentPreviewKind.unsupported,
   );
 
   final File file;
@@ -169,6 +183,12 @@ Future<AttachmentPreviewData?> resolveAttachmentPreviewData({
         report: report,
         textContent: textContent.content,
         truncated: textContent.truncated,
+      );
+    case AttachmentPreviewKind.unsupported:
+      return AttachmentPreviewData.unsupported(
+        file: file,
+        attachment: attachment,
+        report: report,
       );
   }
 }
@@ -556,6 +576,11 @@ class AttachmentPreviewContent extends StatelessWidget {
         maxWidth: maxWidth,
         maxHeight: maxHeight,
       ),
+      AttachmentPreviewKind.unsupported => AttachmentUnsupportedPreviewContent(
+        fileName: data.attachment.fileName,
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+      ),
     };
   }
 }
@@ -673,7 +698,10 @@ class AttachmentUnsupportedPreviewContent extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(fileName, style: context.textTheme.p),
+            Text(
+              sanitizeUnicodeControls(fileName).value,
+              style: context.textTheme.p,
+            ),
             SizedBox(height: spacing.xs),
             Text(
               context.l10n.chatAttachmentUnavailable,

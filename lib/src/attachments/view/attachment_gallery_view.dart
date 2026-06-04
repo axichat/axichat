@@ -14,6 +14,7 @@ import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -67,6 +68,9 @@ String? _resolveMetaText({
   if (parts.isEmpty) return null;
   return parts.join(separator);
 }
+
+String _galleryDisplayFilename(String filename) =>
+    sanitizeUnicodeControls(filename).value;
 
 class AttachmentGalleryGridMetrics {
   const AttachmentGalleryGridMetrics({
@@ -857,6 +861,7 @@ class AttachmentGalleryTile extends StatelessWidget {
     const metaMaxLines = 1;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
+    final metadata = this.metadata;
     if (metadata?.mediaKind == FileMetadataMediaKind.file) {
       return AttachmentGalleryFileTile(
         metadata: metadata!,
@@ -887,7 +892,9 @@ class AttachmentGalleryTile extends StatelessWidget {
         SizedBox(height: context.spacing.s),
         if (showFilename)
           Text(
-            metadata?.filename ?? context.l10n.chatAttachmentFallbackLabel,
+            metadata == null
+                ? context.l10n.chatAttachmentFallbackLabel
+                : _galleryDisplayFilename(metadata.filename),
             style: context.textTheme.small,
             maxLines: filenameMaxLines,
             overflow: TextOverflow.ellipsis,
@@ -1082,7 +1089,7 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
                     ],
                   ),
                   Text(
-                    metadata.filename,
+                    _galleryDisplayFilename(metadata.filename),
                     style: context.textTheme.small.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
@@ -1282,6 +1289,20 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
     try {
       await operation();
     } on XmppFileTooBigException {
+      if (!mounted) return;
+      _showGalleryAttachmentToast(
+        context,
+        context.l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } on XmppMessageException {
+      if (!mounted) return;
+      _showGalleryAttachmentToast(
+        context,
+        context.l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    } on EmailServiceException {
       if (!mounted) return;
       _showGalleryAttachmentToast(
         context,

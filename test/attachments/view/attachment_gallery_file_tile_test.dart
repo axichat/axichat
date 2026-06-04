@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -48,6 +49,81 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Preview'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('gallery file tile strips unicode controls from filename', (
+    tester,
+  ) async {
+    const metadata = FileMetadataData(
+      id: 'spoofed-name',
+      filename: 'invoice\u202Efdp.exe',
+      mimeType: 'application/pdf',
+      sizeBytes: 22,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        AttachmentGalleryTile(
+          metadata: metadata,
+          metadataPending: false,
+          stanzaId: 'stanza-spoofed-name',
+          allowed: true,
+          downloadDelegate: AttachmentDownloadDelegate(() async => false),
+          metadataReloadDelegate: AttachmentMetadataReloadDelegate(
+            () async => metadata,
+          ),
+          onAllowPressed: null,
+          metaText: null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('invoicefdp.exe'), findsOneWidget);
+    expect(find.text('invoice\u202Efdp.exe'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('gallery file tile contains expected download failures', (
+    tester,
+  ) async {
+    const metadata = FileMetadataData(
+      id: 'download-failure',
+      filename: 'notes.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 22,
+    );
+    var downloadCount = 0;
+
+    await tester.pumpWidget(
+      _wrap(
+        AttachmentGalleryTile(
+          metadata: metadata,
+          metadataPending: false,
+          stanzaId: 'stanza-download-failure',
+          allowed: true,
+          downloadDelegate: AttachmentDownloadDelegate(() async {
+            downloadCount += 1;
+            throw XmppMessageException();
+          }),
+          metadataReloadDelegate: AttachmentMetadataReloadDelegate(
+            () async => metadata,
+          ),
+          onAllowPressed: null,
+          metaText: null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Download and save'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(downloadCount, 1);
+    expect(find.text('Attachment unavailable'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
