@@ -10,17 +10,7 @@ ImageProvider<Object> axichatAppIconProvider(
   BuildContext context, {
   required double size,
 }) {
-  final baseSize = size < context.sizing.iconButtonTapTarget
-      ? context.sizing.iconButtonTapTarget
-      : size;
-  final devicePixelRatio = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1;
-  final scaledSize = (baseSize * devicePixelRatio).ceil();
-  final cacheExtent = scaledSize > 0 ? scaledSize : 1;
-  return ResizeImage.resizeIfNeeded(
-    cacheExtent,
-    cacheExtent,
-    const AssetImage(_axichatAppIconAssetPath),
-  );
+  return const AssetImage(_axichatAppIconAssetPath);
 }
 
 Future<void> precacheAxichatAppIcon(
