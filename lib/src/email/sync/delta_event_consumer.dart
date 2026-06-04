@@ -1716,6 +1716,8 @@ class DeltaEventConsumer {
           html: msg.html,
           fileName: msg.fileName,
           filePath: msg.filePath,
+          fileMime: msg.fileMime,
+          fileSizeBytes: msg.fileSize,
         );
     if (incomingSignature.isEmpty) {
       return null;
@@ -1730,6 +1732,9 @@ class DeltaEventConsumer {
     final int? incomingTimestampMicros = msg.timestamp?.microsecondsSinceEpoch;
     Message? closestMatch;
     int? closestDelta;
+    Message? fallbackMatch;
+    int? fallbackDelta;
+    int fallbackMatchCount = 0;
     final Map<String, FileMetadataData?> metadataById =
         <String, FileMetadataData?>{};
     for (final Message candidate in candidates) {
@@ -1751,7 +1756,14 @@ class DeltaEventConsumer {
             message: candidate,
             metadata: metadata,
           );
-      if (!candidateSignature.matches(incomingSignature)) {
+      final bool signaturesMatch = candidateSignature.matches(
+        incomingSignature,
+      );
+      final bool fallbackSignaturesMatch =
+          !signaturesMatch &&
+          incomingTimestampMicros != null &&
+          candidateSignature.matchesAttachmentFileFallback(incomingSignature);
+      if (!signaturesMatch && !fallbackSignaturesMatch) {
         continue;
       }
       if (incomingTimestampMicros == null) {
@@ -1760,18 +1772,36 @@ class DeltaEventConsumer {
       final int? candidateTimestamp =
           candidate.timestamp?.microsecondsSinceEpoch;
       if (candidateTimestamp == null) {
-        return candidate;
+        if (signaturesMatch) {
+          return candidate;
+        }
+        continue;
       }
       final int delta = (candidateTimestamp - incomingTimestampMicros).abs();
       if (delta > maxTimestampDeltaMicros) {
         continue;
       }
-      if (closestDelta == null || delta < closestDelta) {
+      if (signaturesMatch && (closestDelta == null || delta < closestDelta)) {
         closestDelta = delta;
         closestMatch = candidate;
+        continue;
+      }
+      if (!fallbackSignaturesMatch) {
+        continue;
+      }
+      fallbackMatchCount++;
+      if (fallbackDelta == null || delta < fallbackDelta) {
+        fallbackDelta = delta;
+        fallbackMatch = candidate;
       }
     }
-    return closestMatch;
+    if (closestMatch != null) {
+      return closestMatch;
+    }
+    if (fallbackMatchCount == 1) {
+      return fallbackMatch;
+    }
+    return null;
   }
 
   String _resolveOutgoingSenderJid(Chat chat) {
@@ -2606,11 +2636,23 @@ class DeltaEventConsumer {
     }
     final metadataId = deltaFileMetadataId(delta.id);
     final existing = await db.getFileMetadata(metadataId);
+    final previousMetadataId = message.fileMetadataID?.trim();
+    FileMetadataData? previousMetadata;
+    if (existing == null &&
+        previousMetadataId != null &&
+        previousMetadataId.isNotEmpty &&
+        previousMetadataId != metadataId &&
+        delta.fileName?.trim().isNotEmpty != true) {
+      previousMetadata = await db.getFileMetadata(previousMetadataId);
+    }
     final resolvedMetadata = _metadataFromDelta(
       delta: delta,
       metadataId: metadataId,
     );
-    final merged = _mergeMetadata(existing, resolvedMetadata);
+    final merged = _mergeMetadata(
+      existing ?? previousMetadata?.copyWith(id: metadataId),
+      resolvedMetadata,
+    );
     if (merged != null && (existing == null || merged != existing)) {
       await db.saveFileMetadata(merged);
     }

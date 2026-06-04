@@ -17,6 +17,8 @@ class PendingOutgoingEmailSignature {
     required this.textSignature,
     required this.htmlSignature,
     required this.fileSignature,
+    required this.fileMimeSignature,
+    required this.fileSizeBytes,
   });
 
   factory PendingOutgoingEmailSignature.fromOutgoing({
@@ -25,6 +27,8 @@ class PendingOutgoingEmailSignature {
     String? html,
     String? fileName,
     String? filePath,
+    String? fileMime,
+    int? fileSizeBytes,
   }) {
     final String? normalizedSubject = _normalizeSubject(subject);
     final String? normalizedText = _normalizeText(text);
@@ -33,11 +37,15 @@ class PendingOutgoingEmailSignature {
       fileName: fileName,
       filePath: filePath,
     );
+    final String? normalizedFileMime = _normalizeFileMime(fileMime);
+    final int? normalizedFileSize = _normalizeFileSizeBytes(fileSizeBytes);
     return PendingOutgoingEmailSignature(
       subjectSignature: normalizedSubject,
       textSignature: normalizedText,
       htmlSignature: normalizedHtml,
       fileSignature: normalizedFile,
+      fileMimeSignature: normalizedFileMime,
+      fileSizeBytes: normalizedFileSize,
     );
   }
 
@@ -51,6 +59,8 @@ class PendingOutgoingEmailSignature {
       html: message.htmlBody,
       fileName: metadata?.filename,
       filePath: metadata?.path,
+      fileMime: metadata?.mimeType,
+      fileSizeBytes: metadata?.sizeBytes,
     );
   }
 
@@ -58,6 +68,8 @@ class PendingOutgoingEmailSignature {
   final String? textSignature;
   final String? htmlSignature;
   final String? fileSignature;
+  final String? fileMimeSignature;
+  final int? fileSizeBytes;
 
   bool get isEmpty =>
       subjectSignature == null &&
@@ -90,6 +102,42 @@ class PendingOutgoingEmailSignature {
       return true;
     }
     return false;
+  }
+
+  bool matchesAttachmentFileFallback(PendingOutgoingEmailSignature match) {
+    if (fileSignature == null || match.fileSignature == null) {
+      return false;
+    }
+    if (fileMimeSignature == null ||
+        match.fileMimeSignature == null ||
+        fileMimeSignature != match.fileMimeSignature) {
+      return false;
+    }
+    if (fileSizeBytes == null ||
+        match.fileSizeBytes == null ||
+        fileSizeBytes != match.fileSizeBytes) {
+      return false;
+    }
+    if (!_signaturesMatch(subjectSignature, match.subjectSignature)) {
+      return false;
+    }
+    if (textSignature != null &&
+        match.textSignature != null &&
+        textSignature == match.textSignature) {
+      return true;
+    }
+    if (htmlSignature != null &&
+        match.htmlSignature != null &&
+        htmlSignature == match.htmlSignature) {
+      return true;
+    }
+    if (textSignature != null ||
+        match.textSignature != null ||
+        htmlSignature != null ||
+        match.htmlSignature != null) {
+      return false;
+    }
+    return true;
   }
 }
 
@@ -137,4 +185,14 @@ String? _normalizeFileSignature({String? fileName, String? filePath}) {
     return normalizedFileName;
   }
   return _normalizeText(filePath);
+}
+
+String? _normalizeFileMime(String? value) =>
+    _normalizeText(sanitizeEmailMimeType(value));
+
+int? _normalizeFileSizeBytes(int? value) {
+  if (value == null || value <= 0) {
+    return null;
+  }
+  return value;
 }

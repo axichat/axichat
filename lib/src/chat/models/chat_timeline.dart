@@ -43,7 +43,7 @@ enum ChatTimelineEmailVisualKind {
   html,
   attachment;
 
-  bool get requiresEmailBoundary => this == html || this == attachment;
+  bool get requiresEmailBoundary => this == attachment;
 }
 
 final class ChatTimelineEmailBodyBlock {

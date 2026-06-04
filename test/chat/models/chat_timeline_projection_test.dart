@@ -494,7 +494,7 @@ void main() {
     expect(chatTimelineItemsShouldChain(items.last, items.first), isTrue);
   });
 
-  test('html emails do not chain across different RFC messages', () {
+  test('html emails keep normal same sender timeline chaining', () {
     final chat = chat_models.Chat(
       jid: 'alice@example.com',
       title: 'Alice',
@@ -535,7 +535,7 @@ void main() {
       ChatTimelineEmailVisualKind.html,
       ChatTimelineEmailVisualKind.html,
     ]);
-    expect(chatTimelineItemsShouldChain(items.last, items.first), isFalse);
+    expect(chatTimelineItemsShouldChain(items.last, items.first), isTrue);
   });
 
   test('email after attachment starts a new visual chain', () {
@@ -582,7 +582,7 @@ void main() {
     expect(chatTimelineItemsShouldChain(items.last, items.first), isFalse);
   });
 
-  test('incompatible RFC subject matches do not chain visually', () {
+  test('incompatible RFC subject matches still chain without extras', () {
     final chat = chat_models.Chat(
       jid: 'alice@example.com',
       title: 'Alice',
@@ -622,7 +622,7 @@ void main() {
     ).whereType<ChatTimelineMessageItem>().toList(growable: false);
 
     expect(items.map((item) => item.emailRfcGroupKey), everyElement(isNull));
-    expect(chatTimelineItemsShouldChain(items.last, items.first), isFalse);
+    expect(chatTimelineItemsShouldChain(items.last, items.first), isTrue);
   });
 
   test('split forwarded email shows forwarded banner only on leader', () {
