@@ -186,6 +186,79 @@ void main() {
       ),
     ).called(1);
   });
+
+  testWidgets('recovery email code step can go back and change email', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.startRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        recoveryEmail: 'first@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'first-id'),
+    );
+    when(
+      () => settingsCubit.startRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        recoveryEmail: 'second@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'second-id'),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showAccountRecoveryDialog(
+                context,
+                initialUsername: 'alice@axi.im',
+              ),
+            );
+          },
+          child: const Text('Open account recovery'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open account recovery'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Email code'));
+    await tester.pumpAndSettle();
+    final emailField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .last;
+    emailField.controller?.text = 'first@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+
+    final updatedEmailField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .last;
+    expect(updatedEmailField.controller?.text, 'first@example.com');
+    updatedEmailField.controller?.text = 'second@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.startRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        recoveryEmail: 'second@example.com',
+      ),
+    ).called(1);
+  });
 }
 
 class _RecoveryHarness extends StatelessWidget {

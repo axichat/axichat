@@ -573,6 +573,17 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
     _errorText = recoveryErrorText(context, error);
   }
 
+  void _goBack() {
+    if (_operation != null || _challenge == null) {
+      return;
+    }
+    setState(() {
+      _challenge = null;
+      _codeController.clear();
+      _errorText = null;
+    });
+  }
+
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) {
@@ -684,6 +695,11 @@ class _RecoveryEmailSetupDialogState extends State<_RecoveryEmailSetupDialog> {
           : context.l10n.commonContinue,
       canPop: operation == null,
       actions: [
+        if (_challenge != null)
+          AxiButton.secondary(
+            onPressed: operation == null ? _goBack : null,
+            child: Text(context.l10n.commonBack),
+          ),
         if (widget.recoveryEmailConfigured)
           AxiButton.destructive(
             loading: operation == _RecoveryMutationOperation.remove,
@@ -842,6 +858,17 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
     _errorText = recoveryErrorText(context, error);
   }
 
+  void _goBack() {
+    if (_operation != null || _setup == null) {
+      return;
+    }
+    setState(() {
+      _setup = null;
+      _codeController.clear();
+      _errorText = null;
+    });
+  }
+
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) {
@@ -951,6 +978,11 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
           : context.l10n.commonContinue,
       canPop: operation == null,
       actions: [
+        if (_setup != null)
+          AxiButton.secondary(
+            onPressed: operation == null ? _goBack : null,
+            child: Text(context.l10n.commonBack),
+          ),
         if (widget.totpConfigured)
           AxiButton.destructive(
             loading: operation == _RecoveryMutationOperation.remove,

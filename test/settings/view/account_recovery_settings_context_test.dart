@@ -345,6 +345,81 @@ void main() {
     ).called(1);
   });
 
+  testWidgets('recovery email setup code step can go back and change email', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.startRecoveryEmailSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+        recoveryEmail: 'first@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'first-id'),
+    );
+    when(
+      () => settingsCubit.startRecoveryEmailSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+        recoveryEmail: 'second@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'second-id'),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showRecoveryEmailSetupDialog(
+                context,
+                accountJid: 'alpha@axi.im',
+                currentPassword: 'current-password',
+              ),
+            );
+          },
+          child: const Text('Open recovery email'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open recovery email'));
+    await tester.pumpAndSettle();
+    final emailField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    emailField.controller?.text = 'first@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+
+    final updatedEmailField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    expect(updatedEmailField.controller?.text, 'first@example.com');
+    updatedEmailField.controller?.text = 'second@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.startRecoveryEmailSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+        recoveryEmail: 'second@example.com',
+      ),
+    ).called(1);
+  });
+
   testWidgets('recovery email setup maps unavailable service error', (
     tester,
   ) async {
@@ -422,6 +497,17 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(ShadInputOTPSlot), findsNWidgets(6));
+
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AxiOtpFormField), findsNothing);
+    expect(
+      find.text(
+        'Generate an authenticator secret for this account, then enter the 6-digit code from your app.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('recovery email setup confirmation sends OTP input', (

@@ -120,6 +120,52 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
     });
   }
 
+  bool get _canGoBack =>
+      !_loading &&
+      switch (_step) {
+        _RecoveryStep.method || _RecoveryStep.complete => false,
+        _RecoveryStep.emailAddress ||
+        _RecoveryStep.emailCode ||
+        _RecoveryStep.totpCode ||
+        _RecoveryStep.newPassword => true,
+      };
+
+  void _goBack() {
+    if (!_canGoBack) {
+      return;
+    }
+    setState(() {
+      _errorText = null;
+      switch (_step) {
+        case _RecoveryStep.method || _RecoveryStep.complete:
+          return;
+        case _RecoveryStep.emailAddress:
+          _method = null;
+          _step = _RecoveryStep.method;
+        case _RecoveryStep.emailCode:
+          _challenge = null;
+          _codeController.clear();
+          _step = _RecoveryStep.emailAddress;
+        case _RecoveryStep.totpCode:
+          _method = null;
+          _codeController.clear();
+          _step = _RecoveryStep.method;
+        case _RecoveryStep.newPassword:
+          _resetToken = null;
+          _newPasswordController.clear();
+          _newPasswordConfirmController.clear();
+          if (_method == _RecoveryMethod.email) {
+            _challenge = null;
+            _codeController.clear();
+            _step = _RecoveryStep.emailAddress;
+          } else {
+            _codeController.clear();
+            _step = _RecoveryStep.totpCode;
+          }
+      }
+    });
+  }
+
   Future<void> _startEmailReset() async {
     if (!_validateForm()) {
       return;
@@ -324,6 +370,13 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
       callback: _primaryAction,
       canPop: !_loading,
       showPrimaryButton: _step != _RecoveryStep.method,
+      actions: [
+        if (_canGoBack)
+          AxiButton.secondary(
+            onPressed: _goBack,
+            child: Text(context.l10n.commonBack),
+          ),
+      ],
       content: Form(
         key: _formKey,
         child: Column(
