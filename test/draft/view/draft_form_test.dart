@@ -108,6 +108,52 @@ void main() {
     expect(tester.widget<ShadSwitch>(find.byType(ShadSwitch)).value, isFalse);
   });
 
+  testWidgets('autosave saved check disappears after three seconds', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    when(
+      () => harness.draftCubit.saveDraft(
+        id: any(named: 'id'),
+        jids: any(named: 'jids'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+        autoSave: any(named: 'autoSave'),
+        autosaveEnabled: any(named: 'autosaveEnabled'),
+      ),
+    ).thenAnswer((_) async => _draft(id: 7));
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          id: 7,
+          jids: const ['peer@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'peer@example.com',
+          ]),
+          body: 'hello',
+          autosaveEnabled: true,
+          recipientCountAdjustment: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _enterBodyText(tester, 'hello updated');
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    expect(find.byIcon(LucideIcons.check), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.byIcon(LucideIcons.check), findsNothing);
+  });
+
   testWidgets('autosave switch off prevents scheduled autosave', (
     tester,
   ) async {

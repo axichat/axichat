@@ -410,7 +410,7 @@ class _DraftAutosaveControl extends StatelessWidget {
               ),
             ),
         ],
-        SizedBox(width: spacing.xs),
+        SizedBox(width: spacing.s),
         ShadSwitch(
           value: autosaveEnabled,
           onChanged: enabled && !autosaveSaving && !autosaveUpdating

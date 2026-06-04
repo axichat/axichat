@@ -151,6 +151,7 @@ class DraftFormState extends State<DraftForm> {
   bool _autosaveEnabled = false;
   bool _updatingAutosavePreference = false;
   Timer? _autosaveTimer;
+  Timer? _autosaveSavedIndicatorTimer;
   int? _lastSavedSignature;
   DateTime? _lastAutosaveAt;
   bool _autosaveInFlight = false;
@@ -236,6 +237,7 @@ class DraftFormState extends State<DraftForm> {
       }
     }
     _autosaveTimer?.cancel();
+    _autosaveSavedIndicatorTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
     _bodyTextController.dispose();
     _subjectTextController.removeListener(_subjectListener);
@@ -1398,8 +1400,15 @@ class DraftFormState extends State<DraftForm> {
     setState(() {
       _autosaveEnabled = enabled;
       _updatingAutosavePreference = draftId != null;
+      if (!enabled) {
+        _lastAutosaveAt = null;
+      }
     });
     _autosaveTimer?.cancel();
+    if (!enabled) {
+      _autosaveSavedIndicatorTimer?.cancel();
+      _autosaveSavedIndicatorTimer = null;
+    }
     if (enabled) {
       _scheduleAutosave();
     }
@@ -1474,6 +1483,12 @@ class DraftFormState extends State<DraftForm> {
       _lastSavedSignature = signature;
       _lastAutosaveAt = autoSave ? DateTime.now() : null;
     });
+    if (autoSave) {
+      _scheduleAutosaveSavedIndicatorDismissal();
+    } else {
+      _autosaveSavedIndicatorTimer?.cancel();
+      _autosaveSavedIndicatorTimer = null;
+    }
     widget.onDraftSaved?.call(draft.id);
     if (!autoSave &&
         wasNewDraft &&
@@ -1530,6 +1545,20 @@ class DraftFormState extends State<DraftForm> {
 
   void _invalidatePendingSaves() {
     _saveEpoch += 1;
+    _autosaveSavedIndicatorTimer?.cancel();
+    _autosaveSavedIndicatorTimer = null;
+    _lastAutosaveAt = null;
+  }
+
+  void _scheduleAutosaveSavedIndicatorDismissal() {
+    _autosaveSavedIndicatorTimer?.cancel();
+    _autosaveSavedIndicatorTimer = Timer(const Duration(seconds: 3), () {
+      _autosaveSavedIndicatorTimer = null;
+      if (!mounted || _lastAutosaveAt == null) {
+        return;
+      }
+      setState(() => _lastAutosaveAt = null);
+    });
   }
 
   void _invalidateAttachmentWork() {
