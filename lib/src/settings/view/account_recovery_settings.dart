@@ -182,6 +182,9 @@ class _AccountRecoverySettingsPageState
   }
 
   Future<void> _submitStatusPassword() async {
+    if (_loading) {
+      return;
+    }
     final form = _statusPasswordFormKey.currentState;
     if (form == null || !form.validate()) {
       return;
@@ -973,7 +976,7 @@ class _RecoveryTotpSetupDialogState extends State<_RecoveryTotpSetupDialog> {
       title: Text(context.l10n.recoveryTotpTitle),
       loading: operation == _RecoveryMutationOperation.save,
       callback: operation == null ? _submit : null,
-      callbackText: widget.totpConfigured
+      callbackText: widget.totpConfigured && _setup == null
           ? context.l10n.recoveryCreateNewTotpAction
           : context.l10n.commonContinue,
       canPop: operation == null,

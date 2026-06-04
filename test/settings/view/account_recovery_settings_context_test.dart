@@ -267,6 +267,62 @@ void main() {
     ).called(1);
   });
 
+  testWidgets('configured authenticator replacement continues after secret', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.recoveryStatus(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).thenAnswer(
+      (_) async => const provisioning.RecoveryStatus(
+        recoveryEmailConfigured: false,
+        totpConfigured: true,
+      ),
+    );
+    when(
+      () => settingsCubit.startRecoveryTotpSetup(
+        accountJid: 'alpha@axi.im',
+        password: 'current-password',
+      ),
+    ).thenAnswer(
+      (_) async => const provisioning.RecoveryTotpSetup(
+        otpauthUri: 'otpauth://totp/Axichat:alpha@axi.im?secret=ABC123',
+        secret: 'ABC123',
+        challenge: 'challenge-id',
+      ),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        profileCubit: _profileCubit(jid: 'alpha@axi.im'),
+        showOpener: showOpener,
+        childBuilder: (_) => const AccountRecoverySettingsPage(),
+      ),
+    );
+
+    final passwordField = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .single;
+    passwordField.controller?.text = 'current-password';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Authenticator app'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create new'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create new'), findsNothing);
+    expect(find.text('Continue'), findsOneWidget);
+    expect(find.byType(AxiOtpFormField), findsOneWidget);
+  });
+
   testWidgets('showRecoveryEmailSetupDialog survives opener disposal', (
     tester,
   ) async {
