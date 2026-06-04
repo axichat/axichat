@@ -3299,6 +3299,7 @@
   "recoveryEmailSetupCodeHint": "请输入发送到你的恢复邮箱的验证码。",
   "recoveryTotpSetupHint": "将此密钥添加到你的身份验证器应用，然后输入 6 位验证码。",
   "recoveryTotpSetupStartHint": "为此账号生成身份验证器密钥，然后输入应用中的 6 位验证码。",
+  "recoveryCreateNewTotpAction": "新建",
   "recoveryRemoveEmailTitle": "移除恢复邮箱",
   "recoveryRemoveTotpTitle": "移除身份验证器应用",
   "recoveryRemoveConfirmMessage": "移除此恢复方式？"

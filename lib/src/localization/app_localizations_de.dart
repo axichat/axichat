@@ -7251,6 +7251,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Erzeuge ein Authenticator-Geheimnis für dieses Konto und gib dann den 6-stelligen Code aus deiner App ein.';
 
   @override
+  String get recoveryCreateNewTotpAction => 'Neu erstellen';
+
+  @override
   String get recoveryRemoveEmailTitle => 'Wiederherstellungs-E-Mail entfernen';
 
   @override

@@ -7115,6 +7115,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Generate an authenticator secret for this account, then enter the 6-digit code from your app.';
 
   @override
+  String get recoveryCreateNewTotpAction => 'Create new';
+
+  @override
   String get recoveryRemoveEmailTitle => 'Remove recovery email';
 
   @override

@@ -3299,6 +3299,7 @@
   "recoveryEmailSetupCodeHint": "Gib den Code ein, der an deine Wiederherstellungs-E-Mail gesendet wurde.",
   "recoveryTotpSetupHint": "Füge dieses Geheimnis deiner Authenticator-App hinzu und gib dann den 6-stelligen Code ein.",
   "recoveryTotpSetupStartHint": "Erzeuge ein Authenticator-Geheimnis für dieses Konto und gib dann den 6-stelligen Code aus deiner App ein.",
+  "recoveryCreateNewTotpAction": "Neu erstellen",
   "recoveryRemoveEmailTitle": "Wiederherstellungs-E-Mail entfernen",
   "recoveryRemoveTotpTitle": "Authenticator-App entfernen",
   "recoveryRemoveConfirmMessage": "Diese Wiederherstellungsmethode entfernen?"

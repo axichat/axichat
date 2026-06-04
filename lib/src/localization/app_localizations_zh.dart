@@ -6781,6 +6781,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recoveryTotpSetupStartHint => '为此账号生成身份验证器密钥，然后输入应用中的 6 位验证码。';
 
   @override
+  String get recoveryCreateNewTotpAction => '新建';
+
+  @override
   String get recoveryRemoveEmailTitle => '移除恢复邮箱';
 
   @override
@@ -13568,6 +13571,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get recoveryTotpSetupStartHint => '為此帳號產生驗證器密鑰，然後輸入應用程式中的 6 位驗證碼。';
+
+  @override
+  String get recoveryCreateNewTotpAction => '新建';
 
   @override
   String get recoveryRemoveEmailTitle => '移除復原電郵';

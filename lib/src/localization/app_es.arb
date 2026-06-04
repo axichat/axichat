@@ -3299,6 +3299,7 @@
   "recoveryEmailSetupCodeHint": "Introduce el código enviado a tu correo de recuperación.",
   "recoveryTotpSetupHint": "Añade este secreto a tu app autenticadora y luego introduce el código de 6 dígitos.",
   "recoveryTotpSetupStartHint": "Genera un secreto de autenticador para esta cuenta y luego introduce el código de 6 dígitos de tu app.",
+  "recoveryCreateNewTotpAction": "Crear nuevo",
   "recoveryRemoveEmailTitle": "Quitar correo de recuperación",
   "recoveryRemoveTotpTitle": "Quitar app autenticadora",
   "recoveryRemoveConfirmMessage": "¿Quitar este método de recuperación?"

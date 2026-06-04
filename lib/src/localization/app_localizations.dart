@@ -12314,6 +12314,12 @@ abstract class AppLocalizations {
   /// **'Generate an authenticator secret for this account, then enter the 6-digit code from your app.'**
   String get recoveryTotpSetupStartHint;
 
+  /// No description provided for @recoveryCreateNewTotpAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create new'**
+  String get recoveryCreateNewTotpAction;
+
   /// No description provided for @recoveryRemoveEmailTitle.
   ///
   /// In en, this message translates to:

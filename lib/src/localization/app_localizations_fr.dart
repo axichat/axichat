@@ -7272,6 +7272,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Générez un secret d’authentification pour ce compte, puis saisissez le code à 6 chiffres de votre app.';
 
   @override
+  String get recoveryCreateNewTotpAction => 'Créer';
+
+  @override
   String get recoveryRemoveEmailTitle => 'Supprimer l’e-mail de récupération';
 
   @override

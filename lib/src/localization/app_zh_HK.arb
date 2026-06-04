@@ -3299,6 +3299,7 @@
   "recoveryEmailSetupCodeHint": "請輸入傳送到你的復原電郵的驗證碼。",
   "recoveryTotpSetupHint": "將此密鑰加入你的驗證器應用程式，然後輸入 6 位驗證碼。",
   "recoveryTotpSetupStartHint": "為此帳號產生驗證器密鑰，然後輸入應用程式中的 6 位驗證碼。",
+  "recoveryCreateNewTotpAction": "新建",
   "recoveryRemoveEmailTitle": "移除復原電郵",
   "recoveryRemoveTotpTitle": "移除驗證器應用程式",
   "recoveryRemoveConfirmMessage": "移除此復原方式？"

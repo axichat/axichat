@@ -3401,6 +3401,7 @@
   "recoveryEmailSetupCodeHint": "Enter the code sent to your recovery email.",
   "recoveryTotpSetupHint": "Add this secret to your authenticator app, then enter the 6-digit code.",
   "recoveryTotpSetupStartHint": "Generate an authenticator secret for this account, then enter the 6-digit code from your app.",
+  "recoveryCreateNewTotpAction": "Create new",
   "recoveryRemoveEmailTitle": "Remove recovery email",
   "recoveryRemoveTotpTitle": "Remove authenticator app",
   "recoveryRemoveConfirmMessage": "Remove this recovery method?"
