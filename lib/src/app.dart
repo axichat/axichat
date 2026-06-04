@@ -816,15 +816,21 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   listenWhen: (previous, current) =>
                       previous.networkAvailability !=
                       current.networkAvailability,
-                  listener: (context, state) async {
+                  listener: (context, state) {
                     if (!state.emailEnabled) return;
                     final emailService = context.read<EmailService>();
                     if (state.networkAvailability.isUnavailable) {
-                      await emailService.handleNetworkLost();
+                      fireAndForget(
+                        emailService.handleNetworkLost,
+                        operationName: 'App.emailNetworkLost',
+                      );
                       return;
                     }
                     if (state.networkAvailability.isAvailable) {
-                      await emailService.handleNetworkAvailable();
+                      fireAndForget(
+                        emailService.handleNetworkAvailable,
+                        operationName: 'App.emailNetworkAvailable',
+                      );
                     }
                   },
                 ),

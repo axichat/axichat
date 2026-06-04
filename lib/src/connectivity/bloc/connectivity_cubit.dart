@@ -72,11 +72,7 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     required bool demoOffline,
     NetworkAvailability networkAvailability = NetworkAvailability.unknown,
   }) {
-    final effectiveConnectionState =
-        networkAvailability.isUnavailable && !demoOffline
-        ? ConnectionState.notConnected
-        : connectionState;
-    return switch (effectiveConnectionState) {
+    return switch (connectionState) {
       ConnectionState.connected => ConnectivityConnected(
         emailState: emailState,
         emailEnabled: emailEnabled,

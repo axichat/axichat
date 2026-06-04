@@ -18,36 +18,33 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
-  test(
-    'network unavailable maps connected transport to not connected',
-    () async {
-      final xmppStates = StreamController<ConnectionState>.broadcast();
-      final networkStates = StreamController<NetworkAvailability>.broadcast();
-      final xmppService = _MockXmppService();
-      when(
-        () => xmppService.connectionState,
-      ).thenReturn(ConnectionState.connected);
-      when(
-        () => xmppService.connectivityStream,
-      ).thenAnswer((_) => xmppStates.stream);
-      when(() => xmppService.demoOfflineMode).thenReturn(false);
-      final connectivityCubit = ConnectivityCubit(
-        xmppBase: xmppService,
-        emailEnabled: true,
-        networkAvailabilityStream: networkStates.stream,
-        initialNetworkAvailability: NetworkAvailability.available,
-      );
-      addTearDown(connectivityCubit.close);
-      addTearDown(xmppStates.close);
-      addTearDown(networkStates.close);
+  test('network unavailable preserves connected transport state', () async {
+    final xmppStates = StreamController<ConnectionState>.broadcast();
+    final networkStates = StreamController<NetworkAvailability>.broadcast();
+    final xmppService = _MockXmppService();
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(ConnectionState.connected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => xmppStates.stream);
+    when(() => xmppService.demoOfflineMode).thenReturn(false);
+    final connectivityCubit = ConnectivityCubit(
+      xmppBase: xmppService,
+      emailEnabled: true,
+      networkAvailabilityStream: networkStates.stream,
+      initialNetworkAvailability: NetworkAvailability.available,
+    );
+    addTearDown(connectivityCubit.close);
+    addTearDown(xmppStates.close);
+    addTearDown(networkStates.close);
 
-      networkStates.add(NetworkAvailability.unavailable);
-      await pumpEventQueue();
+    networkStates.add(NetworkAvailability.unavailable);
+    await pumpEventQueue();
 
-      expect(connectivityCubit.state, isA<ConnectivityNotConnected>());
-      expect(connectivityCubit.state.isNetworkUnavailable, isTrue);
-    },
-  );
+    expect(connectivityCubit.state, isA<ConnectivityConnected>());
+    expect(connectivityCubit.state.isNetworkUnavailable, isTrue);
+  });
 
   testWidgets('syncing transport chips do not show progress indicators', (
     tester,
@@ -89,6 +86,94 @@ void main() {
       find.textContaining(l10n.sessionCapabilityStatusConnected),
       findsNothing,
     );
+  });
+
+  testWidgets('connectivity banner displays network unavailable as offline', (
+    tester,
+  ) async {
+    final settingsCubit = _mockSettingsCubit();
+    final xmppStates = StreamController<ConnectionState>.broadcast();
+    final xmppService = _MockXmppService();
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(ConnectionState.connected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => xmppStates.stream);
+    when(() => xmppService.demoOfflineMode).thenReturn(false);
+    final connectivityCubit = ConnectivityCubit(
+      xmppBase: xmppService,
+      emailEnabled: true,
+      networkAvailabilityStream: const Stream<NetworkAvailability>.empty(),
+      initialNetworkAvailability: NetworkAvailability.unavailable,
+    );
+    addTearDown(connectivityCubit.close);
+    addTearDown(xmppStates.close);
+
+    expect(connectivityCubit.state, isA<ConnectivityConnected>());
+
+    await tester.pumpWidget(
+      _ConnectionStatusTestApp(
+        settingsCubit: settingsCubit,
+        connectivityCubit: connectivityCubit,
+        child: const ConnectivityIndicator(),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text(
+        lookupAppLocalizations(
+          const Locale('en'),
+        ).connectivityStatusNotConnected,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('connectivity banner recovers when network returns available', (
+    tester,
+  ) async {
+    final settingsCubit = _mockSettingsCubit();
+    final xmppStates = StreamController<ConnectionState>.broadcast();
+    final networkStates = StreamController<NetworkAvailability>.broadcast();
+    final xmppService = _MockXmppService();
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(ConnectionState.connected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => xmppStates.stream);
+    when(() => xmppService.demoOfflineMode).thenReturn(false);
+    final connectivityCubit = ConnectivityCubit(
+      xmppBase: xmppService,
+      emailEnabled: true,
+      networkAvailabilityStream: networkStates.stream,
+      initialNetworkAvailability: NetworkAvailability.unavailable,
+    );
+    addTearDown(connectivityCubit.close);
+    addTearDown(xmppStates.close);
+    addTearDown(networkStates.close);
+
+    await tester.pumpWidget(
+      _ConnectionStatusTestApp(
+        settingsCubit: settingsCubit,
+        connectivityCubit: connectivityCubit,
+        child: const ConnectivityIndicator(),
+      ),
+    );
+    await tester.pump();
+
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(l10n.connectivityStatusNotConnected), findsOneWidget);
+
+    networkStates.add(NetworkAvailability.available);
+    await pumpEventQueue();
+    await tester.pump();
+
+    expect(connectivityCubit.state, isA<ConnectivityConnected>());
+    expect(find.text(l10n.connectivityStatusConnected), findsOneWidget);
+    expect(find.text(l10n.connectivityStatusNotConnected), findsNothing);
   });
 
   testWidgets('connecting banner shows progress after status text', (

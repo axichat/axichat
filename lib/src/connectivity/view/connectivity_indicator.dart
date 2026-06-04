@@ -94,9 +94,15 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
     required ConnectivityState? previousState,
     required _ConnectivityIndicatorDisplay previousDisplay,
   }) {
+    if (state.isNetworkUnavailable) {
+      return _ConnectivityIndicatorDisplay.notConnected;
+    }
     if (state is ConnectivityConnected) {
       if (previousState == null) {
         return _ConnectivityIndicatorDisplay.hidden;
+      }
+      if (previousState.isNetworkUnavailable) {
+        return _ConnectivityIndicatorDisplay.connected;
       }
       if (previousState is ConnectivityConnected) {
         return previousDisplay;

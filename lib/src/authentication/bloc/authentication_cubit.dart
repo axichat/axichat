@@ -2022,6 +2022,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return EndpointOverride(host: endpoint.host, port: endpoint.port);
   }
 
+  EndpointOverride? _offlineResumeXmppEndpoint(EndpointConfig config) {
+    final configuredPort = config.xmppPort > 0
+        ? config.xmppPort
+        : EndpointConfig.defaultXmppPort;
+    final configuredHost = config.xmppHost?.trim();
+    if (configuredHost != null && configuredHost.isNotEmpty) {
+      return EndpointOverride(host: configuredHost, port: configuredPort);
+    }
+    final domain = config.domain.trim().toLowerCase();
+    if (domain.isEmpty) {
+      return null;
+    }
+    final fallback = _overrideFrom(serverLookup[domain]);
+    if (configuredPort != EndpointConfig.defaultXmppPort) {
+      return EndpointOverride(
+        host: fallback?.host ?? domain,
+        port: configuredPort,
+      );
+    }
+    return fallback;
+  }
+
   @override
   Future<void> close() async {
     _invalidateEmailReconnectGeneration();
@@ -2324,6 +2346,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
 
       if (deviceNetworkUnavailable) {
+        final offlineXmppEndpoint = xmppEnabled
+            ? _offlineResumeXmppEndpoint(config)
+            : null;
         applyEmailSessionCredentials();
         final resumeResult = await _resumeOfflineLogin(
           config: config,
@@ -2342,6 +2367,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePrefixStorageKey: databasePrefixStorageKey,
           databasePassphraseStorageKey: databasePassphraseStorageKey,
           pendingAvatar: pendingAvatar,
+          endpoint: offlineXmppEndpoint,
         );
         if (resumeResult.isResumed) {
           authenticationCommitted = true;

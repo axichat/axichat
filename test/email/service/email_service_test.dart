@@ -2099,6 +2099,60 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test('network transitions serialize and coalesce pending flaps', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+    addTearDown(service.shutdown);
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    final lostStarted = Completer<void>();
+    final releaseLost = Completer<void>();
+    final availableStarted = Completer<void>();
+    var lostRunning = false;
+    when(() => transport.notifyNetworkLost()).thenAnswer((_) async {
+      lostRunning = true;
+      if (!lostStarted.isCompleted) {
+        lostStarted.complete();
+      }
+      await releaseLost.future;
+      lostRunning = false;
+    });
+    when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {
+      expect(lostRunning, isFalse);
+      if (!availableStarted.isCompleted) {
+        availableStarted.complete();
+      }
+    });
+
+    final lost = service.handleNetworkLost();
+    await lostStarted.future;
+    final available = service.handleNetworkAvailable();
+    final staleLost = service.handleNetworkLost();
+    final latestAvailable = service.handleNetworkAvailable();
+    await pumpEventQueue();
+
+    expect(availableStarted.isCompleted, isFalse);
+
+    releaseLost.complete();
+    await Future.wait([lost, available, staleLost, latestAvailable]);
+
+    expect(availableStarted.isCompleted, isTrue);
+    verify(() => transport.notifyNetworkLost()).called(1);
+    verify(() => transport.notifyNetworkAvailable()).called(1);
+  });
+
   test('performBackgroundFetch delegates to transport when ready', () async {
     final service = EmailService(
       credentialStore: credentialStore,

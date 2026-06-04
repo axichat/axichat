@@ -432,6 +432,47 @@ void main() {
       },
     );
 
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Manual login attempts XMPP when device network is unavailable.',
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: _xmppOnlyEndpointConfig,
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        resolveNetworkAvailability: () async => NetworkAvailability.unavailable,
+      ),
+      act: (bloc) =>
+          bloc.login(username: validUsername, password: validPassword),
+      expect: () => [
+        const AuthenticationLogInInProgress(config: _xmppOnlyEndpointConfig),
+        const AuthenticationComplete(config: _xmppOnlyEndpointConfig),
+      ],
+      verify: (_) {
+        verify(
+          () => mockXmppService.connect(
+            jid: validJid,
+            password: validPassword,
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: false,
+            reuseExistingSession: false,
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).called(1);
+        verifyNever(
+          () => mockXmppService.resumeOfflineSession(
+            jid: any(named: 'jid'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            password: any(named: 'password'),
+            preHashed: any(named: 'preHashed'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        );
+      },
+    );
+
     late List<String> xmppPreparationOrder;
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -1587,6 +1628,7 @@ void main() {
         AuthenticationComplete(),
       ],
       verify: (_) {
+        final defaultEndpoint = serverLookup[EndpointConfig.defaultDomain]!;
         verifyNever(
           () => mockXmppService.connect(
             jid: any(named: 'jid'),
@@ -1605,7 +1647,90 @@ void main() {
             databasePassphrase: 'passphrase',
             password: validPassword,
             preHashed: true,
-            endpoint: null,
+            endpoint: EndpointOverride(
+              host: defaultEndpoint.host,
+              port: defaultEndpoint.port,
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Stored offline login preserves custom XMPP endpoint.',
+      setUp: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['password'] = validPassword;
+        credentialStorage['password_prehashed_v1'] = true.toString();
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(
+          () => mockXmppService.resumeOfflineSession(
+            jid: any(named: 'jid'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            password: any(named: 'password'),
+            preHashed: any(named: 'preHashed'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenAnswer((_) async {});
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(
+          xmppHost: 'xmpp.custom.example',
+          xmppPort: 6222,
+        ),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        resolveNetworkAvailability: () async => NetworkAvailability.unavailable,
+      ),
+      act: (bloc) => bloc.login(),
+      expect: () => const [
+        AuthenticationLogInInProgress(
+          phase: AuthenticationLoginPhase.preNetwork,
+          config: EndpointConfig(
+            xmppHost: 'xmpp.custom.example',
+            xmppPort: 6222,
+          ),
+        ),
+        AuthenticationLogInInProgress(
+          config: EndpointConfig(
+            xmppHost: 'xmpp.custom.example',
+            xmppPort: 6222,
+          ),
+        ),
+        AuthenticationComplete(
+          config: EndpointConfig(
+            xmppHost: 'xmpp.custom.example',
+            xmppPort: 6222,
+          ),
+        ),
+      ],
+      verify: (_) {
+        verifyNever(
+          () => mockXmppService.connect(
+            jid: any(named: 'jid'),
+            password: any(named: 'password'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        );
+        verify(
+          () => mockXmppService.resumeOfflineSession(
+            jid: validJid,
+            databasePrefix: 'prefix',
+            databasePassphrase: 'passphrase',
+            password: validPassword,
+            preHashed: true,
+            endpoint: const EndpointOverride(
+              host: 'xmpp.custom.example',
+              port: 6222,
+            ),
           ),
         ).called(1);
       },

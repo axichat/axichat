@@ -16,7 +16,6 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
@@ -86,6 +85,8 @@ extension _EmailSyncSourceLabels on _EmailSyncSource {
 enum _EmailRuntimePhase { stopped, running, stopping, disposing }
 
 enum _EmailReconnectRestartPolicy { offlineOnly, foregroundResume }
+
+enum _EmailNetworkTransition { lost, available, foregroundResumeAvailable }
 
 enum EmailShutdownMode { graceful, logout }
 
@@ -738,12 +739,15 @@ class EmailService {
   Timer? _imapSyncTimer;
   Object? _imapSyncLoopToken;
   final EmailAsyncQueue _imapSyncQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _networkSignalQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _networkTransitionQueue = EmailAsyncQueue();
   final EmailAsyncQueue _reconnectCatchUpQueue = EmailAsyncQueue();
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final EmailAsyncQueue _contactsSyncQueue = EmailAsyncQueue();
   final EmailAsyncQueue _chatlistSyncQueue = EmailAsyncQueue();
   final EmailAsyncQueue _readStateQueue = EmailAsyncQueue();
   final EmailAsyncQueue _mdnConfigQueue = EmailAsyncQueue();
+  _EmailNetworkTransition? _pendingNetworkTransition;
   final Set<Future<void>> _activeAppDatabaseOperations = <Future<void>>{};
 
   void updateEndpointConfig(EndpointConfig config) {
@@ -2025,6 +2029,9 @@ class EmailService {
     _chatlistSyncQueue.reset();
     _readStateQueue.reset();
     _imapSyncQueue.reset();
+    _networkSignalQueue.reset();
+    _networkTransitionQueue.reset();
+    _pendingNetworkTransition = null;
     _reconnectCatchUpQueue.reset();
     _reconnectRestartQueue.reset();
     _channelOverflowRecoveryQueue.reset();
@@ -2204,6 +2211,9 @@ class EmailService {
     _foregroundKeepaliveQueue.reset();
     _channelOverflowRecoveryQueue.reset();
     _imapSyncQueue.reset();
+    _networkSignalQueue.reset();
+    _networkTransitionQueue.reset();
+    _pendingNetworkTransition = null;
     _reconnectCatchUpQueue.reset();
     _reconnectRestartQueue.reset();
     _contactsSyncQueue.reset();
@@ -3267,10 +3277,55 @@ class EmailService {
   }
 
   Future<void> handleNetworkAvailable() =>
-      _handleNetworkAvailable(_EmailReconnectRestartPolicy.offlineOnly);
+      _enqueueNetworkTransition(_EmailNetworkTransition.available);
 
   Future<void> handleForegroundResumeNetworkAvailable() =>
-      _handleNetworkAvailable(_EmailReconnectRestartPolicy.foregroundResume);
+      _enqueueNetworkTransition(
+        _EmailNetworkTransition.foregroundResumeAvailable,
+      );
+
+  Future<void> handleNetworkLost() =>
+      _enqueueNetworkTransition(_EmailNetworkTransition.lost);
+
+  Future<void> _enqueueNetworkTransition(
+    _EmailNetworkTransition transition,
+  ) async {
+    _setPendingNetworkTransition(transition);
+    await _networkTransitionQueue.run(() async {
+      final pending = _pendingNetworkTransition;
+      _pendingNetworkTransition = null;
+      if (pending == null) return;
+      await _runNetworkTransition(pending);
+    });
+  }
+
+  void _setPendingNetworkTransition(_EmailNetworkTransition transition) {
+    if (_pendingNetworkTransition ==
+            _EmailNetworkTransition.foregroundResumeAvailable &&
+        transition == _EmailNetworkTransition.available) {
+      return;
+    }
+    _pendingNetworkTransition = transition;
+  }
+
+  Future<void> _runNetworkTransition(_EmailNetworkTransition transition) async {
+    switch (transition) {
+      case _EmailNetworkTransition.lost:
+        await _handleNetworkLost();
+      case _EmailNetworkTransition.available:
+        await _handleNetworkAvailable(_EmailReconnectRestartPolicy.offlineOnly);
+      case _EmailNetworkTransition.foregroundResumeAvailable:
+        await _handleNetworkAvailable(
+          _EmailReconnectRestartPolicy.foregroundResume,
+        );
+    }
+  }
+
+  Future<void> _notifyTransportNetworkAvailable() =>
+      _networkSignalQueue.run(_transport.notifyNetworkAvailable);
+
+  Future<void> _notifyTransportNetworkLost() =>
+      _networkSignalQueue.run(_transport.notifyNetworkLost);
 
   Future<void> _handleNetworkAvailable(
     _EmailReconnectRestartPolicy restartPolicy,
@@ -3278,15 +3333,11 @@ class EmailService {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return;
     }
-    if (_deviceNetworkUnavailable) {
-      _applyDeviceNetworkLostState(source: _EmailSyncSource.networkAvailable);
-      return;
-    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
     await ensureEventChannelActive();
-    await _transport.notifyNetworkAvailable();
+    await _notifyTransportNetworkAvailable();
     await _bootstrapActiveAccountIfNeeded();
     await _runReconnectCatchUp();
     await _refreshConnectivityState(source: _EmailSyncSource.networkAvailable);
@@ -3296,7 +3347,7 @@ class EmailService {
     );
   }
 
-  Future<void> handleNetworkLost() async {
+  Future<void> _handleNetworkLost() async {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return;
     }
@@ -3304,19 +3355,13 @@ class EmailService {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
-    await _transport.notifyNetworkLost();
+    await _notifyTransportNetworkLost();
   }
 
   Future<bool> performBackgroundFetch({
     Duration timeout = _imapSyncFetchTimeout,
   }) async {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
-      return false;
-    }
-    if (_deviceNetworkUnavailable) {
-      _applyDeviceNetworkLostState(
-        source: _EmailSyncSource.backgroundFetchDone,
-      );
       return false;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -3414,16 +3459,12 @@ class EmailService {
   }
 
   Future<bool> recoverForHomeRefresh() async {
-    if (_deviceNetworkUnavailable) {
-      _applyDeviceNetworkLostState(source: _EmailSyncSource.networkAvailable);
-      return false;
-    }
     if (!await canReconnectConfiguredSession()) {
       return true;
     }
     try {
       await ensureEventChannelActive();
-      await _transport.notifyNetworkAvailable();
+      await _notifyTransportNetworkAvailable();
       await _bootstrapActiveAccountIfNeeded();
       fireAndForget(
         () =>
@@ -3462,12 +3503,6 @@ class EmailService {
   }
 
   Future<bool> _refreshHomeEmailSnapshot() async {
-    if (_deviceNetworkUnavailable) {
-      _applyDeviceNetworkLostState(
-        source: _EmailSyncSource.backgroundFetchDone,
-      );
-      return false;
-    }
     if (_transport.isIoRunning) {
       await refreshChatlistFromCore();
       return true;
@@ -4527,10 +4562,6 @@ class EmailService {
     if (!_acceptsRuntimeWork) {
       return null;
     }
-    if (_deviceNetworkUnavailable) {
-      _applyDeviceNetworkLostState(source: source);
-      return 0;
-    }
     try {
       final connectivity = await _readTransportConnectivity(source: source);
       if (!_acceptsRuntimeWork) {
@@ -4579,9 +4610,6 @@ class EmailService {
       return null;
     }
   }
-
-  bool get _deviceNetworkUnavailable =>
-      NetworkAvailabilityService.instance.current.isUnavailable;
 
   void _applyDeviceNetworkLostState({required _EmailSyncSource source}) {
     _cancelConnectivityDowngrade();
@@ -4821,7 +4849,7 @@ class EmailService {
           timeout: _foregroundFetchTimeout,
         );
         if (!success) {
-          await _transport.notifyNetworkAvailable();
+          await _notifyTransportNetworkAvailable();
         }
         await refreshChatlistFromCore();
       } on Exception catch (error, stackTrace) {
@@ -5109,7 +5137,7 @@ class EmailService {
       return;
     }
     try {
-      await _transport.notifyNetworkAvailable();
+      await _notifyTransportNetworkAvailable();
       await _refreshConnectivityState(
         source: _EmailSyncSource.connectivityConfirm,
       );
@@ -5354,7 +5382,7 @@ class EmailService {
         );
         await stop();
         await start();
-        await _transport.notifyNetworkAvailable();
+        await _notifyTransportNetworkAvailable();
         await _bootstrapActiveAccountIfNeeded();
         await _runReconnectCatchUp();
       } on Exception catch (error, stackTrace) {
@@ -5388,7 +5416,7 @@ class EmailService {
     if (!_transport.isIoRunning) {
       return null;
     }
-    await _transport.notifyNetworkAvailable();
+    await _notifyTransportNetworkAvailable();
     await Future.delayed(_reconnectRestartDelay);
     if (!_acceptsRuntimeWork) {
       return null;
