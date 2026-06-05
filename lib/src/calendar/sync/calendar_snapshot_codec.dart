@@ -7,62 +7,64 @@ import 'dart:typed_data';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 
-/// Codec for encoding and decoding full [CalendarModel] snapshots.
-///
-/// Snapshots are gzip-compressed JSON with metadata for version tracking
-/// and integrity verification.
+/// Codec for single-file calendar snapshots.
 class CalendarSnapshotCodec {
   CalendarSnapshotCodec._();
 
-  /// Current snapshot format version.
   static const int currentVersion = 1;
 
-  /// MIME type for snapshot files.
   static const String mimeType = 'application/x-axichat-calendar-snapshot';
-
-  /// File extension for snapshot files.
   static const String fileExtension = '.axical.gz';
 
-  /// Maximum size of compressed snapshot data.
-  static const int maxCompressedBytes = 10 * 1024 * 1024;
+  static const int maxCompressedBytes = 256 * 1024 * 1024;
+  static const int maxDecompressedBytes = 1024 * 1024 * 1024;
 
-  /// Maximum size of decompressed snapshot data.
-  static const int maxDecompressedBytes = 20 * 1024 * 1024;
+  static const String _versionKey = 'version';
+  static const String _generatedAtKey = 'generatedAt';
+  static const String _checksumKey = 'checksum';
+  static const String _calendarModelKey = 'calendar_model';
 
-  /// Maximum allowable compression ratio for snapshot payloads.
-  static const int maxCompressionRatio = 10;
-
-  /// Encodes a [CalendarModel] to a gzip-compressed snapshot.
-  ///
-  /// Returns the compressed bytes suitable for file upload.
   static Uint8List encode(CalendarModel model) {
-    final envelope = _createEnvelope(model);
+    final checksum = model.calculateChecksum();
+    final envelope = <String, dynamic>{
+      _versionKey: currentVersion,
+      _generatedAtKey: DateTime.now().toUtc().toIso8601String(),
+      _checksumKey: checksum,
+      _calendarModelKey: model.copyWith(checksum: checksum).toJson(),
+    };
     final jsonBytes = utf8.encode(jsonEncode(envelope));
-    return Uint8List.fromList(gzip.encode(jsonBytes));
+    if (jsonBytes.length > maxDecompressedBytes) {
+      throw const CalendarSnapshotTooLargeException(
+        'Calendar snapshot exceeds the receiver limit.',
+      );
+    }
+    final compressedBytes = Uint8List.fromList(gzip.encode(jsonBytes));
+    if (compressedBytes.length > maxCompressedBytes) {
+      throw const CalendarSnapshotTooLargeException(
+        'Calendar snapshot upload exceeds the receiver limit.',
+      );
+    }
+    return compressedBytes;
   }
 
-  /// Decodes a gzip-compressed snapshot to a [CalendarSnapshotResult].
-  ///
-  /// Returns null if decoding fails or the snapshot is invalid.
   static CalendarSnapshotResult? decode(Uint8List compressedBytes) {
     if (compressedBytes.isEmpty ||
         compressedBytes.length > maxCompressedBytes) {
       return null;
     }
     try {
-      final decompressed = _decodeGzipWithLimit(compressedBytes);
+      final decompressed = _decodeGzipWithLimit(
+        compressedBytes,
+        maxBytes: maxDecompressedBytes,
+      );
       if (decompressed == null) {
         return null;
       }
-      if (!_withinCompressionLimits(
-        compressedLength: compressedBytes.length,
-        decompressedLength: decompressed.length,
-      )) {
+      final decoded = jsonDecode(utf8.decode(decompressed));
+      if (decoded is! Map) {
         return null;
       }
-      final jsonString = utf8.decode(decompressed);
-      final envelope = jsonDecode(jsonString) as Map<String, dynamic>;
-      return _parseEnvelope(envelope);
+      return _parseEnvelope(Map<String, dynamic>.from(decoded));
     } on FormatException {
       return null;
     } on Exception {
@@ -70,21 +72,18 @@ class CalendarSnapshotCodec {
     }
   }
 
-  /// Decodes a snapshot from a file.
   static Future<CalendarSnapshotResult?> decodeFile(File file) async {
     try {
       final length = await file.length();
-      if (length > maxCompressedBytes) {
+      if (length <= 0 || length > maxCompressedBytes) {
         return null;
       }
-      final bytes = await file.readAsBytes();
-      return decode(bytes);
+      return decode(await file.readAsBytes());
     } on FileSystemException {
       return null;
     }
   }
 
-  /// Encodes a [CalendarModel] and writes to a file.
   static Future<File> encodeToFile(
     CalendarModel model, {
     required Directory directory,
@@ -97,62 +96,44 @@ class CalendarSnapshotCodec {
     return file;
   }
 
-  /// Computes the checksum for a snapshot envelope.
-  static String computeChecksum(CalendarModel model) {
-    return model.calculateChecksum();
-  }
+  static String computeChecksum(CalendarModel model) =>
+      model.calculateChecksum();
 
-  /// Verifies that a snapshot's checksum matches its content.
   static bool verifyChecksum(CalendarSnapshotResult snapshot) {
-    final computed = snapshot.model.calculateChecksum();
-    return computed == snapshot.checksum;
-  }
-
-  static Map<String, dynamic> _createEnvelope(CalendarModel model) {
-    return <String, dynamic>{
-      'version': currentVersion,
-      'generatedAt': DateTime.now().toUtc().toIso8601String(),
-      'checksum': model.calculateChecksum(),
-      'calendar_model': model.toJson(),
-    };
+    return snapshot.model.calculateChecksum() == snapshot.checksum;
   }
 
   static CalendarSnapshotResult? _parseEnvelope(Map<String, dynamic> envelope) {
-    final version = envelope['version'] as int?;
-    if (version == null || version > currentVersion) {
+    final version = envelope[_versionKey] as int?;
+    final generatedAtStr = envelope[_generatedAtKey] as String?;
+    final checksum = envelope[_checksumKey] as String?;
+    final modelJson = envelope[_calendarModelKey] as Map<String, dynamic>?;
+    if (version == null ||
+        version > currentVersion ||
+        generatedAtStr == null ||
+        checksum == null ||
+        modelJson == null) {
       return null;
     }
-
-    final generatedAtStr = envelope['generatedAt'] as String?;
-    if (generatedAtStr == null) {
-      return null;
-    }
-
-    final checksum = envelope['checksum'] as String?;
-    if (checksum == null) {
-      return null;
-    }
-
-    final modelJson = envelope['calendar_model'] as Map<String, dynamic>?;
-    if (modelJson == null) {
-      return null;
-    }
-
     try {
-      final model = CalendarModel.fromJson(modelJson);
       return CalendarSnapshotResult(
         version: version,
-        generatedAt: DateTime.parse(generatedAtStr),
+        generatedAt: DateTime.parse(generatedAtStr).toUtc(),
         checksum: checksum,
-        model: model,
+        model: CalendarModel.fromJson(modelJson),
       );
     } on FormatException {
+      return null;
+    } on Exception {
       return null;
     }
   }
 
-  static Uint8List? _decodeGzipWithLimit(Uint8List compressedBytes) {
-    final sink = _LimitedByteSink(maxDecompressedBytes);
+  static Uint8List? _decodeGzipWithLimit(
+    Uint8List compressedBytes, {
+    required int maxBytes,
+  }) {
+    final sink = _LimitedByteSink(maxBytes);
     final converter = GZipCodec().decoder.startChunkedConversion(sink);
     try {
       converter.add(compressedBytes);
@@ -165,19 +146,6 @@ class CalendarSnapshotCodec {
     }
   }
 
-  static bool _withinCompressionLimits({
-    required int compressedLength,
-    required int decompressedLength,
-  }) {
-    if (decompressedLength > maxDecompressedBytes) {
-      return false;
-    }
-    if (decompressedLength > compressedLength * maxCompressionRatio) {
-      return false;
-    }
-    return true;
-  }
-
   static String _generateFileName() {
     final timestamp = DateTime.now().toUtc().toIso8601String().replaceAll(
       ':',
@@ -187,7 +155,6 @@ class CalendarSnapshotCodec {
   }
 }
 
-/// Result of decoding a calendar snapshot.
 class CalendarSnapshotResult {
   const CalendarSnapshotResult({
     required this.version,
@@ -196,28 +163,23 @@ class CalendarSnapshotResult {
     required this.model,
   });
 
-  /// Snapshot format version.
   final int version;
-
-  /// When the snapshot was generated.
   final DateTime generatedAt;
-
-  /// Checksum of the model at generation time.
   final String checksum;
-
-  /// The decoded calendar model.
   final CalendarModel model;
 
   @override
   String toString() {
+    final checksumPreview = checksum.length <= 8
+        ? checksum
+        : checksum.substring(0, 8);
     return 'CalendarSnapshotResult('
         'version: $version, '
         'generatedAt: $generatedAt, '
-        'checksum: ${checksum.substring(0, 8)}...)';
+        'checksum: $checksumPreview...)';
   }
 }
 
-/// Result of uploading a calendar snapshot.
 class CalendarSnapshotUploadResult {
   const CalendarSnapshotUploadResult({
     required this.url,
@@ -228,6 +190,15 @@ class CalendarSnapshotUploadResult {
   final String url;
   final String checksum;
   final int version;
+}
+
+class CalendarSnapshotTooLargeException implements Exception {
+  const CalendarSnapshotTooLargeException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class _LimitedByteSink extends ByteConversionSinkBase {

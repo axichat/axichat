@@ -23,8 +23,6 @@ import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 
-/// Threshold of updates before sending a snapshot.
-const int kSnapshotThreshold = 50;
 const String _snapshotFallbackName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _snapshotChecksumMismatchLog =
@@ -32,8 +30,6 @@ const String _snapshotChecksumMismatchLog =
 const String _snapshotVersionUnsupportedLogPrefix =
     'Snapshot version unsupported - ignoring snapshot (version: ';
 const String _snapshotVersionUnsupportedLogSuffix = ')';
-const String _inlineSnapshotSentLog = 'Sent inline calendar snapshot';
-const String _inlineSnapshotFailedLog = 'Error sending inline snapshot';
 const String _calendarSyncEntityTask = 'task';
 const String _calendarSyncEntityDayEvent = 'day_event';
 const String _calendarSyncEntityCriticalPath = 'critical_path';
@@ -43,7 +39,17 @@ const String _calendarSyncOperationUpdate = 'update';
 const String _calendarSyncOperationDelete = 'delete';
 const Duration _calendarSyncFutureTimestampTolerance = Duration(minutes: 2);
 
+enum _CalendarOutboundUpdateResult {
+  sentUpdate,
+  coveredBySnapshot,
+  waitingForSnapshot;
+
+  bool get shouldIncrementSnapshotCounter => this == sentUpdate;
+}
+
 class CalendarSyncManager {
+  static const int _snapshotThreshold = 100;
+
   CalendarSyncManager({
     required CalendarModel Function() readModel,
     required Future<void> Function(CalendarModel) applyModel,
@@ -52,13 +58,16 @@ class CalendarSyncManager {
     Future<CalendarSnapshotUploadResult> Function(File file)? sendSnapshotFile,
     CalendarSyncState Function()? readSyncState,
     Future<void> Function(CalendarSyncState)? writeSyncState,
+    Future<void> Function(CalendarSnapshotPublishStatus status)?
+    onSnapshotPublishStatusChanged,
   }) : _readModel = readModel,
        _applyModel = applyModel,
        _sendCalendarMessage = sendCalendarMessage,
        _applyRoomPrimaryView = applyRoomPrimaryView,
        _sendSnapshotFile = sendSnapshotFile,
        _readSyncState = readSyncState ?? CalendarSyncState.read,
-       _writeSyncState = writeSyncState ?? ((s) => s.write());
+       _writeSyncState = writeSyncState ?? ((s) => s.write()),
+       _onSnapshotPublishStatusChanged = onSnapshotPublishStatusChanged;
 
   final CalendarModel Function() _readModel;
   final Future<void> Function(CalendarModel) _applyModel;
@@ -69,8 +78,15 @@ class CalendarSyncManager {
   _sendSnapshotFile;
   final CalendarSyncState Function() _readSyncState;
   final Future<void> Function(CalendarSyncState) _writeSyncState;
-  final ListQueue<CalendarSyncOutbound> _pendingEnvelopes =
-      ListQueue<CalendarSyncOutbound>();
+  final Future<void> Function(CalendarSnapshotPublishStatus status)?
+  _onSnapshotPublishStatusChanged;
+  final ListQueue<
+    ({CalendarSyncOutbound outbound, Future<void> Function()? onSent})
+  >
+  _pendingEnvelopes =
+      ListQueue<
+        ({CalendarSyncOutbound outbound, Future<void> Function()? onSent})
+      >();
   Future<void>? _pendingFlush;
 
   /// Handles an incoming calendar sync message.
@@ -114,11 +130,6 @@ class CalendarSyncManager {
     CalendarSyncMessage message, {
     required CalendarSyncInbound inbound,
   }) async {
-    if (message.data == null) {
-      await _recordHandledMessage(inbound: inbound);
-      return false;
-    }
-
     try {
       final int? snapshotVersion = message.snapshotVersion;
       if (snapshotVersion != null &&
@@ -132,16 +143,27 @@ class CalendarSyncManager {
         await _recordHandledMessage(inbound: inbound);
         return false;
       }
-      final remoteModel = await _parseCalendarModel(
-        message.data!,
-        inbound: inbound,
-        description: 'snapshot',
-      );
+      final decodedSnapshot = inbound.snapshotResult;
+      final inlineData = message.data;
+      if (decodedSnapshot == null && inlineData == null) {
+        await _recordHandledMessage(inbound: inbound);
+        return false;
+      }
+      final remoteModel =
+          decodedSnapshot?.model ??
+          await _parseCalendarModel(
+            inlineData!,
+            inbound: inbound,
+            description: 'snapshot',
+          );
       if (remoteModel == null) {
         return false;
       }
       final localModel = _readModel();
-      final snapshotChecksum = message.snapshotChecksum ?? message.checksum;
+      final snapshotChecksum =
+          message.snapshotChecksum ??
+          message.checksum ??
+          decodedSnapshot?.checksum;
 
       SafeLogging.debugLog(
         'Applying snapshot (checksum: ${message.snapshotChecksum})',
@@ -287,7 +309,6 @@ class CalendarSyncManager {
 
     try {
       bool applied = false;
-      var shouldTrackCalendarSnapshotCounter = true;
       final String operation =
           message.operation ?? _calendarSyncOperationUpdate;
       if (!_isKnownUpdateOperation(operation)) {
@@ -298,7 +319,6 @@ class CalendarSyncManager {
       switch (message.entity) {
         case CalendarSyncMessage.roomPrimaryViewEntity:
           applied = await _mergeRoomPrimaryView(message, operation);
-          shouldTrackCalendarSnapshotCounter = false;
           break;
         case _calendarSyncEntityDayEvent:
           final DayEvent? event = await _parseUpdateData<DayEvent>(
@@ -348,13 +368,6 @@ class CalendarSyncManager {
           break;
       }
 
-      if (applied) {
-        if (shouldTrackCalendarSnapshotCounter) {
-          await _incrementCounterAndMaybeSnapshot(
-            allowSnapshot: !inbound.isFromMam,
-          );
-        }
-      }
       await _recordHandledMessage(inbound: inbound);
       return applied;
     } catch (e) {
@@ -481,87 +494,101 @@ class CalendarSyncManager {
     final state = _readSyncState().incrementCounter();
     await _writeSyncState(state);
 
-    if (state.updatesSinceSnapshot >= kSnapshotThreshold) {
-      await _maybeSendSnapshot();
+    if (state.updatesSinceSnapshot >= _snapshotThreshold) {
+      await _maybeSendSnapshot(allowPendingRetry: false);
     }
   }
 
   /// Sends a snapshot if the calendar has content and snapshot sending is available.
-  Future<bool> _maybeSendSnapshot() async {
+  Future<bool> _maybeSendSnapshot({bool allowPendingRetry = true}) async {
     final CalendarModel model = _normalizeModelForSync(_readModel());
     if (!model.hasCalendarData) {
       return false;
     }
-
+    final currentStatus = _readSyncState().snapshotPublishStatus;
+    if (!allowPendingRetry &&
+        currentStatus != CalendarSnapshotPublishStatus.idle) {
+      return false;
+    }
     final inlineSnapshot = _buildInlineSnapshotOutbound(model);
     final sendSnapshot = _sendSnapshotFile;
-    if (sendSnapshot == null ||
-        _isInlineSnapshotWithinLimit(inlineSnapshot.outbound)) {
-      return _sendInlineSnapshotOutbound(inlineSnapshot);
+    if (sendSnapshot == null) {
+      if (_canSendInlineEnvelope(inlineSnapshot.outbound)) {
+        return _sendInlineSnapshotOutbound(inlineSnapshot);
+      }
+      await _markSnapshotPublishStatus(CalendarSnapshotPublishStatus.pending);
+      return false;
     }
 
-    bool sent = false;
+    File? file;
     try {
       final tempDir = await getTemporaryDirectory();
-      final file = await CalendarSnapshotCodec.encodeToFile(
+      file = await CalendarSnapshotCodec.encodeToFile(
         model,
         directory: tempDir,
       );
-
+      final result = await sendSnapshot(file);
+      if (result.version != CalendarSnapshotCodec.currentVersion ||
+          result.checksum != inlineSnapshot.checksum) {
+        throw const FormatException(
+          'Calendar snapshot upload validation failed.',
+        );
+      }
+      final syncMessage = CalendarSyncMessage.snapshot(
+        snapshotChecksum: result.checksum,
+        snapshotVersion: result.version,
+        snapshotUrl: result.url,
+      );
+      final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
       try {
-        final result = await sendSnapshot(file);
-        final attachmentName = _snapshotAttachmentName(file);
-        final attachment = CalendarSyncAttachment(
-          url: result.url,
-          fileName: attachmentName,
-          mimeType: CalendarSnapshotCodec.mimeType,
+        await _sendEnvelope(
+          CalendarSyncOutbound(
+            envelope: messageJson,
+            attachment: CalendarSyncAttachment(
+              url: result.url,
+              fileName: _snapshotAttachmentName(file),
+              mimeType: CalendarSnapshotCodec.mimeType,
+            ),
+          ),
+          onSent: () => _markSnapshotSent(result.checksum),
         );
-
-        final syncMessage = CalendarSyncMessage.snapshot(
-          snapshotChecksum: result.checksum,
-          snapshotVersion: result.version,
-          snapshotUrl: result.url,
-        );
-
-        final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
-
-        try {
-          await _sendEnvelope(
-            CalendarSyncOutbound(envelope: messageJson, attachment: attachment),
-          );
-        } on Exception catch (error) {
-          SafeLogging.debugLog(
-            'Error queueing calendar snapshot: $error',
-            name: 'CalendarSyncManager',
-          );
-          return false;
-        }
-
-        final state = _readSyncState().resetCounter().markSnapshotPublished(
-          result.checksum,
-        );
-        await _writeSyncState(state);
-
+      } on Exception catch (error) {
         SafeLogging.debugLog(
-          'Sent calendar snapshot (checksum: ${result.checksum})',
+          'Queued calendar snapshot after send error: $error',
           name: 'CalendarSyncManager',
         );
-        sent = true;
-      } finally {
-        if (await file.exists()) {
-          await file.delete();
-        }
+        await _markSnapshotPublishStatus(CalendarSnapshotPublishStatus.pending);
+        return false;
       }
-    } catch (e) {
+      SafeLogging.debugLog(
+        'Sent calendar snapshot (checksum: ${result.checksum})',
+        name: 'CalendarSyncManager',
+      );
+      return true;
+    } on CalendarSnapshotTooLargeException catch (e) {
+      if (_canSendInlineEnvelope(inlineSnapshot.outbound)) {
+        return _sendInlineSnapshotOutbound(inlineSnapshot);
+      }
       SafeLogging.debugLog(
         'Error sending snapshot: $e',
         name: 'CalendarSyncManager',
       );
+      await _markSnapshotPublishStatus(CalendarSnapshotPublishStatus.blocked);
+    } on Exception catch (e) {
+      SafeLogging.debugLog(
+        'Error sending snapshot: $e',
+        name: 'CalendarSyncManager',
+      );
+      if (_canSendInlineEnvelope(inlineSnapshot.outbound)) {
+        return _sendInlineSnapshotOutbound(inlineSnapshot);
+      }
+      await _markSnapshotPublishStatus(CalendarSnapshotPublishStatus.pending);
+    } finally {
+      if (file != null && await file.exists()) {
+        await file.delete();
+      }
     }
-    if (!sent) {
-      return _sendInlineSnapshot(model);
-    }
-    return sent;
+    return false;
   }
 
   ({CalendarSyncOutbound outbound, String checksum})
@@ -570,7 +597,7 @@ class CalendarSyncManager {
     final syncMessage = CalendarSyncMessage(
       type: CalendarSyncType.snapshot,
       timestamp: _syncNowUtc(),
-      data: model.toJson(),
+      data: model.copyWith(checksum: checksum).toJson(),
       checksum: checksum,
       isSnapshot: true,
       snapshotChecksum: checksum,
@@ -584,64 +611,92 @@ class CalendarSyncManager {
     );
   }
 
-  bool _isInlineSnapshotWithinLimit(CalendarSyncOutbound outbound) {
-    return utf8.encode(outbound.envelope).length <=
-            CalendarSyncMessage.maxEnvelopeLength &&
-        CalendarSyncMessage.tryParseEnvelope(outbound.envelope) != null;
-  }
-
-  Future<bool> _sendInlineSnapshot(CalendarModel model) async {
-    return _sendInlineSnapshotOutbound(_buildInlineSnapshotOutbound(model));
-  }
-
   Future<bool> _sendInlineSnapshotOutbound(
     ({CalendarSyncOutbound outbound, String checksum}) snapshot,
   ) async {
     try {
-      await _sendEnvelope(snapshot.outbound);
-
-      final state = _readSyncState().resetCounter().markSnapshotPublished(
-        snapshot.checksum,
+      await _sendEnvelope(
+        snapshot.outbound,
+        onSent: () => _markSnapshotSent(snapshot.checksum),
       );
-      await _writeSyncState(state);
-
       SafeLogging.debugLog(
-        '$_inlineSnapshotSentLog (checksum: ${snapshot.checksum})',
+        'Sent inline calendar snapshot (checksum: ${snapshot.checksum})',
         name: 'CalendarSyncManager',
       );
       return true;
-    } catch (e) {
+    } on Exception catch (error) {
       SafeLogging.debugLog(
-        '$_inlineSnapshotFailedLog: $e',
+        'Queued inline calendar snapshot after send error: $error',
         name: 'CalendarSyncManager',
       );
+      await _markSnapshotPublishStatus(CalendarSnapshotPublishStatus.pending);
     }
     return false;
+  }
+
+  Future<void> _markSnapshotSent(String checksum) async {
+    final state = _readSyncState().resetCounter().markSnapshotPublished(
+      checksum,
+    );
+    await _writeSyncState(state);
+    await _notifySnapshotPublishStatus(CalendarSnapshotPublishStatus.idle);
+  }
+
+  Future<void> _markSnapshotPublishStatus(
+    CalendarSnapshotPublishStatus status,
+  ) async {
+    final current = _readSyncState();
+    if (current.snapshotPublishStatus == status) {
+      return;
+    }
+    final state = switch (status) {
+      CalendarSnapshotPublishStatus.idle => current.markSnapshotPublishIdle(),
+      CalendarSnapshotPublishStatus.pending =>
+        current.markSnapshotPublishPending(),
+      CalendarSnapshotPublishStatus.blocked =>
+        current.markSnapshotPublishBlocked(),
+    };
+    await _writeSyncState(state);
+    await _notifySnapshotPublishStatus(status);
+  }
+
+  Future<void> _notifySnapshotPublishStatus(
+    CalendarSnapshotPublishStatus status,
+  ) async {
+    final notify = _onSnapshotPublishStatusChanged;
+    if (notify == null) {
+      return;
+    }
+    await notify(status);
   }
 
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
     final CalendarTask normalizedTask = _normalizeTaskForSync(task);
-    await _queueUpdate(
+    final result = await _queueUpdate(
       payloadId: normalizedTask.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedTask.modifiedAt),
       data: normalizedTask.toJson(),
       entity: _calendarSyncEntityTask,
     );
-    await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    if (result.shouldIncrementSnapshotCounter) {
+      await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    }
   }
 
   Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
     final DayEvent normalizedEvent = _normalizeDayEventForSync(event);
-    await _queueUpdate(
+    final result = await _queueUpdate(
       payloadId: normalizedEvent.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedEvent.modifiedAt),
       data: normalizedEvent.toJson(),
       entity: _calendarSyncEntityDayEvent,
     );
-    await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    if (result.shouldIncrementSnapshotCounter) {
+      await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    }
   }
 
   Future<void> sendJournalUpdate(
@@ -649,14 +704,16 @@ class CalendarSyncManager {
     String operation,
   ) async {
     final CalendarJournal normalizedJournal = _normalizeJournalForSync(journal);
-    await _queueUpdate(
+    final result = await _queueUpdate(
       payloadId: normalizedJournal.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedJournal.modifiedAt),
       data: normalizedJournal.toJson(),
       entity: _calendarSyncEntityJournal,
     );
-    await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    if (result.shouldIncrementSnapshotCounter) {
+      await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    }
   }
 
   /// Send critical path update to other devices
@@ -665,14 +722,16 @@ class CalendarSyncManager {
     String operation,
   ) async {
     final CalendarCriticalPath normalizedPath = _normalizePathForSync(path);
-    await _queueUpdate(
+    final result = await _queueUpdate(
       payloadId: normalizedPath.id,
       operation: operation,
       timestamp: _resolveRemoteModifiedAt(normalizedPath.modifiedAt),
       data: normalizedPath.toJson(),
       entity: _calendarSyncEntityCriticalPath,
     );
-    await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    if (result.shouldIncrementSnapshotCounter) {
+      await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
+    }
   }
 
   /// Request a calendar snapshot from other devices.
@@ -690,9 +749,15 @@ class CalendarSyncManager {
     await _maybeSendSnapshot();
   }
 
-  Future<void> flushPending() => _flushPendingEnvelopes();
+  Future<void> flushPending() async {
+    await _flushPendingEnvelopes();
+    if (_readSyncState().snapshotPublishStatus ==
+        CalendarSnapshotPublishStatus.pending) {
+      await _maybeSendSnapshot();
+    }
+  }
 
-  Future<void> _queueUpdate({
+  Future<_CalendarOutboundUpdateResult> _queueUpdate({
     required String payloadId,
     required String operation,
     required DateTime timestamp,
@@ -711,7 +776,21 @@ class CalendarSyncManager {
     final String messageJson = jsonEncode({
       'calendar_sync': syncMessage.toJson(),
     });
-    await _sendEnvelope(CalendarSyncOutbound(envelope: messageJson));
+    final outbound = CalendarSyncOutbound(envelope: messageJson);
+    if (!_canSendInlineEnvelope(outbound)) {
+      final sent = await _maybeSendSnapshot();
+      return sent
+          ? _CalendarOutboundUpdateResult.coveredBySnapshot
+          : _CalendarOutboundUpdateResult.waitingForSnapshot;
+    }
+    await _sendEnvelope(outbound);
+    return _CalendarOutboundUpdateResult.sentUpdate;
+  }
+
+  bool _canSendInlineEnvelope(CalendarSyncOutbound outbound) {
+    return utf8.encode(outbound.envelope).length <=
+            CalendarSyncMessage.maxEnvelopeLength &&
+        CalendarSyncMessage.tryParseEnvelope(outbound.envelope) != null;
   }
 
   String _calculateChecksum(Map<String, dynamic> data) {
@@ -906,17 +985,37 @@ class CalendarSyncManager {
     return candidate.isNotEmpty ? candidate : _snapshotFallbackName;
   }
 
-  void _queueEnvelope(CalendarSyncOutbound outbound) {
-    _pendingEnvelopes.add(outbound);
+  void _queueEnvelope(
+    CalendarSyncOutbound outbound, {
+    Future<void> Function()? onSent,
+  }) {
+    if (_isSnapshotOutbound(outbound)) {
+      final retained = _pendingEnvelopes
+          .where((envelope) => !_isSnapshotOutbound(envelope.outbound))
+          .toList(growable: false);
+      _pendingEnvelopes
+        ..clear()
+        ..addAll(retained);
+    }
+    _pendingEnvelopes.add((outbound: outbound, onSent: onSent));
   }
 
-  Future<void> _sendEnvelope(CalendarSyncOutbound outbound) async {
+  bool _isSnapshotOutbound(CalendarSyncOutbound outbound) {
+    return CalendarSyncMessage.tryParseEnvelope(outbound.envelope)?.type ==
+        CalendarSyncType.snapshot;
+  }
+
+  Future<void> _sendEnvelope(
+    CalendarSyncOutbound outbound, {
+    Future<void> Function()? onSent,
+  }) async {
     try {
       await _sendCalendarMessage(outbound);
-    } catch (_) {
-      _queueEnvelope(outbound);
+    } on Exception {
+      _queueEnvelope(outbound, onSent: onSent);
       rethrow;
     }
+    await onSent?.call();
   }
 
   Future<void> _flushPendingEnvelopes() async {
@@ -938,7 +1037,8 @@ class CalendarSyncManager {
     try {
       while (_pendingEnvelopes.isNotEmpty) {
         final envelope = _pendingEnvelopes.first;
-        await _sendCalendarMessage(envelope);
+        await _sendCalendarMessage(envelope.outbound);
+        await envelope.onSent?.call();
         _pendingEnvelopes.removeFirst();
       }
     } finally {

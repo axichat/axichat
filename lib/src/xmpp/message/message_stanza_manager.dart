@@ -405,8 +405,8 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
 final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
   const CalendarTaskIcsPayload({
     required this.ics,
-    bool readOnly = _calendarTaskIcsReadOnlyDefault,
-  }) : readOnly = _calendarTaskIcsReadOnlyDefault;
+    this.readOnly = _calendarTaskIcsReadOnlyDefault,
+  });
 
   final String ics;
   final bool readOnly;

@@ -48,13 +48,49 @@ enum CalendarSnapshotCoverageStatus {
   }
 }
 
+enum CalendarRecoveryCursorStatus {
+  unknown,
+  unverified,
+  verified;
+
+  bool get canUseCursor => this == CalendarRecoveryCursorStatus.verified;
+
+  String get wireValue => name;
+
+  static CalendarRecoveryCursorStatus parse(String? value) {
+    for (final status in CalendarRecoveryCursorStatus.values) {
+      if (status.wireValue == value) {
+        return status;
+      }
+    }
+    return CalendarRecoveryCursorStatus.unknown;
+  }
+}
+
+enum CalendarSnapshotPublishStatus {
+  idle,
+  pending,
+  blocked;
+
+  String get wireValue => name;
+
+  static CalendarSnapshotPublishStatus parse(String? value) {
+    for (final status in CalendarSnapshotPublishStatus.values) {
+      if (status.wireValue == value) {
+        return status;
+      }
+    }
+    return CalendarSnapshotPublishStatus.idle;
+  }
+}
+
 /// Local-only state for calendar sync, stored in [XmppStateStore].
 ///
 /// Tracks counters and markers to avoid redundant MAM paging and
 /// prevent blind overwrites during calendar rehydration.
 class CalendarSyncState {
   const CalendarSyncState({
-    this.schemaVersion = 4,
+    this.schemaVersion = 5,
     this.updatesSinceSnapshot = 0,
     this.lastAppliedTimestamp,
     this.lastAppliedStanzaId,
@@ -70,6 +106,8 @@ class CalendarSyncState {
     this.lastVerifiedSnapshotChecksum,
     this.lastVerifiedSnapshotStanzaId,
     this.lastVerifiedSnapshotAt,
+    this.recoveryCursorStatus = CalendarRecoveryCursorStatus.unknown,
+    this.snapshotPublishStatus = CalendarSnapshotPublishStatus.idle,
   });
 
   /// Legacy registered key for calendar sync state persisted outside the
@@ -79,7 +117,7 @@ class CalendarSyncState {
 
   final int schemaVersion;
 
-  /// Number of updates (send + receive) since the last snapshot.
+  /// Number of locally published updates since the last snapshot.
   final int updatesSinceSnapshot;
 
   /// Legacy mutation cursor. Kept for migration and old callers only.
@@ -119,10 +157,17 @@ class CalendarSyncState {
 
   final DateTime? lastVerifiedSnapshotAt;
 
+  final CalendarRecoveryCursorStatus recoveryCursorStatus;
+
+  final CalendarSnapshotPublishStatus snapshotPublishStatus;
+
   bool get hasCompleteCoverage => coverageStatus.isComplete;
 
   bool get hasVerifiedRecoveryBoundary =>
       snapshotCoverageStatus.isRecoveryBoundary;
+
+  bool get canUseRecoveryCursor =>
+      recoveryTimestamp != null && recoveryCursorStatus.canUseCursor;
 
   DateTime? get recoveryTimestamp =>
       lastHandledTimestamp ?? lastAppliedTimestamp;
@@ -145,6 +190,8 @@ class CalendarSyncState {
     Object? lastVerifiedSnapshotChecksum = _calendarSyncStateUnset,
     Object? lastVerifiedSnapshotStanzaId = _calendarSyncStateUnset,
     Object? lastVerifiedSnapshotAt = _calendarSyncStateUnset,
+    CalendarRecoveryCursorStatus? recoveryCursorStatus,
+    CalendarSnapshotPublishStatus? snapshotPublishStatus,
   }) {
     final DateTime? resolvedLastAppliedTimestamp =
         lastAppliedTimestamp == _calendarSyncStateUnset
@@ -198,6 +245,9 @@ class CalendarSyncState {
           ? this.lastVerifiedSnapshotStanzaId
           : lastVerifiedSnapshotStanzaId as String?,
       lastVerifiedSnapshotAt: resolvedLastVerifiedSnapshotAt?.toUtc(),
+      recoveryCursorStatus: recoveryCursorStatus ?? this.recoveryCursorStatus,
+      snapshotPublishStatus:
+          snapshotPublishStatus ?? this.snapshotPublishStatus,
     );
   }
 
@@ -283,7 +333,24 @@ class CalendarSyncState {
       lastVerifiedSnapshotChecksum: null,
       lastVerifiedSnapshotStanzaId: null,
       lastVerifiedSnapshotAt: null,
+      snapshotPublishStatus: CalendarSnapshotPublishStatus.idle,
     );
+  }
+
+  CalendarSyncState markSnapshotPublishPending() {
+    return copyWith(
+      snapshotPublishStatus: CalendarSnapshotPublishStatus.pending,
+    );
+  }
+
+  CalendarSyncState markSnapshotPublishBlocked() {
+    return copyWith(
+      snapshotPublishStatus: CalendarSnapshotPublishStatus.blocked,
+    );
+  }
+
+  CalendarSyncState markSnapshotPublishIdle() {
+    return copyWith(snapshotPublishStatus: CalendarSnapshotPublishStatus.idle);
   }
 
   CalendarSyncState markSnapshotVerified({
@@ -305,6 +372,7 @@ class CalendarSyncState {
           ? null
           : trimmedStanzaId,
       lastVerifiedSnapshotAt: (verifiedAt ?? DateTime.now()).toUtc(),
+      recoveryCursorStatus: CalendarRecoveryCursorStatus.verified,
     );
   }
 
@@ -315,6 +383,7 @@ class CalendarSyncState {
       lastVerifiedSnapshotChecksum: null,
       lastVerifiedSnapshotStanzaId: null,
       lastVerifiedSnapshotAt: null,
+      recoveryCursorStatus: CalendarRecoveryCursorStatus.verified,
     );
   }
 
@@ -328,16 +397,25 @@ class CalendarSyncState {
       return this;
     }
     return copyWith(
-      schemaVersion: 4,
+      schemaVersion: 5,
       lastArchiveResumeId: trimmed,
       calendarJid: calendarJid,
       archiveJid: archiveJid,
       coverageStatus: CalendarArchiveCoverageStatus.incomplete,
+      recoveryCursorStatus: recoveryCursorStatus.canUseCursor
+          ? CalendarRecoveryCursorStatus.verified
+          : CalendarRecoveryCursorStatus.unverified,
     );
   }
 
   CalendarSyncState markCoverageIncomplete() {
     return copyWith(coverageStatus: CalendarArchiveCoverageStatus.incomplete);
+  }
+
+  CalendarSyncState markRecoveryCursorUnverified() {
+    return copyWith(
+      recoveryCursorStatus: CalendarRecoveryCursorStatus.unverified,
+    );
   }
 
   /// Clears the timestamp and stanza ID fields for nullable replacement.
@@ -355,6 +433,8 @@ class CalendarSyncState {
       lastVerifiedSnapshotChecksum: lastVerifiedSnapshotChecksum,
       lastVerifiedSnapshotStanzaId: lastVerifiedSnapshotStanzaId,
       lastVerifiedSnapshotAt: lastVerifiedSnapshotAt,
+      recoveryCursorStatus: CalendarRecoveryCursorStatus.unknown,
+      snapshotPublishStatus: snapshotPublishStatus,
     );
   }
 
@@ -381,6 +461,8 @@ class CalendarSyncState {
       'lastVerifiedSnapshotAt': lastVerifiedSnapshotAt
           ?.toUtc()
           .toIso8601String(),
+      'recoveryCursorStatus': recoveryCursorStatus.wireValue,
+      'snapshotPublishStatus': snapshotPublishStatus.wireValue,
     });
   }
 
@@ -402,8 +484,22 @@ class CalendarSyncState {
         map['lastVerifiedSnapshotAt'] != null
         ? DateTime.parse(map['lastVerifiedSnapshotAt'] as String).toUtc()
         : null;
+    final snapshotCoverageStatus = schemaVersion < 4
+        ? CalendarSnapshotCoverageStatus.unknown
+        : CalendarSnapshotCoverageStatus.parse(
+            map['snapshotCoverageStatus'] as String?,
+          );
+    final recoveryCursorStatus = schemaVersion < 5
+        ? _migratedRecoveryCursorStatus(
+            snapshotCoverageStatus: snapshotCoverageStatus,
+            lastAppliedTimestamp: lastAppliedTimestamp,
+            lastHandledTimestamp: lastHandledTimestamp,
+          )
+        : CalendarRecoveryCursorStatus.parse(
+            map['recoveryCursorStatus'] as String?,
+          );
     return CalendarSyncState(
-      schemaVersion: 4,
+      schemaVersion: 5,
       updatesSinceSnapshot: map['updatesSinceSnapshot'] as int? ?? 0,
       lastAppliedTimestamp: lastAppliedTimestamp,
       lastAppliedStanzaId: map['lastAppliedStanzaId'] as String?,
@@ -419,16 +515,16 @@ class CalendarSyncState {
               map['coverageStatus'] as String?,
             ),
       lastSnapshotChecksum: map['lastSnapshotChecksum'] as String?,
-      snapshotCoverageStatus: schemaVersion < 4
-          ? CalendarSnapshotCoverageStatus.unknown
-          : CalendarSnapshotCoverageStatus.parse(
-              map['snapshotCoverageStatus'] as String?,
-            ),
+      snapshotCoverageStatus: snapshotCoverageStatus,
       lastVerifiedSnapshotChecksum:
           map['lastVerifiedSnapshotChecksum'] as String?,
       lastVerifiedSnapshotStanzaId:
           map['lastVerifiedSnapshotStanzaId'] as String?,
       lastVerifiedSnapshotAt: lastVerifiedSnapshotAt,
+      recoveryCursorStatus: recoveryCursorStatus,
+      snapshotPublishStatus: CalendarSnapshotPublishStatus.parse(
+        map['snapshotPublishStatus'] as String?,
+      ),
     );
   }
 
@@ -489,7 +585,9 @@ class CalendarSyncState {
         'snapshotCoverageStatus: $snapshotCoverageStatus, '
         'lastVerifiedSnapshotChecksum: $lastVerifiedSnapshotChecksum, '
         'lastVerifiedSnapshotStanzaId: $lastVerifiedSnapshotStanzaId, '
-        'lastVerifiedSnapshotAt: $lastVerifiedSnapshotAt)';
+        'lastVerifiedSnapshotAt: $lastVerifiedSnapshotAt, '
+        'recoveryCursorStatus: $recoveryCursorStatus, '
+        'snapshotPublishStatus: $snapshotPublishStatus)';
   }
 
   @override
@@ -511,7 +609,9 @@ class CalendarSyncState {
         other.snapshotCoverageStatus == snapshotCoverageStatus &&
         other.lastVerifiedSnapshotChecksum == lastVerifiedSnapshotChecksum &&
         other.lastVerifiedSnapshotStanzaId == lastVerifiedSnapshotStanzaId &&
-        other.lastVerifiedSnapshotAt == lastVerifiedSnapshotAt;
+        other.lastVerifiedSnapshotAt == lastVerifiedSnapshotAt &&
+        other.recoveryCursorStatus == recoveryCursorStatus &&
+        other.snapshotPublishStatus == snapshotPublishStatus;
   }
 
   @override
@@ -532,7 +632,23 @@ class CalendarSyncState {
     lastVerifiedSnapshotChecksum,
     lastVerifiedSnapshotStanzaId,
     lastVerifiedSnapshotAt,
+    recoveryCursorStatus,
+    snapshotPublishStatus,
   );
+}
+
+CalendarRecoveryCursorStatus _migratedRecoveryCursorStatus({
+  required CalendarSnapshotCoverageStatus snapshotCoverageStatus,
+  required DateTime? lastAppliedTimestamp,
+  required DateTime? lastHandledTimestamp,
+}) {
+  if (snapshotCoverageStatus.isRecoveryBoundary) {
+    return CalendarRecoveryCursorStatus.verified;
+  }
+  if (lastHandledTimestamp != null || lastAppliedTimestamp != null) {
+    return CalendarRecoveryCursorStatus.unverified;
+  }
+  return CalendarRecoveryCursorStatus.unknown;
 }
 
 class PersonalCalendarSyncStateStore {

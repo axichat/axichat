@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -18,10 +19,10 @@ const String _accountJid = jid;
 const String _peerJid = 'peer@axi.im';
 const String _peerFullJid = 'peer@axi.im/resource';
 const String _uploadServiceJid = 'upload.axi.im';
-const String _slotPutUrl = 'https://upload.axi.im/put';
-const String _slotGetUrl = 'https://upload.axi.im/get';
-const String _slotPutUrlInsecure = 'http://upload.axi.im/put';
-const String _slotGetUrlInsecure = 'http://upload.axi.im/get';
+const String _slotPutUrl = 'https://example.com/put';
+const String _slotGetUrl = 'https://example.com/get';
+const String _slotPutUrlInsecure = 'http://example.com/put';
+const String _slotGetUrlInsecure = 'http://example.com/get';
 const String _oobUrl = 'https://files.axi.im/file.png';
 const String _oobFtpUrl = 'ftp://files.axi.im/file.png';
 const String _oobDesc = 'Sample File';
@@ -150,6 +151,15 @@ class RecordingHttpResponse extends Mock implements HttpClientResponse {
 
   @override
   HttpHeaders get headers => RecordingHttpHeaders();
+
+  @override
+  bool get isBroadcast => false;
+
+  @override
+  Stream<List<int>> timeout(
+    Duration timeLimit, {
+    void Function(EventSink<List<int>> sink)? onTimeout,
+  }) => _stream.timeout(timeLimit, onTimeout: onTimeout);
 
   @override
   StreamSubscription<List<int>> listen(
@@ -409,6 +419,8 @@ void main() {
     registerFallbackValue(FakeStanzaDetails());
     registerOmemoFallbacks();
     registerFallbackValue(mox.ChatMarker.received);
+    registerFallbackValue(MessageNotificationChannel.chat);
+    registerFallbackValue(mox.JID.fromString(_uploadServiceJid));
   });
 
   late XmppService xmppService;
@@ -424,6 +436,8 @@ void main() {
     eventStreamController = StreamController<mox.XmppEvent>.broadcast();
 
     prepareMockConnection();
+    when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+    when(() => mockConnection.sendMessage(any())).thenAnswer((_) async => true);
 
     when(
       () => mockConnection.asBroadcastStream(),

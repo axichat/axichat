@@ -65,12 +65,15 @@ Future<void> showCalendarAvailabilityShareSheet({
   final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
   final Chat? lockedChat = lockToChat ? initialChat : null;
   final bool canLockToChat =
-      lockedChat != null && lockedChat.supportsChatCalendar;
+      lockedChat != null &&
+      lockedChat.supportsChatCalendarForAccount(accountJid: ownerJid);
   final List<Chat> available = lockToChat
       ? (canLockToChat ? <Chat>[lockedChat] : const <Chat>[])
       : chats
             .where(
-              (chat) => chat.supportsChatCalendar && chat.type != ChatType.note,
+              (chat) =>
+                  chat.supportsChatCalendarForAccount(accountJid: ownerJid) &&
+                  chat.type != ChatType.note,
             )
             .toList(growable: false);
   if (available.isEmpty) {
@@ -85,16 +88,24 @@ Future<void> showCalendarAvailabilityShareSheet({
   final record = await Navigator.of(modalContext)
       .push<CalendarAvailabilityShareRecord>(
         AxiFadePageRoute(
-          duration: baseAnimationDuration,
+          duration: locate<SettingsCubit>().animationDuration,
           fullscreenDialog: true,
-          builder: (routeContext) => CalendarAvailabilityShareScreen(
-            source: source,
-            model: model,
-            ownerJid: ownerJid,
-            availableChats: available,
-            initialChat: initialChat,
-            lockToChat: lockToChat,
-            locate: locate,
+          builder: (routeContext) => MultiBlocProvider(
+            providers: [
+              BlocProvider<SettingsCubit>.value(value: locate<SettingsCubit>()),
+              BlocProvider<ProfileCubit>.value(value: locate<ProfileCubit>()),
+              BlocProvider<RosterCubit>.value(value: locate<RosterCubit>()),
+              BlocProvider<ChatsCubit>.value(value: locate<ChatsCubit>()),
+            ],
+            child: CalendarAvailabilityShareScreen(
+              source: source,
+              model: model,
+              ownerJid: ownerJid,
+              availableChats: available,
+              initialChat: initialChat,
+              lockToChat: lockToChat,
+              locate: locate,
+            ),
           ),
         ),
       );
@@ -275,20 +286,24 @@ class _CalendarAvailabilityShareScreenState
               onClose: () => Navigator.of(context).maybePop(),
             ),
             Expanded(
-              child: PageTransitionSwitcher(
-                duration: baseAnimationDuration,
-                reverse: _stepReversing,
-                transitionBuilder:
-                    (child, primaryAnimation, secondaryAnimation) =>
-                        SharedAxisTransition(
-                          animation: primaryAnimation,
-                          secondaryAnimation: secondaryAnimation,
-                          transitionType: SharedAxisTransitionType.horizontal,
-                          child: child,
-                        ),
-                child: KeyedSubtree(
-                  key: ValueKey<_AvailabilityShareStep>(_step),
-                  child: paddedStepChild,
+              child: BlocSelector<SettingsCubit, SettingsState, Duration>(
+                selector: (settings) =>
+                    settings.lowMotion ? Duration.zero : baseAnimationDuration,
+                builder: (context, animationDuration) => PageTransitionSwitcher(
+                  duration: animationDuration,
+                  reverse: _stepReversing,
+                  transitionBuilder:
+                      (child, primaryAnimation, secondaryAnimation) =>
+                          SharedAxisTransition(
+                            animation: primaryAnimation,
+                            secondaryAnimation: secondaryAnimation,
+                            transitionType: SharedAxisTransitionType.horizontal,
+                            child: child,
+                          ),
+                  child: KeyedSubtree(
+                    key: ValueKey<_AvailabilityShareStep>(_step),
+                    child: paddedStepChild,
+                  ),
                 ),
               ),
             ),

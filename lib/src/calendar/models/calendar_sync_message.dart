@@ -4,6 +4,7 @@
 import 'dart:convert';
 
 import 'package:axichat/src/storage/models/chat_models.dart';
+import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:xml/xml.dart';
 
@@ -59,12 +60,14 @@ class CalendarSyncInbound {
     this.stanzaId,
     this.receivedAt,
     this.isFromMam = false,
+    this.snapshotResult,
   });
 
   final CalendarSyncMessage message;
   final String? stanzaId;
   final DateTime? receivedAt;
   final bool isFromMam;
+  final CalendarSnapshotResult? snapshotResult;
 
   DateTime get appliedTimestamp => (receivedAt ?? message.timestamp).toUtc();
 }

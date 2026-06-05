@@ -4909,6 +4909,134 @@ void main() {
       },
     );
 
+    test(
+      'Personal calendar MAM retries backfill while cursor is unverified',
+      () async {
+        await _openXmppStateStore('axichat_personal_unverified_retry_mam');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        await HydratedBloc.storage.write(
+          authStoragePrefix,
+          CalendarStateStorageCodec.encode(CalendarState.initial()),
+        );
+        await CalendarSyncState(
+              lastHandledTimestamp: DateTime.utc(2026, 5, 3, 18),
+              lastHandledStanzaId: 'unverified-retry-cursor-stanza',
+              lastArchiveResumeId: 'unverified-retry-resume',
+            )
+            .markCoverageComplete(calendarJid: selfBare, archiveJid: selfBare)
+            .write();
+        final updateTimestamp = DateTime.utc(2026, 5, 4, 10);
+        final updateTask = _task(
+          id: 'unverified-retry-update-task',
+          title: 'Unverified retry update task',
+          timestamp: updateTimestamp,
+        );
+        final firstMamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'unverified-retry-update',
+                  timestamp: updateTimestamp,
+                  message: _taskUpdate(task: updateTask, operation: 'add'),
+                ),
+              ],
+              complete: false,
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(firstMamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.incomplete,
+        );
+
+        final afterFirstRun = CalendarSyncState.read();
+        expect(firstMamManager.queryCount, 1);
+        expect(firstMamManager.calls.single.start, isNull);
+        expect(firstMamManager.calls.single.after, isNull);
+        expect(firstMamManager.calls.single.before, '');
+        expect(
+          afterFirstRun.coverageStatus,
+          CalendarArchiveCoverageStatus.incomplete,
+        );
+        expect(
+          afterFirstRun.recoveryCursorStatus,
+          CalendarRecoveryCursorStatus.unverified,
+        );
+        expect(afterFirstRun.lastHandledStanzaId, 'unverified-retry-update');
+        expect(afterFirstRun.lastArchiveResumeId, 'unverified-retry-resume');
+
+        final snapshotTimestamp = DateTime.utc(2026, 5, 4, 9);
+        final snapshotTask = _task(
+          id: 'unverified-retry-snapshot-task',
+          title: 'Unverified retry snapshot task',
+          timestamp: snapshotTimestamp,
+        );
+        final snapshotModel = CalendarModel.empty().addTask(snapshotTask);
+        final secondMamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'unverified-retry-snapshot',
+                  timestamp: snapshotTimestamp,
+                  message: _inlineSnapshot(
+                    model: snapshotModel,
+                    timestamp: snapshotTimestamp,
+                  ),
+                ),
+              ],
+              complete: true,
+              first: 'unverified-retry-snapshot-first',
+              last: 'unverified-retry-snapshot-last',
+              count: 1,
+            ),
+          ],
+        );
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(secondMamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.completed,
+        );
+
+        final stored = jsonEncode(HydratedBloc.storage.read(authStoragePrefix));
+        final syncState = CalendarSyncState.read();
+        expect(secondMamManager.queryCount, 1);
+        expect(secondMamManager.calls.single.start, isNull);
+        expect(secondMamManager.calls.single.after, isNull);
+        expect(secondMamManager.calls.single.before, '');
+        expect(stored, contains('Unverified retry update task'));
+        expect(stored, contains('Unverified retry snapshot task'));
+        expect(syncState.hasCompleteCoverage, isTrue);
+        expect(
+          syncState.snapshotCoverageStatus,
+          CalendarSnapshotCoverageStatus.verified,
+        );
+        expect(
+          syncState.recoveryCursorStatus,
+          CalendarRecoveryCursorStatus.verified,
+        );
+        expect(syncState.lastArchiveResumeId, 'unverified-retry-snapshot-last');
+      },
+    );
+
     test('Direct chat calendar MAM runs when coverage is incomplete', () async {
       const peerJid = 'peer@axi.im';
       await _openXmppStateStore('axichat_direct_incomplete_calendar_mam');
@@ -4973,6 +5101,83 @@ void main() {
       final model = ChatCalendarStorage(storage: storage).readModel(peerJid);
       expect(model.tasks[task.id]?.title, 'Direct incomplete task');
     });
+
+    test(
+      'Direct chat calendar MAM backfills when cursor is unverified',
+      () async {
+        const peerJid = 'peer@axi.im';
+        await _openXmppStateStore('axichat_direct_unverified_cursor_mam');
+        final storage = _InMemoryStorage();
+        HydratedBloc.storage = storage;
+        await const ChatCalendarSyncStateStore().write(
+          peerJid,
+          CalendarSyncState(
+            lastHandledTimestamp: DateTime.utc(2026, 5, 3, 18),
+            lastHandledStanzaId: 'direct-unverified-cursor',
+            lastArchiveResumeId: 'direct-unverified-resume',
+          ).markCoverageComplete(calendarJid: peerJid, archiveJid: peerJid),
+        );
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        final timestamp = DateTime.utc(2026, 5, 3, 17);
+        final task = _task(
+          id: 'direct-unverified-task',
+          title: 'Direct unverified task',
+          timestamp: timestamp,
+        );
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _directCalendarMamEvent(
+                  peerBare: peerJid,
+                  selfBare: selfBare,
+                  stanzaId: 'direct-unverified-calendar',
+                  timestamp: timestamp,
+                  message: _taskUpdate(task: task, operation: 'add'),
+                ),
+              ],
+              complete: true,
+              first: 'direct-unverified-first',
+              last: 'direct-unverified-last',
+              count: 1,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        expect(
+          await xmppService.rehydrateChatCalendarFromMam(
+            chatJid: peerJid,
+            chatType: ChatType.chat,
+          ),
+          CalendarMamOutcome.completed,
+        );
+
+        final state = const ChatCalendarSyncStateStore().read(peerJid);
+        final model = ChatCalendarStorage(storage: storage).readModel(peerJid);
+        expect(mamManager.queryCount, 1);
+        expect(mamManager.calls.single.start, isNull);
+        expect(mamManager.calls.single.after, isNull);
+        expect(mamManager.calls.single.before, '');
+        expect(model.tasks[task.id]?.title, 'Direct unverified task');
+        expect(state.hasCompleteCoverage, isTrue);
+        expect(
+          state.snapshotCoverageStatus,
+          CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot,
+        );
+        expect(
+          state.recoveryCursorStatus,
+          CalendarRecoveryCursorStatus.verified,
+        );
+      },
+    );
 
     test(
       'Direct chat calendar MAM runs when legacy coverage has no calendar data',
@@ -5284,6 +5489,9 @@ void main() {
         calendarJid: selfJid,
         archiveJid: selfJid,
         coverageStatus: CalendarArchiveCoverageStatus.incomplete,
+        snapshotCoverageStatus:
+            CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot,
+        recoveryCursorStatus: CalendarRecoveryCursorStatus.verified,
       ).write();
       await xmppService.setMamSupportOverride(true);
       when(
@@ -5315,6 +5523,9 @@ void main() {
         calendarJid: selfBare,
         archiveJid: selfBare,
         coverageStatus: CalendarArchiveCoverageStatus.incomplete,
+        snapshotCoverageStatus:
+            CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot,
+        recoveryCursorStatus: CalendarRecoveryCursorStatus.verified,
       ).write();
       final pageEvents = <List<mox.XmppEvent>>[
         <mox.XmppEvent>[],
@@ -5406,6 +5617,9 @@ void main() {
           calendarJid: selfBare,
           archiveJid: selfBare,
           coverageStatus: CalendarArchiveCoverageStatus.incomplete,
+          snapshotCoverageStatus:
+              CalendarSnapshotCoverageStatus.archiveCompleteWithoutSnapshot,
+          recoveryCursorStatus: CalendarRecoveryCursorStatus.verified,
         ).write();
         final snapshotTime = cursorTimestamp.add(const Duration(minutes: 1));
         final updateTime = cursorTimestamp.add(const Duration(minutes: 2));

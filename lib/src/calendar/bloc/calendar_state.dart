@@ -35,7 +35,12 @@ class CalendarSyncWarning {
   final CalendarSyncWarningType type;
 }
 
-enum CalendarSyncWarningType { snapshotUnavailable, archiveIncomplete }
+enum CalendarSyncWarningType {
+  snapshotUnavailable,
+  archiveIncomplete,
+  snapshotPublishPending,
+  snapshotPublishBlocked,
+}
 
 @immutable
 class CalendarAlertBadgeCounts {

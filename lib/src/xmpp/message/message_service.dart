@@ -7243,22 +7243,27 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _log.warning(_calendarSnapshotMissingFileMessage);
       throw XmppMessageException();
     }
+    final size = await file.length();
+    if (size > CalendarSnapshotCodec.maxCompressedBytes) {
+      throw const CalendarSnapshotTooLargeException(
+        'Calendar snapshot upload exceeds the receiver limit.',
+      );
+    }
     final snapshot = await CalendarSnapshotCodec.decodeFile(file);
     if (snapshot == null) {
       _log.warning(_calendarSnapshotInvalidFileMessage);
       throw XmppMessageException();
     }
-    final size = await file.length();
     final filename = p.basename(file.path).trim().isNotEmpty
         ? p.basename(file.path)
         : _calendarSnapshotDefaultName;
     const contentType = CalendarSnapshotCodec.mimeType;
-    final slot = await _requestHttpUploadSlot(
-      filename: filename,
-      sizeBytes: size,
-      contentType: contentType,
-    );
     try {
+      final slot = await _requestHttpUploadSlot(
+        filename: filename,
+        sizeBytes: size,
+        contentType: contentType,
+      );
       await _uploadFileToSlot(
         slot,
         file,
@@ -7266,15 +7271,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         putUrl: slot.putUrl,
         contentType: contentType,
       );
+      return CalendarSnapshotUploadResult(
+        url: slot.getUrl,
+        checksum: snapshot.checksum,
+        version: snapshot.version,
+      );
+    } on XmppFileTooBigException catch (error, stackTrace) {
+      _log.warning(_calendarSnapshotUploadFailedMessage, error, stackTrace);
+      throw const CalendarSnapshotTooLargeException(
+        'Calendar snapshot upload exceeds the server limit.',
+      );
     } catch (error, stackTrace) {
       _log.warning(_calendarSnapshotUploadFailedMessage, error, stackTrace);
       throw XmppMessageException();
     }
-    return CalendarSnapshotUploadResult(
-      url: slot.getUrl,
-      checksum: snapshot.checksum,
-      version: snapshot.version,
-    );
   }
 
   Future<_UploadSlot> _requestUploadSlotViaStanza({
@@ -11217,7 +11227,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           event: event,
           isSelfCalendar: isSelfCalendar,
           chatJid: chatJid,
-          inbound: _calendarSyncInbound(syncMessage, event),
+          inbound: _calendarSyncInbound(syncMessage, event, null),
         );
       }
       return;
@@ -11242,7 +11252,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         event: event,
         isSelfCalendar: true,
         chatJid: chatJid,
-        inbound: _calendarSyncInbound(syncMessage, event),
+        inbound: _calendarSyncInbound(syncMessage, event, null),
       );
       return;
     }
@@ -11264,7 +11274,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           event: event,
           isSelfCalendar: isSelfCalendar,
           chatJid: chatJid,
-          inbound: _calendarSyncInbound(syncMessage, event),
+          inbound: _calendarSyncInbound(syncMessage, event, null),
         );
       }
       return;
@@ -11295,7 +11305,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             event: event,
             isSelfCalendar: false,
             chatJid: chatJid,
-            inbound: _calendarSyncInbound(syncMessage, event),
+            inbound: _calendarSyncInbound(syncMessage, event, null),
           );
         } else {
           await _recordCalendarMamEnvelopeFailure(
@@ -11332,7 +11342,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         event: event,
         isSelfCalendar: false,
         chatJid: chatJid,
-        inbound: _calendarSyncInbound(syncMessage, event),
+        inbound: _calendarSyncInbound(syncMessage, event, null),
       );
       return;
     }
@@ -11362,19 +11372,33 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         allowRemoteDownload: true,
         allowSelfDownloadOverrides: work.isSelfSender,
         mamSession: calendarMamSession,
-        onMessageDecoded: (fullMessage, decodedEvent) async {
+        onMessageDecoded: (fullMessage, decodedEvent, snapshotResult) async {
           if (isSelfCalendar) {
-            return _invokeCalendarCallback(fullMessage, decodedEvent);
+            return _invokeCalendarCallback(
+              fullMessage,
+              decodedEvent,
+              snapshotResult,
+            );
           }
-          final sanitizedMessage =
-              await _sanitizeChatCalendarSyncMessageForReadOnly(
-                syncMessage: fullMessage,
-                event: decodedEvent,
-                chatJid: chatJid,
-              );
+          final sanitized = snapshotResult == null
+              ? (
+                  message: await _sanitizeChatCalendarSyncMessageForReadOnly(
+                    syncMessage: fullMessage,
+                    event: decodedEvent,
+                    chatJid: chatJid,
+                  ),
+                  snapshotResult: null,
+                )
+              : await _sanitizeChatCalendarSnapshotForReadOnly(
+                  syncMessage: fullMessage,
+                  snapshotResult: snapshotResult,
+                  event: decodedEvent,
+                  chatJid: chatJid,
+                );
           return _invokeChatCalendarCallback(
-            sanitizedMessage,
+            sanitized.message,
             decodedEvent,
+            snapshotResult: sanitized.snapshotResult,
             chatJid: chatJid,
             chatType: chatType,
             senderJid: senderJid,
@@ -11394,7 +11418,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           event: event,
           isSelfCalendar: isSelfCalendar,
           chatJid: chatJid,
-          inbound: _calendarSyncInbound(syncMessage, event),
+          inbound: _calendarSyncInbound(syncMessage, event, null),
         );
       }
       return;
@@ -11402,11 +11426,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
     if (isSelfCalendar) {
       // Route to CalendarSyncManager for processing
-      await _invokeCalendarCallback(syncMessage, event);
+      await _invokeCalendarCallback(syncMessage, event, null);
     } else {
       await _invokeChatCalendarCallback(
         syncMessage,
         event,
+        snapshotResult: null,
         chatJid: chatJid,
         chatType: chatType,
         senderJid: senderJid,
@@ -11417,7 +11442,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       event: event,
       isSelfCalendar: isSelfCalendar,
       chatJid: chatJid,
-      inbound: _calendarSyncInbound(syncMessage, event),
+      inbound: _calendarSyncInbound(syncMessage, event, null),
     );
   }
 
@@ -11576,11 +11601,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         deletedTaskIds: sanitizedDeletedTaskIds,
       );
       final checksum = sanitizedModel.calculateChecksum();
+      final checkedModel = sanitizedModel.copyWith(checksum: checksum);
       _log.warning(
         'Removed unauthorized read-only task changes from calendar ${syncMessage.type}.',
       );
       return syncMessage.copyWith(
-        data: sanitizedModel.toJson(),
+        data: checkedModel.toJson(),
         checksum: checksum,
         snapshotChecksum: syncMessage.type == CalendarSyncType.snapshot
             ? checksum
@@ -11594,6 +11620,81 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       );
       return syncMessage;
     }
+  }
+
+  Future<
+    ({CalendarSyncMessage message, CalendarSnapshotResult? snapshotResult})
+  >
+  _sanitizeChatCalendarSnapshotForReadOnly({
+    required CalendarSyncMessage syncMessage,
+    required CalendarSnapshotResult snapshotResult,
+    required mox.MessageEvent event,
+    required String chatJid,
+  }) async {
+    await _ensureReadOnlyTaskOwnersLoaded();
+    final chatKey = _readOnlyTaskChatKey(chatJid);
+    if (chatKey == null) {
+      return (message: syncMessage, snapshotResult: snapshotResult);
+    }
+    final owners = _readOnlyTaskOwnersByChat[chatKey];
+    if (owners == null || owners.isEmpty) {
+      return (message: syncMessage, snapshotResult: snapshotResult);
+    }
+
+    final remoteModel = snapshotResult.model;
+    final senderIdentity = _calendarSyncSenderIdentity(event);
+    final blockedTaskIds = <String>{};
+    for (final taskId in remoteModel.tasks.keys) {
+      if (_isReadOnlyTaskOwnerMismatch(
+        owners: owners,
+        taskId: taskId,
+        senderJid: senderIdentity,
+      )) {
+        blockedTaskIds.add(taskId);
+      }
+    }
+    for (final taskId in remoteModel.deletedTaskIds.keys) {
+      if (_isReadOnlyTaskOwnerMismatch(
+        owners: owners,
+        taskId: taskId,
+        senderJid: senderIdentity,
+      )) {
+        blockedTaskIds.add(taskId);
+      }
+    }
+    if (blockedTaskIds.isEmpty) {
+      return (message: syncMessage, snapshotResult: snapshotResult);
+    }
+
+    final sanitizedTasks = Map<String, CalendarTask>.from(remoteModel.tasks);
+    final sanitizedDeletedTaskIds = Map<String, DateTime>.from(
+      remoteModel.deletedTaskIds,
+    );
+    for (final taskId in blockedTaskIds) {
+      sanitizedTasks.remove(taskId);
+      sanitizedDeletedTaskIds.remove(taskId);
+    }
+    final sanitizedModel = remoteModel.copyWith(
+      tasks: sanitizedTasks,
+      deletedTaskIds: sanitizedDeletedTaskIds,
+    );
+    final checksum = sanitizedModel.calculateChecksum();
+    final checkedModel = sanitizedModel.copyWith(checksum: checksum);
+    _log.warning(
+      'Removed unauthorized read-only task changes from calendar snapshot.',
+    );
+    return (
+      message: syncMessage.copyWith(
+        checksum: checksum,
+        snapshotChecksum: checksum,
+      ),
+      snapshotResult: CalendarSnapshotResult(
+        version: snapshotResult.version,
+        generatedAt: snapshotResult.generatedAt,
+        checksum: checksum,
+        model: checkedModel,
+      ),
+    );
   }
 
   bool _isReadOnlyTaskOwnerMismatch({
@@ -11782,6 +11883,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required Future<bool> Function(
       CalendarSyncMessage fullMessage,
       mox.MessageEvent event,
+      CalendarSnapshotResult? snapshotResult,
     )
     onMessageDecoded,
   }) async {
@@ -11798,7 +11900,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         snapshotChecksum: snapshotChecksum,
       );
       try {
-        final applied = await onMessageDecoded(inlineMessage, event);
+        final applied = await onMessageDecoded(inlineMessage, event, null);
         if (applied && mamSession.inFlight) {
           mamSession.snapshotSeen = true;
         }
@@ -11860,10 +11962,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         return false;
       }
 
-      // Synthesize a full calendar message with the decoded model data
       final fullMessage = CalendarSyncMessage(
         type: CalendarSyncType.snapshot,
-        data: decoded.model.toJson(),
         checksum: decoded.checksum,
         timestamp: syncMessage.timestamp,
         isSnapshot: true,
@@ -11872,7 +11972,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         snapshotUrl: url ?? metadata?.sourceUrls?.first,
       );
 
-      final applied = await onMessageDecoded(fullMessage, event);
+      final applied = await onMessageDecoded(fullMessage, event, decoded);
       if (applied && mamSession.inFlight) {
         mamSession.snapshotSeen = true;
       }
@@ -11923,7 +12023,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         ? null
         : File(existingPath);
     if (existingFile?.existsSync() ?? false) {
-      return CalendarSnapshotCodec.decodeFile(existingFile!);
+      return _decodeSnapshotFile(existingFile!);
     }
     if (!allowRemoteDownload) {
       return null;
@@ -11932,14 +12032,39 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       metadataId: metadata.id,
       allowHttpOverride: allowHttpOverride,
       allowInsecureHostsOverride: allowInsecureHostsOverride,
+      maxBytesOverride: CalendarSnapshotCodec.maxCompressedBytes,
     );
     if (path == null) return null;
     final file = File(path);
-    return CalendarSnapshotCodec.decodeFile(file);
+    return _decodeSnapshotFile(file);
   }
 
   Future<CalendarSnapshotResult?> _downloadAndDecodeSnapshot(
     String url, {
+    bool? allowHttpOverride,
+    bool? allowInsecureHostsOverride,
+  }) async {
+    final bytes = await _downloadSnapshotAssetBytes(
+      url,
+      maxBytes: _calendarSnapshotDownloadMaxBytes,
+      allowHttpOverride: allowHttpOverride,
+      allowInsecureHostsOverride: allowInsecureHostsOverride,
+    );
+    if (bytes == null) {
+      return null;
+    }
+    return _decodeSnapshotBytes(bytes);
+  }
+
+  Future<CalendarSnapshotResult?> _decodeSnapshotFile(File file) =>
+      CalendarSnapshotCodec.decodeFile(file);
+
+  CalendarSnapshotResult? _decodeSnapshotBytes(Uint8List bytes) =>
+      CalendarSnapshotCodec.decode(bytes);
+
+  Future<Uint8List?> _downloadSnapshotAssetBytes(
+    String url, {
+    required int maxBytes,
     bool? allowHttpOverride,
     bool? allowInsecureHostsOverride,
   }) async {
@@ -11955,7 +12080,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final fileName = '.snapshot_${DateTime.now().millisecondsSinceEpoch}.tmp';
       tmpFile = File(p.join(directory.path, fileName));
 
-      const maxBytes = _calendarSnapshotDownloadMaxBytes;
       const allowInsecureDownloads =
           !kReleaseMode && kAllowInsecureXmppAttachmentDownloads;
       final allowHttpOverrideEnabled = allowHttpOverride == true;
@@ -11974,8 +12098,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         allowInsecureHosts: allowInsecureHosts,
       );
 
-      final bytes = await tmpFile.readAsBytes();
-      return CalendarSnapshotCodec.decode(bytes);
+      return tmpFile.readAsBytes();
     } finally {
       if (tmpFile != null && await tmpFile.exists()) {
         await tmpFile.delete();
@@ -11986,11 +12109,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<bool> _invokeCalendarCallback(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event,
+    CalendarSnapshotResult? snapshotResult,
   ) async {
-    final inbound = _calendarSyncInbound(syncMessage, event);
+    final inbound = _calendarSyncInbound(syncMessage, event, snapshotResult);
     if (!_calendarSyncDispatchController.hasListener) {
       _log.info('No calendar sync listeners registered - applying directly');
-      return _processPersonalCalendarSyncDirect(syncMessage, event);
+      return _processPersonalCalendarSyncDirect(
+        syncMessage,
+        event,
+        snapshotResult,
+      );
     }
     final dispatch = CalendarSyncDispatch(inbound: inbound);
     _calendarSyncDispatchController.add(dispatch);
@@ -12006,7 +12134,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       rethrow;
     } on Exception catch (error, stackTrace) {
       _log.warning('Calendar sync handler failed.', error, stackTrace);
-      return _processPersonalCalendarSyncDirect(syncMessage, event);
+      return _processPersonalCalendarSyncDirect(
+        syncMessage,
+        event,
+        snapshotResult,
+      );
     }
   }
 
@@ -12102,7 +12234,31 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         await sendCalendarSyncMessage(jid: jid, outbound: outbound);
       },
       sendSnapshotFile: uploadCalendarSnapshot,
+      onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
     );
+  }
+
+  Future<void> _emitCalendarSnapshotPublishWarning(
+    CalendarSnapshotPublishStatus status,
+  ) async {
+    switch (status) {
+      case CalendarSnapshotPublishStatus.idle:
+        return;
+      case CalendarSnapshotPublishStatus.pending:
+        await _emitCalendarSyncWarning(
+          const CalendarSyncWarning(
+            type: CalendarSyncWarningType.snapshotPublishPending,
+          ),
+        );
+        return;
+      case CalendarSnapshotPublishStatus.blocked:
+        await _emitCalendarSyncWarning(
+          const CalendarSyncWarning(
+            type: CalendarSyncWarningType.snapshotPublishBlocked,
+          ),
+        );
+        return;
+    }
   }
 
   CalendarModel _readDirectPersonalCalendarModel() {
@@ -12264,21 +12420,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   CalendarSyncInbound _calendarSyncInbound(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event,
+    CalendarSnapshotResult? snapshotResult,
   ) {
     return CalendarSyncInbound(
       message: syncMessage,
       stanzaId: _calendarSyncStanzaId(event),
       receivedAt: _calendarSyncTimestamp(event),
       isFromMam: event.isFromMAM,
+      snapshotResult: snapshotResult,
     );
   }
 
   Future<bool> _processPersonalCalendarSyncDirect(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event,
+    CalendarSnapshotResult? snapshotResult,
   ) async {
     try {
-      final inbound = _calendarSyncInbound(syncMessage, event);
+      final inbound = _calendarSyncInbound(syncMessage, event, snapshotResult);
       final applied = await _directPersonalCalendarSyncManager()
           .onCalendarMessage(inbound);
       try {
@@ -12299,6 +12458,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<bool> _processChatCalendarSyncDirect(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event, {
+    CalendarSnapshotResult? snapshotResult,
     required String chatJid,
     required ChatType chatType,
     required String senderJid,
@@ -12308,7 +12468,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         chatJid: chatJid,
         chatType: chatType,
         senderJid: senderJid,
-        inbound: _calendarSyncInbound(syncMessage, event),
+        inbound: _calendarSyncInbound(syncMessage, event, snapshotResult),
       );
       final applied = await _directChatCalendarSyncCoordinator().handleInbound(
         envelope,
@@ -12372,7 +12532,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required bool isSelfCalendar,
     required String chatJid,
   }) async {
-    final inbound = _calendarSyncInbound(syncMessage, event);
+    final inbound = _calendarSyncInbound(syncMessage, event, null);
     if (isSelfCalendar) {
       final state = _readPersonalCalendarSyncState().markHandled(inbound);
       await _writePersonalCalendarSyncState(state);
@@ -12483,11 +12643,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<bool> _invokeChatCalendarCallback(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event, {
+    CalendarSnapshotResult? snapshotResult,
     required String chatJid,
     required ChatType chatType,
     required String senderJid,
   }) async {
-    final inbound = _calendarSyncInbound(syncMessage, event);
+    final inbound = _calendarSyncInbound(syncMessage, event, snapshotResult);
     if (!_chatCalendarSyncDispatchController.hasListener) {
       _log.info(
         'No chat calendar sync listeners registered - applying directly',
@@ -12495,6 +12656,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return _processChatCalendarSyncDirect(
         syncMessage,
         event,
+        snapshotResult: snapshotResult,
         chatJid: chatJid,
         chatType: chatType,
         senderJid: senderJid,
@@ -12523,6 +12685,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return _processChatCalendarSyncDirect(
         syncMessage,
         event,
+        snapshotResult: snapshotResult,
         chatJid: chatJid,
         chatType: chatType,
         senderJid: senderJid,
@@ -12713,8 +12876,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         return CalendarMamOutcome.skippedCoveredByGlobal;
       }
       final recoveryTimestamp = state.recoveryTimestamp;
-      if (recoveryTimestamp != null &&
-          (!state.hasCompleteCoverage || state.hasVerifiedRecoveryBoundary)) {
+      if (recoveryTimestamp != null && state.canUseRecoveryCursor) {
         final completed = await _catchUpCalendarFromArchive(
           jid: selfJid,
           since: recoveryTimestamp,
@@ -12780,11 +12942,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           : CalendarMamOutcome.incomplete;
     } on Exception catch (e) {
       _log.warning('Calendar rehydration failed: $e');
-      await _writePersonalCalendarCoverageState(
-        complete: false,
-        calendarJid: selfJid,
-        archiveJid: selfJid,
-      );
+      await _writePersonalCalendarFailedCoverageState();
       await _emitCalendarArchiveIncompleteWarning();
       return CalendarMamOutcome.failed;
     } finally {
@@ -12832,13 +12990,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final state = _readChatCalendarSyncState(normalizedChatJid);
       if (chatType == ChatType.chat &&
           state.hasCompleteCoverage &&
-          _mamGlobalSyncCompletedSinceConnect) {
+          _mamGlobalSyncCompletedSinceConnect &&
+          state.hasVerifiedRecoveryBoundary) {
         await _ensureChatCalendarSyncStateStored(normalizedChatJid, state);
         return CalendarMamOutcome.skippedCoveredByGlobal;
       }
       final isMuc = chatType == ChatType.groupChat;
       final recoveryTimestamp = state.recoveryTimestamp;
-      final completed = recoveryTimestamp == null
+      final completed = recoveryTimestamp == null || !state.canUseRecoveryCursor
           ? await _backfillCalendarFromArchive(
               jid: normalizedChatJid,
               isMuc: isMuc,
@@ -12898,6 +13057,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _writePersonalCalendarSyncState(state);
   }
 
+  Future<void> _writePersonalCalendarFailedCoverageState() async {
+    final current = _readPersonalCalendarSyncState();
+    final state = current.hasVerifiedRecoveryBoundary
+        ? current.markCoverageIncomplete()
+        : current.markCoverageIncomplete().markRecoveryCursorUnverified();
+    await _writePersonalCalendarSyncState(state);
+  }
+
   bool _isPersonalBackfillComplete({
     required bool completed,
     required bool snapshotSeen,
@@ -12919,11 +13086,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String archiveJid,
   }) async {
     if (!complete) {
-      await _writePersonalCalendarCoverageState(
-        complete: false,
-        calendarJid: calendarJid,
-        archiveJid: archiveJid,
-      );
+      final state = _readPersonalCalendarSyncState()
+          .markCoverageIncomplete()
+          .markRecoveryCursorUnverified();
+      await _writePersonalCalendarSyncState(state);
       return;
     }
     var state = _readPersonalCalendarSyncState().markCoverageComplete(
@@ -12942,15 +13108,22 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     DateTime? completedAt,
   }) async {
     final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
-    final state = complete
-        ? _readChatCalendarSyncState(normalizedChatJid).markCoverageComplete(
-            calendarJid: normalizedChatJid,
-            archiveJid: normalizedChatJid,
-            completedAt: completedAt,
-          )
-        : _readChatCalendarSyncState(
-            normalizedChatJid,
-          ).markCoverageIncomplete();
+    final current = _readChatCalendarSyncState(normalizedChatJid);
+    CalendarSyncState state;
+    if (complete) {
+      state = current.markCoverageComplete(
+        calendarJid: normalizedChatJid,
+        archiveJid: normalizedChatJid,
+        completedAt: completedAt,
+      );
+      if (!state.hasVerifiedRecoveryBoundary) {
+        state = state.markArchiveCompleteWithoutSnapshot();
+      }
+    } else if (current.hasVerifiedRecoveryBoundary) {
+      state = current.markCoverageIncomplete();
+    } else {
+      state = current.markCoverageIncomplete().markRecoveryCursorUnverified();
+    }
     await _writeChatCalendarSyncState(normalizedChatJid, state);
   }
 

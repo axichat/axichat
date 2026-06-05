@@ -180,6 +180,14 @@ class _CalendarWidgetState
           l10n.calendarSyncWarningArchiveTitle,
           l10n.calendarSyncWarningArchiveMessage,
         ),
+        CalendarSyncWarningType.snapshotPublishPending => (
+          l10n.calendarSyncWarningArchiveTitle,
+          l10n.calendarSyncWarningArchiveMessage,
+        ),
+        CalendarSyncWarningType.snapshotPublishBlocked => (
+          l10n.calendarSyncWarningSnapshotTitle,
+          l10n.calendarSyncWarningSnapshotMessage,
+        ),
       };
       FeedbackSystem.showWarning(context, message, title: title);
       calendarBloc.add(const CalendarEvent.syncWarningCleared());

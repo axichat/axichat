@@ -4,6 +4,7 @@ import 'dart:core';
 import 'dart:isolate';
 
 import 'package:axichat/src/common/generate_random.dart';
+import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
@@ -96,6 +97,9 @@ class MockXmppStateStore extends Mock implements XmppStateStore {}
 class MockXmppDatabase extends Mock implements XmppDatabase {}
 
 class MockNotificationService extends Mock implements NotificationService {}
+
+class MockForegroundRuntimeController extends Mock
+    implements ForegroundRuntimeController {}
 
 class MockMessageService extends Mock implements MessageService {}
 

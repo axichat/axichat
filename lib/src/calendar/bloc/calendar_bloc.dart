@@ -17,6 +17,7 @@ import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinato
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
@@ -46,6 +47,7 @@ CalendarSyncManager buildPersonalCalendarSyncManager(CalendarBloc owner) {
     },
     sendCalendarMessage: owner.sendPersonalCalendarSync,
     sendSnapshotFile: owner.uploadCalendarSnapshot,
+    onSnapshotPublishStatusChanged: owner._handleSnapshotPublishStatus,
   );
 }
 
@@ -211,6 +213,33 @@ class CalendarBloc extends BaseCalendarBloc {
 
   Future<CalendarSnapshotUploadResult> uploadCalendarSnapshot(File file) {
     return _xmppService.uploadCalendarSnapshot(file);
+  }
+
+  Future<void> _handleSnapshotPublishStatus(
+    CalendarSnapshotPublishStatus status,
+  ) async {
+    switch (status) {
+      case CalendarSnapshotPublishStatus.idle:
+        return;
+      case CalendarSnapshotPublishStatus.pending:
+        add(
+          const CalendarEvent.syncWarningRaised(
+            warning: CalendarSyncWarning(
+              type: CalendarSyncWarningType.snapshotPublishPending,
+            ),
+          ),
+        );
+        return;
+      case CalendarSnapshotPublishStatus.blocked:
+        add(
+          const CalendarEvent.syncWarningRaised(
+            warning: CalendarSyncWarning(
+              type: CalendarSyncWarningType.snapshotPublishBlocked,
+            ),
+          ),
+        );
+        return;
+    }
   }
 
   void _attachCalendarSyncSubscriptions() {

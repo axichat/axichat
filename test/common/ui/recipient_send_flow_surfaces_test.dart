@@ -566,9 +566,9 @@ void main() {
       await tester.pumpWidget(
         harness.wrap(
           CalendarTaskShareSheet(
+            locate: harness.locate,
             task: _task(),
             availableChats: harness.chats,
-            locate: harness.locate,
           ),
         ),
       );
@@ -600,9 +600,9 @@ void main() {
       await tester.pumpWidget(
         harness.wrap(
           CalendarTaskShareSheet(
+            locate: harness.locate,
             task: _task(),
             availableChats: harness.chats,
-            locate: harness.locate,
           ),
         ),
       );
@@ -635,9 +635,9 @@ void main() {
         await tester.pumpWidget(
           harness.wrap(
             CalendarTaskShareSheet(
+              locate: harness.locate,
               task: _task(),
               availableChats: harness.chats,
-              locate: harness.locate,
             ),
           ),
         );
@@ -739,11 +739,11 @@ void main() {
       await tester.pumpWidget(
         harness.wrap(
           CalendarCriticalPathShareSheet(
+            locate: harness.locate,
             path: _criticalPath(),
             tasks: [_task()],
             availableChats: harness.chats,
             initialChat: harness.chats.first,
-            locate: harness.locate,
           ),
         ),
       );
@@ -770,11 +770,11 @@ void main() {
         await tester.pumpWidget(
           harness.wrap(
             CalendarCriticalPathShareSheet(
+              locate: harness.locate,
               path: _criticalPath(),
               tasks: [_task()],
               availableChats: harness.chats,
               initialChat: harness.chats.first,
-              locate: harness.locate,
             ),
           ),
         );
@@ -1276,12 +1276,12 @@ Future<void> _pumpAvailabilityRecipientsStep(
   await tester.pumpWidget(
     harness.wrap(
       CalendarAvailabilityShareScreen(
+        locate: harness.locate,
         source: const CalendarAvailabilityShareSource.personal(),
         model: CalendarModel.empty(),
         ownerJid: 'me@axi.im',
         availableChats: harness.chats,
         lockToChat: false,
-        locate: harness.locate,
       ),
     ),
   );
