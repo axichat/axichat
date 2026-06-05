@@ -2079,6 +2079,10 @@ class EmailDeltaTransport implements ChatTransport {
       }
       return;
     }
+    final Message? existingByDeltaId = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: accountId,
+    );
     Message next = existing;
     if (existing.deltaMsgId != msgId ||
         existing.deltaChatId != chatId ||
@@ -2096,6 +2100,12 @@ class EmailDeltaTransport implements ChatTransport {
       if (timestamp != null && next.timestamp != timestamp) {
         next = next.copyWith(timestamp: timestamp);
       }
+    }
+    final String? duplicateOriginId = existingByDeltaId?.originID?.trim();
+    if (duplicateOriginId != null &&
+        duplicateOriginId.isNotEmpty &&
+        existing.originID?.trim().isNotEmpty != true) {
+      next = next.copyWith(originID: duplicateOriginId);
     }
     if (next != existing) {
       await db.updateMessage(next);
@@ -2117,6 +2127,19 @@ class EmailDeltaTransport implements ChatTransport {
         );
       }
     }
+    if (metadata != null &&
+        previousMetadataId != null &&
+        previousMetadataId.isNotEmpty &&
+        previousMetadataId != metadata.id) {
+      await db.deleteFileMetadata(previousMetadataId);
+    }
+    if (existingByDeltaId != null && existingByDeltaId.stanzaID != stanzaId) {
+      await db.deleteMessage(
+        existingByDeltaId.stanzaID,
+        selfJid: existing.senderJid,
+        emailSelfJid: existing.senderJid,
+      );
+    }
     if (shareId != null) {
       await db.insertMessageCopy(
         shareId: shareId,
@@ -2124,12 +2147,6 @@ class EmailDeltaTransport implements ChatTransport {
         dcChatId: chatId,
         dcAccountId: accountId,
       );
-    }
-    if (metadata != null &&
-        previousMetadataId != null &&
-        previousMetadataId.isNotEmpty &&
-        previousMetadataId != metadata.id) {
-      await db.deleteFileMetadata(previousMetadataId);
     }
   }
 
