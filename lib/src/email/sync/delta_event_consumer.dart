@@ -2656,9 +2656,26 @@ class DeltaEventConsumer {
     if (merged != null && (existing == null || merged != existing)) {
       await db.saveFileMetadata(merged);
     }
-    return message.copyWith(
-      fileMetadataID: merged?.id ?? existing?.id ?? resolvedMetadata.id,
-    );
+    final resolvedMetadataId =
+        merged?.id ?? existing?.id ?? resolvedMetadata.id;
+    final resolvedMetadataForMessage = merged ?? existing ?? resolvedMetadata;
+    final messageId = message.id?.trim();
+    if (previousMetadataId != null &&
+        previousMetadataId.isNotEmpty &&
+        previousMetadataId != resolvedMetadataId &&
+        messageId != null &&
+        messageId.isNotEmpty) {
+      await db.updateMessageAttachment(
+        stanzaID: message.stanzaID,
+        metadata: resolvedMetadataForMessage,
+      );
+      await db.replaceMessageAttachments(
+        messageId: messageId,
+        fileMetadataIds: [resolvedMetadataId],
+      );
+      await db.deleteFileMetadata(previousMetadataId);
+    }
+    return message.copyWith(fileMetadataID: resolvedMetadataId);
   }
 
   FileMetadataData _metadataFromDelta({

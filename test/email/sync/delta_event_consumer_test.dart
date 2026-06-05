@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
+import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -83,6 +84,12 @@ void main() {
       () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
     ).thenAnswer((_) async {});
     when(
+      () => database.updateMessageAttachment(
+        stanzaID: any(named: 'stanzaID'),
+        metadata: any(named: 'metadata'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
       () => database.deleteMessage(
         any(),
         selfJid: any(named: 'selfJid'),
@@ -155,6 +162,25 @@ void main() {
         isEncrypted: true,
       ),
     );
+  });
+
+  test('attachment fallback ignores Delta text that repeats the subject', () {
+    final pending = PendingOutgoingEmailSignature.fromOutgoing(
+      subject: 'Photos',
+      fileName: 'photo.jpg',
+      fileMime: 'image/jpeg',
+      fileSizeBytes: 1234,
+    );
+    final incoming = PendingOutgoingEmailSignature.fromOutgoing(
+      subject: 'Photos',
+      text: 'Photos',
+      filePath: '/delta/copied/blob',
+      fileMime: 'image/jpeg',
+      fileSizeBytes: 1234,
+    );
+
+    expect(pending.matches(incoming), isFalse);
+    expect(pending.matchesAttachmentFileFallback(incoming), isTrue);
   });
 
   test('persists incoming timestamps from Delta core', () async {
@@ -3664,6 +3690,7 @@ void main() {
         senderJid: 'me@example.com',
         chatJid: chat.jid,
         timestamp: DateTime.utc(2024, 1, 1, 9),
+        id: 'message-row-53',
         fileMetadataID: pendingMetadata.id,
         deltaAccountId: DeltaAccountDefaults.legacyId,
         deltaChatId: chatId,
@@ -3720,6 +3747,15 @@ void main() {
         () => database.getFileMetadata(deltaFileMetadataId(msgId)),
       ).thenAnswer((_) async => null);
       when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+      when(
+        () => database.replaceMessageAttachments(
+          messageId: pending.id!,
+          fileMetadataIds: any<List<String>>(named: 'fileMetadataIds'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.deleteFileMetadata(pendingMetadata.id),
+      ).thenAnswer((_) async {});
       when(() => database.updateMessage(any())).thenAnswer((_) async {});
       when(() => database.updateChat(any())).thenAnswer((_) async {});
 
@@ -3752,6 +3788,27 @@ void main() {
       expect(savedMetadata.id, deltaFileMetadataId(msgId));
       expect(savedMetadata.filename, 'photo.jpg');
       expect(savedMetadata.path, '/delta/copied/blob');
+      final directAttachmentMetadata =
+          verify(
+                () => database.updateMessageAttachment(
+                  stanzaID: pending.stanzaID,
+                  metadata: captureAny<FileMetadataData>(named: 'metadata'),
+                ),
+              ).captured.single
+              as FileMetadataData;
+      expect(directAttachmentMetadata.id, deltaFileMetadataId(msgId));
+      final replacementIds =
+          verify(
+                () => database.replaceMessageAttachments(
+                  messageId: pending.id!,
+                  fileMetadataIds: captureAny<List<String>>(
+                    named: 'fileMetadataIds',
+                  ),
+                ),
+              ).captured.single
+              as List<String>;
+      expect(replacementIds, [deltaFileMetadataId(msgId)]);
+      verify(() => database.deleteFileMetadata(pendingMetadata.id)).called(1);
     },
   );
 

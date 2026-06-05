@@ -121,9 +121,17 @@ class PendingOutgoingEmailSignature {
     if (!_signaturesMatch(subjectSignature, match.subjectSignature)) {
       return false;
     }
-    if (textSignature != null &&
-        match.textSignature != null &&
-        textSignature == match.textSignature) {
+    final normalizedText = _stripSubjectEchoFromTextSignature(
+      value: textSignature,
+      subject: subjectSignature,
+    );
+    final normalizedMatchText = _stripSubjectEchoFromTextSignature(
+      value: match.textSignature,
+      subject: match.subjectSignature,
+    );
+    if (normalizedText != null &&
+        normalizedMatchText != null &&
+        normalizedText == normalizedMatchText) {
       return true;
     }
     if (htmlSignature != null &&
@@ -131,8 +139,8 @@ class PendingOutgoingEmailSignature {
         htmlSignature == match.htmlSignature) {
       return true;
     }
-    if (textSignature != null ||
-        match.textSignature != null ||
+    if (normalizedText != null ||
+        normalizedMatchText != null ||
         htmlSignature != null ||
         match.htmlSignature != null) {
       return false;
@@ -149,6 +157,19 @@ bool _signaturesMatch(String? first, String? second) {
     return false;
   }
   return first == second;
+}
+
+String? _stripSubjectEchoFromTextSignature({
+  required String? value,
+  required String? subject,
+}) {
+  if (value == null) {
+    return null;
+  }
+  if (subject != null && value == subject) {
+    return null;
+  }
+  return value;
 }
 
 String? _normalizeSubject(String? value) =>
