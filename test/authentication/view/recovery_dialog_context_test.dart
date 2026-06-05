@@ -119,6 +119,61 @@ void main() {
     expect(find.byType(ShadInputOTPSlot), findsNWidgets(6));
   });
 
+  testWidgets('recovery authenticator error is destructive above OTP input', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    when(
+      () => settingsCubit.verifyRecoveryTotpReset(
+        accountJid: 'alice@axi.im',
+        code: '123456',
+      ),
+    ).thenThrow(
+      const provisioning.EmailProvisioningApiRejectedException(
+        code: provisioning.EmailProvisioningApiErrorCode.invalidCode,
+        statusCode: 401,
+        isRecoverable: true,
+      ),
+    );
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showAccountRecoveryDialog(
+                context,
+                initialUsername: 'alice@axi.im',
+              ),
+            );
+          },
+          child: const Text('Open account recovery'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open account recovery'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Authenticator code'));
+    await tester.pumpAndSettle();
+    tester
+        .widget<ShadInputOTP>(find.byType(ShadInputOTP))
+        .onChanged
+        ?.call('123456');
+    await tester.pump();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    const message = 'The code is not valid.';
+    expect(find.text(message), findsOneWidget);
+    _expectDestructiveText(tester, message);
+    _expectAbove(tester, find.text(message), find.byType(ShadInputOTP));
+  });
+
   testWidgets('recovery email verify sends challenge and code', (tester) async {
     final settingsCubit = _settingsCubit();
     when(
@@ -259,6 +314,19 @@ void main() {
       ),
     ).called(1);
   });
+}
+
+void _expectDestructiveText(WidgetTester tester, String message) {
+  final finder = find.text(message);
+  final text = tester.widget<Text>(finder);
+  expect(
+    text.style?.color,
+    ShadTheme.of(tester.element(finder)).colorScheme.destructive,
+  );
+}
+
+void _expectAbove(WidgetTester tester, Finder upper, Finder lower) {
+  expect(tester.getTopLeft(upper).dy, lessThan(tester.getTopLeft(lower).dy));
 }
 
 class _RecoveryHarness extends StatelessWidget {

@@ -334,17 +334,17 @@ class EmailProvisioningClient {
     );
   }
 
-  void _ensureConfigured() {
-    if (!_requirePublicToken) return;
-    if (_publicTokenConfigured) return;
-    throw const EmailProvisioningApiUnavailableException();
-  }
-
   static http.Client _buildHttpClient() {
     if (!kDebugMode) {
       return http.Client();
     }
     return IOClient(HttpClient()..badCertificateCallback = (_, _, _) => true);
+  }
+
+  void _ensureConfigured() {
+    if (!_requirePublicToken) return;
+    if (_publicTokenConfigured) return;
+    throw const EmailProvisioningApiUnavailableException();
   }
 
   Future<EmailProvisioningCredentials> createAccount({
@@ -610,15 +610,11 @@ class EmailProvisioningClient {
 
   Future<RecoveryStatus> recoveryStatus({
     required String email,
-    String? password,
+    required String password,
   }) async {
-    final payload = <String, Object?>{'username': _recoveryUsername(email)};
-    if (password != null) {
-      payload['password'] = password;
-    }
     final response = await _postV1Json(
       pathSegments: const ['recovery', 'status'],
-      payload: payload,
+      payload: {'email': email.trim(), 'password': password},
       logContext: 'recovery status',
     );
     if (response.statusCode == 200) {

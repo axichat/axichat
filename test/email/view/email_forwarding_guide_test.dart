@@ -203,7 +203,7 @@ void main() {
     expect(find.text('Background notifications'), findsOneWidget);
   });
 
-  testWidgets('normal first login for non-axi account skips email onboarding', (
+  testWidgets('normal first login for non-axi account shows welcome', (
     tester,
   ) async {
     await _pumpEmailForwardingApp(
@@ -216,9 +216,27 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome to Axichat'), findsNothing);
-    expect(find.text('Background notifications'), findsNothing);
+    expect(find.text('Welcome to Axichat'), findsOneWidget);
+    expect(find.text('Background notifications'), findsOneWidget);
     expect(find.text('Set up account recovery'), findsNothing);
+  });
+
+  testWidgets('account welcome marks address when shown', (tester) async {
+    final settingsCubit = _settingsCubit();
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: settingsCubit,
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationComplete(),
+      ),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.markAccountWelcomeShownFor('user@example.com'),
+    ).called(1);
   });
 
   testWidgets('first axi.im login shows email onboarding then recovery', (
@@ -253,8 +271,8 @@ void main() {
     );
     verify(
       () => settingsCubit.recoveryStatus(
-        accountJid: any(named: 'accountJid'),
-        password: any(named: 'password'),
+        accountJid: 'alice@axi.im',
+        password: 'current-password',
       ),
     ).called(1);
   });
@@ -281,22 +299,50 @@ void main() {
     expect(find.text('Old password'), findsNothing);
     verify(
       () => settingsCubit.recoveryStatus(
-        accountJid: any(named: 'accountJid'),
-        password: any(named: 'password'),
+        accountJid: 'alice@axi.im',
+        password: 'current-password',
       ),
     ).called(1);
   });
 
-  testWidgets('account welcome skips smtp-disabled non-axi accounts', (
+  testWidgets(
+    'recovery welcome skips status when session password is missing',
+    (tester) async {
+      final settingsCubit = _settingsCubit();
+      await _pumpEmailForwardingApp(
+        tester,
+        settingsCubit: settingsCubit,
+        xmppService: _xmppService(jid: 'alice@axi.im'),
+        authenticationCubit: _authenticationCubit(
+          state: const AuthenticationComplete(),
+          currentEmailPassword: null,
+        ),
+        child: const AccountWelcomeGate(child: SizedBox.shrink()),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Set up account recovery'), findsNothing);
+      verifyNever(
+        () => settingsCubit.recoveryStatus(
+          accountJid: any(named: 'accountJid'),
+          password: any(named: 'password'),
+        ),
+      );
+    },
+  );
+
+  testWidgets('account welcome skips empty content when smtp is disabled', (
     tester,
   ) async {
+    final settingsCubit = _settingsCubit(
+      state: const SettingsState(
+        endpointConfig: EndpointConfig(smtpEnabled: false),
+      ),
+    );
     await _pumpEmailForwardingApp(
       tester,
-      settingsCubit: _settingsCubit(
-        state: const SettingsState(
-          endpointConfig: EndpointConfig(smtpEnabled: false),
-        ),
-      ),
+      settingsCubit: settingsCubit,
       authenticationCubit: _authenticationCubit(
         state: const AuthenticationComplete(),
       ),
@@ -306,15 +352,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Axichat'), findsNothing);
+    expect(find.text('Setup forwarding from:'), findsNothing);
+    expect(find.text('Set up account recovery'), findsNothing);
+    verifyNever(() => settingsCubit.markAccountWelcomeShownFor(any()));
   });
 
-  testWidgets('account welcome skips dismissed account on same device', (
+  testWidgets('account welcome skips already-shown account on same device', (
     tester,
   ) async {
     final settingsCubit = _settingsCubit();
-    when(
-      () => settingsCubit.recoveryWelcomeDismissedFor('alice@axi.im'),
-    ).thenAnswer((_) async => true);
+    when(() => settingsCubit.accountWelcomeShownFor(any())).thenAnswer((
+      invocation,
+    ) async {
+      final accountJid = invocation.positionalArguments.first as String?;
+      return accountJid == 'alice@axi.im';
+    });
     await _pumpEmailForwardingApp(
       tester,
       settingsCubit: settingsCubit,
@@ -328,6 +380,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Axichat'), findsNothing);
+    verifyNever(
+      () => settingsCubit.recoveryStatus(
+        accountJid: any(named: 'accountJid'),
+        password: any(named: 'password'),
+      ),
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -345,6 +403,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Welcome to Axichat'), findsOneWidget);
+  });
+
+  testWidgets('recovery dismissal does not suppress account welcome', (
+    tester,
+  ) async {
+    await _pumpEmailForwardingApp(
+      tester,
+      settingsCubit: _settingsCubit(recoveryWelcomeDismissed: true),
+      xmppService: _xmppService(jid: 'alice@axi.im'),
+      authenticationCubit: _authenticationCubit(
+        state: const AuthenticationComplete(),
+      ),
+      child: const AccountWelcomeGate(child: SizedBox.shrink()),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Axichat'), findsOneWidget);
+    expect(find.text('Set up account recovery'), findsNothing);
   });
 
   testWidgets('account welcome gate releases post-login hold after unmount', (
@@ -449,6 +526,7 @@ Future<void> _pumpEmailForwardingApp(
 
 _MockSettingsCubit _settingsCubit({
   SettingsState state = const SettingsState(),
+  bool accountWelcomeShown = false,
   bool recoveryWelcomeDismissed = false,
 }) {
   final settingsCubit = _MockSettingsCubit();
@@ -462,6 +540,12 @@ _MockSettingsCubit _settingsCubit({
       any(),
       accountJid: any(named: 'accountJid'),
     ),
+  ).thenAnswer((_) async {});
+  when(
+    () => settingsCubit.accountWelcomeShownFor(any()),
+  ).thenAnswer((_) async => accountWelcomeShown);
+  when(
+    () => settingsCubit.markAccountWelcomeShownFor(any()),
   ).thenAnswer((_) async {});
   when(() => settingsCubit.recoveryAvailableForAccount(any())).thenAnswer((
     invocation,
@@ -528,12 +612,16 @@ _MockXmppService _xmppService({
 
 _MockAuthenticationCubit _authenticationCubit({
   required AuthenticationState state,
+  String? currentEmailPassword = 'current-password',
 }) {
   final authenticationCubit = _MockAuthenticationCubit();
   when(() => authenticationCubit.state).thenReturn(state);
   when(
     () => authenticationCubit.stream,
   ).thenAnswer((_) => const Stream<AuthenticationState>.empty());
+  when(
+    () => authenticationCubit.currentEmailPasswordForAccount(any()),
+  ).thenAnswer((_) async => currentEmailPassword);
   when(
     () => authenticationCubit.releaseSignupPostLoginWorkHold(),
   ).thenAnswer((_) async {});

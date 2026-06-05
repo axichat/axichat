@@ -110,7 +110,10 @@ void main() {
         .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
         .single;
     expect(submittedField.controller?.text, 'wrong-password');
-    expect(find.text('Incorrect password. Please try again.'), findsOneWidget);
+    const message = 'Incorrect password. Please try again.';
+    expect(find.text(message), findsOneWidget);
+    _expectDestructiveText(tester, message);
+    _expectAbove(tester, find.text(message), find.byType(AxiTextFormField));
   });
 
   testWidgets('configured recovery email edit dialog can remove method', (
@@ -637,6 +640,10 @@ void main() {
         code: '123456',
       ),
     ).called(1);
+    const message = 'The code is not valid.';
+    expect(find.text(message), findsOneWidget);
+    _expectDestructiveText(tester, message);
+    _expectAbove(tester, find.text(message), find.byType(ShadInputOTP));
   });
 }
 
@@ -685,10 +692,25 @@ Future<void> _expectRecoveryEmailSetupError(
   await tester.pumpAndSettle();
 
   expect(find.text(message), findsOneWidget);
+  _expectDestructiveText(tester, message);
+  _expectAbove(tester, find.text(message), find.byType(AxiTextFormField));
   expect(
     find.text('Unable to reach the email server. Please try again.'),
     findsNothing,
   );
+}
+
+void _expectDestructiveText(WidgetTester tester, String message) {
+  final finder = find.text(message);
+  final text = tester.widget<Text>(finder);
+  expect(
+    text.style?.color,
+    ShadTheme.of(tester.element(finder)).colorScheme.destructive,
+  );
+}
+
+void _expectAbove(WidgetTester tester, Finder upper, Finder lower) {
+  expect(tester.getTopLeft(upper).dy, lessThan(tester.getTopLeft(lower).dy));
 }
 
 Future<void> _pumpRecoverySetupDialog(

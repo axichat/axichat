@@ -383,10 +383,10 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _RecoveryErrorText(errorText: _errorText),
             _RecoveryStepContent(
               step: _step,
               method: _method,
+              errorText: _errorText,
               usernameController: _usernameController,
               recoveryEmailController: _recoveryEmailController,
               codeController: _codeController,
@@ -435,12 +435,14 @@ class _RecoveryErrorText extends StatelessWidget {
     if (value == null || value.isEmpty) {
       return const SizedBox.shrink();
     }
+    final spacing = context.spacing;
     return Padding(
-      padding: EdgeInsets.all(context.spacing.s),
+      padding: EdgeInsets.only(bottom: spacing.s),
       child: Text(
         value,
-        textAlign: TextAlign.center,
-        style: context.textTheme.small,
+        style: context.textTheme.small.copyWith(
+          color: context.colorScheme.destructive,
+        ),
       ),
     );
   }
@@ -450,6 +452,7 @@ class _RecoveryStepContent extends StatelessWidget {
   const _RecoveryStepContent({
     required this.step,
     required this.method,
+    required this.errorText,
     required this.usernameController,
     required this.recoveryEmailController,
     required this.codeController,
@@ -460,6 +463,7 @@ class _RecoveryStepContent extends StatelessWidget {
 
   final _RecoveryStep step;
   final _RecoveryMethod? method;
+  final String? errorText;
   final TextEditingController usernameController;
   final TextEditingController recoveryEmailController;
   final TextEditingController codeController;
@@ -472,16 +476,19 @@ class _RecoveryStepContent extends StatelessWidget {
     return switch (step) {
       _RecoveryStep.method => _RecoveryUsernameFields(
         controller: usernameController,
+        errorText: errorText,
         enabled: enabled,
       ),
       _RecoveryStep.emailAddress => _RecoveryEmailFields(
         usernameController: usernameController,
         recoveryEmailController: recoveryEmailController,
+        errorText: errorText,
         enabled: enabled,
       ),
       _RecoveryStep.emailCode => _RecoveryCodeFields(
         description: context.l10n.recoveryNeutralEmailSent,
         controller: codeController,
+        errorText: errorText,
         enabled: enabled,
       ),
       _RecoveryStep.totpCode => Column(
@@ -495,6 +502,7 @@ class _RecoveryStepContent extends StatelessWidget {
           _RecoveryCodeFields(
             description: context.l10n.recoveryAuthenticatorCodeHint,
             controller: codeController,
+            errorText: errorText,
             enabled: enabled,
           ),
         ],
@@ -502,6 +510,7 @@ class _RecoveryStepContent extends StatelessWidget {
       _RecoveryStep.newPassword => _RecoveryNewPasswordFields(
         newPasswordController: newPasswordController,
         confirmController: newPasswordConfirmController,
+        errorText: errorText,
         enabled: enabled,
       ),
       _RecoveryStep.complete => Text(
@@ -515,36 +524,44 @@ class _RecoveryStepContent extends StatelessWidget {
 class _RecoveryUsernameFields extends StatelessWidget {
   const _RecoveryUsernameFields({
     required this.controller,
+    this.errorText,
     required this.enabled,
   });
 
   final TextEditingController controller;
+  final String? errorText;
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    return AxiTextFormField(
-      key: const ValueKey('recovery-username-field'),
-      autocorrect: false,
-      enabled: enabled,
-      controller: controller,
-      keyboardType: TextInputType.emailAddress,
-      textInputAction: TextInputAction.next,
-      placeholder: Text(context.l10n.authUsername),
-      trailing: const _RecoveryAxiImSuffix(),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._-]')),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RecoveryErrorText(errorText: errorText),
+        AxiTextFormField(
+          key: const ValueKey('recovery-username-field'),
+          autocorrect: false,
+          enabled: enabled,
+          controller: controller,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          placeholder: Text(context.l10n.authUsername),
+          trailing: const _RecoveryAxiImSuffix(),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9._-]')),
+          ],
+          validator: (text) {
+            final value = text.trim();
+            if (value.isEmpty) {
+              return context.l10n.authUsernameRequired;
+            }
+            if (!isAxiJid('$value@${EndpointConfig.axiImDomain}')) {
+              return context.l10n.recoveryAxiAccountRequired;
+            }
+            return null;
+          },
+        ),
       ],
-      validator: (text) {
-        final value = text.trim();
-        if (value.isEmpty) {
-          return context.l10n.authUsernameRequired;
-        }
-        if (!isAxiJid('$value@${EndpointConfig.axiImDomain}')) {
-          return context.l10n.recoveryAxiAccountRequired;
-        }
-        return null;
-      },
     );
   }
 }
@@ -567,11 +584,13 @@ class _RecoveryEmailFields extends StatelessWidget {
   const _RecoveryEmailFields({
     required this.usernameController,
     required this.recoveryEmailController,
+    required this.errorText,
     required this.enabled,
   });
 
   final TextEditingController usernameController;
   final TextEditingController recoveryEmailController;
+  final String? errorText;
   final bool enabled;
 
   @override
@@ -584,6 +603,7 @@ class _RecoveryEmailFields extends StatelessWidget {
           enabled: enabled,
         ),
         SizedBox(height: context.spacing.s),
+        _RecoveryErrorText(errorText: errorText),
         AxiTextFormField(
           autocorrect: false,
           enabled: enabled,
@@ -607,11 +627,13 @@ class _RecoveryCodeFields extends StatelessWidget {
   const _RecoveryCodeFields({
     required this.description,
     required this.controller,
+    required this.errorText,
     required this.enabled,
   });
 
   final String description;
   final TextEditingController controller;
+  final String? errorText;
   final bool enabled;
 
   @override
@@ -621,6 +643,7 @@ class _RecoveryCodeFields extends StatelessWidget {
       children: [
         Text(description, style: context.textTheme.muted),
         SizedBox(height: context.spacing.s),
+        _RecoveryErrorText(errorText: errorText),
         AxiOtpFormField(
           enabled: enabled,
           controller: controller,
@@ -644,11 +667,13 @@ class _RecoveryNewPasswordFields extends StatelessWidget {
   const _RecoveryNewPasswordFields({
     required this.newPasswordController,
     required this.confirmController,
+    required this.errorText,
     required this.enabled,
   });
 
   final TextEditingController newPasswordController;
   final TextEditingController confirmController;
+  final String? errorText;
   final bool enabled;
 
   @override
@@ -661,6 +686,7 @@ class _RecoveryNewPasswordFields extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         SizedBox(height: context.spacing.s),
+        _RecoveryErrorText(errorText: errorText),
         PasswordInput(
           enabled: enabled,
           controller: newPasswordController,

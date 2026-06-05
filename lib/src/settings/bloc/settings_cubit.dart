@@ -73,6 +73,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       CredentialStore.registerKey(_storedLoginJidKeyName);
   final RegisteredCredentialKey _backgroundMessagingPreferencesKey =
       CredentialStore.registerKey('background_messaging_by_address_v1');
+  final RegisteredCredentialKey _accountWelcomeShownKey =
+      CredentialStore.registerKey('account_welcome_shown_by_address_v1');
   final RegisteredCredentialKey _recoveryWelcomeDismissedKey =
       CredentialStore.registerKey('recovery_welcome_dismissed_by_address_v1');
   SettingsState _bootstrapState = const SettingsState();
@@ -307,6 +309,27 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     );
   }
 
+  Future<bool> accountWelcomeShownFor(String? accountJid) async {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return true;
+    }
+    final shown = await _readAccountWelcomeShown();
+    return shown.contains(normalized);
+  }
+
+  Future<void> markAccountWelcomeShownFor(String? accountJid) async {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    final shown = await _readAccountWelcomeShown();
+    if (shown.contains(normalized)) {
+      return;
+    }
+    await _writeAccountWelcomeShown({...shown, normalized});
+  }
+
   bool recoveryAvailableForAccount(String? accountJid) =>
       _normalizedAxiRecoveryAccountJid(accountJid) != null;
 
@@ -333,24 +356,23 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   Future<provisioning.RecoveryStatus?> recoveryStatus({
     required String? accountJid,
-    String? password,
+    required String password,
   }) async {
     final normalized = _normalizedAxiRecoveryAccountJid(accountJid);
     if (normalized == null) {
       return null;
     }
-    final normalizedPassword = password?.trim();
-    final passwordProvided =
-        normalizedPassword != null && normalizedPassword.isNotEmpty;
+    if (password.trim().isEmpty) {
+      return null;
+    }
     _log.info(
       'Loading recovery status: '
-      'accountDomain=${addressDomainPart(normalized) ?? ''} '
-      'passwordProvided=$passwordProvided',
+      'accountDomain=${addressDomainPart(normalized) ?? ''}',
     );
     try {
       final status = await _recoveryClient.recoveryStatus(
         email: normalized,
-        password: passwordProvided ? password : null,
+        password: password,
       );
       _log.info(
         'Loaded recovery status: '
@@ -1015,6 +1037,17 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   Future<Set<String>> _readRecoveryWelcomeDismissals() async {
     return _readDismissedAccounts(_recoveryWelcomeDismissedKey);
+  }
+
+  Future<Set<String>> _readAccountWelcomeShown() async {
+    return _readDismissedAccounts(_accountWelcomeShownKey);
+  }
+
+  Future<void> _writeAccountWelcomeShown(Set<String> shownAccounts) async {
+    await _writeDismissedAccounts(
+      key: _accountWelcomeShownKey,
+      dismissedAccounts: shownAccounts,
+    );
   }
 
   Future<void> _writeRecoveryWelcomeDismissals(

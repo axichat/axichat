@@ -80,16 +80,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                 UnregisterForm.title(context.l10n),
                 style: context.textTheme.h3,
               ),
-              state is AuthenticationUnregisterFailure
-                  ? Padding(
-                      padding: unregisterErrorPadding,
-                      child: Text(
-                        state.message.resolve(context.l10n),
-                        textAlign: TextAlign.center,
-                        style: context.textTheme.small,
-                      ),
-                    )
-                  : SizedBox(height: spacing.l),
+              SizedBox(height: spacing.l),
               if (passwordWasSkipped)
                 Padding(
                   padding: unregisterFieldPadding,
@@ -97,6 +88,17 @@ class _UnregisterFormState extends State<UnregisterForm> {
                     context.l10n.authDeviceOnlyPasswordManagedDeleteHint,
                     textAlign: TextAlign.center,
                     style: context.textTheme.small,
+                  ),
+                ),
+              if (state is AuthenticationUnregisterFailure)
+                Padding(
+                  padding: unregisterErrorPadding,
+                  child: Text(
+                    state.message.resolve(context.l10n),
+                    textAlign: TextAlign.center,
+                    style: context.textTheme.small.copyWith(
+                      color: context.colorScheme.destructive,
+                    ),
                   ),
                 ),
               if (!passwordWasSkipped)

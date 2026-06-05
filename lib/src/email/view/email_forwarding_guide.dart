@@ -607,11 +607,15 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
       return;
     }
     final settingsCubit = context.read<SettingsCubit>();
-    final showEmailOnboarding =
-        settingsCubit.state.endpointConfig.smtpEnabled &&
-        authState is AuthenticationCompleteFromSignup;
+    if (!_debugAlwaysShowWelcome &&
+        await settingsCubit.accountWelcomeShownFor(accountJid)) {
+      await authenticationCubit.releaseSignupPostLoginWorkHold();
+      return;
+    }
+    final showEmailOnboarding = settingsCubit.state.endpointConfig.smtpEnabled;
     final showRecoveryPrompt = await _shouldShowRecoverySetup(
       settingsCubit: settingsCubit,
+      authenticationCubit: authenticationCubit,
       accountJid: accountJid,
     );
     if (!mounted) {
@@ -623,6 +627,13 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
       return;
     }
     _dialogShownForAccount = accountJid;
+    if (!_debugAlwaysShowWelcome) {
+      await settingsCubit.markAccountWelcomeShownFor(accountJid);
+    }
+    if (!mounted) {
+      await authenticationCubit.releaseSignupPostLoginWorkHold();
+      return;
+    }
     try {
       await showFadeScaleDialog<void>(
         context: context,
@@ -655,6 +666,7 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
 
   Future<bool> _shouldShowRecoverySetup({
     required SettingsCubit settingsCubit,
+    required AuthenticationCubit authenticationCubit,
     required String accountJid,
   }) async {
     if (!settingsCubit.recoveryAvailableForAccount(accountJid)) {
@@ -663,8 +675,17 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
     if (await settingsCubit.recoveryWelcomeDismissedFor(accountJid)) {
       return false;
     }
+    final password = await authenticationCubit.currentEmailPasswordForAccount(
+      accountJid,
+    );
+    if (password == null) {
+      return false;
+    }
     try {
-      final status = await settingsCubit.recoveryStatus(accountJid: accountJid);
+      final status = await settingsCubit.recoveryStatus(
+        accountJid: accountJid,
+        password: password,
+      );
       return !(status?.hasRecoveryMethod ?? true);
     } on provisioning.EmailProvisioningApiException {
       return false;

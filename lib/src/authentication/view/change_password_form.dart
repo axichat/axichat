@@ -79,24 +79,16 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                 ChangePasswordForm.title(context.l10n),
                 style: context.textTheme.h3,
               ),
-              state is AuthenticationPasswordChangeSuccess
-                  ? Padding(
-                      padding: EdgeInsets.all(spacing.s),
-                      child: Text(
-                        state.message.resolve(context.l10n),
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : state is AuthenticationPasswordChangeFailure
-                  ? Padding(
-                      padding: EdgeInsets.all(spacing.s),
-                      child: Text(
-                        state.message.resolve(context.l10n),
-                        textAlign: TextAlign.center,
-                        style: context.textTheme.small,
-                      ),
-                    )
-                  : SizedBox(height: spacing.l),
+              if (state is AuthenticationPasswordChangeSuccess)
+                Padding(
+                  padding: EdgeInsets.all(spacing.s),
+                  child: Text(
+                    state.message.resolve(context.l10n),
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              else
+                SizedBox(height: spacing.l),
               if (passwordWasSkipped)
                 Padding(
                   padding: EdgeInsets.all(spacing.s),
@@ -104,6 +96,17 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     context.l10n.authDeviceOnlyPasswordManagedChangeHint,
                     textAlign: TextAlign.center,
                     style: context.textTheme.small,
+                  ),
+                ),
+              if (state is AuthenticationPasswordChangeFailure)
+                Padding(
+                  padding: EdgeInsets.all(spacing.s),
+                  child: Text(
+                    state.message.resolve(context.l10n),
+                    textAlign: TextAlign.center,
+                    style: context.textTheme.small.copyWith(
+                      color: context.colorScheme.destructive,
+                    ),
                   ),
                 ),
               if (!passwordWasSkipped)

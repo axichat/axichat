@@ -81,7 +81,7 @@ void main() {
         httpClient: MockClient((request) async {
           expect(request.url.path, '/v1/recovery/status');
           expect(jsonDecode(request.body), {
-            'username': 'alice',
+            'email': 'alice@axi.im',
             'password': 'password',
           });
           return http.Response(
@@ -127,7 +127,10 @@ void main() {
       }),
     );
 
-    final status = await client.recoveryStatus(email: 'alice@axi.im');
+    final status = await client.recoveryStatus(
+      email: 'alice@axi.im',
+      password: 'password',
+    );
 
     expect(status.recoveryEmailConfigured, isTrue);
     expect(status.recoveryEmail, isNull);
@@ -149,7 +152,10 @@ void main() {
       }),
     );
 
-    final status = await client.recoveryStatus(email: 'alice@axi.im');
+    final status = await client.recoveryStatus(
+      email: 'alice@axi.im',
+      password: 'password',
+    );
 
     expect(status.recoveryEmailConfigured, isTrue);
     expect(status.recoveryEmail, 'recovery@example.com');
@@ -181,7 +187,7 @@ void main() {
       );
 
       await client.createAccount(localpart: 'alice', password: 'password');
-      await client.recoveryStatus(email: 'alice@axi.im');
+      await client.recoveryStatus(email: 'alice@axi.im', password: 'password');
 
       expect(paths, ['/signup', '/v1/recovery/status']);
     },

@@ -316,7 +316,6 @@ class _AccountRecoverySettingsPageState
             onSubmit: _submitStatusPassword,
           )
         else ...[
-          _RecoverySettingsErrorText(errorText: _errorText),
           _RecoverySettingsMethodButton(
             iconData: LucideIcons.mail,
             title: context.l10n.recoveryEmailTitle,
@@ -347,6 +346,7 @@ class _AccountRecoverySettingsPageState
         ],
         if (status != null) ...[
           SizedBox(height: spacing.s),
+          _RecoverySettingsErrorText(errorText: _errorText),
           Align(
             alignment: Alignment.center,
             child: AxiButton.secondary(
@@ -757,16 +757,17 @@ class _RecoveryEmailSetupFields extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RecoverySettingsErrorText(errorText: errorText),
           if (!challengeStarted) ...[
             if (showPasswordField) ...[
+              _RecoverySettingsErrorText(errorText: errorText),
               PasswordInput(
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
               ),
               SizedBox(height: spacing.s),
-            ],
+            ] else
+              _RecoverySettingsErrorText(errorText: errorText),
             AxiTextFormField(
               enabled: enabled,
               autocorrect: false,
@@ -784,13 +785,15 @@ class _RecoveryEmailSetupFields extends StatelessWidget {
             ),
             SizedBox(height: spacing.s),
             if (showPasswordField) ...[
+              _RecoverySettingsErrorText(errorText: errorText),
               PasswordInput(
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
               ),
               SizedBox(height: spacing.s),
-            ],
+            ] else
+              _RecoverySettingsErrorText(errorText: errorText),
             AxiOtpFormField(
               enabled: enabled,
               controller: codeController,
@@ -1038,19 +1041,22 @@ class _RecoveryTotpSetupFields extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _RecoverySettingsErrorText(errorText: errorText),
           if (currentSetup == null)
-            if (showPasswordField)
+            if (showPasswordField) ...[
+              _RecoverySettingsErrorText(errorText: errorText),
               PasswordInput(
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
-              )
-            else
+              ),
+            ] else ...[
               Text(
                 context.l10n.recoveryTotpSetupStartHint,
                 style: context.textTheme.muted,
-              )
+              ),
+              SizedBox(height: spacing.s),
+              _RecoverySettingsErrorText(errorText: errorText),
+            ]
           else ...[
             Text(
               context.l10n.recoveryTotpSetupHint,
@@ -1058,6 +1064,7 @@ class _RecoveryTotpSetupFields extends StatelessWidget {
             ),
             SizedBox(height: spacing.s),
             if (showPasswordField) ...[
+              _RecoverySettingsErrorText(errorText: errorText),
               PasswordInput(
                 enabled: enabled,
                 controller: passwordController,
@@ -1074,6 +1081,8 @@ class _RecoveryTotpSetupFields extends StatelessWidget {
               style: context.textTheme.muted,
             ),
             SizedBox(height: spacing.s),
+            if (!showPasswordField)
+              _RecoverySettingsErrorText(errorText: errorText),
             AxiOtpFormField(
               enabled: enabled,
               controller: codeController,
@@ -1144,12 +1153,14 @@ class _RecoverySettingsErrorText extends StatelessWidget {
     if (value == null || value.isEmpty) {
       return const SizedBox.shrink();
     }
+    final spacing = context.spacing;
     return Padding(
-      padding: EdgeInsets.all(context.spacing.s),
+      padding: EdgeInsets.only(bottom: spacing.s),
       child: Text(
         value,
-        textAlign: TextAlign.center,
-        style: context.textTheme.small,
+        style: context.textTheme.small.copyWith(
+          color: context.colorScheme.destructive,
+        ),
       ),
     );
   }

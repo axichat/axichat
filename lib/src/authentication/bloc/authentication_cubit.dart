@@ -1137,6 +1137,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return trimmed;
   }
 
+  Future<String?> currentEmailPasswordForAccount(String accountJid) async {
+    final normalized =
+        normalizedAddressValue(accountJid) ?? accountJid.bareJid?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    final password = await _resolveDeviceOnlyPassword(jid: normalized);
+    if (password == null || password.trim().isEmpty) {
+      return null;
+    }
+    return password;
+  }
+
   Future<String?> _resolveDeviceOnlyPassword({required String jid}) async {
     final skippedRaw = await _readStoredSkippedPasswordRaw();
     if (skippedRaw != null) {
