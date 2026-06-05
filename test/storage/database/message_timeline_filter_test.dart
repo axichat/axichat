@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -122,6 +124,76 @@ void main() {
     expect(allWithContact.map((msg) => msg.stanzaID), contains('share-1'));
     expect(allWithContact.map((msg) => msg.stanzaID), contains('direct-1'));
   });
+
+  test(
+    'email chat accounts keep multiple Delta chats for one chat account',
+    () async {
+      final chat = Chat(
+        jid: 'multi-delta@example.com',
+        title: 'Multi Delta',
+        type: ChatType.chat,
+        transport: MessageTransport.email,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        deltaChatId: 101,
+        emailAddress: 'multi-delta@example.com',
+      );
+      await db.createChat(chat);
+
+      await db.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: 101,
+      );
+      await db.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: 202,
+      );
+
+      expect(
+        await db.getDeltaChatIdsForAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+        [202, 101],
+      );
+      expect(
+        (await db.getChatByDeltaChatId(
+          101,
+          accountId: DeltaAccountDefaults.legacyId,
+        ))?.jid,
+        chat.jid,
+      );
+      expect(
+        (await db.getChatByDeltaChatId(
+          202,
+          accountId: DeltaAccountDefaults.legacyId,
+        ))?.jid,
+        chat.jid,
+      );
+
+      await db.deleteEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: 101,
+      );
+
+      expect(
+        await db.getDeltaChatIdsForAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+        [202],
+      );
+      expect(
+        await db.getChatByDeltaChatId(
+          101,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+        isNull,
+      );
+    },
+  );
 
   test(
     'message copy insert is idempotent for duplicate delta message',
@@ -483,6 +555,81 @@ void main() {
   );
 
   test(
+    'accepted invite markers update the invite without replacing the summary',
+    () async {
+      const selfJid = 'me@example.com';
+      const peerJid = 'peer@example.com';
+      final chat = Chat(
+        jid: peerJid,
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      );
+      await db.createChat(chat);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'invite-summary-source',
+          senderJid: selfJid,
+          chatJid: peerJid,
+          timestamp: DateTime.utc(2024, 1, 1, 12),
+          body: 'You have been invited to a group chat',
+          pseudoMessageType: PseudoMessageType.mucInvite,
+          pseudoMessageData: const {
+            'roomJid': 'room@conference.example.com',
+            'token': 'invite-token',
+            'inviter': selfJid,
+            'invitee': peerJid,
+          },
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'invite-summary-accepted',
+          senderJid: peerJid,
+          chatJid: peerJid,
+          timestamp: DateTime.utc(2024, 1, 1, 13),
+          body: 'Invite accepted',
+          pseudoMessageType: PseudoMessageType.mucInviteAccepted,
+          pseudoMessageData: const {
+            'roomJid': 'room@conference.example.com',
+            'token': 'invite-token',
+            'inviter': selfJid,
+            'invitee': peerJid,
+            'accepted': true,
+          },
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      final afterAcceptance = await db.getChat(peerJid);
+      expect(
+        afterAcceptance?.lastMessage,
+        'You have been invited to a group chat',
+      );
+      expect(afterAcceptance?.unreadCount, 0);
+      expect(
+        await db.getLastMessageForChat(
+          peerJid,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+        isNotNull,
+      );
+      expect(
+        (await db.getLastMessageForChat(
+          peerJid,
+          filter: MessageTimelineFilter.allWithContact,
+        ))?.stanzaID,
+        'invite-summary-source',
+      );
+    },
+  );
+
+  test(
     'createChat rebuilds invite lastMessage from persisted messages',
     () async {
       const peerJid = 'peer@example.com';
@@ -602,6 +749,153 @@ void main() {
       final repaired = await db.getChat(contact.jid);
       expect(repaired?.lastMessage, 'much newer actual message');
       expect(repaired?.lastChangeTimestamp, DateTime.utc(2024, 1, 7, 18));
+    },
+  );
+
+  test(
+    'repairGeneratedEmailAttachmentCaptionBodies clears legacy attachment caption bodies',
+    () async {
+      final contact = Chat(
+        jid: 'legacy-caption@axi.im',
+        title: 'Legacy Caption',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 9),
+        deltaChatId: 9,
+        emailAddress: 'legacy-caption@example.com',
+      );
+      await db.createChat(contact);
+      await db.saveFileMetadata(
+        const FileMetadataData(id: 'invoice-file', filename: 'invoice.png'),
+      );
+      await db.saveFileMetadata(
+        const FileMetadataData(id: 'receipt-file', filename: 'receipt.png'),
+      );
+      await db.saveMessage(
+        Message(
+          stanzaID: 'legacy-caption-message',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 9, 9),
+          body: '\u{1F4CE} invoice.png (Unknown size)',
+          encryptionProtocol: EncryptionProtocol.none,
+          fileMetadataID: 'invoice-file',
+          pseudoMessageData: const {'emailAttachmentCaption': true},
+          deltaChatId: contact.deltaChatId,
+          deltaMsgId: 90,
+        ),
+      );
+      await db.saveMessage(
+        Message(
+          stanzaID: 'legacy-unmarked-caption-message',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 9, 10),
+          body: '\u{1F4CE} receipt.png (Unknown size)',
+          encryptionProtocol: EncryptionProtocol.none,
+          fileMetadataID: 'receipt-file',
+          deltaChatId: contact.deltaChatId,
+          deltaMsgId: 91,
+        ),
+      );
+
+      await db.repairGeneratedEmailAttachmentCaptionBodies();
+
+      final repaired = await db.getMessageByStanzaID('legacy-caption-message');
+      final repairedUnmarked = await db.getMessageByStanzaID(
+        'legacy-unmarked-caption-message',
+      );
+      final repairedChat = await db.getChat(contact.jid);
+      expect(repaired?.body, isNull);
+      expect(repaired?.pseudoMessageData, isNull);
+      expect(repairedUnmarked?.body, isNull);
+      expect(repairedChat?.lastMessage, 'Attachment: receipt.png');
+    },
+  );
+
+  test(
+    'repairGeneratedEmailAttachmentCaptionBodies preserves real text bodies',
+    () async {
+      final contact = Chat(
+        jid: 'real-caption@axi.im',
+        title: 'Real Caption',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 10),
+        deltaChatId: 10,
+        emailAddress: 'real-caption@example.com',
+      );
+      await db.createChat(contact);
+      await db.saveFileMetadata(
+        const FileMetadataData(id: 'real-file', filename: 'invoice.png'),
+      );
+      await db.saveMessage(
+        Message(
+          stanzaID: 'real-caption-message',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 10, 9),
+          body: 'Here is the signed invoice.',
+          encryptionProtocol: EncryptionProtocol.none,
+          fileMetadataID: 'real-file',
+          pseudoMessageData: const {'emailAttachmentCaption': true},
+          deltaChatId: contact.deltaChatId,
+          deltaMsgId: 100,
+        ),
+      );
+      await db.saveMessage(
+        Message(
+          stanzaID: 'real-paperclip-caption-message',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 10, 10),
+          body: '\u{1F4CE} invoice.png (signed)',
+          encryptionProtocol: EncryptionProtocol.none,
+          fileMetadataID: 'real-file',
+          deltaChatId: contact.deltaChatId,
+          deltaMsgId: 101,
+        ),
+      );
+
+      await db.repairGeneratedEmailAttachmentCaptionBodies();
+
+      final repaired = await db.getMessageByStanzaID('real-caption-message');
+      final repairedPaperclip = await db.getMessageByStanzaID(
+        'real-paperclip-caption-message',
+      );
+      final repairedChat = await db.getChat(contact.jid);
+      expect(repaired?.body, 'Here is the signed invoice.');
+      expect(repaired?.pseudoMessageData, isNull);
+      expect(repairedPaperclip?.body, '\u{1F4CE} invoice.png (signed)');
+      expect(repairedChat?.lastMessage, '\u{1F4CE} invoice.png (signed)');
+    },
+  );
+
+  test(
+    'calendar task share without body uses task title as last message',
+    () async {
+      final contact = Chat(
+        jid: 'task-share@axi.im',
+        title: 'Task Share',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 8),
+      );
+      final task = CalendarTask.create(title: 'Review launch plan');
+      await db.createChat(contact);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'task-share-message',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 8, 9),
+          body: '',
+          encryptionProtocol: EncryptionProtocol.none,
+          pseudoMessageType: PseudoMessageType.calendarTaskIcs,
+          pseudoMessageData: CalendarTaskIcsMessage(task: task).toJson(),
+        ),
+      );
+
+      final updatedChat = await db.getChat(contact.jid);
+      expect(updatedChat?.lastMessage, 'Review launch plan');
     },
   );
 

@@ -224,6 +224,214 @@ void main() {
     },
   );
 
+  test('email RFC siblings count as one unread message', () async {
+    final chat = Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 10,
+      emailAddress: 'peer@example.com',
+    );
+    await db.createChat(chat);
+    await db.saveFileMetadata(
+      const FileMetadataData(id: 'rfc-file-one', filename: 'first.png'),
+    );
+    await db.saveFileMetadata(
+      const FileMetadataData(id: 'rfc-file-two', filename: 'second.png'),
+    );
+
+    for (final message in [
+      Message(
+        stanzaID: 'rfc-body-top',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Reply text',
+        originID: 'message@example.com',
+        timestamp: DateTime.utc(2026, 1, 1, 10),
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 100,
+      ),
+      Message(
+        stanzaID: 'rfc-attachment-one',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: '\u{1F4CE} first.png',
+        originID: 'message@example.com',
+        timestamp: DateTime.utc(2026, 1, 1, 10, 1),
+        fileMetadataID: 'rfc-file-one',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 101,
+      ),
+      Message(
+        stanzaID: 'rfc-body-bottom',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Forwarded text',
+        originID: 'message@example.com',
+        timestamp: DateTime.utc(2026, 1, 1, 10, 2),
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 102,
+      ),
+      Message(
+        stanzaID: 'rfc-attachment-two',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: '\u{1F4CE} second.png',
+        originID: 'message@example.com',
+        timestamp: DateTime.utc(2026, 1, 1, 10, 3),
+        fileMetadataID: 'rfc-file-two',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 103,
+      ),
+    ]) {
+      await db.saveMessage(message, selfJid: 'self@example.com');
+    }
+
+    final unreadCount = await db.countUnreadMessagesForChat(
+      chat.jid,
+      emailSelfJid: 'self@example.com',
+    );
+
+    expect(unreadCount, 1);
+    expect((await db.getChat(chat.jid))?.unreadCount, 1);
+  });
+
+  test(
+    'email attachment fragments without RFC origins count independently',
+    () async {
+      final chat = Chat(
+        jid: 'fragment-peer@example.com',
+        title: 'Fragment Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2026, 1),
+        transport: MessageTransport.email,
+        deltaChatId: 12,
+        emailAddress: 'fragment-peer@example.com',
+      );
+      await db.createChat(chat);
+      await db.saveFileMetadata(
+        const FileMetadataData(id: 'fragment-file-one', filename: 'first.png'),
+      );
+      await db.saveFileMetadata(
+        const FileMetadataData(id: 'fragment-file-two', filename: 'second.png'),
+      );
+      final timestamp = DateTime.utc(2026, 1, 1, 10);
+
+      for (final message in [
+        Message(
+          stanzaID: 'fragment-body',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'Reply text',
+          originID: 'fragment@example.com',
+          timestamp: timestamp,
+          deltaChatId: chat.deltaChatId,
+          deltaMsgId: 120,
+        ),
+        Message(
+          stanzaID: 'fragment-attachment-one',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: '\u{1F4CE} first.png',
+          timestamp: timestamp,
+          fileMetadataID: 'fragment-file-one',
+          deltaChatId: chat.deltaChatId,
+          deltaMsgId: 121,
+        ),
+        Message(
+          stanzaID: 'fragment-attachment-two',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: '\u{1F4CE} second.png',
+          timestamp: timestamp,
+          fileMetadataID: 'fragment-file-two',
+          deltaChatId: chat.deltaChatId,
+          deltaMsgId: 122,
+        ),
+      ]) {
+        await db.saveMessage(message, selfJid: 'self@example.com');
+      }
+
+      final unreadCount = await db.countUnreadMessagesForChat(
+        chat.jid,
+        emailSelfJid: 'self@example.com',
+      );
+
+      expect(unreadCount, 3);
+      expect((await db.getChat(chat.jid))?.unreadCount, 3);
+    },
+  );
+
+  test('late RFC origin hydration repairs split email unread count', () async {
+    final chat = Chat(
+      jid: 'late-peer@example.com',
+      title: 'Late Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 11,
+      emailAddress: 'late-peer@example.com',
+    );
+    await db.createChat(chat);
+    await db.saveFileMetadata(
+      const FileMetadataData(id: 'late-file', filename: 'late.png'),
+    );
+
+    for (final message in [
+      Message(
+        stanzaID: 'late-body',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Late body',
+        timestamp: DateTime.utc(2026, 1, 1, 10),
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 110,
+      ),
+      Message(
+        stanzaID: 'late-attachment',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: '\u{1F4CE} late.png',
+        timestamp: DateTime.utc(2026, 1, 1, 10, 1),
+        fileMetadataID: 'late-file',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 111,
+      ),
+      Message(
+        stanzaID: 'late-quoted-body',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: 'Late quoted body',
+        timestamp: DateTime.utc(2026, 1, 1, 10, 2),
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 112,
+      ),
+    ]) {
+      await db.saveMessage(message, selfJid: 'self@example.com');
+    }
+
+    expect((await db.getChat(chat.jid))?.unreadCount, 3);
+
+    for (final stanzaId in [
+      'late-body',
+      'late-attachment',
+      'late-quoted-body',
+    ]) {
+      final message = await db.getMessageByStanzaID(stanzaId);
+      await db.updateMessage(message!.copyWith(originID: 'late@example.com'));
+    }
+
+    final repaired = await db.repairUnreadCountForChat(
+      chat.jid,
+      emailSelfJid: 'self@example.com',
+    );
+
+    expect(repaired, 1);
+    expect((await db.getChat(chat.jid))?.unreadCount, 1);
+  });
+
   test(
     'deleting an own unread-shaped row preserves peer unread count',
     () async {

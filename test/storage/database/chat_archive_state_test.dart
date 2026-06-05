@@ -183,6 +183,10 @@ void main() {
       await database.getDeltaChatIdForAccount(chatJid: jid, deltaAccountId: 1),
       202,
     );
+    expect(
+      await database.getDeltaChatIdsForAccount(chatJid: jid, deltaAccountId: 1),
+      [202, 201],
+    );
   });
 
   test('startup repairs a restored chat left with an archive suffix', () async {

@@ -188,11 +188,6 @@ abstract interface class XmppDatabase implements Database {
     required int deltaAccountId,
   });
 
-  Future<List<Message>> getEmailMessagesForOriginRepair({
-    required int deltaAccountId,
-    required int limit,
-  });
-
   Stream<List<Reaction>> watchReactionsForChat(String jid);
 
   Future<List<Reaction>> getReactionsForChat(String jid);
@@ -3386,29 +3381,6 @@ WHERE transport = ${MessageTransport.email.index}
   }
 
   @override
-  Future<List<Message>> getEmailMessagesForOriginRepair({
-    required int deltaAccountId,
-    required int limit,
-  }) {
-    if (limit <= 0) {
-      return Future.value(const <Message>[]);
-    }
-    return (select(messages)
-          ..where(
-            (tbl) =>
-                tbl.deltaAccountId.equals(deltaAccountId) &
-                tbl.deltaMsgId.isNotNull(),
-          )
-          ..orderBy([
-            (tbl) => OrderingTerm.desc(tbl.timestamp),
-            (tbl) => OrderingTerm.desc(tbl.deltaMsgId),
-            (tbl) => OrderingTerm.asc(tbl.stanzaID),
-          ])
-          ..limit(limit))
-        .get();
-  }
-
-  @override
   Stream<List<Reaction>> watchReactionsForChat(String jid) =>
       reactionsAccessor.watchChat(jid);
 
@@ -3902,6 +3874,12 @@ WHERE transport = ${MessageTransport.email.index}
             : cleaned;
       }
     }
+    if (pseudoMessageType == PseudoMessageType.calendarTaskIcs) {
+      final calendarTaskPreview = _calendarTaskPreview(pseudoMessageData);
+      if (calendarTaskPreview != null) {
+        return calendarTaskPreview;
+      }
+    }
     if (trimmedSubject?.isNotEmpty == true) {
       return trimmedSubject;
     }
@@ -3920,6 +3898,19 @@ WHERE transport = ${MessageTransport.email.index}
       return 'Attachment';
     }
     return 'Attachment: $filename';
+  }
+
+  String? _calendarTaskPreview(Map<String, dynamic>? pseudoMessageData) {
+    final message = CalendarTaskIcsMessage.tryParse(
+      pseudoMessageData == null
+          ? null
+          : Map<String, dynamic>.from(pseudoMessageData),
+    );
+    final title = message?.task.title.trim();
+    if (title == null || title.isEmpty) {
+      return null;
+    }
+    return title;
   }
 
   Future<void> _updateChatSummaryIfNewer({

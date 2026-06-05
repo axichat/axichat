@@ -210,6 +210,51 @@ void main() {
     },
   );
 
+  test('origin lookup only normalizes bracketed email Message-IDs', () async {
+    await database.createChat(
+      Chat(
+        jid: _chatJid,
+        title: 'Chat',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2026, 3, 11),
+      ),
+    );
+    await database.saveMessage(
+      Message(
+        stanzaID: 'plain-bracketed',
+        senderJid: _chatJid,
+        chatJid: _chatJid,
+        body: 'Plain bracketed origin',
+        originID: '<plain-origin>',
+        timestamp: DateTime.utc(2026, 3, 11, 12),
+      ),
+      selfJid: 'self@axi.im',
+    );
+    await database.saveMessage(
+      Message(
+        stanzaID: 'email-bracketed',
+        senderJid: _chatJid,
+        chatJid: _chatJid,
+        body: 'Email bracketed origin',
+        originID: '<message@example.com>',
+        timestamp: DateTime.utc(2026, 3, 11, 12, 1),
+      ),
+      selfJid: 'self@axi.im',
+    );
+
+    expect(
+      await database.getMessageByOriginID('plain-origin', chatJid: _chatJid),
+      isNull,
+    );
+    expect(
+      (await database.getMessageByOriginID(
+        'message@example.com',
+        chatJid: _chatJid,
+      ))?.stanzaID,
+      'email-bracketed',
+    );
+  });
+
   test(
     'important-only search returns collection entries without a text query',
     () async {
