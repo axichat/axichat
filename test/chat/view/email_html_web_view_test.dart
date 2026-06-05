@@ -575,6 +575,88 @@ void main() {
       expect(layout.useFixedHeight, isTrue);
       expect(layout.preserveMeasuredHeight, isFalse);
     });
+
+    test(
+      'keeps WebView under a state-maintaining wrapper while visibility flips',
+      () {
+        final loadingVisibility = emailHtmlWebViewVisibilityForTesting(
+          hasWebView: true,
+          paintWebView: false,
+        );
+        final loadedVisibility = emailHtmlWebViewVisibilityForTesting(
+          hasWebView: true,
+          paintWebView: true,
+        );
+
+        expect(loadingVisibility.includeWebView, isTrue);
+        expect(loadingVisibility.visible, isFalse);
+        expect(loadingVisibility.maintainState, isTrue);
+        expect(loadedVisibility.includeWebView, isTrue);
+        expect(loadedVisibility.visible, isTrue);
+        expect(loadedVisibility.maintainState, isTrue);
+      },
+    );
+
+    test(
+      'does not include a WebView wrapper before prepared content exists',
+      () {
+        final visibility = emailHtmlWebViewVisibilityForTesting(
+          hasWebView: false,
+          paintWebView: false,
+        );
+
+        expect(visibility.includeWebView, isFalse);
+        expect(visibility.visible, isFalse);
+        expect(visibility.maintainState, isFalse);
+      },
+    );
+  });
+
+  group('load measurement scheduling', () {
+    test('schedules the first finish for a WebView load', () {
+      expect(
+        emailHtmlWebViewShouldScheduleLoadMeasurementsForTesting(
+          webViewGeneration: 1,
+          loadEpoch: 3,
+          scheduledWebViewGeneration: null,
+          scheduledLoadEpoch: null,
+        ),
+        isTrue,
+      );
+    });
+
+    test('skips repeated finish callbacks for the same WebView load', () {
+      expect(
+        emailHtmlWebViewShouldScheduleLoadMeasurementsForTesting(
+          webViewGeneration: 1,
+          loadEpoch: 3,
+          scheduledWebViewGeneration: 1,
+          scheduledLoadEpoch: 3,
+        ),
+        isFalse,
+      );
+    });
+
+    test('schedules again for a new generation or load epoch', () {
+      expect(
+        emailHtmlWebViewShouldScheduleLoadMeasurementsForTesting(
+          webViewGeneration: 2,
+          loadEpoch: 3,
+          scheduledWebViewGeneration: 1,
+          scheduledLoadEpoch: 3,
+        ),
+        isTrue,
+      );
+      expect(
+        emailHtmlWebViewShouldScheduleLoadMeasurementsForTesting(
+          webViewGeneration: 1,
+          loadEpoch: 4,
+          scheduledWebViewGeneration: 1,
+          scheduledLoadEpoch: 3,
+        ),
+        isTrue,
+      );
+    });
   });
 
   group('height commit gate', () {

@@ -251,6 +251,49 @@ emailHtmlWebViewLoadingLayoutForTesting({
   isLoading: isLoading,
 );
 
+({bool includeWebView, bool visible, bool maintainState})
+_resolveEmailHtmlWebViewVisibility({
+  required bool hasWebView,
+  required bool paintWebView,
+}) => (
+  includeWebView: hasWebView,
+  visible: hasWebView && paintWebView,
+  maintainState: hasWebView,
+);
+
+@visibleForTesting
+({bool includeWebView, bool visible, bool maintainState})
+emailHtmlWebViewVisibilityForTesting({
+  required bool hasWebView,
+  required bool paintWebView,
+}) => _resolveEmailHtmlWebViewVisibility(
+  hasWebView: hasWebView,
+  paintWebView: paintWebView,
+);
+
+bool _emailHtmlWebViewShouldScheduleLoadMeasurements({
+  required int webViewGeneration,
+  required int loadEpoch,
+  required int? scheduledWebViewGeneration,
+  required int? scheduledLoadEpoch,
+}) {
+  return scheduledWebViewGeneration != webViewGeneration ||
+      scheduledLoadEpoch != loadEpoch;
+}
+
+@visibleForTesting
+bool emailHtmlWebViewShouldScheduleLoadMeasurementsForTesting({
+  required int webViewGeneration,
+  required int loadEpoch,
+  required int? scheduledWebViewGeneration,
+  required int? scheduledLoadEpoch,
+}) => _emailHtmlWebViewShouldScheduleLoadMeasurements(
+  webViewGeneration: webViewGeneration,
+  loadEpoch: loadEpoch,
+  scheduledWebViewGeneration: scheduledWebViewGeneration,
+  scheduledLoadEpoch: scheduledLoadEpoch,
+);
+
 ({double? contentHeight, bool isLoading, bool committed})
 _resolveEmailHtmlContentHeightAfterReport({
   required double? currentContentHeight,
@@ -1308,6 +1351,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   Size? _lastLinuxPlatformViewSize;
   Offset? _lastLinuxPlatformViewOffset;
   double? _linuxFitLockedHeight;
+  int? _lastProgressLogBucket;
+  int? _scheduledMeasurementWebViewGeneration;
+  int? _scheduledMeasurementLoadEpoch;
 
   void _traceMeasurement(
     String event, {
@@ -1327,6 +1373,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     bool? layoutStable,
     int? layoutSequence,
     Size? contentSize,
+    String? details,
+    int? delayMs,
+    int? elapsedMs,
+    int? htmlLength,
+    int? preparedHtmlLength,
+    int? inputKeyHash,
   }) {
     if (!_debugTraceMeasurements) {
       return;
@@ -1336,9 +1388,19 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       'mode=${widget.contentMode.name}',
       'platform=${defaultTargetPlatform.name}',
       'generation=${webViewGeneration ?? _webViewGeneration}',
+      'loadEpoch=$_loadEpoch',
+      'heightEpoch=$_heightMeasurementEpoch',
+      'loading=$_isLoading',
+      'prepared=${_preparedHtmlData != null}',
+      'controller=${_controller != null}',
       'contentHeight=${_contentHeight?.ceil()}',
       'resolvedHeight=${_resolvedHeight.ceil()}',
       if (progress != null) 'progress=$progress',
+      if (delayMs != null) 'delayMs=$delayMs',
+      if (elapsedMs != null) 'elapsedMs=$elapsedMs',
+      if (htmlLength != null) 'htmlLength=$htmlLength',
+      if (preparedHtmlLength != null) 'preparedHtmlLength=$preparedHtmlLength',
+      if (inputKeyHash != null) 'inputKeyHash=$inputKeyHash',
       if (measuredHeight != null) 'measuredHeight=${measuredHeight.ceil()}',
       if (scrollHeight != null) 'scrollHeight=${scrollHeight.ceil()}',
       if (viewportHeight != null) 'viewportHeight=${viewportHeight.ceil()}',
@@ -1354,6 +1416,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       if (layoutSequence != null) 'layoutSequence=$layoutSequence',
       if (contentSize != null)
         'contentSize=${contentSize.width.ceil()}x${contentSize.height.ceil()}',
+      if (details != null) 'details=$details',
     ];
     debugPrint('[EmailHtmlWebView] ${fields.join(' ')}');
   }
@@ -1381,12 +1444,16 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
 
   @override
   void dispose() {
+    _traceMeasurement('dispose');
     _webViewGeneration++;
     _heightMeasurementEpoch++;
     _controller = null;
     _activeWebViewId = null;
     _webViewGenerationsById.clear();
     _documentHeightObserverInstalled = false;
+    _lastProgressLogBucket = null;
+    _scheduledMeasurementWebViewGeneration = null;
+    _scheduledMeasurementLoadEpoch = null;
     super.dispose();
   }
 
@@ -1398,9 +1465,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget._mode != widget._mode ||
         oldWidget.useHybridComposition != widget.useHybridComposition ||
         oldWidget.contentMode != widget.contentMode) {
+      _traceMeasurement('widget-update-reset-controller');
       _controller = null;
       _activeWebViewId = null;
       _webViewGenerationsById.clear();
+      _lastProgressLogBucket = null;
+      _scheduledMeasurementWebViewGeneration = null;
+      _scheduledMeasurementLoadEpoch = null;
     }
     final layoutChanged =
         oldWidget.html != widget.html ||
@@ -1409,6 +1480,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget._mode != widget._mode ||
         oldWidget.contentMode != widget.contentMode;
     if (layoutChanged) {
+      _traceMeasurement('widget-update-reset-layout');
       _heightMeasurementEpoch++;
       _contentHeight = null;
       _documentHeightObserverInstalled = false;
@@ -1425,6 +1497,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget.backgroundColor != widget.backgroundColor ||
         oldWidget.textColor != widget.textColor ||
         oldWidget.linkColor != widget.linkColor) {
+      _traceMeasurement('widget-update-refresh-prepared-html');
       _preparedHtmlInputKey = null;
       _documentHeightObserverInstalled = false;
       _linuxFitLockedHeight = null;
@@ -1450,9 +1523,22 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       widget.backgroundColor.toARGB32(),
     ].join(':');
     if (_preparedHtmlInputKey == inputKey) {
+      _traceMeasurement(
+        'prepare-skip-same-input',
+        inputKeyHash: inputKey.hashCode,
+        htmlLength: widget.html.length,
+      );
       return;
     }
     _preparedHtmlInputKey = inputKey;
+    _traceMeasurement(
+      'prepare-queued',
+      inputKeyHash: inputKey.hashCode,
+      htmlLength: widget.html.length,
+      details:
+          'reload=$reload preserveMeasuredHeight=$preserveMeasuredHeight '
+          'brightness=${brightness.name}',
+    );
     unawaited(
       _prepareHtmlData(
         inputKey: inputKey,
@@ -1484,6 +1570,15 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     }
     _documentHeightObserverInstalled = false;
     final themeStyle = _buildThemeStyle(brightness: brightness);
+    final prepareTimer = Stopwatch()..start();
+    _traceMeasurement(
+      'prepare-start',
+      inputKeyHash: inputKey.hashCode,
+      htmlLength: widget.html.length,
+      details:
+          'reload=$reload preserveMeasuredHeight=$preserveMeasuredHeight '
+          'brightness=${brightness.name}',
+    );
     String preparedHtmlData;
     try {
       preparedHtmlData = await compute(_prepareEmailHtmlData, {
@@ -1492,7 +1587,19 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         'themeStyle': themeStyle,
         'contentMode': widget.contentMode.name,
       });
-    } on Exception {
+      _traceMeasurement(
+        'prepare-complete',
+        elapsedMs: prepareTimer.elapsedMilliseconds,
+        inputKeyHash: inputKey.hashCode,
+        preparedHtmlLength: preparedHtmlData.length,
+      );
+    } on Exception catch (error) {
+      _traceMeasurement(
+        'prepare-compute-exception',
+        elapsedMs: prepareTimer.elapsedMilliseconds,
+        inputKeyHash: inputKey.hashCode,
+        details: error.runtimeType.toString(),
+      );
       if (widget.contentMode == EmailHtmlContentMode.originalPassive) {
         preparedHtmlData = _buildOriginalPassiveEmailHtmlShell(
           html: widget.html,
@@ -1505,15 +1612,38 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         );
         preparedHtmlData = _injectEmailThemeStyle(fallbackHtml, themeStyle);
       }
+      _traceMeasurement(
+        'prepare-fallback-complete',
+        elapsedMs: prepareTimer.elapsedMilliseconds,
+        inputKeyHash: inputKey.hashCode,
+        preparedHtmlLength: preparedHtmlData.length,
+      );
     }
     if (!mounted || _preparedHtmlInputKey != inputKey) {
+      _traceMeasurement(
+        'prepare-discarded',
+        elapsedMs: prepareTimer.elapsedMilliseconds,
+        inputKeyHash: inputKey.hashCode,
+        details:
+            'mounted=$mounted activeInputKeyHash='
+            '${_preparedHtmlInputKey?.hashCode}',
+      );
       return;
     }
     _preparedHtmlData = preparedHtmlData;
+    _traceMeasurement(
+      'prepare-applied',
+      elapsedMs: prepareTimer.elapsedMilliseconds,
+      inputKeyHash: inputKey.hashCode,
+      preparedHtmlLength: preparedHtmlData.length,
+      details: 'reload=$reload',
+    );
     if (reload) {
       if (_controller == null) {
+        _traceMeasurement('prepare-reload-without-controller');
         setState(() {});
       } else {
+        _traceMeasurement('prepare-reload-load-html');
         await _loadHtml();
       }
       return;
@@ -1527,9 +1657,20 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     final webViewGeneration = controller == null
         ? null
         : _webViewGenerationForController(controller);
-    if (controller == null ||
-        preparedHtmlData == null ||
-        !_canUseController(controller, webViewGeneration)) {
+    if (controller == null) {
+      _traceMeasurement('load-html-skip', details: 'missing-controller');
+      return;
+    }
+    if (preparedHtmlData == null) {
+      _traceMeasurement('load-html-skip', details: 'missing-prepared-html');
+      return;
+    }
+    if (!_canUseController(controller, webViewGeneration)) {
+      _traceMeasurement(
+        'load-html-skip',
+        webViewGeneration: webViewGeneration,
+        details: 'stale-controller',
+      );
       return;
     }
     if (mounted) {
@@ -1539,8 +1680,18 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       });
     }
     if (!_canUseController(controller, webViewGeneration)) {
+      _traceMeasurement(
+        'load-html-skip',
+        webViewGeneration: webViewGeneration,
+        details: 'stale-controller-after-loading-state',
+      );
       return;
     }
+    _traceMeasurement(
+      'load-html-start',
+      webViewGeneration: webViewGeneration,
+      preparedHtmlLength: preparedHtmlData.length,
+    );
     _scheduleLoadCompletionFallback(
       controller,
       webViewGeneration: webViewGeneration!,
@@ -1549,6 +1700,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       data: preparedHtmlData,
       baseUrl: _emailWebViewUri,
       historyUrl: _emailWebViewUri,
+    );
+    _traceMeasurement(
+      'load-html-requested',
+      webViewGeneration: webViewGeneration,
     );
   }
 
@@ -1563,6 +1718,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _webViewGenerationsById
       ..clear()
       ..[webViewId] = webViewGeneration;
+    _lastProgressLogBucket = null;
+    _scheduledMeasurementWebViewGeneration = null;
+    _scheduledMeasurementLoadEpoch = null;
     return webViewGeneration;
   }
 
@@ -1767,8 +1925,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
 
   void _markLoaded() {
     if (!mounted || !_isLoading) {
+      _traceMeasurement(
+        'mark-loaded-skip',
+        details: 'mounted=$mounted loading=$_isLoading',
+      );
       return;
     }
+    _traceMeasurement('mark-loaded');
     setState(() {
       _isLoading = false;
     });
@@ -1782,10 +1945,24 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       return;
     }
     _traceMeasurement('finish-load', webViewGeneration: webViewGeneration);
-    _scheduleContentHeightMeasurements(
-      controller: controller,
+    if (_emailHtmlWebViewShouldScheduleLoadMeasurements(
       webViewGeneration: webViewGeneration,
-    );
+      loadEpoch: _loadEpoch,
+      scheduledWebViewGeneration: _scheduledMeasurementWebViewGeneration,
+      scheduledLoadEpoch: _scheduledMeasurementLoadEpoch,
+    )) {
+      _scheduledMeasurementWebViewGeneration = webViewGeneration;
+      _scheduledMeasurementLoadEpoch = _loadEpoch;
+      _scheduleContentHeightMeasurements(
+        controller: controller,
+        webViewGeneration: webViewGeneration,
+      );
+    } else {
+      _traceMeasurement(
+        'finish-load-measurements-skip',
+        webViewGeneration: webViewGeneration,
+      );
+    }
     _markLoaded();
     if (defaultTargetPlatform == TargetPlatform.linux) {
       _scheduleLinuxPlatformViewResize();
@@ -1811,15 +1988,35 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     required int webViewGeneration,
   }) {
     final loadEpoch = _loadEpoch;
+    _traceMeasurement(
+      'fallback-scheduled',
+      webViewGeneration: webViewGeneration,
+      details: 'epoch=$loadEpoch',
+    );
 
     Future<void> finishAfter(Duration delay) async {
       await Future<void>.delayed(delay);
-      if (!_canUseController(controller, webViewGeneration) ||
+      final canUseController = _canUseController(controller, webViewGeneration);
+      if (!canUseController ||
           loadEpoch != _loadEpoch ||
           !_isLoading ||
           _preparedHtmlData == null) {
+        _traceMeasurement(
+          'fallback-skip',
+          webViewGeneration: webViewGeneration,
+          delayMs: delay.inMilliseconds,
+          details:
+              'canUseController=$canUseController scheduledEpoch=$loadEpoch '
+              'currentEpoch=$_loadEpoch loading=$_isLoading '
+              'prepared=${_preparedHtmlData != null}',
+        );
         return;
       }
+      _traceMeasurement(
+        'fallback-fire',
+        webViewGeneration: webViewGeneration,
+        delayMs: delay.inMilliseconds,
+      );
       _finishWebViewLoad(controller, webViewGeneration: webViewGeneration);
     }
 
@@ -2027,7 +2224,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           );
         }
       }
-    } on Exception {
+    } on Exception catch (error) {
+      _traceMeasurement(
+        'dom-measure-exception',
+        webViewGeneration: webViewGeneration,
+        details: error.runtimeType.toString(),
+      );
       return _emailDomContentHeightMetrics();
     }
     return _emailDomContentHeightMetrics();
@@ -2054,8 +2256,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         'document-observer-installed',
         webViewGeneration: webViewGeneration,
       );
-    } on Exception {
+    } on Exception catch (error) {
       _documentHeightObserverInstalled = false;
+      _traceMeasurement(
+        'document-observer-exception',
+        webViewGeneration: webViewGeneration,
+        details: error.runtimeType.toString(),
+      );
     }
   }
 
@@ -2523,21 +2730,27 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
               }
             },
             onProgressChanged: (controller, progress) {
-              if (progress >= 100) {
-                final webViewGeneration = _webViewGenerationForController(
-                  controller,
+              final webViewGeneration = _webViewGenerationForController(
+                controller,
+              );
+              if (webViewGeneration == null) {
+                return;
+              }
+              final progressLogBucket = progress >= 100 ? 100 : progress ~/ 25;
+              if (_lastProgressLogBucket != progressLogBucket ||
+                  progress >= 100) {
+                _lastProgressLogBucket = progressLogBucket;
+                _traceMeasurement(
+                  'progress',
+                  webViewGeneration: webViewGeneration,
+                  progress: progress,
                 );
-                if (webViewGeneration != null) {
-                  _traceMeasurement(
-                    'progress',
-                    webViewGeneration: webViewGeneration,
-                    progress: progress,
-                  );
-                  _finishWebViewLoad(
-                    controller,
-                    webViewGeneration: webViewGeneration,
-                  );
-                }
+              }
+              if (progress >= 100) {
+                _finishWebViewLoad(
+                  controller,
+                  webViewGeneration: webViewGeneration,
+                );
               }
             },
             onContentSizeChanged: (controller, oldContentSize, newContentSize) {
@@ -2611,6 +2824,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                 controller,
               );
               if (!_canUseController(controller, webViewGeneration)) return;
+              _traceMeasurement(
+                'load-error',
+                webViewGeneration: webViewGeneration,
+                details:
+                    'mainFrame=${request.isForMainFrame} type=${error.type}',
+              );
               if (_preparedHtmlData != null || request.isForMainFrame == true) {
                 _finishWebViewLoad(
                   controller,
@@ -2623,6 +2842,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                 controller,
               );
               if (!_canUseController(controller, webViewGeneration)) return;
+              _traceMeasurement(
+                'load-http-error',
+                webViewGeneration: webViewGeneration,
+                details:
+                    'mainFrame=${request.isForMainFrame} '
+                    'status=${errorResponse.statusCode}',
+              );
               if (_preparedHtmlData != null || request.isForMainFrame == true) {
                 _finishWebViewLoad(
                   controller,
@@ -2639,6 +2865,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       hasContentHeight: _contentHeight != null,
       isLoading: _isLoading,
     );
+    final webViewVisibility = _resolveEmailHtmlWebViewVisibility(
+      hasWebView: webView != null,
+      paintWebView: loadingLayout.paintWebView,
+    );
 
     final webViewStack = Stack(
       children: [
@@ -2652,19 +2882,17 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
             maintainSize: true,
             child: widget.loadingFallback!,
           ),
-        if (webView != null)
+        if (webView != null && webViewVisibility.includeWebView)
           Positioned.fill(
             child: IgnorePointer(
-              ignoring: !loadingLayout.paintWebView,
-              child: loadingLayout.paintWebView
-                  ? webView
-                  : Visibility(
-                      visible: false,
-                      maintainState: true,
-                      maintainAnimation: true,
-                      maintainSize: true,
-                      child: webView,
-                    ),
+              ignoring: !webViewVisibility.visible,
+              child: Visibility(
+                visible: webViewVisibility.visible,
+                maintainState: webViewVisibility.maintainState,
+                maintainAnimation: true,
+                maintainSize: true,
+                child: webView,
+              ),
             ),
           ),
         if (loadingLayout.showLoadingOverlay) loadingOverlay,
