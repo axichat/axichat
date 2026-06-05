@@ -98,6 +98,7 @@ const Map<String, int> _registeredSurfaceCounts = <String, int>{
   'lib/src/attachments/view/pending_attachment_preview.dart': 1,
   'lib/src/authentication/view/endpoint_config_sheet.dart': 1,
   'lib/src/authentication/view/logout_button.dart': 1,
+  'lib/src/authentication/view/recovery_dialog.dart': 1,
   'lib/src/calendar/view/availability/availability_request_sheet.dart': 2,
   'lib/src/calendar/view/availability/availability_viewer.dart': 2,
   'lib/src/calendar/view/availability/calendar_availability_editor_sheet.dart':
@@ -148,6 +149,7 @@ const Map<String, int> _registeredSurfaceCounts = <String, int>{
   'lib/src/profile/view/contact_export_sheet.dart': 1,
   'lib/src/profile/view/profile_screen.dart': 1,
   'lib/src/profile/view/profile_tile.dart': 1,
+  'lib/src/settings/view/account_recovery_settings.dart': 5,
   'lib/src/settings/view/settings_controls.dart': 6,
 };
 

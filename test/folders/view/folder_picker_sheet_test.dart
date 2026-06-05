@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/folders/view/folder_picker_sheet.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -16,6 +17,17 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(
+      const ContactDirectoryEntry(
+        address: 'fallback@example.com',
+        hasXmppRoster: false,
+        hasEmailContact: false,
+        emailNativeIds: [],
+      ),
+    );
+  });
+
   testWidgets('add-to-folder sheet uses an edge-to-edge scaffold surface', (
     tester,
   ) async {
@@ -151,6 +163,101 @@ void main() {
     expect(fieldRect.top - headerDividerRect.bottom, 8);
     expect(footerDividerRect.top - fieldRect.bottom, 8);
   });
+
+  testWidgets(
+    'showContactFolderRuleSheet survives opener disposal and calls contacts cubit',
+    (tester) async {
+      final foldersCubit = _MockFoldersCubit();
+      final contactsCubit = _MockContactsCubit();
+      final settingsCubit = _settingsCubit();
+      final showOpener = ValueNotifier<bool>(true);
+      addTearDown(showOpener.dispose);
+
+      final contact = ContactDirectoryEntry(
+        address: 'alpha@example.com',
+        hasXmppRoster: true,
+        hasEmailContact: false,
+        emailNativeIds: const [],
+        xmppTitle: 'Alpha',
+      );
+      final collection = MessageCollectionEntry(
+        id: 'Projects',
+        title: null,
+        isSystem: false,
+        sortOrder: 0,
+        createdAt: DateTime.utc(2026),
+        updatedAt: DateTime.utc(2026),
+        active: true,
+      );
+      when(() => foldersCubit.state).thenReturn(
+        FoldersState(
+          collectionId: SystemMessageCollection.important.id,
+          chatJid: null,
+          collections: [collection],
+          memberships: const [],
+          contactFolderRules: const <String, String>{},
+          items: null,
+          visibleItems: null,
+        ),
+      );
+      when(
+        () => foldersCubit.stream,
+      ).thenAnswer((_) => const Stream<FoldersState>.empty());
+      when(
+        () => contactsCubit.state,
+      ).thenReturn(ContactsState(items: [contact], visibleItems: [contact]));
+      when(
+        () => contactsCubit.stream,
+      ).thenAnswer((_) => const Stream<ContactsState>.empty());
+      when(
+        () => contactsCubit.setContactFolderRule(
+          contact: any(named: 'contact'),
+          collectionId: any(named: 'collectionId'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await _pumpFolderApp(
+        tester,
+        settingsCubit: settingsCubit,
+        foldersCubit: foldersCubit,
+        contactsCubit: contactsCubit,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: showOpener,
+          builder: (context, visible, child) {
+            if (!visible) {
+              return const SizedBox.shrink();
+            }
+            return Center(
+              child: AxiButton.primary(
+                onPressed: () => unawaited(
+                  showContactFolderRuleSheet(context, contact: contact),
+                ),
+                child: const Text('Open folder rule'),
+              ),
+            );
+          },
+        ),
+      );
+
+      await tester.tap(find.text('Open folder rule'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      showOpener.value = false;
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Projects'));
+      await tester.pump();
+
+      verify(
+        () => contactsCubit.setContactFolderRule(
+          contact: contact,
+          collectionId: 'Projects',
+        ),
+      ).called(1);
+    },
+  );
 }
 
 Future<void> _pumpFolderApp(
@@ -158,6 +265,7 @@ Future<void> _pumpFolderApp(
   required SettingsCubit settingsCubit,
   required FoldersCubit foldersCubit,
   ChatBloc? chatBloc,
+  ContactsCubit? contactsCubit,
   required Widget child,
 }) {
   return tester.pumpWidget(
@@ -191,6 +299,8 @@ Future<void> _pumpFolderApp(
               BlocProvider<FoldersCubit>.value(value: foldersCubit),
               if (chatBloc != null)
                 BlocProvider<ChatBloc>.value(value: chatBloc),
+              if (contactsCubit != null)
+                BlocProvider<ContactsCubit>.value(value: contactsCubit),
             ],
             child: Scaffold(body: child),
           ),
@@ -205,6 +315,9 @@ class _MockFoldersCubit extends MockCubit<FoldersState>
 
 class _MockChatBloc extends MockBloc<ChatEvent, ChatState>
     implements ChatBloc {}
+
+class _MockContactsCubit extends MockCubit<ContactsState>
+    implements ContactsCubit {}
 
 SettingsCubit _settingsCubit() {
   final settingsCubit = _MockSettingsCubit();

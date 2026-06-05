@@ -23,6 +23,12 @@ void main() {
 
 const Map<String, String> _registeredDivergentSurfaceOwners = <String, String>{
   'openComposeDraft': 'test/draft/view/compose_draft_context_test.dart',
+  'showAccountRecoveryDialog':
+      'test/authentication/view/recovery_dialog_context_test.dart',
+  'showRecoveryEmailSetupDialog':
+      'test/settings/view/account_recovery_settings_context_test.dart',
+  'showRecoveryTotpSetupDialog':
+      'test/settings/view/account_recovery_settings_context_test.dart',
   'AvatarEditorRoute': 'test/avatar/view/avatar_editor_context_test.dart',
   'ArchivesRoute': 'test/chats/view/archives_context_test.dart',
   'AttachmentGalleryRoute':
@@ -59,8 +65,7 @@ const Map<String, String> _registeredDivergentSurfaceOwners = <String, String>{
       'test/calendar/view/tasks/calendar_task_copy_context_test.dart',
   'showCalendarExportFormatSheet':
       'test/calendar/view/tasks/calendar_transfer_context_test.dart',
-  'RoomAvatarEditorSheet.show':
-      'test/muc/view/room_avatar_editor_context_test.dart',
+  'RoomAvatarEditorSheet.show': 'test/muc/view/room_members_sheet_test.dart',
   'showTransportChoiceDialog':
       'test/common/ui/transport_choice_dialog_context_test.dart',
   'showLinkActionDialog': 'test/common/ui/link_action_dialog_context_test.dart',
