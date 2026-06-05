@@ -98,7 +98,6 @@ _resolveTimelineMessageChromeActions({
     onShareRequested: onShareRequested,
     onAddToCalendarRequested: onAddToCalendarRequested,
     onDetailsRequested: onDetailsRequested,
-    onStartMultiSelectRequested: onStartMultiSelectRequested,
     onResendRequested: onResendRequested,
     onEditRequested: onEditRequested,
     onAddToFolderRequested: onAddToFolderRequested,
@@ -117,7 +116,6 @@ _resolveTimelineMessageChromeActions({
     onAddToCalendar: callbacks.onAddToCalendar,
     onDetails: callbacks.onDetails,
     replyLoading: callbacks.replyLoading,
-    onSelect: callbacks.onSelect,
     onResend: callbacks.onResend,
     resendUsesSendAgainLabel: callbacks.resendUsesSendAgainLabel,
     resendLoading: callbacks.resendLoading,
@@ -174,6 +172,7 @@ _resolveTimelineMessageRowDecorations({
   required double avatarContentInset,
   required Widget actionBar,
   required Widget? reactionManager,
+  required VoidCallback? onBubbleTap,
 }) {
   final spacing = context.spacing;
   final recipientHeadroom = showRecipientCutout ? spacing.m : 0.0;
@@ -210,10 +209,11 @@ _resolveTimelineMessageRowDecorations({
           bubbleExtraChildren: bubbleExtraChildren,
           bubbleExtraConstraints: bubbleExtraConstraints,
           extraShadows: bubbleShadows,
+          onTap: onBubbleTap,
         );
   final senderLabel = _senderLabelForTimelineMessage(
     context: context,
-    shouldShow: !_chatTimelineItemsShouldChain(currentItem, previous),
+    shouldShow: !chatTimelineItemsShouldChain(currentItem, previous),
     isSelfBubble: self,
     hasAvatarSlot: hasAvatarSlot,
     avatarContentInset: avatarContentInset,
@@ -495,6 +495,7 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
       avatarContentInset: shellData.avatarContentInset,
       actionBar: actionBar,
       reactionManager: reactionManager,
+      onBubbleTap: onBubbleTap,
     );
     return _ChatTimelineMessageRowView(
       messageId: messageModel.stanzaID,

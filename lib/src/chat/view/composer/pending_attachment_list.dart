@@ -143,7 +143,7 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     final pending = widget.pending;
     Widget preview;
     if (pending.isPreparing) {
-      preview = _PendingAttachmentSkeleton(pending: pending);
+      preview = const _PendingAttachmentSkeleton();
     } else {
       preview = FutureBuilder<FileTypeReport>(
         future: _resolveTypeReport(pending.attachment),
@@ -449,17 +449,12 @@ class _PendingFileAttachment extends StatelessWidget {
 }
 
 class _PendingAttachmentSkeleton extends StatelessWidget {
-  const _PendingAttachmentSkeleton({required this.pending});
-
-  final PendingAttachment pending;
+  const _PendingAttachmentSkeleton();
 
   @override
   Widget build(BuildContext context) {
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    if (pending.attachment.isImage) {
-      return _PendingImageSkeleton(animationDuration: animationDuration);
-    }
-    return _PendingFileSkeleton(animationDuration: animationDuration);
+    return _PendingImageSkeleton(animationDuration: animationDuration);
   }
 }
 
@@ -484,122 +479,6 @@ class _PendingImageSkeleton extends StatelessWidget {
       child: ClipPath(
         clipper: ShapeBorderClipper(shape: resolvedShape),
         child: _ShimmerSurface(animationDuration: animationDuration),
-      ),
-    );
-  }
-}
-
-class _PendingFileSkeleton extends StatelessWidget {
-  const _PendingFileSkeleton({required this.animationDuration});
-
-  final Duration animationDuration;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final borderRadius = BorderRadius.circular(context.radii.squircle);
-    final iconExtent = sizing.iconButtonSize;
-    final iconRadius = context.radii.container;
-    final lineHeight = sizing.progressIndicatorBarHeight;
-    final primaryLineWidth = sizing.menuMaxWidth - spacing.xl;
-    final secondaryLineWidth = sizing.menuMaxWidth - spacing.xxl;
-    final actionWidth = sizing.iconButtonSize;
-    return Container(
-      constraints: BoxConstraints(
-        minWidth: sizing.menuMaxWidth - spacing.xl,
-        maxWidth: sizing.menuMaxWidth,
-      ),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: borderRadius,
-        border: Border.all(
-          color: context.borderSide.color,
-          width: context.borderSide.width,
-        ),
-      ),
-      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: iconExtent,
-                height: iconExtent,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(iconRadius),
-                  child: _ShimmerSurface(animationDuration: animationDuration),
-                ),
-              ),
-              SizedBox(width: spacing.m),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      height: sizing.buttonHeightSm,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          context.radii.container,
-                        ),
-                        child: _ShimmerSurface(
-                          animationDuration: animationDuration,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: spacing.s),
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: primaryLineWidth,
-                          height: lineHeight,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              context.radii.container,
-                            ),
-                            child: _ShimmerSurface(
-                              animationDuration: animationDuration,
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: spacing.s),
-                        SizedBox(
-                          width: secondaryLineWidth,
-                          height: lineHeight,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                              context.radii.container,
-                            ),
-                            child: _ShimmerSurface(
-                              animationDuration: animationDuration,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: spacing.m),
-          Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(
-              width: actionWidth,
-              height: actionWidth,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(context.radii.squircle),
-                child: _ShimmerSurface(animationDuration: animationDuration),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

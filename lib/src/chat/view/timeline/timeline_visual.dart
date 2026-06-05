@@ -222,14 +222,30 @@ class _MessageExtraItem extends StatelessWidget {
     super.key,
     required this.child,
     required this.shape,
+    this.onTap,
     this.onLongPress,
     this.onSecondaryTapUp,
   });
 
   final Widget child;
   final ShapeBorder shape;
+  final VoidCallback? onTap;
   final GestureLongPressCallback? onLongPress;
   final GestureTapUpCallback? onSecondaryTapUp;
+
+  _MessageExtraItem withTapFallback(VoidCallback? fallback) {
+    if (onTap != null || fallback == null) {
+      return this;
+    }
+    return _MessageExtraItem(
+      key: key,
+      shape: shape,
+      onTap: fallback,
+      onLongPress: onLongPress,
+      onSecondaryTapUp: onSecondaryTapUp,
+      child: child,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -238,15 +254,20 @@ class _MessageExtraItem extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: child,
     );
-    if (onLongPress == null && onSecondaryTapUp == null) {
+    if (onTap == null && onLongPress == null && onSecondaryTapUp == null) {
       return clippedChild;
     }
-    return GestureDetector(
+    final gestureChild = GestureDetector(
       behavior: HitTestBehavior.translucent,
+      onTap: onTap,
       onLongPress: onLongPress,
       onSecondaryTapUp: onSecondaryTapUp,
       child: clippedChild,
     );
+    if (onTap == null) {
+      return gestureChild;
+    }
+    return MouseRegion(cursor: SystemMouseCursors.click, child: gestureChild);
   }
 }
 
@@ -277,12 +298,14 @@ class _MessageExtrasColumn extends StatelessWidget {
     required this.shadowValue,
     required this.shadows,
     required this.crossAxisAlignment,
+    this.onItemTap,
   });
 
   final List<Widget> children;
   final double shadowValue;
   final List<BoxShadow> shadows;
   final CrossAxisAlignment crossAxisAlignment;
+  final VoidCallback? onItemTap;
 
   @override
   Widget build(BuildContext context) {
@@ -297,11 +320,12 @@ class _MessageExtrasColumn extends StatelessWidget {
         return child;
       }
       if (child is _MessageExtraItem) {
+        final extraItem = child.withTapFallback(onItemTap);
         return _MessageExtraShadow(
-          key: child.key,
-          shape: child.shape,
+          key: extraItem.key,
+          shape: extraItem.shape,
           shadows: resolvedShadows,
-          child: child,
+          child: extraItem,
         );
       }
       return child;
@@ -1330,7 +1354,6 @@ class _MessageActionBar extends StatelessWidget {
     required this.onAddToCalendar,
     required this.onDetails,
     this.replyLoading = false,
-    this.onSelect,
     this.onResend,
     this.resendUsesSendAgainLabel = false,
     this.resendLoading = false,
@@ -1352,7 +1375,6 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback onAddToCalendar;
   final VoidCallback onDetails;
   final bool replyLoading;
-  final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final bool resendUsesSendAgainLabel;
   final bool resendLoading;
@@ -1450,12 +1472,6 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionDetails,
         onPressed: onDetails,
       ),
-      if (onSelect != null)
-        ContextActionButton(
-          icon: Icon(LucideIcons.squareCheck, size: iconSize),
-          label: l10n.chatActionSelect,
-          onPressed: onSelect,
-        ),
     ];
     return Wrap(
       spacing: scaled(spacing.s),

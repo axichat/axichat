@@ -72,6 +72,21 @@ class _ChatTopPanelTransition extends StatelessWidget {
   }
 }
 
+class _ChatBottomSafeAreaSpacer extends StatelessWidget {
+  const _ChatBottomSafeAreaSpacer();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      minimum: EdgeInsets.only(bottom: context.spacing.s),
+      child: const SizedBox.shrink(),
+    );
+  }
+}
+
 class _UnknownSenderBanner extends StatefulWidget {
   const _UnknownSenderBanner({
     required this.readOnly,
@@ -123,6 +138,7 @@ class _UnknownSenderBannerState extends State<_UnknownSenderBanner> {
             chat.type != ChatType.chat ||
             chat.spam ||
             chat.isAxichatWelcomeThread ||
+            chat.isAxiImServerAnnouncementThread ||
             chat.defaultTransport.isEmail) {
           return const SizedBox.shrink();
         }
@@ -820,10 +836,14 @@ class _ChatScaffoldBody extends StatelessWidget {
                             : null,
                       );
                       bottomContent = const SizedBox.shrink();
+                    } else if (chatEntity?.isAxiImServerAnnouncementThread ==
+                        true) {
+                      owner._ensureRecipientBarHeightCleared();
+                      bottomContent = const _ChatBottomSafeAreaSpacer();
                     } else if (readOnly) {
                       owner._ensureRecipientBarHeightCleared();
                       composerOverlayBanner = const _ReadOnlyComposerBanner();
-                      bottomContent = const SizedBox.shrink();
+                      bottomContent = const _ChatBottomSafeAreaSpacer();
                     } else {
                       final visibilityLabel = owner._recipientVisibilityLabel(
                         chat: state.chat,

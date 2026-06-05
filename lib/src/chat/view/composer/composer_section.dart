@@ -2044,7 +2044,13 @@ class _ComposerBottomOverlay extends StatelessWidget {
         key: ValueKey<String?>(quotedMessage.stanzaID),
         senderLabel: quotedSenderLabel,
         previewText:
-            previewTextForMessage(quotedMessage) ??
+            previewTextForMessage(
+              quotedMessage,
+              attachmentPreviewFallback: _quotedAttachmentPreviewFallbackText(
+                quotedMessage,
+                context.l10n,
+              ),
+            ) ??
             context.l10n.chatQuotedNoContent,
         isSelf: quotedIsSelf,
         onClear: onClearQuote,
@@ -2078,4 +2084,15 @@ class _ComposerBottomOverlay extends StatelessWidget {
       ],
     );
   }
+}
+
+String? _quotedAttachmentPreviewFallbackText(
+  Message message,
+  AppLocalizations l10n,
+) {
+  final metadataId = message.fileMetadataID?.trim();
+  if (metadataId == null || metadataId.isEmpty) {
+    return null;
+  }
+  return l10n.chatAttachmentFallbackLabel;
 }

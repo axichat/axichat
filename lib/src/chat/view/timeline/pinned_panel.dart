@@ -700,17 +700,18 @@ class _PinnedMessageTile extends StatelessWidget {
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
         : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
+    final hasVisibleEmailHtmlContent = _emailHtmlHasVisibleTimelineContent(
+      normalizedHtmlBody: normalizedHtmlBody,
+      normalizedHtmlText: normalizedHtmlText,
+    );
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
     final messageText = renderedText;
-    final metadataIdForCaption = attachmentIds.isNotEmpty
-        ? attachmentIds.first
-        : effectiveMessage?.fileMetadataID;
-    final bool hasAttachmentCaption =
+    final bool showsAttachmentOnlySurface =
         shouldRenderTextContent &&
         messageText.isEmpty &&
-        metadataIdForCaption != null &&
-        metadataIdForCaption.isNotEmpty;
+        !hasVisibleEmailHtmlContent &&
+        attachmentIds.isNotEmpty;
     final bool hasVisibleEmailText =
         messageText.isNotEmpty || subjectLabel.isNotEmpty;
     final bool shouldPreferRichEmailHtml =
@@ -723,7 +724,8 @@ class _PinnedMessageTile extends StatelessWidget {
     final bool shouldRenderInlineEmailHtmlBody =
         isEmailMessage &&
         shouldRenderTextContent &&
-        !hasAttachmentCaption &&
+        !showsAttachmentOnlySurface &&
+        hasVisibleEmailHtmlContent &&
         normalizedHtmlBody != null &&
         (!hasVisibleEmailText || shouldPreferRichEmailHtml);
     final contentChildren = <Widget>[];
@@ -853,30 +855,6 @@ class _PinnedMessageTile extends StatelessWidget {
       if (messageError.isNone &&
           !isInviteMessage &&
           !isInviteRevocationMessage &&
-          hasAttachmentCaption) {
-        final metadata = metadataFor(metadataIdForCaption);
-        final filename = metadata?.filename.trim() ?? _emptyText;
-        final displayFilename = filename.isNotEmpty
-            ? filename
-            : l10n.chatAttachmentFallbackLabel;
-        final sizeBytes = metadata?.sizeBytes;
-        final sizeLabel = sizeBytes != null && sizeBytes > 0
-            ? formatBytes(sizeBytes, l10n)
-            : l10n.chatAttachmentUnknownSize;
-        final caption = l10n.chatAttachmentCaption(displayFilename, sizeLabel);
-        contentChildren.add(
-          DynamicInlineText(
-            key: ValueKey(previewItemId),
-            text: TextSpan(text: caption, style: baseTextStyle),
-            details: detailSpans,
-            detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-            onLinkTap: onMessageLinkTap,
-            onLinkLongPress: onMessageLinkTap,
-          ),
-        );
-      } else if (messageError.isNone &&
-          !isInviteMessage &&
-          !isInviteRevocationMessage &&
           shouldRenderInlineEmailHtmlBody) {
         final preparedHtmlBody =
             HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
@@ -897,16 +875,16 @@ class _PinnedMessageTile extends StatelessWidget {
               onLinkTap: onMessageLinkTap,
             ),
           );
-        }
-        contentChildren.add(
-          Padding(
-            padding: EdgeInsets.only(top: spacing.xs),
-            child: ChatInlineDetails(
-              details: detailSpans,
-              detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+          contentChildren.add(
+            Padding(
+              padding: EdgeInsets.only(top: spacing.xs),
+              child: ChatInlineDetails(
+                details: detailSpans,
+                detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else if (messageError.isNone &&
           !isInviteMessage &&
           !isInviteRevocationMessage &&
@@ -1195,6 +1173,10 @@ class _PinnedMessageTile extends StatelessWidget {
         ? null
         : _QuotedMessagePreview(
             message: quotedMessage,
+            attachmentPreviewText: _quotedAttachmentPreviewFallbackText(
+              quotedMessage,
+              context.l10n,
+            ),
             senderLabel: resolveQuotedSenderLabel(context, quotedMessage),
             isSelf: isSelf,
           );

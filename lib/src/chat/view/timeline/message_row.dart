@@ -519,6 +519,7 @@ class _ChatTimelineMessageExtrasView extends StatelessWidget {
     required this.bubbleExtraChildren,
     required this.bubbleExtraConstraints,
     required this.extraShadows,
+    this.onTap,
   });
 
   final bool self;
@@ -528,6 +529,7 @@ class _ChatTimelineMessageExtrasView extends StatelessWidget {
   final List<Widget> bubbleExtraChildren;
   final BoxConstraints bubbleExtraConstraints;
   final List<BoxShadow> extraShadows;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -553,6 +555,7 @@ class _ChatTimelineMessageExtrasView extends StatelessWidget {
             crossAxisAlignment: self
                 ? CrossAxisAlignment.end
                 : CrossAxisAlignment.start,
+            onItemTap: onTap,
             children: extras,
           ),
         );

@@ -38,7 +38,8 @@ class _ChatSettingsButtons extends StatelessWidget {
         ? l10n.chatSignatureHintEnabled
         : l10n.chatSignatureHintDisabled;
     final String signatureWarning = l10n.chatSignatureHintWarning;
-    final bool showAttachmentToggle = chat.type != ChatType.note;
+    final bool showAttachmentToggle =
+        chat.defaultTransport.isXmpp && chat.type != ChatType.note;
     final bool canRenameContact =
         chat.type == ChatType.chat && !chat.isAxichatWelcomeThread;
     final bool isSpamChat = chat.spam;

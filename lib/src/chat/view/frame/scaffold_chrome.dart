@@ -107,7 +107,10 @@ class _ChatCalendarScope extends StatelessWidget {
     if (!calendarAvailable ||
         currentChat == null ||
         currentCoordinator == null ||
-        currentStorage == null) {
+        currentStorage == null ||
+        !currentChat.supportsChatCalendarForAccount(
+          accountJid: xmppService.myJid,
+        )) {
       return child;
     }
     return BlocProvider<ChatCalendarBloc>(
@@ -155,11 +158,16 @@ class _ChatCalendarPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentChat = chat;
-    if (!calendarAvailable || currentChat == null) {
+    final locate = context.read;
+    if (!calendarAvailable ||
+        currentChat == null ||
+        !currentChat.supportsChatCalendarForAccount(
+          accountJid: locate<XmppService>().myJid,
+        )) {
       return const SizedBox.shrink();
     }
     return BlocProvider<CalendarBloc>.value(
-      value: context.watch<ChatCalendarBloc>(),
+      value: locate<ChatCalendarBloc>(),
       child: ChatCalendarWidget(
         chat: currentChat,
         surfacePopEnabled: surfacePopEnabled,
@@ -380,7 +388,8 @@ class _ChatScaffoldLayout extends StatelessWidget {
             !readOnly &&
             chatEntity != null &&
             chatEntity!.type == ChatType.chat &&
-            !chatEntity!.isAxichatWelcomeThread;
+            !chatEntity!.isAxichatWelcomeThread &&
+            !chatEntity!.isAxiImServerAnnouncementThread;
         final statusLabel = item?.status?.trim() ?? '';
         final addressLabel = isWelcomeChat || jid == null
             ? _emptyText
@@ -753,25 +762,16 @@ class _ChatScaffoldAppBar extends StatelessWidget
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (canRenameContact)
-                                  AxiPlainHeaderButton(
-                                    onPressed: owner._promptContactRename,
-                                    semanticLabel:
-                                        context.l10n.chatContactRenameTooltip,
-                                    child: Text(
-                                      state.chat?.displayName ?? '',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: titleStyle,
-                                    ),
-                                  )
-                                else
-                                  Text(
-                                    state.chat?.displayName ?? '',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: titleStyle,
-                                  ),
+                                _ChatTitleLine(
+                                  title: state.chat?.displayName ?? '',
+                                  style: titleStyle,
+                                  canRenameContact: canRenameContact,
+                                  verified:
+                                      chatEntity
+                                          ?.isAxiImServerAnnouncementThread ??
+                                      false,
+                                  onRename: owner._promptContactRename,
+                                ),
                                 if (secondaryLabel.isNotEmpty)
                                   SelectableText(
                                     secondaryLabel,
@@ -915,6 +915,60 @@ class _ChatScaffoldAppBar extends StatelessWidget
         else
           const SizedBox.shrink(),
       ],
+    );
+  }
+}
+
+class _ChatTitleLine extends StatelessWidget {
+  const _ChatTitleLine({
+    required this.title,
+    required this.style,
+    required this.canRenameContact,
+    required this.verified,
+    required this.onRename,
+  });
+
+  final String title;
+  final TextStyle style;
+  final bool canRenameContact;
+  final bool verified;
+  final VoidCallback onRename;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleContent = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          fit: FlexFit.loose,
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        ),
+        if (verified) ...[
+          SizedBox(width: context.spacing.xs),
+          AxiTooltip(
+            builder: (context) =>
+                Text(context.l10n.chatVerifiedServerAnnouncementTooltip),
+            child: Icon(
+              LucideIcons.shieldCheck,
+              size: context.sizing.menuItemIconSize,
+              color: context.colorScheme.primary,
+            ),
+          ),
+        ],
+      ],
+    );
+    if (!canRenameContact) {
+      return titleContent;
+    }
+    return AxiPlainHeaderButton(
+      onPressed: onRename,
+      semanticLabel: context.l10n.chatContactRenameTooltip,
+      child: titleContent,
     );
   }
 }
