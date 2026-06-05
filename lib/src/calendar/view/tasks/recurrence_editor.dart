@@ -10,6 +10,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_date_time_field.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:flutter/material.dart';
@@ -48,7 +49,7 @@ const String _recurrenceLabelSpacer = ' ';
 const String _recurrenceValueSeparator = ', ';
 const String _recurrenceValuePadChar = '0';
 const String _recurrenceEveryKey = 'every';
-const String _recurrenceEndHeaderLabel = 'Ends';
+const String _recurrenceEndHeaderLabel = 'Until';
 const String _recurrenceEndModeNeverLabel = 'Never';
 const String _recurrenceEndModeUntilLabel = 'On date';
 const String _recurrenceEndModeCountLabel = 'After';
@@ -198,6 +199,14 @@ extension RecurrenceFrequencyX on RecurrenceFrequency {
   bool get isMonthlyOrYearly => isMonthly || isYearly;
 }
 
+enum RecurrenceLimitMode { never, until, count }
+
+extension RecurrenceLimitModeX on RecurrenceLimitMode {
+  bool get isUntil => this == RecurrenceLimitMode.until;
+
+  bool get isCount => this == RecurrenceLimitMode.count;
+}
+
 class RecurrenceFormValue {
   const RecurrenceFormValue({
     this.frequency = RecurrenceFrequency.none,
@@ -205,6 +214,7 @@ class RecurrenceFormValue {
     Set<int>? weekdays,
     this.until,
     this.count,
+    this.limitMode = RecurrenceLimitMode.never,
     List<RecurrenceWeekday>? byDays,
     List<int>? byMonthDays,
     List<int>? byYearDays,
@@ -249,6 +259,11 @@ class RecurrenceFormValue {
       weekdays: derivedWeekdays,
       until: rule.count != null ? null : rule.until,
       count: rule.count,
+      limitMode: rule.count != null
+          ? RecurrenceLimitMode.count
+          : rule.until == null
+          ? RecurrenceLimitMode.never
+          : RecurrenceLimitMode.until,
       byDays: advancedByDays,
       byMonthDays: List<int>.from(rule.byMonthDays ?? const <int>[]),
       byYearDays: List<int>.from(rule.byYearDays ?? const <int>[]),
@@ -268,6 +283,7 @@ class RecurrenceFormValue {
   final Set<int> weekdays;
   final DateTime? until;
   final int? count;
+  final RecurrenceLimitMode limitMode;
   final List<RecurrenceWeekday> byDays;
   final List<int> byMonthDays;
   final List<int> byYearDays;
@@ -282,6 +298,22 @@ class RecurrenceFormValue {
 
   bool get isActive => !frequency.isNone;
 
+  RecurrenceLimitMode get resolvedLimitMode {
+    if (limitMode.isUntil) {
+      return RecurrenceLimitMode.until;
+    }
+    if (limitMode.isCount) {
+      return RecurrenceLimitMode.count;
+    }
+    if (until != null) {
+      return RecurrenceLimitMode.until;
+    }
+    if (count != null) {
+      return RecurrenceLimitMode.count;
+    }
+    return RecurrenceLimitMode.never;
+  }
+
   bool get hasAdvancedData =>
       byDays.isNotEmpty ||
       byMonthDays.isNotEmpty ||
@@ -295,21 +327,27 @@ class RecurrenceFormValue {
       byMinutes.isNotEmpty ||
       bySeconds.isNotEmpty;
 
-  RecurrenceFormValue resolveLinkedLimits(DateTime? start) {
-    if (start == null || !isActive) {
+  RecurrenceFormValue normalizeLimitFields() {
+    if (!isActive) {
       return this;
     }
-    if (count == null || until != null) {
-      return this;
+    switch (resolvedLimitMode) {
+      case RecurrenceLimitMode.never:
+        if (until == null && count == null) {
+          return this;
+        }
+        return copyWith(clearUntil: true, clearCount: true);
+      case RecurrenceLimitMode.until:
+        if (count == null) {
+          return this;
+        }
+        return copyWith(clearCount: true);
+      case RecurrenceLimitMode.count:
+        if (until == null) {
+          return this;
+        }
+        return copyWith(clearUntil: true);
     }
-
-    final _RecurrenceLimitSolver solver = _RecurrenceLimitSolver(start, this);
-    final DateTime? derivedUntil = solver.untilForCount(count!);
-    if (derivedUntil == null || derivedUntil == until) {
-      return this;
-    }
-
-    return copyWith(until: derivedUntil);
   }
 
   RecurrenceFormValue copyWith({
@@ -320,6 +358,7 @@ class RecurrenceFormValue {
     bool clearUntil = false,
     int? count,
     bool clearCount = false,
+    RecurrenceLimitMode? limitMode,
     List<RecurrenceWeekday>? byDays,
     List<int>? byMonthDays,
     List<int>? byYearDays,
@@ -338,6 +377,7 @@ class RecurrenceFormValue {
       weekdays: weekdays ?? this.weekdays,
       until: clearUntil ? null : until ?? this.until,
       count: clearCount ? null : count ?? this.count,
+      limitMode: limitMode ?? this.limitMode,
       byDays: byDays ?? this.byDays,
       byMonthDays: byMonthDays ?? this.byMonthDays,
       byYearDays: byYearDays ?? this.byYearDays,
@@ -353,14 +393,16 @@ class RecurrenceFormValue {
   }
 
   RecurrenceRule? toRule({required DateTime start}) {
-    final RecurrenceFormValue normalized = resolveLinkedLimits(start);
+    final RecurrenceFormValue normalized = normalizeLimitFields();
     if (normalized.frequency.isNone) {
       return null;
     }
 
-    final DateTime? effectiveUntil = normalized.count != null
-        ? null
-        : normalized.until;
+    final RecurrenceLimitMode limitMode = normalized.resolvedLimitMode;
+    final DateTime? effectiveUntil = limitMode.isUntil
+        ? normalized.until
+        : null;
+    final int? effectiveCount = limitMode.isCount ? normalized.count : null;
     final List<RecurrenceWeekday> normalizedByDays = _normalizeByDays(
       normalized.byDays,
     );
@@ -450,7 +492,8 @@ class RecurrenceFormValue {
         interval: normalized.interval,
         byWeekdays: byWeekdays,
         until: effectiveUntil,
-        count: normalized.count,
+        untilIsDate: effectiveUntil != null && _isMidnight(effectiveUntil),
+        count: effectiveCount,
         bySeconds: normalizedBySeconds.isEmpty ? null : normalizedBySeconds,
         byMinutes: normalizedByMinutes.isEmpty ? null : normalizedByMinutes,
         byHours: normalizedByHours.isEmpty ? null : normalizedByHours,
@@ -696,7 +739,6 @@ class RecurrenceEditor extends StatefulWidget {
 
 class _RecurrenceEditorState extends State<RecurrenceEditor> {
   late TextEditingController _countController;
-  bool _advancedExpanded = false;
 
   RecurrenceFormValue get value => widget.value;
 
@@ -706,7 +748,6 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     _countController = TextEditingController(
       text: value.count?.toString() ?? '',
     );
-    _advancedExpanded = widget.forceAdvanced || value.hasAdvancedData;
   }
 
   @override
@@ -715,9 +756,6 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     if (oldWidget.value.count != widget.value.count &&
         _countController.text != (widget.value.count?.toString() ?? '')) {
       _countController.text = widget.value.count?.toString() ?? '';
-    }
-    if (!_advancedExpanded && widget.value.hasAdvancedData) {
-      _advancedExpanded = true;
     }
   }
 
@@ -735,8 +773,6 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     final bool showAdvancedToggle = widget.showAdvancedToggle;
     final bool forceAdvanced = widget.forceAdvanced;
     final bool hasAdvancedData = value.hasAdvancedData;
-    final bool isAdvancedVisible = forceAdvanced || _advancedExpanded;
-    final bool canToggleAdvanced = showAdvancedToggle && !forceAdvanced;
     final EdgeInsets resolvedChipPadding =
         widget.chipPadding ??
         EdgeInsets.symmetric(
@@ -810,14 +846,47 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
               switch (mode) {
                 case _RecurrenceEndMode.never:
                   widget.onChanged(
-                    value.copyWith(clearCount: true, clearUntil: true),
+                    value.copyWith(
+                      clearCount: true,
+                      clearUntil: true,
+                      limitMode: RecurrenceLimitMode.never,
+                    ),
                   );
                   break;
                 case _RecurrenceEndMode.until:
-                  widget.onChanged(value.copyWith(clearCount: true));
+                  final DateTime initial =
+                      value.until ??
+                      _deriveUntilForCount(
+                        start: referenceStart,
+                        value: value,
+                        mode: _RecurrenceEndMode.count,
+                      ) ??
+                      referenceStart ??
+                      DateTime.now();
+                  widget.onChanged(
+                    value.copyWith(
+                      until: DateTime(initial.year, initial.month, initial.day),
+                      clearCount: true,
+                      limitMode: RecurrenceLimitMode.until,
+                    ),
+                  );
                   break;
                 case _RecurrenceEndMode.count:
-                  widget.onChanged(value.copyWith(clearUntil: true));
+                  final int count =
+                      value.count ??
+                      _deriveCountForUntil(
+                        start: referenceStart,
+                        value: value,
+                        mode: _RecurrenceEndMode.until,
+                      ) ??
+                      1;
+                  widget.onChanged(
+                    value.copyWith(
+                      count: count,
+                      clearUntil: true,
+                      limitMode: RecurrenceLimitMode.count,
+                    ),
+                  );
                   break;
               }
             },
@@ -828,15 +897,29 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
                       ? null
                       : DateTime(selected.year, selected.month, selected.day),
                   clearCount: true,
+                  limitMode: selected == null
+                      ? RecurrenceLimitMode.never
+                      : RecurrenceLimitMode.until,
                 ),
               );
             },
             onCountChanged: (text) {
               final parsed = int.tryParse(text);
+              if (parsed == null || parsed <= 0) {
+                widget.onChanged(
+                  value.copyWith(
+                    clearCount: true,
+                    clearUntil: true,
+                    limitMode: RecurrenceLimitMode.count,
+                  ),
+                );
+                return;
+              }
               widget.onChanged(
                 value.copyWith(
-                  count: parsed != null && parsed > 0 ? parsed : null,
-                  clearUntil: parsed != null && parsed > 0,
+                  count: parsed,
+                  clearUntil: true,
+                  limitMode: RecurrenceLimitMode.count,
                 ),
               );
             },
@@ -849,23 +932,11 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
         ..add(SizedBox(height: widget.advancedSectionSpacing))
         ..add(
           _RecurrenceAdvancedToggle(
-            isExpanded: isAdvancedVisible,
             hasAdvancedData: hasAdvancedData,
-            onPressed: canToggleAdvanced ? _toggleAdvanced : null,
+            onPressed: enabled ? () => _openAdvancedRules(context) : null,
           ),
         );
-      if (isAdvancedVisible) {
-        children
-          ..add(SizedBox(height: widget.advancedSectionSpacing))
-          ..add(
-            _RecurrenceAdvancedFields(
-              enabled: enabled,
-              referenceStart: referenceStart,
-              value: value,
-              onChanged: widget.onChanged,
-            ),
-          );
-      } else if (hasAdvancedData) {
+      if (hasAdvancedData) {
         children
           ..add(SizedBox(height: context.spacing.xxs))
           ..add(const _RecurrenceAdvancedSummary());
@@ -878,10 +949,40 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     );
   }
 
-  void _toggleAdvanced() {
-    setState(() {
-      _advancedExpanded = !_advancedExpanded;
-    });
+  Future<void> _openAdvancedRules(BuildContext context) async {
+    var sheetValue = value;
+    final BuildContext modalContext = context.calendarModalContext;
+    await showAdaptiveBottomSheet<void>(
+      context: modalContext,
+      isScrollControlled: true,
+      useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
+      surfacePadding: EdgeInsets.zero,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return AxiSheetScaffold.sections(
+              header: AxiSheetHeader(
+                title: Text(_recurrenceAdvancedLabel),
+                onClose: () => Navigator.of(sheetContext).maybePop(),
+              ),
+              sections: [
+                AxiSheetSection(
+                  child: _RecurrenceAdvancedFields(
+                    enabled: widget.enabled,
+                    referenceStart: widget.referenceStart,
+                    value: sheetValue,
+                    onChanged: (next) {
+                      setSheetState(() => sheetValue = next);
+                      widget.onChanged(next);
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   RecurrenceFormValue _normalizedForFrequency(RecurrenceFrequency frequency) {
@@ -891,6 +992,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
       result = result.copyWith(
         clearCount: true,
         clearUntil: true,
+        limitMode: RecurrenceLimitMode.never,
         weekdays: const <int>{},
         byDays: const <RecurrenceWeekday>[],
         byMonthDays: const <int>[],
@@ -1166,6 +1268,9 @@ class _RecurrenceEndControls extends StatelessWidget {
     final TextStyle helperStyle = context.textTheme.labelSm.strong.copyWith(
       color: calendarSubtitleColor,
     );
+    final TextStyle suffixStyle = context.textTheme.label.copyWith(
+      color: calendarSubtitleColor,
+    );
     final DateTime? derivedUntil = _deriveUntilForCount(
       start: referenceStart,
       value: value,
@@ -1218,22 +1323,29 @@ class _RecurrenceEndControls extends StatelessWidget {
           ],
         ] else if (mode.isCount) ...[
           SizedBox(height: context.spacing.s),
-          AxiTextInput(
-            controller: countController,
-            enabled: enabled,
-            keyboardType: TextInputType.number,
-            variant: AxiInputVariant.ghost,
-            placeholder: Text(l10n.calendarRepeatTimes),
-            placeholderStyle: context.textTheme.label.copyWith(
-              color: calendarSubtitleColor.withValues(alpha: 0.55),
+          SizedBox(
+            width: context.sizing.buttonHeightRegular * 4,
+            child: AxiTextInput(
+              controller: countController,
+              enabled: enabled,
+              keyboardType: TextInputType.number,
+              variant: AxiInputVariant.ghost,
+              placeholder: Text(l10n.calendarRepeatTimes),
+              placeholderStyle: context.textTheme.label.copyWith(
+                color: calendarSubtitleColor.withValues(alpha: 0.55),
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: context.spacing.xs,
+                vertical: context.spacing.s,
+              ),
+              style: context.textTheme.label,
+              trailing: Text(
+                _recurrenceEndModeDerivedCountSuffix,
+                style: suffixStyle,
+              ),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: onCountChanged,
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: context.spacing.xs,
-              vertical: context.spacing.s,
-            ),
-            style: context.textTheme.label,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: onCountChanged,
           ),
           if (derivedUntil != null) ...[
             SizedBox(height: context.spacing.xxs),
@@ -1288,13 +1400,11 @@ class _RecurrenceEndModeChip extends StatelessWidget {
 }
 
 _RecurrenceEndMode _endModeForValue(RecurrenceFormValue value) {
-  if (value.count != null) {
-    return _RecurrenceEndMode.count;
-  }
-  if (value.until != null) {
-    return _RecurrenceEndMode.until;
-  }
-  return _RecurrenceEndMode.never;
+  return switch (value.resolvedLimitMode) {
+    RecurrenceLimitMode.never => _RecurrenceEndMode.never,
+    RecurrenceLimitMode.until => _RecurrenceEndMode.until,
+    RecurrenceLimitMode.count => _RecurrenceEndMode.count,
+  };
 }
 
 DateTime? _deriveUntilForCount({
@@ -1316,7 +1426,10 @@ int? _deriveCountForUntil({
   if (start == null || !mode.isUntil || value.until == null) {
     return null;
   }
-  return _RecurrenceLimitSolver(start, value).countThrough(value.until!);
+  return _RecurrenceLimitSolver(
+    start,
+    value,
+  ).countThrough(_inclusiveDateLimit(value.until!));
 }
 
 String _formatDerivedDate(
@@ -1336,6 +1449,13 @@ bool _isMidnight(DateTime date) {
       date.second == 0 &&
       date.millisecond == 0 &&
       date.microsecond == 0;
+}
+
+DateTime _inclusiveDateLimit(DateTime date) {
+  if (!_isMidnight(date)) {
+    return date;
+  }
+  return DateTime(date.year, date.month, date.day, 23, 59, 59, 999, 999);
 }
 
 String _ordinalLabelForValue(int value) {
@@ -1432,12 +1552,10 @@ CalendarDateTime _calendarDateTimeForDate({
 
 class _RecurrenceAdvancedToggle extends StatelessWidget {
   const _RecurrenceAdvancedToggle({
-    required this.isExpanded,
     required this.hasAdvancedData,
     this.onPressed,
   });
 
-  final bool isExpanded;
   final bool hasAdvancedData;
   final VoidCallback? onPressed;
 
@@ -1450,10 +1568,7 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
     final Color iconColor = calendarSubtitleColor;
     return AxiPlainHeaderButton(
       onPressed: onPressed,
-      padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.s,
-        vertical: context.spacing.s,
-      ),
+      padding: EdgeInsets.symmetric(vertical: context.spacing.s),
       child: Row(
         children: [
           Text(_recurrenceAdvancedLabel.toUpperCase(), style: labelStyle),
@@ -1463,7 +1578,7 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
           ],
           const Spacer(),
           Icon(
-            isExpanded ? Icons.expand_less : Icons.expand_more,
+            Icons.chevron_right,
             size: _recurrenceIconMediumSize,
             color: iconColor,
           ),

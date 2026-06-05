@@ -152,8 +152,11 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
                           scope, {
                           required bool scheduleTouched,
                           required bool checklistTouched,
+                          required bool completionTouched,
                         }) {
-                          if (scheduleTouched || checklistTouched) {
+                          if (scheduleTouched ||
+                              checklistTouched ||
+                              completionTouched) {
                             context.read<B>().add(
                               CalendarEvent.taskOccurrenceUpdated(
                                 taskId: baseId,
@@ -166,6 +169,9 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
                                     : null,
                                 endDate: scheduleTouched
                                     ? updatedTask.endDate
+                                    : null,
+                                isCompleted: completionTouched
+                                    ? updatedTask.isCompleted
                                     : null,
                                 checklist: checklistTouched
                                     ? updatedTask.checklist

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/foundation.dart';
@@ -49,7 +51,6 @@ const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
 const List<CalendarRawProperty> _emptyRawProperties = <CalendarRawProperty>[];
-const List<TaskChecklistItem> _emptyChecklistItems = <TaskChecklistItem>[];
 const List<TaskContextAction> _emptyInlineActions = <TaskContextAction>[];
 const double _taskPopoverMinWidth = 320.0;
 const int _initialPopoverRevision = 0;
@@ -129,6 +130,41 @@ enum _TaskEditField {
   checklist,
 }
 
+final class EditTaskCloseController {
+  Future<bool> Function()? _requestHandler;
+  Future<bool>? _pendingRequest;
+
+  void _attach(Future<bool> Function() handler) {
+    _requestHandler = handler;
+  }
+
+  void _detach() {
+    _requestHandler = null;
+    _pendingRequest = null;
+  }
+
+  Future<bool> requestPassiveClose() async {
+    final pendingRequest = _pendingRequest;
+    if (pendingRequest != null) {
+      return pendingRequest;
+    }
+    final handler = _requestHandler;
+    if (handler == null) {
+      return true;
+    }
+    late final Future<bool> request;
+    request = handler().whenComplete(() {
+      if (identical(_pendingRequest, request)) {
+        _pendingRequest = null;
+      }
+    });
+    _pendingRequest = request;
+    return request;
+  }
+}
+
+enum _EditTaskCloseAction { save, discard, cancel }
+
 class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   const EditTaskDropdown({
     super.key,
@@ -145,6 +181,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
     this.editMode = _defaultTaskEditMode,
     required this.locationHelper,
     this.parentScrollController,
+    this.closeController,
   });
 
   final CalendarTask task;
@@ -157,6 +194,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
     OccurrenceUpdateScope scope, {
     required bool scheduleTouched,
     required bool checklistTouched,
+    required bool completionTouched,
   })?
   onOccurrenceUpdated;
   final ScaffoldMessengerState? scaffoldMessenger;
@@ -166,6 +204,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
   final TaskEditMode editMode;
   final LocationAutocompleteHelper locationHelper;
   final ScrollController? parentScrollController;
+  final EditTaskCloseController? closeController;
 
   @override
   State<EditTaskDropdown<B>> createState() => _EditTaskDropdownState<B>();
@@ -184,9 +223,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     _initialPopoverRevision,
   );
   bool _suppressFieldTracking = false;
-  bool _suppressChecklistPersist = false;
   final Set<_TaskEditField> _touchedFields = <_TaskEditField>{};
-  List<TaskChecklistItem> _lastChecklistSnapshot = _emptyChecklistItems;
+  bool _allowRoutePop = false;
 
   bool _isImportant = false;
   bool _isUrgent = false;
@@ -217,10 +255,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       ..addListener(_refresh)
       ..addListener(_handleChecklistChanged);
     _hydrateFromTask(widget.task, rebuild: false);
+    widget.closeController?._attach(_confirmPassiveClose);
   }
 
   @override
   void dispose() {
+    widget.closeController?._detach();
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
@@ -254,6 +294,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   @override
   void didUpdateWidget(covariant EditTaskDropdown<B> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.closeController != widget.closeController) {
+      oldWidget.closeController?._detach();
+      widget.closeController?._attach(_confirmPassiveClose);
+    }
     if (oldWidget.task.id != widget.task.id) {
       _hydrateFromTask(widget.task, rebuild: true);
     }
@@ -285,7 +329,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       }
 
       _checklistController.setItems(task.checklist);
-      _setChecklistSnapshot(_checklistController.items);
 
       _isImportant = task.isImportant || task.isCritical;
       _isUrgent = task.isUrgent || task.isCritical;
@@ -299,7 +342,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _deadline = task.deadline;
       _recurrence = RecurrenceFormValue.fromRule(
         task.recurrence,
-      ).resolveLinkedLimits(_startTime ?? task.scheduledTime);
+      ).normalizeLimitFields();
       final ReminderPreferences fallbackReminders = task.effectiveReminders;
       final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
         task.icsMeta?.alarms ?? _emptyAdvancedAlarms,
@@ -326,88 +369,19 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
     _touchedFields.clear();
     _suppressFieldTracking = true;
-    _suppressChecklistPersist = true;
     if (rebuild && mounted) {
       setState(apply);
     } else {
       apply();
     }
     _suppressFieldTracking = false;
-    _suppressChecklistPersist = false;
   }
 
   void _handleChecklistChanged() {
-    if (_suppressChecklistPersist || !widget.editMode.allowsChecklistEdits) {
+    if (!widget.editMode.allowsChecklistEdits) {
       return;
     }
     _markTouched(_TaskEditField.checklist);
-    final List<TaskChecklistItem> current = List<TaskChecklistItem>.from(
-      _checklistController.items,
-    );
-    final bool shouldPersist = widget.editMode.isChecklistOnly
-        ? !listEquals(_lastChecklistSnapshot, current)
-        : _isChecklistCompletionChange(
-            previous: _lastChecklistSnapshot,
-            current: current,
-          );
-    _setChecklistSnapshot(current);
-    if (!shouldPersist) {
-      return;
-    }
-    _persistChecklistUpdate(current);
-  }
-
-  bool _isChecklistCompletionChange({
-    required List<TaskChecklistItem> previous,
-    required List<TaskChecklistItem> current,
-  }) {
-    if (previous.length != current.length) {
-      return false;
-    }
-    bool completionChanged = false;
-    for (final MapEntry<int, TaskChecklistItem> entry
-        in current.asMap().entries) {
-      final TaskChecklistItem before = previous[entry.key];
-      final TaskChecklistItem after = entry.value;
-      if (before.id != after.id || before.label != after.label) {
-        return false;
-      }
-      if (before.isCompleted != after.isCompleted) {
-        completionChanged = true;
-      }
-    }
-    return completionChanged;
-  }
-
-  void _persistChecklistUpdate(List<TaskChecklistItem> checklist) {
-    final CalendarTask baseTask = _resolveLatestTaskSnapshot();
-    final CalendarTask updatedTask = baseTask.copyWith(checklist: checklist);
-    if (widget.task.isOccurrence && widget.onOccurrenceUpdated != null) {
-      widget.onOccurrenceUpdated!(
-        updatedTask,
-        _occurrenceScope,
-        scheduleTouched: false,
-        checklistTouched: true,
-      );
-      final CalendarTask? seriesTask = _resolveLatestSeriesSnapshot();
-      if (seriesTask != null) {
-        final CalendarTask seriesUpdate = seriesTask.copyWith(
-          checklist: checklist,
-        );
-        if (seriesUpdate != seriesTask) {
-          widget.onTaskUpdated(seriesUpdate);
-        }
-      }
-      return;
-    }
-    widget.onTaskUpdated(updatedTask);
-  }
-
-  void _setChecklistSnapshot(Iterable<TaskChecklistItem> items) {
-    _lastChecklistSnapshot = List<TaskChecklistItem>.from(
-      items,
-      growable: false,
-    );
   }
 
   void _markTouched(_TaskEditField field) {
@@ -444,6 +418,56 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     return context.read<B>().state.model.tasks[baseId];
   }
 
+  CalendarTask _withPendingOccurrenceOverride({
+    required CalendarTask seriesTask,
+    required CalendarTask occurrenceTask,
+    required OccurrenceUpdateScope scope,
+    required bool scheduleTouched,
+    required bool checklistTouched,
+    required bool completionTouched,
+  }) {
+    if (!scheduleTouched && !checklistTouched && !completionTouched) {
+      return seriesTask;
+    }
+    final String? occurrenceKey = occurrenceKeyFrom(widget.task.id);
+    if (occurrenceKey == null || occurrenceKey.isEmpty) {
+      return seriesTask;
+    }
+
+    final overrides = Map<String, TaskOccurrenceOverride>.from(
+      seriesTask.occurrenceOverrides,
+    );
+    final TaskOccurrenceOverride baseOverride =
+        overrides[occurrenceKey] ?? const TaskOccurrenceOverride();
+    final bool? completedOverride = completionTouched
+        ? (occurrenceTask.isCompleted == seriesTask.isCompleted
+              ? null
+              : occurrenceTask.isCompleted)
+        : baseOverride.isCompleted;
+    final TaskOccurrenceOverride updatedOverride = baseOverride.copyWith(
+      scheduledTime: scheduleTouched
+          ? occurrenceTask.scheduledTime
+          : baseOverride.scheduledTime,
+      duration: scheduleTouched
+          ? occurrenceTask.duration
+          : baseOverride.duration,
+      endDate: scheduleTouched ? occurrenceTask.endDate : baseOverride.endDate,
+      isCompleted: completedOverride,
+      checklist: checklistTouched
+          ? occurrenceTask.checklist
+          : baseOverride.checklist,
+      range: scope.range,
+    );
+
+    if (updatedOverride.isEmpty) {
+      overrides.remove(occurrenceKey);
+    } else {
+      overrides[occurrenceKey] = updatedOverride;
+    }
+
+    return seriesTask.copyWith(occurrenceOverrides: overrides);
+  }
+
   AlarmReminderSplit _splitTaskAlarms(CalendarTask task) {
     final ReminderPreferences fallbackReminders = task.effectiveReminders;
     final List<CalendarAlarm> existingAlarms = List<CalendarAlarm>.from(
@@ -464,7 +488,187 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 
   void _dismiss() {
-    closeSheetWithKeyboardDismiss(context, widget.onClose);
+    if (mounted) {
+      setState(() {
+        _allowRoutePop = true;
+      });
+    } else {
+      _allowRoutePop = true;
+    }
+    unawaited(
+      closeSheetWithKeyboardDismiss(context, widget.onClose).whenComplete(() {
+        if (mounted) {
+          setState(() {
+            _allowRoutePop = false;
+          });
+        }
+      }),
+    );
+  }
+
+  Future<void> _handlePassiveClose() async {
+    if (await _confirmPassiveClose()) {
+      _dismiss();
+    }
+  }
+
+  Future<bool> _confirmPassiveClose() async {
+    if (!_hasUnsavedChanges) {
+      return true;
+    }
+    final _EditTaskCloseAction? action = await _confirmCloseAction();
+    if (!mounted) {
+      return false;
+    }
+    return switch (action) {
+      _EditTaskCloseAction.save => _saveChanges(),
+      _EditTaskCloseAction.discard => true,
+      _EditTaskCloseAction.cancel || null => false,
+    };
+  }
+
+  Future<_EditTaskCloseAction?> _confirmCloseAction() {
+    return showFadeScaleDialog<_EditTaskCloseAction>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final pop = Navigator.of(dialogContext).pop;
+        return AxiDialog(
+          constraints: BoxConstraints(
+            maxWidth: dialogContext.sizing.dialogMaxWidth,
+          ),
+          title: Text(
+            context.l10n.calendarEditUnsavedChangesTitle,
+            style: dialogContext.modalHeaderTextStyle,
+          ),
+          actions: [
+            AxiButton.outline(
+              onPressed: () => pop(_EditTaskCloseAction.cancel),
+              child: Text(context.l10n.commonCancel),
+            ),
+            AxiButton.destructive(
+              onPressed: () => pop(_EditTaskCloseAction.discard),
+              child: Text(context.l10n.calendarEditDiscardChanges),
+            ),
+            AxiButton.primary(
+              onPressed: () => pop(_EditTaskCloseAction.save),
+              child: Text(context.l10n.commonSave),
+            ),
+          ],
+          child: Text(
+            context.l10n.calendarEditUnsavedChangesMessage,
+            style: dialogContext.textTheme.small,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _withPassiveCloseGuard(Widget child) {
+    return PopScope<Object?>(
+      canPop: _allowRoutePop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        unawaited(_handlePassiveClose());
+      },
+      child: child,
+    );
+  }
+
+  bool get _hasUnsavedChanges {
+    if (!widget.editMode.allowsAnyEdits) {
+      return false;
+    }
+    final CalendarTask baseTask = _resolveLatestTaskSnapshot();
+    if (widget.editMode.isChecklistOnly) {
+      return _checklistController.hasPendingEntry ||
+          !listEquals(_checklistController.items, baseTask.checklist);
+    }
+    if (_titleController.text.trim() != baseTask.title) {
+      return true;
+    }
+    if (_optionalText(_descriptionController.text) != baseTask.description) {
+      return true;
+    }
+    if (_optionalText(_locationController.text) != baseTask.location) {
+      return true;
+    }
+    if (_draftPriority != (baseTask.priority ?? TaskPriority.none)) {
+      return true;
+    }
+    if (_isCompleted != baseTask.isCompleted) {
+      return true;
+    }
+    if (_startTime != baseTask.scheduledTime) {
+      return true;
+    }
+    if (_endTime != _taskEndTime(baseTask)) {
+      return true;
+    }
+    if (_deadline != baseTask.deadline) {
+      return true;
+    }
+    if (_normalizedRule(_draftRecurrenceRule(baseTask)) !=
+        _normalizedRule(baseTask.recurrence)) {
+      return true;
+    }
+    if (_checklistController.hasPendingEntry ||
+        !listEquals(_checklistController.items, baseTask.checklist)) {
+      return true;
+    }
+    final AlarmReminderSplit baseSplit = _splitTaskAlarms(baseTask);
+    if (_reminders != baseSplit.reminders ||
+        !listEquals(_advancedAlarms, baseSplit.advancedAlarms)) {
+      return true;
+    }
+    if (!listEquals(
+      _categories,
+      baseTask.icsMeta?.categories ?? _emptyCategories,
+    )) {
+      return true;
+    }
+    if (_url != baseTask.icsMeta?.url ||
+        _geo != baseTask.icsMeta?.geo ||
+        _organizer != baseTask.icsMeta?.organizer ||
+        !listEquals(
+          _attendees,
+          baseTask.icsMeta?.attendees ?? _emptyAttendees,
+        )) {
+      return true;
+    }
+    return false;
+  }
+
+  String? _optionalText(String value) {
+    final String trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  TaskPriority get _draftPriority {
+    if (_isImportant && _isUrgent) return TaskPriority.critical;
+    if (_isImportant) return TaskPriority.important;
+    if (_isUrgent) return TaskPriority.urgent;
+    return TaskPriority.none;
+  }
+
+  DateTime? _taskEndTime(CalendarTask task) {
+    return task.effectiveEndDate ??
+        task.scheduledTime?.add(task.duration ?? calendarDefaultTaskDuration);
+  }
+
+  RecurrenceRule? _draftRecurrenceRule(CalendarTask task) {
+    if (!_recurrence.isActive) {
+      return null;
+    }
+    return _recurrence.normalizeLimitFields().toRule(
+      start: _startTime ?? task.scheduledTime ?? DateTime.now(),
+    );
+  }
+
+  RecurrenceRule? _normalizedRule(RecurrenceRule? rule) {
+    return rule == null || rule.isNone ? null : rule;
   }
 
   @override
@@ -482,7 +686,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             : TaskTitleValidation.validate(value.text, context.l10n) == null;
         return AxiSheetHeader(
           title: Text(context.l10n.calendarEditTaskTitle),
-          onClose: _dismiss,
+          onClose: _handleCancel,
           showCloseButton: false,
           actions: [
             AxiIconButton.outline(
@@ -494,7 +698,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             AxiIconButton.outline(
               iconData: Icons.close,
               tooltip: context.l10n.calendarCloseTooltip,
-              onPressed: _dismiss,
+              onPressed: _handleCancel,
               color: calendarSubtitleColor,
             ),
           ],
@@ -701,29 +905,40 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 ),
               ),
               AxiSheetSection(
-                child: TaskReminderRepeatSection(
-                  reminders: _reminders,
-                  onRemindersChanged: (value) => _updateDraft(() {
+                child: ReminderPreferencesField(
+                  value: _reminders,
+                  onChanged: (value) => _updateDraft(() {
                     _markTouched(_TaskEditField.reminders);
                     _reminders = value;
                   }),
-                  recurrence: _recurrence,
-                  onRecurrenceChanged: _handleRecurrenceChanged,
-                  deadline: _deadline,
                   referenceStart: _startTime,
                   advancedAlarms: _advancedAlarms,
                   onAdvancedAlarmsChanged: (value) => _updateDraft(() {
                     _markTouched(_TaskEditField.advancedAlarms);
                     _advancedAlarms = value;
                   }),
+                  title: context.l10n.calendarRemindersSection,
+                  anchor: _deadline == null
+                      ? ReminderAnchor.start
+                      : ReminderAnchor.deadline,
+                  showBothAnchors: _deadline != null,
+                  enabled: allowsFullEdits,
+                ),
+              ),
+              AxiSheetSection(
+                child: TaskRecurrenceSection(
+                  title: context.l10n.calendarRepeatLabel,
+                  value: _recurrence,
+                  onChanged: _handleRecurrenceChanged,
+                  referenceStart: _startTime,
                   fallbackWeekday: _recurrenceFallbackWeekday,
-                  recurrenceSpacing: context.spacing.xs,
-                  recurrenceChipSpacing: context.spacing.xs,
-                  recurrenceChipRunSpacing: context.spacing.xs,
-                  recurrenceWeekdaySpacing: context.spacing.s,
-                  recurrenceAdvancedSectionSpacing: context.spacing.m,
-                  recurrenceEndSpacing: context.spacing.m,
-                  recurrenceFieldGap: context.spacing.m,
+                  spacing: context.spacing.xs,
+                  chipSpacing: context.spacing.xs,
+                  chipRunSpacing: context.spacing.xs,
+                  weekdaySpacing: context.spacing.s,
+                  advancedSectionSpacing: context.spacing.m,
+                  endSpacing: context.spacing.m,
+                  fieldGap: context.spacing.m,
                   enabled: allowsFullEdits,
                 ),
               ),
@@ -936,15 +1151,12 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                             SizedBox(height: context.spacing.m),
                             const AxiSheetSectionDivider(),
                             SizedBox(height: context.spacing.m),
-                            TaskReminderRepeatSection(
-                              reminders: _reminders,
-                              onRemindersChanged: (value) => _updateDraft(() {
+                            ReminderPreferencesField(
+                              value: _reminders,
+                              onChanged: (value) => _updateDraft(() {
                                 _markTouched(_TaskEditField.reminders);
                                 _reminders = value;
                               }),
-                              recurrence: _recurrence,
-                              onRecurrenceChanged: _handleRecurrenceChanged,
-                              deadline: _deadline,
                               referenceStart: _startTime,
                               advancedAlarms: _advancedAlarms,
                               onAdvancedAlarmsChanged: (value) =>
@@ -952,15 +1164,29 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                                     _markTouched(_TaskEditField.advancedAlarms);
                                     _advancedAlarms = value;
                                   }),
+                              title: context.l10n.calendarRemindersSection,
+                              anchor: _deadline == null
+                                  ? ReminderAnchor.start
+                                  : ReminderAnchor.deadline,
+                              showBothAnchors: _deadline != null,
+                              enabled: allowsFullEdits,
+                            ),
+                            SizedBox(height: context.spacing.m),
+                            const AxiSheetSectionDivider(),
+                            SizedBox(height: context.spacing.m),
+                            TaskRecurrenceSection(
+                              title: context.l10n.calendarRepeatLabel,
+                              value: _recurrence,
+                              onChanged: _handleRecurrenceChanged,
+                              referenceStart: _startTime,
                               fallbackWeekday: _recurrenceFallbackWeekday,
-                              recurrenceSpacing: context.spacing.xs,
-                              recurrenceChipSpacing: context.spacing.xs,
-                              recurrenceChipRunSpacing: context.spacing.xs,
-                              recurrenceWeekdaySpacing: context.spacing.s,
-                              recurrenceAdvancedSectionSpacing:
-                                  context.spacing.m,
-                              recurrenceEndSpacing: context.spacing.m,
-                              recurrenceFieldGap: context.spacing.m,
+                              spacing: context.spacing.xs,
+                              chipSpacing: context.spacing.xs,
+                              chipRunSpacing: context.spacing.xs,
+                              weekdaySpacing: context.spacing.s,
+                              advancedSectionSpacing: context.spacing.m,
+                              endSpacing: context.spacing.m,
+                              fieldGap: context.spacing.m,
                               enabled: allowsFullEdits,
                             ),
                             SizedBox(height: context.spacing.m),
@@ -1105,12 +1331,14 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         );
 
         if (isSheet) {
-          return ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: resolvedMaxHeight),
-            child: surfaceBody,
+          return _withPassiveCloseGuard(
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: resolvedMaxHeight),
+              child: surfaceBody,
+            ),
           );
         }
-        return surfaced;
+        return _withPassiveCloseGuard(surfaced);
       },
     );
   }
@@ -1169,11 +1397,16 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 
   RecurrenceFormValue _normalizeRecurrence(RecurrenceFormValue value) {
-    final DateTime? anchor = _startTime ?? widget.task.scheduledTime;
-    return value.resolveLinkedLimits(anchor);
+    return value.normalizeLimitFields();
   }
 
   void _handleSave() {
+    if (_saveChanges()) {
+      _dismiss();
+    }
+  }
+
+  bool _saveChanges() {
     final TaskEditMode editMode = widget.editMode;
     _checklistController.commitPendingEntry();
     final bool isOccurrenceEdit =
@@ -1191,28 +1424,36 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           _occurrenceScope,
           scheduleTouched: false,
           checklistTouched: true,
+          completionTouched: false,
         );
         final CalendarTask? seriesTask = _resolveLatestSeriesSnapshot();
         if (seriesTask != null) {
-          final CalendarTask seriesUpdate = seriesTask.copyWith(
+          final CalendarTask seriesFieldsUpdate = seriesTask.copyWith(
             checklist: checklistItems,
           );
-          if (seriesUpdate != seriesTask) {
+          if (seriesFieldsUpdate != seriesTask) {
+            final CalendarTask seriesUpdate = _withPendingOccurrenceOverride(
+              seriesTask: seriesFieldsUpdate,
+              occurrenceTask: updatedTask,
+              scope: _occurrenceScope,
+              scheduleTouched: false,
+              checklistTouched: true,
+              completionTouched: false,
+            );
             widget.onTaskUpdated(seriesUpdate);
           }
         }
       } else {
         widget.onTaskUpdated(updatedTask);
       }
-      _dismiss();
-      return;
+      return true;
     }
     if (!editMode.allowsAnyEdits) {
-      return;
+      return false;
     }
     if (!(_formKey.currentState?.validate() ?? false)) {
       _titleFocusNode.requestFocus();
-      return;
+      return false;
     }
 
     final CalendarTask baseTask = _resolveLatestTaskSnapshot();
@@ -1221,12 +1462,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final String title = titleTouched ? nextTitle : baseTask.title;
 
     final bool priorityTouched = _isTouched(_TaskEditField.priority);
-    final TaskPriority nextPriority = () {
-      if (_isImportant && _isUrgent) return TaskPriority.critical;
-      if (_isImportant) return TaskPriority.important;
-      if (_isUrgent) return TaskPriority.urgent;
-      return TaskPriority.none;
-    }();
+    final TaskPriority nextPriority = _draftPriority;
     final TaskPriority? priority = priorityTouched
         ? nextPriority
         : baseTask.priority;
@@ -1267,9 +1503,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         scheduledTime ?? baseTask.scheduledTime ?? DateTime.now();
     final RecurrenceRule? nextRecurrence = recurrenceTouched
         ? (_recurrence.isActive
-              ? _recurrence
-                    .resolveLinkedLimits(recurrenceAnchor)
-                    .toRule(start: recurrenceAnchor)
+              ? _recurrence.normalizeLimitFields().toRule(
+                  start: recurrenceAnchor,
+                )
               : null)
         : null;
     final RecurrenceRule? recurrence = recurrenceTouched
@@ -1383,12 +1619,13 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     );
 
     if (isOccurrenceEdit) {
-      if (scheduleTouched || checklistTouched) {
+      if (scheduleTouched || checklistTouched || completionTouched) {
         widget.onOccurrenceUpdated!(
           updatedTask,
           _occurrenceScope,
           scheduleTouched: scheduleTouched,
           checklistTouched: checklistTouched,
+          completionTouched: completionTouched,
         );
       }
 
@@ -1400,7 +1637,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         final CalendarIcsMeta? seriesIcsMeta = resolveIcsMeta(
           seriesTask.icsMeta,
         );
-        final CalendarTask seriesUpdate = seriesTask.copyWith(
+        final CalendarTask seriesFieldsUpdate = seriesTask.copyWith(
           title: titleTouched ? nextTitle : seriesTask.title,
           description: descriptionTouched
               ? nextDescription
@@ -1408,9 +1645,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           location: locationTouched ? nextLocation : seriesTask.location,
           deadline: deadlineTouched ? nextDeadline : seriesTask.deadline,
           priority: priorityTouched ? nextPriority : seriesTask.priority,
-          isCompleted: completionTouched
-              ? nextIsCompleted
-              : seriesTask.isCompleted,
+          isCompleted: seriesTask.isCompleted,
           checklist: checklistTouched ? checklistItems : seriesTask.checklist,
           recurrence: recurrenceTouched
               ? (nextRecurrence?.isNone == true ? null : nextRecurrence)
@@ -1419,14 +1654,22 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           icsMeta: seriesIcsMeta,
         );
 
-        if (seriesUpdate != seriesTask) {
+        if (seriesFieldsUpdate != seriesTask) {
+          final CalendarTask seriesUpdate = _withPendingOccurrenceOverride(
+            seriesTask: seriesFieldsUpdate,
+            occurrenceTask: updatedTask,
+            scope: _occurrenceScope,
+            scheduleTouched: scheduleTouched,
+            checklistTouched: checklistTouched,
+            completionTouched: completionTouched,
+          );
           widget.onTaskUpdated(seriesUpdate);
         }
       }
     } else {
       widget.onTaskUpdated(updatedTask);
     }
-    _dismiss();
+    return true;
   }
 
   void _handleCancel() {

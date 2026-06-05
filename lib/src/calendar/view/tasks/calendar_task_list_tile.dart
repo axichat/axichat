@@ -5,13 +5,11 @@ import 'package:flutter/material.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_completion_checkbox.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_exclude.dart';
+import 'package:axichat/src/calendar/view/tasks/task_deadline_badge.dart';
 import 'package:axichat/src/calendar/view/tasks/task_checklist.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
 
 class CalendarTaskListTile extends StatelessWidget {
   const CalendarTaskListTile({
@@ -111,34 +109,7 @@ class CalendarTaskListTile extends StatelessWidget {
           ],
           if (task.deadline != null) ...[
             SizedBox(height: context.spacing.m),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: context.spacing.s,
-                vertical: context.spacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: _deadlineBackgroundColor(task.deadline!),
-                borderRadius: context.radius,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: context.sizing.menuItemIconSize,
-                    color: _deadlineColor(task.deadline!),
-                  ),
-                  SizedBox(width: context.spacing.xs),
-                  Text(
-                    _deadlineLabel(context.l10n, task.deadline!),
-                    style: context.textTheme.label.strong.copyWith(
-                      color: _deadlineColor(task.deadline!),
-                      letterSpacing: 0.1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            TaskDeadlineBadge(deadline: task.deadline!),
           ],
           if (task.location?.isNotEmpty == true) ...[
             SizedBox(height: context.spacing.xs),
@@ -163,28 +134,4 @@ class CalendarTaskListTile extends StatelessWidget {
       ),
     );
   }
-}
-
-Color _deadlineColor(DateTime deadline) {
-  final now = DateTime.now();
-  if (deadline.isBefore(now)) {
-    return calendarDangerColor;
-  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-    return calendarWarningColor;
-  }
-  return calendarPrimaryColor;
-}
-
-Color _deadlineBackgroundColor(DateTime deadline) {
-  final now = DateTime.now();
-  if (deadline.isBefore(now)) {
-    return calendarDangerColor.withValues(alpha: 0.1);
-  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-    return calendarWarningColor.withValues(alpha: 0.1);
-  }
-  return calendarPrimaryColor.withValues(alpha: 0.08);
-}
-
-String _deadlineLabel(AppLocalizations l10n, DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(l10n, deadline);
 }

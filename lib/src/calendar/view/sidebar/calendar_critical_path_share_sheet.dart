@@ -35,8 +35,11 @@ Future<void> showCalendarCriticalPathShareSheet({
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
   final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
+  final accountJid = locate<ProfileCubit>().state.jid;
   final List<Chat> available = chats
-      .where((chat) => chat.supportsChatCalendar)
+      .where(
+        (chat) => chat.supportsChatCalendarForAccount(accountJid: accountJid),
+      )
       .toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(
@@ -51,12 +54,20 @@ Future<void> showCalendarCriticalPathShareSheet({
     useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     preferDialogOnMobile: true,
     surfacePadding: EdgeInsets.zero,
-    builder: (sheetContext) => CalendarCriticalPathShareSheet(
-      path: path,
-      tasks: tasks,
-      availableChats: available,
-      initialChat: initialChat,
-      locate: locate,
+    builder: (sheetContext) => MultiBlocProvider(
+      providers: [
+        BlocProvider<SettingsCubit>.value(value: locate<SettingsCubit>()),
+        BlocProvider<ProfileCubit>.value(value: locate<ProfileCubit>()),
+        BlocProvider<RosterCubit>.value(value: locate<RosterCubit>()),
+        BlocProvider<ChatsCubit>.value(value: locate<ChatsCubit>()),
+      ],
+      child: CalendarCriticalPathShareSheet(
+        path: path,
+        tasks: tasks,
+        availableChats: available,
+        initialChat: initialChat,
+        locate: locate,
+      ),
     ),
   );
   if (result != true || !context.mounted) {

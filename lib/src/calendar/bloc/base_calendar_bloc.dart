@@ -1002,16 +1002,20 @@ abstract class BaseCalendarBloc
 
       final TaskOccurrenceOverride baseOverride =
           existing ?? const TaskOccurrenceOverride();
+      final bool? completedOverride = event.isCompleted == null
+          ? baseOverride.isCompleted
+          : (event.isCompleted == task.isCompleted ? null : event.isCompleted);
       final TaskOccurrenceOverride updatedOverride = baseOverride.copyWith(
         scheduledTime: event.scheduledTime ?? baseOverride.scheduledTime,
         duration: event.duration ?? baseOverride.duration,
         endDate: event.endDate ?? baseOverride.endDate,
         isCancelled: event.isCancelled ?? baseOverride.isCancelled,
+        isCompleted: completedOverride,
         checklist: event.checklist ?? baseOverride.checklist,
         range: event.range,
       );
 
-      if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -1124,7 +1128,7 @@ abstract class BaseCalendarBloc
             endDate: leftEnd,
           );
 
-          if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+          if (updatedOverride.isEmpty) {
             overrides.remove(occurrenceKey);
           } else {
             overrides[occurrenceKey] = updatedOverride;
@@ -1747,7 +1751,7 @@ abstract class BaseCalendarBloc
         title: overrideTitle,
       );
 
-      if (_overrideIsEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -1841,7 +1845,7 @@ abstract class BaseCalendarBloc
         description: overrideDescription,
       );
 
-      if (_overrideIsEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -1932,7 +1936,7 @@ abstract class BaseCalendarBloc
         location: overrideLocation,
       );
 
-      if (_overrideIsEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -2018,7 +2022,7 @@ abstract class BaseCalendarBloc
         checklist: matchesBase ? null : checklist,
       );
 
-      if (_overrideIsEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -2204,21 +2208,6 @@ abstract class BaseCalendarBloc
 
   Set<String> _selectionGroupFor(String id) {
     return {id};
-  }
-
-  bool _overrideIsEmpty(TaskOccurrenceOverride override) {
-    return override.scheduledTime == null &&
-        override.duration == null &&
-        override.endDate == null &&
-        override.isCancelled == null &&
-        override.priority == null &&
-        override.isCompleted == null &&
-        override.title == null &&
-        override.description == null &&
-        override.location == null &&
-        (override.checklist == null || override.checklist!.isEmpty) &&
-        override.rawProperties.isEmpty &&
-        override.rawComponents.isEmpty;
   }
 
   List<TaskChecklistItem> _normalizedChecklist(List<TaskChecklistItem> source) {
@@ -2416,7 +2405,7 @@ abstract class BaseCalendarBloc
         priority: overridePriority,
       );
 
-      if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -2959,7 +2948,7 @@ abstract class BaseCalendarBloc
         isCompleted: overrideCompleted,
       );
 
-      if (_isOccurrenceOverrideEmpty(updatedOverride)) {
+      if (updatedOverride.isEmpty) {
         overrides.remove(occurrenceKey);
       } else {
         overrides[occurrenceKey] = updatedOverride;
@@ -3650,22 +3639,4 @@ abstract class BaseCalendarBloc
   Future<void> onDayEventUpdated(DayEvent event);
   Future<void> onDayEventDeleted(DayEvent event);
   void logError(String message, Object error);
-}
-
-bool _isOccurrenceOverrideEmpty(TaskOccurrenceOverride override) {
-  final isCancelled = override.isCancelled ?? false;
-  return !isCancelled &&
-      override.scheduledTime == null &&
-      override.duration == null &&
-      override.endDate == null &&
-      override.priority == null &&
-      override.isCompleted == null &&
-      override.title == null &&
-      override.description == null &&
-      override.location == null &&
-      override.recurrenceId == null &&
-      override.range == null &&
-      (override.checklist == null || override.checklist!.isEmpty) &&
-      override.rawProperties.isEmpty &&
-      override.rawComponents.isEmpty;
 }

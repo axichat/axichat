@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -36,6 +38,7 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
     this.marginOverride,
     this.hideActionMenu = false,
     this.compactShareFragment = false,
+    this.onBeforeToggleCompletion,
   });
 
   final CalendarTask task;
@@ -46,6 +49,7 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   final EdgeInsets? marginOverride;
   final bool hideActionMenu;
   final bool compactShareFragment;
+  final FutureOr<void> Function(CalendarTask task)? onBeforeToggleCompletion;
 }
 
 abstract class BaseTaskTileState<
@@ -115,7 +119,7 @@ abstract class BaseTaskTileState<
             }
 
             void handleToggleCompletion(bool completed) {
-              _toggleTaskCompletion(context, completed);
+              unawaited(_toggleTaskCompletion(context, completed));
             }
 
             final bool hideActions = widget.hideActionMenu;
@@ -221,7 +225,10 @@ abstract class BaseTaskTileState<
     );
   }
 
-  void _toggleTaskCompletion(BuildContext context, bool completed) {
+  Future<void> _toggleTaskCompletion(
+    BuildContext context,
+    bool completed,
+  ) async {
     if (_isUpdating) {
       return;
     }
@@ -229,9 +236,25 @@ abstract class BaseTaskTileState<
       _isUpdating = true;
       _pendingCompletionValue = completed;
     });
-    final String baseId = widget.task.baseId;
-    context.read<T>().add(
-      CalendarEvent.taskCompleted(taskId: baseId, completed: completed),
+    await widget.onBeforeToggleCompletion?.call(widget.task);
+    if (!mounted) {
+      return;
+    }
+    if (widget.task.isOccurrence) {
+      this.context.read<T>().add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: widget.task.baseId,
+          occurrenceId: widget.task.id,
+          isCompleted: completed,
+        ),
+      );
+      return;
+    }
+    this.context.read<T>().add(
+      CalendarEvent.taskCompleted(
+        taskId: widget.task.baseId,
+        completed: completed,
+      ),
     );
   }
 

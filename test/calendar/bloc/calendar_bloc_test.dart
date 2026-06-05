@@ -1798,5 +1798,98 @@ void main() {
         }),
       ],
     );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskOccurrenceUpdated completes only the selected occurrence',
+      build: () => buildBloc(),
+      seed: () {
+        seededTask = CalendarTask.create(
+          title: 'Repeating',
+          scheduledTime: DateTime(2024, 1, 1, 9),
+          duration: const Duration(hours: 1),
+          recurrence: const RecurrenceRule(
+            frequency: RecurrenceFrequency.weekly,
+            byWeekdays: [DateTime.tuesday],
+          ),
+        );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final occurrenceStart = DateTime(2024, 1, 2, 9);
+        final occurrenceKey = occurrenceStart.microsecondsSinceEpoch.toString();
+        final occurrenceId = '${seededTask.id}::$occurrenceKey';
+
+        bloc.add(
+          CalendarEvent.taskOccurrenceUpdated(
+            taskId: seededTask.id,
+            occurrenceId: occurrenceId,
+            isCompleted: true,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final task = state.model.tasks[seededTask.id]!;
+          final occurrenceStart = DateTime(2024, 1, 2, 9);
+          final key = occurrenceStart.microsecondsSinceEpoch.toString();
+          final override = task.occurrenceOverrides[key];
+          return !task.isCompleted && override?.isCompleted == true;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskOccurrenceUpdated clears completion override matching the series',
+      build: () => buildBloc(),
+      seed: () {
+        final occurrenceStart = DateTime(2024, 1, 2, 9);
+        final occurrenceKey = occurrenceStart.microsecondsSinceEpoch.toString();
+        seededTask =
+            CalendarTask.create(
+              title: 'Repeating',
+              scheduledTime: DateTime(2024, 1, 1, 9),
+              duration: const Duration(hours: 1),
+              recurrence: const RecurrenceRule(
+                frequency: RecurrenceFrequency.weekly,
+                byWeekdays: [DateTime.tuesday],
+              ),
+            ).copyWith(
+              occurrenceOverrides: {
+                occurrenceKey: const TaskOccurrenceOverride(isCompleted: true),
+              },
+            );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final occurrenceStart = DateTime(2024, 1, 2, 9);
+        final occurrenceKey = occurrenceStart.microsecondsSinceEpoch.toString();
+        final occurrenceId = '${seededTask.id}::$occurrenceKey';
+
+        bloc.add(
+          CalendarEvent.taskOccurrenceUpdated(
+            taskId: seededTask.id,
+            occurrenceId: occurrenceId,
+            isCompleted: false,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final task = state.model.tasks[seededTask.id]!;
+          final occurrenceStart = DateTime(2024, 1, 2, 9);
+          final key = occurrenceStart.microsecondsSinceEpoch.toString();
+          return !task.isCompleted &&
+              !task.occurrenceOverrides.containsKey(key);
+        }),
+      ],
+    );
   });
 }

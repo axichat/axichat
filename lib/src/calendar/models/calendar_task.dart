@@ -83,6 +83,26 @@ abstract class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
       _$TaskOccurrenceOverrideFromJson(json);
 }
 
+extension TaskOccurrenceOverrideValues on TaskOccurrenceOverride {
+  bool get isEmpty {
+    final bool isCancelled = this.isCancelled ?? false;
+    return !isCancelled &&
+        scheduledTime == null &&
+        duration == null &&
+        endDate == null &&
+        priority == null &&
+        isCompleted == null &&
+        title == null &&
+        description == null &&
+        location == null &&
+        recurrenceId == null &&
+        range == null &&
+        (checklist == null || checklist!.isEmpty) &&
+        rawProperties.isEmpty &&
+        rawComponents.isEmpty;
+  }
+}
+
 @HiveType(typeId: 35)
 enum RecurrenceFrequency {
   @HiveField(0)

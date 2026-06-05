@@ -6,6 +6,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/month/day_event_editor.dart';
 import 'package:axichat/src/calendar/view/sidebar/critical_path_panel.dart';
@@ -94,7 +95,7 @@ void main() {
     expect(submitted!.scheduledTime, slotTime);
   });
 
-  testWidgets('QuickAddModal keeps repeat inside reminders section', (
+  testWidgets('QuickAddModal keeps repeat separate from reminders section', (
     tester,
   ) async {
     ensureCalendarTestStorage();
@@ -123,10 +124,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _expectReminderRepeatGrouping(tester);
+    await _expectReminderRepeatSections(tester);
   });
 
-  testWidgets('EditTaskDropdown keeps repeat inside reminders section', (
+  testWidgets('EditTaskDropdown keeps repeat separate from reminders section', (
     tester,
   ) async {
     ensureCalendarTestStorage();
@@ -180,7 +181,91 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _expectReminderRepeatGrouping(tester);
+    await _expectReminderRepeatSections(tester);
+  });
+
+  testWidgets('EditTaskDropdown saves dirty edits only from Save', (
+    tester,
+  ) async {
+    ensureCalendarTestStorage();
+    final SettingsCubit settingsCubit = SettingsCubit();
+    addTearDown(settingsCubit.close);
+
+    final bloc = MockCalendarBloc();
+    final state = CalendarTestData.baseState();
+    final updatedTasks = <CalendarTask>[];
+    final closeController = EditTaskCloseController();
+    when(() => bloc.state).thenReturn(state);
+    when(
+      () => bloc.stream,
+    ).thenAnswer((_) => const Stream<CalendarState>.empty());
+    when(() => bloc.close()).thenAnswer((_) async {});
+    addTearDown(bloc.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: ShadTheme(
+          data: ShadThemeData(
+            colorScheme: const ShadSlateColorScheme.light(),
+            brightness: Brightness.light,
+          ),
+          child: BlocProvider<SettingsCubit>.value(
+            value: settingsCubit,
+            child: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 760,
+                  height: 560,
+                  child: BlocProvider<CalendarBloc>.value(
+                    value: bloc,
+                    child: EditTaskDropdown<CalendarBloc>(
+                      task: state.model.tasks['task-unscheduled']!,
+                      closeController: closeController,
+                      onClose: () {},
+                      onTaskUpdated: updatedTasks.add,
+                      onTaskDeleted: (_) {},
+                      locationHelper: LocationAutocompleteHelper.fromSeeds(
+                        const [],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Important'));
+    await tester.pump();
+
+    expect(updatedTasks, isEmpty);
+
+    final cancelClose = closeController.requestPassiveClose();
+    final duplicateCancelClose = closeController.requestPassiveClose();
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(AxiButton, 'Cancel').last);
+    await tester.pumpAndSettle();
+
+    expect(await cancelClose, isFalse);
+    expect(await duplicateCancelClose, isFalse);
+    expect(updatedTasks, isEmpty);
+
+    final saveClose = closeController.requestPassiveClose();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(AxiButton, 'Save').last);
+    await tester.pumpAndSettle();
+
+    expect(await saveClose, isTrue);
+    expect(updatedTasks.single.priority, TaskPriority.critical);
   });
 
   testWidgets('QuickAddModal keeps text focus when keyboard insets change', (
@@ -910,7 +995,7 @@ void main() {
     final harness = await CalendarWidgetHarness.pump(
       tester: tester,
       state: CalendarTestData.selectionMode(),
-      size: const Size(1600, 900),
+      size: const Size(1600, 1200),
     );
 
     expect(find.text('Clear Selection'), findsOneWidget);
@@ -969,7 +1054,7 @@ void main() {
     final harness = await CalendarWidgetHarness.pump(
       tester: tester,
       state: CalendarTestData.selectionMode(),
-      size: const Size(1600, 900),
+      size: const Size(1600, 1200),
     );
 
     final applyFinder = find.widgetWithText(AxiButton, 'Apply changes');
@@ -1040,6 +1125,79 @@ void main() {
 
     applyButton = tester.widget<AxiButton>(applyFinder);
     expect(applyButton.onPressed, isNull);
+  });
+
+  testWidgets('selection priority change waits for Apply changes', (
+    tester,
+  ) async {
+    final harness = await CalendarWidgetHarness.pump(
+      tester: tester,
+      state: CalendarTestData.selectionMode(),
+      size: const Size(1600, 1200),
+    );
+
+    final applyFinder = find.widgetWithText(AxiButton, 'Apply changes');
+    expect(tester.widget<AxiButton>(applyFinder).onPressed, isNull);
+
+    await tester.tap(find.text('Important').last);
+    await tester.pump();
+
+    verifyNever(
+      () => harness.bloc.add(
+        const CalendarEvent.selectionPriorityChanged(
+          priority: TaskPriority.important,
+        ),
+      ),
+    );
+    expect(tester.widget<AxiButton>(applyFinder).onPressed, isNotNull);
+
+    await tester.tap(applyFinder);
+    await tester.pump();
+
+    verify(
+      () => harness.bloc.add(
+        const CalendarEvent.selectionPriorityChanged(
+          priority: TaskPriority.important,
+        ),
+      ),
+    ).called(1);
+  });
+
+  testWidgets('selection repeat mixed state includes advanced dates', (
+    tester,
+  ) async {
+    final CalendarState baseState = CalendarTestData.selectionMode();
+    final Map<String, CalendarTask> tasks = Map<String, CalendarTask>.from(
+      baseState.model.tasks,
+    );
+    final RecurrenceRule repeat = RecurrenceRule(
+      frequency: RecurrenceFrequency.daily,
+      interval: 1,
+      exDates: [CalendarDateTime(value: DateTime(2024, 1, 18), isAllDay: true)],
+    );
+    tasks['task-overlap-a'] = tasks['task-overlap-a']!.copyWith(
+      recurrence: repeat,
+    );
+    tasks['task-overlap-b'] = tasks['task-overlap-b']!.copyWith(
+      recurrence: repeat.copyWith(
+        exDates: [
+          CalendarDateTime(value: DateTime(2024, 1, 19), isAllDay: true),
+        ],
+      ),
+    );
+
+    await CalendarWidgetHarness.pump(
+      tester: tester,
+      state: baseState.copyWith(model: baseState.model.copyWith(tasks: tasks)),
+      size: const Size(1600, 1200),
+    );
+
+    expect(
+      find.text(
+        'Tasks have different recurrence settings. Updates will apply to all selected tasks.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('right-click opens task context menu', (tester) async {
@@ -1499,9 +1657,10 @@ void main() {
   });
 }
 
-Future<void> _expectReminderRepeatGrouping(WidgetTester tester) async {
+Future<void> _expectReminderRepeatSections(WidgetTester tester) async {
   for (var attempt = 0; attempt < 8; attempt++) {
-    if (tester.any(find.byType(TaskReminderRepeatSection))) {
+    if (tester.any(find.byType(ReminderPreferencesField)) &&
+        tester.any(find.byType(TaskRecurrenceSection))) {
       break;
     }
     final Finder scrollable = find.byType(Scrollable).first;
@@ -1509,29 +1668,9 @@ Future<void> _expectReminderRepeatGrouping(WidgetTester tester) async {
     await tester.pump();
   }
 
-  final Finder groupFinder = find.byType(TaskReminderRepeatSection);
-  expect(groupFinder, findsOneWidget);
-  expect(
-    find.descendant(
-      of: groupFinder,
-      matching: find.byType(ReminderPreferencesField),
-    ),
-    findsOneWidget,
-  );
-  expect(
-    find.descendant(
-      of: groupFinder,
-      matching: find.byType(TaskRecurrenceSection),
-    ),
-    findsOneWidget,
-  );
-  expect(
-    find.descendant(
-      of: groupFinder,
-      matching: find.byType(AxiSheetSectionDivider),
-    ),
-    findsNothing,
-  );
+  expect(find.byType(ReminderPreferencesField), findsAtLeastNWidgets(1));
+  expect(find.byType(TaskRecurrenceSection), findsAtLeastNWidgets(1));
+  expect(find.byType(AxiSheetSectionDivider), findsAtLeastNWidgets(1));
 }
 
 Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {

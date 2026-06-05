@@ -248,6 +248,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   final Map<String, CalendarTask> _visibleTasks = <String, CalendarTask>{};
   final CalendarSurfaceController _surfaceController =
       CalendarSurfaceController();
+  final Map<String, EditTaskCloseController> _editCloseControllersByTaskId =
+      <String, EditTaskCloseController>{};
   final GlobalKey _surfaceKey = GlobalKey(debugLabel: 'calendar-surface');
   late final ShadPopoverController _gridContextMenuController;
   DateTime? _contextMenuSlot;
@@ -290,7 +292,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   VoidCallback? get onAxiSurfaceDismiss => () {
     final String? activeId = _taskPopoverController.activeTaskId;
     if (activeId != null) {
-      _closeTaskPopover(activeId, reason: 'surface-back');
+      unawaited(_requestCloseTaskPopover(activeId, reason: 'surface-back'));
     }
   };
 
@@ -899,6 +901,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (_taskPopoverPortalController.isShowing) {
       _taskPopoverPortalController.hide();
     }
+    _editCloseControllersByTaskId.clear();
     _focusNode.dispose();
     _zoomControlsController.dispose();
     _edgeAutoScrollTicker?.dispose();
@@ -1107,11 +1110,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   void _copyTaskInstance(CalendarTask task) {
     final CalendarTask template = task.forClipboardInstance();
     _taskInteractionController.setClipboardTemplate(template);
+    FeedbackSystem.showTaskCopiedForPaste(context);
   }
 
   void _copyTaskTemplate(CalendarTask task) {
     final CalendarTask template = task.forClipboardTemplate();
     _taskInteractionController.setClipboardTemplate(template);
+    FeedbackSystem.showTaskCopiedForPaste(context);
   }
 
   Future<void> _copyTaskToClipboard(CalendarTask task) async {
@@ -1585,8 +1590,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                         scope, {
                         required bool scheduleTouched,
                         required bool checklistTouched,
+                        required bool completionTouched,
                       }) {
-                        if (scheduleTouched || checklistTouched) {
+                        if (scheduleTouched ||
+                            checklistTouched ||
+                            completionTouched) {
                           context.read<T>().add(
                             CalendarEvent.taskOccurrenceUpdated(
                               taskId: baseId,
@@ -1599,6 +1607,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                   : null,
                               endDate: scheduleTouched
                                   ? updatedTask.endDate
+                                  : null,
+                              isCompleted: completionTouched
+                                  ? updatedTask.isCompleted
                                   : null,
                               checklist: checklistTouched
                                   ? updatedTask.checklist
@@ -2167,7 +2178,18 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
     if (_taskPopoverController.activeTaskId == task.id) {
-      _closeTaskPopover(task.id, reason: 'toggle-close');
+      unawaited(_requestCloseTaskPopover(task.id, reason: 'toggle-close'));
+      return;
+    }
+    final String? activeId = _taskPopoverController.activeTaskId;
+    if (activeId != null && activeId != task.id) {
+      unawaited(
+        _replaceTaskPopover(
+          activeId: activeId,
+          task: task,
+          layout: _calculateTaskPopoverLayout(bounds),
+        ),
+      );
       return;
     }
 
@@ -2189,14 +2211,33 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
     syncAxiSurfaceRegistration();
     TaskEditSessionTracker.instance.end(taskId, this);
+    _editCloseControllersByTaskId.remove(taskId);
   }
 
   void _openTaskPopover(CalendarTask task, TaskPopoverLayout layout) {
     final activeId = _taskPopoverController.activeTaskId;
     if (activeId != null && activeId != task.id) {
-      _closeTaskPopover(activeId, reason: _taskPopoverCloseReasonSwitchTarget);
+      unawaited(
+        _replaceTaskPopover(activeId: activeId, task: task, layout: layout),
+      );
+      return;
     }
+    _showTaskPopover(task, layout);
+  }
 
+  Future<void> _replaceTaskPopover({
+    required String activeId,
+    required CalendarTask task,
+    required TaskPopoverLayout layout,
+  }) async {
+    if (!await _canCloseTaskPopover(activeId) || !mounted) {
+      return;
+    }
+    _closeTaskPopover(activeId, reason: _taskPopoverCloseReasonSwitchTarget);
+    _showTaskPopover(task, layout);
+  }
+
+  void _showTaskPopover(CalendarTask task, TaskPopoverLayout layout) {
     if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
@@ -2204,6 +2245,31 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _ensurePopoverEntry();
     syncAxiSurfaceRegistration();
     _armPopoverDismissQueue();
+  }
+
+  EditTaskCloseController _editCloseControllerFor(String taskId) {
+    return _editCloseControllersByTaskId.putIfAbsent(
+      taskId,
+      EditTaskCloseController.new,
+    );
+  }
+
+  Future<bool> _canCloseTaskPopover(String taskId) async {
+    if (!mounted) {
+      return true;
+    }
+    final EditTaskCloseController? controller =
+        _editCloseControllersByTaskId[taskId];
+    return controller == null || await controller.requestPassiveClose();
+  }
+
+  Future<void> _requestCloseTaskPopover(
+    String taskId, {
+    required String reason,
+  }) async {
+    if (await _canCloseTaskPopover(taskId) && mounted) {
+      _closeTaskPopover(taskId, reason: reason);
+    }
   }
 
   void _armPopoverDismissQueue() {
@@ -2254,7 +2320,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                       Overlay.of(overlayContext).context.findRenderObject()
                           as RenderBox?;
                   if (currentOverlayBox == null) {
-                    _closeTaskPopover(currentId, reason: 'outside-tap');
+                    unawaited(
+                      _requestCloseTaskPopover(
+                        currentId,
+                        reason: 'outside-tap',
+                      ),
+                    );
                     return;
                   }
                   final TaskPopoverLayout popoverLayout = _taskPopoverController
@@ -2269,7 +2340,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                     event.position,
                   );
                   if (!popoverRect.contains(localPosition)) {
-                    _closeTaskPopover(currentId, reason: 'outside-tap');
+                    unawaited(
+                      _requestCloseTaskPopover(
+                        currentId,
+                        reason: 'outside-tap',
+                      ),
+                    );
                   }
                 },
               ),
@@ -2332,6 +2408,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                             parentScrollController: _verticalController,
                             inlineActions: inlineActions,
                             collectionMethod: state.model.collection?.method,
+                            closeController: _editCloseControllerFor(taskId),
                             onClose: () => _closeTaskPopover(
                               taskId,
                               reason: 'dropdown-close',
@@ -2350,8 +2427,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                     scope, {
                                     required bool scheduleTouched,
                                     required bool checklistTouched,
+                                    required bool completionTouched,
                                   }) {
-                                    if (scheduleTouched || checklistTouched) {
+                                    if (scheduleTouched ||
+                                        checklistTouched ||
+                                        completionTouched) {
                                       context.read<T>().add(
                                         CalendarEvent.taskOccurrenceUpdated(
                                           taskId: baseId,
@@ -2364,6 +2444,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                               : null,
                                           endDate: scheduleTouched
                                               ? updatedTask.endDate
+                                              : null,
+                                          isCompleted: completionTouched
+                                              ? updatedTask.isCompleted
                                               : null,
                                           checklist: checklistTouched
                                               ? updatedTask.checklist
@@ -2840,6 +2923,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _toggleTaskCompletion(CalendarTask task) {
+    if (task.isOccurrence) {
+      context.read<T>().add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: task.baseId,
+          occurrenceId: task.id,
+          isCompleted: !task.isCompleted,
+        ),
+      );
+      return;
+    }
     context.read<T>().add(
       CalendarEvent.taskCompleted(
         taskId: task.baseId,
@@ -2849,6 +2942,16 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   void _setTaskCompletion(CalendarTask task, bool completed) {
+    if (task.isOccurrence) {
+      context.read<T>().add(
+        CalendarEvent.taskOccurrenceUpdated(
+          taskId: task.baseId,
+          occurrenceId: task.id,
+          isCompleted: completed,
+        ),
+      );
+      return;
+    }
     context.read<T>().add(
       CalendarEvent.taskCompleted(taskId: task.baseId, completed: completed),
     );

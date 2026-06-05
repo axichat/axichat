@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -31,6 +32,19 @@ class FeedbackMessage {
 }
 
 class FeedbackSystem {
+  static void showTaskCopiedForPaste(BuildContext context) {
+    final String message = switch (defaultTargetPlatform) {
+      TargetPlatform.android || TargetPlatform.iOS =>
+        context.l10n.calendarTaskCopiedPasteInstructionTouch,
+      TargetPlatform.fuchsia ||
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows =>
+        context.l10n.calendarTaskCopiedPasteInstructionPointer,
+    };
+    showSuccess(context, message);
+  }
+
   static void showSuccess(
     BuildContext context,
     String message, {

@@ -142,6 +142,7 @@ abstract class CalendarEvent with _$CalendarEvent {
     Duration? duration,
     DateTime? endDate,
     bool? isCancelled,
+    bool? isCompleted,
     List<TaskChecklistItem>? checklist,
     RecurrenceRange? range,
   }) = CalendarTaskOccurrenceUpdated;

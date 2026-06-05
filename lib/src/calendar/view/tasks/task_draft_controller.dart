@@ -123,7 +123,7 @@ class TaskDraftController extends ChangeNotifier {
     }
 
     if (_recurrence.isActive) {
-      _recurrence = _recurrence.resolveLinkedLimits(_startTime);
+      _recurrence = _recurrence.normalizeLimitFields();
     }
 
     notifyListeners();
@@ -154,9 +154,7 @@ class TaskDraftController extends ChangeNotifier {
   }
 
   void setRecurrence(RecurrenceFormValue value) {
-    final RecurrenceFormValue normalized = value.resolveLinkedLimits(
-      _startTime,
-    );
+    final RecurrenceFormValue normalized = value.normalizeLimitFields();
     if (_recurrence == normalized) return;
     _recurrence = normalized;
     notifyListeners();
@@ -262,9 +260,7 @@ class TaskDraftController extends ChangeNotifier {
     if (reference == null) {
       return null;
     }
-    final RecurrenceFormValue normalized = _recurrence.resolveLinkedLimits(
-      reference,
-    );
+    final RecurrenceFormValue normalized = _recurrence.normalizeLimitFields();
     return normalized.toRule(start: reference);
   }
 

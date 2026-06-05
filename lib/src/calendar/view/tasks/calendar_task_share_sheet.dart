@@ -17,6 +17,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -42,10 +43,18 @@ Future<void> showCalendarTaskShareSheet({
     isScrollControlled: true,
     useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
     surfacePadding: EdgeInsets.zero,
-    builder: (sheetContext) => CalendarTaskShareSheet(
-      task: task,
-      availableChats: available,
-      locate: locate,
+    builder: (sheetContext) => MultiBlocProvider(
+      providers: [
+        BlocProvider<SettingsCubit>.value(value: locate<SettingsCubit>()),
+        BlocProvider<ProfileCubit>.value(value: locate<ProfileCubit>()),
+        BlocProvider<RosterCubit>.value(value: locate<RosterCubit>()),
+        BlocProvider<ChatsCubit>.value(value: locate<ChatsCubit>()),
+      ],
+      child: CalendarTaskShareSheet(
+        task: task,
+        availableChats: available,
+        locate: locate,
+      ),
     ),
   );
   if (result != true || !context.mounted) {

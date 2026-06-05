@@ -7,8 +7,8 @@ import 'dart:ui' show lerpDouble;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
+import 'package:axichat/src/calendar/view/tasks/task_deadline_badge.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -631,7 +631,7 @@ class _ResizableTaskBody extends StatelessWidget {
       if (gap > 0) {
         children.add(SizedBox(height: gap));
       }
-      children.add(_TaskDeadlineBadge(deadline: task.deadline!));
+      children.add(TaskDeadlineBadge(deadline: task.deadline!));
     }
 
     if (showLocation) {
@@ -831,44 +831,6 @@ class _TaskAccentStripe extends StatelessWidget {
   }
 }
 
-class _TaskDeadlineBadge extends StatelessWidget {
-  const _TaskDeadlineBadge({required this.deadline});
-
-  final DateTime deadline;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final spacing = context.spacing;
-    final Color color = _deadlineColor(deadline);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.s,
-        vertical: spacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: _deadlineBackgroundColor(deadline),
-        borderRadius: context.radius,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.calendar_today_outlined,
-            size: context.sizing.menuItemIconSize,
-            color: color,
-          ),
-          SizedBox(width: spacing.xs),
-          Text(
-            _deadlineLabel(l10n, deadline),
-            style: context.textTheme.label.strong.copyWith(color: color),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TaskLocationRow extends StatelessWidget {
   const _TaskLocationRow({required this.location});
 
@@ -892,28 +854,4 @@ class _TaskLocationRow extends StatelessWidget {
       ],
     );
   }
-}
-
-Color _deadlineColor(DateTime deadline) {
-  final now = DateTime.now();
-  if (deadline.isBefore(now)) {
-    return calendarDangerColor;
-  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-    return calendarWarningColor;
-  }
-  return calendarPrimaryColor;
-}
-
-Color _deadlineBackgroundColor(DateTime deadline) {
-  final now = DateTime.now();
-  if (deadline.isBefore(now)) {
-    return calendarDangerColor.withValues(alpha: 0.1);
-  } else if (deadline.isBefore(now.add(const Duration(days: 1)))) {
-    return calendarWarningColor.withValues(alpha: 0.1);
-  }
-  return calendarPrimaryColor.withValues(alpha: 0.08);
-}
-
-String _deadlineLabel(AppLocalizations l10n, DateTime deadline) {
-  return TimeFormatter.formatFriendlyDateTime(l10n, deadline);
 }

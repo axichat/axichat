@@ -632,6 +632,7 @@ class TaskRecurrenceSection extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.headerSize = TaskSectionLabelSize.medium,
     this.headerTrailing,
+    this.showHeader = true,
     this.enabled = true,
     this.fallbackWeekday,
     this.referenceStart,
@@ -655,6 +656,7 @@ class TaskRecurrenceSection extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final TaskSectionLabelSize headerSize;
   final Widget? headerTrailing;
+  final bool showHeader;
   final bool enabled;
   final int? fallbackWeekday;
   final DateTime? referenceStart;
@@ -691,12 +693,14 @@ class TaskRecurrenceSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TaskSectionHeader(
-            title: title,
-            size: headerSize,
-            trailing: headerTrailing,
-          ),
-          SizedBox(height: resolvedSpacing),
+          if (showHeader) ...[
+            TaskSectionHeader(
+              title: title,
+              size: headerSize,
+              trailing: headerTrailing,
+            ),
+            SizedBox(height: resolvedSpacing),
+          ],
           RecurrenceEditor(
             value: value,
             onChanged: onChanged,

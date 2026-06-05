@@ -16,8 +16,8 @@ import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
 
 typedef CalendarDateTimeChanged = void Function(DateTime? value);
 
-const double _deadlinePickerOverlayWidth = 320.0;
-const double _deadlinePickerDropdownMinWidth = 320.0;
+const double _deadlinePickerOverlayWidth = 360.0;
+const double _deadlinePickerDropdownMinWidth = 360.0;
 
 class CalendarDateTimeField extends StatefulWidget {
   const CalendarDateTimeField({
@@ -226,6 +226,21 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
     }
   }
 
+  DateTime _pickerDisplayValue() {
+    final DateTime base = widget.value ?? DateTime.now();
+    DateTime date = DateTime(base.year, base.month, base.day);
+    if (_minDate != null && date.isBefore(_minDate!)) {
+      date = DateTime(_minDate!.year, _minDate!.month, _minDate!.day);
+    }
+    if (_maxDate != null && date.isAfter(_maxDate!)) {
+      date = DateTime(_maxDate!.year, _maxDate!.month, _maxDate!.day);
+    }
+    if (!widget.showTimeSelectors) {
+      return date;
+    }
+    return DateTime(date.year, date.month, date.day, base.hour, base.minute);
+  }
+
   void _showOverlay(BuildContext context) {
     if (_isOpen) return;
     _initialValue = _currentValue;
@@ -247,8 +262,15 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
     if (!mounted) {
       return;
     }
-    _initialValue = _currentValue;
-    setState(() => _isBottomSheetOpen = true);
+    _initialValue = widget.value;
+    final DateTime displayValue = widget.value ?? _pickerDisplayValue();
+    bool committed = false;
+    setState(() {
+      _currentValue = displayValue;
+      _visibleMonth = _monthStart(displayValue);
+      _ensureVisibleMonthInRange();
+      _isBottomSheetOpen = true;
+    });
 
     try {
       final BuildContext modalContext = context.calendarModalContext;
@@ -285,7 +307,6 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                   _currentValue = newValue;
                   _visibleMonth = _monthStart(date);
                 });
-                widget.onChanged(newValue);
               }
 
               void handleHourSelected(int hour) {
@@ -299,7 +320,6 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                   value.minute,
                 );
                 setSheetState(() => _currentValue = updated);
-                widget.onChanged(updated);
               }
 
               void handleMinuteSelected(int minute) {
@@ -313,7 +333,6 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                   minute,
                 );
                 setSheetState(() => _currentValue = updated);
-                widget.onChanged(updated);
               }
 
               void handleCancel() {
@@ -323,15 +342,28 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                   _visibleMonth = _monthStart(target ?? DateTime.now());
                   _ensureVisibleMonthInRange();
                 });
-                if (!_sameMoment(widget.value, target)) {
-                  widget.onChanged(target);
-                }
+                committed = true;
                 closeSheet();
               }
 
               void handleClear() {
                 setSheetState(() => _currentValue = null);
+                committed = true;
                 widget.onChanged(null);
+                closeSheet();
+              }
+
+              void handleDone() {
+                final DateTime target = _currentValue ?? _pickerDisplayValue();
+                setSheetState(() {
+                  _currentValue = target;
+                  _visibleMonth = _monthStart(target);
+                  _ensureVisibleMonthInRange();
+                });
+                committed = true;
+                if (!_sameMoment(widget.value, target)) {
+                  widget.onChanged(target);
+                }
                 closeSheet();
               }
 
@@ -398,7 +430,7 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
                     ),
                   const Spacer(),
                   AxiButton.primary(
-                    onPressed: closeSheet,
+                    onPressed: handleDone,
                     child: Text(context.l10n.commonDone),
                   ),
                 ],
@@ -423,6 +455,11 @@ class _CalendarDateTimeFieldState extends State<CalendarDateTimeField>
         _initialValue = null;
       } else {
         setState(() {
+          if (!committed) {
+            _currentValue = widget.value;
+            _visibleMonth = _monthStart(widget.value ?? DateTime.now());
+            _ensureVisibleMonthInRange();
+          }
           _isBottomSheetOpen = false;
           _initialValue = null;
         });

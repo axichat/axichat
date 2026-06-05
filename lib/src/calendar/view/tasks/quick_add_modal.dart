@@ -958,25 +958,40 @@ class _QuickAddModalContent extends StatelessWidget {
           child: AnimatedBuilder(
             animation: formController,
             builder: (context, _) {
-              return TaskReminderRepeatSection(
-                reminders: formController.reminders,
-                onRemindersChanged: onRemindersChanged,
-                recurrence: formController.recurrence,
-                onRecurrenceChanged: onRecurrenceChanged,
-                deadline: formController.deadline,
+              return ReminderPreferencesField(
+                value: formController.reminders,
+                onChanged: onRemindersChanged,
                 advancedAlarms: formController.advancedAlarms,
                 onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
+                referenceStart: formController.startTime,
+                title: context.l10n.calendarRemindersSection,
+                anchor: formController.deadline == null
+                    ? ReminderAnchor.start
+                    : ReminderAnchor.deadline,
+                showBothAnchors: formController.deadline != null,
+              );
+            },
+          ),
+        ),
+        AxiSheetSection(
+          child: AnimatedBuilder(
+            animation: formController,
+            builder: (context, _) {
+              return TaskRecurrenceSection(
+                title: context.l10n.calendarRepeatLabel,
+                value: formController.recurrence,
+                onChanged: onRecurrenceChanged,
                 referenceStart: formController.startTime,
                 fallbackWeekday:
                     formController.startTime?.weekday ??
                     fallbackDate?.weekday ??
                     DateTime.now().weekday,
-                recurrenceChipSpacing: spacing.s,
-                recurrenceChipRunSpacing: spacing.s,
-                recurrenceWeekdaySpacing: spacing.s,
-                recurrenceAdvancedSectionSpacing: spacing.m,
-                recurrenceEndSpacing: spacing.m,
-                recurrenceFieldGap: spacing.m,
+                chipSpacing: spacing.s,
+                chipRunSpacing: spacing.s,
+                weekdaySpacing: spacing.s,
+                advancedSectionSpacing: spacing.m,
+                endSpacing: spacing.m,
+                fieldGap: spacing.m,
               );
             },
           ),

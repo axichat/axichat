@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
@@ -100,6 +101,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                 onTap: tapAction,
                 marginOverride: shareFragment ? _shareMargin() : null,
                 hideActionMenu: shareFragment,
+                onBeforeToggleCompletion: _linkMatchingPersonalTask,
               ),
               if (widget.footerDetails.isNotEmpty)
                 Padding(
@@ -155,9 +157,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         storedTask == null && occurrenceTask != null;
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
     final locate = context.read;
-    final CalendarTaskCopyStyle copyStyle = editMode.isReadOnly
-        ? CalendarTaskCopyStyle.shallowClone
-        : CalendarTaskCopyStyle.linked;
+    final CalendarTaskCopyStyle copyStyle = CalendarTaskCopyStyle.linked;
     final List<TaskContextAction> inlineActions = _inlineActionsForTask(
       displayTask,
       copyStyle: copyStyle,
@@ -214,6 +214,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                         scope, {
                         required bool scheduleTouched,
                         required bool checklistTouched,
+                        required bool completionTouched,
                       }) {
                         if (!editMode.allowsAnyEdits) {
                           return;
@@ -222,7 +223,11 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                             editMode.allowsFullEdits && scheduleTouched;
                         final bool canUpdateChecklist =
                             editMode.allowsChecklistEdits && checklistTouched;
-                        if (!canUpdateSchedule && !canUpdateChecklist) {
+                        final bool canUpdateCompletion =
+                            editMode.allowsAnyEdits && completionTouched;
+                        if (!canUpdateSchedule &&
+                            !canUpdateChecklist &&
+                            !canUpdateCompletion) {
                           return;
                         }
                         context.read<ChatCalendarBloc>().add(
@@ -237,6 +242,9 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                                 : null,
                             endDate: canUpdateSchedule
                                 ? updatedTask.endDate
+                                : null,
+                            isCompleted: canUpdateCompletion
+                                ? updatedTask.isCompleted
                                 : null,
                             checklist: canUpdateChecklist
                                 ? updatedTask.checklist
@@ -280,9 +288,8 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       if (approved != true) return;
     }
     if (!mounted) return;
-    if (!taskInCalendar) {
-      _ensureTaskImported(task);
-    }
+    await _ensureTaskImported(task);
+    if (!mounted) return;
     await _showTaskEditSheet(context, task, editMode: editMode);
   }
 
@@ -379,10 +386,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       }
     }
 
-    if (style.isLinked && personalStorageId != null && chatStorageId != null) {
+    if (style.isLinked && personalStorageId != null) {
       final Set<String> linkedStorageIds = <String>{};
       linkedStorageIds.add(personalStorageId);
-      linkedStorageIds.add(chatStorageId);
+      linkedStorageIds.add(
+        chatStorageId ?? context.read<ChatCalendarBloc>().id,
+      );
       if (linkedStorageIds.length > 1) {
         await CalendarLinkedTaskRegistry.instance.addLinks(
           taskId: task.id,
@@ -436,15 +445,46 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     }
   }
 
-  void _ensureTaskImported(CalendarTask task) {
-    if (context.read<ChatCalendarBloc>().state.model.tasks.containsKey(
-      task.id,
-    )) {
+  Future<void> _ensureTaskImported(CalendarTask task) async {
+    final ChatCalendarBloc bloc = context.read<ChatCalendarBloc>();
+    if (bloc.state.model.tasks.containsKey(task.id)) {
+      await _linkMatchingPersonalTask(task);
       return;
     }
-    context.read<ChatCalendarBloc>().add(
-      CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
+    final String? storageId = await _copyTaskToCalendar(
+      task: task,
+      style: CalendarTaskCopyStyle.linked,
+      bloc: bloc,
     );
+    if (storageId != null) {
+      await _linkMatchingPersonalTask(task, chatStorageId: storageId);
+    }
+  }
+
+  Future<void> _linkMatchingPersonalTask(
+    CalendarTask task, {
+    String? chatStorageId,
+  }) async {
+    final CalendarBloc? personalBloc = _personalCalendarBloc();
+    if (personalBloc == null ||
+        !personalBloc.state.model.tasks.containsKey(task.id)) {
+      return;
+    }
+    await CalendarLinkedTaskRegistry.instance.addLinks(
+      taskId: task.id,
+      storageIds: <String>[
+        personalBloc.id,
+        chatStorageId ?? context.read<ChatCalendarBloc>().id,
+      ],
+    );
+  }
+
+  CalendarBloc? _personalCalendarBloc() {
+    try {
+      return context.read<CalendarBloc>();
+    } on ProviderNotFoundException {
+      return null;
+    }
   }
 
   EdgeInsets _shareMargin() {
@@ -466,6 +506,7 @@ class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
     bool readOnly = false,
     super.marginOverride,
     super.hideActionMenu,
+    super.onBeforeToggleCompletion,
   }) : super(
          isGuestMode: false,
          compact: true,
