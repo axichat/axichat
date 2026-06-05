@@ -1012,7 +1012,12 @@ abstract class BaseCalendarBloc
         isCancelled: event.isCancelled ?? baseOverride.isCancelled,
         isCompleted: completedOverride,
         checklist: event.checklist ?? baseOverride.checklist,
-        range: event.range,
+        range:
+            event.scheduledTime != null ||
+                event.duration != null ||
+                event.endDate != null
+            ? event.range
+            : baseOverride.range,
       );
 
       if (updatedOverride.isEmpty) {

@@ -2836,7 +2836,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                               checklist: checklistTouched
                                   ? updatedTask.checklist
                                   : null,
-                              range: scope.range,
+                              range: scheduleTouched ? scope.range : null,
                             ),
                           );
                         }
@@ -5982,7 +5982,9 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                                       checklist: checklistTouched
                                           ? updatedTask.checklist
                                           : null,
-                                      range: scope.range,
+                                      range: scheduleTouched
+                                          ? scope.range
+                                          : null,
                                     ),
                                   );
                                 }

@@ -482,7 +482,6 @@ DateTime? _nextOccurrence(
         baseStart.day,
       );
   }
-  return null;
 }
 
 Iterable<DateTime> _simpleOccurrencesWithin({
@@ -1139,7 +1138,6 @@ DateTime? calculateRecurrenceEndDate({
     case RecurrenceFrequency.none:
       return null;
   }
-  return null;
 }
 
 DateTime _inclusiveLimitForUnit(
@@ -1381,7 +1379,9 @@ _OverrideResolution _resolveOccurrenceOverride({
     return _noOverrideResolution;
   }
 
-  final TaskOccurrenceOverride base = range?.override ?? _emptyOverride;
+  final TaskOccurrenceOverride base = range == null
+      ? _emptyOverride
+      : _scheduleRangeOverride(range.override);
   final TaskOccurrenceOverride merged = _mergeOverrides(base, direct);
   final DateTime? shiftedStart = _shiftedStartForRange(
     occurrenceStart: originalStart,
@@ -1544,5 +1544,18 @@ TaskOccurrenceOverride _mergeOverrides(
     rawComponents: override.rawComponents.isNotEmpty
         ? override.rawComponents
         : base.rawComponents,
+  );
+}
+
+TaskOccurrenceOverride _scheduleRangeOverride(TaskOccurrenceOverride override) {
+  return TaskOccurrenceOverride(
+    scheduledTime: override.scheduledTime,
+    duration: override.duration,
+    endDate: override.endDate,
+    isCancelled: override.isCancelled,
+    recurrenceId: override.recurrenceId,
+    range: override.range,
+    rawProperties: override.rawProperties,
+    rawComponents: override.rawComponents,
   );
 }

@@ -249,7 +249,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                             checklist: canUpdateChecklist
                                 ? updatedTask.checklist
                                 : null,
-                            range: scope.range,
+                            range: canUpdateSchedule ? scope.range : null,
                           ),
                         );
                       }

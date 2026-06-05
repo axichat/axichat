@@ -456,7 +456,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       checklist: checklistTouched
           ? occurrenceTask.checklist
           : baseOverride.checklist,
-      range: scope.range,
+      range: scheduleTouched ? scope.range : baseOverride.range,
     );
 
     if (updatedOverride.isEmpty) {

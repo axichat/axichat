@@ -176,7 +176,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
                                 checklist: checklistTouched
                                     ? updatedTask.checklist
                                     : null,
-                                range: scope.range,
+                                range: scheduleTouched ? scope.range : null,
                               ),
                             );
                           }

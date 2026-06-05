@@ -1614,7 +1614,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                               checklist: checklistTouched
                                   ? updatedTask.checklist
                                   : null,
-                              range: scope.range,
+                              range: scheduleTouched ? scope.range : null,
                             ),
                           );
                         }
@@ -2451,7 +2451,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                                           checklist: checklistTouched
                                               ? updatedTask.checklist
                                               : null,
-                                          range: scope.range,
+                                          range: scheduleTouched
+                                              ? scope.range
+                                              : null,
                                         ),
                                       );
                                     }

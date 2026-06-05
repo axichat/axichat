@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/interop/chat_calendar_support.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
+import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -1838,6 +1839,70 @@ void main() {
           final key = occurrenceStart.microsecondsSinceEpoch.toString();
           final override = task.occurrenceOverrides[key];
           return !task.isCompleted && override?.isCompleted == true;
+        }),
+      ],
+    );
+
+    blocTest<CalendarBloc, CalendarState>(
+      'taskOccurrenceUpdated preserves range when completing range anchor',
+      build: () => buildBloc(),
+      seed: () {
+        final occurrenceStart = DateTime(2024, 1, 8, 9);
+        final occurrenceKey = occurrenceStart.microsecondsSinceEpoch.toString();
+        seededTask =
+            CalendarTask.create(
+              title: 'Repeating',
+              scheduledTime: DateTime(2024, 1, 1, 9),
+              duration: const Duration(hours: 1),
+              recurrence: const RecurrenceRule(
+                frequency: RecurrenceFrequency.weekly,
+              ),
+            ).copyWith(
+              occurrenceOverrides: {
+                occurrenceKey: TaskOccurrenceOverride(
+                  scheduledTime: DateTime(2024, 1, 8, 10),
+                  duration: const Duration(hours: 1),
+                  range: RecurrenceRange.thisAndFuture,
+                ),
+              },
+            );
+        final model = CalendarModel.empty().addTask(seededTask);
+        return CalendarState.initial().copyWith(model: model);
+      },
+      act: (bloc) {
+        final occurrenceStart = DateTime(2024, 1, 8, 9);
+        final occurrenceKey = occurrenceStart.microsecondsSinceEpoch.toString();
+        final occurrenceId = '${seededTask.id}::$occurrenceKey';
+
+        bloc.add(
+          CalendarEvent.taskOccurrenceUpdated(
+            taskId: seededTask.id,
+            occurrenceId: occurrenceId,
+            isCompleted: true,
+          ),
+        );
+      },
+      verify: (_) {
+        verify(() => syncManager.sendTaskUpdate(any(), 'update')).called(1);
+      },
+      expect: () => [
+        predicate<CalendarState>((state) {
+          final task = state.model.tasks[seededTask.id]!;
+          final occurrenceStart = DateTime(2024, 1, 8, 9);
+          final occurrenceKey = occurrenceStart.microsecondsSinceEpoch
+              .toString();
+          final futureStart = DateTime(2024, 1, 15, 9);
+          final futureKey = futureStart.microsecondsSinceEpoch.toString();
+          final override = task.occurrenceOverrides[occurrenceKey];
+          final occurrence = task.occurrenceForId(
+            '${seededTask.id}::$occurrenceKey',
+          );
+          final future = task.occurrenceForId('${seededTask.id}::$futureKey');
+          return override?.range == RecurrenceRange.thisAndFuture &&
+              override?.isCompleted == true &&
+              occurrence?.isCompleted == true &&
+              future?.scheduledTime == DateTime(2024, 1, 15, 10) &&
+              future?.isCompleted == false;
         }),
       ],
     );

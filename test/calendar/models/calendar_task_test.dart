@@ -718,6 +718,45 @@ void main() {
         expect(occurrences, hasLength(1));
         expect(occurrences.first.scheduledTime, expectedOccurrence);
       });
+
+      test('does not inherit completion from range anchor', () {
+        final DateTime seriesStart = DateTime(2024, 1, 1, 9);
+        final DateTime anchorStart = DateTime(2024, 1, 8, 9);
+        final DateTime shiftedAnchorStart = DateTime(2024, 1, 8, 10);
+        final DateTime futureStart = DateTime(2024, 1, 15, 9);
+        final String anchorKey = anchorStart.microsecondsSinceEpoch.toString();
+        final String futureKey = futureStart.microsecondsSinceEpoch.toString();
+        final CalendarTask task =
+            CalendarTask.create(
+              title: 'Shifted series',
+              scheduledTime: seriesStart,
+              duration: const Duration(hours: 1),
+              recurrence: const RecurrenceRule(
+                frequency: RecurrenceFrequency.weekly,
+              ),
+            ).copyWith(
+              occurrenceOverrides: <String, TaskOccurrenceOverride>{
+                anchorKey: TaskOccurrenceOverride(
+                  scheduledTime: shiftedAnchorStart,
+                  duration: const Duration(hours: 1),
+                  isCompleted: true,
+                  range: RecurrenceRange.thisAndFuture,
+                ),
+              },
+            );
+
+        final CalendarTask? anchor = task.occurrenceForId(
+          '${task.id}::$anchorKey',
+        );
+        final CalendarTask? future = task.occurrenceForId(
+          '${task.id}::$futureKey',
+        );
+
+        expect(anchor?.scheduledTime, shiftedAnchorStart);
+        expect(anchor?.isCompleted, isTrue);
+        expect(future?.scheduledTime, DateTime(2024, 1, 15, 10));
+        expect(future?.isCompleted, isFalse);
+      });
     });
 
     group('equality', () {
