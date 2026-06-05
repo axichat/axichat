@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
@@ -55,11 +54,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     EmailService? emailService,
     required List<HomeTab> tabs,
     Map<HomeTab, SearchFilterId?> initialFilters = const {},
-    NetworkAvailability initialNetworkAvailability =
-        NetworkAvailability.unknown,
   }) : _xmppService = xmppService,
        _emailService = emailService,
-       _networkAvailability = initialNetworkAvailability,
        super(HomeState.initial(tabs: tabs, initialFilters: initialFilters)) {
     on<HomeActiveTabChanged>(_onActiveTabChanged);
     on<HomeSearchVisibilityChanged>(_onSearchVisibilityChanged);
@@ -70,7 +66,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<HomeRefreshRequested>(_onRefreshRequested);
     on<HomeRefreshStatusCleared>(_onRefreshStatusCleared);
     on<HomeEmailServiceChanged>(_onEmailServiceChanged);
-    on<HomeNetworkAvailabilityChanged>(_onNetworkAvailabilityChanged);
     on<_HomeEmailUnreadRefreshRequested>(_onEmailUnreadRefreshRequested);
     _attachEmailSyncSubscription(emailService);
   }
@@ -78,7 +73,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final XmppService _xmppService;
   final Logger _log = Logger('HomeBloc');
   EmailService? _emailService;
-  NetworkAvailability _networkAvailability;
   StreamSubscription<void>? _emailSyncSubscription;
   EmailService? _emailSyncSubscriptionService;
   Future<void>? _emailSyncSubscriptionTask;
@@ -150,13 +144,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       targetSlot,
       current.copyWith(filterId: event.filterId),
     );
-  }
-
-  void _onNetworkAvailabilityChanged(
-    HomeNetworkAvailabilityChanged event,
-    Emitter<HomeState> emit,
-  ) {
-    _networkAvailability = event.availability;
   }
 
   Future<void> _onRefreshRequested(
@@ -422,9 +409,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (emailService == null) {
       return _HomeRefreshTargetOutcome.skipped;
     }
-    if (_networkAvailability.isUnavailable) {
-      return _HomeRefreshTargetOutcome.failure;
-    }
     final didSync = await emailService.syncSessionState();
     return didSync
         ? _HomeRefreshTargetOutcome.success
@@ -445,9 +429,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final emailService = _emailService;
     if (emailService == null) {
       return _HomeRefreshOutcome.success;
-    }
-    if (_networkAvailability.isUnavailable) {
-      return _HomeRefreshOutcome.emailFailure;
     }
     final didRefresh = await emailService.refreshUnreadForHomeRefresh();
     return didRefresh

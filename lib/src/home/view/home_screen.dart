@@ -2325,22 +2325,10 @@ class _HomeBlocScope extends StatelessWidget {
               : null,
           tabs: tabs.map((tab) => tab.id).toList(growable: false),
           initialFilters: initialFilters,
-          initialNetworkAvailability:
-              locate<ConnectivityCubit>().state.networkAvailability,
         );
       },
       child: MultiBlocListener(
         listeners: [
-          BlocListener<ConnectivityCubit, ConnectivityState>(
-            listenWhen: (previous, current) =>
-                previous.networkAvailability != current.networkAvailability,
-            listener: (context, state) {
-              final locate = context.read;
-              locate<HomeBloc>().add(
-                HomeNetworkAvailabilityChanged(state.networkAvailability),
-              );
-            },
-          ),
           BlocListener<SettingsCubit, SettingsState>(
             listenWhen: (previous, current) =>
                 previous.endpointConfig != current.endpointConfig,

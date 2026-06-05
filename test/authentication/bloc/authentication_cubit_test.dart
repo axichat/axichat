@@ -7,7 +7,6 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
-import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
@@ -20,7 +19,6 @@ import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
@@ -433,14 +431,13 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Manual login attempts XMPP when device network is unavailable.',
+      'Manual login attempts XMPP directly.',
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
         initialEndpointConfig: _xmppOnlyEndpointConfig,
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
-        resolveNetworkAvailability: () async => NetworkAvailability.unavailable,
       ),
       act: (bloc) =>
           bloc.login(username: validUsername, password: validPassword),
@@ -796,7 +793,7 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Stored login continues normally when network availability plugin is unavailable.',
+      'Stored login attempts XMPP directly.',
       setUp: () {
         credentialStorage['jid'] = validJid;
         credentialStorage['password'] = validPassword;
@@ -809,8 +806,6 @@ void main() {
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
-        resolveNetworkAvailability: () async =>
-            throw MissingPluginException('connectivity unavailable'),
       ),
       act: (bloc) => bloc.login(),
       expect: () => [
@@ -1593,13 +1588,24 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Stored login resumes offline immediately when device network is unavailable.',
+      'Stored login resumes offline after XMPP network failure.',
       setUp: () {
         credentialStorage['jid'] = validJid;
         credentialStorage['password'] = validPassword;
         credentialStorage['password_prehashed_v1'] = true.toString();
         credentialStorage['${validJid}_database_prefix'] = 'prefix';
         credentialStorage['prefix_database_passphrase'] = 'passphrase';
+        when(
+          () => mockXmppService.connect(
+            jid: any(named: 'jid'),
+            password: any(named: 'password'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenThrow(XmppNetworkException());
         when(
           () => mockXmppService.resumeOfflineSession(
             jid: any(named: 'jid'),
@@ -1617,7 +1623,9 @@ void main() {
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
-        resolveNetworkAvailability: () async => NetworkAvailability.unavailable,
+        endpointResolver: EndpointResolver(
+          lookup: (_) async => const <InternetAddress>[],
+        ),
       ),
       act: (bloc) => bloc.login(),
       expect: () => const [
@@ -1629,17 +1637,20 @@ void main() {
       ],
       verify: (_) {
         final defaultEndpoint = serverLookup[EndpointConfig.defaultDomain]!;
-        verifyNever(
+        verify(
           () => mockXmppService.connect(
-            jid: any(named: 'jid'),
-            password: any(named: 'password'),
-            databasePrefix: any(named: 'databasePrefix'),
-            databasePassphrase: any(named: 'databasePassphrase'),
-            preHashed: any(named: 'preHashed'),
-            reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
+            jid: validJid,
+            password: validPassword,
+            databasePrefix: 'prefix',
+            databasePassphrase: 'passphrase',
+            preHashed: true,
+            reuseExistingSession: false,
+            endpoint: EndpointOverride(
+              host: defaultEndpoint.host,
+              port: defaultEndpoint.port,
+            ),
           ),
-        );
+        ).called(1);
         verify(
           () => mockXmppService.resumeOfflineSession(
             jid: validJid,
@@ -1665,6 +1676,17 @@ void main() {
         credentialStorage['${validJid}_database_prefix'] = 'prefix';
         credentialStorage['prefix_database_passphrase'] = 'passphrase';
         when(
+          () => mockXmppService.connect(
+            jid: any(named: 'jid'),
+            password: any(named: 'password'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenThrow(XmppNetworkException());
+        when(
           () => mockXmppService.resumeOfflineSession(
             jid: any(named: 'jid'),
             databasePrefix: any(named: 'databasePrefix'),
@@ -1684,7 +1706,9 @@ void main() {
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
-        resolveNetworkAvailability: () async => NetworkAvailability.unavailable,
+        endpointResolver: EndpointResolver(
+          lookup: (_) async => const <InternetAddress>[],
+        ),
       ),
       act: (bloc) => bloc.login(),
       expect: () => const [
@@ -1709,17 +1733,20 @@ void main() {
         ),
       ],
       verify: (_) {
-        verifyNever(
+        verify(
           () => mockXmppService.connect(
-            jid: any(named: 'jid'),
-            password: any(named: 'password'),
-            databasePrefix: any(named: 'databasePrefix'),
-            databasePassphrase: any(named: 'databasePassphrase'),
-            preHashed: any(named: 'preHashed'),
-            reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
+            jid: validJid,
+            password: validPassword,
+            databasePrefix: 'prefix',
+            databasePassphrase: 'passphrase',
+            preHashed: true,
+            reuseExistingSession: false,
+            endpoint: const EndpointOverride(
+              host: 'xmpp.custom.example',
+              port: 6222,
+            ),
           ),
-        );
+        ).called(1);
         verify(
           () => mockXmppService.resumeOfflineSession(
             jid: validJid,

@@ -829,13 +829,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     }
                     if (!state.emailEnabled) return;
                     final emailService = context.read<EmailService>();
-                    if (state.networkAvailability.isUnavailable) {
-                      fireAndForget(
-                        emailService.handleNetworkLost,
-                        operationName: 'App.emailNetworkLost',
-                      );
-                      return;
-                    }
                     if (state.networkAvailability.isAvailable) {
                       fireAndForget(
                         emailService.handleNetworkAvailable,
