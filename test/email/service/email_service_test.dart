@@ -2153,6 +2153,94 @@ void main() {
     verify(() => transport.notifyNetworkAvailable()).called(1);
   });
 
+  test('foreground resume does not overwrite queued network lost', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+    addTearDown(service.shutdown);
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    final availableStarted = Completer<void>();
+    final releaseAvailable = Completer<void>();
+    final lostStarted = Completer<void>();
+    when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {
+      if (!availableStarted.isCompleted) {
+        availableStarted.complete();
+      }
+      await releaseAvailable.future;
+    });
+    when(() => transport.notifyNetworkLost()).thenAnswer((_) async {
+      if (!lostStarted.isCompleted) {
+        lostStarted.complete();
+      }
+    });
+
+    final available = service.handleNetworkAvailable();
+    await availableStarted.future;
+    final lost = service.handleNetworkLost();
+    final foregroundResume = service.handleForegroundResumeNetworkAvailable();
+    await pumpEventQueue();
+
+    expect(lostStarted.isCompleted, isFalse);
+
+    releaseAvailable.complete();
+    await Future.wait([available, lost, foregroundResume]);
+
+    expect(lostStarted.isCompleted, isTrue);
+    verify(() => transport.notifyNetworkAvailable()).called(1);
+    verify(() => transport.notifyNetworkLost()).called(1);
+  });
+
+  test('foreground resume does not follow active network lost', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+    addTearDown(service.shutdown);
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    final lostStarted = Completer<void>();
+    final releaseLost = Completer<void>();
+    when(() => transport.notifyNetworkLost()).thenAnswer((_) async {
+      if (!lostStarted.isCompleted) {
+        lostStarted.complete();
+      }
+      await releaseLost.future;
+    });
+
+    final lost = service.handleNetworkLost();
+    await lostStarted.future;
+    final foregroundResume = service.handleForegroundResumeNetworkAvailable();
+    await pumpEventQueue();
+
+    releaseLost.complete();
+    await Future.wait([lost, foregroundResume]);
+
+    verify(() => transport.notifyNetworkLost()).called(1);
+    verifyNever(() => transport.notifyNetworkAvailable());
+  });
+
   test('performBackgroundFetch delegates to transport when ready', () async {
     final service = EmailService(
       credentialStore: credentialStore,

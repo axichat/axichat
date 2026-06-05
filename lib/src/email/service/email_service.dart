@@ -748,6 +748,7 @@ class EmailService {
   final EmailAsyncQueue _readStateQueue = EmailAsyncQueue();
   final EmailAsyncQueue _mdnConfigQueue = EmailAsyncQueue();
   _EmailNetworkTransition? _pendingNetworkTransition;
+  _EmailNetworkTransition? _activeNetworkTransition;
   final Set<Future<void>> _activeAppDatabaseOperations = <Future<void>>{};
 
   void updateEndpointConfig(EndpointConfig config) {
@@ -2032,6 +2033,7 @@ class EmailService {
     _networkSignalQueue.reset();
     _networkTransitionQueue.reset();
     _pendingNetworkTransition = null;
+    _activeNetworkTransition = null;
     _reconnectCatchUpQueue.reset();
     _reconnectRestartQueue.reset();
     _channelOverflowRecoveryQueue.reset();
@@ -2214,6 +2216,7 @@ class EmailService {
     _networkSignalQueue.reset();
     _networkTransitionQueue.reset();
     _pendingNetworkTransition = null;
+    _activeNetworkTransition = null;
     _reconnectCatchUpQueue.reset();
     _reconnectRestartQueue.reset();
     _contactsSyncQueue.reset();
@@ -3300,6 +3303,11 @@ class EmailService {
   }
 
   void _setPendingNetworkTransition(_EmailNetworkTransition transition) {
+    if (transition == _EmailNetworkTransition.foregroundResumeAvailable &&
+        (_pendingNetworkTransition == _EmailNetworkTransition.lost ||
+            _activeNetworkTransition == _EmailNetworkTransition.lost)) {
+      return;
+    }
     if (_pendingNetworkTransition ==
             _EmailNetworkTransition.foregroundResumeAvailable &&
         transition == _EmailNetworkTransition.available) {
@@ -3309,15 +3317,24 @@ class EmailService {
   }
 
   Future<void> _runNetworkTransition(_EmailNetworkTransition transition) async {
-    switch (transition) {
-      case _EmailNetworkTransition.lost:
-        await _handleNetworkLost();
-      case _EmailNetworkTransition.available:
-        await _handleNetworkAvailable(_EmailReconnectRestartPolicy.offlineOnly);
-      case _EmailNetworkTransition.foregroundResumeAvailable:
-        await _handleNetworkAvailable(
-          _EmailReconnectRestartPolicy.foregroundResume,
-        );
+    _activeNetworkTransition = transition;
+    try {
+      switch (transition) {
+        case _EmailNetworkTransition.lost:
+          await _handleNetworkLost();
+        case _EmailNetworkTransition.available:
+          await _handleNetworkAvailable(
+            _EmailReconnectRestartPolicy.offlineOnly,
+          );
+        case _EmailNetworkTransition.foregroundResumeAvailable:
+          await _handleNetworkAvailable(
+            _EmailReconnectRestartPolicy.foregroundResume,
+          );
+      }
+    } finally {
+      if (_activeNetworkTransition == transition) {
+        _activeNetworkTransition = null;
+      }
     }
   }
 
