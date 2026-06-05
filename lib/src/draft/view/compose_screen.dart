@@ -50,7 +50,6 @@ class _ComposeScreenState extends State<ComposeScreen> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return PopScope(
       canPop: _allowPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -91,25 +90,15 @@ class _ComposeScreenState extends State<ComposeScreen> {
         ),
         body: Align(
           alignment: Alignment.topCenter,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.m,
-              spacing.m,
-              spacing.m,
-              keyboardVisible ? 0 : spacing.m,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: sizing.composeWindowExpandedWidth,
             ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: sizing.composeWindowExpandedWidth,
-              ),
-              child: AxiModalSurface(
-                child: ComposeDraftContent(
-                  seed: widget.seed,
-                  draftFormKey: _draftFormKey,
-                  onClosed: _popScreen,
-                  onDiscarded: _popScreen,
-                ),
-              ),
+            child: ComposeDraftContent(
+              seed: widget.seed,
+              draftFormKey: _draftFormKey,
+              onClosed: _popScreen,
+              onDiscarded: _popScreen,
             ),
           ),
         ),

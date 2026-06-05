@@ -686,7 +686,9 @@ class DraftFormState extends State<DraftForm> {
                     ? AutovalidateMode.always
                     : AutovalidateMode.disabled;
                 return SingleChildScrollView(
-                  padding: EdgeInsets.zero,
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewPaddingOf(context).bottom,
+                  ),
                   child: Form(
                     key: _formKey,
                     autovalidateMode: autovalidateMode,

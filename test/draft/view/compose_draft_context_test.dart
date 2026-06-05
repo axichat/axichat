@@ -70,6 +70,61 @@ void main() {
       ).called(1);
     },
   );
+
+  testWidgets('compose route keeps actions above keyboard at bottom scroll', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(390, 844)
+      ..devicePixelRatio = 1
+      ..padding = const FakeViewPadding(bottom: 24);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      tester.view.resetPadding();
+      tester.view.resetViewInsets();
+    });
+
+    final harness = _ComposeDraftContextHarness();
+    addTearDown(harness.dispose);
+
+    await tester.pumpWidget(harness.wrap());
+
+    await tester.tap(find.text('Open compose draft'));
+    await tester.pumpAndSettle();
+
+    final appBarBottom = tester.getRect(find.byType(AppBar)).bottom;
+    final recipientsRect = tester.getRect(find.byType(RecipientChipsBar));
+    expect(recipientsRect.top, moreOrLessEquals(appBarBottom, epsilon: 1));
+    expect(recipientsRect.left, moreOrLessEquals(0, epsilon: 1));
+    expect(
+      recipientsRect.right,
+      moreOrLessEquals(
+        tester.view.physicalSize.width / tester.view.devicePixelRatio,
+        epsilon: 1,
+      ),
+    );
+
+    await _enterBodyText(tester, List.filled(32, 'message line').join('\n'));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await tester.pump();
+    await tester.drag(
+      find.byType(SingleChildScrollView).last,
+      const Offset(0, -1200),
+    );
+    await tester.pumpAndSettle();
+
+    final visibleBottom =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio - 320;
+    expect(
+      tester.getRect(find.widgetWithText(AxiButton, 'Discard')).bottom,
+      lessThanOrEqualTo(visibleBottom),
+    );
+    expect(
+      tester.getRect(find.widgetWithText(AxiButton, 'Save draft')).bottom,
+      lessThanOrEqualTo(visibleBottom),
+    );
+  });
 }
 
 class _ComposeDraftContextHarness {

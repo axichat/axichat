@@ -75,6 +75,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   });
 
+  testWidgets('rejects typed raw axi.im recipient', (tester) async {
+    final harness = _DraftFormHarness();
+    when(() => harness.settingsCubit.state).thenReturn(
+      const SettingsState(endpointConfig: EndpointConfig(smtpEnabled: false)),
+    );
+
+    await tester.pumpWidget(
+      harness.wrap(
+        const DraftForm(
+          initialRecipients: <ComposerRecipient>[],
+          body: 'hello',
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await _submitRecipientText(tester, 'axi.im');
+    await _submitRecipientText(tester, 'peer@example.com');
+
+    expect(find.text('axi.im'), findsNothing);
+    expect(find.text('peer@example.com'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
   testWidgets(
     'does not delete tracked draft when autosaved form becomes empty',
     (tester) async {

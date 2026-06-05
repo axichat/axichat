@@ -147,7 +147,6 @@ class DraftComposerView extends StatelessWidget {
     final sectionSpacing = spacing.m;
     final smallGap = spacing.s;
     final onAutosaveChanged = this.onAutosaveChanged;
-    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return _DraftTaskDropRegion(
       onTaskDropped: enabled ? onTaskDropped : null,
@@ -357,7 +356,7 @@ class DraftComposerView extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (!keyboardVisible) SizedBox(height: sectionSpacing),
+                SizedBox(height: sectionSpacing),
               ],
             ),
           ),
