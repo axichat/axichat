@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 enum NetworkAvailability {
   unknown,
@@ -35,15 +36,23 @@ class NetworkAvailabilityService {
   NetworkAvailability _current = NetworkAvailability.unknown;
   Future<void>? _startFuture;
   int _startRequests = 0;
+  bool _connectivityPluginAvailable = true;
 
   NetworkAvailability get current => _current;
 
   Stream<NetworkAvailability> get stream => _controller.stream;
 
   Future<NetworkAvailability> refresh() async {
-    final availability = await _resolveAvailability(
-      await _connectivity.checkConnectivity(),
-    );
+    Object? result;
+    try {
+      result = await _connectivity.checkConnectivity();
+      _connectivityPluginAvailable = true;
+    } on MissingPluginException {
+      _connectivityPluginAvailable = false;
+      _updateAvailability(NetworkAvailability.unknown);
+      return _current;
+    }
+    final availability = await _resolveAvailability(result);
     _updateAvailability(availability);
     return availability;
   }
@@ -111,10 +120,24 @@ class NetworkAvailabilityService {
 
   Future<void> _startListener() async {
     await refresh();
-    if (_startRequests <= 0 || _subscription != null) return;
+    if (!_connectivityPluginAvailable ||
+        _startRequests <= 0 ||
+        _subscription != null) {
+      return;
+    }
     _subscription = _connectivity.onConnectivityChanged.cast<Object?>().listen(
       _handleConnectivityChange,
+      onError: _handleConnectivityError,
     );
+  }
+
+  void _handleConnectivityError(Object error, StackTrace stackTrace) {
+    if (error is MissingPluginException) {
+      _connectivityPluginAvailable = false;
+      _updateAvailability(NetworkAvailability.unknown);
+      return;
+    }
+    Zone.current.handleUncaughtError(error, stackTrace);
   }
 
   void _releaseStartRequest() {

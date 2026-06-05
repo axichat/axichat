@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -78,6 +79,52 @@ void main() {
     await service.stop();
     expect(connectivity.cancelCount, 1);
   });
+
+  test(
+    'missing connectivity plugin completes start with unknown state',
+    () async {
+      final connectivity = _FakeConnectivity(
+        check: () => Future<List<ConnectivityResult>>.error(
+          MissingPluginException('connectivity check unavailable'),
+        ),
+      );
+      final service = NetworkAvailabilityService.forTesting(
+        connectivity: connectivity,
+      );
+
+      await service.start();
+
+      expect(service.current, NetworkAvailability.unknown);
+      expect(connectivity.listenCount, 0);
+
+      await service.stop();
+      expect(connectivity.cancelCount, 0);
+    },
+  );
+
+  test('missing connectivity event plugin resets state to unknown', () async {
+    final connectivity = _FakeConnectivity(
+      check: () => Future<List<ConnectivityResult>>.value(const [
+        ConnectivityResult.wifi,
+      ]),
+    );
+    final service = NetworkAvailabilityService.forTesting(
+      connectivity: connectivity,
+    );
+
+    await service.start();
+    expect(service.current, NetworkAvailability.available);
+
+    connectivity.emitError(
+      MissingPluginException('connectivity listener unavailable'),
+    );
+    await pumpEventQueue();
+
+    expect(service.current, NetworkAvailability.unknown);
+
+    await service.stop();
+    expect(connectivity.cancelCount, 1);
+  });
 }
 
 class _FakeConnectivity implements Connectivity {
@@ -108,6 +155,10 @@ class _FakeConnectivity implements Connectivity {
   @override
   Stream<List<ConnectivityResult>> get onConnectivityChanged =>
       _controller.stream;
+
+  void emitError(Object error) {
+    _controller.addError(error);
+  }
 }
 
 class _ConnectivityCheckException implements Exception {
