@@ -3303,10 +3303,14 @@ class EmailService {
   }
 
   void _setPendingNetworkTransition(_EmailNetworkTransition transition) {
-    if (transition == _EmailNetworkTransition.foregroundResumeAvailable &&
-        (_pendingNetworkTransition == _EmailNetworkTransition.lost ||
-            _activeNetworkTransition == _EmailNetworkTransition.lost)) {
-      return;
+    if (transition == _EmailNetworkTransition.foregroundResumeAvailable) {
+      if (_pendingNetworkTransition == _EmailNetworkTransition.lost) {
+        return;
+      }
+      if (_activeNetworkTransition == _EmailNetworkTransition.lost &&
+          _pendingNetworkTransition != _EmailNetworkTransition.available) {
+        return;
+      }
     }
     if (_pendingNetworkTransition ==
             _EmailNetworkTransition.foregroundResumeAvailable &&

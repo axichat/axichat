@@ -2241,6 +2241,56 @@ void main() {
     verifyNever(() => transport.notifyNetworkAvailable());
   });
 
+  test(
+    'foreground resume upgrades queued available behind active network lost',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+      addTearDown(service.shutdown);
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      clearInteractions(transport);
+      final lostStarted = Completer<void>();
+      final releaseLost = Completer<void>();
+      when(() => transport.notifyNetworkLost()).thenAnswer((_) async {
+        if (!lostStarted.isCompleted) {
+          lostStarted.complete();
+        }
+        await releaseLost.future;
+      });
+      when(() => transport.isIoRunning).thenReturn(true);
+      when(() => transport.connectivity()).thenAnswer((_) async => 2000);
+
+      final lost = service.handleNetworkLost();
+      await lostStarted.future;
+      final available = service.handleNetworkAvailable();
+      final foregroundResume = service.handleForegroundResumeNetworkAvailable();
+      await pumpEventQueue();
+
+      releaseLost.complete();
+      await Future.wait([lost, available, foregroundResume]);
+      await Future<void>.delayed(const Duration(milliseconds: 4300));
+      await pumpMicrotasks();
+
+      verify(() => transport.notifyNetworkLost()).called(1);
+      verify(() => transport.notifyNetworkAvailable()).called(3);
+      verify(() => transport.stop()).called(1);
+      verify(() => transport.start()).called(1);
+    },
+  );
+
   test('performBackgroundFetch delegates to transport when ready', () async {
     final service = EmailService(
       credentialStore: credentialStore,
