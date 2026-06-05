@@ -1497,6 +1497,91 @@ void main() {
     ]);
     await tester.pump(const Duration(milliseconds: 400));
   });
+
+  testWidgets('email partial recipients remain removable after pruning', (
+    tester,
+  ) async {
+    final harness = _DraftFormHarness();
+    final firstChat = Chat(
+      jid: 'chat-a@example.com',
+      title: 'Mail A',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+      transport: MessageTransport.email,
+      emailAddress: 'a@example.com',
+    );
+    final secondChat = Chat(
+      jid: 'chat-b@example.com',
+      title: 'Mail B',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026),
+      transport: MessageTransport.email,
+      emailAddress: 'b@example.com',
+    );
+    when(
+      () => harness.settingsCubit.state,
+    ).thenReturn(const SettingsState(emailSendConfirmationEnabled: false));
+    when(() => harness.chatsCubit.state).thenReturn(
+      ChatsState(
+        openCalendar: false,
+        items: [firstChat, secondChat],
+        visibleItems: [firstChat, secondChat],
+        creationStatus: RequestStatus.none,
+      ),
+    );
+    when(
+      () => harness.draftCubit.sendDraft(
+        id: any(named: 'id'),
+        xmppTargets: any(named: 'xmppTargets'),
+        emailTargets: any(named: 'emailTargets'),
+        body: any(named: 'body'),
+        shareTokenSignatureEnabled: any(named: 'shareTokenSignatureEnabled'),
+        subject: any(named: 'subject'),
+        quoteTarget: any(named: 'quoteTarget'),
+        attachments: any(named: 'attachments'),
+        calendarTaskIcsMessage: any(named: 'calendarTaskIcsMessage'),
+        forwardedBlocks: any(named: 'forwardedBlocks'),
+      ),
+    ).thenAnswer(
+      (_) async => DraftSendOutcome.failure(
+        failureType: DraftSendFailureType.sendFailed,
+        completedEmailRecipientKeys: const {'a@example.com'},
+        latestEmailRecipientStatuses: const {
+          'a@example.com': FanOutRecipientState.sent,
+          'b@example.com': FanOutRecipientState.failed,
+        },
+      ),
+    );
+
+    await tester.pumpWidget(
+      harness.wrap(
+        DraftForm(
+          jids: const ['chat-a@example.com', 'chat-b@example.com'],
+          initialRecipients: harness.initialRecipients(const [
+            'chat-a@example.com',
+            'chat-b@example.com',
+          ]),
+          body: 'hello',
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Send draft'));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.bySemanticsLabel('Delete').first);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 400));
+  });
 }
 
 class _DraftFormHarness {

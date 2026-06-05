@@ -1189,31 +1189,29 @@ class DraftFormState extends State<DraftForm> {
         outcome.completedEmailRecipientKeys.isEmpty) {
       return;
     }
-    _recipients = _recipients
-        .where((recipient) {
-          if (!recipient.included) {
-            return true;
-          }
-          if (outcome.completedTransports.contains(DraftSendTransport.email) &&
-              recipient.usesEmailTransport()) {
-            return false;
-          }
-          if (recipient.usesEmailTransport() &&
-              _recipientMatchesEmailKeys(
-                recipient,
-                outcome.completedEmailRecipientKeys,
-              )) {
-            return false;
-          }
-          if (outcome.completedTransports.contains(DraftSendTransport.xmpp)) {
-            final jid = recipient.xmppJid();
-            if (jid != null && jid.isNotEmpty) {
-              return false;
-            }
-          }
-          return true;
-        })
-        .toList(growable: false);
+    _recipients = _recipients.where((recipient) {
+      if (!recipient.included) {
+        return true;
+      }
+      if (outcome.completedTransports.contains(DraftSendTransport.email) &&
+          recipient.usesEmailTransport()) {
+        return false;
+      }
+      if (recipient.usesEmailTransport() &&
+          _recipientMatchesEmailKeys(
+            recipient,
+            outcome.completedEmailRecipientKeys,
+          )) {
+        return false;
+      }
+      if (outcome.completedTransports.contains(DraftSendTransport.xmpp)) {
+        final jid = recipient.xmppJid();
+        if (jid != null && jid.isNotEmpty) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
   }
 
   bool _recipientMatchesEmailKeys(
