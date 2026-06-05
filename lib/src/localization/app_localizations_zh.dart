@@ -2982,6 +2982,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucMembersTitle => '成员';
 
   @override
+  String get mucMemberListMayBeIncomplete => '此列表可能不完整。服务器或你在房间中的角色可能会隐藏部分成员。';
+
+  @override
   String get mucEditAvatar => '编辑房间头像';
 
   @override
@@ -9771,6 +9774,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get mucMembersTitle => '成員';
+
+  @override
+  String get mucMemberListMayBeIncomplete => '此列表可能不完整。伺服器或你在聊天室中的角色可能會隱藏部分成員。';
 
   @override
   String get mucEditAvatar => '編輯聊天室頭像';

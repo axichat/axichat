@@ -1306,6 +1306,7 @@
   "mucEnterNicknamePlaceholder": "Enter a nickname",
   "mucUpdateNickname": "Update",
   "mucMembersTitle": "Members",
+  "mucMemberListMayBeIncomplete": "This list may be incomplete. Some room members can be hidden by the server or by your room role.",
   "mucEditAvatar": "Edit room avatar",
   "mucAvatarMenuDescription": "Room members will see this avatar.",
   "mucInviteUser": "Invite user",

@@ -1165,6 +1165,7 @@
   "mucEnterNicknamePlaceholder": "Spitznamen eingeben",
   "mucUpdateNickname": "Aktualisieren",
   "mucMembersTitle": "Mitglieder",
+  "mucMemberListMayBeIncomplete": "Diese Liste ist möglicherweise unvollständig. Einige Raummitglieder können vom Server oder durch deine Raumrolle ausgeblendet werden.",
   "mucEditAvatar": "Raum-Avatar bearbeiten",
   "mucAvatarMenuDescription": "Raummitglieder sehen diesen Avatar.",
   "mucInviteUser": "Benutzer einladen",

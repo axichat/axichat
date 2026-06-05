@@ -1165,6 +1165,7 @@
   "mucEnterNicknamePlaceholder": "输入昵称",
   "mucUpdateNickname": "更新",
   "mucMembersTitle": "成员",
+  "mucMemberListMayBeIncomplete": "此列表可能不完整。服务器或你在房间中的角色可能会隐藏部分成员。",
   "mucEditAvatar": "编辑房间头像",
   "mucAvatarMenuDescription": "房间成员将看到此头像。",
   "mucInviteUser": "邀请用户",

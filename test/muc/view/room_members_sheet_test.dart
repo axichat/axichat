@@ -86,6 +86,63 @@ void main() {
     expect(shape.side.color, colors.border);
   });
 
+  testWidgets('room header shows title and member list caveat', (tester) async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+
+    await tester.pumpWidget(
+      _RoomMembersSheetTestApp(
+        child: RoomMembersSheet(
+          roomState: RoomState(
+            roomJid: roomJid,
+            myOccupantJid: selfOccupantId,
+            occupants: <String, Occupant>{
+              selfOccupantId: Occupant(
+                occupantId: selfOccupantId,
+                nick: 'self',
+                realJid: 'self@axi.im',
+                affiliation: OccupantAffiliation.owner,
+                role: OccupantRole.moderator,
+              ),
+            },
+          ),
+          roomTitle: 'Project room',
+          memberSections: <RoomMemberSection>[
+            RoomMemberSection(
+              kind: RoomMemberSectionKind.owners,
+              members: <RoomMemberEntry>[
+                RoomMemberEntry(
+                  occupant: Occupant(
+                    occupantId: selfOccupantId,
+                    nick: 'self',
+                    realJid: 'self@axi.im',
+                    affiliation: OccupantAffiliation.owner,
+                    role: OccupantRole.moderator,
+                  ),
+                  actions: const <MucModerationAction>[],
+                ),
+              ],
+            ),
+          ],
+          canInvite: false,
+          avatarUpdateInFlight: false,
+          onInvite: (_) {},
+          onAction: (_, _, _) async {},
+          onOpenDirectChat: (_) async => true,
+        ),
+      ),
+    );
+
+    expect(find.text('Project room'), findsOneWidget);
+    expect(find.text(roomJid), findsOneWidget);
+    expect(
+      find.text(
+        'This list may be incomplete. Some room members can be hidden by the server or by your room role.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'member action panel expands inside the tile bubble and respects async loading',
     (tester) async {

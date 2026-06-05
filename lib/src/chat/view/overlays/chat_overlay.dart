@@ -33,58 +33,63 @@ class _RoomMembersDrawerContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ChatBloc, ChatState>(
-      builder: (context, state) {
-        final l10n = context.l10n;
-        final roomState = state.roomState;
-        if (roomState == null ||
-            (!roomState.isReadyForMessaging &&
-                !roomState.hasJoinError &&
-                !roomState.hasTerminalExit)) {
-          final colors = context.colorScheme;
-          final textTheme = context.textTheme;
-          final spacing = context.spacing;
-          return SafeArea(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AxiProgressIndicator(
-                    color: colors.foreground,
-                    semanticsLabel: l10n.chatMembersLoading,
-                  ),
-                  SizedBox(height: spacing.s),
-                  Text(
-                    l10n.chatMembersLoadingEllipsis,
-                    style: textTheme.muted.copyWith(
-                      color: colors.mutedForeground,
+    return AxiModalSurface(
+      padding: EdgeInsets.zero,
+      borderColor: Colors.transparent,
+      shadows: const <BoxShadow>[],
+      child: BlocBuilder<ChatBloc, ChatState>(
+        builder: (context, state) {
+          final l10n = context.l10n;
+          final roomState = state.roomState;
+          if (roomState == null ||
+              (!roomState.isReadyForMessaging &&
+                  !roomState.hasJoinError &&
+                  !roomState.hasTerminalExit)) {
+            final colors = context.colorScheme;
+            final textTheme = context.textTheme;
+            final spacing = context.spacing;
+            return SafeArea(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AxiProgressIndicator(
+                      color: colors.foreground,
+                      semanticsLabel: l10n.chatMembersLoading,
                     ),
-                  ),
-                ],
+                    SizedBox(height: spacing.s),
+                    Text(
+                      l10n.chatMembersLoadingEllipsis,
+                      style: textTheme.muted.copyWith(
+                        color: colors.mutedForeground,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            );
+          }
+          return RoomMembersContent(
+            roomState: roomState,
+            memberSections: state.roomMemberSections,
+            avatarUpdateInFlight: state.roomAvatarUpdateStatus.isLoading,
+            canInvite:
+                roomState.myAffiliation.isOwner ||
+                roomState.myAffiliation.isAdmin ||
+                roomState.myRole.isModerator,
+            onInvite: onInvite,
+            onAction: onAction,
+            onOpenDirectChat: onOpenDirectChat,
+            roomAvatarPath: state.chat?.avatarPath,
+            roomTitle: state.chat?.title,
+            onChangeNickname: onChangeNickname,
+            onLeaveRoom: onLeaveRoom,
+            onDestroyRoom: onDestroyRoom,
+            currentNickname: roomState.selfNick,
+            onClose: onClose,
           );
-        }
-        return RoomMembersSheet(
-          roomState: roomState,
-          memberSections: state.roomMemberSections,
-          avatarUpdateInFlight: state.roomAvatarUpdateStatus.isLoading,
-          canInvite:
-              roomState.myAffiliation.isOwner ||
-              roomState.myAffiliation.isAdmin ||
-              roomState.myRole.isModerator,
-          onInvite: onInvite,
-          onAction: onAction,
-          onOpenDirectChat: onOpenDirectChat,
-          roomAvatarPath: state.chat?.avatarPath,
-          onChangeNickname: onChangeNickname,
-          onLeaveRoom: onLeaveRoom,
-          onDestroyRoom: onDestroyRoom,
-          currentNickname: roomState.selfNick,
-          onClose: onClose,
-          useSurface: true,
-        );
-      },
+        },
+      ),
     );
   }
 }

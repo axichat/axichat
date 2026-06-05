@@ -1158,6 +1158,7 @@
   "mucEnterNicknamePlaceholder": "輸入暱稱",
   "mucUpdateNickname": "更新",
   "mucMembersTitle": "成員",
+  "mucMemberListMayBeIncomplete": "此列表可能不完整。伺服器或你在聊天室中的角色可能會隱藏部分成員。",
   "mucEditAvatar": "編輯聊天室頭像",
   "mucAvatarMenuDescription": "聊天室成員會看到此頭像。",
   "mucInviteUser": "邀請用戶",

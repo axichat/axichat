@@ -3167,6 +3167,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get mucMembersTitle => 'Mitglieder';
 
   @override
+  String get mucMemberListMayBeIncomplete =>
+      'Diese Liste ist möglicherweise unvollständig. Einige Raummitglieder können vom Server oder durch deine Raumrolle ausgeblendet werden.';
+
+  @override
   String get mucEditAvatar => 'Raum-Avatar bearbeiten';
 
   @override

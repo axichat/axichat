@@ -3167,6 +3167,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get mucMembersTitle => 'Membres';
 
   @override
+  String get mucMemberListMayBeIncomplete =>
+      'Cette liste peut être incomplète. Certains membres de la salle peuvent être masqués par le serveur ou par votre rôle dans la salle.';
+
+  @override
   String get mucEditAvatar => 'Modifier l’avatar de la salle';
 
   @override

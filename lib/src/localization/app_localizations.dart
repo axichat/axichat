@@ -5610,6 +5610,12 @@ abstract class AppLocalizations {
   /// **'Members'**
   String get mucMembersTitle;
 
+  /// No description provided for @mucMemberListMayBeIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'This list may be incomplete. Some room members can be hidden by the server or by your room role.'**
+  String get mucMemberListMayBeIncomplete;
+
   /// No description provided for @mucEditAvatar.
   ///
   /// In en, this message translates to:

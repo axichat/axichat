@@ -29,7 +29,59 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class RoomMembersSheet extends StatelessWidget {
-  const RoomMembersSheet({
+  RoomMembersSheet({
+    required RoomState roomState,
+    required List<RoomMemberSection> memberSections,
+    required bool canInvite,
+    required bool avatarUpdateInFlight,
+    required ValueChanged<String> onInvite,
+    required Future<void> Function(
+      String occupantId,
+      MucModerationAction action,
+      String actionLabel,
+    )
+    onAction,
+    required Future<bool> Function(String jid) onOpenDirectChat,
+    String? roomAvatarPath,
+    String? roomTitle,
+    ValueChanged<String>? onChangeNickname,
+    Future<void> Function()? onLeaveRoom,
+    Future<void> Function()? onDestroyRoom,
+    String? currentNickname,
+    VoidCallback? onClose,
+    super.key,
+  }) : content = RoomMembersContent(
+         roomState: roomState,
+         memberSections: memberSections,
+         canInvite: canInvite,
+         avatarUpdateInFlight: avatarUpdateInFlight,
+         onInvite: onInvite,
+         onAction: onAction,
+         onOpenDirectChat: onOpenDirectChat,
+         roomAvatarPath: roomAvatarPath,
+         roomTitle: roomTitle,
+         onChangeNickname: onChangeNickname,
+         onLeaveRoom: onLeaveRoom,
+         onDestroyRoom: onDestroyRoom,
+         currentNickname: currentNickname,
+         onClose: onClose,
+       );
+
+  final RoomMembersContent content;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiModalSurface(
+      padding: EdgeInsets.zero,
+      borderColor: Colors.transparent,
+      shadows: const <BoxShadow>[],
+      child: content,
+    );
+  }
+}
+
+class RoomMembersContent extends StatelessWidget {
+  const RoomMembersContent({
     required this.roomState,
     required this.memberSections,
     required this.canInvite,
@@ -38,12 +90,12 @@ class RoomMembersSheet extends StatelessWidget {
     required this.onAction,
     required this.onOpenDirectChat,
     this.roomAvatarPath,
+    this.roomTitle,
     this.onChangeNickname,
     this.onLeaveRoom,
     this.onDestroyRoom,
     this.currentNickname,
     this.onClose,
-    this.useSurface = true,
     super.key,
   });
 
@@ -60,12 +112,12 @@ class RoomMembersSheet extends StatelessWidget {
   onAction;
   final Future<bool> Function(String jid) onOpenDirectChat;
   final String? roomAvatarPath;
+  final String? roomTitle;
   final ValueChanged<String>? onChangeNickname;
   final Future<void> Function()? onLeaveRoom;
   final Future<void> Function()? onDestroyRoom;
   final String? currentNickname;
   final VoidCallback? onClose;
-  final bool useSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +164,7 @@ class RoomMembersSheet extends StatelessWidget {
             padding: avatarSectionPadding,
             child: _RoomAvatarSection(
               roomJid: roomState.roomJid,
+              roomTitle: roomTitle,
               avatarPath: avatarPath,
               canEdit: canEditAvatar,
               loading: avatarUpdateInFlight,
@@ -195,47 +248,53 @@ class RoomMembersSheet extends StatelessWidget {
                       ],
                     ),
                   )
-                : memberSections.isEmpty
-                ? Center(
-                    child: Text(
-                      l10n.mucNoMembers,
-                      style: theme.muted.copyWith(
-                        color: colors.mutedForeground,
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.mucMemberListMayBeIncomplete,
+                        style: theme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
                       ),
-                    ),
-                  )
-                : ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemBuilder: (context, index) {
-                      final group = memberSections[index];
-                      return _MemberSection(
-                        kind: group.kind,
-                        members: group.members,
-                        onAction: onAction,
-                        onOpenDirectChat: onOpenDirectChat,
-                        myOccupantJid: roomState.myOccupantJid,
-                        l10n: l10n,
-                        animationDuration: animationDuration,
-                      );
-                    },
-                    separatorBuilder: (_, _) => SizedBox(height: spacing.s),
-                    itemCount: memberSections.length,
+                      SizedBox(height: spacing.s),
+                      Expanded(
+                        child: memberSections.isEmpty
+                            ? Center(
+                                child: Text(
+                                  l10n.mucNoMembers,
+                                  style: theme.muted.copyWith(
+                                    color: colors.mutedForeground,
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: EdgeInsets.zero,
+                                itemBuilder: (context, index) {
+                                  final group = memberSections[index];
+                                  return _MemberSection(
+                                    kind: group.kind,
+                                    members: group.members,
+                                    onAction: onAction,
+                                    onOpenDirectChat: onOpenDirectChat,
+                                    myOccupantJid: roomState.myOccupantJid,
+                                    l10n: l10n,
+                                    animationDuration: animationDuration,
+                                  );
+                                },
+                                separatorBuilder: (_, _) =>
+                                    SizedBox(height: spacing.s),
+                                itemCount: memberSections.length,
+                              ),
+                      ),
+                    ],
                   ),
           ),
         ),
       ],
     );
 
-    final Widget wrappedContent = useSurface
-        ? AxiModalSurface(
-            padding: EdgeInsets.zero,
-            borderColor: Colors.transparent,
-            shadows: const <BoxShadow>[],
-            child: content,
-          )
-        : content;
-
-    return wrappedContent;
+    return content;
   }
 
   Future<List<String>?> _promptInvite(BuildContext context) async {
@@ -314,6 +373,7 @@ class RoomMembersSheet extends StatelessWidget {
 class _RoomAvatarSection extends StatelessWidget {
   const _RoomAvatarSection({
     required this.roomJid,
+    required this.roomTitle,
     required this.avatarPath,
     required this.canEdit,
     required this.loading,
@@ -321,6 +381,7 @@ class _RoomAvatarSection extends StatelessWidget {
   });
 
   final String roomJid;
+  final String? roomTitle;
   final String? avatarPath;
   final bool canEdit;
   final bool loading;
@@ -332,6 +393,7 @@ class _RoomAvatarSection extends StatelessWidget {
     final motion = context.motion;
     final sizing = context.sizing;
     final spacing = context.spacing;
+    final textTheme = context.textTheme;
     final avatarSize = sizing.iconButtonTapTarget;
     final avatarSpacing = spacing.s;
     final l10n = context.l10n;
@@ -382,9 +444,38 @@ class _RoomAvatarSection extends StatelessWidget {
       children: [
         avatar,
         SizedBox(width: avatarSpacing),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _displayTitle(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.large.strong,
+              ),
+              SizedBox(height: spacing.xs),
+              Text(
+                roomJid,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.small.copyWith(color: colors.mutedForeground),
+              ),
+            ],
+          ),
+        ),
+        if (editButton != null) SizedBox(width: avatarSpacing),
         ?editButton,
       ],
     );
+  }
+
+  String _displayTitle() {
+    final trimmedTitle = roomTitle?.trim();
+    if (trimmedTitle != null && trimmedTitle.isNotEmpty) {
+      return trimmedTitle;
+    }
+    return roomJid;
   }
 }
 

@@ -3099,6 +3099,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mucMembersTitle => 'Members';
 
   @override
+  String get mucMemberListMayBeIncomplete =>
+      'This list may be incomplete. Some room members can be hidden by the server or by your room role.';
+
+  @override
   String get mucEditAvatar => 'Edit room avatar';
 
   @override

@@ -1161,6 +1161,7 @@
   "mucEnterNicknamePlaceholder": "Introduce un apodo",
   "mucUpdateNickname": "Actualizar",
   "mucMembersTitle": "Miembros",
+  "mucMemberListMayBeIncomplete": "Esta lista puede estar incompleta. Algunos miembros de la sala pueden estar ocultos por el servidor o por tu rol en la sala.",
   "mucEditAvatar": "Editar avatar de la sala",
   "mucAvatarMenuDescription": "Los miembros de la sala verán este avatar.",
   "mucInviteUser": "Invitar usuario",

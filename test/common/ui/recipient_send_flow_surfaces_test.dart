@@ -108,6 +108,43 @@ void main() {
       },
     );
 
+    testWidgets('room member drawer pending state uses modal surface loading', (
+      tester,
+    ) async {
+      final chat = _chat(
+        jid: 'room@conference.axi.im',
+        title: 'Room',
+        type: ChatType.groupChat,
+        myNickname: 'me',
+      );
+      final harness = _RecipientSurfaceHarness(chats: [chat]);
+      final events = _captureChatEvents(
+        harness,
+        state: ChatState(
+          items: const <Message>[],
+          messagesLoaded: true,
+          chat: chat,
+          roomState: null,
+        ),
+        jid: chat.jid,
+      );
+
+      await _pumpChatSurface(tester, harness);
+      await tester.tap(_roomMembersButtonFinder());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(events.whereType<ChatRoomMembersOpened>(), hasLength(1));
+      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.byType(AxiProgressIndicator),
+          matching: find.byType(AxiModalSurface),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('pinned panel failure retry dispatches retry event', (
       tester,
     ) async {
@@ -1223,6 +1260,12 @@ Finder _chatExpandDraftButtonFinder() {
 Finder _pinnedMessagesButtonFinder() {
   return find.byWidgetPredicate(
     (widget) => widget is AxiIconButton && widget.tooltip == 'Pinned messages',
+  );
+}
+
+Finder _roomMembersButtonFinder() {
+  return find.byWidgetPredicate(
+    (widget) => widget is AxiIconButton && widget.tooltip == 'Room members',
   );
 }
 
