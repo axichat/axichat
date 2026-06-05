@@ -121,10 +121,7 @@ class PendingOutgoingEmailSignature {
     if (!_signaturesMatch(subjectSignature, match.subjectSignature)) {
       return false;
     }
-    final normalizedText = _stripSubjectEchoFromTextSignature(
-      value: textSignature,
-      subject: subjectSignature,
-    );
+    final normalizedText = textSignature;
     final normalizedMatchText = _stripSubjectEchoFromTextSignature(
       value: match.textSignature,
       subject: match.subjectSignature,

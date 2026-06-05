@@ -183,6 +183,25 @@ void main() {
     expect(pending.matchesAttachmentFileFallback(incoming), isTrue);
   });
 
+  test('attachment fallback preserves pending caption that equals subject', () {
+    final pending = PendingOutgoingEmailSignature.fromOutgoing(
+      subject: 'Photos',
+      text: 'Photos',
+      fileName: 'photo.jpg',
+      fileMime: 'image/jpeg',
+      fileSizeBytes: 1234,
+    );
+    final incoming = PendingOutgoingEmailSignature.fromOutgoing(
+      subject: 'Photos',
+      filePath: '/delta/copied/blob',
+      fileMime: 'image/jpeg',
+      fileSizeBytes: 1234,
+    );
+
+    expect(pending.matches(incoming), isFalse);
+    expect(pending.matchesAttachmentFileFallback(incoming), isFalse);
+  });
+
   test('persists incoming timestamps from Delta core', () async {
     const chatId = 7;
     const msgId = 24;
