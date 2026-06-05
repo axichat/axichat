@@ -956,6 +956,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
       context: modalContext,
       isScrollControlled: true,
       useBottomSafeArea: context.calendarUseSheetBottomSafeArea,
+      preferDialogOnMobile: true,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
         return StatefulBuilder(
