@@ -3814,6 +3814,8 @@ void main() {
         expect(afterMessage?.subject, equals(subject));
         expect(afterMessage?.chatJid, equals('axi.im'));
         expect(afterMessage?.senderJid, equals('axi.im'));
+        final chat = await database.getChat('axi.im');
+        expect(chat?.unreadCount, equals(1));
       },
     );
 

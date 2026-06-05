@@ -66,6 +66,25 @@ void main() {
   });
 
   group('Message.countsTowardUnread', () {
+    test('counts subject-only direct messages as unread content', () {
+      const message = Message(
+        stanzaID: stanzaId,
+        senderJid: directSenderJid,
+        chatJid: directChatJid,
+        subject: 'Maintenance notice',
+      );
+
+      expect(message.hasUnreadContent, isTrue);
+      expect(
+        message.countsTowardUnread(
+          selfJid: 'self@example.com',
+          isGroupChat: false,
+          myOccupantJid: null,
+        ),
+        isTrue,
+      );
+    });
+
     test('ignores group messages whose stored real JID is self', () {
       const message = Message(
         stanzaID: stanzaId,

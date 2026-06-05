@@ -1021,12 +1021,13 @@ extension MessageReferenceIds on Message {
 
   bool get hasUnreadContent {
     final hasBody = body?.trim().isNotEmpty == true;
+    final hasSubject = subject?.trim().isNotEmpty == true;
     final hasAttachment = fileMetadataID?.trim().isNotEmpty == true;
     final pseudoMessageType = this.pseudoMessageType;
     if (isHiddenMultiDeviceSyncMessage) {
       return false;
     }
-    if (!(hasBody || hasAttachment)) {
+    if (!(hasBody || hasSubject || hasAttachment)) {
       return false;
     }
     if (pseudoMessageType != null && !pseudoMessageType.isInvite) {
