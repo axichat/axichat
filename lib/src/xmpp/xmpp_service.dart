@@ -4676,40 +4676,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     return _SocketConnectResult.connected;
   }
 
-  Future<bool> _axiImDnsARecordFallback({
-    required int port,
-    required String failedHost,
-  }) async {
-    try {
-      final records = await InternetAddress.lookup(
-        'axi.im',
-        type: InternetAddressType.IPv4,
-      ).timeout(const Duration(seconds: 10));
-      final seenHosts = <String>{};
-      for (final record in records) {
-        final host = record.address;
-        if (host == failedHost || !seenHosts.add(host)) {
-          continue;
-        }
-        _log.fine('Attempting axi.im DNS A fallback endpoint $host:$port...');
-        final result = await _hostPortConnect(host, port);
-        if (result == _SocketConnectResult.connected) {
-          return true;
-        }
-        if (result == _SocketConnectResult.superseded) {
-          return false;
-        }
-      }
-    } on SocketException catch (error) {
-      _log.warning('axi.im DNS A fallback lookup failed: $error');
-    } on TimeoutException catch (error) {
-      _log.warning('axi.im DNS A fallback lookup timed out: $error');
-    } on Exception catch (error) {
-      _log.warning('axi.im DNS A fallback failed: $error');
-    }
-    return false;
-  }
-
   @override
   Future<bool> connect(String domain, {String? host, int? port}) async {
     _secure = false;
@@ -4747,23 +4713,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       return false;
     }
 
-    if (domain == 'axi.im') {
-      _log.warning(
-        'Direct axi.im endpoint failed. Trying DNS A record fallback...',
-      );
-      final fallbackConnected = await _axiImDnsARecordFallback(
-        port: resolvedPort,
-        failedHost: resolvedHost,
-      );
-      if (fallbackConnected) {
-        _setupStreams();
-        return true;
-      }
-    }
-
-    _log.warning(
-      'Socket connection failed. DNS/SRV fallbacks are disabled for all domains except axi.im A fallback.',
-    );
+    _log.warning('Socket connection failed. DNS/SRV fallbacks are disabled.');
     await _onConnectFailure?.call();
     return false;
   }

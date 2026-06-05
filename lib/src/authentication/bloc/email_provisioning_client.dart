@@ -2,13 +2,11 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:logging/logging.dart';
 
 class EmailProvisioningCredentials {
@@ -252,16 +250,14 @@ class EmailProvisioningClient {
   }) : _baseUrl = _normalizeBase(baseUrl),
        _publicToken = _normalizePublicToken(publicToken),
        _requirePublicToken = requirePublicToken,
-       _httpClient = httpClient ?? _buildHttpClient(),
+       _httpClient = httpClient ?? http.Client(),
        _ownsClient = httpClient == null,
-       _debugBadCertificateCallbackEnabled = httpClient == null && kDebugMode,
        _log = logger ?? Logger('EmailProvisioningClient') {
     _validateBaseUrl(_baseUrl);
     _log.info(
       'Email provisioning client configured: '
       'base=$_baseUrl '
       'ownsClient=$_ownsClient '
-      'badCertAllowed=$_debugBadCertificateCallbackEnabled '
       'requirePublicToken=$_requirePublicToken '
       'publicTokenConfigured=$_publicTokenConfigured',
     );
@@ -313,7 +309,6 @@ class EmailProvisioningClient {
   final bool _requirePublicToken;
   final http.Client _httpClient;
   final bool _ownsClient;
-  final bool _debugBadCertificateCallbackEnabled;
   final Logger _log;
 
   bool get _publicTokenConfigured =>
@@ -332,13 +327,6 @@ class EmailProvisioningClient {
       'Using insecure email provisioning base URL '
       '(development override enabled).',
     );
-  }
-
-  static http.Client _buildHttpClient() {
-    if (!kDebugMode) {
-      return http.Client();
-    }
-    return IOClient(HttpClient()..badCertificateCallback = (_, _, _) => true);
   }
 
   void _ensureConfigured() {
@@ -916,7 +904,6 @@ class EmailProvisioningClient {
       'Email provisioning POST $logContext: '
       'url=$uri '
       'ownsClient=$_ownsClient '
-      'badCertAllowed=$_debugBadCertificateCallbackEnabled '
       'clientToken=${headers.containsKey('X-Client-Token')}',
     );
     try {
@@ -934,8 +921,7 @@ class EmailProvisioningClient {
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach $logContext service at $uri '
-        '(ownsClient=$_ownsClient, '
-        'badCertAllowed=$_debugBadCertificateCallbackEnabled).',
+        '(ownsClient=$_ownsClient).',
         error,
         stackTrace,
       );
@@ -957,7 +943,6 @@ class EmailProvisioningClient {
       'Email provisioning DELETE $logContext: '
       'url=$uri '
       'ownsClient=$_ownsClient '
-      'badCertAllowed=$_debugBadCertificateCallbackEnabled '
       'clientToken=${headers.containsKey('X-Client-Token')}',
     );
     try {
@@ -975,8 +960,7 @@ class EmailProvisioningClient {
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to reach $logContext service at $uri '
-        '(ownsClient=$_ownsClient, '
-        'badCertAllowed=$_debugBadCertificateCallbackEnabled).',
+        '(ownsClient=$_ownsClient).',
         error,
         stackTrace,
       );
