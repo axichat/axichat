@@ -333,6 +333,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatPresentationHydrationRequested,
       transformer: sequential(),
     );
+    on<_ChatReadStateSyncRequested>(
+      _onChatReadStateSyncRequested,
+      transformer: sequential(),
+    );
     on<ChatRenderedMessagesHydrationRequested>(
       _onChatRenderedMessagesHydrationRequested,
     );
@@ -572,6 +576,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   int? _emailUnreadBoundaryUnreadCount;
   bool _needsUnreadBootstrap = false;
   int? _pendingUnreadBoundaryCount;
+  int? _unreadBootstrapRefreshLimit;
   Future<void> _loadEarlierQueue = Future<void>.value();
   String? _pendingScrollTargetMessageId;
   final String _chatArchiveSessionId;
@@ -599,20 +604,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  Future<void> _handleLifecycleResumed() async {
-    final chat = state.chat;
-    if (chat == null) return;
-    await _syncReadStateForActiveChat(
-      chat: chat,
-      items: state.items,
-      allowSend: true,
+  Future<void> _handleLifecycleResumed() {
+    _requestReadStateSyncForActiveChat(
+      sendPolicy: _ChatReadStateSyncSendPolicy.allowed,
     );
+    return Future<void>.value();
   }
 
-  Future<void> _onChatReadThresholdChanged(
+  void _onChatReadThresholdChanged(
     ChatReadThresholdChanged event,
-    Emitter<ChatState> emit,
-  ) async {
+    Emitter<ChatState> _,
+  ) {
     final nextIds = event.messageIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
@@ -622,16 +624,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     _readThresholdMessageIds = nextIds;
-    final chat = state.chat;
-    if (chat == null) {
-      return;
-    }
-    final lifecycleState = SchedulerBinding.instance.lifecycleState;
-    await _syncReadStateForActiveChat(
-      chat: chat,
-      items: state.items,
-      allowSend: lifecycleState == AppLifecycleState.resumed,
-    );
+    _requestReadStateSyncForActiveChat();
   }
 
   Future<void> _onChatMessageReadRequested(
@@ -857,10 +850,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<Message> items,
   }) async {
     if (chat == null) return;
+    if (_mustDeferAutomaticReadStateSync) return;
     await _syncReadStateForActiveChat(
       chat: chat,
       items: items,
       allowSend: false,
+    );
+  }
+
+  bool get _mustDeferAutomaticReadStateSync =>
+      _needsUnreadBootstrap || _unreadBootstrapRefreshLimit != null;
+
+  void _requestReadStateSyncForActiveChat({
+    _ChatReadStateSyncSendPolicy sendPolicy =
+        _ChatReadStateSyncSendPolicy.whenResumed,
+  }) {
+    if (state.chat == null) return;
+    add(_ChatReadStateSyncRequested(sendPolicy: sendPolicy));
+  }
+
+  Future<void> _onChatReadStateSyncRequested(
+    _ChatReadStateSyncRequested event,
+    Emitter<ChatState> _,
+  ) async {
+    final chat = state.chat;
+    if (chat == null || _mustDeferAutomaticReadStateSync) {
+      return;
+    }
+    await _syncReadStateForActiveChat(
+      chat: chat,
+      items: state.items,
+      allowSend: event.sendPolicy.allowsSendNow,
     );
   }
 
@@ -2390,6 +2410,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
+    _unreadBootstrapRefreshLimit = null;
     final attachmentMaps = await _loadAttachmentMaps(event.items);
     final filtered = await _filterInternalMessages(
       messages: event.items,
@@ -2514,6 +2535,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (emit.isDone) {
       return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
     }
+    _requestReadStateSyncForActiveChat();
   }
 
   Set<String> _quotedReferenceIdsForMessages(Iterable<Message> messages) {
@@ -2733,17 +2755,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _queueAutoDownloadAttachments(
       messages: _messagesForPresentationHydration(event),
       attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
-    );
-
-    final chat = state.chat;
-    if (chat == null) {
-      return;
-    }
-    final lifecycleState = SchedulerBinding.instance.lifecycleState;
-    await _syncReadStateForActiveChat(
-      chat: chat,
-      items: state.items,
-      allowSend: lifecycleState == AppLifecycleState.resumed,
     );
   }
 
@@ -2975,6 +2986,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     if (desiredLimit != _currentMessageLimit) {
+      _unreadBootstrapRefreshLimit = desiredLimit;
       await _subscribeToMessages(limit: desiredLimit, filter: state.viewFilter);
     }
   }

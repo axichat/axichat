@@ -9943,6 +9943,257 @@ void main() {
   );
 
   test(
+    'XMPP unread bootstrap defers read sync until the oldest unread is visible',
+    () async {
+      final unreadChat = initialChat.copyWith(
+        unreadCount: ChatBloc.messageBatchSize + 5,
+      );
+      final messages = List<Message>.generate(
+        ChatBloc.messageBatchSize + 5,
+        (index) => Message(
+          stanzaID: 'xmpp-bootstrap-unread-$index',
+          senderJid: unreadChat.jid,
+          chatJid: unreadChat.jid,
+          timestamp: DateTime(
+            2026,
+            1,
+            4,
+            12,
+          ).subtract(Duration(minutes: index)),
+          body: 'Unread $index',
+        ),
+      );
+      final firstPage = messages.take(ChatBloc.messageBatchSize).toList();
+
+      final bloc = ChatBloc(
+        jid: unreadChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(unreadChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      messageStreamController.add(firstPage);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.unreadBoundaryStanzaId, isNull);
+      verify(
+        () => messageService.ensureArchiveWindowFromMamForChatSession(
+          sessionId: any(named: 'sessionId'),
+          chat: unreadChat,
+          desiredWindow: ChatBloc.messageBatchSize + 5,
+          filter: MessageTimelineFilter.directOnly,
+          visibleWindowEmpty: false,
+          fallbackBeforeId: firstPage.last.stanzaID,
+          pageSize: ChatBloc.messageBatchSize,
+        ),
+      ).called(1);
+      verifyNever(
+        () => messageService.markMessagesDisplayedLocally(
+          messages: any(named: 'messages'),
+          chatJid: unreadChat.jid,
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
+      verifyNever(
+        () => messageService.sendReadMarker(
+          any(),
+          any(),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+
+      messageStreamController.add(messages);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.unreadBoundaryStanzaId, messages.last.stanzaID);
+      final displayedMessages =
+          verify(
+                () => messageService.markMessagesDisplayedLocally(
+                  messages: captureAny(named: 'messages'),
+                  chatJid: unreadChat.jid,
+                  selfJid: any(named: 'selfJid'),
+                  emailSelfJid: any(named: 'emailSelfJid'),
+                ),
+              ).captured.single
+              as List<Message>;
+      expect(displayedMessages.map((message) => message.stanzaID), [
+        for (final message in messages) message.stanzaID,
+      ]);
+      verify(
+        () => messageService.sendReadMarker(
+          unreadChat.jid,
+          messages.first.stanzaID,
+          chatType: unreadChat.type,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'XMPP unread bootstrap releases read sync when boundary stays unavailable',
+    () async {
+      final unreadChat = initialChat.copyWith(
+        unreadCount: ChatBloc.messageBatchSize + 5,
+      );
+      final firstPage = List<Message>.generate(
+        ChatBloc.messageBatchSize,
+        (index) => Message(
+          stanzaID: 'xmpp-bootstrap-unavailable-$index',
+          senderJid: unreadChat.jid,
+          chatJid: unreadChat.jid,
+          timestamp: DateTime(
+            2026,
+            1,
+            4,
+            12,
+          ).subtract(Duration(minutes: index)),
+          body: 'Unread $index',
+        ),
+      );
+
+      final bloc = ChatBloc(
+        jid: unreadChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(unreadChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      messageStreamController.add(firstPage);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.unreadBoundaryStanzaId, isNull);
+      verifyNever(
+        () => messageService.markMessagesDisplayedLocally(
+          messages: any(named: 'messages'),
+          chatJid: unreadChat.jid,
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
+      verifyNever(
+        () => messageService.sendReadMarker(
+          any(),
+          any(),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+
+      messageStreamController.add(firstPage);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.unreadBoundaryStanzaId, isNull);
+      final displayedMessages =
+          verify(
+                () => messageService.markMessagesDisplayedLocally(
+                  messages: captureAny(named: 'messages'),
+                  chatJid: unreadChat.jid,
+                  selfJid: any(named: 'selfJid'),
+                  emailSelfJid: any(named: 'emailSelfJid'),
+                ),
+              ).captured.single
+              as List<Message>;
+      expect(displayedMessages.map((message) => message.stanzaID), [
+        for (final message in firstPage) message.stanzaID,
+      ]);
+      verify(
+        () => messageService.sendReadMarker(
+          unreadChat.jid,
+          firstPage.first.stanzaID,
+          chatType: unreadChat.type,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'lifecycle show sends read markers while framework state is inactive',
+    () async {
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+      final incoming = Message(
+        stanzaID: 'lifecycle-show-inactive-read',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 4, 12, 3),
+        body: 'Visible while inactive',
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      await _pumpBloc();
+      messageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyNever(
+        () => messageService.sendReadMarker(
+          any(),
+          any(),
+          chatType: any(named: 'chatType'),
+        ),
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.hidden,
+      );
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendReadMarker(
+          initialChat.jid,
+          incoming.stanzaID,
+          chatType: initialChat.type,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'open XMPP chats do not send duplicate read markers while one is in flight',
     () async {
       final completer = Completer<void>();
