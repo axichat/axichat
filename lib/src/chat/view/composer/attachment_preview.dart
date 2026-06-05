@@ -103,6 +103,72 @@ void openSingleAttachmentComposeDraft({
   );
 }
 
+List<AttachmentPreviewDialogAction> localAttachmentPreviewDialogActions({
+  required BuildContext ownerContext,
+  required File file,
+  required FileMetadataData metadata,
+  required FileTypeReport report,
+  required AppLocalizations l10n,
+  bool closeBeforeSend = true,
+  bool enabled = true,
+}) {
+  return [
+    AttachmentPreviewDialogAction(
+      iconData: LucideIcons.save,
+      tooltip: l10n.chatAttachmentExportConfirm,
+      enabled: enabled,
+      onPressed: (context) async {
+        final allowed = await confirmExportAllowed(
+          context,
+          metadata: metadata,
+          report: report,
+          confirmLabel: l10n.chatAttachmentExportConfirm,
+        );
+        if (!context.mounted || !allowed) return;
+        await saveAttachmentToDevice(
+          context,
+          file: file,
+          filename: metadata.filename,
+        );
+      },
+    ),
+    AttachmentPreviewDialogAction(
+      iconData: LucideIcons.share2,
+      tooltip: l10n.chatActionShare,
+      enabled: enabled,
+      onPressed: (context) async {
+        final allowed = await confirmExportAllowed(
+          context,
+          metadata: metadata,
+          report: report,
+          confirmLabel: l10n.chatActionShare,
+        );
+        if (!context.mounted || !allowed) return;
+        await shareAttachmentFromFile(
+          context,
+          file: file,
+          filename: metadata.filename,
+        );
+      },
+    ),
+    AttachmentPreviewDialogAction(
+      iconData: LucideIcons.send,
+      tooltip: l10n.commonSend,
+      enabled: enabled,
+      onPressed: (context) {
+        if (closeBeforeSend) {
+          Navigator.of(context).pop();
+        }
+        if (!ownerContext.mounted) return;
+        openSingleAttachmentComposeDraft(
+          context: ownerContext,
+          metadata: metadata,
+        );
+      },
+    ),
+  ];
+}
+
 const String _attachmentMacOsQuarantineAgent = appDisplayName;
 const String _attachmentMacOsQuarantineCommand = 'xattr';
 const String _attachmentMacOsQuarantineWriteArg = '-w';
@@ -1109,30 +1175,22 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       metadata: metadata,
       controller: controller,
     );
+    final actions = localAttachmentPreviewDialogActions(
+      ownerContext: context,
+      file: localFile,
+      metadata: metadata,
+      report: widget.typeReport ?? metadata.declaredTypeReport,
+      l10n: context.l10n,
+      closeBeforeSend: false,
+      enabled: !_downloading,
+    );
     final actionButtons = Positioned(
       top: spacing.s,
       right: spacing.s,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AxiIconButton.ghost(
-            iconData: LucideIcons.save,
-            onPressed: _downloading
-                ? null
-                : () async {
-                    await _handleSaveAttachment(localFile);
-                  },
-          ),
-          SizedBox(width: spacing.s),
-          AxiIconButton.ghost(
-            iconData: LucideIcons.share2,
-            onPressed: _downloading
-                ? null
-                : () async {
-                    await _handleShareAttachment(localFile);
-                  },
-          ),
-        ],
+      child: AttachmentPreviewActionRow(
+        closeTooltip: context.l10n.commonClose,
+        actions: actions,
+        showClose: false,
       ),
     );
 
@@ -1142,7 +1200,15 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
           constraints,
           context,
           intrinsicWidth: metadata.width?.toDouble(),
-          minimumWidth: _attachmentMetadataOverlayMinWidth(context),
+          minimumWidth: math.max(
+            _attachmentMetadataOverlayMinWidth(context),
+            _attachmentPreviewActionRowMinWidth(
+                  context,
+                  actionCount: actions.length,
+                  showClose: false,
+                ) +
+                (spacing.s * 2),
+          ),
         );
         return Align(
           alignment: Alignment.centerLeft,
@@ -1265,42 +1331,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         });
       }
     }
-  }
-
-  Future<void> _handleSaveAttachment(File file) async {
-    final l10n = context.l10n;
-    final FileTypeReport report =
-        widget.typeReport ?? widget.metadata.declaredTypeReport;
-    final bool allowed = await confirmExportAllowed(
-      context,
-      metadata: widget.metadata,
-      report: report,
-      confirmLabel: l10n.chatAttachmentExportConfirm,
-    );
-    if (!mounted || !allowed) return;
-    await saveAttachmentToDevice(
-      context,
-      file: file,
-      filename: widget.metadata.filename,
-    );
-  }
-
-  Future<void> _handleShareAttachment(File file) async {
-    final l10n = context.l10n;
-    final FileTypeReport report =
-        widget.typeReport ?? widget.metadata.declaredTypeReport;
-    final bool allowed = await confirmExportAllowed(
-      context,
-      metadata: widget.metadata,
-      report: report,
-      confirmLabel: l10n.chatActionShare,
-    );
-    if (!mounted || !allowed) return;
-    await shareAttachmentFromFile(
-      context,
-      file: file,
-      filename: widget.metadata.filename,
-    );
   }
 
   void _togglePlayback() {
@@ -1469,6 +1499,19 @@ double _resolveAttachmentWidth(
 double _attachmentMetadataOverlayMinWidth(BuildContext context) =>
     context.sizing.attachmentPreviewExtent * 2;
 
+double _attachmentPreviewActionRowMinWidth(
+  BuildContext context, {
+  required int actionCount,
+  required bool showClose,
+}) {
+  final spacing = context.spacing;
+  final sizing = context.sizing;
+  final totalButtons = actionCount + (showClose ? 1 : 0);
+  if (totalButtons <= 0) return 0;
+  return (sizing.iconButtonTapTarget * totalButtons) +
+      (spacing.xs * (totalButtons - 1));
+}
+
 ({int width, int height})? _attachmentImageCacheDimensions({
   required double targetWidth,
   required double aspectRatio,
@@ -1568,23 +1611,20 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
 
-  _PreviewGhostColors _previewGhostColors(BuildContext context) {
-    final colors = context.colorScheme;
-    final isDark = context.brightness == Brightness.dark;
-    return _PreviewGhostColors(
-      background: isDark ? colors.background : colors.foreground,
-      foreground: isDark ? colors.foreground : colors.background,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final ghostColors = _previewGhostColors(context);
     final intrinsic = _intrinsicSizeFrom(metadata);
     final l10n = context.l10n;
+    final actions = localAttachmentPreviewDialogActions(
+      ownerContext: composeContext,
+      file: file,
+      metadata: metadata,
+      report: typeReport ?? metadata.declaredTypeReport,
+      l10n: l10n,
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final double availableWidth = constraints.maxWidth.isFinite
@@ -1596,8 +1636,11 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
         final double maxWidth = math.max(0.0, availableWidth - spacing.xl);
         final double maxHeight = math.max(0.0, availableHeight - spacing.xl);
         final double actionRowHeight = sizing.iconButtonTapTarget;
-        final double actionRowMinWidth =
-            (sizing.iconButtonTapTarget * 4) + (spacing.xs * 3);
+        final double actionRowMinWidth = _attachmentPreviewActionRowMinWidth(
+          context,
+          actionCount: actions.length,
+          showClose: true,
+        );
         final double minimumPreviewWidth = math.max(
           _attachmentMetadataOverlayMinWidth(context),
           actionRowMinWidth,
@@ -1662,74 +1705,9 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 width: contentWidth,
                 height: actionRowHeight,
                 child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AxiIconButton.ghost(
-                        iconData: LucideIcons.save,
-                        color: ghostColors.foreground,
-                        backgroundColor: ghostColors.background,
-                        onPressed: () async {
-                          final FileTypeReport report =
-                              typeReport ?? metadata.declaredTypeReport;
-                          final bool allowed = await confirmExportAllowed(
-                            context,
-                            metadata: metadata,
-                            report: report,
-                            confirmLabel: l10n.chatAttachmentExportConfirm,
-                          );
-                          if (!context.mounted || !allowed) return;
-                          await saveAttachmentToDevice(
-                            context,
-                            file: file,
-                            filename: metadata.filename,
-                          );
-                        },
-                      ),
-                      SizedBox(width: spacing.xs),
-                      AxiIconButton.ghost(
-                        iconData: LucideIcons.share2,
-                        color: ghostColors.foreground,
-                        backgroundColor: ghostColors.background,
-                        onPressed: () async {
-                          final FileTypeReport report =
-                              typeReport ?? metadata.declaredTypeReport;
-                          final bool allowed = await confirmExportAllowed(
-                            context,
-                            metadata: metadata,
-                            report: report,
-                            confirmLabel: l10n.chatActionShare,
-                          );
-                          if (!context.mounted || !allowed) return;
-                          await shareAttachmentFromFile(
-                            context,
-                            file: file,
-                            filename: metadata.filename,
-                          );
-                        },
-                      ),
-                      SizedBox(width: spacing.xs),
-                      AxiIconButton.ghost(
-                        iconData: LucideIcons.send,
-                        tooltip: l10n.commonSend,
-                        color: ghostColors.foreground,
-                        backgroundColor: ghostColors.background,
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          openSingleAttachmentComposeDraft(
-                            context: composeContext,
-                            metadata: metadata,
-                          );
-                        },
-                      ),
-                      SizedBox(width: spacing.xs),
-                      AxiIconButton.ghost(
-                        iconData: LucideIcons.x,
-                        color: ghostColors.foreground,
-                        backgroundColor: ghostColors.background,
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
+                  child: AttachmentPreviewActionRow(
+                    closeTooltip: l10n.commonClose,
+                    actions: actions,
                   ),
                 ),
               ),
@@ -1817,16 +1795,6 @@ Size _expandPreviewImageSizeForWidth({
     return Size(targetWidth, expandedHeight);
   }
   return size;
-}
-
-class _PreviewGhostColors {
-  const _PreviewGhostColors({
-    required this.background,
-    required this.foreground,
-  });
-
-  final Color background;
-  final Color foreground;
 }
 
 String _mediaDecodeGuardKey(String metadataId) =>
@@ -2423,19 +2391,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
         context: context,
         data: previewData,
         closeTooltip: l10n.commonClose,
-        actions: [
-          AttachmentPreviewDialogAction(
-            iconData: LucideIcons.send,
-            tooltip: l10n.commonSend,
-            onPressed: (dialogContext) {
-              Navigator.of(dialogContext).pop();
-              openSingleAttachmentComposeDraft(
-                context: context,
-                metadata: widget.metadata,
-              );
-            },
-          ),
-        ],
+        actions: localAttachmentPreviewDialogActions(
+          ownerContext: context,
+          file: file,
+          metadata: widget.metadata,
+          report: report,
+          l10n: l10n,
+        ),
       );
     } on _AttachmentDownloadCancelledException {
       return;

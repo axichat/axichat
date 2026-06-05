@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:axichat/src/attachments/view/attachment_file_preview.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -15,6 +16,133 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  testWidgets('preview action row places close after preview actions', (
+    tester,
+  ) async {
+    var saves = 0;
+
+    await tester.pumpWidget(
+      _wrap(
+        Center(
+          child: AttachmentPreviewActionRow(
+            closeTooltip: 'Close',
+            actions: [
+              AttachmentPreviewDialogAction(
+                iconData: LucideIcons.save,
+                tooltip: 'Save',
+                onPressed: (_) {
+                  saves += 1;
+                },
+              ),
+              AttachmentPreviewDialogAction(
+                iconData: LucideIcons.share2,
+                tooltip: 'Share',
+                onPressed: (_) {},
+              ),
+              AttachmentPreviewDialogAction(
+                iconData: LucideIcons.send,
+                tooltip: 'Send',
+                onPressed: (_) {},
+              ),
+            ],
+          ),
+        ),
+        width: axiSizing.dialogMaxWidth,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final saveX = tester.getTopLeft(find.byIcon(LucideIcons.save)).dx;
+    final shareX = tester.getTopLeft(find.byIcon(LucideIcons.share2)).dx;
+    final sendX = tester.getTopLeft(find.byIcon(LucideIcons.send)).dx;
+    final closeX = tester.getTopLeft(find.byIcon(LucideIcons.x)).dx;
+    expect(saveX, lessThan(shareX));
+    expect(shareX, lessThan(sendX));
+    expect(sendX, lessThan(closeX));
+
+    await tester.tap(find.byIcon(LucideIcons.save));
+    await tester.pump();
+
+    expect(saves, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('preview action row can omit close for inline previews', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        Center(
+          child: AttachmentPreviewActionRow(
+            closeTooltip: 'Close',
+            showClose: false,
+            actions: [
+              AttachmentPreviewDialogAction(
+                iconData: LucideIcons.send,
+                tooltip: 'Send',
+                onPressed: (_) {},
+              ),
+            ],
+          ),
+        ),
+        width: axiSizing.dialogMaxWidth,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(LucideIcons.send), findsOneWidget);
+    expect(find.byIcon(LucideIcons.x), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('preview action row disables actions while async action runs', (
+    tester,
+  ) async {
+    final completer = Completer<void>();
+    var shares = 0;
+
+    await tester.pumpWidget(
+      _wrap(
+        Center(
+          child: AttachmentPreviewActionRow(
+            closeTooltip: 'Close',
+            actions: [
+              AttachmentPreviewDialogAction(
+                iconData: LucideIcons.save,
+                tooltip: 'Save',
+                onPressed: (_) => completer.future,
+              ),
+              AttachmentPreviewDialogAction(
+                iconData: LucideIcons.share2,
+                tooltip: 'Share',
+                onPressed: (_) {
+                  shares += 1;
+                },
+              ),
+            ],
+          ),
+        ),
+        width: axiSizing.dialogMaxWidth,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.save));
+    await tester.pump();
+    await tester.tap(find.byIcon(LucideIcons.share2));
+    await tester.pump();
+
+    expect(shares, 0);
+
+    completer.complete();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(LucideIcons.share2));
+    await tester.pump();
+
+    expect(shares, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('narrow non-media gallery tile uses compact menu layout', (
     tester,
   ) async {
@@ -301,7 +429,7 @@ void main() {
   });
 }
 
-Widget _wrap(Widget child) {
+Widget _wrap(Widget child, {double? width}) {
   final settingsCubit = _MockSettingsCubit();
   when(() => settingsCubit.state).thenReturn(const SettingsState());
   when(
@@ -323,7 +451,7 @@ Widget _wrap(Widget child) {
         body: Align(
           alignment: Alignment.topLeft,
           child: SizedBox(
-            width: axiSizing.attachmentPreviewExtent,
+            width: width ?? axiSizing.attachmentPreviewExtent,
             child: child,
           ),
         ),

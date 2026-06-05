@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -122,12 +123,14 @@ class AttachmentPreviewDialogAction {
     required this.tooltip,
     required this.onPressed,
     this.destructive = false,
+    this.enabled = true,
   });
 
   final IconData iconData;
   final String tooltip;
-  final void Function(BuildContext context) onPressed;
+  final FutureOr<void> Function(BuildContext context) onPressed;
   final bool destructive;
+  final bool enabled;
 }
 
 Future<AttachmentPreviewData?> resolveAttachmentPreviewData({
@@ -499,15 +502,26 @@ class AttachmentPreviewDialog extends StatelessWidget {
   }
 }
 
-class AttachmentPreviewActionRow extends StatelessWidget {
+class AttachmentPreviewActionRow extends StatefulWidget {
   const AttachmentPreviewActionRow({
     super.key,
     required this.closeTooltip,
     required this.actions,
+    this.showClose = true,
   });
 
   final String closeTooltip;
   final List<AttachmentPreviewDialogAction> actions;
+  final bool showClose;
+
+  @override
+  State<AttachmentPreviewActionRow> createState() =>
+      _AttachmentPreviewActionRowState();
+}
+
+class _AttachmentPreviewActionRowState
+    extends State<AttachmentPreviewActionRow> {
+  int? _activeActionIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -517,26 +531,52 @@ class AttachmentPreviewActionRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AxiIconButton.ghost(
-          iconData: LucideIcons.x,
-          tooltip: closeTooltip,
-          color: ghostColors.foreground,
-          backgroundColor: ghostColors.background,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        for (final action in actions) ...[
-          SizedBox(width: spacing.xs),
+        for (final action in widget.actions.asMap().entries) ...[
+          if (action.key > 0) SizedBox(width: spacing.xs),
           AxiIconButton.ghost(
-            iconData: action.iconData,
-            tooltip: action.tooltip,
-            color: action.destructive
+            iconData: action.value.iconData,
+            tooltip: action.value.tooltip,
+            color: action.value.destructive
                 ? colors.destructive
                 : ghostColors.foreground,
             backgroundColor: ghostColors.background,
-            onPressed: () => action.onPressed(context),
+            loading: _activeActionIndex == action.key,
+            onPressed: action.value.enabled && _activeActionIndex == null
+                ? () => _runAction(action.key, action.value)
+                : null,
+          ),
+        ],
+        if (widget.showClose) ...[
+          if (widget.actions.isNotEmpty) SizedBox(width: spacing.xs),
+          AxiIconButton.ghost(
+            iconData: LucideIcons.x,
+            tooltip: widget.closeTooltip,
+            color: ghostColors.foreground,
+            backgroundColor: ghostColors.background,
+            onPressed: _activeActionIndex == null
+                ? () => Navigator.of(context).pop()
+                : null,
           ),
         ],
       ],
+    );
+  }
+
+  void _runAction(int index, AttachmentPreviewDialogAction action) {
+    final result = action.onPressed(context);
+    if (result is! Future<void>) return;
+    if (mounted) {
+      setState(() {
+        _activeActionIndex = index;
+      });
+    }
+    unawaited(
+      result.whenComplete(() {
+        if (!mounted) return;
+        setState(() {
+          _activeActionIndex = null;
+        });
+      }),
     );
   }
 }

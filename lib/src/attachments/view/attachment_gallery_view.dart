@@ -1195,19 +1195,13 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
         context: context,
         data: previewData,
         closeTooltip: context.l10n.commonClose,
-        actions: [
-          AttachmentPreviewDialogAction(
-            iconData: LucideIcons.send,
-            tooltip: context.l10n.commonSend,
-            onPressed: (dialogContext) {
-              Navigator.of(dialogContext).pop();
-              openSingleAttachmentComposeDraft(
-                context: context,
-                metadata: widget.metadata,
-              );
-            },
-          ),
-        ],
+        actions: localAttachmentPreviewDialogActions(
+          ownerContext: context,
+          file: file,
+          metadata: widget.metadata,
+          report: report,
+          l10n: context.l10n,
+        ),
       );
     });
   }
