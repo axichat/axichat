@@ -3122,10 +3122,13 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   }
 
   Future<void> _clearSelfPresenceOnDisconnect() async {
-    await _invalidateSelfPresence(markNeedsJoin: false);
+    await _invalidateSelfPresence(markNeedsJoin: false, persistSnapshot: false);
   }
 
-  Future<void> _invalidateSelfPresence({required bool markNeedsJoin}) async {
+  Future<void> _invalidateSelfPresence({
+    required bool markNeedsJoin,
+    required bool persistSnapshot,
+  }) async {
     _clearAllRoomSelfPresenceReadiness();
     if (_roomStates.isEmpty) return;
     if (!markNeedsJoin) {
@@ -3149,7 +3152,11 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       if (identical(cleared, room)) {
         continue;
       }
-      _publishRoomState(roomKey: key, room: cleared);
+      _publishRoomState(
+        roomKey: key,
+        room: cleared,
+        persistSnapshot: persistSnapshot,
+      );
     }
   }
 

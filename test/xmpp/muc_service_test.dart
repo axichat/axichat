@@ -5007,6 +5007,47 @@ void main() {
     );
 
     test(
+      'PRES-010B [HP] disconnect clears self presence without persisting room snapshot',
+      () async {
+        const inviteeNick = 'friend';
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: _roomNick,
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          fromPresence: true,
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: '$_roomJid/$inviteeNick',
+          nick: inviteeNick,
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+        );
+        await pumpEventQueue();
+        expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
+        when(() => mockConnection.disconnect()).thenAnswer((_) async {});
+        clearInteractions(mockStateStore);
+
+        await xmppService.disconnect();
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.hasSelfPresence, isFalse);
+        expect(room?.occupantForRealJid(_inviteeJid), isNotNull);
+        verifyNever(() => mockStateStore.read(key: any(named: 'key')));
+        verifyNever(
+          () => mockStateStore.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
+          ),
+        );
+      },
+    );
+
+    test(
       'PRES-011 [HP] acceptRoomInvite rejects stale invites that create a new room',
       () async {
         when(

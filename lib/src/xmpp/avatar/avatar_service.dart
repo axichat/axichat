@@ -235,10 +235,13 @@ class RoomAwareVCardManager extends mox.VCardManager {
       return state;
     }
 
-    final hash = x.firstTag('photo')?.innerText() ?? '';
-
     final jid = mox.JID.fromString(from);
     final roomAvatarJid = isRoomJid?.call(jid) ?? false;
+    if (roomAvatarJid && jid.resource.isNotEmpty) {
+      return state;
+    }
+
+    final hash = x.firstTag('photo')?.innerText() ?? '';
     getAttributes().sendEvent(
       roomAvatarJid
           ? RoomVCardAvatarUpdatedEvent(jid, hash)
