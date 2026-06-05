@@ -2495,7 +2495,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return;
     }
-    final bootstrappedUnreadWindow = await _maybeBootstrapUnreadWindow(
+    if (emit.isDone) {
+      return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
+    }
+    _requestPresentationHydrationForMessages(
+      filteredItems,
+      missingQuoteIds: missingQuoteIds,
+      metadataIds: nextMetadataIds,
+      syncFileMetadata: true,
+    );
+    await _maybeBootstrapUnreadWindow(
       chat: chat,
       filteredOutCount: event.items.length - filteredItems.length,
       pseudoCount: filteredItems
@@ -2505,15 +2514,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (emit.isDone) {
       return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
     }
-    if (bootstrappedUnreadWindow) {
-      return;
-    }
-    _requestPresentationHydrationForMessages(
-      filteredItems,
-      missingQuoteIds: missingQuoteIds,
-      metadataIds: nextMetadataIds,
-      syncFileMetadata: true,
-    );
   }
 
   Set<String> _quotedReferenceIdsForMessages(Iterable<Message> messages) {
@@ -2946,22 +2946,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  Future<bool> _maybeBootstrapUnreadWindow({
-    required Chat? chat,
+  Future<void> _maybeBootstrapUnreadWindow({
+    required Chat chat,
     required int filteredOutCount,
     required int pseudoCount,
   }) async {
     if (!_needsUnreadBootstrap) {
-      return false;
-    }
-    if (chat == null) {
-      _needsUnreadBootstrap = false;
-      return false;
+      return;
     }
     final unreadTargetCount = _pendingUnreadBoundaryCount ?? chat.unreadCount;
     if (unreadTargetCount <= _emptyMessageCount) {
       _needsUnreadBootstrap = false;
-      return false;
+      return;
     }
     _needsUnreadBootstrap = false;
     final desiredWindow = unreadTargetCount + filteredOutCount + pseudoCount;
@@ -2980,9 +2976,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (desiredLimit != _currentMessageLimit) {
       await _subscribeToMessages(limit: desiredLimit, filter: state.viewFilter);
-      return true;
     }
-    return false;
   }
 
   Future<void> _onPinnedMessagesUpdated(
