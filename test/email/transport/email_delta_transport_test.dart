@@ -457,193 +457,234 @@ void main() {
     },
   );
 
-  test(
-    'sendAttachment removes duplicate Delta row ingested before pending send is marked',
-    () async {
-      const chatId = 7;
-      const msgId = 73;
-      final chat = Chat(
-        jid: 'alice@example.com',
-        title: 'Alice',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-        transport: MessageTransport.email,
-        encryptionProtocol: EncryptionProtocol.none,
-        deltaChatId: chatId,
-        emailAddress: 'alice@example.com',
-        emailFromAddress: 'me@example.com',
-      );
-      final sentTimestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
-      final deltaStanzaId = deltaMessageStanzaId(msgId);
-      final duplicateMessage = Message(
-        stanzaID: deltaStanzaId,
-        senderJid: 'me@example.com',
-        chatJid: chat.jid,
-        timestamp: sentTimestamp,
-        originID: 'attachment@example.com',
-        subject: 'Photos',
-        deltaChatId: chatId,
-        deltaMsgId: msgId,
+  Future<Message> sendAttachmentWithDuplicateDeltaRow({
+    required MessageError duplicateError,
+    required bool duplicateAcked,
+    required bool duplicateReceived,
+    required bool duplicateDisplayed,
+    MessageError pendingError = MessageError.none,
+  }) async {
+    const chatId = 7;
+    const msgId = 73;
+    final chat = Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: chatId,
+      emailAddress: 'alice@example.com',
+      emailFromAddress: 'me@example.com',
+    );
+    final sentTimestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+    final deltaStanzaId = deltaMessageStanzaId(msgId);
+    final duplicateMessage = Message(
+      stanzaID: deltaStanzaId,
+      senderJid: 'me@example.com',
+      chatJid: chat.jid,
+      timestamp: sentTimestamp,
+      originID: 'attachment@example.com',
+      subject: 'Photos',
+      error: duplicateError,
+      acked: duplicateAcked,
+      received: duplicateReceived,
+      displayed: duplicateDisplayed,
+      deltaChatId: chatId,
+      deltaMsgId: msgId,
+      deltaAccountId: DeltaAccountDefaults.legacyId,
+      fileMetadataID: deltaFileMetadataId(msgId),
+    );
+    Message? pendingMessage;
+    Message? updatedPending;
+    var duplicateDeleted = false;
+
+    when(
+      () => deltaSafe.createAccounts(directory: any(named: 'directory')),
+    ).thenThrow(const DeltaAllocationException('accounts unavailable'));
+    when(
+      () => deltaSafe.createContext(
+        databasePath: any(named: 'databasePath'),
+        osName: any(named: 'osName'),
+      ),
+    ).thenAnswer((_) async => context);
+    when(
+      () => context.open(passphrase: any(named: 'passphrase')),
+    ).thenAnswer((_) async {});
+    when(() => context.getConfig(any())).thenAnswer((invocation) async {
+      final key = invocation.positionalArguments.first as String;
+      return key == 'addr' ? 'me@example.com' : null;
+    });
+    when(
+      () => context.setConfig(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => context.isConfigured).thenReturn(true);
+    when(
+      () => database.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        fileMetadataID: deltaFileMetadataId(msgId),
-      );
-      Message? pendingMessage;
-      Message? updatedPending;
-      var duplicateDeleted = false;
-
-      when(
-        () => deltaSafe.createAccounts(directory: any(named: 'directory')),
-      ).thenThrow(const DeltaAllocationException('accounts unavailable'));
-      when(
-        () => deltaSafe.createContext(
-          databasePath: any(named: 'databasePath'),
-          osName: any(named: 'osName'),
-        ),
-      ).thenAnswer((_) async => context);
-      when(
-        () => context.open(passphrase: any(named: 'passphrase')),
-      ).thenAnswer((_) async {});
-      when(() => context.getConfig(any())).thenAnswer((invocation) async {
-        final key = invocation.positionalArguments.first as String;
-        return key == 'addr' ? 'me@example.com' : null;
-      });
-      when(
-        () => context.setConfig(
-          key: any(named: 'key'),
-          value: any(named: 'value'),
-        ),
-      ).thenAnswer((_) async {});
-      when(() => context.isConfigured).thenReturn(true);
-      when(
-        () => database.replaceDeltaPlaceholderSelfJids(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          resolvedAddress: 'me@example.com',
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.getChatByDeltaChatId(
-          chatId,
-          accountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => chat);
-      when(
-        () => database.upsertEmailChatAccount(
-          chatJid: chat.jid,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async {});
-      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
-      when(() => database.deleteFileMetadata(any())).thenAnswer((_) async {});
-      when(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      ).thenAnswer((invocation) async {
-        pendingMessage = invocation.positionalArguments.first as Message;
-      });
-      when(
-        () => context.sendFileMessage(
-          chatId: chatId,
-          viewType: any(named: 'viewType'),
-          filePath: '/tmp/image.png',
-          fileName: 'image.png',
-          mimeType: 'image/png',
-          text: 'Photos',
-          subject: 'Photos',
-          html: any(named: 'html'),
-          forcePlaintext: false,
-          skipAutocrypt: false,
-        ),
-      ).thenAnswer((_) async => msgId);
-      when(() => context.getMessage(msgId)).thenAnswer(
-        (_) async => DeltaMessage(
-          id: msgId,
-          chatId: chatId,
-          subject: 'Photos',
-          filePath: '/tmp/image.png',
-          fileMime: 'image/png',
-          fileSize: 1024,
-          timestamp: sentTimestamp,
-          isOutgoing: true,
-        ),
-      );
-      when(
-        () => context.getMessageMimeHeaders(msgId),
-      ).thenAnswer((_) async => null);
-      when(
-        () => context.getMessageRfc724Mid(msgId),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(
-          msgId,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer(
-        (_) async => duplicateDeleted ? updatedPending : duplicateMessage,
-      );
-      when(() => database.getMessageByStanzaID(any())).thenAnswer((
-        invocation,
-      ) async {
-        final stanzaId = invocation.positionalArguments.first as String;
-        if (stanzaId == deltaStanzaId) {
-          return duplicateDeleted ? null : duplicateMessage;
-        }
-        return pendingMessage;
-      });
-      when(() => database.updateMessage(any())).thenAnswer((invocation) async {
-        updatedPending = invocation.positionalArguments.first as Message;
-      });
-      when(
-        () => database.deleteMessage(
-          deltaStanzaId,
-          selfJid: 'me@example.com',
-          emailSelfJid: 'me@example.com',
-        ),
-      ).thenAnswer((_) async {
-        duplicateDeleted = true;
-      });
-
-      await transport.ensureInitialized(
-        databasePrefix: 'email_delta_transport_test',
-        databasePassphrase: 'test-passphrase',
-      );
-      await transport.isConfigured();
-
-      await transport.sendAttachment(
+        resolvedAddress: 'me@example.com',
+        placeholderJids: any(named: 'placeholderJids'),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.removeDeltaPlaceholderDuplicates(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        placeholderJids: any(named: 'placeholderJids'),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.getChatByDeltaChatId(
+        chatId,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => chat);
+    when(
+      () => database.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      ),
+    ).thenAnswer((_) async {});
+    when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+    when(() => database.deleteFileMetadata(any())).thenAnswer((_) async {});
+    when(
+      () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+    ).thenAnswer((invocation) async {
+      final message = invocation.positionalArguments.first as Message;
+      pendingMessage = pendingError == MessageError.none
+          ? message
+          : message.copyWith(error: pendingError);
+    });
+    when(
+      () => context.sendFileMessage(
+        chatId: chatId,
+        viewType: any(named: 'viewType'),
+        filePath: '/tmp/image.png',
+        fileName: 'image.png',
+        mimeType: 'image/png',
+        text: 'Photos',
+        subject: 'Photos',
+        html: any(named: 'html'),
+        forcePlaintext: false,
+        skipAutocrypt: false,
+      ),
+    ).thenAnswer((_) async => msgId);
+    when(() => context.getMessage(msgId)).thenAnswer(
+      (_) async => DeltaMessage(
+        id: msgId,
         chatId: chatId,
         subject: 'Photos',
-        attachment: const EmailAttachment(
-          path: '/tmp/image.png',
-          fileName: 'image.png',
-          caption: 'Photos',
-          sizeBytes: 1024,
-          mimeType: 'image/png',
-        ),
+        filePath: '/tmp/image.png',
+        fileMime: 'image/png',
+        fileSize: 1024,
+        timestamp: sentTimestamp,
+        isOutgoing: true,
+      ),
+    );
+    when(
+      () => context.getMessageMimeHeaders(msgId),
+    ).thenAnswer((_) async => null);
+    when(
+      () => context.getMessageRfc724Mid(msgId),
+    ).thenAnswer((_) async => null);
+    when(() => database.getMessageByStanzaID(any())).thenAnswer((
+      invocation,
+    ) async {
+      final stanzaId = invocation.positionalArguments.first as String;
+      if (stanzaId == deltaStanzaId) {
+        return duplicateDeleted ? null : duplicateMessage;
+      }
+      return pendingMessage;
+    });
+    when(() => database.updateMessage(any())).thenAnswer((invocation) async {
+      updatedPending = invocation.positionalArguments.first as Message;
+    });
+    when(
+      () => database.deleteMessage(
+        deltaStanzaId,
+        selfJid: 'me@example.com',
+        emailSelfJid: 'me@example.com',
+      ),
+    ).thenAnswer((_) async {
+      duplicateDeleted = true;
+    });
+
+    await transport.ensureInitialized(
+      databasePrefix: 'email_delta_transport_test',
+      databasePassphrase: 'test-passphrase',
+    );
+    await transport.isConfigured();
+
+    await transport.sendAttachment(
+      chatId: chatId,
+      subject: 'Photos',
+      attachment: const EmailAttachment(
+        path: '/tmp/image.png',
+        fileName: 'image.png',
+        caption: 'Photos',
+        sizeBytes: 1024,
+        mimeType: 'image/png',
+      ),
+    );
+
+    verify(
+      () => database.deleteMessage(
+        deltaStanzaId,
+        selfJid: 'me@example.com',
+        emailSelfJid: 'me@example.com',
+      ),
+    ).called(1);
+    final updated = updatedPending;
+    expect(updated, isNotNull);
+    return updated!;
+  }
+
+  test(
+    'sendAttachment preserves delivered duplicate Delta row state',
+    () async {
+      final updated = await sendAttachmentWithDuplicateDeltaRow(
+        duplicateError: MessageError.none,
+        duplicateAcked: true,
+        duplicateReceived: true,
+        duplicateDisplayed: true,
+        pendingError: MessageError.emailSendFailure,
       );
 
-      expect(updatedPending?.deltaMsgId, msgId);
-      expect(updatedPending?.deltaChatId, chatId);
-      expect(updatedPending?.deltaAccountId, DeltaAccountDefaults.legacyId);
-      expect(updatedPending?.originID, 'attachment@example.com');
-      verify(
-        () => database.deleteMessage(
-          deltaStanzaId,
-          selfJid: 'me@example.com',
-          emailSelfJid: 'me@example.com',
-        ),
-      ).called(1);
+      expect(updated.deltaMsgId, 73);
+      expect(updated.deltaChatId, 7);
+      expect(updated.deltaAccountId, DeltaAccountDefaults.legacyId);
+      expect(updated.originID, 'attachment@example.com');
+      expect(updated.error, MessageError.none);
+      expect(updated.acked, isTrue);
+      expect(updated.received, isTrue);
+      expect(updated.displayed, isTrue);
     },
   );
+
+  test('sendAttachment preserves failed duplicate Delta row state', () async {
+    final updated = await sendAttachmentWithDuplicateDeltaRow(
+      duplicateError: MessageError.emailSendFailure,
+      duplicateAcked: false,
+      duplicateReceived: false,
+      duplicateDisplayed: false,
+    );
+
+    expect(updated.deltaMsgId, 73);
+    expect(updated.deltaChatId, 7);
+    expect(updated.deltaAccountId, DeltaAccountDefaults.legacyId);
+    expect(updated.originID, 'attachment@example.com');
+    expect(updated.error, MessageError.emailSendFailure);
+    expect(updated.acked, isFalse);
+    expect(updated.received, isFalse);
+    expect(updated.displayed, isFalse);
+  });
 
   test(
     'stopEventDeliveryAndAwaitActiveOperations waits for tracked chatlist refresh without stopping native IO',

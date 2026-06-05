@@ -2079,10 +2079,16 @@ class EmailDeltaTransport implements ChatTransport {
       }
       return;
     }
-    final Message? existingByDeltaId = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: accountId,
-    );
+    final String duplicateStanzaId = deltaMessageStanzaId(msgId);
+    final Message? duplicateCandidate = duplicateStanzaId == stanzaId
+        ? null
+        : await db.getMessageByStanzaID(duplicateStanzaId);
+    final Message? duplicateMessage =
+        duplicateCandidate == null ||
+            duplicateCandidate.deltaMsgId != msgId ||
+            duplicateCandidate.deltaAccountId != accountId
+        ? null
+        : duplicateCandidate;
     Message next = existing;
     if (existing.deltaMsgId != msgId ||
         existing.deltaChatId != chatId ||
@@ -2101,11 +2107,35 @@ class EmailDeltaTransport implements ChatTransport {
         next = next.copyWith(timestamp: timestamp);
       }
     }
-    final String? duplicateOriginId = existingByDeltaId?.originID?.trim();
-    if (duplicateOriginId != null &&
-        duplicateOriginId.isNotEmpty &&
-        existing.originID?.trim().isNotEmpty != true) {
-      next = next.copyWith(originID: duplicateOriginId);
+    if (duplicateMessage != null) {
+      final String? duplicateOriginId = duplicateMessage.originID?.trim();
+      final bool hasSuccessfulState =
+          next.acked ||
+          next.received ||
+          next.displayed ||
+          duplicateMessage.acked ||
+          duplicateMessage.received ||
+          duplicateMessage.displayed;
+      final MessageError mergedError;
+      if (duplicateMessage.error != MessageError.none && !hasSuccessfulState) {
+        mergedError = duplicateMessage.error;
+      } else if (hasSuccessfulState && next.error != MessageError.none) {
+        mergedError = MessageError.none;
+      } else {
+        mergedError = next.error;
+      }
+      next = next.copyWith(
+        originID:
+            duplicateOriginId != null &&
+                duplicateOriginId.isNotEmpty &&
+                next.originID?.trim().isNotEmpty != true
+            ? duplicateOriginId
+            : next.originID,
+        acked: next.acked || duplicateMessage.acked,
+        received: next.received || duplicateMessage.received,
+        displayed: next.displayed || duplicateMessage.displayed,
+        error: mergedError,
+      );
     }
     if (next != existing) {
       await db.updateMessage(next);
@@ -2133,9 +2163,9 @@ class EmailDeltaTransport implements ChatTransport {
         previousMetadataId != metadata.id) {
       await db.deleteFileMetadata(previousMetadataId);
     }
-    if (existingByDeltaId != null && existingByDeltaId.stanzaID != stanzaId) {
+    if (duplicateMessage != null) {
       await db.deleteMessage(
-        existingByDeltaId.stanzaID,
+        duplicateMessage.stanzaID,
         selfJid: existing.senderJid,
         emailSelfJid: existing.senderJid,
       );
