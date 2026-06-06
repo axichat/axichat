@@ -58,11 +58,7 @@ void main() {
   ) async {
     await _pumpEmailForwardingApp(
       tester,
-      child: EmailOnboardingWelcomeContent(
-        onForegroundActivationStarted: () {},
-        onForegroundActivationFinished: () {},
-        onForegroundActivated: () async {},
-      ),
+      child: const EmailOnboardingWelcomeContent(),
     );
 
     await tester.pumpAndSettle();
@@ -80,11 +76,7 @@ void main() {
     await _pumpEmailForwardingApp(
       tester,
       settingsCubit: settingsCubit,
-      child: EmailOnboardingWelcomeContent(
-        onForegroundActivationStarted: () {},
-        onForegroundActivationFinished: () {},
-        onForegroundActivated: () async {},
-      ),
+      child: const EmailOnboardingWelcomeContent(),
     );
 
     await tester.pumpAndSettle();
@@ -148,11 +140,7 @@ void main() {
       tester,
       settingsCubit: settingsCubit,
       emailService: emailService,
-      child: EmailOnboardingWelcomeContent(
-        onForegroundActivationStarted: () {},
-        onForegroundActivationFinished: () {},
-        onForegroundActivated: () async {},
-      ),
+      child: const EmailOnboardingWelcomeContent(),
     );
 
     await tester.pumpAndSettle();

@@ -50,6 +50,13 @@ String _largeCalendarPayloadText() {
   return String.fromCharCodes(codeUnits);
 }
 
+String _largeSnapshotDescription(int index) {
+  return List<String>.filled(
+    12,
+    'large-calendar-snapshot-task-$index-payload',
+  ).join(' ');
+}
+
 Future<CalendarSnapshotUploadResult> _uploadSnapshotAsset(
   File file, {
   required int index,
@@ -94,6 +101,60 @@ void main() {
       expect(result?.checksum, model.calculateChecksum());
       expect(result?.model.tasks[task.id]?.title, task.title);
     });
+
+    test(
+      'large snapshots round trip through isolate-backed codec paths',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'axichat_large_snapshot_round_trip',
+        );
+        addTearDown(() async {
+          if (await directory.exists()) {
+            await directory.delete(recursive: true);
+          }
+        });
+        final modifiedAt = DateTime.utc(2024, 6, 1, 11);
+        final tasks = <String, CalendarTask>{};
+        for (var index = 0; index < 1500; index++) {
+          final task = CalendarTask(
+            id: 'large-snapshot-task-$index',
+            title: 'Large snapshot task $index',
+            description: _largeSnapshotDescription(index),
+            createdAt: modifiedAt.add(Duration(minutes: index)),
+            modifiedAt: modifiedAt.add(Duration(minutes: index)),
+          );
+          tasks[task.id] = task;
+        }
+        final model = CalendarModel.empty().copyWith(
+          tasks: tasks,
+          lastModified: modifiedAt,
+        );
+
+        final expectedChecksum =
+            await CalendarSnapshotCodec.computeChecksumAsync(model);
+        final encoded = await CalendarSnapshotCodec.encodeAsync(model);
+        final decoded = await CalendarSnapshotCodec.decodeAsync(encoded);
+        final file = await CalendarSnapshotCodec.encodeToFile(
+          model,
+          directory: directory,
+        );
+        final fileDecoded = await CalendarSnapshotCodec.decodeFile(file);
+
+        expect(decoded, isNotNull);
+        expect(decoded?.checksum, expectedChecksum);
+        expect(decoded?.model.tasks, hasLength(tasks.length));
+        expect(
+          decoded?.model.tasks['large-snapshot-task-1499']?.description,
+          _largeSnapshotDescription(1499),
+        );
+        expect(
+          await CalendarSnapshotCodec.verifyChecksumAsync(decoded!),
+          isTrue,
+        );
+        expect(fileDecoded?.checksum, expectedChecksum);
+        expect(fileDecoded?.model.tasks, hasLength(tasks.length));
+      },
+    );
   });
 
   CalendarSyncManager buildManager({

@@ -160,9 +160,6 @@ class AccountWelcomeDialog extends StatelessWidget {
     required this.accountJid,
     required this.showEmailOnboarding,
     required this.showRecoveryPrompt,
-    required this.onForegroundActivationStarted,
-    required this.onForegroundActivationFinished,
-    required this.onForegroundActivated,
     required this.onRecoveryDismissed,
     required this.onRecoveryConfigured,
   });
@@ -170,9 +167,6 @@ class AccountWelcomeDialog extends StatelessWidget {
   final String accountJid;
   final bool showEmailOnboarding;
   final bool showRecoveryPrompt;
-  final void Function() onForegroundActivationStarted;
-  final void Function() onForegroundActivationFinished;
-  final Future<void> Function() onForegroundActivated;
   final Future<void> Function() onRecoveryDismissed;
   final Future<void> Function() onRecoveryConfigured;
 
@@ -230,13 +224,7 @@ class AccountWelcomeDialog extends StatelessWidget {
               ),
             ),
             children: [
-              if (showEmailOnboarding)
-                EmailOnboardingWelcomeContent(
-                  onForegroundActivationStarted: onForegroundActivationStarted,
-                  onForegroundActivationFinished:
-                      onForegroundActivationFinished,
-                  onForegroundActivated: onForegroundActivated,
-                ),
+              if (showEmailOnboarding) const EmailOnboardingWelcomeContent(),
               if (showRecoveryPrompt) ...[
                 if (showEmailOnboarding) SizedBox(height: spacing.xl),
                 AccountRecoveryWelcomeContent(
@@ -254,16 +242,7 @@ class AccountWelcomeDialog extends StatelessWidget {
 }
 
 class EmailOnboardingWelcomeContent extends StatelessWidget {
-  const EmailOnboardingWelcomeContent({
-    super.key,
-    required this.onForegroundActivationStarted,
-    required this.onForegroundActivationFinished,
-    required this.onForegroundActivated,
-  });
-
-  final void Function() onForegroundActivationStarted;
-  final void Function() onForegroundActivationFinished;
-  final Future<void> Function() onForegroundActivated;
+  const EmailOnboardingWelcomeContent({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -284,12 +263,7 @@ class EmailOnboardingWelcomeContent extends StatelessWidget {
           style: context.textTheme.muted,
         ),
         SizedBox(height: spacing.xl),
-        NotificationRequest(
-          allowCurrentSessionMigration: true,
-          onForegroundActivationStarted: onForegroundActivationStarted,
-          onForegroundActivationFinished: onForegroundActivationFinished,
-          onForegroundActivated: onForegroundActivated,
-        ),
+        const NotificationRequest(),
       ],
     );
   }
@@ -559,7 +533,6 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
   final bool _debugAlwaysShowWelcome = false;
   String? _dialogShownForAccount;
   bool _dialogScheduled = false;
-  Completer<void>? _foregroundActivationCompleter;
 
   @override
   void didChangeDependencies() {
@@ -635,25 +608,22 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
       return;
     }
     try {
-      await showFadeScaleDialog<void>(
+      final dialog = showFadeScaleDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => AccountWelcomeDialog(
           accountJid: accountJid,
           showEmailOnboarding: showEmailOnboarding,
           showRecoveryPrompt: showRecoveryPrompt,
-          onForegroundActivationStarted: _handleForegroundActivationStarted,
-          onForegroundActivationFinished: _handleForegroundActivationFinished,
-          onForegroundActivated:
-              authenticationCubit.releaseSignupPostLoginWorkHold,
           onRecoveryDismissed: () =>
               settingsCubit.dismissRecoveryWelcomeFor(accountJid),
           onRecoveryConfigured: () =>
               settingsCubit.dismissRecoveryWelcomeFor(accountJid),
         ),
       );
+      unawaited(authenticationCubit.releaseSignupPostLoginWorkHold());
+      await dialog;
     } finally {
-      await _foregroundActivationCompleter?.future;
       await authenticationCubit.releaseSignupPostLoginWorkHold();
     }
     if (!mounted || _debugAlwaysShowWelcome) {
@@ -689,21 +659,6 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
       return !(status?.hasRecoveryMethod ?? true);
     } on provisioning.EmailProvisioningApiException {
       return false;
-    }
-  }
-
-  void _handleForegroundActivationStarted() {
-    _foregroundActivationCompleter ??= Completer<void>();
-  }
-
-  void _handleForegroundActivationFinished() {
-    final completer = _foregroundActivationCompleter;
-    if (completer == null) {
-      return;
-    }
-    _foregroundActivationCompleter = null;
-    if (!completer.isCompleted) {
-      completer.complete();
     }
   }
 }

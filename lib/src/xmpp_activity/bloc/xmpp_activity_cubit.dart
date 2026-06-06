@@ -38,6 +38,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   static const Duration _defaultOperationTimeout = Duration(minutes: 2);
   static const Duration _mamMucSyncTimeout = Duration(minutes: 10);
   static const Duration _longMamSyncTimeout = Duration(minutes: 20);
+  static const Duration _emitCoalesceDelay = Duration(milliseconds: 16);
 
   final XmppBase _xmppBase;
   final Duration _completedRetention;
@@ -45,11 +46,21 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   final Map<_XmppOperationKey, _XmppOperationBatch> _activeOperations = {};
   final Map<String, Timer> _retentionTimers = {};
   final Map<String, Timer> _completionTimers = {};
+  List<XmppOperation> _operations = const <XmppOperation>[];
+  Timer? _emitTimer;
   late final StreamSubscription<XmppOperationEvent> _subscription;
   late final StreamSubscription<ConnectionState> _connectivitySubscription;
   late final Timer _staleOperationTimer;
 
   static final _logger = Logger('XmppActivityCubit');
+
+  void _setOperations(List<XmppOperation> operations) {
+    _operations = List.unmodifiable(operations);
+    _emitTimer ??= Timer(_emitCoalesceDelay, () {
+      _emitTimer = null;
+      emit(state.copyWith(operations: _operations));
+    });
+  }
 
   void _handleConnectionState(ConnectionState connectionState) {
     if (connectionState == ConnectionState.connected ||
@@ -125,7 +136,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   }
 
   String _startOperation(XmppOperationKind kind) {
-    final operations = List<XmppOperation>.of(state.operations);
+    final operations = List<XmppOperation>.of(_operations);
     final index = operations.lastIndexWhere(
       (item) =>
           item.kind == kind && item.status == XmppOperationStatus.inProgress,
@@ -144,7 +155,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       startedAt: DateTime.now(),
     );
     final updated = operations..add(operation);
-    emit(state.copyWith(operations: List.unmodifiable(updated)));
+    _setOperations(updated);
     return id;
   }
 
@@ -196,14 +207,14 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   }
 
   void _updateOperation(String id, {XmppOperationStatus? status}) {
-    final operations = List<XmppOperation>.of(state.operations);
+    final operations = List<XmppOperation>.of(_operations);
     final index = operations.indexWhere((item) => item.id == id);
     if (index == -1) return;
     _cancelCompletion(id);
     final updated = operations[index].copyWith(status: status);
     operations[index] = updated;
     _scheduleTeardown(updated);
-    emit(state.copyWith(operations: List.unmodifiable(operations)));
+    _setOperations(operations);
   }
 
   void _scheduleTeardown(XmppOperation operation) {
@@ -216,9 +227,9 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
         : _failedRetention;
     _cancelRetention(operation.id);
     _retentionTimers[operation.id] = Timer(retention, () {
-      final operations = List<XmppOperation>.of(state.operations)
+      final operations = List<XmppOperation>.of(_operations)
         ..removeWhere((item) => item.id == operation.id);
-      emit(state.copyWith(operations: List.unmodifiable(operations)));
+      _setOperations(operations);
       _retentionTimers.remove(operation.id);
     });
   }
@@ -235,7 +246,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
 
   void _clearInProgressOperations() {
     if (_activeOperations.isEmpty &&
-        !state.operations.any(
+        !_operations.any(
           (operation) => operation.status == XmppOperationStatus.inProgress,
         )) {
       return;
@@ -245,16 +256,16 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       timer.cancel();
     }
     _completionTimers.clear();
-    final operations = state.operations
+    final operations = _operations
         .where(
           (operation) => operation.status != XmppOperationStatus.inProgress,
         )
         .toList(growable: false);
-    emit(state.copyWith(operations: List.unmodifiable(operations)));
+    _setOperations(operations);
   }
 
   void _refreshOperationStartTime(String id, {required DateTime startedAt}) {
-    final operations = List<XmppOperation>.of(state.operations);
+    final operations = List<XmppOperation>.of(_operations);
     final index = operations.indexWhere((item) => item.id == id);
     if (index == -1) {
       return;
@@ -264,7 +275,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       return;
     }
     operations[index] = operation.copyWith(startedAt: startedAt);
-    emit(state.copyWith(operations: List.unmodifiable(operations)));
+    _setOperations(operations);
   }
 
   DateTime _startedAtForOperation(XmppOperation operation) {
@@ -285,7 +296,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   }
 
   void _reconcileStaleOperations() {
-    final operations = state.operations;
+    final operations = _operations;
     if (operations.isEmpty) {
       return;
     }
@@ -330,7 +341,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       _logger.warning(
         'Marking stale XMPP operations as failed: ${staleIds.join(', ')}.',
       );
-      emit(state.copyWith(operations: List.unmodifiable(updatedOperations)));
+      _setOperations(updatedOperations);
     }
   }
 
@@ -349,6 +360,8 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   @override
   Future<void> close() async {
     _staleOperationTimer.cancel();
+    _emitTimer?.cancel();
+    _emitTimer = null;
     for (final timer in _completionTimers.values.toList(growable: false)) {
       timer.cancel();
     }

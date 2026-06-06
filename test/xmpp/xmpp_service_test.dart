@@ -1022,6 +1022,7 @@ void main() {
     });
 
     test('When stream negotiations complete, requests the roster.', () async {
+      stubUnsafeBootstrapManagersUnavailable();
       when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
       when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
       when(
@@ -1040,6 +1041,7 @@ void main() {
     test(
       'Signup post-login hold defers carbons and bootstrap until released.',
       () async {
+        stubUnsafeBootstrapManagersUnavailable();
         when(() => mockConnection.carbonsEnabled).thenReturn(false);
         when(
           () => mockConnection.enableCarbons(),
@@ -1072,6 +1074,7 @@ void main() {
     test(
       'When stream negotiations resume, does not request the roster.',
       () async {
+        stubUnsafeBootstrapManagersUnavailable();
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
         when(
           () => mockConnection.requestRoster(),
@@ -1093,6 +1096,7 @@ void main() {
     test(
       'When stream negotiations complete, requests the blocklist.',
       () async {
+        stubUnsafeBootstrapManagersUnavailable();
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
         when(
           () => mockConnection.requestRoster(),
@@ -1112,6 +1116,7 @@ void main() {
     );
 
     test('When stream negotiations resume, requests the blocklist.', () async {
+      stubUnsafeBootstrapManagersUnavailable();
       when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
       when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
       when(
@@ -7794,6 +7799,51 @@ void main() {
         expect(secondOperationRan, isFalse);
       },
     );
+
+    test('Bootstrap pass starts same-priority operations together.', () async {
+      final operationStarted = List<Completer<void>>.generate(
+        3,
+        (_) => Completer<void>(),
+      );
+      final allowOperationsToFinish = Completer<void>();
+
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.notConnected,
+        ),
+      );
+      await pumpEventQueue();
+      xmppService.resetBootstrapOperations();
+
+      for (var index = 0; index < operationStarted.length; index += 1) {
+        final operationIndex = index;
+        xmppService.registerBootstrapOperation(
+          XmppBootstrapOperation(
+            key: Object(),
+            priority: -2,
+            triggers: const <XmppBootstrapTrigger>{
+              XmppBootstrapTrigger.manualRefresh,
+            },
+            operationName: 'same-priority bootstrap test $operationIndex',
+            run: () async {
+              operationStarted[operationIndex].complete();
+              await allowOperationsToFinish.future;
+            },
+          ),
+        );
+      }
+
+      final runFuture = xmppService.runBootstrapOperations(
+        XmppBootstrapTrigger.manualRefresh,
+      );
+      await Future.wait<void>(
+        operationStarted.map((operation) => operation.future),
+      );
+
+      allowOperationsToFinish.complete();
+      await runFuture;
+    });
 
     test('Bootstrap pass stops scheduling operations after reset.', () async {
       final operationStarted = Completer<void>();

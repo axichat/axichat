@@ -510,7 +510,7 @@ class CalendarSyncManager {
         currentStatus != CalendarSnapshotPublishStatus.idle) {
       return false;
     }
-    final inlineSnapshot = _buildInlineSnapshotOutbound(model);
+    final inlineSnapshot = await _buildInlineSnapshotOutbound(model);
     final sendSnapshot = _sendSnapshotFile;
     if (sendSnapshot == null) {
       if (_canSendInlineEnvelope(inlineSnapshot.outbound)) {
@@ -591,9 +591,9 @@ class CalendarSyncManager {
     return false;
   }
 
-  ({CalendarSyncOutbound outbound, String checksum})
-  _buildInlineSnapshotOutbound(CalendarModel model) {
-    final checksum = CalendarSnapshotCodec.computeChecksum(model);
+  Future<({CalendarSyncOutbound outbound, String checksum})>
+  _buildInlineSnapshotOutbound(CalendarModel model) async {
+    final checksum = await CalendarSnapshotCodec.computeChecksumAsync(model);
     final syncMessage = CalendarSyncMessage(
       type: CalendarSyncType.snapshot,
       timestamp: _syncNowUtc(),

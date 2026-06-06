@@ -12,6 +12,12 @@ import 'package:mocktail/mocktail.dart';
 
 import '../../mocks.dart';
 
+extension on FakeAsync {
+  void elapseActivityEmit() {
+    elapse(const Duration(milliseconds: 16));
+  }
+}
+
 void main() {
   test('clears in-progress operations when XMPP disconnects', () {
     fakeAsync((async) {
@@ -42,6 +48,7 @@ void main() {
           stage: XmppOperationStage.start,
         ),
       );
+      async.elapseActivityEmit();
 
       expect(cubit.state.operations, hasLength(1));
       expect(
@@ -51,6 +58,7 @@ void main() {
 
       connectionState = ConnectionState.connecting;
       connectionStates.add(ConnectionState.connecting);
+      async.elapseActivityEmit();
 
       expect(cubit.state.operations, isEmpty);
 
@@ -83,7 +91,7 @@ void main() {
 
       final cubit = XmppActivityCubit(
         xmppBase: xmppService,
-        completedRetention: const Duration(milliseconds: 1),
+        completedRetention: const Duration(milliseconds: 32),
       );
 
       operationEvents.add(
@@ -93,6 +101,7 @@ void main() {
         ),
       );
       connectionStates.add(ConnectionState.notConnected);
+      async.elapseActivityEmit();
 
       expect(
         cubit.state.operations.single.status,
@@ -112,10 +121,12 @@ void main() {
       );
 
       async.elapse(const Duration(milliseconds: 350));
+      async.elapseActivityEmit();
 
       expect(cubit.state.operations.single.status, XmppOperationStatus.success);
 
-      async.elapse(const Duration(milliseconds: 1));
+      async.elapse(const Duration(milliseconds: 32));
+      async.elapseActivityEmit();
 
       expect(cubit.state.operations, isEmpty);
 
@@ -148,7 +159,7 @@ void main() {
 
       final cubit = XmppActivityCubit(
         xmppBase: xmppService,
-        completedRetention: const Duration(milliseconds: 1),
+        completedRetention: const Duration(milliseconds: 32),
       );
 
       operationEvents
@@ -164,6 +175,7 @@ void main() {
             stage: XmppOperationStage.end,
           ),
         );
+      async.elapseActivityEmit();
 
       expect(
         cubit.state.operations.single.status,
@@ -171,13 +183,108 @@ void main() {
       );
 
       async.elapse(const Duration(milliseconds: 350));
+      async.elapseActivityEmit();
 
       expect(cubit.state.operations.single.status, XmppOperationStatus.success);
 
-      async.elapse(const Duration(milliseconds: 1));
+      async.elapse(const Duration(milliseconds: 32));
+      async.elapseActivityEmit();
 
       expect(cubit.state.operations, isEmpty);
 
+      unawaited(cubit.close());
+      unawaited(operationEvents.close());
+      unawaited(connectionStates.close());
+      async.flushMicrotasks();
+    });
+  });
+
+  test('coalesces a mocked post-login activity storm by UI phase', () {
+    fakeAsync((async) {
+      final operationEvents = StreamController<XmppOperationEvent>.broadcast(
+        sync: true,
+      );
+      final connectionStates = StreamController<ConnectionState>.broadcast(
+        sync: true,
+      );
+      final xmppService = MockXmppService();
+      when(
+        () => xmppService.xmppOperationStream,
+      ).thenAnswer((_) => operationEvents.stream);
+      when(
+        () => xmppService.connectivityStream,
+      ).thenAnswer((_) => connectionStates.stream);
+      when(
+        () => xmppService.connectionState,
+      ).thenReturn(ConnectionState.connected);
+      when(() => xmppService.demoOfflineMode).thenReturn(false);
+
+      final cubit = XmppActivityCubit(
+        xmppBase: xmppService,
+        completedRetention: const Duration(milliseconds: 32),
+      );
+      final emissions = <XmppActivityState>[];
+      final subscription = cubit.stream.listen(emissions.add);
+      final postLoginKinds = <XmppOperationKind>[
+        XmppOperationKind.pubSubConversations,
+        XmppOperationKind.pubSubBookmarks,
+        XmppOperationKind.pubSubDrafts,
+        XmppOperationKind.pubSubSpam,
+        XmppOperationKind.pubSubAddressBlock,
+        XmppOperationKind.pubSubAvatarMetadata,
+        XmppOperationKind.mamGlobalSync,
+        XmppOperationKind.mamMucSync,
+        XmppOperationKind.mamFetch,
+      ];
+
+      for (var index = 0; index < 20; index++) {
+        for (final kind in postLoginKinds) {
+          operationEvents.add(
+            XmppOperationEvent(kind: kind, stage: XmppOperationStage.start),
+          );
+        }
+      }
+
+      expect(emissions, isEmpty);
+
+      async.elapseActivityEmit();
+
+      expect(emissions, hasLength(1));
+      expect(
+        cubit.state.operations.map((operation) => operation.kind),
+        unorderedEquals(postLoginKinds),
+      );
+      expect(
+        cubit.state.operations.map((operation) => operation.status),
+        everyElement(XmppOperationStatus.inProgress),
+      );
+
+      for (var index = 0; index < 20; index++) {
+        for (final kind in postLoginKinds) {
+          operationEvents.add(
+            XmppOperationEvent(kind: kind, stage: XmppOperationStage.end),
+          );
+        }
+      }
+
+      expect(emissions, hasLength(1));
+
+      async.elapse(const Duration(milliseconds: 350));
+      async.elapseActivityEmit();
+
+      expect(emissions, hasLength(2));
+      expect(
+        cubit.state.operations.map((operation) => operation.status),
+        everyElement(XmppOperationStatus.success),
+      );
+
+      async.elapse(const Duration(milliseconds: 32));
+      async.elapseActivityEmit();
+
+      expect(emissions, hasLength(3));
+      expect(cubit.state.operations, isEmpty);
+
+      unawaited(subscription.cancel());
       unawaited(cubit.close());
       unawaited(operationEvents.close());
       unawaited(connectionStates.close());

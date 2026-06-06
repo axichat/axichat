@@ -1439,6 +1439,7 @@ class XmppService extends XmppBase
   void beginSignupPostLoginWorkHold() {
     _signupPostLoginWorkHeld = true;
     _deferredSignupPostLoginTrigger = null;
+    _xmppLogger.info('Holding signup post-login XMPP work.');
   }
 
   @override
@@ -1449,13 +1450,17 @@ class XmppService extends XmppBase
     }
     _signupPostLoginWorkHeld = false;
     _deferredSignupPostLoginTrigger = null;
+    _xmppLogger.info(
+      'Releasing signup post-login XMPP work. '
+      'trigger=$trigger connectionState=$connectionState',
+    );
     if (trigger == null || connectionState != ConnectionState.connected) {
       return;
     }
-    fireAndForget(
-      () async => await _runAutomaticPostNegotiationWork(trigger),
-      operationName: 'XmppService.releaseSignupPostLoginWorkHold',
-    );
+    fireAndForget(() async {
+      await Future<void>.delayed(Duration.zero);
+      await _runAutomaticPostNegotiationWork(trigger);
+    }, operationName: 'XmppService.releaseSignupPostLoginWorkHold');
   }
 
   @override
@@ -1537,14 +1542,7 @@ class XmppService extends XmppBase
               );
               index++;
             }
-            await Future.wait<void>(
-              futures.map(
-                (future) => future.catchError(
-                  (Object _, StackTrace _) {},
-                  test: (Object error) => error is Exception,
-                ),
-              ),
-            );
+            await _waitForBootstrapOperations(futures);
           }
         })
         .whenComplete(() {
@@ -1556,6 +1554,20 @@ class XmppService extends XmppBase
       test: (Object error) => error is Exception,
     );
     await scheduled;
+  }
+
+  Future<void> _waitForBootstrapOperations(List<Future<void>> futures) async {
+    if (futures.isEmpty) {
+      return;
+    }
+    await Future.wait<void>(
+      futures.map(
+        (future) => future.catchError(
+          (Object _, StackTrace _) {},
+          test: (Object error) => error is Exception,
+        ),
+      ),
+    );
   }
 
   Future<void> _startBootstrapOperationIfAllowed(

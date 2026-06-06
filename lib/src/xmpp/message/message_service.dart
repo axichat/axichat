@@ -1052,6 +1052,7 @@ const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = mamLoginBackfillMessageLimit;
 const int _calendarSnapshotDownloadMaxBytes =
     CalendarSnapshotCodec.maxCompressedBytes;
+const Duration _calendarSyncDispatchTimeout = Duration(seconds: 30);
 const String _calendarSnapshotDefaultName =
     'calendar_snapshot${CalendarSnapshotCodec.fileExtension}';
 const String _calendarSnapshotNoJidMessage =
@@ -5267,7 +5268,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mamGlobalBootstrapOperationName,
-        priority: 0,
+        priority: 1,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.resumedNegotiation,
@@ -5281,7 +5282,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     registerBootstrapOperation(
       XmppBootstrapOperation(
         key: _mamCalendarBootstrapOperationName,
-        priority: 1,
+        priority: 2,
         triggers: const <XmppBootstrapTrigger>{
           XmppBootstrapTrigger.fullNegotiation,
           XmppBootstrapTrigger.manualRefresh,
@@ -10903,7 +10904,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   Future<T> _awaitCalendarSyncQueueWork<T>(Future<T> future) {
     return Future.any<T>([
-      future,
+      future.timeout(_calendarSyncDispatchTimeout),
       _calendarSyncAbortSignal.future.then<T>(
         (_) => throw XmppAbortedException(),
       ),
@@ -10948,7 +10949,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       waits.add(waiter.future);
     }
     if (waits.isNotEmpty) {
-      await Future.wait(waits);
+      await Future.wait(waits).timeout(_calendarSyncDispatchTimeout);
     }
   }
 
@@ -11941,7 +11942,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         return false;
       }
 
-      if (!CalendarSnapshotCodec.verifyChecksum(decoded)) {
+      if (!await CalendarSnapshotCodec.verifyChecksumAsync(decoded)) {
         _log.warning(_calendarSnapshotChecksumFailedMessage);
         await _maybeNotifySnapshotUnavailable(
           event,
@@ -12059,8 +12060,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<CalendarSnapshotResult?> _decodeSnapshotFile(File file) =>
       CalendarSnapshotCodec.decodeFile(file);
 
-  CalendarSnapshotResult? _decodeSnapshotBytes(Uint8List bytes) =>
-      CalendarSnapshotCodec.decode(bytes);
+  Future<CalendarSnapshotResult?> _decodeSnapshotBytes(Uint8List bytes) =>
+      CalendarSnapshotCodec.decodeAsync(bytes);
 
   Future<Uint8List?> _downloadSnapshotAssetBytes(
     String url, {
@@ -12131,6 +12132,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       return applied;
     } on XmppAbortedException {
+      rethrow;
+    } on TimeoutException catch (error, stackTrace) {
+      _log.warning('Calendar sync handler timed out.', error, stackTrace);
       rethrow;
     } on Exception catch (error, stackTrace) {
       _log.warning('Calendar sync handler failed.', error, stackTrace);
@@ -12679,6 +12683,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       return applied;
     } on XmppAbortedException {
+      rethrow;
+    } on TimeoutException catch (error, stackTrace) {
+      _log.warning('Chat calendar sync handler timed out.', error, stackTrace);
       rethrow;
     } on Exception catch (error, stackTrace) {
       _log.warning('Chat calendar sync handler failed.', error, stackTrace);

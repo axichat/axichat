@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:axichat/src/calendar/models/calendar_model.dart';
@@ -47,6 +48,9 @@ class CalendarSnapshotCodec {
     return compressedBytes;
   }
 
+  static Future<Uint8List> encodeAsync(CalendarModel model) =>
+      Isolate.run(() => encode(model));
+
   static CalendarSnapshotResult? decode(Uint8List compressedBytes) {
     if (compressedBytes.isEmpty ||
         compressedBytes.length > maxCompressedBytes) {
@@ -72,13 +76,23 @@ class CalendarSnapshotCodec {
     }
   }
 
+  static Future<CalendarSnapshotResult?> decodeAsync(
+    Uint8List compressedBytes,
+  ) async {
+    if (compressedBytes.isEmpty ||
+        compressedBytes.length > maxCompressedBytes) {
+      return null;
+    }
+    return Isolate.run(() => decode(compressedBytes));
+  }
+
   static Future<CalendarSnapshotResult?> decodeFile(File file) async {
     try {
       final length = await file.length();
       if (length <= 0 || length > maxCompressedBytes) {
         return null;
       }
-      return decode(await file.readAsBytes());
+      return decodeAsync(await file.readAsBytes());
     } on FileSystemException {
       return null;
     }
@@ -89,7 +103,7 @@ class CalendarSnapshotCodec {
     required Directory directory,
     String? fileName,
   }) async {
-    final bytes = encode(model);
+    final bytes = await encodeAsync(model);
     final name = fileName ?? _generateFileName();
     final file = File('${directory.path}/$name');
     await file.writeAsBytes(bytes);
@@ -99,9 +113,15 @@ class CalendarSnapshotCodec {
   static String computeChecksum(CalendarModel model) =>
       model.calculateChecksum();
 
+  static Future<String> computeChecksumAsync(CalendarModel model) =>
+      Isolate.run(() => computeChecksum(model));
+
   static bool verifyChecksum(CalendarSnapshotResult snapshot) {
     return snapshot.model.calculateChecksum() == snapshot.checksum;
   }
+
+  static Future<bool> verifyChecksumAsync(CalendarSnapshotResult snapshot) =>
+      Isolate.run(() => verifyChecksum(snapshot));
 
   static CalendarSnapshotResult? _parseEnvelope(Map<String, dynamic> envelope) {
     final version = envelope[_versionKey] as int?;
