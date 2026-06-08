@@ -262,7 +262,7 @@ class EmailOnboardingWelcomeContent extends StatelessWidget {
           l10n.emailForwardingWelcomeOtherProviderHint,
           style: context.textTheme.muted,
         ),
-        SizedBox(height: spacing.xl),
+        SizedBox(height: spacing.l),
         const NotificationRequest(),
       ],
     );

@@ -11355,7 +11355,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       );
     }
 
-    _log.info('Received calendar sync message type: ${syncMessage.type}');
+    if (event.isFromMAM) {
+      _log.fine('Received calendar sync message type: ${syncMessage.type}');
+    } else {
+      _log.info('Received calendar sync message type: ${syncMessage.type}');
+    }
     _trackMamGlobalChatCalendarCoverageCandidate(
       chatJid: chatJid,
       chatType: chatType,

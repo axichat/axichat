@@ -5079,6 +5079,7 @@ class _PendingAccountDeletion {
 final class _CoalescingAsyncQueue {
   bool _running = false;
   bool _queued = false;
+  bool _completerShared = false;
   Completer<void>? _completer;
 
   Future<void> enqueue(Future<void> Function() operation) async {
@@ -5086,10 +5087,12 @@ final class _CoalescingAsyncQueue {
       _queued = true;
       final completer = _completer;
       if (completer != null) {
+        _completerShared = true;
         return completer.future;
       }
       final fallback = Completer<void>();
       _completer = fallback;
+      _completerShared = true;
       return fallback.future;
     }
 
@@ -5101,12 +5104,17 @@ final class _CoalescingAsyncQueue {
         _queued = false;
         await operation();
       } while (_queued);
-      completer.complete();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
     } catch (error, stackTrace) {
-      completer.completeError(error, stackTrace);
+      if (_completerShared && !completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
       rethrow;
     } finally {
       _running = false;
+      _completerShared = false;
       _completer = null;
     }
   }
