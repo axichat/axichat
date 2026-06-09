@@ -2021,13 +2021,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _clearAuthTransaction(expected: txn);
   }
 
-  EndpointOverride? _overrideFrom(IOEndpoint? endpoint) {
-    if (endpoint == null) {
-      return null;
-    }
-    return EndpointOverride(host: endpoint.host, port: endpoint.port);
-  }
-
   @override
   Future<void> close() async {
     _invalidateEmailReconnectGeneration();
@@ -2329,10 +2322,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       EndpointOverride? xmppEndpoint;
       if (xmppEnabled) {
-        xmppEndpoint = await _endpointResolver.resolveXmpp(
-          config,
-          fallback: _overrideFrom(serverLookup[config.domain]),
-        );
+        xmppEndpoint = await _endpointResolver.resolveXmpp(config);
         if (_stopLoginIfCancelled(loginAttempt)) {
           return;
         }

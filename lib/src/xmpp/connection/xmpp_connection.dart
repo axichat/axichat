@@ -344,7 +344,12 @@ class XmppConnection extends mox.XmppConnection {
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
-  XmppConnectionSettings({required super.jid, required super.password});
+  XmppConnectionSettings({
+    required super.jid,
+    required super.password,
+    super.host,
+    super.port,
+  });
 }
 
 enum ReconnectTrigger {
@@ -816,10 +821,6 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     if (rawDomain == null) return configuredEndpoints;
     final domain = rawDomain.trim().toLowerCase();
     if (domain.isEmpty) return configuredEndpoints;
-    final endpoint = serverLookup[domain];
-    if (endpoint != null) {
-      return [endpoint];
-    }
     if (configuredEndpoints.isNotEmpty) {
       return configuredEndpoints;
     }

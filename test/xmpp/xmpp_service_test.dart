@@ -16,6 +16,7 @@ import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_state_store.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -893,6 +894,9 @@ void main() {
     registerFallbackValue(FakeJid());
     registerFallbackValue(ReconnectTrigger.resume);
     registerFallbackValue(MessageNotificationChannel.chat);
+    registerFallbackValue(
+      XmppConnectionSettings(jid: mox.JID.fromString(jid), password: password),
+    );
     registerOmemoFallbacks();
   });
 
@@ -982,6 +986,28 @@ void main() {
     await connectSuccessfully(xmppService);
 
     expect(foregroundServiceActive.value, isTrue);
+    await xmppService.close();
+  });
+
+  test('connect applies explicit endpoint to connection settings', () async {
+    xmppService = XmppService(
+      buildConnection: () => mockConnection,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
+      notificationService: mockNotificationService,
+    );
+
+    await connectSuccessfully(
+      xmppService,
+      endpoint: const EndpointOverride(host: 'xmpp.custom.example', port: 5223),
+    );
+
+    final captured = verify(
+      () => mockConnection.connectionSettings = captureAny(),
+    ).captured;
+    final settings = captured.single as XmppConnectionSettings;
+    expect(settings.host, 'xmpp.custom.example');
+    expect(settings.port, 5223);
     await xmppService.close();
   });
 
@@ -8518,7 +8544,7 @@ void main() {
     );
 
     test(
-      'connect failure callback fires when no endpoint is available',
+      'connect failure callback fires when direct domain dialing fails',
       () async {
         final wrapper = XmppSocketWrapper();
         var failures = 0;

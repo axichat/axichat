@@ -106,6 +106,33 @@ void main() {
       },
     );
 
+    test('release for inactive client is a no-op', () async {
+      var stopCalls = 0;
+
+      final bridge = FlutterForegroundTaskBridge(
+        isRunningService: () async => true,
+        startForegroundService: (_) async {},
+        stopForegroundService: () async {
+          stopCalls++;
+        },
+        waitForResume: () async {},
+        initCommunicationPort: () {},
+        addTaskDataCallback: (_) {},
+        removeTaskDataCallback: (_) {},
+        sendDataToTask: (_) {},
+      );
+
+      await bridge.release(foregroundClientEmailKeepalive);
+      expect(stopCalls, isZero);
+
+      await bridge.acquire(clientId: foregroundClientXmpp);
+      await bridge.release(foregroundClientEmailKeepalive);
+      expect(stopCalls, isZero);
+
+      await bridge.release(foregroundClientXmpp);
+      expect(stopCalls, equals(1));
+    });
+
     test(
       'acquire restarts the foreground service when lease state is stale',
       () async {

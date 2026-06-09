@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,31 +11,17 @@ void main() {
     expect(await manager.hasConnection(), isTrue);
   });
 
-  test('checks connectivity using mapped XMPP endpoint', () async {
-    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-    addTearDown(server.close);
-    final subscription = server.listen((socket) {
-      socket.destroy();
-    });
-    addTearDown(subscription.cancel);
-
+  test('checks connectivity using bare domain endpoint', () async {
     const domain = 'example.test';
-    final previousEndpoint = serverLookup[domain];
-    serverLookup[domain] = IOEndpoint(
-      InternetAddress.loopbackIPv4.address,
-      server.port,
-    );
-    addTearDown(() {
-      if (previousEndpoint == null) {
-        serverLookup.remove(domain);
-      } else {
-        serverLookup[domain] = previousEndpoint;
-      }
-    });
-
     final manager = XmppConnectivityManager.forXmppConnection(
       domainProvider: () => domain,
       shouldContinue: () async => true,
+      connectivityProbe: (endpoints) async {
+        expect(endpoints, hasLength(1));
+        expect(endpoints.single.host, domain);
+        expect(endpoints.single.port, 5222);
+        return true;
+      },
     );
 
     expect(await manager.hasConnection(), isTrue);

@@ -1636,7 +1636,6 @@ void main() {
         AuthenticationComplete(),
       ],
       verify: (_) {
-        final defaultEndpoint = serverLookup[EndpointConfig.defaultDomain]!;
         verify(
           () => mockXmppService.connect(
             jid: validJid,
@@ -1646,8 +1645,8 @@ void main() {
             preHashed: true,
             reuseExistingSession: false,
             endpoint: EndpointOverride(
-              host: defaultEndpoint.host,
-              port: defaultEndpoint.port,
+              host: EndpointConfig.defaultDomain,
+              port: EndpointConfig.defaultXmppPort,
             ),
           ),
         ).called(1);
@@ -1659,8 +1658,8 @@ void main() {
             password: validPassword,
             preHashed: true,
             endpoint: EndpointOverride(
-              host: defaultEndpoint.host,
-              port: defaultEndpoint.port,
+              host: EndpointConfig.defaultDomain,
+              port: EndpointConfig.defaultXmppPort,
             ),
           ),
         ).called(1);

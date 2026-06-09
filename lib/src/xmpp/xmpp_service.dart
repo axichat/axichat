@@ -454,19 +454,6 @@ class HttpUploadSupport {
   int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
 }
 
-// Hardcode the socket endpoints so we never block on DNS when dialing the XMPP
-// server. The `domain` parameter is still passed through for TLS/SASL SNI.
-final serverLookup = <String, IOEndpoint>{
-  'nz.axichat.com': const IOEndpoint('167.160.14.12', 5222),
-  'axi.im': const IOEndpoint('152.53.171.135', 5222),
-  'hookipa.net': const IOEndpoint('31.172.31.205', 5222),
-  'xmpp.social': const IOEndpoint('31.172.31.205', 5222),
-  'trashserver.net': const IOEndpoint('5.1.72.136', 5222),
-  'conversations.im': const IOEndpoint('78.47.177.120', 5222),
-  'draugr.de': const IOEndpoint('23.88.8.69', 5222),
-  'jix.im': const IOEndpoint('51.77.59.5', 5222),
-};
-
 typedef ConnectionState = mox.XmppConnectionState;
 
 enum XmppForegroundSocketState { uninitialized, direct, foreground }
@@ -621,6 +608,7 @@ abstract interface class XmppBase {
     required String databasePassphrase,
     bool preHashed = false,
     bool reuseExistingSession = false,
+    EndpointOverride? endpoint,
   });
 
   Future<void> resumeOfflineSession({
@@ -1923,10 +1911,6 @@ class XmppService extends XmppBase
     _setConnection(await _connectionFactory());
     _configureSocketCallbacks();
     _myJid = targetJid;
-    final bareDomain = _myJid?.domain.trim();
-    if (bareDomain != null && bareDomain.isNotEmpty && endpoint != null) {
-      serverLookup[bareDomain] = IOEndpoint(endpoint.host, endpoint.port);
-    }
     if (!_stateStore.isCompleted) {
       _stateStore.complete(
         await _stateStoreFactory(databasePrefix, databasePassphrase),
@@ -1948,6 +1932,8 @@ class XmppService extends XmppBase
       _connection.connectionSettings = XmppConnectionSettings(
         jid: targetJid.toBare(),
         password: password,
+        host: endpoint?.host,
+        port: endpoint?.port,
       );
       await _attachMessageNotificationSubscription();
       _sessionReconnectEnabled = true;
@@ -1983,10 +1969,6 @@ class XmppService extends XmppBase
     }
 
     _myJid = mox.JID.fromString(jid);
-    final bareDomain = _myJid?.domain.trim();
-    if (bareDomain != null && bareDomain.isNotEmpty && endpoint != null) {
-      serverLookup[bareDomain] = IOEndpoint(endpoint.host, endpoint.port);
-    }
 
     await _initConnection(preHashed: preHashed);
 
@@ -1995,6 +1977,8 @@ class XmppService extends XmppBase
     _connection.connectionSettings = XmppConnectionSettings(
       jid: _myJid!.toBare(),
       password: password,
+      host: endpoint?.host,
+      port: endpoint?.port,
     );
 
     _connectInFlight = true;
@@ -4692,7 +4676,6 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   Future<bool> connect(String domain, {String? host, int? port}) async {
     _secure = false;
 
-    final endpoint = serverLookup[domain];
     final overrideHost = host;
     final hasHostOverride = overrideHost != null && overrideHost.isNotEmpty;
 
@@ -4702,16 +4685,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       resolvedHost = overrideHost;
       resolvedPort = port ?? 5222;
     } else {
-      final target = endpoint;
-      if (target == null) {
-        _log.severe(
-          'No static server mapping and no host override provided. DNS lookups are disabled.',
-        );
-        await _onConnectFailure?.call();
-        return false;
-      }
-      resolvedHost = target.host;
-      resolvedPort = port ?? target.port;
+      resolvedHost = domain;
+      resolvedPort = port ?? EndpointConfig.defaultXmppPort;
     }
 
     _log.fine('Connecting via direct endpoint...');

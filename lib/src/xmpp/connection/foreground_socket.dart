@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
@@ -199,6 +200,14 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
 
   @override
   Future<void> release(String clientId) async {
+    if (!_usageCounts.containsKey(clientId)) {
+      _log.fine(
+        'Foreground service release ignored for inactive client: '
+        'clientId=$clientId totalUsage=$_totalUsage',
+      );
+      _detachCallbackIfUnused();
+      return;
+    }
     _log.info(
       'Foreground service release requested: '
       'clientId=$clientId totalUsageBefore=$_totalUsage',
@@ -839,15 +848,7 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       return _SocketTarget(overrideHost, port ?? 5222);
     }
 
-    final mapping = serverLookup[domain];
-    if (mapping == null) {
-      _log.severe(
-        'No static server mapping and no host override provided. DNS lookups are disabled.',
-      );
-      return null;
-    }
-
-    return _SocketTarget(mapping.host, port ?? mapping.port);
+    return _SocketTarget(domain, port ?? EndpointConfig.defaultXmppPort);
   }
 
   @override

@@ -188,9 +188,17 @@ class EndpointResolver {
     final resolvedPort = config.xmppPort > 0
         ? config.xmppPort
         : EndpointConfig.defaultXmppPort;
+    final preferred = config.xmppHost?.trim();
+    if (preferred != null && preferred.isNotEmpty) {
+      return EndpointOverride(host: preferred, port: resolvedPort);
+    }
+    final domain = config.domain.trim();
+    if (config.smtpEnabled && domain.isNotEmpty) {
+      return EndpointOverride(host: domain, port: resolvedPort);
+    }
     return await _resolve(
       config: config,
-      preferredHost: config.xmppHost,
+      preferredHost: null,
       defaultPort: resolvedPort,
       fallback: fallback,
     );
