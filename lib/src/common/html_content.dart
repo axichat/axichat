@@ -591,6 +591,19 @@ pre, code {
     }
   }
 
+  static bool looksLikeCssBodyText(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty ||
+        !normalized.contains('{') ||
+        !normalized.contains('}') ||
+        !normalized.contains(':')) {
+      return false;
+    }
+    return RegExp(
+      r'(?:^|[{};\s])(?:@media|@font-face|background|border|color|display|font|height|line-height|margin|padding|text-|width)\b',
+    ).hasMatch(normalized);
+  }
+
   static bool shouldRenderRichEmailHtml({
     required String? normalizedHtmlBody,
     required String? normalizedHtmlText,

@@ -450,6 +450,89 @@ void main() {
     expect(items.first.attachmentIds, ['file-two']);
   });
 
+  test('generated attachment caption rows stay hidden in RFC groups', () {
+    final chat = chat_models.Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final messages = [
+      Message(
+        stanzaID: 'generated-caption',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        body: '\u{1F4CE} photo.jpg (Unknown size)',
+        originID: '<captioned-attachment@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+        pseudoMessageData: const {'emailAttachmentCaption': true},
+        deltaChatId: 1,
+        deltaMsgId: 20,
+      ),
+      Message(
+        stanzaID: 'attachment-row',
+        senderJid: chat.jid,
+        chatJid: chat.jid,
+        originID: '<captioned-attachment@example.com>',
+        timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+        fileMetadataID: 'file-one',
+        deltaChatId: 1,
+        deltaMsgId: 21,
+      ),
+    ];
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: messages,
+      isEmailChat: true,
+      attachmentsByMessageId: const {
+        'attachment-row': ['file-one'],
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.map((item) => item.id), ['attachment-row']);
+    expect(items.single.renderedText, isEmpty);
+    expect(items.single.rowText, ' ');
+    expect(items.single.attachmentIds, ['file-one']);
+  });
+
+  test('full html replaces CSS-only RFC822 body text in email rows', () {
+    final chat = chat_models.Chat(
+      jid: 'rides@example.com',
+      title: 'Rides',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+    );
+    final message = Message(
+      stanzaID: 'css-rfc-row',
+      senderJid: 'rides@example.com',
+      chatJid: 'rides@example.com',
+      body: 'body { margin: 0; padding: 0; }',
+      htmlBody: '<style>body { margin: 0; padding: 0; }</style>',
+      pseudoMessageData: const {'emailRfc822Body': true},
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+      originID: '<ride@example.com>',
+      deltaChatId: 1,
+      deltaMsgId: 10,
+    );
+
+    final items = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      emailFullHtmlByDeltaId: const {
+        10: '<html><body><p>Your ride is complete.</p></body></html>',
+      },
+    ).whereType<ChatTimelineMessageItem>().toList(growable: false);
+
+    expect(items.single.renderedText, 'Your ride is complete.');
+    expect(items.single.renderedText, isNot(contains('margin: 0')));
+    expect(items.single.resolvedHtmlBody, contains('Your ride is complete'));
+    expect(items.single.emailVisualKind, ChatTimelineEmailVisualKind.html);
+  });
+
   test('plain text emails keep normal same sender timeline chaining', () {
     final chat = chat_models.Chat(
       jid: 'alice@example.com',

@@ -915,6 +915,13 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       );
     }
     bodyText = ChatSubjectCodec.previewBodyText(bodyText);
+    if (message.hasRfc822BodyContent &&
+        HtmlContentCodec.looksLikeCssBodyText(bodyText)) {
+      bodyText = rfcEmailBodyText(
+        message: message,
+        resolvedHtmlBody: resolvedForwardHtml,
+      );
+    }
   }
   if (suppressRfcEmailBody) {
     showSubjectHeader = false;
@@ -1301,16 +1308,10 @@ bool _emailBodyHasHtml({required String? resolvedHtmlBody}) {
 String? _resolvedEmailHtmlBodyForProjection({
   required Message message,
   required Map<int, String> emailFullHtmlByDeltaId,
-}) {
-  final deltaMessageId = message.deltaMsgId;
-  if (deltaMessageId == null) {
-    return message.htmlBody;
-  }
-  if (message.hasRfc822BodyContent) {
-    return message.htmlBody;
-  }
-  return emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
-}
+}) => resolvedEmailHtmlBodyForMessage(
+  message: message,
+  emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+);
 
 List<ChatTimelineEmailBodyBlock> _rfcEmailBodyBlocksForGroup({
   required RfcEmailGroup group,

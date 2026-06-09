@@ -138,9 +138,123 @@ void main() {
         expect(group.shouldSuppressTimelineText(attachment), isTrue);
       },
     );
+
+    test(
+      'does not let generated attachment captions lead attachment groups',
+      () {
+        const caption = Message(
+          stanzaID: 'generated-caption',
+          senderJid: 'sender@example.com',
+          chatJid: 'sender@example.com',
+          body: '\u{1F4CE} photo.jpg (Unknown size)',
+          pseudoMessageData: {'emailAttachmentCaption': true},
+          originID: 'shared@example.com',
+          deltaAccountId: 1,
+          deltaChatId: 10,
+          deltaMsgId: 1,
+        );
+        const attachment = Message(
+          stanzaID: 'attachment',
+          senderJid: 'sender@example.com',
+          chatJid: 'sender@example.com',
+          fileMetadataID: 'file-1',
+          originID: 'shared@example.com',
+          deltaAccountId: 1,
+          deltaChatId: 10,
+          deltaMsgId: 2,
+        );
+
+        final groups = buildRfcEmailGroupsByMessageStanzaId(
+          messages: const [caption, attachment],
+          attachmentsForMessage: (message) => message.fileMetadataID == null
+              ? const []
+              : [message.fileMetadataID!],
+          bodyTextForMessage: (message) =>
+              rfcEmailBodyText(message: message, resolvedHtmlBody: null),
+          requireMeaningfulBody: false,
+        );
+        final group = groups[caption.stanzaID]!;
+
+        expect(group.leader, attachment);
+        expect(group.shouldHideTimelineMessage(caption), isTrue);
+        expect(group.shouldSuppressTimelineText(attachment), isFalse);
+      },
+    );
+  });
+
+  group('resolvedEmailHtmlBodyForMessage', () {
+    test('uses full html when stored RFC822 html has no visible body', () {
+      const message = Message(
+        stanzaID: 'css-rfc-row',
+        senderJid: 'rides@example.com',
+        chatJid: 'rides@example.com',
+        body: 'body { margin: 0; padding: 0; }',
+        htmlBody: '<style>body { margin: 0; padding: 0; }</style>',
+        pseudoMessageData: {'emailRfc822Body': true},
+        originID: '<ride@example.com>',
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      );
+
+      expect(
+        resolvedEmailHtmlBodyForMessage(
+          message: message,
+          emailFullHtmlByDeltaId: const {
+            10: '<html><body><p>Your ride is complete.</p></body></html>',
+          },
+        ),
+        contains('Your ride is complete'),
+      );
+    });
+
+    test(
+      'drops stored RFC822 html when it has no visible body or full html',
+      () {
+        const message = Message(
+          stanzaID: 'css-rfc-row',
+          senderJid: 'rides@example.com',
+          chatJid: 'rides@example.com',
+          body: 'body { margin: 0; padding: 0; }',
+          htmlBody: '<style>body { margin: 0; padding: 0; }</style>',
+          pseudoMessageData: {'emailRfc822Body': true},
+          originID: '<ride@example.com>',
+          deltaChatId: 1,
+          deltaMsgId: 10,
+        );
+
+        expect(
+          resolvedEmailHtmlBodyForMessage(
+            message: message,
+            emailFullHtmlByDeltaId: const {},
+          ),
+          isNull,
+        );
+      },
+    );
   });
 
   group('rfcEmailBodyText', () {
+    test('uses visible full html text instead of CSS-only RFC822 body', () {
+      const message = Message(
+        stanzaID: 'css-rfc-row',
+        senderJid: 'rides@example.com',
+        chatJid: 'rides@example.com',
+        body: 'body { margin: 0; padding: 0; }',
+        pseudoMessageData: {'emailRfc822Body': true},
+        deltaChatId: 1,
+        deltaMsgId: 10,
+      );
+
+      expect(
+        rfcEmailBodyText(
+          message: message,
+          resolvedHtmlBody:
+              '<html><body><p>Your ride is complete.</p></body></html>',
+        ),
+        'Your ride is complete.',
+      );
+    });
+
     test('ignores generated email attachment captions', () {
       const message = Message(
         stanzaID: 'stanza-1',

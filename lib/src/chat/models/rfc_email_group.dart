@@ -20,8 +20,11 @@ final class RfcEmailGroup {
 
   Message get leader =>
       bodySources.where((message) => !hasAttachments(message)).firstOrNull ??
-      messages.where((message) => !hasAttachments(message)).firstOrNull ??
+      _nonGeneratedCaptionMessages
+          .where((message) => !hasAttachments(message))
+          .firstOrNull ??
       bodySources.firstOrNull ??
+      _nonGeneratedCaptionMessages.firstOrNull ??
       messages.first;
 
   Message get quoteTarget =>
@@ -46,10 +49,15 @@ final class RfcEmailGroup {
   bool get hasAnyAttachments =>
       attachmentIdsByStanzaId.values.any((ids) => ids.isNotEmpty);
 
+  Iterable<Message> get _nonGeneratedCaptionMessages =>
+      messages.where((message) => !_isGeneratedAttachmentCaptionOnly(message));
+
   bool shouldHideTimelineMessage(Message message) =>
       !isLeader(message) &&
       !hasAttachments(message) &&
-      (isBodySource(message) || isDuplicateBodyMessage(message));
+      (isBodySource(message) ||
+          isDuplicateBodyMessage(message) ||
+          _isGeneratedAttachmentCaptionOnly(message));
 
   bool shouldSuppressTimelineText(Message message) =>
       !isLeader(message) &&
@@ -204,6 +212,45 @@ String? rfcEmailGroupKey(Message message) {
   return message.emailRfcGroupKey;
 }
 
+String? resolvedEmailHtmlBodyForMessage({
+  required Message message,
+  required Map<int, String> emailFullHtmlByDeltaId,
+}) {
+  final deltaMessageId = message.deltaMsgId;
+  if (deltaMessageId == null) {
+    return message.htmlBody;
+  }
+  final fullHtml = emailFullHtmlByDeltaId[deltaMessageId];
+  if (!message.hasRfc822BodyContent) {
+    return fullHtml ?? message.htmlBody;
+  }
+  if (emailHtmlHasVisibleBodyContent(message.htmlBody)) {
+    return message.htmlBody;
+  }
+  return fullHtml;
+}
+
+bool emailHtmlHasVisibleBodyContent(String? html) {
+  final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+  if (normalizedHtml == null) {
+    return false;
+  }
+  return emailHtmlVisibleBodyText(normalizedHtml).isNotEmpty ||
+      HtmlContentCodec.containsRenderableRemoteImages(normalizedHtml);
+}
+
+String emailHtmlVisibleBodyText(String? html) {
+  final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+  if (normalizedHtml == null) {
+    return '';
+  }
+  final preparedHtml = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+    normalizedHtml,
+    allowRemoteImages: false,
+  );
+  return HtmlContentCodec.toPlainText(preparedHtml).trim();
+}
+
 String rfcEmailBodyText({
   required Message message,
   required String? resolvedHtmlBody,
@@ -213,16 +260,17 @@ String rfcEmailBodyText({
       _looksGeneratedEmailAttachmentCaption(body)) {
     return '';
   }
-  if (body.isNotEmpty) {
-    return body;
-  }
-  final normalizedHtml = HtmlContentCodec.normalizeHtml(
+  final htmlText = emailHtmlVisibleBodyText(
     resolvedHtmlBody ?? message.htmlBody,
   );
-  if (normalizedHtml == null) {
-    return '';
+  if (body.isNotEmpty) {
+    if (message.hasRfc822BodyContent &&
+        HtmlContentCodec.looksLikeCssBodyText(body)) {
+      return htmlText;
+    }
+    return body;
   }
-  return HtmlContentCodec.toPlainText(normalizedHtml).trim();
+  return htmlText;
 }
 
 String _plainEmailBodyCandidate(Message message) {
@@ -246,6 +294,15 @@ bool _looksGeneratedEmailAttachmentCaption(String value) {
     return true;
   }
   return RegExp(r'^[^\r\n]+\.[^\s./\\]{1,16}\s+\([^)]+\)$').hasMatch(trimmed);
+}
+
+bool _isGeneratedAttachmentCaptionOnly(Message message) {
+  if (!message.hasGeneratedEmailAttachmentCaption) {
+    return false;
+  }
+  return _looksGeneratedEmailAttachmentCaption(
+    _plainEmailBodyCandidate(message),
+  );
 }
 
 final class _RfcEmailBodyCandidate {
